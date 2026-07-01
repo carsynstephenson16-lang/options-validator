@@ -380,5 +380,140 @@ class RegisterCounterTests(unittest.TestCase):
                 hashing.REPO_ROOT = original_root
 
 
+def _oos_trades(n=1):
+    # All strictly after IN_SAMPLE_END, so the partition assertion passes.
+    return [{"pnl": 1.0, "capital_at_risk": 100.0,
+             "entry_date": "2023-06-01", "symbol": "SPY"} for _ in range(n)]
+
+
+class OOSGateTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = self._tmp.name
+        self.clean = lambda paths: True  # simulate committed-clean source/ledger files
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _register(self, hyp="H1"):
+        experiments.register(hyp, "expectancy CI lower bound > 0", is_result={},
+                             data_window=_window(), risk_basis="economic_max_loss",
+                             base_dir=self.base, code_sha="deadbeef",
+                             source_clean_tracked=self.clean)
+
+    def test_reveal_refused_without_registration(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+
+    def test_reveal_refused_on_cost_model_drift(self):
+        self._register()
+        original = config.SLIPPAGE_HAIRCUT
+        try:
+            config.SLIPPAGE_HAIRCUT = original + 0.05
+            with self.assertRaises(experiments.OOSGateError):
+                experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                       scoreboard_fn=lambda t: {"verdict": "x"},
+                                       git_clean_tracked=self.clean)
+        finally:
+            config.SLIPPAGE_HAIRCUT = original
+
+    def test_reveal_refused_on_config_drift(self):
+        self._register()
+        original = config.A_SPREAD_WIDTH
+        try:
+            config.A_SPREAD_WIDTH = original + 1
+            with self.assertRaises(experiments.OOSGateError):
+                experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                       scoreboard_fn=lambda t: {"verdict": "x"},
+                                       git_clean_tracked=self.clean)
+        finally:
+            config.A_SPREAD_WIDTH = original
+
+    def test_reveal_refused_on_source_drift(self):
+        self._register()
+        original = hashing.source_hash
+        try:
+            hashing.source_hash = lambda: "different"
+            with self.assertRaises(experiments.OOSGateError):
+                experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                       scoreboard_fn=lambda t: {"verdict": "x"},
+                                       git_clean_tracked=self.clean)
+        finally:
+            hashing.source_hash = original
+
+    def test_reveal_is_write_once(self):
+        self._register()
+        experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                               scoreboard_fn=lambda t: {"verdict": "x"},
+                               git_clean_tracked=self.clean)
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+
+    def test_reveal_refused_when_budget_exhausted(self):
+        for i in range(config.OOS_LOOK_BUDGET):
+            self._register(f"H{i}")
+            experiments.reveal_oos(f"H{i}", run_fn=_oos_trades, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+        self._register("Hlast")
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.reveal_oos("Hlast", run_fn=_oos_trades, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+
+    def test_reveal_refused_on_in_sample_leak(self):
+        self._register()
+        leaky = lambda: [{"pnl": 1.0, "capital_at_risk": 100.0,
+                          "entry_date": "2021-01-01", "symbol": "SPY"}]
+        with self.assertRaises(ValueError):
+            experiments.reveal_oos("H1", run_fn=leaky, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+
+    def test_reveal_refused_outside_registered_oos_window(self):
+        self._register()
+        wrong_window = lambda: [{"pnl": 1.0, "capital_at_risk": 100.0,
+                                 "entry_date": "2025-01-01", "symbol": "SPY"}]
+        with self.assertRaises(ValueError):
+            experiments.reveal_oos("H1", run_fn=wrong_window, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+
+    def test_reveal_refused_when_ledger_dirty(self):
+        self._register()
+        with self.assertRaises(ledger.LedgerError):
+            experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=lambda paths: False)
+
+    def test_reveal_happy_path_writes_oos_reveal_record(self):
+        self._register()
+        out = experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                     scoreboard_fn=lambda t: {"verdict": "PASS"},
+                                     git_clean_tracked=self.clean)
+        self.assertEqual(out["verdict"], "PASS")
+        rec = ledger.read_all(self.base)[-1]
+        self.assertEqual(rec["entry_type"], "oos_reveal")
+        self.assertEqual(rec["hypothesis_id"], "H1")
+        ledger.verify(self.base)
+
+    def test_reveal_sanitizes_non_finite_oos_result(self):
+        # A real OOS scoreboard can carry float('nan'); json_safe must null it so
+        # the fail-closed ledger (allow_nan=False) can store the reveal.
+        self._register()
+        out = experiments.reveal_oos(
+            "H1", run_fn=_oos_trades, base_dir=self.base,
+            scoreboard_fn=lambda t: {"sharpe_per_trade": float("nan"), "verdict": "NO EDGE"},
+            git_clean_tracked=self.clean)
+        self.assertIsNone(out["sharpe_per_trade"])
+        ledger.verify(self.base)
+        rec = ledger.read_all(self.base)[-1]
+        self.assertIsNone(rec["oos_result"]["sharpe_per_trade"])
+
+
 if __name__ == "__main__":
     unittest.main()

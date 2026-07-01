@@ -171,3 +171,63 @@ def log_trial_intent(reason, *, hypothesis_id=None, base_dir="ledger") -> str:
     }
     body["trial_count"] = current_trial_count(base_dir) + 1
     return ledger.append(body, base_dir)
+
+
+def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
+               git_clean_tracked=None):
+    """Write-once OOS reveal. Refuses unless a matching registration exists, the
+    registered config/source/cost surfaces are unchanged, the global look budget
+    is not spent, no prior reveal exists for this hypothesis, and the ledger is
+    committed+clean. Only then does it run the (injected) backtest, assert the
+    OOS partition and registered window, and append the oos_reveal record."""
+    records = ledger.read_all(base_dir)
+    runs = [r for r in records
+            if r.get("entry_type") == "run" and r.get("hypothesis_id") == hypothesis_id]
+    if not runs:
+        raise OOSGateError(f"no registered hypothesis {hypothesis_id!r} to reveal")
+    run = runs[-1]
+
+    if run["config_hash"] != hashing.config_hash():
+        raise OOSGateError("registered config params drifted since registration")
+    if run["cost_model_hash"] != hashing.cost_model_hash():
+        raise OOSGateError("frozen cost-model params drifted since registration")
+    if run["source_hash"] != hashing.source_hash():
+        raise OOSGateError("registered source code drifted since registration")
+
+    reveals = [r for r in records if r.get("entry_type") == "oos_reveal"]
+    if any(r.get("hypothesis_id") == hypothesis_id for r in reveals):
+        raise OOSGateError(f"OOS already revealed for {hypothesis_id!r} (write-once)")
+
+    revealed_hyps = {r.get("hypothesis_id") for r in reveals}
+    if len(revealed_hyps) >= config.OOS_LOOK_BUDGET:
+        raise OOSGateError(
+            f"global OOS look budget exhausted ({config.OOS_LOOK_BUDGET})")
+
+    # The pre-registration must be immutable in git BEFORE we peek at the holdout.
+    ledger.verify(base_dir, anchored=True, git_clean_tracked=git_clean_tracked)
+
+    oos_trades = run_fn()
+    entry_dates = [t["entry_date"] for t in oos_trades]
+    windows.assert_oos_only(entry_dates, config.IN_SAMPLE_END)
+    windows.assert_within_window(entry_dates, run["oos_window"])
+
+    if scoreboard_fn is None:
+        from metrics import scoreboard as scoreboard_fn  # local import avoids cycle
+    safe_oos = json_safe(scoreboard_fn(oos_trades))
+    try:
+        hashing.canonical_json(safe_oos)
+    except (TypeError, ValueError) as exc:
+        raise OOSGateError(f"oos_result is not JSON-serializable: {exc}") from exc
+
+    body = {
+        "entry_type": "oos_reveal",
+        "timestamp": _now(),
+        "run_id": run["run_id"],
+        "hypothesis_id": hypothesis_id,
+        "oos_result": safe_oos,
+        "budget_used": len(revealed_hyps) + 1,
+        "budget_total": config.OOS_LOOK_BUDGET,
+    }
+    body["trial_count"] = current_trial_count(base_dir)  # reveal adds no new trial
+    ledger.append(body, base_dir)
+    return safe_oos
