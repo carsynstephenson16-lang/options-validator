@@ -57,7 +57,11 @@ def main(argv=None) -> int:
         return 0
 
     if args.cmd == "trial-log":
-        experiments.log_trial_intent(args.reason, base_dir=args.ledger)
+        try:
+            experiments.log_trial_intent(args.reason, base_dir=args.ledger)
+        except ledger.LedgerError as exc:
+            print(f"INTEGRITY FAIL: {exc}", file=sys.stderr)
+            return 1
         print(f"trial logged; count = {experiments.current_trial_count(args.ledger)}")
         return 0
 

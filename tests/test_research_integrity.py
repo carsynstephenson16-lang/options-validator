@@ -560,6 +560,15 @@ class CliTests(unittest.TestCase):
         jsonl.write_text(jsonl.read_text().replace("x", "HACK"))
         self.assertNotEqual(cli.main(["verify", "--ledger", self.base]), 0)
 
+    def test_trial_log_returns_nonzero_on_tampered_ledger(self):
+        # trial-log must surface a corrupted chain as a clean nonzero exit, not a
+        # bare LedgerError traceback (mirrors the verify subcommand's handling).
+        cli.main(["trial-log", "--reason", "x", "--ledger", self.base])
+        jsonl = Path(self.base) / "experiments.jsonl"
+        jsonl.write_text(jsonl.read_text().replace("x", "HACK"))
+        self.assertNotEqual(cli.main(["trial-log", "--reason", "y",
+                                      "--ledger", self.base]), 0)
+
     def test_register_subcommand_is_a_distinct_seam(self):
         calls = {}
         original = experiments.register
