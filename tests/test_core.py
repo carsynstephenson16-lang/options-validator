@@ -42,13 +42,14 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_scoreboard_rejects_zero_capital_at_risk(self):
         with self.assertRaises(ValueError):
-            scoreboard([{"pnl": 12.0, "capital_at_risk": 0.0}])
+            scoreboard([{"pnl": 12.0, "capital_at_risk": 0.0,
+                         "entry_date": "2021-01-04", "symbol": "SPY"}])
 
     def test_loss_count_gate_blocks_thin_short_vol_sample(self):
         trades = [
-            {"pnl": 20.0, "capital_at_risk": 100.0},
-            {"pnl": 15.0, "capital_at_risk": 100.0},
-            {"pnl": -70.0, "capital_at_risk": 100.0},
+            {"pnl": 20.0, "capital_at_risk": 100.0, "entry_date": "2021-01-04", "symbol": "SPY"},
+            {"pnl": 15.0, "capital_at_risk": 100.0, "entry_date": "2021-01-11", "symbol": "SPY"},
+            {"pnl": -70.0, "capital_at_risk": 100.0, "entry_date": "2021-01-19", "symbol": "SPY"},
         ]
 
         result = scoreboard(trades)

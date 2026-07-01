@@ -22,16 +22,38 @@ from __future__ import annotations
 import numpy as np
 import config
 
+from datetime import date
+
+
+def _as_date(x):
+    if isinstance(x, date):
+        return x
+    if isinstance(x, str):
+        try:
+            return date.fromisoformat(x)
+        except ValueError as exc:
+            raise ValueError(f"invalid ISO date: {x!r}") from exc
+    raise ValueError(f"expected ISO date string or date object, got {type(x).__name__}")
+
 
 def _validated_arrays(trades):
     pnls = []
     wins = []
     capital_at_risk = []
+    entry_dates = []
 
     for idx, trade in enumerate(trades):
-        missing = {"pnl", "capital_at_risk"} - trade.keys()
+        missing = {"pnl", "capital_at_risk", "entry_date", "symbol"} - trade.keys()
         if missing:
             raise ValueError(f"trade {idx} missing required field(s): {sorted(missing)}")
+
+        if not trade["symbol"]:
+            raise ValueError(f"trade {idx} has empty symbol")
+        try:
+            entry_date = _as_date(trade["entry_date"])
+        except (ValueError, TypeError):
+            raise ValueError(
+                f"trade {idx} has unparseable entry_date: {trade['entry_date']!r}")
 
         pnl = float(trade["pnl"])
         car = float(trade["capital_at_risk"])
@@ -45,11 +67,13 @@ def _validated_arrays(trades):
         pnls.append(pnl)
         wins.append(bool(trade.get("is_win", pnl > 0)))
         capital_at_risk.append(car)
+        entry_dates.append(entry_date)
 
     return (
         np.array(pnls, dtype=float),
         np.array(wins, dtype=bool),
         np.array(capital_at_risk, dtype=float),
+        entry_dates,
     )
 
 
@@ -74,7 +98,7 @@ def _expectancy_ci(pnls, n_boot, lo=5, hi=95):
 
 
 def scoreboard(trades, label="strategy"):
-    pnls, wins, cap = _validated_arrays(trades)
+    pnls, wins, cap, entry_dates = _validated_arrays(trades)
     n = len(trades)
     n_win, n_loss = int(wins.sum()), int((~wins).sum())
 
