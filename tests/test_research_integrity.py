@@ -1,3 +1,5 @@
+import os
+import subprocess
 import unittest
 
 import config
@@ -95,6 +97,44 @@ class LedgerChainTests(unittest.TestCase):
         ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
         ledger.append({"entry_type": "oos_reveal", "hypothesis_id": "H1"}, self.base)
         self.assertEqual(ledger.current_trial_count(self.base), 2)
+
+
+class LedgerAnchoringTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = self._tmp.name
+        subprocess.run(["git", "init", "-q", self.repo], check=True)
+        subprocess.run(["git", "-C", self.repo, "config", "user.email", "t@t.t"], check=True)
+        subprocess.run(["git", "-C", self.repo, "config", "user.name", "t"], check=True)
+        self.base = os.path.join(self.repo, "ledger")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _clean_tracked(self, paths):
+        # Same semantics as the default, but scoped to the temp repo via git -C.
+        for p in paths:
+            rel = os.path.relpath(p, self.repo)
+            t = subprocess.run(["git", "-C", self.repo, "ls-files", "--error-unmatch", rel],
+                               capture_output=True, text=True)
+            if t.returncode != 0:
+                return False
+            s = subprocess.run(["git", "-C", self.repo, "status", "--porcelain", "--", rel],
+                               capture_output=True, text=True)
+            if s.stdout.strip():
+                return False
+        return True
+
+    def test_anchored_verify_fails_when_uncommitted(self):
+        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base, anchored=True, git_clean_tracked=self._clean_tracked)
+
+    def test_anchored_verify_passes_when_committed_clean(self):
+        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
+        subprocess.run(["git", "-C", self.repo, "add", "ledger"], check=True)
+        subprocess.run(["git", "-C", self.repo, "commit", "-q", "-m", "anchor"], check=True)
+        ledger.verify(self.base, anchored=True, git_clean_tracked=self._clean_tracked)  # no raise
 
 
 if __name__ == "__main__":
