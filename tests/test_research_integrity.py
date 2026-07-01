@@ -3,6 +3,8 @@ import unittest
 import config
 from analysis import feasibility
 from research import hashing
+import tempfile
+from research import ledger
 
 
 class ConfigKnobTests(unittest.TestCase):
@@ -50,6 +52,49 @@ class HashingTests(unittest.TestCase):
     def test_data_window_hash_is_stable_for_equal_windows(self):
         w = {"start": "2018-01-01", "end": "2022-12-31", "universe": ["SPY"]}
         self.assertEqual(hashing.data_window_hash(w), hashing.data_window_hash(dict(w)))
+
+
+class LedgerChainTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = self._tmp.name
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_append_chains_and_verifies(self):
+        ledger.append({"entry_type": "trial_intent", "reason": "first"}, self.base)
+        ledger.append({"entry_type": "trial_intent", "reason": "second"}, self.base)
+        ledger.verify(self.base)  # must not raise
+        records = ledger.read_all(self.base)
+        self.assertEqual([r["seq"] for r in records], [0, 1])
+        self.assertEqual(records[1]["prev_hash"], records[0]["record_hash"])
+
+    def test_head_matches_tip(self):
+        h = ledger.append({"entry_type": "trial_intent", "reason": "x"}, self.base)
+        self.assertEqual(ledger.tip(self.base), h)
+
+    def test_verify_detects_a_tampered_record(self):
+        ledger.append({"entry_type": "trial_intent", "reason": "keep"}, self.base)
+        ledger.append({"entry_type": "trial_intent", "reason": "keep2"}, self.base)
+        jsonl = f"{self.base}/experiments.jsonl"
+        lines = open(jsonl).read().splitlines()
+        lines[0] = lines[0].replace("keep", "HACKED")
+        open(jsonl, "w").write("\n".join(lines) + "\n")
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_head_mismatch(self):
+        ledger.append({"entry_type": "trial_intent", "reason": "x"}, self.base)
+        open(f"{self.base}/HEAD", "w").write("0" * 64 + "\n")
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_trial_counter_counts_runs_and_intents_only(self):
+        ledger.append({"entry_type": "trial_intent", "reason": "a"}, self.base)
+        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
+        ledger.append({"entry_type": "oos_reveal", "hypothesis_id": "H1"}, self.base)
+        self.assertEqual(ledger.current_trial_count(self.base), 2)
 
 
 if __name__ == "__main__":
