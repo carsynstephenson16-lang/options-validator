@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from research import ledger
 from research import windows
+from research import experiments
 
 
 class ConfigKnobTests(unittest.TestCase):
@@ -245,6 +246,107 @@ class WindowTests(unittest.TestCase):
     def test_split_rejects_invalid_date_type(self):
         with self.assertRaises(ValueError):
             windows.split_is_oos([object()], "2022-12-31")
+
+
+def _window():
+    return {"start": "2018-01-01", "end": "2024-12-31",
+            "is_window": {"start": "2018-01-01", "end": "2022-12-31"},
+            "oos_window": {"start": "2023-01-01", "end": "2024-12-31"},
+            "universe": ["SPY"]}
+
+
+class RegisterCounterTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = self._tmp.name
+        self.clean = lambda paths: True  # simulate a committed-clean source surface
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_register_writes_run_record_with_null_oos(self):
+        experiments.register("H1", "expectancy CI lower bound > 0",
+                             is_result={"verdict": "NO EDGE"},
+                             data_window=_window(), risk_basis="economic_max_loss",
+                             base_dir=self.base, code_sha="deadbeef",
+                             source_clean_tracked=self.clean)
+        rec = ledger.read_all(self.base)[-1]
+        self.assertEqual(rec["entry_type"], "run")
+        self.assertEqual(rec["hypothesis_id"], "H1")
+        self.assertIsNone(rec["oos_result"])
+        self.assertIsNone(rec["deflated_sharpe"])
+        self.assertIsNone(rec["pbo"])
+        self.assertEqual(rec["source_hash"], hashing.source_hash())
+
+    def test_counter_increments_on_register_and_trial_log_only(self):
+        experiments.log_trial_intent("eyeballed a 25-delta", base_dir=self.base)
+        experiments.register("H1", "t", is_result={}, data_window=_window(),
+                             risk_basis="economic_max_loss", base_dir=self.base,
+                             code_sha="deadbeef", source_clean_tracked=self.clean)
+        self.assertEqual(experiments.current_trial_count(self.base), 2)
+
+    def test_counter_is_monotonic_and_non_resettable(self):
+        experiments.log_trial_intent("a", base_dir=self.base)
+        experiments.log_trial_intent("b", base_dir=self.base)
+        ledger.verify(self.base)
+        self.assertEqual(experiments.current_trial_count(self.base), 2)
+
+    def test_register_rejects_duplicate_hypothesis_id(self):
+        experiments.register("H1", "t", is_result={}, data_window=_window(),
+                             risk_basis="economic_max_loss", base_dir=self.base,
+                             code_sha="deadbeef", source_clean_tracked=self.clean)
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("H1", "t2", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+
+    def test_register_rejects_dirty_source_surface(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Hdirty", "t", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=lambda paths: False)
+
+    def test_register_rejects_unknown_risk_basis(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Hbad", "t", is_result={}, data_window=_window(),
+                                 risk_basis="typo", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+
+    def test_register_rejects_empty_identity_or_threshold(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("", "t", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("H1", "", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+
+    def test_register_rejects_malformed_data_window(self):
+        bad = dict(_window())
+        del bad["oos_window"]
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Hbadwindow", "t", is_result={}, data_window=bad,
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+
+    def test_register_sanitizes_non_finite_is_result_to_null(self):
+        # A real scoreboard carries float('nan') (e.g. Sharpe on a zero-variance
+        # or insufficient-sample run). json_safe must turn it into JSON null so
+        # the fail-closed ledger (allow_nan=False) can store the run instead of
+        # crashing -- logging the honest INSUFFICIENT result is the whole point.
+        experiments.register("Hnan", "t",
+                             is_result={"sharpe_per_trade": float("nan"),
+                                        "expectancy_CI90": [float("nan"), float("nan")],
+                                        "verdict": "INSUFFICIENT SAMPLE"},
+                             data_window=_window(), risk_basis="economic_max_loss",
+                             base_dir=self.base, code_sha="deadbeef",
+                             source_clean_tracked=self.clean)
+        ledger.verify(self.base)  # must not raise -> the record is valid JSON
+        rec = ledger.read_all(self.base)[-1]
+        self.assertIsNone(rec["is_result"]["sharpe_per_trade"])
+        self.assertEqual(rec["is_result"]["expectancy_CI90"], [None, None])
+        self.assertEqual(rec["is_result"]["verdict"], "INSUFFICIENT SAMPLE")
 
 
 if __name__ == "__main__":
