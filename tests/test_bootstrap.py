@@ -105,5 +105,34 @@ class VerdictGuardTests(unittest.TestCase):
         self.assertNotIn("INSUFFICIENT SAMPLE", result["verdict"])
 
 
+class UnderCoverageTests(unittest.TestCase):
+    def _clustered(self):
+        """42 'up' weeks (+10 for all 5 names) then 8 CONTIGUOUS 'down' weeks
+        (-30 for all 5 names). Overall mean is mildly positive, but losses cluster
+        both serially (contiguous weeks) and cross-sectionally (all names move
+        together each week)."""
+        dates, pnls, symbols = [], [], ["SPY", "QQQ", "MSFT", "AAPL", "NVDA"]
+        start = date(2018, 1, 1).toordinal()
+        week = 0
+        for _ in range(42):
+            for s in symbols:
+                dates.append(date.fromordinal(start + week * 7).isoformat()); pnls.append(10.0)
+            week += 1
+        for _ in range(8):
+            for s in symbols:
+                dates.append(date.fromordinal(start + week * 7).isoformat()); pnls.append(-30.0)
+            week += 1
+        return dates, np.array(pnls, dtype=float)
+
+    def test_iid_false_pass_but_dependence_aware_refuses(self):
+        dates, pnls = self._clustered()
+        iid_lo, iid_hi = metrics.iid_expectancy_ci(pnls, n_boot=2000, seed=42)
+        dep_lo, dep_hi = metrics._dependence_aware_ci(dates, pnls, n_boot=2000, seed=42)
+
+        self.assertGreater(iid_lo, 0.0)               # IID: false PASS (CI excludes 0)
+        self.assertLessEqual(dep_lo, 0.0)             # dependence-aware: includes 0
+        self.assertGreater(dep_hi - dep_lo, iid_hi - iid_lo)  # and is wider
+
+
 if __name__ == "__main__":
     unittest.main()
