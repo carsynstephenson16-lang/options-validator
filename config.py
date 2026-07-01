@@ -101,3 +101,15 @@ A_SPREAD_WIDTH_SWEEP = [1, 2, 5]
 # trades, the harness returns INSUFFICIENT SAMPLE instead of pass/fail.
 MIN_LOSSES_FOR_VERDICT = 10
 BOOTSTRAP_SAMPLES      = 5_000        # for the expectancy confidence interval
+
+# ---------------------------------------------------------------------------
+# RESEARCH INTEGRITY (Phase 1A) -- frozen, verdict-affecting knobs
+# ---------------------------------------------------------------------------
+# These are hashed into the cost-model snapshot (research/hashing.py) and
+# FROZEN before any out-of-sample reveal. Changing one starts a NEW
+# pre-registered hypothesis; it must never be quietly retuned toward a PASS.
+OOS_LOOK_BUDGET          = 3      # global cap on distinct hypotheses that may reveal OOS
+BOOTSTRAP_BLOCK_EXPONENT = 1 / 3  # n^(1/3) blocking rate (Politis-White / Lahiri)
+BOOTSTRAP_BLOCK_CONSTANTS = [0.5, 1, 2, 4]  # mean block = round(c * n_cohorts**exp)
+COHORT_GRANULARITY       = "week"  # cross-sectional cohort key = ISO week of entry_date
+FILL_MODEL_ID            = "conservative_mid_minus_haircut_v1"  # bump if fill logic changes
