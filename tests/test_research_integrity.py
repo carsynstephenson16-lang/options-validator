@@ -1,4 +1,5 @@
 import os
+import math
 import subprocess
 import unittest
 
@@ -6,7 +7,9 @@ import config
 from analysis import feasibility
 from research import hashing
 import tempfile
+from pathlib import Path
 from research import ledger
+from research import windows
 
 
 class ConfigKnobTests(unittest.TestCase):
@@ -29,6 +32,10 @@ class ConfigKnobTests(unittest.TestCase):
 class HashingTests(unittest.TestCase):
     def test_canonical_json_is_sorted_and_compact(self):
         self.assertEqual(hashing.canonical_json({"b": 1, "a": 2}), '{"a":2,"b":1}')
+
+    def test_canonical_json_rejects_non_finite_values(self):
+        with self.assertRaises(ValueError):
+            hashing.canonical_json({"bad": math.nan})
 
     def test_cost_model_snapshot_includes_scattered_credit_frac(self):
         snap = hashing.cost_model_snapshot()
@@ -79,16 +86,16 @@ class LedgerChainTests(unittest.TestCase):
     def test_verify_detects_a_tampered_record(self):
         ledger.append({"entry_type": "trial_intent", "reason": "keep"}, self.base)
         ledger.append({"entry_type": "trial_intent", "reason": "keep2"}, self.base)
-        jsonl = f"{self.base}/experiments.jsonl"
-        lines = open(jsonl).read().splitlines()
+        jsonl = Path(self.base) / "experiments.jsonl"
+        lines = jsonl.read_text().splitlines()
         lines[0] = lines[0].replace("keep", "HACKED")
-        open(jsonl, "w").write("\n".join(lines) + "\n")
+        jsonl.write_text("\n".join(lines) + "\n")
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base)
 
     def test_verify_detects_head_mismatch(self):
         ledger.append({"entry_type": "trial_intent", "reason": "x"}, self.base)
-        open(f"{self.base}/HEAD", "w").write("0" * 64 + "\n")
+        (Path(self.base) / "HEAD").write_text("0" * 64 + "\n")
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base)
 
@@ -97,6 +104,18 @@ class LedgerChainTests(unittest.TestCase):
         ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
         ledger.append({"entry_type": "oos_reveal", "hypothesis_id": "H1"}, self.base)
         self.assertEqual(ledger.current_trial_count(self.base), 2)
+
+    def test_append_rejects_reserved_chain_fields(self):
+        for key in ("seq", "prev_hash", "record_hash"):
+            with self.subTest(key=key):
+                with self.assertRaises(ledger.LedgerError):
+                    ledger.append({"entry_type": "trial_intent", key: "bad"}, self.base)
+
+    def test_append_refuses_to_build_on_broken_chain(self):
+        ledger.append({"entry_type": "trial_intent", "reason": "keep"}, self.base)
+        (Path(self.base) / "HEAD").write_text("0" * 64 + "\n")
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append({"entry_type": "trial_intent", "reason": "next"}, self.base)
 
 
 class LedgerAnchoringTests(unittest.TestCase):
@@ -135,6 +154,21 @@ class LedgerAnchoringTests(unittest.TestCase):
         subprocess.run(["git", "-C", self.repo, "add", "ledger"], check=True)
         subprocess.run(["git", "-C", self.repo, "commit", "-q", "-m", "anchor"], check=True)
         ledger.verify(self.base, anchored=True, git_clean_tracked=self._clean_tracked)  # no raise
+
+
+class WindowTests(unittest.TestCase):
+    def test_split_partitions_at_in_sample_end(self):
+        dates = ["2021-06-01", "2022-12-31", "2023-01-01", "2024-05-05"]
+        is_idx, oos_idx = windows.split_is_oos(dates, "2022-12-31")
+        self.assertEqual(is_idx, [0, 1])   # <= 2022-12-31 is in-sample
+        self.assertEqual(oos_idx, [2, 3])  # strictly after is out-of-sample
+
+    def test_assert_oos_only_raises_on_in_sample_leak(self):
+        with self.assertRaises(ValueError):
+            windows.assert_oos_only(["2023-02-01", "2022-11-01"], "2022-12-31")
+
+    def test_assert_oos_only_accepts_pure_oos(self):
+        windows.assert_oos_only(["2023-02-01", "2024-01-01"], "2022-12-31")  # no raise
 
 
 if __name__ == "__main__":
