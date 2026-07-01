@@ -1,4 +1,5 @@
 import os
+import json
 import math
 import subprocess
 import unittest
@@ -11,6 +12,7 @@ from pathlib import Path
 from research import ledger
 from research import windows
 from research import experiments
+from research import cli
 
 
 class ConfigKnobTests(unittest.TestCase):
@@ -537,6 +539,64 @@ class OOSGateTests(unittest.TestCase):
         ledger.verify(self.base)
         rec = ledger.read_all(self.base)[-1]
         self.assertIsNone(rec["oos_result"]["sharpe_per_trade"])
+
+
+class CliTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = self._tmp.name
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_trial_log_then_verify_returns_zero(self):
+        self.assertEqual(cli.main(["trial-log", "--reason", "swept width",
+                                   "--ledger", self.base]), 0)
+        self.assertEqual(cli.main(["verify", "--ledger", self.base]), 0)
+
+    def test_verify_returns_nonzero_on_tamper(self):
+        cli.main(["trial-log", "--reason", "x", "--ledger", self.base])
+        jsonl = Path(self.base) / "experiments.jsonl"
+        jsonl.write_text(jsonl.read_text().replace("x", "HACK"))
+        self.assertNotEqual(cli.main(["verify", "--ledger", self.base]), 0)
+
+    def test_register_subcommand_is_a_distinct_seam(self):
+        calls = {}
+        original = experiments.register
+        try:
+            def fake_register(hypothesis_id, decision_threshold, is_result, *,
+                              data_window, risk_basis, notes="", base_dir="ledger"):
+                calls.update({
+                    "hypothesis_id": hypothesis_id,
+                    "decision_threshold": decision_threshold,
+                    "is_result": is_result,
+                    "data_window": data_window,
+                    "risk_basis": risk_basis,
+                    "notes": notes,
+                    "base_dir": base_dir,
+                })
+                return "hash"
+            experiments.register = fake_register
+            rc = cli.main([
+                "register",
+                "--hypothesis-id", "H1",
+                "--decision-threshold", "ci_lo>0",
+                "--is-result-json", json.dumps({"verdict": "NO EDGE"}),
+                "--data-window-json", json.dumps(_window()),
+                "--risk-basis", "economic_max_loss",
+                "--notes", "synthetic",
+                "--ledger", self.base,
+            ])
+        finally:
+            experiments.register = original
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls["hypothesis_id"], "H1")
+        self.assertEqual(calls["base_dir"], self.base)
+
+    def test_reveal_oos_subcommand_is_a_distinct_gate(self):
+        # With no registration, the integrity gate refuses before any data path.
+        self.assertNotEqual(cli.main(["reveal-oos", "--hypothesis-id", "H1",
+                                      "--ledger", self.base]), 0)
 
 
 if __name__ == "__main__":
