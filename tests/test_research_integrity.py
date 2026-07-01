@@ -357,6 +357,22 @@ class RegisterCounterTests(unittest.TestCase):
                                  base_dir=self.base, code_sha="deadbeef",
                                  source_clean_tracked=self.clean)
 
+    def test_register_rejects_oos_window_overlapping_in_sample(self):
+        bad = dict(_window())
+        bad["oos_window"] = {"start": "2022-06-01", "end": "2024-12-31"}  # starts in-sample
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Hoverlap", "t", is_result={}, data_window=bad,
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+
+    def test_register_rejects_is_window_past_in_sample_end(self):
+        bad = dict(_window())
+        bad["is_window"] = {"start": "2018-01-01", "end": "2023-06-01"}  # ends after IN_SAMPLE_END
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Hlate", "t", is_result={}, data_window=bad,
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+
     def test_source_clean_default_checker_against_real_temp_repo(self):
         with tempfile.TemporaryDirectory() as repo:
             subprocess.run(["git", "init", "-q", repo], check=True)
@@ -500,6 +516,14 @@ class OOSGateTests(unittest.TestCase):
         self.assertEqual(rec["entry_type"], "oos_reveal")
         self.assertEqual(rec["hypothesis_id"], "H1")
         ledger.verify(self.base)
+
+    def test_reveal_rejects_oos_trade_missing_entry_date(self):
+        self._register()
+        no_date = lambda: [{"pnl": 1.0, "capital_at_risk": 100.0, "symbol": "SPY"}]
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.reveal_oos("H1", run_fn=no_date, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
 
     def test_reveal_sanitizes_non_finite_oos_result(self):
         # A real OOS scoreboard can carry float('nan'); json_safe must null it so

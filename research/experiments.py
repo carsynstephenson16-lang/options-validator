@@ -129,6 +129,14 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
         raise OOSGateError(f"unknown risk_basis {risk_basis!r}")
     is_window = _require_window(data_window, "is_window")
     oos_window = _require_window(data_window, "oos_window")
+    from research.windows import _as_date
+    boundary = _as_date(config.IN_SAMPLE_END)
+    if _as_date(is_window["end"]) > boundary:
+        raise OOSGateError(
+            f"is_window.end {is_window['end']} must be <= IN_SAMPLE_END {config.IN_SAMPLE_END}")
+    if _as_date(oos_window["start"]) <= boundary:
+        raise OOSGateError(
+            f"oos_window.start {oos_window['start']} must be > IN_SAMPLE_END {config.IN_SAMPLE_END}")
     _require_source_clean(source_clean_tracked)
     if any(r.get("entry_type") == "run" and r.get("hypothesis_id") == hypothesis_id
            for r in ledger.read_all(base_dir)):
@@ -179,7 +187,22 @@ def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
     registered config/source/cost surfaces are unchanged, the global look budget
     is not spent, no prior reveal exists for this hypothesis, and the ledger is
     committed+clean. Only then does it run the (injected) backtest, assert the
-    OOS partition and registered window, and append the oos_reveal record."""
+    OOS partition and registered window, and append the oos_reveal record.
+
+    Trust boundaries (Threat Model C -- honest single-writer now; hard/multi-process
+    enforcement deferred to the autonomous-runner phase):
+      * Single-writer: concurrent multi-process reveals are unsupported in Phase 1A.
+        The read-check-append is not locked, so two simultaneous processes could
+        both pass the budget/write-once check. There is no concurrent caller today;
+        the CLI seam + a future PreToolUse hook is the intended enforcement point.
+      * run_fn must not transiently mutate frozen globals (config/cost/source) during
+        its own execution: drift is hashed once before run_fn, so a mutate-then-restore
+        inside run_fn is not detected. run_fn is trusted to be side-effect-free on
+        frozen state.
+      * A zero-trade run_fn still consumes one scarce OOS look and permanently sets
+        write-once for the hypothesis; that is intended (an honest 'no OOS trades' is a
+        valid, budget-consuming reveal).
+    """
     records = ledger.read_all(base_dir)
     runs = [r for r in records
             if r.get("entry_type") == "run" and r.get("hypothesis_id") == hypothesis_id]
@@ -207,7 +230,10 @@ def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
     ledger.verify(base_dir, anchored=True, git_clean_tracked=git_clean_tracked)
 
     oos_trades = run_fn()
-    entry_dates = [t["entry_date"] for t in oos_trades]
+    try:
+        entry_dates = [t["entry_date"] for t in oos_trades]
+    except (KeyError, TypeError) as exc:
+        raise OOSGateError(f"oos trade missing entry_date: {exc}") from exc
     windows.assert_oos_only(entry_dates, config.IN_SAMPLE_END)
     windows.assert_within_window(entry_dates, run["oos_window"])
 
