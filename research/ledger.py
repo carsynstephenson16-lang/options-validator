@@ -11,6 +11,8 @@ from research.hashing import canonical_json, sha256_hex
 
 GENESIS_PREV = "0" * 64
 TRIAL_TYPES = {"run", "trial_intent"}
+RESERVED_KEYS = {"seq", "prev_hash", "record_hash"}
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class LedgerError(Exception):
@@ -27,7 +29,15 @@ def read_all(base_dir="ledger") -> list[dict]:
     if not jsonl.exists():
         return []
     import json
-    return [json.loads(line) for line in jsonl.read_text().splitlines() if line.strip()]
+    records = []
+    for lineno, line in enumerate(jsonl.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise LedgerError(f"invalid JSON at ledger line {lineno}: {exc}") from exc
+    return records
 
 
 def tip(base_dir="ledger") -> str:
@@ -40,6 +50,10 @@ def _record_hash(record_without_hash: dict) -> str:
 
 
 def append(body: dict, base_dir="ledger") -> str:
+    reserved = RESERVED_KEYS & body.keys()
+    if reserved:
+        raise LedgerError(f"ledger body uses reserved field(s): {sorted(reserved)}")
+    verify(base_dir)
     jsonl, head = _paths(base_dir)
     jsonl.parent.mkdir(parents=True, exist_ok=True)
     records = read_all(base_dir)
@@ -88,12 +102,14 @@ def _git_clean_tracked_default(paths) -> bool:
     """True iff every path is git-tracked and has no uncommitted changes."""
     import subprocess
     for p in paths:
-        tracked = subprocess.run(["git", "ls-files", "--error-unmatch", p],
-                                 capture_output=True, text=True)
+        tracked = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "ls-files", "--error-unmatch", p],
+            capture_output=True, text=True)
         if tracked.returncode != 0:
             return False
-        status = subprocess.run(["git", "status", "--porcelain", "--", p],
-                                capture_output=True, text=True)
+        status = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain", "--", p],
+            capture_output=True, text=True)
         if status.stdout.strip():
             return False
     return True

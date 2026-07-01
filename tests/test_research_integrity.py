@@ -62,6 +62,30 @@ class HashingTests(unittest.TestCase):
         w = {"start": "2018-01-01", "end": "2022-12-31", "universe": ["SPY"]}
         self.assertEqual(hashing.data_window_hash(w), hashing.data_window_hash(dict(w)))
 
+    def test_source_hash_is_deterministic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "a.py").write_text("X = 1\n")
+            self.assertEqual(
+                hashing.source_hash(paths=("a.py",), root=tmp),
+                hashing.source_hash(paths=("a.py",), root=tmp),
+            )
+
+    def test_source_snapshot_default_root_includes_config(self):
+        self.assertIn("config.py", hashing.source_snapshot())
+
+    def test_source_snapshot_default_root_includes_dependency_lock_surface(self):
+        snap = hashing.source_snapshot()
+        self.assertIn("pyproject.toml", snap)
+        self.assertIn("uv.lock", snap)
+
+    def test_source_hash_changes_when_source_file_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "a.py")
+            path.write_text("X = 1\n")
+            before = hashing.source_hash(paths=("a.py",), root=tmp)
+            path.write_text("X = 2\n")
+            self.assertNotEqual(hashing.source_hash(paths=("a.py",), root=tmp), before)
+
 
 class LedgerChainTests(unittest.TestCase):
     def setUp(self):
@@ -90,6 +114,12 @@ class LedgerChainTests(unittest.TestCase):
         lines = jsonl.read_text().splitlines()
         lines[0] = lines[0].replace("keep", "HACKED")
         jsonl.write_text("\n".join(lines) + "\n")
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_wraps_invalid_json_as_ledger_error(self):
+        ledger.append({"entry_type": "trial_intent", "reason": "keep"}, self.base)
+        (Path(self.base) / "experiments.jsonl").write_text("{not json}\n")
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base)
 
@@ -155,6 +185,21 @@ class LedgerAnchoringTests(unittest.TestCase):
         subprocess.run(["git", "-C", self.repo, "commit", "-q", "-m", "anchor"], check=True)
         ledger.verify(self.base, anchored=True, git_clean_tracked=self._clean_tracked)  # no raise
 
+    def test_default_clean_checker_is_repo_root_scoped(self):
+        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
+        subprocess.run(["git", "-C", self.repo, "add", "ledger"], check=True)
+        subprocess.run(["git", "-C", self.repo, "commit", "-q", "-m", "anchor"], check=True)
+
+        old_root = ledger.REPO_ROOT
+        old_cwd = os.getcwd()
+        try:
+            ledger.REPO_ROOT = Path(self.repo)
+            os.chdir(Path(self.repo).parent)
+            ledger.verify(self.base, anchored=True)  # no injected checker
+        finally:
+            os.chdir(old_cwd)
+            ledger.REPO_ROOT = old_root
+
 
 class WindowTests(unittest.TestCase):
     def test_split_partitions_at_in_sample_end(self):
@@ -169,6 +214,37 @@ class WindowTests(unittest.TestCase):
 
     def test_assert_oos_only_accepts_pure_oos(self):
         windows.assert_oos_only(["2023-02-01", "2024-01-01"], "2022-12-31")  # no raise
+
+    def test_assert_within_window_accepts_registered_range(self):
+        windows.assert_within_window(
+            ["2023-01-01", "2024-12-31"],
+            {"start": "2023-01-01", "end": "2024-12-31"},
+        )
+
+    def test_assert_within_window_rejects_before_start(self):
+        with self.assertRaises(ValueError):
+            windows.assert_within_window(
+                ["2022-12-31", "2023-01-02"],
+                {"start": "2023-01-01", "end": "2024-12-31"},
+            )
+
+    def test_assert_within_window_rejects_after_end(self):
+        with self.assertRaises(ValueError):
+            windows.assert_within_window(
+                ["2024-12-31", "2025-01-01"],
+                {"start": "2023-01-01", "end": "2024-12-31"},
+            )
+
+    def test_assert_within_window_rejects_invalid_date_type(self):
+        with self.assertRaises(ValueError):
+            windows.assert_within_window(
+                [123],
+                {"start": "2023-01-01", "end": "2024-12-31"},
+            )
+
+    def test_split_rejects_invalid_date_type(self):
+        with self.assertRaises(ValueError):
+            windows.split_is_oos([object()], "2022-12-31")
 
 
 if __name__ == "__main__":
