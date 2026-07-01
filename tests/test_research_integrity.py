@@ -13,6 +13,7 @@ from research import ledger
 from research import windows
 from research import experiments
 from research import cli
+from research import facts
 
 
 class ConfigKnobTests(unittest.TestCase):
@@ -606,6 +607,22 @@ class CliTests(unittest.TestCase):
         # With no registration, the integrity gate refuses before any data path.
         self.assertNotEqual(cli.main(["reveal-oos", "--hypothesis-id", "H1",
                                       "--ledger", self.base]), 0)
+
+
+class FactsLogTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = self._tmp.name
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_facts_append_and_read_are_separate_from_ledger(self):
+        facts.append_fact("ThetaData missing EOD marks 2020-03-16", base_dir=self.base)
+        facts.append_fact("SPY spread ~2% at 30-delta", base_dir=self.base)
+        self.assertEqual(len(facts.read_facts(self.base)), 2)
+        # Facts must NOT land in the verdict-bearing ledger:
+        self.assertEqual(ledger.read_all(self.base), [])
 
 
 if __name__ == "__main__":
