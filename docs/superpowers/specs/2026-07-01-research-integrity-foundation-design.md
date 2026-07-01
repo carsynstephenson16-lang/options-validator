@@ -122,11 +122,16 @@ an IS/OOS split, cohort bootstrap, or provenance hashing.
   leaves a trace); a real external/remote anchor is the deferred threat-B layer.
 - **Record fields:** `run_id`, `timestamp`, `hypothesis_id`, pre-registered
   `decision_threshold`, `code_sha`, `config_hash`, `cost_model_hash`,
-  `data_window_hash`, `risk_basis` (see below), `is_window`, `is_result`
-  (scoreboard dict), `oos_window`, `oos_result` (**null until reveal**),
-  `trial_count` (cumulative), `verdict`, `notes`. Phase-1B fields
+  `source_hash`, `data_window_hash`, `risk_basis` (see below), `is_window`,
+  `is_result` (scoreboard dict), `oos_window`, `oos_result` (**null until
+  reveal**), `trial_count` (cumulative), `verdict`, `notes`. Phase-1B fields
   (`deflated_sharpe`, `pbo`) are **present but null/stubbed — never computed in
   1A**.
+- **Reveal records are append-only.** The pre-registration `run` record is never
+  mutated. It keeps `oos_result: null`; a successful reveal appends a separate
+  `oos_reveal` record with the same `run_id`/`hypothesis_id`, the `oos_result`,
+  and look-budget metadata. This is what makes "write-once" compatible with an
+  append-only ledger.
 
 ### Unit 3 — Integrity CLI (the hook seams)
 
@@ -134,7 +139,11 @@ Distinct subcommands so a future hook can gate them individually:
 
 - `integrity register` — write a new hypothesis record: `hypothesis_id`,
   `decision_threshold`, `is_result`, and all hashes; `oos_result` null.
-  Increments the trial counter.
+  Increments the trial counter. `hypothesis_id` is single-use: a duplicate
+  registration is refused, because reusing an ID would make the write-once OOS
+  rule ambiguous. `hypothesis_id` and `decision_threshold` must be non-empty, and
+  registration refuses a malformed `data_window`: both `is_window` and
+  `oos_window` must be explicit objects with parsable `start`/`end` bounds.
 - `integrity reveal-oos` — the only path that populates `oos_result`
   (see Unit 4).
 - `integrity trial-log` — record an **intent-to-select** that was not a full run
@@ -147,6 +156,26 @@ Distinct subcommands so a future hook can gate them individually:
 reset without breaking the chain. It counts intent-to-select, not executed runs
 (a width sweep of 3 counts as 3). It is *recorded* in 1A; the multiple-testing
 deflation that *consumes* it is Phase 1B.
+
+**Frozen source/config/cost surfaces.** `code_sha` is an audit field, not the
+drift-enforcement field: ledger anchoring commits naturally change `HEAD` even
+when strategy code is unchanged. Instead `source_hash` hashes the
+verdict/backtest source-code execution surface (`pyproject.toml`, `uv.lock`,
+`config.py`, `metrics.py`, and Python files under `analysis/`, `data/`,
+`harness/`, `research/`, `strategies/`) while excluding ledger records, results,
+caches, docs, and tests. Market-data content belongs in `data_window_hash` once
+ThetaData is wired; it is not smuggled into the source-code hash. The dependency
+files are included because changing numpy or another locked runtime dependency can
+change the verdict machinery without a `.py` diff. `config_hash` hashes all
+uppercase config constants. At `reveal-oos`, the current `source_hash`,
+`config_hash`, and `cost_model_hash` must all match the registered values, or the
+code refuses the reveal. This prevents a post-registration strategy, verdict,
+dependency, or config change from leaking into the holdout while still allowing
+ledger anchor commits. `register` also refuses if any file that would be hashed
+is untracked or ignored, or if any tracked file in the source-hash surface is
+dirty or deleted, because a preregistered hash of uncommitted source cannot be
+recovered from git later. The registration may dirty the ledger files; the
+research source surface must be committed-clean before that write happens.
 
 **Frozen cost/fill params — one canonical hashable surface.** These constants are
 scattered across files, so hashing "config.py lines" by string/line search would
@@ -181,11 +210,15 @@ increments the counter — enforced by the hash mismatch between `register` and
 - **OOS reveal *is* the first execution of the post-2022 window.** The OOS
   backtest is never run during exploration. `reveal-oos` refuses unless (a) a
   matching `register` exists with a decision threshold, (b) the global OOS
-  **look budget** > 0, and (c) `ledger/experiments.jsonl` and `ledger/HEAD` are
+  **look budget** > 0, (c) `ledger/experiments.jsonl` and `ledger/HEAD` are
   **committed with a clean tree** — so the pre-registration is immutable in git
-  history *before* anyone peeks at the holdout. It then runs the OOS backtest,
-  writes `oos_result` **write-once**, decrements the budget. A second reveal on
-  the same hypothesis is refused.
+  history *before* anyone peeks at the holdout, and (d) the current `source_hash`,
+  `config_hash`, and `cost_model_hash` match the registered values. It then runs
+  the OOS backtest and validates every returned trade entry date against the
+  registered `oos_window` (`start <= entry_date <= end`) as well as the global
+  `IN_SAMPLE_END` boundary. Only then does it append an `oos_reveal` record with
+  `oos_result` **write-once** and decrement the budget. A second reveal on the
+  same hypothesis is refused.
 - **Global look budget = 3** (`config.OOS_LOOK_BUDGET = 3`, hashed into the
   ledger). This is a global cap across the whole research program, not per
   hypothesis. Trader rationale: with 2023–2024 as the holdout and this universe
@@ -305,6 +338,8 @@ Resolution (two distinct concepts):
   ratio**. Sizing, however, must use `economic_max_loss`.
 - **In Phase 1A (this spec):** the ledger **defines and hashes the `risk_basis`**
   used for a run, so every verdict is interpretable and reproducible.
+  `risk_basis` is an enum: exactly `capital_at_risk` or `economic_max_loss`.
+  Unknown values are refused at registration time.
 - **Blocking prerequisite before the first real backtest (tracked separately,
   not part of the substrate build):** update `size_defined_risk` to gate on
   `economic_max_loss`. Small change in strategy code; best landed when real
