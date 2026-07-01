@@ -58,6 +58,7 @@ def _require_window(data_window, key) -> dict:
         raise OOSGateError(f"data_window.{key} must contain start/end")
     window = data_window[key]
     try:
+        # start<=end check: both sentinel dates lie within [start,end] iff start<=end
         windows.assert_within_window([window["start"], window["end"]], window)
     except (KeyError, TypeError, ValueError) as exc:
         raise OOSGateError(f"data_window.{key} must contain valid start/end") from exc
@@ -132,6 +133,11 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
     if any(r.get("entry_type") == "run" and r.get("hypothesis_id") == hypothesis_id
            for r in ledger.read_all(base_dir)):
         raise OOSGateError(f"hypothesis_id {hypothesis_id!r} is already registered")
+    safe_is_result = json_safe(is_result)
+    try:
+        hashing.canonical_json(safe_is_result)
+    except (TypeError, ValueError) as exc:
+        raise OOSGateError(f"is_result is not JSON-serializable: {exc}") from exc
     body = {
         "entry_type": "run",
         "timestamp": _now(),
@@ -145,7 +151,7 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
         "data_window_hash": hashing.data_window_hash(data_window),
         "risk_basis": risk_basis,
         "is_window": is_window,
-        "is_result": json_safe(is_result),
+        "is_result": safe_is_result,
         "oos_window": oos_window,
         "oos_result": None,
         "deflated_sharpe": None,  # Phase-1B stub -- never computed in 1A

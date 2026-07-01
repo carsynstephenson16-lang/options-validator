@@ -348,6 +348,37 @@ class RegisterCounterTests(unittest.TestCase):
         self.assertEqual(rec["is_result"]["expectancy_CI90"], [None, None])
         self.assertEqual(rec["is_result"]["verdict"], "INSUFFICIENT SAMPLE")
 
+    def test_register_rejects_non_serializable_is_result(self):
+        # A set is not JSON-serializable and json_safe passes it through unchanged.
+        # The gate must surface this as OOSGateError, not a bare TypeError.
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Hobj", "t", is_result={"bad": {1, 2, 3}},
+                                 data_window=_window(), risk_basis="economic_max_loss",
+                                 base_dir=self.base, code_sha="deadbeef",
+                                 source_clean_tracked=self.clean)
+
+    def test_source_clean_default_checker_against_real_temp_repo(self):
+        with tempfile.TemporaryDirectory() as repo:
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            subprocess.run(["git", "-C", repo, "config", "user.email", "t@t.t"], check=True)
+            subprocess.run(["git", "-C", repo, "config", "user.name", "t"], check=True)
+            (Path(repo) / "config.py").write_text("X = 1\n")
+            subprocess.run(["git", "-C", repo, "add", "config.py"], check=True)
+            subprocess.run(["git", "-C", repo, "commit", "-q", "-m", "init"], check=True)
+            original_root = hashing.REPO_ROOT
+            try:
+                hashing.REPO_ROOT = Path(repo)
+                # committed + clean -> True
+                self.assertTrue(experiments._source_clean_tracked_default(["config.py"]))
+                # locally modified (uncommitted) -> False
+                (Path(repo) / "config.py").write_text("X = 2\n")
+                self.assertFalse(experiments._source_clean_tracked_default(["config.py"]))
+                # untracked file -> False
+                (Path(repo) / "new.py").write_text("Y = 1\n")
+                self.assertFalse(experiments._source_clean_tracked_default(["new.py"]))
+            finally:
+                hashing.REPO_ROOT = original_root
+
 
 if __name__ == "__main__":
     unittest.main()
