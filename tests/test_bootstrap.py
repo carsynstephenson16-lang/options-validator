@@ -1,6 +1,8 @@
 import unittest
 from datetime import date
 
+import numpy as np
+
 import config
 import metrics
 from metrics import scoreboard
@@ -47,6 +49,36 @@ class CohortAndBlockTests(unittest.TestCase):
     def test_block_lengths_empty_below_three_cohorts(self):
         self.assertEqual(metrics._block_lengths(2), [])
         self.assertEqual(metrics._block_lengths(1), [])
+
+
+class EnvelopeCiTests(unittest.TestCase):
+    def _independent_weekly(self):
+        # 60 trades, one per distinct ISO week, mild both-signed PnL, one symbol.
+        base = date(2018, 1, 1)
+        dates = [(base.toordinal() + i * 7) for i in range(60)]
+        dates = [date.fromordinal(o).isoformat() for o in dates]
+        rng = np.random.default_rng(0)
+        pnls = rng.normal(5.0, 40.0, size=60)
+        return dates, pnls
+
+    def test_ci_is_finite_ordered_and_seed_stable_on_independent_data(self):
+        dates, pnls = self._independent_weekly()
+        lo1, hi1 = metrics._dependence_aware_ci(dates, pnls, n_boot=400, seed=7)
+        lo2, hi2 = metrics._dependence_aware_ci(dates, pnls, n_boot=400, seed=7)
+        self.assertTrue(np.isfinite(lo1) and np.isfinite(hi1))
+        self.assertLess(lo1, float(pnls.mean()))
+        self.assertLess(float(pnls.mean()), hi1)
+        self.assertEqual((lo1, hi1), (lo2, hi2))  # deterministic under fixed seed
+
+    def test_ci_is_nan_below_three_cohorts(self):
+        dates = ["2021-01-04", "2021-01-11"]  # 2 weeks -> no valid block
+        lo, hi = metrics._dependence_aware_ci(dates, np.array([1.0, -1.0]), n_boot=50)
+        self.assertTrue(np.isnan(lo) and np.isnan(hi))
+
+    def test_iid_helper_exists_and_is_not_used_by_scoreboard(self):
+        _, pnls = self._independent_weekly()
+        lo, hi = metrics.iid_expectancy_ci(pnls, n_boot=400, seed=1)
+        self.assertLess(lo, hi)
 
 
 if __name__ == "__main__":

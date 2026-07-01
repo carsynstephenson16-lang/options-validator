@@ -73,6 +73,89 @@ def _block_lengths(n_cohorts):
     return sorted(lengths)
 
 
+def _resample_block(cohorts, n_target, block_len, rng):
+    """Circular block bootstrap over the ordered cohort sequence. Accumulates
+    contiguous blocks of whole cohorts (with wraparound) until >= n_target trades,
+    then returns the mean PnL per trade of the resample."""
+    n = len(cohorts)
+    acc = []
+    total = 0
+    while total < n_target:
+        start = int(rng.integers(n))
+        for j in range(block_len):
+            c = cohorts[(start + j) % n]
+            acc.append(c)
+            total += len(c)
+            if total >= n_target:
+                break
+    return float(np.concatenate(acc).mean())
+
+
+def _resample_stationary(cohorts, n_target, block_len, rng):
+    """Stationary bootstrap (Politis-Romano): geometric block length with mean
+    `block_len` (p = 1/block_len), over the same cohort sequence."""
+    n = len(cohorts)
+    p = 1.0 / block_len
+    acc = []
+    total = 0
+    idx = int(rng.integers(n))
+    while total < n_target:
+        c = cohorts[idx]
+        acc.append(c)
+        total += len(c)
+        if rng.random() < p:
+            idx = int(rng.integers(n))
+        else:
+            idx = (idx + 1) % n
+    return float(np.concatenate(acc).mean())
+
+
+def _ci_one(cohorts, n_target, block_len, method, n_boot, rng, lo, hi):
+    fn = _resample_block if method == "block" else _resample_stationary
+    means = np.empty(n_boot)
+    for i in range(n_boot):
+        means[i] = fn(cohorts, n_target, block_len, rng)
+    return float(np.percentile(means, lo)), float(np.percentile(means, hi))
+
+
+def _ci_from_cohorts(cohorts, n_target, n_boot, lo, hi, seed):
+    """Widest CI across ALL (method, block_len) combinations: min lower bound,
+    max upper bound. No configuration can be selected because it flatters."""
+    Ls = _block_lengths(len(cohorts))
+    if not Ls:
+        return (float("nan"), float("nan"))
+    rng = np.random.default_rng(seed)
+    los, his = [], []
+    for method in ("block", "stationary"):
+        for L in Ls:
+            lo_b, hi_b = _ci_one(cohorts, n_target, L, method, n_boot, rng, lo, hi)
+            los.append(lo_b)
+            his.append(hi_b)
+    return (min(los), max(his))
+
+
+def _dependence_aware_ci(entry_dates, pnls, n_boot=None, lo=5, hi=95, seed=42):
+    """Verdict CI: weekly-cohort block bootstrap + stationary cross-check over a
+    shared frozen block-length envelope, reporting the widest CI."""
+    n_boot = n_boot or config.BOOTSTRAP_SAMPLES
+    cohorts = _build_week_cohorts(entry_dates, pnls)
+    return _ci_from_cohorts(cohorts, len(pnls), n_boot, lo, hi, seed)
+
+
+def iid_expectancy_ci(pnls, n_boot=None, lo=5, hi=95, seed=42):
+    """EXPLICIT, opt-in IID resample -- for the demo/illustration ONLY. NEVER
+    called by scoreboard(): a silent IID fallback is the integrity hole this
+    module exists to close."""
+    n_boot = n_boot or config.BOOTSTRAP_SAMPLES
+    if len(pnls) < 2:
+        return (float("nan"), float("nan"))
+    rng = np.random.default_rng(seed)
+    means = np.empty(n_boot)
+    for i in range(n_boot):
+        means[i] = rng.choice(pnls, size=len(pnls), replace=True).mean()
+    return (float(np.percentile(means, lo)), float(np.percentile(means, hi)))
+
+
 def _validated_arrays(trades):
     pnls = []
     wins = []
