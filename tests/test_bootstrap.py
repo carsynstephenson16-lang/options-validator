@@ -1,5 +1,8 @@
 import unittest
+from datetime import date
 
+import config
+import metrics
 from metrics import scoreboard
 
 
@@ -23,6 +26,27 @@ class ContractTests(unittest.TestCase):
     def test_scoreboard_raises_on_non_date_entry_type(self):
         with self.assertRaises(ValueError):
             scoreboard([_trade(5.0, date=123)])
+
+
+class CohortAndBlockTests(unittest.TestCase):
+    def test_same_iso_week_trades_form_one_cohort(self):
+        # 2021-01-04 (Mon) and 2021-01-08 (Fri) are the same ISO week.
+        dates = ["2021-01-04", "2021-01-08", "2021-01-11"]
+        pnls = __import__("numpy").array([1.0, 2.0, 3.0])
+        cohorts = metrics._build_week_cohorts(dates, pnls)
+        self.assertEqual(len(cohorts), 2)          # week1 {Mon,Fri}, week2 {Mon}
+        self.assertEqual(sorted(cohorts[0].tolist()), [1.0, 2.0])
+
+    def test_block_lengths_are_deduped_clamped_and_theory_anchored(self):
+        Ls = metrics._block_lengths(64)  # 64**(1/3)=4 -> {2,4,8,16}
+        self.assertEqual(Ls, [2, 4, 8, 16])
+        for L in Ls:
+            self.assertGreaterEqual(L, 2)
+            self.assertLessEqual(L, 63)
+
+    def test_block_lengths_empty_below_three_cohorts(self):
+        self.assertEqual(metrics._block_lengths(2), [])
+        self.assertEqual(metrics._block_lengths(1), [])
 
 
 if __name__ == "__main__":

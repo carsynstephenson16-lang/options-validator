@@ -36,6 +36,43 @@ def _as_date(x):
     raise ValueError(f"expected ISO date string or date object, got {type(x).__name__}")
 
 
+def _iso_week_key(d):
+    iso = _as_date(d).isocalendar()
+    return (iso[0], iso[1])  # (ISO year, ISO week)
+
+
+def _build_week_cohorts(entry_dates, pnls):
+    """Group PnLs into cohorts keyed by ISO week of entry, ordered chronologically.
+
+    Weekly cohorts keep same-week trades across all names as one INDIVISIBLE unit
+    (the cross-sectional axis); the block bootstrap over the ordered cohort
+    sequence handles the serial axis (Task 12)."""
+    order = sorted(range(len(entry_dates)), key=lambda i: _as_date(entry_dates[i]))
+    groups = {}
+    keys_in_order = []
+    for i in order:
+        k = _iso_week_key(entry_dates[i])
+        if k not in groups:
+            groups[k] = []
+            keys_in_order.append(k)
+        groups[k].append(float(pnls[i]))
+    return [np.array(groups[k], dtype=float) for k in keys_in_order]
+
+
+def _block_lengths(n_cohorts):
+    """Frozen, theory-anchored mean block lengths (in cohorts): round(c*n^(1/3)),
+    deduped, clamped to 2 <= L <= n_cohorts-1. Empty if n_cohorts < 3 (no valid
+    block) -> the caller returns INSUFFICIENT SAMPLE / no verdict."""
+    if n_cohorts < 3:
+        return []
+    lengths = set()
+    for c in config.BOOTSTRAP_BLOCK_CONSTANTS:
+        L = int(round(c * n_cohorts ** config.BOOTSTRAP_BLOCK_EXPONENT))
+        L = max(2, min(L, n_cohorts - 1))
+        lengths.add(L)
+    return sorted(lengths)
+
+
 def _validated_arrays(trades):
     pnls = []
     wins = []
