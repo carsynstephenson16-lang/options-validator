@@ -14,6 +14,7 @@ from research import windows
 from research import experiments
 from research import cli
 from research import facts
+from harness import run_backtest
 
 
 class ConfigKnobTests(unittest.TestCase):
@@ -623,6 +624,22 @@ class FactsLogTests(unittest.TestCase):
         self.assertEqual(len(facts.read_facts(self.base)), 2)
         # Facts must NOT land in the verdict-bearing ledger:
         self.assertEqual(ledger.read_all(self.base), [])
+
+
+class RunBacktestSeamTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = self._tmp.name
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_reveal_seam_gate_runs_before_the_unwired_data_path(self):
+        # No registration exists -> the gate must refuse BEFORE reaching the
+        # NotImplementedError ThetaData fetch inside the injected run function.
+        with self.assertRaises(experiments.OOSGateError):
+            run_backtest.reveal_out_of_sample("H1", base_dir=self.base,
+                                              git_clean_tracked=lambda paths: True)
 
 
 if __name__ == "__main__":
