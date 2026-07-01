@@ -46,8 +46,9 @@ Phase-1B stats (DSR/PBO are stubbed `null`).
 ## 3. Exact current state (verified at handoff)
 
 - Branch: `phase-1a-research-integrity` (checked out). Base branch: `main`.
-- HEAD: `0aa8f20` (Task 8 CLI). Working tree CLEAN.
-- Full suite: **75 tests, green** (`uv run python -m unittest discover -s tests`).
+- HEAD: `b272b75` (this handoff). Last CODE commit: `04a07ca` (Task 8 CLI +
+  trial-log fix). Working tree CLEAN.
+- Full suite: **76 tests, green** (`uv run python -m unittest discover -s tests`).
 - `research/` modules present: `__init__.py`, `hashing.py`, `ledger.py`,
   `windows.py`, `experiments.py`, `cli.py`. **Missing: `facts.py` (Task 9).**
 - `metrics.py` is still the ORIGINAL Phase-0 version (old IID `_expectancy_ci`);
@@ -56,6 +57,8 @@ Phase-1B stats (DSR/PBO are stubbed `null`).
 
 **Commit history on the branch (newest first):**
 ```
+b272b75 docs: Phase-1A execution handoff (this file)
+04a07ca fix(research): trial-log surfaces LedgerError as clean nonzero exit  [Task 8 fix]
 0aa8f20 feat(research): integrity CLI seams (verify, trial-log, register, reveal-oos)   [Task 8]
 9189405 fix(research): reveal entry_date->OOSGateError; register rejects window straddling IN_SAMPLE_END; single-writer doc  [Task 7 fixes]
 53b8a41 feat(research): write-once OOS gate with source/config/cost drift + window checks  [Task 7]
@@ -146,11 +149,12 @@ Use **superpowers:subagent-driven-development**. Per task:
 6. Model choice: sonnet for implementers/most reviews; haiku ok for trivial;
    Explore for all reviews.
 
-**IN-FLIGHT at handoff:** the Task 8 combined spec+quality review (a read-only
-Explore agent) was running when this handoff was written. Task 8 is verbatim
-Codex CLI on a green tree (75 tests). A new session can either wait for/ignore
-that result and re-verify `uv run python -m unittest discover -s tests`, or
-re-run a quick read-only review of `0aa8f20`. No code change is expected.
+**Task 8 is fully closed.** Its read-only review returned spec PASS + quality
+"with fixes" (one item: `trial-log` leaked a `LedgerError` traceback instead of
+returning an int). That fix landed in `04a07ca` (mirrors `verify`'s handling; a
+`test_trial_log_returns_nonzero_on_tampered_ledger` was added). CliTests is now 5
+tests; full suite 76 green. No pending fixes remain for Tasks 1–8. Start at
+Task 9.
 
 ## 7. REMAINING WORK — Tasks 9–16 (all in the committed plan)
 
