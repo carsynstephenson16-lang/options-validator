@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+.venv/
+.python-version.local
+
+.env
+.env.*
+!.env.example
+
+# Local Claude Code agent config / permissions -- never commit
+.claude/
+
+.cache/
+results/*
+!results/.gitkeep

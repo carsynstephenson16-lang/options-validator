@@ -1,0 +1,42 @@
+# Options Validation Harness -- rules for AI agents working in this repo
+
+## What this project is
+A research/validation harness answering ONE question: does a strategy have
+positive expectancy AFTER realistic costs, across 2018/2020/2022 regimes?
+It is NOT a live trading bot. It must never place real orders.
+A "no edge after costs" finding is a SUCCESS, not a failure to fix.
+
+## Hard guardrails (non-negotiable)
+- NO LOOK-AHEAD: at each decision timestamp use only data available at or
+  before it. A leak invalidates every downstream result.
+- CONSERVATIVE FILLS: fill at the quote MID or WORSE -- never the favorable
+  side. Apply SLIPPAGE_HAIRCUT on top of mid. Use quote-based marks, not stale
+  last-traded prices.
+- COSTS: COMMISSION_PER_CONTRACT on BOTH legs each way (via a Lumibot
+  TradingFee) PLUS a half-spread cost on each leg.
+- LIQUIDITY: skip any contract failing MIN_OPEN_INTEREST or MAX_SPREAD_PCT --
+  check BOTH legs before trading.
+- EOD GAPS: ThetaData can miss EOD marks even when intraday quotes exist.
+  Prefer SKIPPING the day (log it) over silently using an intraday snapshot
+  inside an EOD backtest.
+- CACHE downloaded data locally (parquet).
+
+## Engineering rules
+- Do NOT build a custom backtest engine, event loop, or fill simulator.
+  Configure Lumibot's (ThetaDataBacktesting + BacktestingBroker).
+- VERIFY every Lumibot/ThetaData API call against the INSTALLED library before
+  trusting it. Do not rely on remembered signatures. If a capability is
+  missing, STOP and report -- do not work around it by building infrastructure.
+- Every number in strategy logic comes from config.py. No magic numbers.
+- Keep it minimal. The goal is to validate edge, not build a framework.
+  Resist adding features that aren't on the phase plan in README.md.
+
+## Verdict rule
+- Expectancy-per-trade after costs (with a bootstrap CI) is the headline.
+- The verdict gates on the number of LOSSES (MIN_LOSSES_FOR_VERDICT), not the
+  number of trades. A high win rate in a short-vol strategy proves nothing on
+  its own -- the rare losses decide whether the edge is real.
+
+## Scope
+Validator only. No live order placement, no scanner/suggestor, no parameter
+optimizer unless explicitly added to the phase plan.
