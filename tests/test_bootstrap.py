@@ -81,5 +81,29 @@ class EnvelopeCiTests(unittest.TestCase):
         self.assertLess(lo, hi)
 
 
+class VerdictGuardTests(unittest.TestCase):
+    def _weeks(self, n_weeks, pnl, symbol="SPY", start=date(2018, 1, 1)):
+        out = []
+        for w in range(n_weeks):
+            d = date.fromordinal(start.toordinal() + w * 7).isoformat()
+            out.append(_trade(pnl, date=d, symbol=symbol))
+        return out
+
+    def test_insufficient_when_fewer_than_three_cohorts(self):
+        # 2 weeks, 20 losses -> passes the loss gate but fails the cohort gate.
+        trades = ([_trade(-50.0, date="2021-01-04") for _ in range(10)]
+                  + [_trade(-50.0, date="2021-01-11") for _ in range(10)])
+        result = scoreboard(trades)
+        self.assertIn("INSUFFICIENT SAMPLE", result["verdict"])
+
+    def test_verdict_present_with_enough_cohorts_and_losses(self):
+        # 40 weekly winners + 12 weekly losers across many weeks -> a real verdict.
+        trades = self._weeks(40, 30.0) + [
+            _trade(-60.0, date=date.fromordinal(date(2019, 1, 7).toordinal() + w * 7).isoformat())
+            for w in range(12)]
+        result = scoreboard(trades)
+        self.assertNotIn("INSUFFICIENT SAMPLE", result["verdict"])
+
+
 if __name__ == "__main__":
     unittest.main()

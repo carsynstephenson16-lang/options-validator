@@ -206,17 +206,6 @@ def _max_drawdown(pnls):
     return float((running_max - equity).max())
 
 
-def _expectancy_ci(pnls, n_boot, lo=5, hi=95):
-    """Bootstrap CI for mean PnL per trade (default 90% interval)."""
-    if len(pnls) < 2:
-        return (float("nan"), float("nan"))
-    rng = np.random.default_rng(42)
-    means = np.empty(n_boot)
-    for i in range(n_boot):
-        means[i] = rng.choice(pnls, size=len(pnls), replace=True).mean()
-    return (float(np.percentile(means, lo)), float(np.percentile(means, hi)))
-
-
 def scoreboard(trades, label="strategy"):
     pnls, wins, cap, entry_dates = _validated_arrays(trades)
     n = len(trades)
@@ -226,16 +215,21 @@ def scoreboard(trades, label="strategy"):
     rets = pnls / cap
 
     expectancy = float(pnls.mean()) if n else 0.0
-    ci_lo, ci_hi = _expectancy_ci(pnls, config.BOOTSTRAP_SAMPLES)
+    cohorts = _build_week_cohorts(entry_dates, pnls)
+    n_cohorts = len(cohorts)
+    ci_lo, ci_hi = _ci_from_cohorts(cohorts, n, config.BOOTSTRAP_SAMPLES, 5, 95, seed=42)
 
     mean_r = float(rets.mean()) if n else 0.0
     std_r = float(rets.std(ddof=1)) if n > 1 else 0.0
     downside = rets[rets < 0]
     dstd = float(downside.std(ddof=1)) if len(downside) > 1 else 0.0
-    # ---- verdict gates on LOSSES, not trades -------------------------------
+    # ---- verdict gates on LOSSES and on COHORTS, not trades -----------------
     if n_loss < config.MIN_LOSSES_FOR_VERDICT:
         verdict = (f"INSUFFICIENT SAMPLE ({n_loss} losses; need "
                    f">= {config.MIN_LOSSES_FOR_VERDICT}). Ratios below are NOT reliable.")
+    elif n_cohorts < 3:
+        verdict = (f"INSUFFICIENT SAMPLE ({n_cohorts} entry-week cohorts; need >= 3 "
+                   "to form a dependence-aware CI). No verdict.")
     elif ci_lo > 0:
         verdict = "PASS -- expectancy positive after costs (CI above zero)"
     elif ci_hi < 0:
@@ -292,10 +286,16 @@ def _demo():
     and how the verdict refuses to certify a thin loss sample.
     """
     rng = np.random.default_rng(7)
-    trades = [{"pnl": float(rng.normal(45, 8)), "capital_at_risk": 350.0}
-              for _ in range(35)]
-    trades += [{"pnl": float(rng.normal(-300, 40)), "capital_at_risk": 350.0}
-               for _ in range(6)]
+    base = date(2020, 1, 6).toordinal()  # Monday
+    symbols = config.UNIVERSE
+    trades = [{"pnl": float(rng.normal(45, 8)), "capital_at_risk": 350.0,
+               "entry_date": date.fromordinal(base + i * 3).isoformat(),
+               "symbol": symbols[i % len(symbols)]}
+              for i in range(35)]
+    trades += [{"pnl": float(rng.normal(-300, 40)), "capital_at_risk": 350.0,
+                "entry_date": date.fromordinal(base + 120 + i * 3).isoformat(),
+                "symbol": symbols[i % len(symbols)]}
+               for i in range(6)]
     print_scoreboard(scoreboard(trades, label="DEMO put credit spread (synthetic)"))
     print("\nNote: ~85% win rate, but only 6 losses -- below the verdict floor,")
     print("so the harness refuses to certify it. The expectancy is already")
