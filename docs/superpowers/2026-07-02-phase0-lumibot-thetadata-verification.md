@@ -97,6 +97,21 @@ The real smoke test (SMOKE_TEST_DATE=2022-12-30) needs **Standard**.
 
 ## Authentication model — TWO paths, an unresolved decision (2026-07-02)
 
+> **LIVE RESULT (2026-07-02, later same day): Path A executed and REJECTED.**
+> Prereqs all held (Java 26, `THETADATA_USERNAME`/`THETADATA_PASSWORD` present
+> in `.env` — checked as booleans, values never read). Lumibot's launcher
+> downloaded/launched ThetaTerminal (Bootstrap 20250709, Terminal 20260629),
+> wrote `creds.txt` 0600 — and the terminal rejected the login on every
+> ~30s relaunch: `ERROR: Invalid credentials. Please check your credentials
+> file, API key, or environment variable, and try again.` Port 25503 never
+> served; the free metadata probe was never reached. Note the 20260629 error
+> text puts "API key" first-class — the account may have moved to key auth,
+> or the password is stale. **OWNER ACTION (only the owner can fix
+> credentials):** log in at thetadata.net and verify/reset the email+password
+> in `.env`, or explicitly authorize Path B (launch with `THETA_DATA_API_KEY`;
+> terminal 20260629 >= the 20260615 minimum). The fetch path stays
+> launcher-agnostic either way. Recorded in `ledger/facts.log`.
+
 The owner supplied a ThetaData **API key** (`td1_prod_...`, stored in `.env` as
 `THETA_DATA_API_KEY` — the exact var ThetaTerminal reads per docs.thetadata.us;
 requires ThetaTerminal/Bootstrap >= 20260615). But the **installed lumibot

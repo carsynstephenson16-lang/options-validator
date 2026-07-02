@@ -111,13 +111,13 @@ def _ensure_terminal() -> None:
     """Ensure a local ThetaTerminal is serving at THETA_BASE_URL; if not, start
     it via lumibot's launcher using THETADATA_USERNAME/THETADATA_PASSWORD.
 
-    AUTH NOTE (open decision, see module docstring + .env): the installed lumibot
-    launcher authenticates with EMAIL+PASSWORD only. It does NOT use ThetaData's
-    newer API-key auth (THETA_DATA_API_KEY, terminal >= 20260615). If the account
-    has only an API key, either add email/password here, or launch ThetaTerminal
-    separately with the key exported and this probe will find it already alive.
-    Once the terminal is up (however it was launched), the fetch path below is
-    launcher-agnostic. Fails loud on the exact missing prerequisite."""
+    AUTH NOTE (2026-07-02 live result): Path A (email+password via lumibot's
+    launcher) was executed and terminal 20260629 REJECTED the login
+    ("Invalid credentials") in a relaunch loop -- see the Phase-0 doc and
+    ledger/facts.log. Until the owner refreshes the password or authorizes a
+    Path B launch (THETA_DATA_API_KEY, terminal >= 20260615), this probe
+    fails loud here. The fetch path below is launcher-agnostic once a
+    terminal is alive at THETA_BASE_URL, however it was started."""
     import requests
 
     try:
