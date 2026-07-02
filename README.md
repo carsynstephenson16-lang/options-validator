@@ -40,11 +40,16 @@ wired and verified.
 ## Capital & risk
 
 Set `RISK_SLEEVE` in `config.py` to the dollars you're genuinely willing to lose
-to this strategy, and size 1% of *that*. Do **not** size against your whole net
-worth (that silently puts your stock portfolio behind every options trade) or an
-arbitrary account number. The feasibility script shows the trade-off across
-several sleeve sizes -- and confirms that a $5-wide spread does not fit a small
-sleeve at 1% risk, which is a real finding, not a bug.
+to this strategy, and cap each trade's **economic max loss** (margin plus
+round-trip commissions) at an explicit dollar figure decided against that
+sleeve (`MAX_LOSS_PER_TRADE`; owner decision 2026-07-02: $600 ≈ 4.3% of the
+$14k sleeve). Do **not** size against your whole net worth (that silently puts
+your stock portfolio behind every options trade) or an arbitrary account
+number, and never raise the cap to make a width "fit". The feasibility script
+shows what fits the cap **and** the portfolio view the per-trade cap hides:
+five concurrent positions ≈ $3,000 at simultaneous risk (~21.4% of the sleeve)
+in a universe that is ~1.5 independent bets -- in a tech drawdown they lose
+together.
 
 ## Phase plan
 
@@ -55,7 +60,9 @@ sleeve at 1% risk, which is a real finding, not a bug.
   **Stop and confirm before building further.**
 - **Phase 1** -- finish the ThetaData adapter + smoke test.
 - **Phase 2** -- finish Strategy A + the backtest wrapper; produce a scoreboard.
-- **Phase 3** -- width sweep ($1 / $2 / $5) reporting expectancy *and* feasibility.
+- **Phase 3** -- width sweep ($1 / $2 / $5) reporting expectancy *and* feasibility
+  (**in-sample only** -- exactly one pre-registered width may ever reveal OOS;
+  the sweep must not spend the `OOS_LOOK_BUDGET`).
 - **Phase 4** -- (optional, later) Strategy B + an apples-to-apples comparison.
 
 A live "scanner / suggestor" is a **separate project** that only makes sense

@@ -9,8 +9,9 @@ import config
 
 
 def risk_budget() -> float:
-    """Dollars at risk allowed per trade = RISK_PER_TRADE of the options sleeve."""
-    return config.RISK_SLEEVE * config.RISK_PER_TRADE
+    """Dollars of ECONOMIC max loss allowed per trade: the hard cap
+    MAX_LOSS_PER_TRADE (owner decision 2026-07-02), not a sleeve fraction."""
+    return float(config.MAX_LOSS_PER_TRADE)
 
 
 def round_trip_commission_per_spread(legs: int = 2) -> float:

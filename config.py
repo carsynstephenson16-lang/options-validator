@@ -14,9 +14,10 @@ contain a hardcoded number that isn't sourced from this file.
 # ---------------------------------------------------------------------------
 # IMPORTANT (read before changing): "capital" in a backtest is a STUDY KNOB,
 # not your bank balance. The honest way to size risk is to decide how much of
-# YOUR money is the "options book" (the risk sleeve) and size 1% of THAT --
-# not 1% of your whole net worth (which silently puts your stock portfolio
-# behind every options trade) and not 1% of an arbitrary round number.
+# YOUR money is the "options book" (the risk sleeve) and cap each trade's
+# ECONOMIC max loss at an explicit dollar figure decided against that sleeve --
+# never against your whole net worth (which silently puts your stock portfolio
+# behind every options trade) and never an arbitrary round number.
 # Set RISK_SLEEVE to the dollars you are genuinely willing to lose here.
 #
 # HONEST SLEEVE (2026-07-01 decision): the owner's ~$14k of genuine options
@@ -26,17 +27,22 @@ contain a hardcoded number that isn't sourced from this file.
 # money. An earlier "$58k sleeve so a $5-wide spread fits" idea was rejected as
 # reverse-engineering the sleeve to fit the trade -- the exact mistake this file
 # and analysis/feasibility.py warn against.
-RISK_SLEEVE          = 14_000    # $ genuinely willing to lose (cash + swing)
-RISK_PER_TRADE       = 0.01      # max fraction of RISK_SLEEVE at risk per trade
+RISK_SLEEVE          = 14_000    # $ genuinely willing to lose (cash + swing;
+                                 # re-confirmed by the owner 2026-07-02)
+# PER-TRADE RISK (owner decision 2026-07-02): a HARD DOLLAR CAP replaces the
+# old "1% of sleeve" rule. $600 =~ 4.3% of the sleeve -- and under the assumed
+# credits it is what makes the strategy TRADABLE at all: the 1% rule ($140)
+# sat below the $2-wide ECONOMIC max loss ($142.60), i.e. zero contracts.
+# The cap is PER TRADE, not per cluster: len(UNIVERSE) concurrent positions
+# put ~$3,000 (~21.4% of the sleeve) at SIMULTANEOUS risk in a ~1.5-effective-
+# bet universe -- analysis/feasibility.py prints that portfolio view. Never
+# raise this cap to make a width "fit"; that is reverse-engineering risk to
+# fit the trade, the exact mistake this file warns against.
+MAX_LOSS_PER_TRADE   = 600       # $ hard cap on economic max loss per trade
 STARTING_CAPITAL     = 25_000    # account equity used by the backtest engine
                                  # (engine buying power; decoupled from the
-                                 # risk sleeve above -- 1-contract spreads need
-                                 # trivial buying power)
-
-# For the feasibility study we test sizing against several candidate sleeve
-# sizes so you can SEE the trade-off rather than guess one. 14_000 is the
-# owner's real sleeve; the others bracket it so the trade-off stays visible.
-RISK_SLEEVE_CANDIDATES = [8_000, 14_000, 25_000, 58_000]
+                                 # risk sleeve above -- a few defined-risk
+                                 # spreads need trivial buying power)
 
 # ---------------------------------------------------------------------------
 # UNIVERSE & WINDOW
@@ -47,7 +53,14 @@ RISK_SLEEVE_CANDIDATES = [8_000, 14_000, 25_000, 58_000]
 # short-put spread loses together. Treat "diversification" here with suspicion.
 UNIVERSE             = ["SPY", "QQQ", "MSFT", "AAPL", "NVDA"]
 BACKTEST_START       = "2018-01-01"   # must span 2018 / 2020 / 2022 regimes
-BACKTEST_END         = "2024-12-31"
+# OOS WINDOW EXTENSION (2026-07-02, decided BLIND at pre-registration -- before
+# any paid or post-IN_SAMPLE_END market data was fetched or opened): end moved
+# 2024-12-31 -> 2026-06-30. Rationale: analysis/power_check.py measured the
+# 2-year OOS window as underpowered at plausible edge sizes with an inflated
+# false-PASS rate; +75% OOS weeks is the only free lever that improves both.
+# The holdout stays untouched until the budgeted reveal. Registration freezes
+# this via data_window_hash -- changing it AFTER registering = a NEW hypothesis.
+BACKTEST_END         = "2026-06-30"
 IN_SAMPLE_END        = "2022-12-31"   # in-sample <= this; out-of-sample after
 
 # ---------------------------------------------------------------------------
@@ -73,15 +86,15 @@ DTE_MIN              = 10             # never 0DTE
 # STRATEGY A -- DEFINED-RISK PUT CREDIT SPREAD (volatility-risk-premium)
 # ---------------------------------------------------------------------------
 A_SHORT_PUT_DELTA    = 0.30          # sell the ~30-delta put (match on |delta|)
-# $2-wide is the CAPITAL-HONEST threshold candidate at the ~$14k sleeve -- NOT
-# the "cost-efficient" width (narrower spreads are MORE commission/spread
-# sensitive, not less). At 1% risk the per-trade budget is $140, which equals
-# the $2-wide GROSS max loss exactly -- a ZERO-SLACK threshold (commissions and
-# real-credit shortfalls are NOT in the feasibility formula, so true all-in risk
-# can breach budget; the live data path must skip trades whose actual
-# conservative credit does not fit). $5-wide does not fit this sleeve; $1-wide
-# fits but is the most cost-punished. Not validated until real quotes replace
-# ASSUMED_CREDIT_FRAC in feasibility.py.
+# Width under the $600 cap (2026-07-02; supersedes the old "$2-wide zero-slack
+# threshold" note): ALL sweep widths now fit at assumed credits -- $1-wide
+# (~$72.60 economic) 8 contracts, $2-wide (~$142.60) 4, $5-wide (~$352.60) 1.
+# Feasibility no longer forces the width choice; the IN-SAMPLE width sweep
+# decides it. $2-wide stays the registered candidate. Narrower widths remain
+# the most commission/spread-punished per dollar of credit. Feasibility is
+# NOT validation: the live data path must still skip trades whose actual
+# conservative credit does not fit, and nothing here is real until measured
+# quotes replace ASSUMED_CREDIT_FRAC in feasibility.py.
 A_SPREAD_WIDTH       = 2             # buy the put this many $ lower
 A_TARGET_DTE         = (30, 45)      # nearest expiration in band and >= DTE_MIN
 A_PROFIT_TARGET      = 0.50          # close at 50% of entry credit captured
@@ -90,7 +103,10 @@ A_CLOSE_AT_DTE       = 7             # always close by 7 DTE
 
 # Width sweep: costs are ~fixed per contract but credit shrinks with width, so
 # narrow spreads are far more cost-sensitive. Sweep WIDTH as the variable and
-# keep RISK_PER_TRADE fixed, rather than loosening risk to make trades "fit".
+# keep MAX_LOSS_PER_TRADE fixed, rather than loosening risk to make trades "fit".
+# INTEGRITY (2026-07-02): the sweep is judged IN-SAMPLE ONLY. Three widths
+# against OOS_LOOK_BUDGET = 3 (a lifetime cap) would exhaust the entire OOS
+# budget in one sweep; exactly ONE pre-registered width may ever reveal OOS.
 A_SPREAD_WIDTH_SWEEP = [1, 2, 5]
 
 # ---------------------------------------------------------------------------

@@ -3,11 +3,7 @@ import tempfile
 from pathlib import Path
 
 import config
-from analysis.feasibility import (
-    ASSUMED_CREDIT_FRAC,
-    contracts_that_fit,
-    max_loss_per_spread,
-)
+from analysis.feasibility import ASSUMED_CREDIT_FRAC
 import pandas as pd
 
 from data import thetadata_adapter
@@ -45,7 +41,9 @@ class PricingAndSizingTests(unittest.TestCase):
         contracts, economic_max_loss = size_defined_risk(width=5, net_credit=1.50)
 
         self.assertAlmostEqual(economic_max_loss, 352.60)
-        self.assertEqual(contracts, int((config.RISK_SLEEVE * config.RISK_PER_TRADE) // 352.60))
+        # $600 cap / $352.60 = 1.70 -> exactly 1 contract, never rounded up.
+        self.assertEqual(contracts, int(config.MAX_LOSS_PER_TRADE // 352.60))
+        self.assertEqual(contracts, 1)
 
     def test_round_trip_commission_per_spread_counts_two_legs_each_way(self):
         self.assertAlmostEqual(round_trip_commission_per_spread(), 2.60)
@@ -54,11 +52,15 @@ class PricingAndSizingTests(unittest.TestCase):
         self.assertAlmostEqual(capital_at_risk_per_spread(width=2, net_credit=0.60), 140.0)
         self.assertAlmostEqual(economic_max_loss_per_spread(width=2, net_credit=0.60), 142.60)
 
-    def test_two_wide_zero_slack_gross_fit_is_rejected_on_economic_risk(self):
+    def test_two_wide_fits_with_slack_under_the_dollar_cap(self):
+        # Under the old 1%-of-sleeve rule ($140) the $142.60 economic max loss
+        # meant ZERO contracts -- the harness could not trade at all. The $600
+        # cap (owner decision 2026-07-02) fits 4 contracts with slack.
         contracts, economic_max_loss = size_defined_risk(width=2, net_credit=0.60)
 
         self.assertAlmostEqual(economic_max_loss, 142.60)
-        self.assertEqual(contracts, 0)
+        self.assertEqual(contracts, int(config.MAX_LOSS_PER_TRADE // 142.60))
+        self.assertEqual(contracts, 4)
 
     def test_impossible_vertical_credit_fails_closed(self):
         contracts, economic_max_loss = size_defined_risk(width=2, net_credit=2.00)
@@ -293,40 +295,40 @@ class ScoreboardTests(unittest.TestCase):
                          "entry_date": "2021-01-04", "symbol": "SPY"}])
 
 
-class HonestSleeveConfigTests(unittest.TestCase):
-    """Locks the decided CAPITAL-HONEST config: $14k sleeve, $2-wide.
-
-    IMPORTANT: these preserve the original gross-feasibility fact under the
-    current ASSUMED_CREDIT_FRAC. Runtime sizing now gates on economic max loss,
-    so the $2-wide zero-slack gross fit is correctly rejected once commissions
-    are included.
+class HonestRiskCapConfigTests(unittest.TestCase):
+    """Locks the decided CAPITAL-HONEST config (owner decision 2026-07-02):
+    $14k sleeve, a HARD $600 per-trade max-loss cap (~4.3% of sleeve), $2-wide
+    as the registered candidate. Sizing gates on ECONOMIC max loss (margin +
+    round-trip commissions) against the dollar cap.
     """
 
-    def _gross_max_loss(self, width):
-        return max_loss_per_spread(width, ASSUMED_CREDIT_FRAC * width)
-
     def _contracts_for_width(self, width):
-        budget = config.RISK_SLEEVE * config.RISK_PER_TRADE
-        return contracts_that_fit(budget, self._gross_max_loss(width))
+        contracts, _ = size_defined_risk(width, ASSUMED_CREDIT_FRAC * width)
+        return contracts
 
     def test_sleeve_is_capital_honest_fourteen_k(self):
         self.assertEqual(config.RISK_SLEEVE, 14_000)
 
+    def test_per_trade_cap_is_six_hundred_dollars(self):
+        self.assertEqual(config.MAX_LOSS_PER_TRADE, 600)
+
     def test_configured_width_is_two(self):
         self.assertEqual(config.A_SPREAD_WIDTH, 2)
 
-    def test_two_wide_is_a_zero_slack_gross_threshold_fit(self):
-        # Per-trade budget exactly equals the $2-wide GROSS max loss: zero
-        # slack. Commissions / worse real fills push true risk over budget.
-        budget = config.RISK_SLEEVE * config.RISK_PER_TRADE
-        self.assertEqual(self._gross_max_loss(2), budget)  # exact knife-edge
-        self.assertEqual(self._contracts_for_width(2), 1)  # gross threshold fit
+    def test_every_sweep_width_fits_at_least_one_contract(self):
+        # The cap must never be tuned to make a width fit; but as decided, all
+        # three sweep widths ARE feasible, so the width choice belongs to the
+        # IN-SAMPLE sweep, not to feasibility arithmetic.
+        for width in config.A_SPREAD_WIDTH_SWEEP:
+            self.assertGreaterEqual(self._contracts_for_width(width), 1,
+                                    f"width {width} no longer fits the cap")
 
-    def test_five_wide_does_not_fit_the_honest_sleeve(self):
-        self.assertEqual(self._contracts_for_width(5), 0)
-
-    def test_fourteen_k_is_a_feasibility_candidate(self):
-        self.assertIn(14_000, config.RISK_SLEEVE_CANDIDATES)
+    def test_concentration_is_documented_reality(self):
+        # 5 concurrent positions x $600 = $3,000 =~ 21.4% of the sleeve at
+        # simultaneous risk, in a ~1.5-effective-bet universe. The cap is
+        # PER-TRADE; the portfolio view must stay visible in feasibility.
+        worst = len(config.UNIVERSE) * config.MAX_LOSS_PER_TRADE
+        self.assertAlmostEqual(worst / config.RISK_SLEEVE, 0.21429, places=4)
 
 
 if __name__ == "__main__":
