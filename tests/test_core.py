@@ -129,6 +129,96 @@ class ChainCacheTests(unittest.TestCase):
         self.assertEqual(out.iloc[0]["right"], "P")
 
 
+class ChainMergeTests(unittest.TestCase):
+    """Pin the offline-testable half of the ThetaData fetch: the four
+    per-contract frames must merge into a valid CHAIN_COLUMNS chain,
+    fail-closed on gaps, and fail loud on unexpected column names."""
+
+    def _frames(self, n=3):
+        base = {
+            "expiration": ["2022-02-18"] * n,
+            "strike": [380.0 + 5 * i for i in range(n)],
+            "right": ["put"] * n,
+        }
+        eod = pd.DataFrame({**base,
+                            "bid": [1.00 + i for i in range(n)],
+                            "ask": [1.10 + i for i in range(n)]})
+        greeks = pd.DataFrame({**base, "delta": [-0.30] * n, "gamma": [0.02] * n,
+                               "theta": [-0.04] * n, "vega": [0.12] * n})
+        iv = pd.DataFrame({**base, "implied_volatility": [0.25] * n})
+        oi = pd.DataFrame({**base, "open_interest": [500] * n})
+        return eod, greeks, iv, oi
+
+    def test_merge_produces_valid_chain_and_normalizes_rights(self):
+        chain = thetadata_adapter._merge_chain_frames(*self._frames())
+
+        self.assertEqual(list(chain.columns), thetadata_adapter.CHAIN_COLUMNS)
+        self.assertEqual(set(chain["right"]), {"P"})
+        thetadata_adapter.validate_chain_schema(chain)
+
+    def test_merge_drops_contracts_missing_open_interest(self):
+        eod, greeks, iv, oi = self._frames(3)
+
+        chain = thetadata_adapter._merge_chain_frames(eod, greeks, iv, oi.iloc[:2])
+
+        self.assertEqual(len(chain), 2)
+
+    def test_merge_keeps_last_report_per_contract(self):
+        eod, greeks, iv, _ = self._frames(1)
+        oi = pd.DataFrame({
+            "expiration": ["2022-02-18"] * 2,
+            "strike": [380.0] * 2,
+            "right": ["put"] * 2,
+            "timestamp": ["2022-01-03T10:00:00", "2022-01-03T16:00:00"],
+            "open_interest": [100, 700],
+        })
+
+        chain = thetadata_adapter._merge_chain_frames(eod, greeks, iv, oi)
+
+        self.assertEqual(chain.iloc[0]["open_interest"], 700)
+
+    def test_merge_fails_loud_when_quote_columns_missing(self):
+        eod, greeks, iv, oi = self._frames(1)
+
+        with self.assertRaisesRegex(ValueError, r"none of.*bid"):
+            thetadata_adapter._merge_chain_frames(
+                eod.drop(columns=["bid", "ask"]), greeks, iv, oi)
+
+
+class OOSTouchGuardTests(unittest.TestCase):
+    """Spec Unit 4: 'just printing a chain' after IN_SAMPLE_END is a holdout
+    look. The adapter refuses post-2022 dates -- even cached ones -- unless the
+    OOS reveal gate passes allow_oos=True."""
+
+    def _valid_chain(self):
+        return pd.DataFrame([{
+            "expiration": "2023-02-17", "strike": 390.0, "right": "P",
+            "bid": 1.00, "ask": 1.05, "open_interest": 500, "iv": 0.25,
+            "delta": -0.30, "gamma": 0.02, "theta": -0.04, "vega": 0.12,
+        }])
+
+    def test_post_in_sample_chain_refused_without_gate(self):
+        with self.assertRaises(thetadata_adapter.OOSDataTouchError):
+            thetadata_adapter.get_eod_chain("SPY", "2023-01-05")
+
+    def test_even_cached_post_in_sample_chain_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cache = thetadata_adapter.CACHE_DIR
+            try:
+                thetadata_adapter.CACHE_DIR = Path(tmp)
+                self._valid_chain().to_parquet(
+                    thetadata_adapter._cache_path("SPY", "2023-01-05"))
+
+                with self.assertRaises(thetadata_adapter.OOSDataTouchError):
+                    thetadata_adapter.get_eod_chain("SPY", "2023-01-05")
+
+                gated = thetadata_adapter.get_eod_chain(
+                    "SPY", "2023-01-05", allow_oos=True)
+            finally:
+                thetadata_adapter.CACHE_DIR = old_cache
+
+        self.assertEqual(len(gated), 1)
+
 class ScoreboardTests(unittest.TestCase):
     def test_scoreboard_requires_capital_at_risk(self):
         with self.assertRaises(ValueError):
