@@ -15,6 +15,8 @@ but main() refuses first, belt-and-braces).
 
 Run from repo root:  python smoke_test.py
 """
+import pandas as pd
+
 import config
 from data.thetadata_adapter import get_eod_chain, passes_liquidity
 from research import facts
@@ -24,11 +26,15 @@ SMOKE_TEST_DATE = "2022-12-30"  # last trading day before IN_SAMPLE_END
 # Candidate short-put band: config.A_SHORT_PUT_DELTA = 0.30 is the target
 # ~30-delta short put; 0.25-0.35 is the surrounding band summarize_chain
 # reports as "candidates" for that leg -- not a strict match on 0.30 itself.
+# The +/-0.05 width is a REPORTING band only (strike grids are discrete, so
+# the nearest-|delta| match rarely sits exactly on 0.30); it feeds no verdict
+# and no selection logic -- strike selection matches nearest |delta| in the
+# strategy, not this band.
 CANDIDATE_SHORT_PUT_DELTA_LOW = 0.25
 CANDIDATE_SHORT_PUT_DELTA_HIGH = 0.35
 
 
-def summarize_chain(chain) -> dict:
+def summarize_chain(chain: pd.DataFrame) -> dict:
     puts = chain[chain["right"] == "P"]
     calls = chain[chain["right"] == "C"]
     liquid = chain[chain.apply(
