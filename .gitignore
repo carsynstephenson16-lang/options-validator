@@ -15,3 +15,6 @@ __pycache__/
 .cache/
 results/*
 !results/.gitkeep
+
+# Obsidian vault config (repo opened as a vault; not project files)
+.obsidian/
