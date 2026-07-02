@@ -255,6 +255,21 @@ def _merge_chain_frames(eod: pd.DataFrame, greeks: pd.DataFrame,
     return merged[CHAIN_COLUMNS].reset_index(drop=True)
 
 
+def _fetch_merged_chain(symbol: str, date: str):
+    """Fetch the four per-contract frames and merge into a validated chain.
+    Returns (chain, dropped_count). Callers decide how the drop count is
+    reported -- the blind-cache path must not print anything."""
+    _ensure_terminal()
+    eod = _fetch_v3_csv("eod", symbol, date)
+    greeks = _fetch_v3_csv("greeks", symbol, date)
+    iv = _fetch_v3_csv("iv", symbol, date)
+    oi = _fetch_v3_csv("oi", symbol, date)
+
+    chain = _merge_chain_frames(eod, greeks, iv, oi)
+    validate_chain_schema(chain)
+    return chain, len(eod) - len(chain)
+
+
 def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.DataFrame:
     """Return the validated EOD option chain for `symbol` on `date` (YYYY-MM-DD),
     fetched from the local ThetaTerminal on cache miss and cached as parquet.
@@ -274,20 +289,81 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
     if cached.exists():
         return validate_chain_schema(pd.read_parquet(cached))
 
-    _ensure_terminal()
-    eod = _fetch_v3_csv("eod", symbol, date)
-    greeks = _fetch_v3_csv("greeks", symbol, date)
-    iv = _fetch_v3_csv("iv", symbol, date)
-    oi = _fetch_v3_csv("oi", symbol, date)
-
-    chain = _merge_chain_frames(eod, greeks, iv, oi)
-    dropped = len(eod) - len(chain)
+    chain, dropped = _fetch_merged_chain(symbol, date)
     if dropped:
-        print(f"{symbol} @ {date}: dropped {dropped}/{len(eod)} contracts "
+        print(f"{symbol} @ {date}: dropped {dropped} contracts "
               "missing greeks/IV/OI (fail-closed; untradeable anyway)")
-    validate_chain_schema(chain)
     chain.to_parquet(cached)
     return chain
+
+
+# --------------------------------------------------------------------------
+# Blind cache (pre-registration decision doc 2026-07-02, section 4)
+# --------------------------------------------------------------------------
+
+BLIND_CACHE_METADATA_KEYS = (
+    "symbol", "date", "rows", "columns", "sha256", "path", "already_cached",
+)
+
+
+def _parquet_metadata_without_values(path: Path):
+    """(rows, column_names) read from parquet FILE METADATA only -- the value
+    pages are never materialized, so an existing blind-cached file can be
+    audited without a holdout look even in-process."""
+    import pyarrow.parquet as pq
+
+    f = pq.ParquetFile(path)
+    return int(f.metadata.num_rows), list(f.schema_arrow.names)
+
+
+def blind_cache_chain(symbol: str, date: str, *, ledger_dir="ledger") -> dict:
+    """Fetch-and-cache a post-IN_SAMPLE_END chain WITHOUT surfacing its values.
+
+    The OOS holdout may be cached during the paid data month so the eventual
+    reveal does not need a second subscription -- but caching must not become
+    a stealth look. This path therefore: (1) refuses in-sample dates (use
+    get_eod_chain); (2) writes the parquet to the same cache location the
+    reveal path reads; (3) returns ONLY safe metadata (BLIND_CACHE_METADATA_KEYS
+    -- no prices, greeks, or aggregates thereof); (4) appends an auditable
+    facts event on EVERY invocation. Reading the cached values remains gated
+    by get_eod_chain's OOS guard / the reveal path (allow_oos=True).
+    """
+    from research import facts
+
+    symbol = _normalize_symbol(symbol)
+    date = _normalize_date(date)
+    if date <= config.IN_SAMPLE_END:
+        raise ValueError(
+            f"{symbol} @ {date} is in-sample (<= {config.IN_SAMPLE_END}); "
+            "blind caching is only for the OOS holdout -- use get_eod_chain."
+        )
+    cached = _cache_path(symbol, date)
+    already_cached = cached.exists()
+    if already_cached:
+        rows, columns = _parquet_metadata_without_values(cached)
+    else:
+        chain, _dropped = _fetch_merged_chain(symbol, date)
+        chain.to_parquet(cached)
+        rows, columns = len(chain), list(chain.columns)
+        del chain  # values must not outlive the write
+
+    sha256 = __import__("hashlib").sha256(cached.read_bytes()).hexdigest()
+    meta = {
+        "symbol": symbol,
+        "date": date,
+        "rows": rows,
+        "columns": columns,
+        "sha256": sha256,
+        "path": str(cached),
+        "already_cached": already_cached,
+    }
+    facts.append_fact(
+        "BLIND_CACHE "
+        f"symbol={symbol} date={date} rows={rows} sha256={sha256} "
+        f"already_cached={str(already_cached).lower()} path={cached}",
+        base_dir=ledger_dir,
+    )
+    return meta
 
 
 def mid_price(bid: float, ask: float) -> float:

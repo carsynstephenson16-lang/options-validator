@@ -110,8 +110,14 @@ Decision: implement a **blind-cache** mode before subscribing, test-first:
 - READING those parquet files stays gated by the OOS reveal path
   (`allow_oos=True` via `reveal_oos()` only). Charge-on-touch is unchanged:
   the budgeted look happens at reveal, not at caching.
-- Not implemented today; it is a listed prerequisite before the subscription
-  starts (with tests proving values cannot leak through the blind path).
+- IMPLEMENTED (2026-07-02): `data/thetadata_adapter.blind_cache_chain` +
+  `tests/test_blind_cache.py` -- refuses in-sample dates; returns only
+  `BLIND_CACHE_METADATA_KEYS` (symbol, date, rows, schema names, sha256,
+  path, already_cached); appends a `BLIND_CACHE` facts event per invocation;
+  an already-cached file is audited from parquet FILE METADATA only (value
+  pages never materialized); tests pin that `get_eod_chain` still refuses
+  the blind-cached date without the reveal gate and that the reveal seam
+  reads the cache without a network touch.
 
 ## 5. Verdict CI size inflation: acknowledged, decision owner-facing
 
