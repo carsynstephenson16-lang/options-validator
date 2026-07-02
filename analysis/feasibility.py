@@ -18,6 +18,11 @@ import math
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
+from strategies.base import (  # noqa: E402
+    capital_at_risk_per_spread,
+    economic_max_loss_per_spread,
+    round_trip_commission_per_spread,
+)
 
 # Rule of thumb: a 30-delta, $W-wide put credit spread collects on the order of
 # 25-35% of the width in net credit. We use the midpoint; it is an ASSUMPTION
@@ -27,7 +32,7 @@ ASSUMED_CREDIT_FRAC = 0.30
 
 def max_loss_per_spread(width, credit):
     """Defined risk = (width - net credit) per share x 100 shares."""
-    return (width - credit) * 100.0
+    return capital_at_risk_per_spread(width, credit)
 
 
 def contracts_that_fit(risk_budget, max_loss):
@@ -40,28 +45,30 @@ def run():
     widths = config.A_SPREAD_WIDTH_SWEEP
     sleeves = config.RISK_SLEEVE_CANDIDATES
     rpt = config.RISK_PER_TRADE
-    commission = config.COMMISSION_PER_CONTRACT
 
     print("=" * 78)
     print("FEASIBILITY: can a single spread fit the 1%-per-trade rule?")
     print(f"(assumed net credit = {ASSUMED_CREDIT_FRAC:.0%} of width "
           "-- replace with measured data)")
+    print("Sizing basis: ECONOMIC max loss = broker margin + round-trip commissions")
     print("=" * 78)
 
     for width in widths:
         credit = ASSUMED_CREDIT_FRAC * width
-        mloss = max_loss_per_spread(width, credit)
-        rt_comm = commission * 4          # 2 legs x open+close
+        margin = max_loss_per_spread(width, credit)
+        rt_comm = round_trip_commission_per_spread()
+        economic = economic_max_loss_per_spread(width, credit)
         comm_drag = rt_comm / (credit * 100.0)
         print(f"\nWidth ${width}  |  assumed credit ${credit:.2f}  |  "
-              f"max loss ${mloss:.0f}/contract")
+              f"broker margin ${margin:.0f}/contract  |  "
+              f"economic max loss ${economic:.2f}/contract")
         print(f"   round-trip commission ${rt_comm:.2f} = "
               f"{comm_drag:.1%} of the ${credit*100:.0f} credit (before bid-ask)")
         for sleeve in sleeves:
             budget = sleeve * rpt
-            n = contracts_that_fit(budget, mloss)
+            n = contracts_that_fit(budget, economic)
             fit = "FITS" if n >= 1 else "ZERO -- does not fit"
-            tail = f"  using ${n*mloss:.0f} buying power" if n >= 1 else ""
+            tail = f"  using ${n*economic:.2f} economic risk" if n >= 1 else ""
             print(f"   sleeve ${sleeve:>6,} -> 1% budget ${budget:>6.0f} -> "
                   f"{n} contract(s)  [{fit}]{tail}")
 

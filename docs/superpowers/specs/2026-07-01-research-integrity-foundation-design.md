@@ -69,10 +69,10 @@ function later — see Unit 4).
 
 ### Unit 1 — Typed trade record
 
-Today the record fed to `metrics.scoreboard()` is only `{pnl, capital_at_risk}`
-([metrics.py:13-18](../../../metrics.py#L13-L18),
-[run_backtest.py:16](../../../harness/run_backtest.py#L16)). That cannot support
-an IS/OOS split, cohort bootstrap, or provenance hashing.
+The pre-Phase-1A record fed to `metrics.scoreboard()` was only
+`{pnl, capital_at_risk}`. That baseline could not support an IS/OOS split, cohort
+bootstrap, or provenance hashing, so Phase 1A tightens the verdict-path trade
+schema as follows.
 
 - **Required** (substrate cannot run without these):
   - `pnl` — net of all costs (unchanged).
@@ -81,16 +81,22 @@ an IS/OOS split, cohort bootstrap, or provenance hashing.
   - `entry_date` — **the IS/OOS split and every cohort key on entry date**, not
     exit date. A trade belongs to the window in which the *decision* was made;
     keying on exit date would reintroduce look-ahead.
-  - `symbol` — required on verdict paths for auditability (verifying a weekly
-    cohort actually spans multiple names, i.e. the ~1.5-independent-bets
-    concentration claim) and to foreclose a "drop a field, get a tighter CI"
-    escape hatch. Under weekly cohorting the cohort *key* is the ISO week, not the
-    symbol, but symbol stays required so the cross-sectional structure is
-    auditable and available for later diagnostics without a schema break.
+  - `symbol` — non-empty underlying ticker string required on verdict paths for
+    auditability (verifying a weekly cohort actually spans multiple names, i.e.
+    the ~1.5-independent-bets concentration claim) and to foreclose a "drop a
+    field, get a tighter CI" escape hatch. Under weekly cohorting the cohort
+    *key* is the ISO week, not the symbol, but symbol stays required so the
+    cross-sectional structure is auditable and available for later diagnostics
+    without a schema break.
 - **Recommended** (cheap, high audit value; not blocking):
   - `exit_date`, `strategy_id`, `width`, `entry_credit`, `costs`,
     `economic_max_loss` (see Risk-basis section), `data_source_id`
     (provenance for the data-window hash).
+- **Outcome classification:** verdict loss counts are derived from realized net
+  `pnl` only: wins are `pnl > 0`, losses are `pnl < 0`, and flat trades are
+  neither. If an extractor supplies `is_win`, it must agree with `pnl > 0`;
+  contradictory flags are rejected rather than allowed to satisfy or evade the
+  loss-count gate.
 - **Fail loud, never silently fall back.** On any verdict-producing path
   (`scoreboard()`), a missing `entry_date` or `symbol` must **raise
   `ValueError`** — the same discipline `_validated_arrays` already applies to
@@ -120,13 +126,30 @@ an IS/OOS split, cohort bootstrap, or provenance hashing.
   tamper-*evident*, not tamper-*proof* — a capable agent could recompute every
   hash and re-commit. Committing `HEAD` puts the head in git history (rewriting it
   leaves a trace); a real external/remote anchor is the deferred threat-B layer.
-- **Record fields:** `run_id`, `timestamp`, `hypothesis_id`, pre-registered
-  `decision_threshold`, `code_sha`, `config_hash`, `cost_model_hash`,
-  `source_hash`, `data_window_hash`, `risk_basis` (see below), `is_window`,
-  `is_result` (scoreboard dict), `oos_window`, `oos_result` (**null until
-  reveal**), `trial_count` (cumulative), `verdict`, `notes`. Phase-1B fields
+- **Record types and fields:** Phase 1A accepts only `trial_intent`, `run`, and
+  `oos_reveal` records. A `trial_intent` record carries a `timestamp`, `reason`,
+  cumulative `trial_count`, and optional `hypothesis_id`. A `run` record carries
+  `run_id`, `timestamp`,
+  `hypothesis_id`, pre-registered `decision_threshold`, `code_sha`,
+  `config_hash`, `cost_model_hash`, `source_hash`, `data_window_hash`,
+  `risk_basis` (see below), `is_window`, `is_result` (scoreboard dict),
+  `oos_window`, `oos_result` (**null until reveal**), `trial_count`
+  (cumulative), and `notes`. Verdicts live inside `is_result` / `oos_result`;
+  there is no separate top-level verdict field. Phase-1B fields
   (`deflated_sharpe`, `pbo`) are **present but null/stubbed — never computed in
-  1A**.
+  1A**. Verification rejects unknown ledger record types and malformed window
+  objects. An `oos_reveal` record carries a `timestamp`, matching
+  `run_id`/`hypothesis_id`, `oos_result` (scoreboard dict), `trial_count`, and
+  look-budget metadata. Timestamps are timezone-aware ISO timestamps, not free
+  text. Phase 1A record schemas are closed: extra top-level fields are rejected
+  so a manually edited ledger cannot smuggle ambiguous, unversioned semantics into
+  an otherwise valid hash chain. Ledger verification also rejects untrimmed
+  identity/audit strings such as `hypothesis_id`, `run_id`, `decision_threshold`,
+  and trial-intent `reason`; canonicalization is not only a CLI convenience.
+  `code_sha` must be a full Git object hash. Frozen `config_hash`,
+  `cost_model_hash`, `source_hash`, and `data_window_hash` fields must be
+  64-character lowercase SHA-256 hex digests, and the registered `is_window`
+  must end strictly before `oos_window` begins.
 - **Reveal records are append-only.** The pre-registration `run` record is never
   mutated. It keeps `oos_result: null`; a successful reveal appends a separate
   `oos_reveal` record with the same `run_id`/`hypothesis_id`, the `oos_result`,
@@ -141,14 +164,18 @@ Distinct subcommands so a future hook can gate them individually:
   `decision_threshold`, `is_result`, and all hashes; `oos_result` null.
   Increments the trial counter. `hypothesis_id` is single-use: a duplicate
   registration is refused, because reusing an ID would make the write-once OOS
-  rule ambiguous. `hypothesis_id` and `decision_threshold` must be non-empty, and
-  registration refuses a malformed `data_window`: both `is_window` and
+  rule ambiguous. `hypothesis_id` and `decision_threshold` are trimmed before
+  hashing/storage and must be non-empty after trimming, so `"H1"` and `" H1 "`
+  cannot become two different hypotheses. `is_result` must be a scoreboard
+  object, `notes` must be text, optional `run_id` must be non-empty when supplied,
+  and registration refuses a malformed `data_window`: both `is_window` and
   `oos_window` must be explicit objects with parsable `start`/`end` bounds.
 - `integrity reveal-oos` — the only path that populates `oos_result`
   (see Unit 4).
 - `integrity trial-log` — record an **intent-to-select** that was not a full run
   (an eyeballed delta, a discarded config, each width in a sweep). Increments
-  the counter.
+  the counter. `reason` and optional `hypothesis_id` are trimmed and must be
+  non-empty when supplied.
 - `integrity verify` — recompute the hash chain, check the git-anchored head and
   ancestry, report tamper/consistency status.
 
@@ -201,6 +228,10 @@ is a *fact* (allowed); nudging an assumption because it improves PnL is *tuning*
 (banned). Changing a frozen param starts a **new** pre-registered hypothesis and
 increments the counter — enforced by the hash mismatch between `register` and
 `reveal-oos`.
+- **Fill-model semantics:** when `HALF_SPREAD_COST` is true, entry credit crosses
+  the bid/ask on both legs (short leg at bid, long leg at ask) and then applies
+  `SLIPPAGE_HAIRCUT` adversely on top. A near-mid fill model is a different
+  `FILL_MODEL_ID`, not the current conservative model.
 
 ### Unit 4 — RunWindow / OOS gate
 
@@ -232,6 +263,15 @@ increments the counter — enforced by the hash mismatch between `register` and
 - **Testability before ThetaData:** `reveal-oos` takes an **injected run
   function**, so it is fully unit-testable now with a fake backtest and wired to
   the real Lumibot/ThetaData path later.
+- **Non-verdict data probes stay in-sample.** Smoke tests and environment checks
+  are allowed to verify connectivity, schema, and caching, but they must use
+  dates on or before `IN_SAMPLE_END` unless they go through the OOS reveal gate.
+  "Just printing a chain" after 2022 is still a holdout look.
+- **Cached/fetched option chains are validated at the adapter boundary.** Cache
+  keys must use a safe symbol and ISO date, and cached parquet must contain the
+  required option-chain schema with finite numeric fields before any strategy or
+  smoke path can consume it. Bad cache data is an integrity failure, not a
+  downstream surprise.
 
 ### Unit 5 — Dependence-aware confidence interval
 
@@ -311,16 +351,17 @@ facts, not parameters" channel.
 
 ## Risk-basis amendment (finding #7)
 
-`size_defined_risk` ([base.py:24](../../../strategies/base.py#L24)) sizes on
-**gross** payoff max loss `(width − credit) × 100`, excluding commissions. OIC
-confirms that payoff definition (max loss = high strike − low strike − net
-premium); commissions are additional real cash loss. At the current **zero-slack**
-$2-wide config ([config.py:76-85](../../../config.py#L76-L85)), the $2.60
-round-trip commission pushes true economic risk to ~$142.60, above the $140
-per-trade budget — which **flips feasibility from 1 contract to 0**. Gross-only
-sizing therefore lets the backtest trade a configuration that violates the stated
-"1% of sleeve" rule on every $2-wide trade: certifying a strategy that could not
-actually be run. This is a simulation-realism integrity concern, not later polish.
+Before the Codex post-review fix, `size_defined_risk`
+([base.py](../../../strategies/base.py)) sized on **gross** payoff max loss
+`(width − credit) × 100`, excluding commissions. OIC confirms that payoff
+definition (max loss = high strike − low strike − net premium); commissions are
+additional real cash loss. At the current **zero-slack** $2-wide config
+([config.py:76-85](../../../config.py#L76-L85)), the $2.60 round-trip commission
+pushes true economic risk to ~$142.60, above the $140 per-trade budget — which
+**flips feasibility from 1 contract to 0**. Gross-only sizing therefore would let
+the backtest trade a configuration that violates the stated "1% of sleeve" rule
+on every $2-wide trade: certifying a strategy that could not actually be run.
+This is a simulation-realism integrity concern, not later polish.
 
 Resolution (two distinct concepts):
 
@@ -335,17 +376,19 @@ Resolution (two distinct concepts):
   and **adds `return_on_economic_max_loss` as a secondary diagnostic**. Margin
   return and economic-risk return answer different trading questions, so we report
   both — but the **verdict is driven by the PnL expectancy CI (Unit 5), not by any
-  ratio**. Sizing, however, must use `economic_max_loss`.
+  ratio**. If `economic_max_loss` is supplied for any trade, it must be supplied
+  for every trade and must be at least `capital_at_risk`; otherwise the scoreboard
+  refuses the malformed diagnostic instead of printing a flattering number.
+  Sizing, however, must use `economic_max_loss`.
 - **In Phase 1A (this spec):** the ledger **defines and hashes the `risk_basis`**
   used for a run, so every verdict is interpretable and reproducible.
   `risk_basis` is an enum: exactly `capital_at_risk` or `economic_max_loss`.
   Unknown values are refused at registration time.
-- **Blocking prerequisite before the first real backtest (tracked separately,
-  not part of the substrate build):** update `size_defined_risk` to gate on
-  `economic_max_loss`. Small change in strategy code; best landed when real
-  credits/commissions are measured during ThetaData wiring — but it **must**
-  precede run #1. A backtest may not take trades that violate the capital rule
-  under the label "gross-only feasibility."
+- **Post-review implementation before the first real backtest:** `size_defined_risk`
+  now gates on `economic_max_loss`, the feasibility report uses economic max loss
+  as the budget-fit basis, and the strategy logs economic max loss when it skips or
+  places a spread. Future ThetaData trade extraction must still record both
+  `capital_at_risk` and `economic_max_loss` separately.
 
 ---
 
@@ -376,8 +419,6 @@ synthetic trades.
 - DSR / PBO / CSCV computation or gating (Phase 1B; fields stubbed only).
 - ThetaData fetch and Lumibot strategy-adapter wiring (Phase-0 stubs stay stubs;
   the substrate injects a run function, it does not wire the engine).
-- The `size_defined_risk` code change itself — a tracked blocking prerequisite
-  before run #1, not part of the substrate build.
 
 ## Testing strategy
 
@@ -401,12 +442,12 @@ look budget; monotonic intent-to-select counter; frozen + hashed cost/fill param
 and `risk_basis`; dependence-aware (block-over-cohort primary + stationary
 cross-check) CI replacing the IID one — each enforced by code, each covered by a
 test, all existing tests green, committed on a branch. Phase-1B stat fields are
-stubbed, not computed. The `size_defined_risk` economic-max-loss change is logged
-as a blocking prerequisite for the first real backtest.
+stubbed, not computed. The `size_defined_risk` economic-max-loss sizing change is
+implemented and covered before the first real backtest.
 
 ## Sequencing
 
-(1) reproducible foundation [done] → (2) **this Phase 1A substrate** → (3)
-`size_defined_risk` economic-risk fix + wire ThetaData → first backtest **through
-the substrate** → (4) Phase 1B statistical gates → (5) broad learning-layer spec
-last.
+(1) reproducible foundation [done] → (2) **this Phase 1A substrate** + economic-risk
+sizing fix [done in Codex post-review patch] → (3) wire ThetaData → first backtest
+**through the substrate** → (4) Phase 1B statistical gates → (5) broad
+learning-layer spec last.

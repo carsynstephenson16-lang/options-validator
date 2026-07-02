@@ -1,5 +1,11 @@
 # Handoff — Phase 1A execution (mid-flight, Tasks 1–8 done, 9–16 remain)
 
+> **Historical / superseded:** Phase 1A has since been implemented through
+> `e86b79b` and reviewed again by Codex. Use
+> `docs/superpowers/reviews/2026-07-01-phase1a-implementation-audit.md` and the
+> live code as the current state. This file remains as provenance for the
+> mid-flight Tasks 1-8 handoff and should not be used as active instructions.
+
 > Paste this whole file as the opening context of a NEW session to continue the
 > Phase-1A build without losing anything. It is self-contained. Written
 > 2026-07-01 by the Claude session that executed Tasks 1–8.
@@ -79,7 +85,8 @@ d4ebe9e docs: Phase 1A research-integrity spec (reviewed + reconciled)
 
 - **`config.py`** (+Task 1): frozen knobs `OOS_LOOK_BUDGET=3`,
   `BOOTSTRAP_BLOCK_EXPONENT=1/3`, `BOOTSTRAP_BLOCK_CONSTANTS=[0.5,1,2,4]`,
-  `COHORT_GRANULARITY="week"`, `FILL_MODEL_ID="conservative_mid_minus_haircut_v1"`.
+  `COHORT_GRANULARITY="week"`,
+  `FILL_MODEL_ID="conservative_bid_ask_plus_haircut_v1"`.
 - **`research/hashing.py`**: `canonical_json` (fail-closed `allow_nan=False`, per
   RFC 8259), `sha256_hex`, `sha256_file`, `cost_model_snapshot`/`cost_model_hash`
   (captures `ASSUMED_CREDIT_FRAC` from `analysis/feasibility.py`, NOT config),

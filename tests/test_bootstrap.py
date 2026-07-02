@@ -21,6 +21,10 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scoreboard([{"pnl": 5.0, "capital_at_risk": 100.0, "entry_date": "2021-01-04"}])
 
+    def test_scoreboard_raises_on_non_string_symbol(self):
+        with self.assertRaises(ValueError):
+            scoreboard([_trade(5.0, symbol=123)])
+
     def test_scoreboard_raises_on_unparseable_entry_date(self):
         with self.assertRaises(ValueError):
             scoreboard([_trade(5.0, date="not-a-date")])
@@ -38,6 +42,15 @@ class CohortAndBlockTests(unittest.TestCase):
         cohorts = metrics._build_week_cohorts(dates, pnls)
         self.assertEqual(len(cohorts), 2)          # week1 {Mon,Fri}, week2 {Mon}
         self.assertEqual(sorted(cohorts[0].tolist()), [1.0, 2.0])
+
+    def test_week_cohorts_refuse_config_label_drift(self):
+        original = config.COHORT_GRANULARITY
+        try:
+            config.COHORT_GRANULARITY = "day"
+            with self.assertRaises(ValueError):
+                metrics._build_week_cohorts(["2021-01-04"], np.array([1.0]))
+        finally:
+            config.COHORT_GRANULARITY = original
 
     def test_block_lengths_are_deduped_clamped_and_theory_anchored(self):
         Ls = metrics._block_lengths(64)  # 64**(1/3)=4 -> {2,4,8,16}

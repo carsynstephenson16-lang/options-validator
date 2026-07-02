@@ -7,6 +7,7 @@ reveal_oos()      -> the ONLY path that populates an out-of-sample result (Task 
 """
 from __future__ import annotations
 import math
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -19,6 +20,7 @@ class OOSGateError(Exception):
 
 
 VALID_RISK_BASES = {"capital_at_risk", "economic_max_loss"}
+GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 
 
 def json_safe(obj):
@@ -45,12 +47,22 @@ def _code_sha():
     out = subprocess.run(
         ["git", "-C", str(hashing.REPO_ROOT), "rev-parse", "HEAD"],
         capture_output=True, text=True)
-    return out.stdout.strip() or "unknown"
+    if out.returncode != 0:
+        raise OOSGateError(f"could not resolve git HEAD: {out.stderr.strip()}")
+    return _require_git_sha(out.stdout.strip(), "code_sha")
 
 
-def _require_non_empty_text(value, field_name) -> None:
+def _require_non_empty_text(value, field_name) -> str:
     if not isinstance(value, str) or not value.strip():
         raise OOSGateError(f"{field_name} must be a non-empty string")
+    return value.strip()
+
+
+def _require_git_sha(value, field_name) -> str:
+    value = _require_non_empty_text(value, field_name)
+    if not GIT_SHA_RE.fullmatch(value):
+        raise OOSGateError(f"{field_name} must be a full Git object hash")
+    return value
 
 
 def _require_window(data_window, key) -> dict:
@@ -123,10 +135,16 @@ def current_trial_count(base_dir="ledger") -> int:
 def register(hypothesis_id, decision_threshold, is_result, *, data_window,
              risk_basis, notes="", run_id=None, code_sha=None,
              source_clean_tracked=None, base_dir="ledger") -> str:
-    _require_non_empty_text(hypothesis_id, "hypothesis_id")
-    _require_non_empty_text(decision_threshold, "decision_threshold")
+    hypothesis_id = _require_non_empty_text(hypothesis_id, "hypothesis_id")
+    decision_threshold = _require_non_empty_text(decision_threshold, "decision_threshold")
+    if run_id is not None:
+        run_id = _require_non_empty_text(run_id, "run_id")
+    if not isinstance(notes, str):
+        raise OOSGateError("notes must be a string")
     if risk_basis not in VALID_RISK_BASES:
         raise OOSGateError(f"unknown risk_basis {risk_basis!r}")
+    if not isinstance(is_result, dict):
+        raise OOSGateError("is_result must be a scoreboard object")
     is_window = _require_window(data_window, "is_window")
     oos_window = _require_window(data_window, "oos_window")
     from research.windows import _as_date
@@ -146,13 +164,14 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
         hashing.canonical_json(safe_is_result)
     except (TypeError, ValueError) as exc:
         raise OOSGateError(f"is_result is not JSON-serializable: {exc}") from exc
+    code_sha = _require_git_sha(code_sha, "code_sha") if code_sha is not None else _code_sha()
     body = {
         "entry_type": "run",
         "timestamp": _now(),
         "run_id": run_id or uuid.uuid4().hex,
         "hypothesis_id": hypothesis_id,
         "decision_threshold": decision_threshold,
-        "code_sha": code_sha or _code_sha(),
+        "code_sha": code_sha,
         "config_hash": hashing.config_hash(),
         "cost_model_hash": hashing.cost_model_hash(),
         "source_hash": hashing.source_hash(),
@@ -171,6 +190,9 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
 
 
 def log_trial_intent(reason, *, hypothesis_id=None, base_dir="ledger") -> str:
+    reason = _require_non_empty_text(reason, "reason")
+    if hypothesis_id is not None:
+        hypothesis_id = _require_non_empty_text(hypothesis_id, "hypothesis_id")
     body = {
         "entry_type": "trial_intent",
         "timestamp": _now(),
@@ -203,12 +225,25 @@ def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
         write-once for the hypothesis; that is intended (an honest 'no OOS trades' is a
         valid, budget-consuming reveal).
     """
+    hypothesis_id = _require_non_empty_text(hypothesis_id, "hypothesis_id")
+    ledger.verify(base_dir)
     records = ledger.read_all(base_dir)
     runs = [r for r in records
             if r.get("entry_type") == "run" and r.get("hypothesis_id") == hypothesis_id]
     if not runs:
         raise OOSGateError(f"no registered hypothesis {hypothesis_id!r} to reveal")
     run = runs[-1]
+    required_run_fields = {
+        "run_id",
+        "config_hash",
+        "cost_model_hash",
+        "source_hash",
+        "oos_window",
+    }
+    missing_run_fields = required_run_fields - run.keys()
+    if missing_run_fields:
+        raise OOSGateError(
+            f"registered run missing required field(s): {sorted(missing_run_fields)}")
 
     if run["config_hash"] != hashing.config_hash():
         raise OOSGateError("registered config params drifted since registration")
@@ -234,12 +269,18 @@ def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
         entry_dates = [t["entry_date"] for t in oos_trades]
     except (KeyError, TypeError) as exc:
         raise OOSGateError(f"oos trade missing entry_date: {exc}") from exc
-    windows.assert_oos_only(entry_dates, config.IN_SAMPLE_END)
-    windows.assert_within_window(entry_dates, run["oos_window"])
+    try:
+        windows.assert_oos_only(entry_dates, config.IN_SAMPLE_END)
+        windows.assert_within_window(entry_dates, run["oos_window"])
+    except ValueError as exc:
+        raise OOSGateError(f"OOS window validation failed: {exc}") from exc
 
     if scoreboard_fn is None:
         from metrics import scoreboard as scoreboard_fn  # local import avoids cycle
-    safe_oos = json_safe(scoreboard_fn(oos_trades))
+    try:
+        safe_oos = json_safe(scoreboard_fn(oos_trades))
+    except ValueError as exc:
+        raise OOSGateError(f"OOS scoring failed: {exc}") from exc
     try:
         hashing.canonical_json(safe_oos)
     except (TypeError, ValueError) as exc:

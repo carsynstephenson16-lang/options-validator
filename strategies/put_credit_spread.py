@@ -69,17 +69,19 @@ class PutCreditSpread(Strategy):
         if credit <= 0:
             self.log_message(f"{symbol}: non-positive credit, skip"); return
 
-        contracts, max_loss = size_defined_risk(self.width, credit)
+        contracts, economic_max_loss = size_defined_risk(self.width, credit)
         if contracts < 1:
             self.log_message(
                 f"{symbol}: risk budget too small for ${self.width} width "
-                f"(max loss ${max_loss:.0f} > budget). Skip -- NOT rounding up.")
+                f"(economic max loss ${economic_max_loss:.0f} > budget). "
+                "Skip -- NOT rounding up.")
             return
 
         self._submit_spread(symbol, expiry, short_put, long_put, contracts, credit)  # VERIFY
         self.log_message(
             f"{symbol}: SOLD {contracts}x ${self.width}-wide put spread, "
-            f"credit ${credit:.2f}, max loss ${max_loss:.0f}/contract")
+            f"credit ${credit:.2f}, economic max loss "
+            f"${economic_max_loss:.0f}/contract")
 
     # ----- EXIT ----------------------------------------------------------
     def _manage_exit(self, symbol):

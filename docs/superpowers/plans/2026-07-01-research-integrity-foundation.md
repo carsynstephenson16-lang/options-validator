@@ -72,7 +72,7 @@ class ConfigKnobTests(unittest.TestCase):
         self.assertEqual(config.COHORT_GRANULARITY, "week")
 
     def test_fill_model_id_is_versioned_string(self):
-        self.assertEqual(config.FILL_MODEL_ID, "conservative_mid_minus_haircut_v1")
+        self.assertEqual(config.FILL_MODEL_ID, "conservative_bid_ask_plus_haircut_v1")
 
 
 if __name__ == "__main__":
@@ -100,7 +100,7 @@ OOS_LOOK_BUDGET          = 3      # global cap on distinct hypotheses that may r
 BOOTSTRAP_BLOCK_EXPONENT = 1 / 3  # n^(1/3) blocking rate (Politis-White / Lahiri)
 BOOTSTRAP_BLOCK_CONSTANTS = [0.5, 1, 2, 4]  # mean block = round(c * n_cohorts**exp)
 COHORT_GRANULARITY       = "week"  # cross-sectional cohort key = ISO week of entry_date
-FILL_MODEL_ID            = "conservative_mid_minus_haircut_v1"  # bump if fill logic changes
+FILL_MODEL_ID            = "conservative_bid_ask_plus_haircut_v1"  # bump if fill logic changes
 ```
 
 - [ ] **Step 4: Run it and confirm it passes**
@@ -1418,13 +1418,10 @@ def main(argv=None) -> int:
         return 0
 
     if args.cmd == "reveal-oos":
-        def _unwired_oos_run():
-            raise NotImplementedError(
-                "Phase 0: wire the OOS ThetaData backtest before reveal-oos can run")
+        from harness import run_backtest
         try:
-            experiments.reveal_oos(
-                args.hypothesis_id, run_fn=_unwired_oos_run, base_dir=args.ledger)
-        except experiments.OOSGateError as exc:
+            run_backtest.reveal_out_of_sample(args.hypothesis_id, base_dir=args.ledger)
+        except (experiments.OOSGateError, ledger.LedgerError) as exc:
             print(f"OOS GATE REFUSED: {exc}", file=sys.stderr)
             return 1
         except NotImplementedError as exc:
@@ -1690,7 +1687,7 @@ The three trade-building tests in `ScoreboardTests` ([tests/test_core.py:38-57](
 - [ ] **Step 6: Run the affected suites and confirm they pass**
 
 Run: `uv run python -m unittest tests.test_bootstrap.ContractTests tests.test_core.ScoreboardTests -v`
-Expected: PASS (ContractTests 4 OK; ScoreboardTests 3 OK).
+Expected: PASS (ContractTests 4 OK; ScoreboardTests 6 OK).
 
 - [ ] **Step 7: Optional commit checkpoint (only if the user asked for commits)**
 
@@ -2270,9 +2267,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ## Self-review notes (author)
 
-- **Spec coverage:** Unit 1 typed trade record → Task 10 (`entry_date`/`symbol` required, raise). Unit 2 ledger + HEAD + anchoring → Tasks 3–4. Unit 3 CLI seams + canonical frozen hash → Tasks 2, 8. Unit 4 RunWindow/OOS gate + look budget + injected run fn → Tasks 5, 7, 15. Unit 5 dependence-aware CI (weekly cohort block + stationary cross-check, shared envelope, widest, `n_cohorts<3` guard) → Tasks 11–14. Unit 6 facts log → Task 9. Risk-basis (#7, ledger side) → `risk_basis` field carried through `register()` (Task 6); the `size_defined_risk` code change stays a tracked prerequisite (out of scope, per spec). DSR/PBO stubbed as `null` → Task 6. Frozen knobs → Task 1. Registered hypothesis drift guard → `config_hash`, `cost_model_hash`, and `source_hash` are stored at registration (Task 6) and rechecked before OOS reveal (Task 7). Registration also refuses dirty, deleted, untracked, or ignored source-hash files before writing the ledger record, so a preregistered hash remains recoverable from git; it also refuses empty hypothesis IDs, empty thresholds, and malformed registered windows.
+- **Spec coverage:** Unit 1 typed trade record → Task 10 (`entry_date`/`symbol` required, raise). Unit 2 ledger + HEAD + anchoring → Tasks 3–4. Unit 3 CLI seams + canonical frozen hash → Tasks 2, 8. Unit 4 RunWindow/OOS gate + look budget + injected run fn → Tasks 5, 7, 15. Unit 5 dependence-aware CI (weekly cohort block + stationary cross-check, shared envelope, widest, `n_cohorts<3` guard) → Tasks 11–14. Unit 6 facts log → Task 9. Risk-basis (#7) → `risk_basis` field carried through `register()` (Task 6), `return_on_economic_max_loss` reported as a secondary diagnostic when complete valid `economic_max_loss` values are supplied, and the Codex post-review patch updates `size_defined_risk` plus the feasibility report to use economic max loss as the budget-fit basis before run #1. DSR/PBO stubbed as `null` → Task 6. Frozen knobs → Task 1. Registered hypothesis drift guard → `config_hash`, `cost_model_hash`, and `source_hash` are stored at registration (Task 6) and rechecked before OOS reveal (Task 7). Registration also refuses dirty, deleted, untracked, or ignored source-hash files before writing the ledger record, so a preregistered hash remains recoverable from git; it also refuses empty hypothesis IDs, empty thresholds, and malformed registered windows.
 - **Placeholder scan:** no TODO/TBD; every code step shows complete code; the one tunable (down-week magnitude in Task 14) has an explicit fallback value and a "don't weaken the IID side" rule.
-- **Type/name consistency:** `_validated_arrays` returns a 4-tuple (Task 10) consumed identically in Tasks 10 and 13; `_ci_from_cohorts(cohorts, n_target, n_boot, lo, hi, seed)` defined in Task 12 and called with matching args in Tasks 12 and 13; `register(..., source_clean_tracked, base_dir)` defined in Task 6 and called consistently in Tasks 6 and 7; `reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn, base_dir, git_clean_tracked)` defined in Task 7 and called consistently in Tasks 7 and 15; `ledger.verify(base_dir, anchored, git_clean_tracked)` consistent across Tasks 3, 4, 7.
+- **Type/name consistency:** `_validated_arrays` returns a 5-tuple (Task 10: PnL, win flags, `capital_at_risk`, optional `economic_max_loss`, entry dates) consumed consistently by `scoreboard`; `_ci_from_cohorts(cohorts, n_target, n_boot, lo, hi, seed)` defined in Task 12 and called with matching args in Tasks 12 and 13; `register(..., source_clean_tracked, base_dir)` defined in Task 6 and called consistently in Tasks 6 and 7; `reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn, base_dir, git_clean_tracked)` defined in Task 7 and called consistently in Tasks 7 and 15; `ledger.verify(base_dir, anchored, git_clean_tracked)` consistent across Tasks 3, 4, 7.
 - **TDD + commit checkpoints:** every task is failing-test-first, minimal impl,
   verify, then commit only if the user explicitly asked for task commits. No
   pushes; single branch `phase-1a-research-integrity`.

@@ -9,10 +9,12 @@ data/thetadata_adapter.py -- that is expected at Phase 0.)
 import config
 from data.thetadata_adapter import get_eod_chain
 
+SMOKE_TEST_DATE = "2022-12-30"  # last trading day before IN_SAMPLE_END
+
 
 def main():
     symbol = config.UNIVERSE[0]
-    date = "2024-01-31"   # any trading day once ThetaData is wired
+    date = SMOKE_TEST_DATE
     print(f"Fetching EOD chain: {symbol} @ {date}")
     chain = get_eod_chain(symbol, date)
     print(chain.head(20).to_string())
