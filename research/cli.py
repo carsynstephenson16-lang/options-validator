@@ -76,20 +76,17 @@ def main(argv=None) -> int:
                 notes=args.notes,
                 base_dir=args.ledger,
             )
-        except (ValueError, experiments.OOSGateError) as exc:
+        except (ValueError, experiments.OOSGateError, ledger.LedgerError) as exc:
             print(f"REGISTER REFUSED: {exc}", file=sys.stderr)
             return 1
         print("hypothesis registered")
         return 0
 
     if args.cmd == "reveal-oos":
-        def _unwired_oos_run():
-            raise NotImplementedError(
-                "Phase 0: wire the OOS ThetaData backtest before reveal-oos can run")
+        from harness import run_backtest
         try:
-            experiments.reveal_oos(
-                args.hypothesis_id, run_fn=_unwired_oos_run, base_dir=args.ledger)
-        except experiments.OOSGateError as exc:
+            run_backtest.reveal_out_of_sample(args.hypothesis_id, base_dir=args.ledger)
+        except (experiments.OOSGateError, ledger.LedgerError) as exc:
             print(f"OOS GATE REFUSED: {exc}", file=sys.stderr)
             return 1
         except NotImplementedError as exc:

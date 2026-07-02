@@ -5,6 +5,7 @@ import subprocess
 import unittest
 
 import config
+import smoke_test
 from analysis import feasibility
 from research import hashing
 import tempfile
@@ -15,6 +16,13 @@ from research import experiments
 from research import cli
 from research import facts
 from harness import run_backtest
+
+
+TEST_CODE_SHA = "e" * 40
+TEST_CONFIG_HASH = "a" * 64
+TEST_COST_MODEL_HASH = "b" * 64
+TEST_SOURCE_HASH = "c" * 64
+TEST_DATA_WINDOW_HASH = "d" * 64
 
 
 class ConfigKnobTests(unittest.TestCase):
@@ -31,7 +39,15 @@ class ConfigKnobTests(unittest.TestCase):
         self.assertEqual(config.COHORT_GRANULARITY, "week")
 
     def test_fill_model_id_is_versioned_string(self):
-        self.assertEqual(config.FILL_MODEL_ID, "conservative_mid_minus_haircut_v1")
+        self.assertEqual(config.FILL_MODEL_ID, "conservative_bid_ask_plus_haircut_v1")
+
+
+class SmokeTestBoundaryTests(unittest.TestCase):
+    def test_smoke_probe_stays_in_sample(self):
+        self.assertLessEqual(
+            windows._as_date(smoke_test.SMOKE_TEST_DATE),
+            windows._as_date(config.IN_SAMPLE_END),
+        )
 
 
 class HashingTests(unittest.TestCase):
@@ -100,21 +116,66 @@ class LedgerChainTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
+    def _intent(self, reason="x"):
+        return {
+            "entry_type": "trial_intent",
+            "timestamp": "2026-07-01T00:00:00+00:00",
+            "reason": reason,
+        }
+
+    def _run(self, hypothesis_id="H1", run_id="run1"):
+        return {
+            "entry_type": "run",
+            "timestamp": "2026-07-01T00:00:00+00:00",
+            "run_id": run_id,
+            "hypothesis_id": hypothesis_id,
+            "decision_threshold": "expectancy CI lower bound > 0",
+            "code_sha": TEST_CODE_SHA,
+            "config_hash": TEST_CONFIG_HASH,
+            "cost_model_hash": TEST_COST_MODEL_HASH,
+            "source_hash": TEST_SOURCE_HASH,
+            "data_window_hash": TEST_DATA_WINDOW_HASH,
+            "risk_basis": "economic_max_loss",
+            "is_window": {"start": "2018-01-01", "end": "2022-12-31"},
+            "is_result": {"verdict": "x"},
+            "oos_window": {"start": "2023-01-01", "end": "2024-12-31"},
+            "oos_result": None,
+            "deflated_sharpe": None,
+            "pbo": None,
+            "notes": "",
+        }
+
+    def _reveal(self, hypothesis_id="H1", run_id="run1", budget_used=1, budget_total=3):
+        return {
+            "entry_type": "oos_reveal",
+            "timestamp": "2026-07-01T00:00:00+00:00",
+            "hypothesis_id": hypothesis_id,
+            "run_id": run_id,
+            "oos_result": {"verdict": "x"},
+            "budget_used": budget_used,
+            "budget_total": budget_total,
+        }
+
+    def _write_records(self, records):
+        jsonl = Path(self.base) / "experiments.jsonl"
+        jsonl.write_text("\n".join(hashing.canonical_json(r) for r in records) + "\n")
+        (Path(self.base) / "HEAD").write_text(records[-1]["record_hash"] + "\n")
+
     def test_append_chains_and_verifies(self):
-        ledger.append({"entry_type": "trial_intent", "reason": "first"}, self.base)
-        ledger.append({"entry_type": "trial_intent", "reason": "second"}, self.base)
+        ledger.append(self._intent("first"), self.base)
+        ledger.append(self._intent("second"), self.base)
         ledger.verify(self.base)  # must not raise
         records = ledger.read_all(self.base)
         self.assertEqual([r["seq"] for r in records], [0, 1])
         self.assertEqual(records[1]["prev_hash"], records[0]["record_hash"])
 
     def test_head_matches_tip(self):
-        h = ledger.append({"entry_type": "trial_intent", "reason": "x"}, self.base)
+        h = ledger.append(self._intent(), self.base)
         self.assertEqual(ledger.tip(self.base), h)
 
     def test_verify_detects_a_tampered_record(self):
-        ledger.append({"entry_type": "trial_intent", "reason": "keep"}, self.base)
-        ledger.append({"entry_type": "trial_intent", "reason": "keep2"}, self.base)
+        ledger.append(self._intent("keep"), self.base)
+        ledger.append(self._intent("keep2"), self.base)
         jsonl = Path(self.base) / "experiments.jsonl"
         lines = jsonl.read_text().splitlines()
         lines[0] = lines[0].replace("keep", "HACKED")
@@ -123,34 +184,261 @@ class LedgerChainTests(unittest.TestCase):
             ledger.verify(self.base)
 
     def test_verify_wraps_invalid_json_as_ledger_error(self):
-        ledger.append({"entry_type": "trial_intent", "reason": "keep"}, self.base)
+        ledger.append(self._intent("keep"), self.base)
         (Path(self.base) / "experiments.jsonl").write_text("{not json}\n")
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base)
 
     def test_verify_detects_head_mismatch(self):
-        ledger.append({"entry_type": "trial_intent", "reason": "x"}, self.base)
+        ledger.append(self._intent(), self.base)
         (Path(self.base) / "HEAD").write_text("0" * 64 + "\n")
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base)
 
     def test_trial_counter_counts_runs_and_intents_only(self):
-        ledger.append({"entry_type": "trial_intent", "reason": "a"}, self.base)
-        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
-        ledger.append({"entry_type": "oos_reveal", "hypothesis_id": "H1"}, self.base)
+        ledger.append(self._intent("a"), self.base)
+        ledger.append(self._run(), self.base)
+        ledger.append(self._reveal(), self.base)
         self.assertEqual(ledger.current_trial_count(self.base), 2)
+        records = ledger.read_all(self.base)
+        self.assertEqual([r["trial_count"] for r in records], [1, 2, 2])
+
+    def test_append_rejects_unknown_entry_type(self):
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append({"entry_type": "run_candidate", "reason": "bypass"}, self.base)
+
+    def test_verify_detects_hash_valid_unknown_entry_type(self):
+        ledger.append(self._intent("keep"), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["entry_type"] = "run_candidate"
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_append_rejects_wrong_trial_count(self):
+        with self.assertRaises(ledger.LedgerError):
+            body = self._intent("a")
+            body["trial_count"] = 7
+            ledger.append(body, self.base)
+
+    def test_verify_detects_hash_valid_trial_count_reset(self):
+        ledger.append(self._intent("a"), self.base)
+        ledger.append(self._run(), self.base)
+        records = ledger.read_all(self.base)
+        records[1]["trial_count"] = 1
+        body = {k: v for k, v in records[1].items() if k != "record_hash"}
+        records[1]["record_hash"] = ledger._record_hash(body)
+
+        jsonl = Path(self.base) / "experiments.jsonl"
+        jsonl.write_text("\n".join(hashing.canonical_json(r) for r in records) + "\n")
+        (Path(self.base) / "HEAD").write_text(records[1]["record_hash"] + "\n")
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_append_rejects_oos_reveal_without_registered_run(self):
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._reveal(), self.base)
+
+    def test_append_rejects_trial_intent_without_timestamp(self):
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append({"entry_type": "trial_intent", "reason": "a"}, self.base)
+
+    def test_append_rejects_invalid_timestamp(self):
+        bad = self._intent()
+        bad["timestamp"] = "not-a-timestamp"
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_append_rejects_unknown_run_field(self):
+        bad = self._run()
+        bad["verdict"] = "top-level verdict is not part of the schema"
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_append_rejects_invalid_run_hash_field(self):
+        bad = self._run()
+        bad["source_hash"] = "source-hash"
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_append_rejects_abbreviated_code_sha(self):
+        bad = self._run()
+        bad["code_sha"] = "deadbeef"
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_verify_detects_hash_valid_naive_timestamp(self):
+        ledger.append(self._intent("keep"), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["timestamp"] = "2026-07-01T00:00:00"
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_invalid_run_hash_field(self):
+        ledger.append(self._run(), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["config_hash"] = "config-hash"
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_abbreviated_code_sha(self):
+        ledger.append(self._run(), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["code_sha"] = "deadbeef"
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_extra_field(self):
+        ledger.append(self._run(), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["unregistered_note"] = "not in the Phase 1A schema"
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_uncanonical_trial_identity(self):
+        ledger.append(self._intent("keep"), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["hypothesis_id"] = " H1 "
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_duplicate_oos_reveal(self):
+        ledger.append(self._run("H1", "run1"), self.base)
+        ledger.append(self._run("H2", "run2"), self.base)
+        ledger.append(self._reveal("H1", "run1", budget_used=1), self.base)
+        ledger.append(self._reveal("H2", "run2", budget_used=2), self.base)
+        records = ledger.read_all(self.base)
+        records[3]["hypothesis_id"] = "H1"
+        records[3]["run_id"] = "run1"
+        body = {k: v for k, v in records[3].items() if k != "record_hash"}
+        records[3]["record_hash"] = ledger._record_hash(body)
+
+        jsonl = Path(self.base) / "experiments.jsonl"
+        jsonl.write_text("\n".join(hashing.canonical_json(r) for r in records) + "\n")
+        (Path(self.base) / "HEAD").write_text(records[3]["record_hash"] + "\n")
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_budget_miscount(self):
+        ledger.append(self._run(), self.base)
+        ledger.append(self._reveal(), self.base)
+        records = ledger.read_all(self.base)
+        records[1]["budget_used"] = 2
+        body = {k: v for k, v in records[1].items() if k != "record_hash"}
+        records[1]["record_hash"] = ledger._record_hash(body)
+
+        jsonl = Path(self.base) / "experiments.jsonl"
+        jsonl.write_text("\n".join(hashing.canonical_json(r) for r in records) + "\n")
+        (Path(self.base) / "HEAD").write_text(records[1]["record_hash"] + "\n")
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_append_rejects_oos_reveal_without_result(self):
+        ledger.append(self._run(), self.base)
+        bad = self._reveal()
+        del bad["oos_result"]
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_append_rejects_malformed_run_schema(self):
+        bad = self._run()
+        del bad["decision_threshold"]
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_append_rejects_uncanonical_run_identity(self):
+        bad = self._run(hypothesis_id=" H1 ")
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_append_rejects_malformed_run_window(self):
+        bad = self._run()
+        bad["oos_window"] = {"start": "not-a-date", "end": "2024-12-31"}
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_append_rejects_overlapping_run_windows(self):
+        bad = self._run()
+        bad["oos_window"] = {"start": "2022-12-31", "end": "2024-12-31"}
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+    def test_verify_detects_hash_valid_reversed_run_window(self):
+        ledger.append(self._run(), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["is_window"] = {"start": "2022-12-31", "end": "2018-01-01"}
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_overlapping_run_windows(self):
+        ledger.append(self._run(), self.base)
+        records = ledger.read_all(self.base)
+        records[0]["oos_window"] = {"start": "2022-12-31", "end": "2024-12-31"}
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        self._write_records(records)
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
+
+    def test_verify_detects_hash_valid_duplicate_run_id(self):
+        ledger.append(self._run("H1", "same-run"), self.base)
+        ledger.append(self._run("H2", "run2"), self.base)
+        records = ledger.read_all(self.base)
+        records[1]["run_id"] = "same-run"
+        body = {k: v for k, v in records[1].items() if k != "record_hash"}
+        records[1]["record_hash"] = ledger._record_hash(body)
+
+        jsonl = Path(self.base) / "experiments.jsonl"
+        jsonl.write_text("\n".join(hashing.canonical_json(r) for r in records) + "\n")
+        (Path(self.base) / "HEAD").write_text(records[1]["record_hash"] + "\n")
+
+        with self.assertRaises(ledger.LedgerError):
+            ledger.verify(self.base)
 
     def test_append_rejects_reserved_chain_fields(self):
         for key in ("seq", "prev_hash", "record_hash"):
             with self.subTest(key=key):
                 with self.assertRaises(ledger.LedgerError):
-                    ledger.append({"entry_type": "trial_intent", key: "bad"}, self.base)
+                    body = self._intent()
+                    body[key] = "bad"
+                    ledger.append(body, self.base)
 
     def test_append_refuses_to_build_on_broken_chain(self):
-        ledger.append({"entry_type": "trial_intent", "reason": "keep"}, self.base)
+        ledger.append(self._intent("keep"), self.base)
         (Path(self.base) / "HEAD").write_text("0" * 64 + "\n")
         with self.assertRaises(ledger.LedgerError):
-            ledger.append({"entry_type": "trial_intent", "reason": "next"}, self.base)
+            ledger.append(self._intent("next"), self.base)
 
 
 class LedgerAnchoringTests(unittest.TestCase):
@@ -179,19 +467,41 @@ class LedgerAnchoringTests(unittest.TestCase):
                 return False
         return True
 
+    def _run(self):
+        return {
+            "entry_type": "run",
+            "timestamp": "2026-07-01T00:00:00+00:00",
+            "run_id": "run1",
+            "hypothesis_id": "H1",
+            "decision_threshold": "expectancy CI lower bound > 0",
+            "code_sha": TEST_CODE_SHA,
+            "config_hash": TEST_CONFIG_HASH,
+            "cost_model_hash": TEST_COST_MODEL_HASH,
+            "source_hash": TEST_SOURCE_HASH,
+            "data_window_hash": TEST_DATA_WINDOW_HASH,
+            "risk_basis": "economic_max_loss",
+            "is_window": {"start": "2018-01-01", "end": "2022-12-31"},
+            "is_result": {"verdict": "x"},
+            "oos_window": {"start": "2023-01-01", "end": "2024-12-31"},
+            "oos_result": None,
+            "deflated_sharpe": None,
+            "pbo": None,
+            "notes": "",
+        }
+
     def test_anchored_verify_fails_when_uncommitted(self):
-        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
+        ledger.append(self._run(), self.base)
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base, anchored=True, git_clean_tracked=self._clean_tracked)
 
     def test_anchored_verify_passes_when_committed_clean(self):
-        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
+        ledger.append(self._run(), self.base)
         subprocess.run(["git", "-C", self.repo, "add", "ledger"], check=True)
         subprocess.run(["git", "-C", self.repo, "commit", "-q", "-m", "anchor"], check=True)
         ledger.verify(self.base, anchored=True, git_clean_tracked=self._clean_tracked)  # no raise
 
     def test_default_clean_checker_is_repo_root_scoped(self):
-        ledger.append({"entry_type": "run", "hypothesis_id": "H1"}, self.base)
+        ledger.append(self._run(), self.base)
         subprocess.run(["git", "-C", self.repo, "add", "ledger"], check=True)
         subprocess.run(["git", "-C", self.repo, "commit", "-q", "-m", "anchor"], check=True)
 
@@ -272,7 +582,7 @@ class RegisterCounterTests(unittest.TestCase):
         experiments.register("H1", "expectancy CI lower bound > 0",
                              is_result={"verdict": "NO EDGE"},
                              data_window=_window(), risk_basis="economic_max_loss",
-                             base_dir=self.base, code_sha="deadbeef",
+                             base_dir=self.base, code_sha=TEST_CODE_SHA,
                              source_clean_tracked=self.clean)
         rec = ledger.read_all(self.base)[-1]
         self.assertEqual(rec["entry_type"], "run")
@@ -286,8 +596,20 @@ class RegisterCounterTests(unittest.TestCase):
         experiments.log_trial_intent("eyeballed a 25-delta", base_dir=self.base)
         experiments.register("H1", "t", is_result={}, data_window=_window(),
                              risk_basis="economic_max_loss", base_dir=self.base,
-                             code_sha="deadbeef", source_clean_tracked=self.clean)
+                             code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
         self.assertEqual(experiments.current_trial_count(self.base), 2)
+
+    def test_trial_intent_rejects_empty_reason(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.log_trial_intent("", base_dir=self.base)
+
+    def test_trial_intent_trims_reason_and_hypothesis_id(self):
+        experiments.log_trial_intent(" reason ", hypothesis_id=" Hx ",
+                                     base_dir=self.base)
+
+        rec = ledger.read_all(self.base)[-1]
+        self.assertEqual(rec["reason"], "reason")
+        self.assertEqual(rec["hypothesis_id"], "Hx")
 
     def test_counter_is_monotonic_and_non_resettable(self):
         experiments.log_trial_intent("a", base_dir=self.base)
@@ -298,33 +620,66 @@ class RegisterCounterTests(unittest.TestCase):
     def test_register_rejects_duplicate_hypothesis_id(self):
         experiments.register("H1", "t", is_result={}, data_window=_window(),
                              risk_basis="economic_max_loss", base_dir=self.base,
-                             code_sha="deadbeef", source_clean_tracked=self.clean)
+                             code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("H1", "t2", is_result={}, data_window=_window(),
                                  risk_basis="economic_max_loss", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
+
+    def test_register_trims_hypothesis_id_and_rejects_whitespace_duplicate(self):
+        experiments.register(" Htrim ", " t ", is_result={}, data_window=_window(),
+                             risk_basis="economic_max_loss", base_dir=self.base,
+                             code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
+        rec = ledger.read_all(self.base)[-1]
+        self.assertEqual(rec["hypothesis_id"], "Htrim")
+        self.assertEqual(rec["decision_threshold"], "t")
+
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Htrim", "new t", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_rejects_dirty_source_surface(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hdirty", "t", is_result={}, data_window=_window(),
                                  risk_basis="economic_max_loss", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=lambda paths: False)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=lambda paths: False)
 
     def test_register_rejects_unknown_risk_basis(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hbad", "t", is_result={}, data_window=_window(),
                                  risk_basis="typo", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_rejects_empty_identity_or_threshold(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("", "t", is_result={}, data_window=_window(),
                                  risk_basis="economic_max_loss", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("H1", "", is_result={}, data_window=_window(),
                                  risk_basis="economic_max_loss", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
+
+    def test_register_rejects_blank_run_id(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("H1", "t", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", run_id=" ",
+                                 base_dir=self.base, code_sha=TEST_CODE_SHA,
+                                 source_clean_tracked=self.clean)
+
+    def test_register_rejects_abbreviated_code_sha(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("H1", "t", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", code_sha="deadbeef",
+                                 base_dir=self.base, source_clean_tracked=self.clean)
+
+    def test_register_rejects_non_string_notes(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("H1", "t", is_result={}, data_window=_window(),
+                                 risk_basis="economic_max_loss", notes=None,
+                                 base_dir=self.base, code_sha=TEST_CODE_SHA,
+                                 source_clean_tracked=self.clean)
 
     def test_register_rejects_malformed_data_window(self):
         bad = dict(_window())
@@ -332,7 +687,7 @@ class RegisterCounterTests(unittest.TestCase):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hbadwindow", "t", is_result={}, data_window=bad,
                                  risk_basis="economic_max_loss", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_sanitizes_non_finite_is_result_to_null(self):
         # A real scoreboard carries float('nan') (e.g. Sharpe on a zero-variance
@@ -344,7 +699,7 @@ class RegisterCounterTests(unittest.TestCase):
                                         "expectancy_CI90": [float("nan"), float("nan")],
                                         "verdict": "INSUFFICIENT SAMPLE"},
                              data_window=_window(), risk_basis="economic_max_loss",
-                             base_dir=self.base, code_sha="deadbeef",
+                             base_dir=self.base, code_sha=TEST_CODE_SHA,
                              source_clean_tracked=self.clean)
         ledger.verify(self.base)  # must not raise -> the record is valid JSON
         rec = ledger.read_all(self.base)[-1]
@@ -358,7 +713,14 @@ class RegisterCounterTests(unittest.TestCase):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hobj", "t", is_result={"bad": {1, 2, 3}},
                                  data_window=_window(), risk_basis="economic_max_loss",
-                                 base_dir=self.base, code_sha="deadbeef",
+                                 base_dir=self.base, code_sha=TEST_CODE_SHA,
+                                 source_clean_tracked=self.clean)
+
+    def test_register_rejects_non_dict_is_result(self):
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.register("Hlist", "t", is_result=["PASS"],
+                                 data_window=_window(), risk_basis="economic_max_loss",
+                                 base_dir=self.base, code_sha=TEST_CODE_SHA,
                                  source_clean_tracked=self.clean)
 
     def test_register_rejects_oos_window_overlapping_in_sample(self):
@@ -367,7 +729,7 @@ class RegisterCounterTests(unittest.TestCase):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hoverlap", "t", is_result={}, data_window=bad,
                                  risk_basis="economic_max_loss", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_rejects_is_window_past_in_sample_end(self):
         bad = dict(_window())
@@ -375,7 +737,7 @@ class RegisterCounterTests(unittest.TestCase):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hlate", "t", is_result={}, data_window=bad,
                                  risk_basis="economic_max_loss", base_dir=self.base,
-                                 code_sha="deadbeef", source_clean_tracked=self.clean)
+                                 code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_source_clean_default_checker_against_real_temp_repo(self):
         with tempfile.TemporaryDirectory() as repo:
@@ -418,7 +780,7 @@ class OOSGateTests(unittest.TestCase):
     def _register(self, hyp="H1"):
         experiments.register(hyp, "expectancy CI lower bound > 0", is_result={},
                              data_window=_window(), risk_basis="economic_max_loss",
-                             base_dir=self.base, code_sha="deadbeef",
+                             base_dir=self.base, code_sha=TEST_CODE_SHA,
                              source_clean_tracked=self.clean)
 
     def test_reveal_refused_without_registration(self):
@@ -489,7 +851,7 @@ class OOSGateTests(unittest.TestCase):
         self._register()
         leaky = lambda: [{"pnl": 1.0, "capital_at_risk": 100.0,
                           "entry_date": "2021-01-01", "symbol": "SPY"}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(experiments.OOSGateError):
             experiments.reveal_oos("H1", run_fn=leaky, base_dir=self.base,
                                    scoreboard_fn=lambda t: {"verdict": "x"},
                                    git_clean_tracked=self.clean)
@@ -498,7 +860,7 @@ class OOSGateTests(unittest.TestCase):
         self._register()
         wrong_window = lambda: [{"pnl": 1.0, "capital_at_risk": 100.0,
                                  "entry_date": "2025-01-01", "symbol": "SPY"}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(experiments.OOSGateError):
             experiments.reveal_oos("H1", run_fn=wrong_window, base_dir=self.base,
                                    scoreboard_fn=lambda t: {"verdict": "x"},
                                    git_clean_tracked=self.clean)
@@ -509,6 +871,33 @@ class OOSGateTests(unittest.TestCase):
             experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
                                    scoreboard_fn=lambda t: {"verdict": "x"},
                                    git_clean_tracked=lambda paths: False)
+
+    def test_reveal_verifies_chain_before_trusting_run_fields(self):
+        self._register()
+        jsonl = Path(self.base) / "experiments.jsonl"
+        record = json.loads(jsonl.read_text().splitlines()[0])
+        del record["config_hash"]
+        jsonl.write_text(json.dumps(record) + "\n")
+
+        with self.assertRaises(ledger.LedgerError):
+            experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+
+    def test_reveal_refuses_valid_chain_with_malformed_run_record(self):
+        self._register()
+        jsonl = Path(self.base) / "experiments.jsonl"
+        records = ledger.read_all(self.base)
+        del records[0]["config_hash"]
+        body = {k: v for k, v in records[0].items() if k != "record_hash"}
+        records[0]["record_hash"] = ledger._record_hash(body)
+        jsonl.write_text(hashing.canonical_json(records[0]) + "\n")
+        (Path(self.base) / "HEAD").write_text(records[0]["record_hash"] + "\n")
+
+        with self.assertRaises(ledger.LedgerError):
+            experiments.reveal_oos("H1", run_fn=_oos_trades, base_dir=self.base,
+                                   scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
 
     def test_reveal_happy_path_writes_oos_reveal_record(self):
         self._register()
@@ -521,12 +910,28 @@ class OOSGateTests(unittest.TestCase):
         self.assertEqual(rec["hypothesis_id"], "H1")
         ledger.verify(self.base)
 
+    def test_reveal_trims_hypothesis_id(self):
+        self._register("Htrim")
+        out = experiments.reveal_oos(" Htrim ", run_fn=_oos_trades, base_dir=self.base,
+                                     scoreboard_fn=lambda t: {"verdict": "PASS"},
+                                     git_clean_tracked=self.clean)
+
+        self.assertEqual(out["verdict"], "PASS")
+
     def test_reveal_rejects_oos_trade_missing_entry_date(self):
         self._register()
         no_date = lambda: [{"pnl": 1.0, "capital_at_risk": 100.0, "symbol": "SPY"}]
         with self.assertRaises(experiments.OOSGateError):
             experiments.reveal_oos("H1", run_fn=no_date, base_dir=self.base,
                                    scoreboard_fn=lambda t: {"verdict": "x"},
+                                   git_clean_tracked=self.clean)
+
+    def test_reveal_wraps_scoreboard_contract_failures(self):
+        self._register()
+        no_symbol = lambda: [{"pnl": 1.0, "capital_at_risk": 100.0,
+                              "entry_date": "2023-06-01"}]
+        with self.assertRaises(experiments.OOSGateError):
+            experiments.reveal_oos("H1", run_fn=no_symbol, base_dir=self.base,
                                    git_clean_tracked=self.clean)
 
     def test_reveal_sanitizes_non_finite_oos_result(self):
@@ -604,10 +1009,55 @@ class CliTests(unittest.TestCase):
         self.assertEqual(calls["hypothesis_id"], "H1")
         self.assertEqual(calls["base_dir"], self.base)
 
+    def test_register_returns_nonzero_on_ledger_error(self):
+        original = experiments.register
+        try:
+            def fake_register(*args, **kwargs):
+                raise ledger.LedgerError("dirty ledger")
+            experiments.register = fake_register
+            self.assertNotEqual(cli.main([
+                "register",
+                "--hypothesis-id", "H1",
+                "--decision-threshold", "ci_lo>0",
+                "--is-result-json", json.dumps({"verdict": "NO EDGE"}),
+                "--data-window-json", json.dumps(_window()),
+                "--risk-basis", "economic_max_loss",
+                "--ledger", self.base,
+            ]), 0)
+        finally:
+            experiments.register = original
+
     def test_reveal_oos_subcommand_is_a_distinct_gate(self):
         # With no registration, the integrity gate refuses before any data path.
         self.assertNotEqual(cli.main(["reveal-oos", "--hypothesis-id", "H1",
                                       "--ledger", self.base]), 0)
+
+    def test_reveal_oos_subcommand_delegates_to_harness_seam(self):
+        calls = {}
+        original = run_backtest.reveal_out_of_sample
+        try:
+            def fake_reveal(hypothesis_id, *, base_dir="ledger"):
+                calls["hypothesis_id"] = hypothesis_id
+                calls["base_dir"] = base_dir
+                return {"verdict": "blocked in test"}
+            run_backtest.reveal_out_of_sample = fake_reveal
+            rc = cli.main(["reveal-oos", "--hypothesis-id", "H1",
+                           "--ledger", self.base])
+        finally:
+            run_backtest.reveal_out_of_sample = original
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls, {"hypothesis_id": "H1", "base_dir": self.base})
+
+    def test_reveal_oos_returns_nonzero_on_ledger_error(self):
+        original = run_backtest.reveal_out_of_sample
+        try:
+            def fake_reveal(hypothesis_id, *, base_dir="ledger"):
+                raise ledger.LedgerError("dirty ledger")
+            run_backtest.reveal_out_of_sample = fake_reveal
+            self.assertNotEqual(cli.main(["reveal-oos", "--hypothesis-id", "H1",
+                                          "--ledger", self.base]), 0)
+        finally:
+            run_backtest.reveal_out_of_sample = original
 
 
 class FactsLogTests(unittest.TestCase):

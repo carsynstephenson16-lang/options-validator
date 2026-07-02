@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 import config
 from analysis.feasibility import (
@@ -6,9 +8,18 @@ from analysis.feasibility import (
     contracts_that_fit,
     max_loss_per_spread,
 )
+import pandas as pd
+
+from data import thetadata_adapter
 from data.thetadata_adapter import mid_price, passes_liquidity
 from metrics import scoreboard
-from strategies.base import entry_credit_conservative, size_defined_risk
+from strategies.base import (
+    capital_at_risk_per_spread,
+    economic_max_loss_per_spread,
+    entry_credit_conservative,
+    round_trip_commission_per_spread,
+    size_defined_risk,
+)
 
 
 class PricingAndSizingTests(unittest.TestCase):
@@ -18,11 +29,42 @@ class PricingAndSizingTests(unittest.TestCase):
 
         self.assertLess(conservative, mid_credit)
 
-    def test_defined_risk_sizing_never_rounds_up(self):
-        contracts, max_loss = size_defined_risk(width=5, net_credit=1.50)
+    def test_conservative_credit_crosses_bid_ask_then_haircuts(self):
+        credit = entry_credit_conservative(1.00, 1.20, 0.30, 0.40)
 
-        self.assertEqual(max_loss, 350.0)
-        self.assertEqual(contracts, int((config.RISK_SLEEVE * config.RISK_PER_TRADE) // 350))
+        expected = 1.00 * (1 - config.SLIPPAGE_HAIRCUT) - 0.40 * (
+            1 + config.SLIPPAGE_HAIRCUT
+        )
+        self.assertAlmostEqual(credit, expected)
+
+    def test_conservative_credit_rejects_invalid_quotes(self):
+        with self.assertRaises(ValueError):
+            entry_credit_conservative(1.20, 1.00, 0.30, 0.40)
+
+    def test_defined_risk_sizing_never_rounds_up(self):
+        contracts, economic_max_loss = size_defined_risk(width=5, net_credit=1.50)
+
+        self.assertAlmostEqual(economic_max_loss, 352.60)
+        self.assertEqual(contracts, int((config.RISK_SLEEVE * config.RISK_PER_TRADE) // 352.60))
+
+    def test_round_trip_commission_per_spread_counts_two_legs_each_way(self):
+        self.assertAlmostEqual(round_trip_commission_per_spread(), 2.60)
+
+    def test_economic_max_loss_adds_commissions_to_margin(self):
+        self.assertAlmostEqual(capital_at_risk_per_spread(width=2, net_credit=0.60), 140.0)
+        self.assertAlmostEqual(economic_max_loss_per_spread(width=2, net_credit=0.60), 142.60)
+
+    def test_two_wide_zero_slack_gross_fit_is_rejected_on_economic_risk(self):
+        contracts, economic_max_loss = size_defined_risk(width=2, net_credit=0.60)
+
+        self.assertAlmostEqual(economic_max_loss, 142.60)
+        self.assertEqual(contracts, 0)
+
+    def test_impossible_vertical_credit_fails_closed(self):
+        contracts, economic_max_loss = size_defined_risk(width=2, net_credit=2.00)
+
+        self.assertEqual(contracts, 0)
+        self.assertEqual(economic_max_loss, float("inf"))
 
 
 class LiquidityTests(unittest.TestCase):
@@ -33,6 +75,58 @@ class LiquidityTests(unittest.TestCase):
 
     def test_accepts_tight_quote_with_enough_open_interest(self):
         self.assertTrue(passes_liquidity(config.MIN_OPEN_INTEREST, 1.00, 1.05))
+
+
+class ChainCacheTests(unittest.TestCase):
+    def _valid_chain(self):
+        return pd.DataFrame([{
+            "expiration": "2022-02-18",
+            "strike": 390.0,
+            "right": "P",
+            "bid": 1.00,
+            "ask": 1.05,
+            "open_interest": 500,
+            "iv": 0.25,
+            "delta": -0.30,
+            "gamma": 0.02,
+            "theta": -0.04,
+            "vega": 0.12,
+        }])
+
+    def test_cache_path_rejects_unsafe_symbol_or_date(self):
+        with self.assertRaises(ValueError):
+            thetadata_adapter._cache_path("../SPY", "2022-01-03")
+        with self.assertRaises(ValueError):
+            thetadata_adapter._cache_path("SPY", "2022-99-99")
+
+    def test_cached_chain_must_match_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cache = thetadata_adapter.CACHE_DIR
+            try:
+                thetadata_adapter.CACHE_DIR = Path(tmp)
+                bad = self._valid_chain().drop(columns=["delta"])
+                bad.to_parquet(thetadata_adapter._cache_path("SPY", "2022-01-03"))
+
+                with self.assertRaises(ValueError):
+                    thetadata_adapter.get_eod_chain("SPY", "2022-01-03")
+            finally:
+                thetadata_adapter.CACHE_DIR = old_cache
+
+    def test_valid_cached_chain_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cache = thetadata_adapter.CACHE_DIR
+            try:
+                thetadata_adapter.CACHE_DIR = Path(tmp)
+                self._valid_chain().to_parquet(
+                    thetadata_adapter._cache_path("spy", "2022-01-03")
+                )
+
+                out = thetadata_adapter.get_eod_chain("SPY", "2022-01-03")
+            finally:
+                thetadata_adapter.CACHE_DIR = old_cache
+
+        self.assertEqual(list(out.columns), thetadata_adapter.CHAIN_COLUMNS)
+        self.assertEqual(out.iloc[0]["right"], "P")
 
 
 class ScoreboardTests(unittest.TestCase):
@@ -57,16 +151,65 @@ class ScoreboardTests(unittest.TestCase):
         self.assertEqual(result["n_losses"], 1)
         self.assertIn("INSUFFICIENT SAMPLE", result["verdict"])
 
+    def test_scoreboard_rejects_is_win_contradicting_net_pnl(self):
+        with self.assertRaises(ValueError):
+            scoreboard([{"pnl": -12.0, "capital_at_risk": 100.0,
+                         "entry_date": "2021-01-04", "symbol": "SPY",
+                         "is_win": True}])
+
+    def test_flat_trades_do_not_satisfy_loss_floor(self):
+        trades = [
+            {"pnl": 40.0, "capital_at_risk": 100.0,
+             "entry_date": f"2021-{month:02d}-01", "symbol": "SPY"}
+            for month in range(1, 7)
+        ] + [
+            {"pnl": 0.0, "capital_at_risk": 100.0,
+             "entry_date": f"2022-{month:02d}-01", "symbol": "SPY"}
+            for month in range(1, config.MIN_LOSSES_FOR_VERDICT + 1)
+        ]
+
+        result = scoreboard(trades)
+
+        self.assertEqual(result["n_losses"], 0)
+        self.assertIn("INSUFFICIENT SAMPLE", result["verdict"])
+
+    def test_scoreboard_reports_secondary_economic_max_loss_return(self):
+        trades = [
+            {"pnl": 10.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
+             "entry_date": "2021-01-04", "symbol": "SPY"},
+            {"pnl": 20.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
+             "entry_date": "2021-01-11", "symbol": "SPY"},
+        ]
+
+        result = scoreboard(trades)
+
+        self.assertAlmostEqual(result["return_on_economic_max_loss"], 30.0 / 110.0)
+
+    def test_scoreboard_rejects_partial_economic_max_loss(self):
+        trades = [
+            {"pnl": 10.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
+             "entry_date": "2021-01-04", "symbol": "SPY"},
+            {"pnl": 20.0, "capital_at_risk": 100.0,
+             "entry_date": "2021-01-11", "symbol": "SPY"},
+        ]
+
+        with self.assertRaises(ValueError):
+            scoreboard(trades)
+
+    def test_scoreboard_rejects_economic_max_loss_below_margin(self):
+        with self.assertRaises(ValueError):
+            scoreboard([{"pnl": 12.0, "capital_at_risk": 100.0,
+                         "economic_max_loss": 99.0,
+                         "entry_date": "2021-01-04", "symbol": "SPY"}])
+
 
 class HonestSleeveConfigTests(unittest.TestCase):
     """Locks the decided CAPITAL-HONEST config: $14k sleeve, $2-wide.
 
-    IMPORTANT: these assert GROSS feasibility only, under the current
-    ASSUMED_CREDIT_FRAC. $2-wide is a ZERO-SLACK gross threshold, NOT a robust
-    all-in fit: the sizing formula excludes commissions and assumes the 30%
-    credit holds, so true all-in risk can exceed budget. Do not read a passing
-    test here as "$2-wide is safe to trade." See spec
-    2026-07-01-reproducible-foundation-design.md.
+    IMPORTANT: these preserve the original gross-feasibility fact under the
+    current ASSUMED_CREDIT_FRAC. Runtime sizing now gates on economic max loss,
+    so the $2-wide zero-slack gross fit is correctly rejected once commissions
+    are included.
     """
 
     def _gross_max_loss(self, width):

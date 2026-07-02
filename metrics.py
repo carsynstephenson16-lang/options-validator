@@ -14,7 +14,8 @@ Input: a list of closed trades. Each trade is a dict with at least:
     pnl              net profit/loss in $ AFTER all costs (commission + slippage)
     capital_at_risk  $ tied up (defined-risk max loss) while the trade was open
 Optionally:
-    is_win           bool; if absent, inferred from pnl > 0
+    is_win           bool; if present, must agree with pnl > 0
+    economic_max_loss margin + round-trip commissions; secondary diagnostic only
 
 Run a demo:  python metrics.py
 """
@@ -47,6 +48,8 @@ def _build_week_cohorts(entry_dates, pnls):
     Weekly cohorts keep same-week trades across all names as one INDIVISIBLE unit
     (the cross-sectional axis); the block bootstrap over the ordered cohort
     sequence handles the serial axis (Task 12)."""
+    if config.COHORT_GRANULARITY != "week":
+        raise ValueError(f"unsupported COHORT_GRANULARITY: {config.COHORT_GRANULARITY!r}")
     order = sorted(range(len(entry_dates)), key=lambda i: _as_date(entry_dates[i]))
     groups = {}
     keys_in_order = []
@@ -159,15 +162,19 @@ def iid_expectancy_ci(pnls, n_boot=None, lo=5, hi=95, seed=42):
 def _validated_arrays(trades):
     pnls = []
     wins = []
+    losses = []
     capital_at_risk = []
+    economic_max_loss = []
     entry_dates = []
+    saw_economic_max_loss = False
+    missed_economic_max_loss = False
 
     for idx, trade in enumerate(trades):
         missing = {"pnl", "capital_at_risk", "entry_date", "symbol"} - trade.keys()
         if missing:
             raise ValueError(f"trade {idx} missing required field(s): {sorted(missing)}")
 
-        if not trade["symbol"]:
+        if not isinstance(trade["symbol"], str) or not trade["symbol"].strip():
             raise ValueError(f"trade {idx} has empty symbol")
         try:
             entry_date = _as_date(trade["entry_date"])
@@ -183,16 +190,44 @@ def _validated_arrays(trades):
             raise ValueError(
                 f"trade {idx} has invalid capital_at_risk: {trade['capital_at_risk']!r}"
             )
+        inferred_win = pnl > 0
+        if "is_win" in trade and bool(trade["is_win"]) != inferred_win:
+            raise ValueError(
+                f"trade {idx} has is_win inconsistent with net pnl: "
+                f"{trade['is_win']!r} vs {trade['pnl']!r}"
+            )
+        if "economic_max_loss" in trade:
+            saw_economic_max_loss = True
+            eml = float(trade["economic_max_loss"])
+            if not np.isfinite(eml) or eml <= 0:
+                raise ValueError(
+                    f"trade {idx} has invalid economic_max_loss: "
+                    f"{trade['economic_max_loss']!r}"
+                )
+            if eml < car:
+                raise ValueError(
+                    f"trade {idx} has economic_max_loss below capital_at_risk: "
+                    f"{trade['economic_max_loss']!r} < {trade['capital_at_risk']!r}"
+                )
+            economic_max_loss.append(eml)
+        else:
+            missed_economic_max_loss = True
 
         pnls.append(pnl)
-        wins.append(bool(trade.get("is_win", pnl > 0)))
+        wins.append(inferred_win)
+        losses.append(pnl < 0)
         capital_at_risk.append(car)
         entry_dates.append(entry_date)
+
+    if saw_economic_max_loss and missed_economic_max_loss:
+        raise ValueError("economic_max_loss must be supplied on every trade or none")
 
     return (
         np.array(pnls, dtype=float),
         np.array(wins, dtype=bool),
+        np.array(losses, dtype=bool),
         np.array(capital_at_risk, dtype=float),
+        np.array(economic_max_loss, dtype=float) if saw_economic_max_loss else None,
         entry_dates,
     )
 
@@ -207,11 +242,11 @@ def _max_drawdown(pnls):
 
 
 def scoreboard(trades, label="strategy"):
-    pnls, wins, cap, entry_dates = _validated_arrays(trades)
+    pnls, wins, losses, cap, economic_max_loss, entry_dates = _validated_arrays(trades)
     n = len(trades)
-    n_win, n_loss = int(wins.sum()), int((~wins).sum())
+    n_win, n_loss = int(wins.sum()), int(losses.sum())
 
-    win_pnls, loss_pnls = pnls[wins], pnls[~wins]
+    win_pnls, loss_pnls = pnls[wins], pnls[losses]
     rets = pnls / cap
 
     expectancy = float(pnls.mean()) if n else 0.0
@@ -223,6 +258,11 @@ def scoreboard(trades, label="strategy"):
     std_r = float(rets.std(ddof=1)) if n > 1 else 0.0
     downside = rets[rets < 0]
     dstd = float(downside.std(ddof=1)) if len(downside) > 1 else 0.0
+    economic_return = (
+        float(pnls.sum() / economic_max_loss.mean())
+        if economic_max_loss is not None and economic_max_loss.mean()
+        else float("nan")
+    )
     # ---- verdict gates on LOSSES and on COHORTS, not trades -----------------
     if n_loss < config.MIN_LOSSES_FOR_VERDICT:
         verdict = (f"INSUFFICIENT SAMPLE ({n_loss} losses; need "
@@ -251,6 +291,7 @@ def scoreboard(trades, label="strategy"):
         "sharpe_per_trade": (mean_r / std_r) if std_r else float("nan"),
         "sortino_per_trade": (mean_r / dstd) if dstd else float("nan"),
         "capital_efficiency": float(pnls.sum() / cap.mean()) if cap.mean() else float("nan"),
+        "return_on_economic_max_loss": economic_return,
         "verdict": verdict,
     }
 
@@ -273,6 +314,12 @@ def print_scoreboard(s):
     print(f"  Sortino (per-trade)   {s['sortino_per_trade']:.2f}   (NOT annualized)")
     print(f"  capital efficiency    {s['capital_efficiency']:.2%}  "
           f"(total P&L / avg capital at risk)")
+    economic = s["return_on_economic_max_loss"]
+    if np.isfinite(economic):
+        print(f"  economic max-loss ret {economic:.2%}  "
+              f"(total P&L / avg economic max loss)")
+    else:
+        print("  economic max-loss ret n/a    (economic_max_loss not supplied)")
     print("-" * 70)
     print(f"  VERDICT: {s['verdict']}")
     print("=" * 70)
