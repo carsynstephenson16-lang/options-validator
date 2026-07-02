@@ -31,11 +31,30 @@ against an arbitrary system Python.
 uv sync
 uv run python analysis/feasibility.py     # can a spread even fit your risk sleeve?
 uv run python metrics.py                  # see the scoreboard on synthetic trades
+uv run python scripts/validate_foundation.py  # verify local researcher scaffolding
 uv run python -m unittest discover -s tests   # run the test suite
 ```
 
 `smoke_test.py` is intentionally blocked until ThetaData chain fetching is
 wired and verified.
+
+## Researcher foundation
+
+This repo now includes a local-only options researcher workspace around the
+validation harness. It is meant to make research capture reproducible before any
+market-data wiring, not to create a live trading system.
+
+| Area | Path | Purpose |
+|---|---|---|
+| Package manifest | `options_researcher/` | Importable foundation manifest and guardrail constants |
+| Offline scripts | `scripts/` | Local note creation and layout validation |
+| Obsidian templates | `.obsidian/templates/` | Vault templates for hypotheses, logs, data audits, and OOS checks |
+| NotebookLM templates | `docs/notebooklm/templates/` | Source-upload and synthesis prompts that keep claims tied to sources |
+| Research notes | `docs/research-notes/` | Local markdown notes created from templates |
+
+The foundation is intentionally offline: no paid APIs, no broker order
+placement, no live trading, and no hardcoded secrets. Use `uv run python
+scripts/validate_foundation.py` after changing the scaffold.
 
 ## Capital & risk
 

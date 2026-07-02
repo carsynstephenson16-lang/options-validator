@@ -84,6 +84,14 @@ Do not hardcode current prices, event probabilities, or market odds.
 If live data access is unavailable, return a blocker instead of guessing.
 Do not expand this repo into a live scanner, suggestor, or trading bot unless the README phase plan is explicitly changed first.
 
+## Researcher Foundation Workflow
+
+Use the templates and scripts in this repository as local research scaffolding only. They do not authorize paid data calls, live trading, broker order placement, or any workaround around the pre-registration/OOS ledger gates.
+
+Start new research notes from `.obsidian/templates/` or `docs/notebooklm/templates/`, then move verdict-bearing work into the code and the append-only ledger. NotebookLM outputs are reading aids, not evidence; quote or cite the underlying source and record uncertainty before a claim reaches code, a README, or a registration.
+
+Keep `options_researcher/` and `scripts/` offline and standard-library-only unless the README phase plan is explicitly updated. Scripts may create local markdown files, validate layout, or call the existing `research.cli` seams; they must not fetch market data, submit orders, or embed credentials.
+
 ## Data Rules
 
 Verify schemas before using datasets.
