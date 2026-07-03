@@ -101,7 +101,7 @@ A_SHORT_PUT_DELTA    = 0.30          # sell the ~30-delta put (match on |delta|)
 # NOT validation: the live data path must still skip trades whose actual
 # conservative credit does not fit, and nothing here is real until measured
 # quotes replace ASSUMED_CREDIT_FRAC in feasibility.py.
-A_SPREAD_WIDTH       = 1             # buy the put this many $ lower
+A_SPREAD_WIDTH       = 5             # buy the put this many $ lower
                                      # [WIDTH SWEEP ARM 2026-07-03: in-sample
                                      # only; restored to 2 after the arm run]
 A_TARGET_DTE         = (30, 45)      # nearest expiration in band and >= DTE_MIN
