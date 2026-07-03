@@ -1,0 +1,19 @@
+title = "options-validator secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "thetadata-api-key"
+description = "ThetaData API key"
+regex = '''td1_[A-Za-z0-9_=-]{20,}'''
+keywords = ["td1_"]
+
+[allowlist]
+description = "Allow committed placeholders only"
+regexes = [
+  '''THETADATA_API_KEY=""''',
+  '''THETA_DATA_API_KEY=""''',
+  '''THETADATA_USERNAME=""''',
+  '''THETADATA_PASSWORD=""''',
+]
