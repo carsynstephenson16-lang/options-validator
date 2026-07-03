@@ -370,5 +370,118 @@ class DryRunTests(_CacheRunnerTestCase):
         self.assertEqual(total_already_cached, 1)
 
 
+class _FakeRpcError(Exception):
+    """Stand-in for grpc.RpcError carrying a status code. Declared lazily as a
+    grpc.RpcError subclass inside tests so the except clause in the runner
+    genuinely matches it."""
+
+
+def _make_rpc_error(code):
+    import grpc
+
+    class FakeRpcError(grpc.RpcError):
+        def code(self):
+            return code
+
+        def __str__(self):
+            return f"fake rpc error {code}"
+
+    return FakeRpcError()
+
+
+class TransportRetryTests(_CacheRunnerTestCase):
+    """A long sequential run WILL hit transport-level gRPC failures (observed
+    live 2026-07-03: UNAVAILABLE 'Stream removed (Socket closed)' ~3,890 calls
+    in). The runner must retry those with a client reset + backoff, propagate
+    everything non-transport immediately, and give up after a bounded number
+    of attempts."""
+
+    def setUp(self):
+        super().setUp()
+        import grpc  # hard dep of thetadata; offline-safe
+
+        self.grpc = grpc
+        self._old_sleep = cache_runner._sleep
+        self._old_reset = thetadata_adapter._reset_client
+        self.sleeps = []
+        self.resets = []
+        cache_runner._sleep = self.sleeps.append
+        thetadata_adapter._reset_client = lambda: self.resets.append(True)
+        cache_runner.trading_days = lambda start, end: ["2022-12-28"]
+
+    def tearDown(self):
+        cache_runner._sleep = self._old_sleep
+        thetadata_adapter._reset_client = self._old_reset
+        super().tearDown()
+
+    def test_unavailable_is_retried_with_reset_and_backoff_then_succeeds(self):
+        attempts = []
+
+        def flaky(symbol, date):
+            attempts.append(1)
+            if len(attempts) <= 2:
+                raise _make_rpc_error(self.grpc.StatusCode.UNAVAILABLE)
+
+        cache_runner.get_eod_chain = flaky
+
+        result = cache_runner.cache_in_sample(["SPY"], ledger_dir=self.ledger_dir)
+
+        self.assertEqual(result["fetched"], 1)
+        self.assertEqual(len(attempts), 3)
+        self.assertEqual(len(self.resets), 2)
+        self.assertEqual(self.sleeps, [
+            cache_runner._RETRY_BASE_SLEEP_S,
+            cache_runner._RETRY_BASE_SLEEP_S * 2,
+        ])
+
+    def test_permission_denied_propagates_immediately_without_retry(self):
+        attempts = []
+
+        def denied(symbol, date):
+            attempts.append(1)
+            raise _make_rpc_error(self.grpc.StatusCode.PERMISSION_DENIED)
+
+        cache_runner.get_eod_chain = denied
+
+        with self.assertRaises(self.grpc.RpcError):
+            cache_runner.cache_in_sample(["SPY"], ledger_dir=self.ledger_dir)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(self.resets, [])
+        self.assertEqual(self.sleeps, [])
+
+    def test_retries_exhaust_then_propagate(self):
+        attempts = []
+
+        def always_down(symbol, date):
+            attempts.append(1)
+            raise _make_rpc_error(self.grpc.StatusCode.UNAVAILABLE)
+
+        cache_runner.get_eod_chain = always_down
+
+        with self.assertRaises(self.grpc.RpcError):
+            cache_runner.cache_in_sample(["SPY"], ledger_dir=self.ledger_dir)
+        self.assertEqual(len(attempts), cache_runner._RETRY_MAX + 1)
+        self.assertEqual(len(self.sleeps), cache_runner._RETRY_MAX)
+
+    def test_gap_runtime_error_is_untouched_by_the_retry_wrapper(self):
+        cache_runner.get_eod_chain = lambda s, d: (_ for _ in ()).throw(
+            RuntimeError("ThetaData greeks_eod returned no rows for SPY @ x"))
+
+        result = cache_runner.cache_in_sample(["SPY"], ledger_dir=self.ledger_dir)
+
+        self.assertEqual(result["gaps"], 1)
+        self.assertEqual(self.resets, [])
+        self.assertEqual(self.sleeps, [])
+
+    def test_reset_client_clears_the_module_singleton(self):
+        old = thetadata_adapter._client_singleton
+        try:
+            thetadata_adapter._client_singleton = object()
+            self._old_reset()  # the REAL _reset_client saved in setUp
+            self.assertIsNone(thetadata_adapter._client_singleton)
+        finally:
+            thetadata_adapter._client_singleton = old
+
+
 if __name__ == "__main__":
     unittest.main()

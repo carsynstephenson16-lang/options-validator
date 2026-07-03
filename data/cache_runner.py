@@ -44,17 +44,56 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+
+import grpc  # hard dependency of thetadata; import is offline-safe
 
 # Repo root on sys.path so `python data/cache_runner.py ...` (run from the
 # repo root, per the docstring above) can import top-level packages -- same
 # shim analysis/feasibility.py and analysis/power_check.py use.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
+from data import thetadata_adapter  # noqa: E402
 from data.thetadata_adapter import _cache_path, blind_cache_chain, get_eod_chain  # noqa: E402
 from research import facts  # noqa: E402
 
 _GAP_MESSAGE_TOKEN = "returned no rows"
 _PROGRESS_EVERY = 250
+
+# Transport-retry policy (observed live 2026-07-03: a multi-hour sequential
+# run died at ~3,890 calls with UNAVAILABLE 'Stream removed (Socket closed)').
+# Retry ONLY transport/session-shaped gRPC codes, with a client reset (fresh
+# auth + channel) and exponential backoff; entitlement problems
+# (PERMISSION_DENIED) and everything non-gRPC propagate untouched.
+_RETRYABLE_GRPC_CODES = frozenset({
+    grpc.StatusCode.UNAVAILABLE,
+    grpc.StatusCode.UNKNOWN,
+    grpc.StatusCode.DEADLINE_EXCEEDED,
+    grpc.StatusCode.INTERNAL,
+    grpc.StatusCode.UNAUTHENTICATED,      # expired session -> re-auth fixes it
+    grpc.StatusCode.RESOURCE_EXHAUSTED,   # rate limit -> backoff helps
+})
+_RETRY_MAX = 5            # retries per task after the first attempt
+_RETRY_BASE_SLEEP_S = 5   # 5, 10, 20, 40, 80s
+_sleep = time.sleep       # seam so tests never really sleep
+
+
+def _fetch_with_transport_retry(fetch_one, symbol: str, day: str):
+    """Run one task with bounded recovery from transport-level gRPC failures.
+    Gap RuntimeErrors and non-retryable errors pass straight through."""
+    for attempt in range(_RETRY_MAX + 1):
+        try:
+            return fetch_one(symbol, day)
+        except grpc.RpcError as exc:
+            code = exc.code() if callable(getattr(exc, "code", None)) else None
+            if code not in _RETRYABLE_GRPC_CODES or attempt == _RETRY_MAX:
+                raise
+            wait = _RETRY_BASE_SLEEP_S * (2 ** attempt)
+            print(f"transport retry {attempt + 1}/{_RETRY_MAX} for {symbol} @ "
+                  f"{day}: {getattr(code, 'name', 'unknown')} -- resetting "
+                  f"client, sleeping {wait}s", flush=True)
+            thetadata_adapter._reset_client()
+            _sleep(wait)
 
 
 def trading_days(start: str, end: str) -> list[str]:
@@ -83,7 +122,7 @@ def _run_window(days: list[str], symbols: list[str], fetch_one, ledger_dir: str)
                 counts["skipped_cached"] += 1
             else:
                 try:
-                    fetch_one(symbol, day)
+                    _fetch_with_transport_retry(fetch_one, symbol, day)
                 except RuntimeError as exc:
                     if not _is_gap_error(exc):
                         raise

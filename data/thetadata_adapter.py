@@ -153,6 +153,15 @@ def _client():
     return _client_singleton
 
 
+def _reset_client() -> None:
+    """Drop the cached ThetaClient so the next fetch re-authenticates on a
+    fresh channel. Recovery step after a transport-level gRPC failure --
+    observed live 2026-07-03: UNAVAILABLE 'Stream removed (Socket closed)'
+    after ~3,890 sequential calls on one channel."""
+    global _client_singleton
+    _client_singleton = None
+
+
 def _fetch_raw(symbol: str, date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Two bulk calls for one symbol-day: the whole chain's greeks+NBBO+IV,
     and the whole chain's open interest. expiration="*" per call (per the
