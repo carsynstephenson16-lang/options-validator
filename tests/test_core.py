@@ -132,24 +132,25 @@ class ChainCacheTests(unittest.TestCase):
 
 
 class ChainMergeTests(unittest.TestCase):
-    """Pin the offline-testable half of the ThetaData fetch: the four
-    per-contract frames must merge into a valid CHAIN_COLUMNS chain,
+    """Pin the offline-testable half of the ThetaData fetch: the two bulk
+    frames (greeks_eod carrying NBBO + all greeks + implied_vol, and the
+    open_interest report) must merge into a valid CHAIN_COLUMNS chain,
     fail-closed on gaps, and fail loud on unexpected column names."""
 
     def _frames(self, n=3):
         base = {
             "expiration": ["2022-02-18"] * n,
             "strike": [380.0 + 5 * i for i in range(n)],
-            "right": ["put"] * n,
+            "right": ["PUT"] * n,
         }
-        eod = pd.DataFrame({**base,
-                            "bid": [1.00 + i for i in range(n)],
-                            "ask": [1.10 + i for i in range(n)]})
-        greeks = pd.DataFrame({**base, "delta": [-0.30] * n, "gamma": [0.02] * n,
-                               "theta": [-0.04] * n, "vega": [0.12] * n})
-        iv = pd.DataFrame({**base, "implied_volatility": [0.25] * n})
+        greeks = pd.DataFrame({**base,
+                               "bid": [1.00 + i for i in range(n)],
+                               "ask": [1.10 + i for i in range(n)],
+                               "delta": [-0.30] * n, "gamma": [0.02] * n,
+                               "theta": [-0.04] * n, "vega": [0.12] * n,
+                               "implied_vol": [0.25] * n})
         oi = pd.DataFrame({**base, "open_interest": [500] * n})
-        return eod, greeks, iv, oi
+        return greeks, oi
 
     def test_merge_produces_valid_chain_and_normalizes_rights(self):
         chain = thetadata_adapter._merge_chain_frames(*self._frames())
@@ -159,32 +160,46 @@ class ChainMergeTests(unittest.TestCase):
         thetadata_adapter.validate_chain_schema(chain)
 
     def test_merge_drops_contracts_missing_open_interest(self):
-        eod, greeks, iv, oi = self._frames(3)
+        greeks, oi = self._frames(3)
 
-        chain = thetadata_adapter._merge_chain_frames(eod, greeks, iv, oi.iloc[:2])
+        chain = thetadata_adapter._merge_chain_frames(greeks, oi.iloc[:2])
 
         self.assertEqual(len(chain), 2)
 
     def test_merge_keeps_last_report_per_contract(self):
-        eod, greeks, iv, _ = self._frames(1)
+        greeks, _ = self._frames(1)
         oi = pd.DataFrame({
             "expiration": ["2022-02-18"] * 2,
             "strike": [380.0] * 2,
-            "right": ["put"] * 2,
+            "right": ["PUT"] * 2,
             "timestamp": ["2022-01-03T10:00:00", "2022-01-03T16:00:00"],
             "open_interest": [100, 700],
         })
 
-        chain = thetadata_adapter._merge_chain_frames(eod, greeks, iv, oi)
+        chain = thetadata_adapter._merge_chain_frames(greeks, oi)
 
         self.assertEqual(chain.iloc[0]["open_interest"], 700)
 
     def test_merge_fails_loud_when_quote_columns_missing(self):
-        eod, greeks, iv, oi = self._frames(1)
+        greeks, oi = self._frames(1)
 
         with self.assertRaisesRegex(ValueError, r"none of.*bid"):
             thetadata_adapter._merge_chain_frames(
-                eod.drop(columns=["bid", "ask"]), greeks, iv, oi)
+                greeks.drop(columns=["bid", "ask"]), oi)
+
+    def test_merge_fails_loud_when_implied_vol_missing(self):
+        greeks, oi = self._frames(1)
+
+        with self.assertRaisesRegex(ValueError, r"(?i)implied_vol"):
+            thetadata_adapter._merge_chain_frames(
+                greeks.drop(columns=["implied_vol"]), oi)
+
+    def test_merge_fails_loud_when_a_greek_column_missing(self):
+        greeks, oi = self._frames(1)
+
+        with self.assertRaisesRegex(ValueError, r"delta"):
+            thetadata_adapter._merge_chain_frames(
+                greeks.drop(columns=["delta"]), oi)
 
 
 class OOSTouchGuardTests(unittest.TestCase):

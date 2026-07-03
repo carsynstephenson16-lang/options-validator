@@ -1,12 +1,23 @@
 """
 data/thetadata_adapter.py -- EOD option-chain access with local caching.
 
-STATUS: PHASE 0 WIRED, PENDING LIVE SMOKE TEST. The fetch path below talks to
-the same local ThetaTerminal that Lumibot manages (see
-docs/superpowers/2026-07-02-phase0-lumibot-thetadata-verification.md for the
-endpoint evidence). Column names on the greeks/IV endpoints are fail-loud
-guesses until the first live smoke test confirms them -- do NOT trust the fetch
-path before `python smoke_test.py` passes against a real terminal.
+PATH C (2026-07-03): fetches through the OFFICIAL `thetadata` Python client,
+authenticating with a direct API key (env THETADATA_API_KEY, legacy
+THETA_DATA_API_KEY also accepted) against the remote MDDS -- no ThetaTerminal
+process, no lumibot launcher, no local port. Two bulk calls per symbol-day
+replace the old four-endpoint REST fetch:
+  - `option_history_greeks_eod(symbol, expiration="*", start_date, end_date)`
+    returns NBBO (bid/ask) + every greek + implied_vol for the WHOLE chain in
+    one frame -- live-verified 2026-07-03 (SPY @ 2022-12-30: 7486 rows, 43
+    columns). Values are ThetaData-computed (data over local model, per the
+    Phase-0 resolution), generated from the 17:15 ET EOD report.
+  - `option_history_open_interest(symbol, expiration="*", start_date,
+    end_date)` returns open_interest per contract, sourced from the ~06:30 ET
+    OPRA report reflecting the PREVIOUS day's close -- i.e. the OI figure
+    already known during day D, so joining day-D OI is look-ahead-free.
+  Fewer OI rows than greeks rows is expected (not every contract carries OI);
+  the inner join below drops those contracts, which is the existing
+  fail-closed design (untradeable under the liquidity gate anyway).
 
 Note: Lumibot ships ThetaDataBacktesting natively, so inside the backtest loop
 Lumibot pulls its own quote data for FILLS. This adapter exists because the
@@ -18,7 +29,6 @@ the OOS reveal path (allow_oos=True) -- "just printing a chain" after 2022 is
 still a holdout look (spec, Unit 4).
 """
 from __future__ import annotations
-import io
 import os
 import re
 from datetime import date as Date
@@ -31,17 +41,6 @@ import config
 
 CACHE_DIR = Path(os.environ.get("OPTIONS_CACHE_DIR", ".cache/chains"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-# Local ThetaTerminal v3 REST (verified: lumibot thetadata_helper.py:342).
-THETA_BASE_URL = os.environ.get("THETADATA_BASE_URL", "http://127.0.0.1:25503")
-READINESS_PATH = "/v3/terminal/mdds/status"
-_V3_CHAIN_ENDPOINTS = {
-    "eod": "/v3/option/history/eod",
-    "greeks": "/v3/option/history/greeks/first_order",
-    "iv": "/v3/option/history/greeks_implied_volatility",
-    "oi": "/v3/option/history/open_interest",
-}
-_REQUEST_TIMEOUT_S = 120
 
 # Schema every downstream consumer expects from a chain DataFrame:
 CHAIN_COLUMNS = [
@@ -104,85 +103,108 @@ def validate_chain_schema(chain: pd.DataFrame) -> pd.DataFrame:
 
 
 # --------------------------------------------------------------------------
-# ThetaTerminal fetch path (live-verified only once the smoke test passes)
+# Official thetadata client fetch path (Path C, live-verified 2026-07-03)
 # --------------------------------------------------------------------------
 
-def _ensure_terminal() -> None:
-    """Ensure a local ThetaTerminal is serving at THETA_BASE_URL; if not, start
-    it via lumibot's launcher using THETADATA_USERNAME/THETADATA_PASSWORD.
+_API_KEY_ENV_VARS = ("THETADATA_API_KEY", "THETA_DATA_API_KEY")
 
-    AUTH NOTE (2026-07-02 live result): Path A (email+password via lumibot's
-    launcher) was executed and terminal 20260629 REJECTED the login
-    ("Invalid credentials") in a relaunch loop -- see the Phase-0 doc and
-    ledger/facts.log. Until the owner refreshes the password or authorizes a
-    Path B launch (THETA_DATA_API_KEY, terminal >= 20260615), this probe
-    fails loud here. The fetch path below is launcher-agnostic once a
-    terminal is alive at THETA_BASE_URL, however it was started."""
-    import requests
+_client_singleton = None  # module-cached ThetaClient; constructed lazily
+
+
+def _resolve_api_key() -> str:
+    """Load .env, then resolve the ThetaData API key from either env var name
+    (THETADATA_API_KEY preferred; THETA_DATA_API_KEY accepted for the legacy
+    name already present in this repo's .env). Never includes any value in
+    the error message -- only the variable NAMES are named."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    for name in _API_KEY_ENV_VARS:
+        value = os.environ.get(name)
+        if value:
+            return value
+    raise RuntimeError(
+        "No ThetaData API key found: set one of "
+        f"{', '.join(_API_KEY_ENV_VARS)} in .env."
+    )
+
+
+def _client():
+    """Module-cached ThetaClient, constructed lazily on first real fetch so
+    cache hits and offline tests never authenticate. `ThetaClient.__init__`
+    performs a synchronous auth request against the remote MDDS -- importing
+    the `thetadata` package here (not at module load) keeps this module's
+    import cheap and network-free."""
+    global _client_singleton
+    if _client_singleton is None:
+        from thetadata import ThetaClient
+
+        client = ThetaClient(api_key=_resolve_api_key(), dataframe_type="pandas")
+        # Fail fast if the authenticated account has no options entitlement --
+        # every data call below would otherwise fail one at a time. Default
+        # True on a missing attribute so a future client-library change never
+        # false-blocks a working account.
+        if not getattr(client, "options_subscription", True):
+            raise RuntimeError(
+                "ThetaData account has no options subscription entitlement -- "
+                "data calls would fail; check the account tier."
+            )
+        _client_singleton = client
+    return _client_singleton
+
+
+def _fetch_raw(symbol: str, date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Two bulk calls for one symbol-day: the whole chain's greeks+NBBO+IV,
+    and the whole chain's open interest. expiration="*" per call (per the
+    client's own docstring, any expiration=* request is scoped to one day).
+
+    EMPTY-DAY / GAP CONTRACT: a non-trading day, an EOD gap, or a day outside
+    the subscription's history window must surface as RuntimeError whose
+    message contains "returned no rows" (data/cache_runner.py depends on this
+    exact token to distinguish a gap -- skip and log -- from a real failure).
+    The installed thetadata.errors defines exactly two exceptions:
+    AuthenticationError and NoDataFoundError. Every data method (see
+    client.py) maps ONLY grpc.StatusCode.NOT_FOUND to NoDataFoundError, so an
+    empty day is normally an EXCEPTION, not an empty frame -- we catch that
+    exact type and re-raise with the required token. The empty-frame check is
+    kept too, belt-and-braces, in case a future client version returns an
+    empty frame instead of raising. Everything else -- AuthenticationError,
+    or a raw grpc.RpcError for entitlement (PERMISSION_DENIED), rate-limit
+    (RESOURCE_EXHAUSTED), or session (UNAUTHENTICATED) failures -- is not a
+    gap and must propagate untouched.
+    """
+    from thetadata.errors import NoDataFoundError
+
+    fetch_date = Date.fromisoformat(date)
+    client = _client()
 
     try:
-        resp = requests.get(THETA_BASE_URL + READINESS_PATH, timeout=2)
-        if resp.ok:
-            return
-    except requests.RequestException:
-        pass
-
-    from lumibot.credentials import THETADATA_CONFIG
-    from lumibot.tools import thetadata_helper
-
-    username = THETADATA_CONFIG.get("THETADATA_USERNAME")
-    password = THETADATA_CONFIG.get("THETADATA_PASSWORD")
-    if not username or not password:
-        raise RuntimeError(
-            f"ThetaTerminal is not running at {THETA_BASE_URL} and "
-            "THETADATA_USERNAME/THETADATA_PASSWORD are not set. Either add "
-            "email+password to .env for lumibot's launcher, or start "
-            "ThetaTerminal yourself with THETA_DATA_API_KEY exported (a valid "
-            "key is in .env). Terminal also requires a Java >= 21 runtime."
+        greeks = client.option_history_greeks_eod(
+            symbol=symbol, expiration="*", start_date=fetch_date, end_date=fetch_date,
         )
-    thetadata_helper.check_connection(username, password, wait_for_connection=True)
-
-    resp = requests.get(THETA_BASE_URL + READINESS_PATH, timeout=10)
-    if not resp.ok:
+    except NoDataFoundError:
+        greeks = None
+    if greeks is None or greeks.empty:
         raise RuntimeError(
-            f"ThetaTerminal did not become ready at {THETA_BASE_URL} "
-            f"(status {resp.status_code}). Check credentials and Java runtime."
+            f"ThetaData greeks_eod returned no rows for {symbol} @ {date}. "
+            "Likely a non-trading day, an EOD gap, or outside the "
+            "subscription window -- skip the day (log it), do not substitute."
         )
 
-
-def _fetch_v3_csv(endpoint_key: str, symbol: str, date: str) -> pd.DataFrame:
-    """One whole-chain request (expiration=*, strike=*, both rights) for one day,
-    CSV format so the response shape is flat and self-describing."""
-    import requests
-
-    params = {
-        "symbol": symbol,
-        "expiration": "*",
-        "strike": "*",
-        "right": "both",
-        "start_date": date,
-        "end_date": date,
-        "format": "csv",
-    }
-    if endpoint_key in ("greeks", "iv"):
-        # EOD values: one row per contract. Fail-loud guess until the live
-        # smoke test confirms the interval semantics (see module docstring).
-        params["interval"] = "1d"
-    url = THETA_BASE_URL + _V3_CHAIN_ENDPOINTS[endpoint_key]
-    resp = requests.get(url, params=params, timeout=_REQUEST_TIMEOUT_S)
-    if not resp.ok:
-        raise RuntimeError(
-            f"ThetaData {endpoint_key} request failed: HTTP {resp.status_code} "
-            f"for {url} ({resp.text[:200]!r})"
+    try:
+        oi = client.option_history_open_interest(
+            symbol=symbol, expiration="*", start_date=fetch_date, end_date=fetch_date,
         )
-    frame = pd.read_csv(io.StringIO(resp.text))
-    if frame.empty:
+    except NoDataFoundError:
+        oi = None
+    if oi is None or oi.empty:
         raise RuntimeError(
-            f"ThetaData {endpoint_key} returned no rows for {symbol} @ {date}. "
-            "Likely outside your subscription's history window, a non-trading "
-            "day, or an EOD gap -- skip the day (log it), do not substitute."
+            f"ThetaData open_interest returned no rows for {symbol} @ {date}. "
+            "Likely a non-trading day, an EOD gap, or outside the "
+            "subscription window -- skip the day (log it), do not substitute."
         )
-    return frame
+
+    return greeks, oi
 
 
 def _pick_col(frame: pd.DataFrame, candidates, ctx: str) -> str:
@@ -222,33 +244,26 @@ def _normalize_contract_keys(frame: pd.DataFrame, ctx: str) -> pd.DataFrame:
     return out.drop_duplicates(subset=_KEY_COLS, keep="last")
 
 
-def _merge_chain_frames(eod: pd.DataFrame, greeks: pd.DataFrame,
-                        iv: pd.DataFrame, oi: pd.DataFrame) -> pd.DataFrame:
-    """Inner-join the four per-contract frames into CHAIN_COLUMNS.
+def _merge_chain_frames(greeks: pd.DataFrame, oi: pd.DataFrame) -> pd.DataFrame:
+    """Inner-join the two per-contract frames into CHAIN_COLUMNS.
 
     Inner join is deliberate fail-closed behavior: a contract missing quotes,
     greeks, or open interest is untradeable under the liquidity/delta rules, so
     it is dropped here rather than passed downstream with NaNs. The caller
     logs the drop count."""
-    eod = _normalize_contract_keys(eod, "eod")
     greeks = _normalize_contract_keys(greeks, "greeks")
-    iv = _normalize_contract_keys(iv, "implied_volatility")
     oi = _normalize_contract_keys(oi, "open_interest")
 
-    bid_col = _pick_col(eod, ("bid", "close_bid", "bid_price"), "eod")
-    ask_col = _pick_col(eod, ("ask", "close_ask", "ask_price"), "eod")
-    iv_col = _pick_col(iv, ("implied_volatility", "implied_vol", "iv"), "implied_volatility")
+    bid_col = _pick_col(greeks, ("bid", "close_bid", "bid_price"), "greeks")
+    ask_col = _pick_col(greeks, ("ask", "close_ask", "ask_price"), "greeks")
+    iv_col = _pick_col(greeks, ("implied_vol", "implied_volatility", "iv"), "greeks")
     oi_col = _pick_col(oi, ("open_interest", "oi"), "open_interest")
     for greek in ("delta", "gamma", "theta", "vega"):
         _pick_col(greeks, (greek,), "greeks")
 
     merged = (
-        eod[_KEY_COLS + [bid_col, ask_col]]
-        .rename(columns={bid_col: "bid", ask_col: "ask"})
-        .merge(greeks[_KEY_COLS + ["delta", "gamma", "theta", "vega"]],
-               on=_KEY_COLS, how="inner")
-        .merge(iv[_KEY_COLS + [iv_col]].rename(columns={iv_col: "iv"}),
-               on=_KEY_COLS, how="inner")
+        greeks[_KEY_COLS + [bid_col, ask_col, "delta", "gamma", "theta", "vega", iv_col]]
+        .rename(columns={bid_col: "bid", ask_col: "ask", iv_col: "iv"})
         .merge(oi[_KEY_COLS + [oi_col]].rename(columns={oi_col: "open_interest"}),
                on=_KEY_COLS, how="inner")
     )
@@ -256,23 +271,21 @@ def _merge_chain_frames(eod: pd.DataFrame, greeks: pd.DataFrame,
 
 
 def _fetch_merged_chain(symbol: str, date: str):
-    """Fetch the four per-contract frames and merge into a validated chain.
+    """Fetch the two bulk frames and merge into a validated chain.
     Returns (chain, dropped_count). Callers decide how the drop count is
     reported -- the blind-cache path must not print anything."""
-    _ensure_terminal()
-    eod = _fetch_v3_csv("eod", symbol, date)
-    greeks = _fetch_v3_csv("greeks", symbol, date)
-    iv = _fetch_v3_csv("iv", symbol, date)
-    oi = _fetch_v3_csv("oi", symbol, date)
+    greeks, oi = _fetch_raw(symbol, date)
 
-    chain = _merge_chain_frames(eod, greeks, iv, oi)
+    normalized_greeks = _normalize_contract_keys(greeks, "greeks")
+    chain = _merge_chain_frames(greeks, oi)
     validate_chain_schema(chain)
-    return chain, len(eod) - len(chain)
+    return chain, len(normalized_greeks) - len(chain)
 
 
 def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.DataFrame:
     """Return the validated EOD option chain for `symbol` on `date` (YYYY-MM-DD),
-    fetched from the local ThetaTerminal on cache miss and cached as parquet.
+    fetched via the official thetadata client on cache miss and cached as
+    parquet.
 
     Dates after config.IN_SAMPLE_END are refused (OOSDataTouchError) unless the
     OOS reveal gate passes allow_oos=True -- reading a cached post-2022 chain
@@ -292,7 +305,7 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
     chain, dropped = _fetch_merged_chain(symbol, date)
     if dropped:
         print(f"{symbol} @ {date}: dropped {dropped} contracts "
-              "missing greeks/IV/OI (fail-closed; untradeable anyway)")
+              "missing open interest (fail-closed; untradeable anyway)")
     chain.to_parquet(cached)
     return chain
 

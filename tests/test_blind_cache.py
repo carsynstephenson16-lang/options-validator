@@ -23,16 +23,16 @@ def _frames(n=3):
     base = {
         "expiration": ["2023-07-21"] * n,
         "strike": [380.0 + 5 * i for i in range(n)],
-        "right": ["put"] * n,
+        "right": ["PUT"] * n,
     }
-    eod = pd.DataFrame({**base,
-                        "bid": [1.00 + i for i in range(n)],
-                        "ask": [1.10 + i for i in range(n)]})
-    greeks = pd.DataFrame({**base, "delta": [-0.30] * n, "gamma": [0.02] * n,
-                           "theta": [-0.04] * n, "vega": [0.12] * n})
-    iv = pd.DataFrame({**base, "implied_volatility": [0.25] * n})
+    greeks = pd.DataFrame({**base,
+                           "bid": [1.00 + i for i in range(n)],
+                           "ask": [1.10 + i for i in range(n)],
+                           "delta": [-0.30] * n, "gamma": [0.02] * n,
+                           "theta": [-0.04] * n, "vega": [0.12] * n,
+                           "implied_vol": [0.25] * n})
     oi = pd.DataFrame({**base, "open_interest": [500] * n})
-    return eod, greeks, iv, oi
+    return greeks, oi
 
 
 class BlindCacheTests(unittest.TestCase):
@@ -44,29 +44,32 @@ class BlindCacheTests(unittest.TestCase):
         thetadata_adapter.CACHE_DIR.mkdir(parents=True)
         self.ledger_dir = str(tmp / "ledger")
 
-        self._old_fetch = thetadata_adapter._fetch_v3_csv
-        self._old_ensure = thetadata_adapter._ensure_terminal
+        self._old_fetch_raw = thetadata_adapter._fetch_raw
+        self._old_client = thetadata_adapter._client
         self.fetch_calls = []
 
-        def fake_fetch(endpoint_key, symbol, date):
-            self.fetch_calls.append(endpoint_key)
-            eod, greeks, iv, oi = _frames()
-            return {"eod": eod, "greeks": greeks, "iv": iv, "oi": oi}[endpoint_key]
+        def fake_fetch_raw(symbol, date):
+            self.fetch_calls.append((symbol, date))
+            return _frames()
 
-        thetadata_adapter._fetch_v3_csv = fake_fetch
-        thetadata_adapter._ensure_terminal = lambda: None
+        thetadata_adapter._fetch_raw = fake_fetch_raw
+
+        def _client_forbidden():
+            raise AssertionError("no test should construct a real ThetaClient")
+
+        thetadata_adapter._client = _client_forbidden
 
     def tearDown(self):
-        thetadata_adapter._fetch_v3_csv = self._old_fetch
-        thetadata_adapter._ensure_terminal = self._old_ensure
+        thetadata_adapter._fetch_raw = self._old_fetch_raw
+        thetadata_adapter._client = self._old_client
         thetadata_adapter.CACHE_DIR = self._old_cache
         self._tmp.cleanup()
 
     def _forbid_network(self):
         def raiser(*args, **kwargs):
             raise AssertionError("network fetch must not happen here")
-        thetadata_adapter._fetch_v3_csv = raiser
-        thetadata_adapter._ensure_terminal = raiser
+        thetadata_adapter._fetch_raw = raiser
+        thetadata_adapter._client = raiser
 
     def test_refuses_in_sample_dates(self):
         with self.assertRaises(ValueError):
