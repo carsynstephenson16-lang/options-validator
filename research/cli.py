@@ -8,6 +8,7 @@ built in Phase 1A -- these are the seams it would attach to.
 Usage: uv run python -m research.cli <verify|trial-log|register|reveal-oos> ...
 """
 from __future__ import annotations
+
 import argparse
 import json
 import sys

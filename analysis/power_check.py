@@ -187,7 +187,7 @@ def run(quick=False):
     print(f"measured fully-overlapping PnL correlation {rho:.3f} -> "
           f"~{n_eff:.2f} effective bets across {N_SYMBOLS} names "
           f"(config flags ~1.5)")
-    print(f"PASS rule: widest-envelope 90% CI lower bound > 0 (metrics.py, frozen)")
+    print("PASS rule: widest-envelope 90% CI lower bound > 0 (metrics.py, frozen)")
     if quick:
         print("QUICK MODE: numbers are smoke-level noisy; run full for the record")
     print(flush=True)

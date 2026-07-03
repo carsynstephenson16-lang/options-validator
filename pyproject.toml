@@ -14,3 +14,34 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    ".cache",
+    ".venv",
+    "results",
+]
+
+[tool.ruff.lint]
+# Start with deterministic correctness/import checks. Broader style and
+# complexity rules can be enabled after the live data path settles.
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = [
+    # Existing strategy/test code intentionally uses terse skip-return and
+    # lambda fixtures in a few places. Leave these for a later style pass.
+    "E702",
+    "E731",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+    "pyright>=1.1.411",
+    "ruff>=0.15.20",
+]

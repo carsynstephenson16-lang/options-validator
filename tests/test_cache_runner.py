@@ -12,8 +12,7 @@ import unittest
 from pathlib import Path
 
 import config
-from data import cache_runner
-from data import thetadata_adapter
+from data import cache_runner, thetadata_adapter
 from research import facts
 
 

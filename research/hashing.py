@@ -6,6 +6,7 @@ in analysis/feasibility.py, the rest in config.py), so we hash ONE explicit
 snapshot object -- never a line/string search that could silently miss a param.
 """
 from __future__ import annotations
+
 import hashlib
 import json
 from pathlib import Path

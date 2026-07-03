@@ -5,12 +5,13 @@ Ties config + a Strategy class + the ThetaData datasource + metrics together.
 Keep this THIN: do not reimplement the engine -- call Lumibot's run_backtest.
 """
 from __future__ import annotations
+
 from datetime import datetime
 
 import config
 
 
-def run(strategy_cls, start: str = None, end: str = None):
+def run(strategy_cls, start: str | None = None, end: str | None = None):
     """PHASE 0 VERIFY: confirm the ThetaDataBacktesting import and the
     run_backtest signature against the installed lumibot, then map Lumibot's
     per-trade output into the list-of-dicts that metrics.scoreboard expects:

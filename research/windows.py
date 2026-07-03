@@ -5,6 +5,7 @@ Keyed on ENTRY date: a trade belongs to the window in which the decision was
 made. Keying on exit date would reintroduce look-ahead.
 """
 from __future__ import annotations
+
 from datetime import date
 
 

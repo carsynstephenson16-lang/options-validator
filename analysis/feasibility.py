@@ -15,9 +15,9 @@ fetched chains.
 
 Run from the repo root:  python analysis/feasibility.py
 """
+import math
 import os
 import sys
-import math
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402

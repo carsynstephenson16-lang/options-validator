@@ -6,6 +6,7 @@ log_trial_intent()-> record an intent-to-select that was not a full run; +1 tria
 reveal_oos()      -> the ONLY path that populates an out-of-sample result (Task 7).
 """
 from __future__ import annotations
+
 import math
 import re
 import uuid

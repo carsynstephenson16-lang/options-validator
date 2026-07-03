@@ -20,10 +20,12 @@ Optionally:
 Run a demo:  python metrics.py
 """
 from __future__ import annotations
-import numpy as np
-import config
 
 from datetime import date
+
+import numpy as np
+
+import config
 
 
 def _as_date(x):

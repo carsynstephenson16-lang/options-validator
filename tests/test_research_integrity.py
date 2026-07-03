@@ -1,22 +1,16 @@
-import os
 import json
 import math
+import os
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 import config
 import smoke_test
 from analysis import feasibility
-from research import hashing
-import tempfile
-from pathlib import Path
-from research import ledger
-from research import windows
-from research import experiments
-from research import cli
-from research import facts
 from harness import run_backtest
-
+from research import cli, experiments, facts, hashing, ledger, windows
 
 TEST_CODE_SHA = "e" * 40
 TEST_CONFIG_HASH = "a" * 64

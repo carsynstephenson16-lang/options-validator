@@ -4,6 +4,7 @@ spreads, workflow notes). Deliberately separate from the hypothesis ledger and
 explicitly NOT verdict-feeding: the "learn facts, not parameters" channel.
 """
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from pathlib import Path
 

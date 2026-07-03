@@ -14,7 +14,7 @@ that claim, not to assume it.
 from __future__ import annotations
 
 import config
-from strategies.base import size_defined_risk, entry_credit_conservative
+from strategies.base import entry_credit_conservative, size_defined_risk
 
 # Keep the file importable before lumibot is installed.
 try:
