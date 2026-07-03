@@ -121,6 +121,24 @@ class BlindCacheTests(unittest.TestCase):
         self.assertEqual(len(chain), 3)
         self.assertEqual(list(chain.columns), thetadata_adapter.CHAIN_COLUMNS)
 
+    def test_empty_merge_is_a_gap_not_an_empty_cache_file(self):
+        # Observed live (QQQ 2023-12-27): greeks and OI reports both populated
+        # but sharing ZERO contract keys (strike-adjustment mismatch) -> the
+        # inner join is empty. That must surface as the gap RuntimeError
+        # ("returned no rows" token), never be written as a zero-row parquet.
+        def disjoint_fetch_raw(symbol, date):
+            greeks, oi = _frames()
+            oi = oi.copy()
+            oi["strike"] = oi["strike"] + 0.22  # no key overlap
+            return greeks, oi
+
+        thetadata_adapter._fetch_raw = disjoint_fetch_raw
+
+        with self.assertRaisesRegex(RuntimeError, "returned no rows"):
+            thetadata_adapter.blind_cache_chain(
+                "QQQ", OOS_DATE, ledger_dir=self.ledger_dir)
+        self.assertFalse(thetadata_adapter._cache_path("QQQ", OOS_DATE).exists())
+
     def test_already_cached_file_is_not_refetched_and_still_audited(self):
         first = thetadata_adapter.blind_cache_chain(
             "SPY", OOS_DATE, ledger_dir=self.ledger_dir)

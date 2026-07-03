@@ -287,6 +287,19 @@ def _fetch_merged_chain(symbol: str, date: str):
 
     normalized_greeks = _normalize_contract_keys(greeks, "greeks")
     chain = _merge_chain_frames(greeks, oi)
+    if chain.empty:
+        # Observed live (QQQ @ 2023-12-27): both reports populated but sharing
+        # ZERO contract keys -- greeks strikes came back dividend-adjusted by
+        # -0.22 while OI carried the round listing strikes. Do NOT repair the
+        # keys (rounding could mis-join genuinely adjusted contracts); an
+        # empty intersection is an unusable day. Same guardrail as any EOD
+        # gap: skip the day, log it, never write a zero-row cache file.
+        raise RuntimeError(
+            f"ThetaData merged chain returned no rows for {symbol} @ {date}: "
+            "the greeks and open-interest reports share no contract keys "
+            "(adjustment mismatch or report glitch) -- skip the day (log it), "
+            "do not substitute."
+        )
     validate_chain_schema(chain)
     return chain, len(normalized_greeks) - len(chain)
 
