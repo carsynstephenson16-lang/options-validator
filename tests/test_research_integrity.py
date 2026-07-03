@@ -137,6 +137,17 @@ class LedgerChainTests(unittest.TestCase):
             "deflated_sharpe": None,
             "pbo": None,
             "notes": "",
+            "scope": {"symbols": ["SPY"]},
+        }
+
+    def _attempt(self, hypothesis_id="H1", run_id="run1", budget_used=1, budget_total=3):
+        return {
+            "entry_type": "oos_attempt",
+            "timestamp": "2026-07-01T00:00:00+00:00",
+            "hypothesis_id": hypothesis_id,
+            "run_id": run_id,
+            "budget_used": budget_used,
+            "budget_total": budget_total,
         }
 
     def _reveal(self, hypothesis_id="H1", run_id="run1", budget_used=1, budget_total=3):
@@ -192,10 +203,11 @@ class LedgerChainTests(unittest.TestCase):
     def test_trial_counter_counts_runs_and_intents_only(self):
         ledger.append(self._intent("a"), self.base)
         ledger.append(self._run(), self.base)
+        ledger.append(self._attempt(), self.base)
         ledger.append(self._reveal(), self.base)
         self.assertEqual(ledger.current_trial_count(self.base), 2)
         records = ledger.read_all(self.base)
-        self.assertEqual([r["trial_count"] for r in records], [1, 2, 2])
+        self.assertEqual([r["trial_count"] for r in records], [1, 2, 2, 2])
 
     def test_append_rejects_unknown_entry_type(self):
         with self.assertRaises(ledger.LedgerError):
@@ -323,38 +335,43 @@ class LedgerChainTests(unittest.TestCase):
     def test_verify_detects_hash_valid_duplicate_oos_reveal(self):
         ledger.append(self._run("H1", "run1"), self.base)
         ledger.append(self._run("H2", "run2"), self.base)
+        ledger.append(self._attempt("H1", "run1", budget_used=1), self.base)
         ledger.append(self._reveal("H1", "run1", budget_used=1), self.base)
+        ledger.append(self._attempt("H2", "run2", budget_used=2), self.base)
         ledger.append(self._reveal("H2", "run2", budget_used=2), self.base)
         records = ledger.read_all(self.base)
-        records[3]["hypothesis_id"] = "H1"
-        records[3]["run_id"] = "run1"
-        body = {k: v for k, v in records[3].items() if k != "record_hash"}
-        records[3]["record_hash"] = ledger._record_hash(body)
+        records[5]["hypothesis_id"] = "H1"
+        records[5]["run_id"] = "run1"
+        records[5]["budget_used"] = 1
+        body = {k: v for k, v in records[5].items() if k != "record_hash"}
+        records[5]["record_hash"] = ledger._record_hash(body)
 
         jsonl = Path(self.base) / "experiments.jsonl"
         jsonl.write_text("\n".join(hashing.canonical_json(r) for r in records) + "\n")
-        (Path(self.base) / "HEAD").write_text(records[3]["record_hash"] + "\n")
+        (Path(self.base) / "HEAD").write_text(records[5]["record_hash"] + "\n")
 
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base)
 
     def test_verify_detects_hash_valid_budget_miscount(self):
         ledger.append(self._run(), self.base)
+        ledger.append(self._attempt(), self.base)
         ledger.append(self._reveal(), self.base)
         records = ledger.read_all(self.base)
-        records[1]["budget_used"] = 2
-        body = {k: v for k, v in records[1].items() if k != "record_hash"}
-        records[1]["record_hash"] = ledger._record_hash(body)
+        records[2]["budget_used"] = 2
+        body = {k: v for k, v in records[2].items() if k != "record_hash"}
+        records[2]["record_hash"] = ledger._record_hash(body)
 
         jsonl = Path(self.base) / "experiments.jsonl"
         jsonl.write_text("\n".join(hashing.canonical_json(r) for r in records) + "\n")
-        (Path(self.base) / "HEAD").write_text(records[1]["record_hash"] + "\n")
+        (Path(self.base) / "HEAD").write_text(records[2]["record_hash"] + "\n")
 
         with self.assertRaises(ledger.LedgerError):
             ledger.verify(self.base)
 
     def test_append_rejects_oos_reveal_without_result(self):
         ledger.append(self._run(), self.base)
+        ledger.append(self._attempt(), self.base)
         bad = self._reveal()
         del bad["oos_result"]
         with self.assertRaises(ledger.LedgerError):
@@ -481,6 +498,7 @@ class LedgerAnchoringTests(unittest.TestCase):
             "deflated_sharpe": None,
             "pbo": None,
             "notes": "",
+            "scope": {"symbols": ["SPY"]},
         }
 
     def test_anchored_verify_fails_when_uncommitted(self):
@@ -563,6 +581,10 @@ def _window():
             "universe": ["SPY"]}
 
 
+def _scope():
+    return {"symbols": ["SPY"]}
+
+
 class RegisterCounterTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -575,7 +597,7 @@ class RegisterCounterTests(unittest.TestCase):
     def test_register_writes_run_record_with_null_oos(self):
         experiments.register("H1", "expectancy CI lower bound > 0",
                              is_result={"verdict": "NO EDGE"},
-                             data_window=_window(), risk_basis="economic_max_loss",
+                             data_window=_window(), scope=_scope(), risk_basis="economic_max_loss",
                              base_dir=self.base, code_sha=TEST_CODE_SHA,
                              source_clean_tracked=self.clean)
         rec = ledger.read_all(self.base)[-1]
@@ -589,7 +611,7 @@ class RegisterCounterTests(unittest.TestCase):
     def test_counter_increments_on_register_and_trial_log_only(self):
         experiments.log_trial_intent("eyeballed a 25-delta", base_dir=self.base)
         experiments.register("H1", "t", is_result={}, data_window=_window(),
-                             risk_basis="economic_max_loss", base_dir=self.base,
+                             scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                              code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
         self.assertEqual(experiments.current_trial_count(self.base), 2)
 
@@ -613,16 +635,16 @@ class RegisterCounterTests(unittest.TestCase):
 
     def test_register_rejects_duplicate_hypothesis_id(self):
         experiments.register("H1", "t", is_result={}, data_window=_window(),
-                             risk_basis="economic_max_loss", base_dir=self.base,
+                             scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                              code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("H1", "t2", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_trims_hypothesis_id_and_rejects_whitespace_duplicate(self):
         experiments.register(" Htrim ", " t ", is_result={}, data_window=_window(),
-                             risk_basis="economic_max_loss", base_dir=self.base,
+                             scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                              code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
         rec = ledger.read_all(self.base)[-1]
         self.assertEqual(rec["hypothesis_id"], "Htrim")
@@ -630,48 +652,48 @@ class RegisterCounterTests(unittest.TestCase):
 
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Htrim", "new t", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_rejects_dirty_source_surface(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hdirty", "t", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=lambda paths: False)
 
     def test_register_rejects_unknown_risk_basis(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hbad", "t", is_result={}, data_window=_window(),
-                                 risk_basis="typo", base_dir=self.base,
+                                 scope=_scope(), risk_basis="typo", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_rejects_empty_identity_or_threshold(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("", "t", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("H1", "", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_rejects_blank_run_id(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("H1", "t", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", run_id=" ",
+                                 scope=_scope(), risk_basis="economic_max_loss", run_id=" ",
                                  base_dir=self.base, code_sha=TEST_CODE_SHA,
                                  source_clean_tracked=self.clean)
 
     def test_register_rejects_abbreviated_code_sha(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("H1", "t", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", code_sha="deadbeef",
+                                 scope=_scope(), risk_basis="economic_max_loss", code_sha="deadbeef",
                                  base_dir=self.base, source_clean_tracked=self.clean)
 
     def test_register_rejects_non_string_notes(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("H1", "t", is_result={}, data_window=_window(),
-                                 risk_basis="economic_max_loss", notes=None,
+                                 scope=_scope(), risk_basis="economic_max_loss", notes=None,
                                  base_dir=self.base, code_sha=TEST_CODE_SHA,
                                  source_clean_tracked=self.clean)
 
@@ -680,7 +702,7 @@ class RegisterCounterTests(unittest.TestCase):
         del bad["oos_window"]
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hbadwindow", "t", is_result={}, data_window=bad,
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_sanitizes_non_finite_is_result_to_null(self):
@@ -692,7 +714,7 @@ class RegisterCounterTests(unittest.TestCase):
                              is_result={"sharpe_per_trade": float("nan"),
                                         "expectancy_CI90": [float("nan"), float("nan")],
                                         "verdict": "INSUFFICIENT SAMPLE"},
-                             data_window=_window(), risk_basis="economic_max_loss",
+                             data_window=_window(), scope=_scope(), risk_basis="economic_max_loss",
                              base_dir=self.base, code_sha=TEST_CODE_SHA,
                              source_clean_tracked=self.clean)
         ledger.verify(self.base)  # must not raise -> the record is valid JSON
@@ -706,14 +728,14 @@ class RegisterCounterTests(unittest.TestCase):
         # The gate must surface this as OOSGateError, not a bare TypeError.
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hobj", "t", is_result={"bad": {1, 2, 3}},
-                                 data_window=_window(), risk_basis="economic_max_loss",
+                                 data_window=_window(), scope=_scope(), risk_basis="economic_max_loss",
                                  base_dir=self.base, code_sha=TEST_CODE_SHA,
                                  source_clean_tracked=self.clean)
 
     def test_register_rejects_non_dict_is_result(self):
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hlist", "t", is_result=["PASS"],
-                                 data_window=_window(), risk_basis="economic_max_loss",
+                                 data_window=_window(), scope=_scope(), risk_basis="economic_max_loss",
                                  base_dir=self.base, code_sha=TEST_CODE_SHA,
                                  source_clean_tracked=self.clean)
 
@@ -722,7 +744,7 @@ class RegisterCounterTests(unittest.TestCase):
         bad["oos_window"] = {"start": "2022-06-01", "end": "2024-12-31"}  # starts in-sample
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hoverlap", "t", is_result={}, data_window=bad,
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_register_rejects_is_window_past_in_sample_end(self):
@@ -730,7 +752,7 @@ class RegisterCounterTests(unittest.TestCase):
         bad["is_window"] = {"start": "2018-01-01", "end": "2023-06-01"}  # ends after IN_SAMPLE_END
         with self.assertRaises(experiments.OOSGateError):
             experiments.register("Hlate", "t", is_result={}, data_window=bad,
-                                 risk_basis="economic_max_loss", base_dir=self.base,
+                                 scope=_scope(), risk_basis="economic_max_loss", base_dir=self.base,
                                  code_sha=TEST_CODE_SHA, source_clean_tracked=self.clean)
 
     def test_source_clean_default_checker_against_real_temp_repo(self):
@@ -773,7 +795,7 @@ class OOSGateTests(unittest.TestCase):
 
     def _register(self, hyp="H1"):
         experiments.register(hyp, "expectancy CI lower bound > 0", is_result={},
-                             data_window=_window(), risk_basis="economic_max_loss",
+                             data_window=_window(), scope=_scope(), risk_basis="economic_max_loss",
                              base_dir=self.base, code_sha=TEST_CODE_SHA,
                              source_clean_tracked=self.clean)
 
@@ -975,12 +997,14 @@ class CliTests(unittest.TestCase):
         original = experiments.register
         try:
             def fake_register(hypothesis_id, decision_threshold, is_result, *,
-                              data_window, risk_basis, notes="", base_dir="ledger"):
+                              data_window, scope, risk_basis, notes="",
+                              base_dir="ledger"):
                 calls.update({
                     "hypothesis_id": hypothesis_id,
                     "decision_threshold": decision_threshold,
                     "is_result": is_result,
                     "data_window": data_window,
+                    "scope": scope,
                     "risk_basis": risk_basis,
                     "notes": notes,
                     "base_dir": base_dir,
@@ -993,6 +1017,7 @@ class CliTests(unittest.TestCase):
                 "--decision-threshold", "ci_lo>0",
                 "--is-result-json", json.dumps({"verdict": "NO EDGE"}),
                 "--data-window-json", json.dumps(_window()),
+                "--scope-json", json.dumps(_scope()),
                 "--risk-basis", "economic_max_loss",
                 "--notes", "synthetic",
                 "--ledger", self.base,
@@ -1001,6 +1026,7 @@ class CliTests(unittest.TestCase):
             experiments.register = original
         self.assertEqual(rc, 0)
         self.assertEqual(calls["hypothesis_id"], "H1")
+        self.assertEqual(calls["scope"], _scope())
         self.assertEqual(calls["base_dir"], self.base)
 
     def test_register_returns_nonzero_on_ledger_error(self):
@@ -1015,6 +1041,7 @@ class CliTests(unittest.TestCase):
                 "--decision-threshold", "ci_lo>0",
                 "--is-result-json", json.dumps({"verdict": "NO EDGE"}),
                 "--data-window-json", json.dumps(_window()),
+                "--scope-json", json.dumps(_scope()),
                 "--risk-basis", "economic_max_loss",
                 "--ledger", self.base,
             ]), 0)

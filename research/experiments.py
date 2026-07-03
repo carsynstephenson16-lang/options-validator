@@ -78,6 +78,15 @@ def _require_window(data_window, key) -> dict:
     return dict(window)
 
 
+def _require_scope(scope) -> dict:
+    """Friendly pre-validation of the registered universe; the ledger's
+    semantic verifier re-checks the same contract fail-closed."""
+    try:
+        return ledger._require_scope({"scope": scope}, seq=-1)
+    except ledger.LedgerError as exc:
+        raise OOSGateError(f"invalid scope: {exc}") from exc
+
+
 def _source_paths():
     import subprocess
     tracked = subprocess.run(
@@ -134,7 +143,7 @@ def current_trial_count(base_dir="ledger") -> int:
 
 
 def register(hypothesis_id, decision_threshold, is_result, *, data_window,
-             risk_basis, notes="", run_id=None, code_sha=None,
+             scope, risk_basis, notes="", run_id=None, code_sha=None,
              source_clean_tracked=None, base_dir="ledger") -> str:
     hypothesis_id = _require_non_empty_text(hypothesis_id, "hypothesis_id")
     decision_threshold = _require_non_empty_text(decision_threshold, "decision_threshold")
@@ -146,6 +155,7 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
         raise OOSGateError(f"unknown risk_basis {risk_basis!r}")
     if not isinstance(is_result, dict):
         raise OOSGateError("is_result must be a scoreboard object")
+    scope = _require_scope(scope)
     is_window = _require_window(data_window, "is_window")
     oos_window = _require_window(data_window, "oos_window")
     from research.windows import _as_date
@@ -185,6 +195,7 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
         "deflated_sharpe": None,  # Phase-1B stub -- never computed in 1A
         "pbo": None,              # Phase-1B stub -- never computed in 1A
         "notes": notes,
+        "scope": scope,
     }
     body["trial_count"] = current_trial_count(base_dir) + 1
     return ledger.append(body, base_dir)
@@ -206,11 +217,16 @@ def log_trial_intent(reason, *, hypothesis_id=None, base_dir="ledger") -> str:
 
 def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
                git_clean_tracked=None):
-    """Write-once OOS reveal. Refuses unless a matching registration exists, the
-    registered config/source/cost surfaces are unchanged, the global look budget
-    is not spent, no prior reveal exists for this hypothesis, and the ledger is
-    committed+clean. Only then does it run the (injected) backtest, assert the
-    OOS partition and registered window, and append the oos_reveal record.
+    """Write-once OOS reveal with charge-on-touch. Refuses unless a matching
+    registration exists, the registered config/source/cost surfaces are
+    unchanged, the global look budget (counting TOUCHED hypotheses: attempts
+    union reveals) is not spent, no prior reveal exists for this hypothesis,
+    and the ledger is committed+clean. Only then does it append the
+    budget-consuming oos_attempt record, run the (injected) backtest, assert
+    the OOS partition and registered window, and append the oos_reveal record.
+    A crashed run_fn leaves the attempt on the ledger: the look was spent when
+    the holdout was touched, and re-attempting the same hypothesis completes
+    that look rather than opening a second one.
 
     Trust boundaries (Threat Model C -- honest single-writer now; hard/multi-process
     enforcement deferred to the autonomous-runner phase):
@@ -240,6 +256,7 @@ def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
         "cost_model_hash",
         "source_hash",
         "oos_window",
+        "scope",
     }
     missing_run_fields = required_run_fields - run.keys()
     if missing_run_fields:
@@ -257,13 +274,29 @@ def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
     if any(r.get("hypothesis_id") == hypothesis_id for r in reveals):
         raise OOSGateError(f"OOS already revealed for {hypothesis_id!r} (write-once)")
 
-    revealed_hyps = {r.get("hypothesis_id") for r in reveals}
-    if len(revealed_hyps) >= config.OOS_LOOK_BUDGET:
+    # Charge-on-touch budget: a hypothesis consumes its look the moment the
+    # holdout is about to be touched (oos_attempt), whether or not a reveal
+    # ever lands. Re-attempting an already-touched hypothesis completes the
+    # same look; it never opens a second one.
+    touched_hyps = {r.get("hypothesis_id") for r in records
+                    if r.get("entry_type") in ledger.OOS_TYPES}
+    if hypothesis_id not in touched_hyps and len(touched_hyps) >= config.OOS_LOOK_BUDGET:
         raise OOSGateError(
             f"global OOS look budget exhausted ({config.OOS_LOOK_BUDGET})")
 
     # The pre-registration must be immutable in git BEFORE we peek at the holdout.
     ledger.verify(base_dir, anchored=True, git_clean_tracked=git_clean_tracked)
+
+    budget_used = len(touched_hyps | {hypothesis_id})
+    ledger.append({
+        "entry_type": "oos_attempt",
+        "timestamp": _now(),
+        "run_id": run["run_id"],
+        "hypothesis_id": hypothesis_id,
+        "budget_used": budget_used,
+        "budget_total": config.OOS_LOOK_BUDGET,
+        "trial_count": current_trial_count(base_dir),
+    }, base_dir)
 
     oos_trades = run_fn()
     try:
@@ -293,7 +326,7 @@ def reveal_oos(hypothesis_id, run_fn, *, scoreboard_fn=None, base_dir="ledger",
         "run_id": run["run_id"],
         "hypothesis_id": hypothesis_id,
         "oos_result": safe_oos,
-        "budget_used": len(revealed_hyps) + 1,
+        "budget_used": budget_used,
         "budget_total": config.OOS_LOOK_BUDGET,
     }
     body["trial_count"] = current_trial_count(base_dir)  # reveal adds no new trial

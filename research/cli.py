@@ -39,6 +39,8 @@ def main(argv=None) -> int:
     p_register.add_argument("--decision-threshold", required=True)
     p_register.add_argument("--is-result-json", required=True)
     p_register.add_argument("--data-window-json", required=True)
+    p_register.add_argument("--scope-json", required=True,
+                            help='registered universe, e.g. {"symbols": ["SPY", "QQQ"]}')
     p_register.add_argument("--risk-basis", required=True)
     p_register.add_argument("--notes", default="")
 
@@ -73,6 +75,7 @@ def main(argv=None) -> int:
                 args.decision_threshold,
                 json.loads(args.is_result_json),
                 data_window=json.loads(args.data_window_json),
+                scope=json.loads(args.scope_json),
                 risk_basis=args.risk_basis,
                 notes=args.notes,
                 base_dir=args.ledger,

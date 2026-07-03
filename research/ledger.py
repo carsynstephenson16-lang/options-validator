@@ -16,7 +16,12 @@ GENESIS_PREV = "0" * 64
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 TRIAL_TYPES = {"run", "trial_intent"}
-VALID_ENTRY_TYPES = TRIAL_TYPES | {"oos_reveal"}
+# OOS record types share budget accounting: an oos_attempt is the auditable
+# charge-on-touch event appended BEFORE the holdout backtest executes; the
+# budget counts TOUCHED hypotheses (attempts union reveals), never just
+# successful reveals, so a crashed attempt still burned its look.
+OOS_TYPES = {"oos_attempt", "oos_reveal"}
+VALID_ENTRY_TYPES = TRIAL_TYPES | OOS_TYPES
 VALID_RISK_BASES = {"capital_at_risk", "economic_max_loss"}
 RESERVED_KEYS = {"seq", "prev_hash", "record_hash"}
 CHAIN_KEYS = RESERVED_KEYS | {"trial_count", "entry_type"}
@@ -39,6 +44,14 @@ RUN_KEYS = CHAIN_KEYS | {
     "deflated_sharpe",
     "pbo",
     "notes",
+    "scope",
+}
+OOS_ATTEMPT_KEYS = CHAIN_KEYS | {
+    "timestamp",
+    "hypothesis_id",
+    "run_id",
+    "budget_used",
+    "budget_total",
 }
 OOS_REVEAL_KEYS = CHAIN_KEYS | {
     "timestamp",
@@ -51,6 +64,7 @@ OOS_REVEAL_KEYS = CHAIN_KEYS | {
 ALLOWED_KEYS_BY_TYPE = {
     "trial_intent": TRIAL_INTENT_KEYS,
     "run": RUN_KEYS,
+    "oos_attempt": OOS_ATTEMPT_KEYS,
     "oos_reveal": OOS_REVEAL_KEYS,
 }
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -94,7 +108,7 @@ def _expected_trial_count(records: list[dict], entry_type: str):
     count = sum(1 for r in records if r.get("entry_type") in TRIAL_TYPES)
     if entry_type in TRIAL_TYPES:
         return count + 1
-    if entry_type == "oos_reveal":
+    if entry_type in OOS_TYPES:
         return count
     return None
 
@@ -188,12 +202,32 @@ def _require_window(rec: dict, key: str, seq: int) -> dict:
     return window
 
 
+def _require_scope(rec: dict, seq: int) -> dict:
+    """scope = {"symbols": [...]}: the registered universe the OOS reveal must
+    run -- canonical upper-case symbols, no duplicates (a duplicate would
+    double-run a name), no extra keys to smuggle state through."""
+    scope = _require_dict(rec, "scope", seq)
+    if set(scope) != {"symbols"}:
+        raise LedgerError(f"scope must contain exactly 'symbols' at seq {seq}")
+    symbols = scope["symbols"]
+    if not isinstance(symbols, list) or not symbols:
+        raise LedgerError(f"scope.symbols must be a non-empty list at seq {seq}")
+    for s in symbols:
+        if not isinstance(s, str) or not s or s != s.strip() or s != s.upper():
+            raise LedgerError(
+                f"scope.symbols must be canonical upper-case tickers at seq {seq}: {s!r}")
+    if len(set(symbols)) != len(symbols):
+        raise LedgerError(f"scope.symbols must not contain duplicates at seq {seq}")
+    return scope
+
+
 def _verify_semantic_records(records: list[dict]) -> None:
     trial_count = 0
     runs_by_hypothesis = {}
     run_ids = set()
+    touched_hypotheses = set()   # attempts union reveals: the budget basis
     revealed_hypotheses = set()
-    reveal_budget_total = None
+    oos_budget_total = None
 
     for i, rec in enumerate(records):
         entry_type = rec.get("entry_type")
@@ -245,26 +279,32 @@ def _verify_semantic_records(records: list[dict]) -> None:
                 raise LedgerError(f"pbo must be null at seq {i}")
             if not isinstance(rec.get("notes"), str):
                 raise LedgerError(f"notes must be a string at seq {i}")
+            _require_scope(rec, i)
             if hypothesis_id in runs_by_hypothesis:
                 raise LedgerError(f"duplicate run hypothesis_id at seq {i}: {hypothesis_id!r}")
             if run_id in run_ids:
                 raise LedgerError(f"duplicate run_id at seq {i}: {run_id!r}")
             runs_by_hypothesis[hypothesis_id] = run_id
             run_ids.add(run_id)
-        elif entry_type == "oos_reveal":
+        elif entry_type in OOS_TYPES:
             _require_timestamp(rec, "timestamp", i)
             hypothesis_id = _require_canonical_text(rec, "hypothesis_id", i)
             run_id = _require_canonical_text(rec, "run_id", i)
-            _require_dict(rec, "oos_result", i)
             if hypothesis_id not in runs_by_hypothesis:
                 raise LedgerError(
-                    f"oos_reveal at seq {i} has no registered run: {hypothesis_id!r}"
+                    f"{entry_type} at seq {i} has no registered run: {hypothesis_id!r}"
                 )
             if runs_by_hypothesis[hypothesis_id] != run_id:
-                raise LedgerError(f"oos_reveal run_id mismatch at seq {i}")
-            if hypothesis_id in revealed_hypotheses:
-                raise LedgerError(f"duplicate oos_reveal at seq {i}: {hypothesis_id!r}")
-            expected_budget_used = len(revealed_hypotheses) + 1
+                raise LedgerError(f"{entry_type} run_id mismatch at seq {i}")
+            if entry_type == "oos_reveal":
+                _require_dict(rec, "oos_result", i)
+                if hypothesis_id not in touched_hypotheses:
+                    raise LedgerError(
+                        f"oos_reveal at seq {i} has no prior oos_attempt "
+                        f"(charge-on-touch) for {hypothesis_id!r}")
+                if hypothesis_id in revealed_hypotheses:
+                    raise LedgerError(f"duplicate oos_reveal at seq {i}: {hypothesis_id!r}")
+            expected_budget_used = len(touched_hypotheses | {hypothesis_id})
             if rec.get("budget_used") != expected_budget_used:
                 raise LedgerError(
                     f"budget_used mismatch at seq {i}: "
@@ -273,11 +313,13 @@ def _verify_semantic_records(records: list[dict]) -> None:
             budget_total = _require_positive_int(rec, "budget_total", i)
             if budget_total < expected_budget_used:
                 raise LedgerError(f"budget_total below budget_used at seq {i}")
-            if reveal_budget_total is None:
-                reveal_budget_total = budget_total
-            elif budget_total != reveal_budget_total:
+            if oos_budget_total is None:
+                oos_budget_total = budget_total
+            elif budget_total != oos_budget_total:
                 raise LedgerError(f"budget_total changed at seq {i}")
-            revealed_hypotheses.add(hypothesis_id)
+            touched_hypotheses.add(hypothesis_id)
+            if entry_type == "oos_reveal":
+                revealed_hypotheses.add(hypothesis_id)
 
 
 def append(body: dict, base_dir="ledger") -> str:

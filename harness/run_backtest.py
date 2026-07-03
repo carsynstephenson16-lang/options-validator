@@ -130,21 +130,33 @@ def run(strategy_cls, start: str | None = None, end: str | None = None, *,
     return sorted(trades, key=lambda t: (t["entry_date"], t["symbol"]))
 
 
-def _oos_backtest_trades():
-    """OOS seam, still sealed ON PURPOSE: the charge-on-touch policy (every
-    holdout data open logged as an auditable event) is not implemented yet,
-    and memory records it as REQUIRED before any reveal. Wire it, then call
-    run(strategy_cls, start=<IN_SAMPLE_END+1>, end=config.BACKTEST_END,
-    allow_oos=True) from here."""
-    raise NotImplementedError(
-        "OOS backtest stays sealed: implement charge-on-touch logging before "
-        "any reveal (see project memory / pre-registration decisions).")
+def _oos_backtest_trades(hypothesis_id: str, *, base_dir="ledger") -> list[dict]:
+    """The holdout backtest, derived ONLY from the registered record: scope
+    symbols and oos_window come from the ledger, never from config.UNIVERSE or
+    caller arguments. Reachable through reveal_out_of_sample -- by the time
+    this runs, reveal_oos has already charged the budget-consuming oos_attempt
+    record (charge-on-touch)."""
+    from research import experiments, ledger
+    from strategies.put_credit_spread import PutCreditSpread
+
+    runs = [r for r in ledger.read_all(base_dir)
+            if r.get("entry_type") == "run"
+            and r.get("hypothesis_id") == hypothesis_id]
+    if not runs:
+        raise experiments.OOSGateError(
+            f"no registered hypothesis {hypothesis_id!r} for the OOS backtest")
+    record = runs[-1]
+    window = record["oos_window"]
+    return run(PutCreditSpread, start=window["start"], end=window["end"],
+               symbols=list(record["scope"]["symbols"]), allow_oos=True)
 
 
 def reveal_out_of_sample(hypothesis_id, *, base_dir="ledger", git_clean_tracked=None):
     """Thin seam: delegate the write-once OOS reveal to the integrity substrate,
-    injecting the (still-sealed) backtest as the run function."""
+    injecting the registered-scope backtest as the run function."""
     from research import experiments
+    hypothesis_id = hypothesis_id.strip()
     return experiments.reveal_oos(
-        hypothesis_id, run_fn=_oos_backtest_trades, base_dir=base_dir,
-        git_clean_tracked=git_clean_tracked)
+        hypothesis_id,
+        run_fn=lambda: _oos_backtest_trades(hypothesis_id, base_dir=base_dir),
+        base_dir=base_dir, git_clean_tracked=git_clean_tracked)
