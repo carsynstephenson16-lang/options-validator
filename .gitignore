@@ -19,3 +19,10 @@ results/*
 # Obsidian vault config (repo opened as a vault; not project files)
 .obsidian/
 .lumibot/
+
+# Obsidian daily notes & scratch files kept local: their substance is captured
+# in tracked docs/ (verification, specs, lessons). Root-anchored so dated docs
+# under docs/ (e.g. docs/superpowers/2026-07-02-*.md) stay tracked. Use
+# `git add -f` if a specific note ever needs to be committed.
+/20??-??-??.md
+/Untitled*.md
