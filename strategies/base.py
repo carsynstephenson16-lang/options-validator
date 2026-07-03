@@ -3,6 +3,7 @@ strategies/base.py -- shared helpers so strategies size and cost identically.
 Apples-to-apples starts here. These functions are real and correct.
 """
 from __future__ import annotations
+
 import math
 
 import config
@@ -41,7 +42,6 @@ def size_defined_risk(width: float, net_credit: float):
     """
     if width <= 0 or net_credit <= 0 or net_credit >= width:
         return 0, float("inf")
-    capital_at_risk = capital_at_risk_per_spread(width, net_credit)
     economic_max_loss = economic_max_loss_per_spread(width, net_credit)
     return max(math.floor(risk_budget() / economic_max_loss), 0), economic_max_loss
 
