@@ -1,11 +1,11 @@
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
+
+import pandas as pd
 
 import config
 from analysis.feasibility import ASSUMED_CREDIT_FRAC
-import pandas as pd
-
 from data import thetadata_adapter
 from data.thetadata_adapter import mid_price, passes_liquidity
 from metrics import scoreboard
@@ -339,11 +339,11 @@ class HonestRiskCapConfigTests(unittest.TestCase):
                                     f"width {width} no longer fits the cap")
 
     def test_concentration_is_documented_reality(self):
-        # 5 concurrent positions x $600 = $3,000 =~ 21.4% of the sleeve at
-        # simultaneous risk, in a ~1.5-effective-bet universe. The cap is
+        # 9 concurrent positions x $600 = $5,400 =~ 38.6% of the sleeve at
+        # simultaneous risk, in a high-correlation universe. The cap is
         # PER-TRADE; the portfolio view must stay visible in feasibility.
         worst = len(config.UNIVERSE) * config.MAX_LOSS_PER_TRADE
-        self.assertAlmostEqual(worst / config.RISK_SLEEVE, 0.21429, places=4)
+        self.assertAlmostEqual(worst / config.RISK_SLEEVE, 0.38571, places=4)
 
 
 if __name__ == "__main__":

@@ -34,10 +34,11 @@ RISK_SLEEVE          = 14_000    # $ genuinely willing to lose (cash + swing;
 # credits it is what makes the strategy TRADABLE at all: the 1% rule ($140)
 # sat below the $2-wide ECONOMIC max loss ($142.60), i.e. zero contracts.
 # The cap is PER TRADE, not per cluster: len(UNIVERSE) concurrent positions
-# put ~$3,000 (~21.4% of the sleeve) at SIMULTANEOUS risk in a ~1.5-effective-
-# bet universe -- analysis/feasibility.py prints that portfolio view. Never
-# raise this cap to make a width "fit"; that is reverse-engineering risk to
-# fit the trade, the exact mistake this file warns against.
+# put ~$5,400 (~38.6% of the sleeve) at SIMULTANEOUS risk in the current
+# 9-symbol universe. These names are emphatically not 9 independent bets --
+# analysis/feasibility.py prints the portfolio view. Never raise this cap to
+# make a width "fit"; that is reverse-engineering risk to fit the trade, the
+# exact mistake this file warns against.
 MAX_LOSS_PER_TRADE   = 600       # $ hard cap on economic max loss per trade
 STARTING_CAPITAL     = 25_000    # account equity used by the backtest engine
                                  # (engine buying power; decoupled from the
@@ -47,11 +48,16 @@ STARTING_CAPITAL     = 25_000    # account equity used by the backtest engine
 # ---------------------------------------------------------------------------
 # UNIVERSE & WINDOW
 # ---------------------------------------------------------------------------
-# CONCENTRATION FLAG: SPY and QQQ overlap heavily with AAPL/MSFT/NVDA, which
-# are top holdings of both. These five names are closer to ~1.5 independent
-# bets than five -- effectively one tech-beta factor. In a tech drawdown every
-# short-put spread loses together. Treat "diversification" here with suspicion.
-UNIVERSE             = ["SPY", "QQQ", "MSFT", "AAPL", "NVDA"]
+# CONCENTRATION FLAG: SPY and QQQ overlap heavily with AAPL/MSFT/NVDA/AMZN,
+# and PLTR/NOW/VST add high-beta thematic exposure rather than clean
+# diversification. This universe is much closer to one growth/AI/power-risk
+# cluster than 9 independent bets. In a risk-off or tech/AI drawdown, short-put
+# spreads across these symbols can lose together. Treat "diversification" here
+# with suspicion.
+UNIVERSE             = [
+    "SPY", "QQQ", "MSFT", "AAPL", "NVDA",
+    "VST", "PLTR", "AMZN", "NOW",
+]
 BACKTEST_START       = "2018-01-01"   # must span 2018 / 2020 / 2022 regimes
 # OOS WINDOW EXTENSION (2026-07-02, decided BLIND at pre-registration -- before
 # any paid or post-IN_SAMPLE_END market data was fetched or opened): end moved

@@ -47,9 +47,9 @@ $14k sleeve). Do **not** size against your whole net worth (that silently puts
 your stock portfolio behind every options trade) or an arbitrary account
 number, and never raise the cap to make a width "fit". The feasibility script
 shows what fits the cap **and** the portfolio view the per-trade cap hides:
-five concurrent positions ≈ $3,000 at simultaneous risk (~21.4% of the sleeve)
-in a universe that is ~1.5 independent bets -- in a tech drawdown they lose
-together.
+nine concurrent positions ≈ $5,400 at simultaneous risk (~38.6% of the sleeve)
+in a universe that is far fewer than nine independent bets -- in a growth/AI or
+tech drawdown, many of them can lose together.
 
 ## Phase plan
 
@@ -70,8 +70,9 @@ A live "scanner / suggestor" is a **separate project** that only makes sense
 
 ## Known limitations (don't paper over these)
 
-- **Factor concentration:** SPY/QQQ overlap heavily with AAPL/MSFT/NVDA, so this
-  universe is ~one tech-beta bet. A positive result here may not generalize.
+- **Factor concentration:** SPY/QQQ overlap heavily with AAPL/MSFT/NVDA/AMZN,
+  and PLTR/NOW/VST add high-beta thematic exposure. This is not nine clean
+  independent bets. A positive result here may not generalize.
 - **EOD data** is an upper bound on realism -- real fills happen intraday.
 - **VRP compression:** the historical volatility risk premium has thinned; a
   2018-2024 backtest may overstate what's available now.
