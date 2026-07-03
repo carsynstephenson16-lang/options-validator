@@ -1,5 +1,9 @@
 # OOS reveal runbook — prepared and PAUSED at the owner's door (2026-07-03)
 
+**OWNER DECISION 2026-07-03: reveal DECLINED ("no") — the holdout stays
+sealed at 0/3.** This runbook remains the only sanctioned path should that
+ever change.
+
 **STANDING RECOMMENDATION: DO NOT REVEAL.** Both registered hypotheses failed
 in-sample with their entire CI90 below zero (H1 $2-wide: −$102.79/trade
 [−132.61, −74.46]; H2 $5-wide: −$39.07/trade [−61.28, −18.08]). An OOS look
