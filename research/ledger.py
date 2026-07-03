@@ -5,10 +5,10 @@ The chain IS the tamper-evidence: each record commits to the previous one.
 A second tracked file, HEAD, holds the current tip so it is diffable in git.
 """
 from __future__ import annotations
-from datetime import date
-from datetime import datetime
-from pathlib import Path
+
 import re
+from datetime import date, datetime
+from pathlib import Path
 
 from research.hashing import canonical_json, sha256_hex
 
@@ -290,7 +290,10 @@ def append(body: dict, base_dir="ledger") -> str:
     records = read_all(base_dir)
     prev = tip(base_dir)
     record = dict(body)
-    expected_trial_count = _expected_trial_count(records, record.get("entry_type"))
+    entry_type = record.get("entry_type")
+    if not isinstance(entry_type, str):
+        raise LedgerError(f"ledger entry_type must be a string: {entry_type!r}")
+    expected_trial_count = _expected_trial_count(records, entry_type)
     if expected_trial_count is not None:
         actual_trial_count = record.get("trial_count")
         if actual_trial_count is None:
