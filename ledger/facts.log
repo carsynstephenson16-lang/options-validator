@@ -1,1 +1,3 @@
 2026-07-02T17:49:50.156039+00:00	THETADATA_AUTH path=A result=invalid_credentials terminal=20260629 bootstrap=20250709 detail=lumibot_launcher_creds_rejected_relaunch_loop owner_action=verify_or_reset_password_or_authorize_path_b
+2026-07-03T00:07:44.495567+00:00	THETADATA_AUTH path=C_official_client_api_key result=401_unauthorized client=thetadata-1.0.9 key_format=td1_valid_41ch source_env=THETA_DATA_API_KEY
+2026-07-03T00:07:44.497361+00:00	THETADATA_AUTH path=C_official_client_email_password result=401_unauthorized client=thetadata-1.0.9 note=consistent_with_terminal_rejection_same_day owner_action=paste_current_api_key_from_dashboard_as_THETADATA_API_KEY

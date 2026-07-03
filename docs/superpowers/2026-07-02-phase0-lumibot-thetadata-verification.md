@@ -137,6 +137,29 @@ in the next session (this is the "most optimal way" call the owner deferred):
 `_ensure_terminal()` currently implements Path A and fails loud pointing at both
 options; the merge/fetch/OOS-guard logic is already Path-agnostic and offline-tested.
 
+## Path C — official `thetadata` Python library (ADOPTED 2026-07-03)
+
+After the owner upgraded the ThetaData account, the data path moved OFF
+ThetaTerminal/lumibot-launcher entirely: `thetadata==1.0.9` (uv-locked)
+authenticates DIRECTLY against ThetaData's remote MDDS in the `ThetaClient`
+constructor and returns dataframes (`dataframe_type="pandas"`). Verified from
+the installed source: env var `THETADATA_API_KEY` (client.py:125 — NOTE the
+name differs from ThetaTerminal's `THETA_DATA_API_KEY`); explicit `api_key=`
+ctor param takes precedence; email+password also supported; per-endpoint
+methods mirror REST v3 (`option_history_eod`, `option_history_greeks_eod`,
+`option_history_open_interest`, `option_list_expirations`, ...). Lumibot's
+engine remains the backtest engine; only the ADAPTER's transport changes —
+same public surface, cache files, OOS guards, fail-loud column checks.
+
+**Live auth status (2026-07-03): BLOCKED on credentials.** Both the stored
+API key (td1-format, 41 chars, clean) and the stored email+password get a
+clean HTTP 401 from the live auth service through the official client —
+consistent with the same-day ThetaTerminal rejection. The account was just
+upgraded, so the stored key almost certainly predates the upgrade. OWNER
+ACTION (the only remaining step): copy the CURRENT API key from the
+ThetaData dashboard into `.env` as `THETADATA_API_KEY` (the adapter also
+accepts the legacy `THETA_DATA_API_KEY` name). Recorded in ledger/facts.log.
+
 ## Prerequisites before the first live call (owner actions)
 
 1. **Java >= 21** — DONE 2026-07-02: `brew install openjdk` + `brew link --force
