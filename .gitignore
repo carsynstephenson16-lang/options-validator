@@ -18,3 +18,4 @@ results/*
 
 # Obsidian vault config (repo opened as a vault; not project files)
 .obsidian/
+.lumibot/
