@@ -1,89 +1,114 @@
-# Options Strategy Validation Harness
+# Options Research Platform — VST · CEG · MSFT · AMZN
 
-**One question:** does an options strategy have *positive expectancy after
-realistic costs*, across multiple market regimes (2018 / 2020 / 2022)?
+**Mission (owner decision 2026-07-03):** research how the options of four
+AI-infrastructure names — Vistra (VST) and Constellation (CEG) on the
+nuclear/data-center power side, Microsoft (MSFT) and Amazon (AMZN) on the
+Mag-7 cloud side — actually behave, and only then build and validate option
+strategies on them. **Research only. This is NOT a live bot and places no
+orders.** "No edge after costs" is a successful finding — the point is to
+learn that cheaply, before risking money.
 
-This is a **research / validation tool. It is NOT a live bot and places no
-orders.** A result of "no edge after costs" is a **successful** outcome -- the
-whole point is to find that out cheaply, before risking money.
+The platform has two layers, and the separation is deliberate:
 
-## Status
+1. **The discipline layer** (kept from the project's first phase, fully
+   tested): conservative fill model (quote mid **or worse**, commissions both
+   legs both ways, adverse haircut), liquidity gates on every leg, a
+   scoreboard whose verdict gates on the number of **losses** (not trades),
+   dependence-aware confidence intervals, an append-only research ledger, and
+   a sealed-holdout protocol. This layer exists because it already caught
+   three tempting strategies (H1, H2, H3-draft) that would have lost money.
+2. **The research layer** (`options_researcher/`, new): descriptive and
+   predictive studies of the four names' options — liquidity, strike grids,
+   implied-vol behavior, how option prices react around big moves — that
+   produce *facts first*, and only later feed pre-registered strategy tests.
 
-| Piece | File | State |
-|---|---|---|
-| Parameters | `config.py` | complete |
-| Feasibility check | `analysis/feasibility.py` | measured from cached in-sample chains |
-| Scoreboard | `metrics.py`, `tools/score_backtest.py` | real-cache in-sample scoreboard available |
-| Sizing / cost helpers | `strategies/base.py` | complete |
-| Liquidity / caching helpers | `data/thetadata_adapter.py` | official ThetaData client + parquet cache wired |
-| Strategy A (put credit spread) | `strategies/put_credit_spread.py` | offline Lumibot/PandasData path wired |
-| Backtest wrapper | `harness/run_backtest.py` | chunked real-cache backtest wired |
-| Smoke test | `smoke_test.py` | wired in-sample ThetaData/cache probe |
-| Tests | `tests/` | passing (`unittest`) |
+## Current status
 
-## Quickstart (the parts that work now)
+| Piece | State |
+|---|---|
+| Universe | `config.UNIVERSE = ["MSFT", "AMZN", "VST", "CEG"]` |
+| Chain data | Daily EOD chains 2018-01-02..2026-06-30 cached for MSFT/AMZN/VST (~2,134 days each). **CEG: no data yet** (listed 2022-02; fetch is the top roadmap item) |
+| Tradability profile | `options_researcher/profile_tradability.py` — first findings below |
+| Backtest path | Offline Lumibot/PandasData harness + `tools/score_backtest.py` scoreboard CLI, wired against the real cache |
+| Feasibility | `analysis/feasibility.py` — credits measured from cached chains, not assumed |
+| Discipline layer | 256 tests green (`uv run python -m unittest discover -s tests`) |
+| Strategy history | H1 ($2-wide SPY/QQQ put spread), H2 ($5-wide): registered, honest in-sample **FAILs**. H3R (SPY conditional-VRP): archived un-run at scope pivot. Ledger records are permanent; OOS budget 0/3 spent |
 
-The reproducible environment target is **Python 3.12 managed by uv**. The
-lockfile is the source of truth once generated; avoid running this research code
-against an arbitrary system Python.
+### What the first profile says (sampled days, ~37-DTE puts)
+
+- **MSFT**: tradable under our gates since 2019; spreads ~3–9%; $5 strike
+  grid since 2021. Best-behaved name of the four.
+- **AMZN**: thin before its 2022 split, good after — spreads ~2–4%, growing
+  open interest, 6–12 strikes passing gates recently.
+- **VST**: rich implied vol (50%+ in 2024–25) but **ATM open interest failed
+  our ≥100 floor in every sampled year, including 2024–26**. Caveat: weekly
+  expirations may fragment OI; checking monthly expiries is a roadmap item.
+  Until then, VST structures must assume poor fills.
+- **CEG**: unknown — no data. Nothing about CEG gets assumed until chains
+  are fetched.
+
+## Quickstart
+
+Python 3.12 managed by uv; the lockfile is the source of truth.
 
 ```bash
 uv sync
-uv run python analysis/feasibility.py     # can a spread even fit your risk sleeve?
-uv run python tools/score_backtest.py --symbols SPY,QQQ --json
-uv run python -m unittest discover -s tests   # run the test suite
+uv run python -m unittest discover -s tests                 # discipline layer
+uv run python options_researcher/profile_tradability.py     # 4-name liquidity profile
+uv run python analysis/feasibility.py                       # sizing vs the sleeve
+uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample scoreboard
 ```
 
-`smoke_test.py` is wired for a single in-sample chain probe. It will use a
-cached parquet file when present, or the official ThetaData Python client on a
-cache miss. Post-`IN_SAMPLE_END` values remain sealed unless the OOS reveal gate
-explicitly opens them.
+`smoke_test.py` probes a single in-sample chain (cached parquet, or the
+official ThetaData client on a cache miss). Post-`IN_SAMPLE_END` values stay
+sealed for the legacy holdout machinery unless the reveal gate opens them.
 
 ## Capital & risk
 
-Set `RISK_SLEEVE` in `config.py` to the dollars you're genuinely willing to lose
-to this strategy, and cap each trade's **economic max loss** (margin plus
-round-trip commissions) at an explicit dollar figure decided against that
-sleeve (`MAX_LOSS_PER_TRADE`; owner decision 2026-07-02: $600 ≈ 4.3% of the
-$14k sleeve). Do **not** size against your whole net worth (that silently puts
-your stock portfolio behind every options trade) or an arbitrary account
-number, and never raise the cap to make a width "fit". The feasibility script
-shows what fits the cap **and** the portfolio view the per-trade cap hides:
-nine concurrent positions ≈ $5,400 at simultaneous risk (~38.6% of the sleeve)
-in a universe that is far fewer than nine independent bets -- in a growth/AI or
-tech drawdown, many of them can lose together.
+`RISK_SLEEVE` ($14k) and `MAX_LOSS_PER_TRADE` ($600 economic max loss, owner
+decision 2026-07-02) live in `config.py`. Four concurrent positions ≈ $2,400
+≈ 17.1% of the sleeve at simultaneous risk — and these four names are **one
+AI-infrastructure cluster, not four independent bets**; in an AI or
+power-sector drawdown they can lose together. Never size against net worth,
+and never raise the cap to make a structure "fit".
 
-## Current research state
+## Research rules (non-negotiable, inherited)
 
-- ThetaData's official Python client fetches EOD greeks/NBBO/IV plus open
-  interest into local parquet cache files.
-- Lumibot remains the engine, but backtests run fully offline through
-  per-contract PandasData objects built from the cache.
-- H1 (`SPY,QQQ`, $2-wide) and H2 (`SPY,QQQ`, $5-wide) both failed in-sample
-  after conservative fills and fees. The owner declined OOS reveal, so the
-  holdout remains sealed and `OOS_LOOK_BUDGET` is still unspent.
-- Any new strategy, symbol scope, width, stop, signal, or fill-model change is a
-  new hypothesis and must preserve the OOS gate.
+See `.cursorrules` and `AGENTS.md`. No look-ahead; fills at quote mid or
+worse; commission plus half-spread on both legs; liquidity filters on both
+legs; verdicts gate on losses; every strategy number lives in `config.py`;
+data gaps are skipped and logged, never papered over. New strategy ideas are
+**pre-registered in the ledger before results exist** — parameters frozen
+first, run once, result recorded whatever it shows. The 2023+ window is no
+longer a credible blind holdout for these four names (they were picked
+knowing the 2023+ AI boom, and profiling has opened their recent
+microstructure — disclosed in `ledger/facts.log`); future hypotheses
+therefore pre-declare their own validation design, e.g. a forward
+paper-trading window.
 
-A live "scanner / suggestor" is a **separate project** that only makes sense
-*after* a strategy survives this validation process. Building it first is
-premature.
+## Roadmap (one scoped step per prompt)
 
-## Known limitations (don't paper over these)
+1. **CEG data**: confirm the ThetaData subscription is active, fetch CEG
+   chains 2022-02..present with `data/cache_runner.py`, re-run the profiler.
+2. **VST monthly-expiry check**: does open interest concentrate in monthlies?
+   (Decides whether VST is tradable at all under honest gates.)
+3. **Behavior studies** (facts, not verdicts): per name — implied vol vs
+   later realized moves, behavior around earnings, reaction to large
+   sector/market moves. Produces the feature set for any predictive idea.
+4. **Structure menu per name from measured liquidity**: which defined-risk
+   structures (spreads, covered calls / LEAPS-based, condors) clear friction
+   arithmetic on each name's real grids and spreads.
+5. **First 4-name hypothesis**: pre-registered like H1/H2 were, with its own
+   validation design declared before any P&L is computed.
 
-- **Factor concentration:** SPY/QQQ overlap heavily with AAPL/MSFT/NVDA/AMZN,
-  and PLTR/NOW/VST add high-beta thematic exposure. This is not nine clean
-  independent bets. A positive result here may not generalize.
-- **EOD data** is an upper bound on realism -- real fills happen intraday.
-- **VRP compression:** the historical volatility risk premium has thinned; a
-  2018-2024 backtest may overstate what's available now.
-- **Assignment risk:** single names and SPY/QQQ are American-style, physically
-  settled. `A_CLOSE_AT_DTE` mitigates pin/assignment risk -- keep it.
+## Known limitations
 
-## Guardrails
-
-See `.cursorrules`. The non-negotiables: no look-ahead; fills at the quote mid
-**or worse**, never the favorable side; commission + half-spread on **both**
-legs; liquidity filters on both legs; don't build a custom engine (use Lumibot);
-verify every Lumibot API call against the installed library; the verdict gates
-on the number of **losses**, not trades.
+- **EOD data** is an upper bound on realism — real fills happen intraday.
+- **Assignment/early exercise** are not simulated (American-style, physically
+  settled); defined-risk caps bound the damage.
+- **Earnings gaps**: single names gap through levels at EOD cadence; any
+  strategy test must handle earnings explicitly (blackouts or measured
+  exposure).
+- **History asymmetry**: CEG effectively starts 2022; VST's tradable era is
+  recent. Sample sizes will be small; the loss-gated verdict machinery exists
+  precisely so thin samples read as INSUFFICIENT SAMPLE, not fake passes.
