@@ -91,7 +91,8 @@ class BucketTests(unittest.TestCase):
     def test_thesis_premium_caps(self):
         f = self.frame([
             ["p1", "leaps_call", "MSFT", "C", 400, "2027-06-18", 1,
-             "2026-07-04", 45.0, "thesis"],     # $4,500 > per-name cap
+             "2026-07-04", 105.0, "thesis"],    # $10,500 > 10k per-name cap
+                                                # (owner amendment 2026-07-04)
         ])
         issues = check_buckets(f)
         self.assertTrue(any("premium MSFT" in i for i in issues))

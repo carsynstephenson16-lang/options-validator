@@ -1,3 +1,4 @@
 id,structure,symbol,right,strike,expiration,contracts,entry_date,entry_price,bucket
 h4-csp-1,csp,VST,P,145.0,2026-07-17,1,2026-06-30,2.1285,csp
 h4-tac-1,tactical_call,VST,C,165.0,2026-07-17,1,2026-06-30,5.0500,tactical
+h4-leaps-1,leaps_call,MSFT,C,340.0,2027-06-17,1,2026-06-30,79.5375,thesis

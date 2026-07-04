@@ -142,8 +142,12 @@ FILL_MODEL_ID            = "conservative_bid_ask_plus_haircut_v1"  # bump if fil
 # TACTICAL: short-dated long calls under the existing $600 economic cap.
 # CSP: exactly one cash-secured put; collateral lives on the EQUITY side.
 # ---------------------------------------------------------------------------
-H4_THESIS_MAX_PREMIUM_PER_NAME = 4_000   # $ per underlying
-H4_THESIS_MAX_PREMIUM_TOTAL    = 10_000  # $ across all LEAPS
+H4_THESIS_MAX_PREMIUM_PER_NAME = 10_000  # $ per underlying (owner amendment
+                                         # 2026-07-04: 4k -> 10k; every 0.70d
+                                         # ~1y LEAPS priced above the blind 4k
+                                         # estimate; TOTAL below unchanged, so
+                                         # effectively ONE full-size LEAPS)
+H4_THESIS_MAX_PREMIUM_TOTAL    = 10_000  # $ across all LEAPS (unchanged)
 H4_THESIS_MAX_POSITIONS        = 2
 H4_THESIS_NAMES                = ["MSFT", "VST", "CEG"]
 H4_THESIS_DELTA                = 0.70
