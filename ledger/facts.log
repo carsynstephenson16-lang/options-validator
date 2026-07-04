@@ -10499,3 +10499,23 @@
 2026-07-04T05:05:54.238734+00:00	BLIND_CACHE symbol=CEG date=2026-06-30 rows=1704 sha256=df25db0202000836229ef82fc356db53b1520f2f9c82ec187d9ce6188ac0b8a7 already_cached=false path=.cache/chains/CEG_2026-06-30.parquet
 2026-07-04T05:06:24.004168+00:00	CEG_CACHE_COMPLETE 2026-07-04: 1100 daily EOD chain parquets cached for CEG, 2022-02-09..2026-06-30, 0 zero-row files. In-sample window: 225 fetched, 1034 pre-listing gap days (options listed ~2022-02-09, regular-way equity 2022-02-02). OOS-blind window: 874 fetched + 1 smoke, 0 gaps. Universe cache now complete for all 4 names: MSFT/AMZN/VST 2018-01-02.., CEG 2022-02-09..
 2026-07-04T14:52:51.932113+00:00	UNDERLYING_CLOSES_PARITY 2026-07-04: interim close series for all 4 names derived from OWN cached chains via put-call parity (nearest monthly, 5 ATM strikes, r=0). Provider decision trail: ThetaData stock history = paid STANDARD tier (options sub does not cover; FREE serves ~recent window only); AlphaVantage TIME_SERIES_DAILY full history = premium; Stooq blocks programmatic access (JS PoW). Validation vs TRUE closes (ThetaData FREE, 2026-05-01..06-30, n=41/symbol): level bias median +0.275/+0.369/+0.305/+0.329 pct (MSFT/AMZN/VST/CEG; un-discounted-K signature, rates-era dependent, left UNCORRECTED and disclosed), daily-return diff median 4.7/2.7/14.5/13.8 bps. FIT for returns/vol studies; Study C carries a +-1 pct borderline-assignment band. Clean paid source (ThetaData stock STANDARD) remains the owner-optional upgrade and would be REQUIRED for any registered hypothesis whose verdict depends on close levels.
+2026-07-04T15:03:31.093769+00:00	STUDY_A MSFT: iv_rank>=0.70 days n=508 iv_med=0.314 fwd_rv_med=0.330
+2026-07-04T15:03:31.103194+00:00	STUDY_A AMZN: iv_rank>=0.70 days n=500 iv_med=0.406 fwd_rv_med=0.435
+2026-07-04T15:03:31.134390+00:00	STUDY_A VST: iv_rank>=0.70 days n=536 iv_med=0.489 fwd_rv_med=0.505
+2026-07-04T15:03:31.244294+00:00	STUDY_A CEG: iv_rank>=0.70 days n=278 iv_med=0.507 fwd_rv_med=0.587
+2026-07-04T15:03:31.861378+00:00	STUDY_B MSFT: n=34 runup_med=+0.039 crush_med=-0.076 absmove_med=2.93%
+2026-07-04T15:03:31.870177+00:00	STUDY_B AMZN: n=34 runup_med=+0.052 crush_med=-0.145 absmove_med=3.48%
+2026-07-04T15:03:31.878084+00:00	STUDY_B VST: n=31 runup_med=-0.043 crush_med=+0.004 absmove_med=3.27%
+2026-07-04T15:03:31.881921+00:00	STUDY_B CEG: n=17 runup_med=-0.060 crush_med=-0.009 absmove_med=4.60%
+2026-07-04T15:03:45.363873+00:00	STUDY_C VST d=0.20: cycles=42 assigned=13 cc_total=10,818 bh_total=14,148
+2026-07-04T15:03:45.441696+00:00	STUDY_C VST d=0.30: cycles=42 assigned=16 cc_total=9,949 bh_total=14,148
+2026-07-04T15:03:45.519411+00:00	STUDY_C VST d=0.40: cycles=42 assigned=22 cc_total=9,262 bh_total=14,148
+2026-07-04T15:03:51.629921+00:00	STUDY_C AMZN d=0.20: cycles=102 assigned=26 cc_total=-117,077 bh_total=-94,518
+2026-07-04T15:03:51.959664+00:00	STUDY_C AMZN d=0.30: cycles=102 assigned=39 cc_total=-141,181 bh_total=-94,518
+2026-07-04T15:03:52.283336+00:00	STUDY_C AMZN d=0.40: cycles=102 assigned=51 cc_total=-160,719 bh_total=-94,518
+2026-07-04T15:04:57.812519+00:00	STUDY_C VST d=0.20: cycles=42 assigned=13 cc_total=10,818 bh_total=14,148
+2026-07-04T15:04:57.891494+00:00	STUDY_C VST d=0.30: cycles=42 assigned=16 cc_total=9,949 bh_total=14,148
+2026-07-04T15:04:57.969987+00:00	STUDY_C VST d=0.40: cycles=42 assigned=22 cc_total=9,262 bh_total=14,148
+2026-07-04T15:05:00.358813+00:00	STUDY_C AMZN d=0.20: cycles=47 assigned=9 cc_total=13,551 bh_total=13,542
+2026-07-04T15:05:00.472833+00:00	STUDY_C AMZN d=0.30: cycles=47 assigned=18 cc_total=12,840 bh_total=13,542
+2026-07-04T15:05:00.587377+00:00	STUDY_C AMZN d=0.40: cycles=47 assigned=22 cc_total=12,654 bh_total=13,542

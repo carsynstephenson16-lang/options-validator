@@ -74,7 +74,11 @@ def main():
 
     os.makedirs("reports", exist_ok=True)
     today = _date.today().isoformat()
-    eras = {"VST": "2023-01-01", "AMZN": "2018-01-02"}
+    # AMZN starts POST-SPLIT: the close series is deliberately RAW
+    # (strike-aligned), so the 2022-06 20:1 split reads as a -95% cycle and
+    # corrupts cross-split P&L arithmetic; pre-split AMZN also had no usable
+    # fine strike grid (profiler finding). VST has no splits in-window.
+    eras = {"VST": "2023-01-01", "AMZN": "2022-07-01"}
     lines = [f"# Study C — monthly covered-call income vs buy-and-hold ({today})",
              "", "Descriptive income table, NOT a verdict. Benchmark is "
              "buy-and-hold on the same shares: premium's cost is capped "
