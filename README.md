@@ -27,7 +27,7 @@ The platform has two layers, and the separation is deliberate:
 | Piece | State |
 |---|---|
 | Universe | `config.UNIVERSE = ["MSFT", "AMZN", "VST", "CEG"]` |
-| Chain data | Daily EOD chains 2018-01-02..2026-06-30 cached for MSFT/AMZN/VST (~2,134 days each). **CEG: no data yet** (listed 2022-02; fetch is the top roadmap item) |
+| Chain data | Daily EOD chains cached for the full universe: MSFT/AMZN/VST 2018-01-02..2026-06-30 (~2,134 days each), CEG 2022-02-09..2026-06-30 (1,100 days, zero empty files; the 2018–2022-02 gap is pre-listing) |
 | Tradability profile | `options_researcher/profile_tradability.py` — first findings below |
 | Backtest path | Offline Lumibot/PandasData harness + `tools/score_backtest.py` scoreboard CLI, wired against the real cache |
 | Feasibility | `analysis/feasibility.py` — credits measured from cached chains, not assumed |
@@ -44,8 +44,11 @@ The platform has two layers, and the separation is deliberate:
   our ≥100 floor in every sampled year, including 2024–26**. Caveat: weekly
   expirations may fragment OI; checking monthly expiries is a roadmap item.
   Until then, VST structures must assume poor fills.
-- **CEG**: unknown — no data. Nothing about CEG gets assumed until chains
-  are fetched.
+- **CEG**: fetched 2026-07-04, and it rhymes with VST — rich implied vol
+  (45–53% in 2024–26) but thin ATM open interest at the sampled ~37-DTE
+  expiries: passed our gates in 2023 (7.7% spread, OI 134), just missed in
+  2024 (OI 87), collapsed at sampled expiries in 2025–26. Only ~4.5 years of
+  option history exist at all. The monthly-expiry check decides CEG too.
 
 ## Quickstart
 
@@ -88,10 +91,11 @@ paper-trading window.
 
 ## Roadmap (one scoped step per prompt)
 
-1. **CEG data**: confirm the ThetaData subscription is active, fetch CEG
-   chains 2022-02..present with `data/cache_runner.py`, re-run the profiler.
-2. **VST monthly-expiry check**: does open interest concentrate in monthlies?
-   (Decides whether VST is tradable at all under honest gates.)
+1. ~~**CEG data**~~ — DONE 2026-07-04: 1,100 chains cached, profiler re-run
+   (see findings above; `ledger/facts.log` CEG_CACHE_COMPLETE).
+2. **VST + CEG monthly-expiry check**: does open interest concentrate in
+   monthlies? (Decides whether the power names are tradable at all under
+   honest gates — currently the single most important open question.)
 3. **Behavior studies** (facts, not verdicts): per name — implied vol vs
    later realized moves, behavior around earnings, reaction to large
    sector/market moves. Produces the feature set for any predictive idea.
