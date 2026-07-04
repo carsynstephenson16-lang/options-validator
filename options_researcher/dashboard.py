@@ -70,6 +70,10 @@ def _achievement_tag(line: str) -> str | None:
     try:
         _, rest = line.split("\t", 1)
     except ValueError:
+        # Lenient by design (not fail-loud): read_facts() only guarantees
+        # non-blank lines from ledger/facts.log, a log this module doesn't
+        # own exclusively, so a hand-edited/malformed line here should be
+        # skipped rather than crash the dashboard.
         return None
     return rest.split(" ", 1)[0] if rest else None
 
@@ -94,7 +98,7 @@ def _default_closes() -> dict[str, list[float]]:
 
     out: dict[str, list[float]] = {}
     for sym in config.UNIVERSE:
-        series = load_closes(sym, "2018-01-01", config.BACKTEST_END,
+        series = load_closes(sym, config.BACKTEST_START, config.BACKTEST_END,
                              allow_oos=True)
         out[sym] = [float(v) for v in series.iloc[-60:]]
     return out
