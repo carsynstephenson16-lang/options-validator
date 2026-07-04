@@ -343,10 +343,16 @@ from options_researcher.studies.covered_call_income import compute_cc_cycles
 
 
 def chain(iso_exp, strike, delta, bid):
-    return pd.DataFrame([{"expiration": iso_exp, "strike": strike,
-                          "right": "C", "bid": bid, "ask": bid + 0.10,
-                          "open_interest": 500, "iv": 0.40, "delta": delta,
-                          "gamma": 0.0, "theta": 0.0, "vega": 0.0}])
+    # BOTH rights: expiration discovery (nearest_monthly) walks PUT rows by
+    # M1 design -- real chains always carry both sides; a call-only fixture
+    # would make cycle discovery return None (plan defect fixed 2026-07-04).
+    rows = []
+    for right, d in (("P", -0.30), ("C", delta)):
+        rows.append({"expiration": iso_exp, "strike": strike,
+                     "right": right, "bid": bid, "ask": bid + 0.10,
+                     "open_interest": 500, "iv": 0.40, "delta": d,
+                     "gamma": 0.0, "theta": 0.0, "vega": 0.0})
+    return pd.DataFrame(rows)
 
 
 class CoveredCallTests(unittest.TestCase):
