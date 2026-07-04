@@ -29,3 +29,6 @@ results/*
 
 # session scratch (web research cache)
 .firecrawl/
+
+# disposable intermediates (WAT convention)
+.tmp/
