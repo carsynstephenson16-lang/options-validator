@@ -33,3 +33,55 @@ def is_monthly(exp: date) -> bool:
     chain data."""
     tf = third_friday(exp.year, exp.month)
     return exp == tf or (exp.weekday() == 3 and exp + timedelta(days=1) == tf)
+
+
+def load_range(symbol: str, start_iso: str, end_iso: str, *,
+               allow_oos: bool = False) -> dict[str, pd.DataFrame]:
+    """Cached chains keyed by ISO day. Thin delegation -- the OOS gate stays
+    in the data layer. Researcher call sites pass allow_oos=True explicitly
+    (disclosed post-2022 look, facts.log PIVOT_4NAME_SCOPE)."""
+    return load_cached_chains(symbol, start_iso, end_iso, allow_oos=allow_oos)
+
+
+def puts_in_window(chain: pd.DataFrame, today: date,
+                   min_dte: int, max_dte: int) -> pd.DataFrame:
+    """Puts with sane quotes (bid>0, ask>=bid) whose DTE lies in the band.
+    Adds exp_date (datetime.date) and dte (int) columns."""
+    puts = chain[(chain["right"] == "P") & (chain["bid"] > 0)
+                 & (chain["ask"] >= chain["bid"])].copy()
+    if puts.empty:
+        return puts.assign(exp_date=pd.Series(dtype=object),
+                           dte=pd.Series(dtype=int))
+    puts["exp_date"] = pd.to_datetime(puts["expiration"]).dt.date
+    puts["dte"] = puts["exp_date"].map(lambda e: (e - today).days)
+    return puts[(puts["dte"] >= min_dte) & (puts["dte"] <= max_dte)]
+
+
+def nearest_monthly(chain: pd.DataFrame, today: date, *,
+                    min_dte: int = 15, max_dte: int = 60):
+    """Earliest MONTHLY expiration inside the DTE band, or None."""
+    win = puts_in_window(chain, today, min_dte, max_dte)
+    monthlies = sorted(e for e in win["exp_date"].unique() if is_monthly(e))
+    return monthlies[0] if monthlies else None
+
+
+def atm_row(chain: pd.DataFrame, expiration: date, *,
+            right: str = "P", target_delta: float = 0.50):
+    """Row of `right` on `expiration` with |delta| nearest target, or None."""
+    exp_dates = pd.to_datetime(chain["expiration"]).dt.date
+    sub = chain[(chain["right"] == right) & (exp_dates == expiration)
+                & (chain["bid"] > 0) & (chain["ask"] >= chain["bid"])]
+    if sub.empty:
+        return None
+    return sub.loc[(sub["delta"].abs() - target_delta).abs().idxmin()]
+
+
+def liquid_strikes(chain: pd.DataFrame, expiration: date, *,
+                   right: str = "P") -> int:
+    """Rows of `right` on `expiration` passing the FROZEN liquidity gates
+    (data.thetadata_adapter.passes_liquidity: OI floor, quote sanity,
+    max spread). Never re-implements the gates."""
+    exp_dates = pd.to_datetime(chain["expiration"]).dt.date
+    sub = chain[(chain["right"] == right) & (exp_dates == expiration)]
+    return int(sum(passes_liquidity(r.open_interest, r.bid, r.ask)
+                   for r in sub.itertuples()))
