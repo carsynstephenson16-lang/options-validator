@@ -280,7 +280,7 @@ def _book_rows(marks: list[dict]) -> str:
         <td>{_esc(m.get("strike", ""))}</td>
         <td>{_esc(m.get("expiration", ""))}</td>
         <td>{_esc(m.get("dte", ""))}</td>
-        <td>{_esc(m.get("mark", ""))}</td>
+        <td>{_esc(m.get("mark") if m.get("mark") is not None else "n/a")}</td>
         <td style="color:{pnl_color}">{sign}{_esc(f"{pnl:,.2f}")}</td>
         <td>{_flag_pills(flags)}</td>
       </tr>""")

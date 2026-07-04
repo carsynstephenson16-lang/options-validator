@@ -34,6 +34,22 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("http://", html)
         self.assertNotIn("https://cdn", html)
 
+    def test_render_shows_placeholder_for_missing_quote_mark(self):
+        # Mirrors what mark_position() actually produces when a chain quote
+        # can't be found for a position: mark/pnl both None, QUOTE_MISSING
+        # flag set. dict.get("mark", "") does NOT help here because the key
+        # is present with value None -- the "" default never kicks in, so
+        # the raw Python literal "None" must not leak into the table cell.
+        from options_researcher.dashboard import render
+        book = {"marks": [{"id": "p1", "structure": "csp", "symbol": "VST",
+                           "strike": 100.0, "expiration": "2027-01-15",
+                           "contracts": 1, "dte": 30, "mark": None,
+                           "pnl": None, "flags": ["QUOTE_MISSING"]}],
+                "bucket_issues": []}
+        html = render(assemble(book=book, facts=[], reports=[], closes={}))
+        self.assertIn("n/a", html)
+        self.assertNotIn(">None<", html)
+
 
 class MainTests(unittest.TestCase):
     def test_main_writes_html_file_and_prints_path(self):
