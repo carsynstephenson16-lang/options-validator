@@ -12,27 +12,17 @@
 import glob
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date
 
 import pandas as pd
+
+from options_researcher.chains import is_monthly, third_friday  # noqa: F401
 
 CACHE_DIR = os.path.join(".cache", "chains")
 SYMBOLS = ["VST", "CEG", "MSFT", "AMZN"]
 DTE_LO, DTE_HI = 15, 60          # window wide enough to always contain a monthly
 SAMPLE_EVERY = 5
 OI_FLOOR, SPREAD_MAX = 100, 0.10  # the frozen liquidity gates (config values)
-
-
-def third_friday(year: int, month: int) -> date:
-    d = date(year, month, 15)     # 3rd Friday is always the 15th..21st
-    while d.weekday() != 4:
-        d += timedelta(days=1)
-    return d
-
-
-def is_monthly(exp: date) -> bool:
-    tf = third_friday(exp.year, exp.month)
-    return exp == tf or (exp.weekday() == 3 and exp + timedelta(days=1) == tf)
 
 
 def day_stats(df: pd.DataFrame, file_date: date):
