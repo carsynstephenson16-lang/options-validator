@@ -134,9 +134,9 @@ paper-trading window.
 **Scope status: COMPLETE.** Live hypothesis: **H5 Sector Income Core**
 (specs/2026-07-04-h5-sector-income-core-design.md; ledger trial 6; H4
 superseded at zero cycles, book carried over, window clock restarted).
-Remaining: the passive forward window (≥ 2 quarters → scoreboard verdict),
+Remaining: the passive forward window (≥ 2 quarters → scoreboard verdict) and
 declaring more 100-share lots in data/positions/holdings.csv to activate the
-covered-call engine, and executing the M7 dashboard plan.
+covered-call engine.
 
 ## Known limitations
 
