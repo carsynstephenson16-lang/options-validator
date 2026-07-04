@@ -158,3 +158,22 @@ H4_TACTICAL_DELTA              = 0.40
 H4_CSP_MAX_POSITIONS           = 1
 H4_CSP_NAMES                   = ["VST", "AMZN"]
 H4_CSP_DELTA                   = 0.20
+
+# ---------------------------------------------------------------------------
+# H5 ATTRACTIVENESS THRESHOLDS (frozen; owner-amendment only). Anchors:
+# put-yield GREEN 1.0%/mo = Study E measured VST 0.20d average; CC-yield
+# GREEN 0.8%/mo = Study C AMZN 0.20d collected while beating buy-and-hold;
+# cushion = %OTM / (rv21/sqrt(12)); IV-rank grades flip sign buyer vs seller
+# (Study A: high rank = paid more AND real risk higher -- never "free").
+# ---------------------------------------------------------------------------
+H5_PUT_YIELD_GREEN = 0.010
+H5_PUT_YIELD_AMBER = 0.006
+H5_CUSHION_GREEN   = 0.8
+H5_CUSHION_AMBER   = 0.5
+H5_CC_YIELD_GREEN  = 0.008
+H5_CC_YIELD_AMBER  = 0.004
+H5_CC_UPSIDE_GREEN = 0.03
+H5_IVR_SELL_GREEN  = 0.5
+H5_IVR_BUY_GREEN   = 0.3
+H5_IVR_BUY_RED     = 0.7
+H5_INCOME_DELTA    = 0.20     # CSP + CC short-leg target delta (band +/-0.15)
