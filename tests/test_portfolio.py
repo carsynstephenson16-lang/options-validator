@@ -117,3 +117,64 @@ class BucketTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from options_researcher.portfolio import check_coverage, load_holdings
+
+
+class HoldingsTests(unittest.TestCase):
+    def write(self, body):
+        import tempfile
+        t = tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False)
+        t.write("symbol,shares,cost_basis,acquired\n" + body)
+        t.close()
+        self.addCleanup(os.unlink, t.name)
+        return t.name
+
+    def test_loads_and_validates(self):
+        h = load_holdings(self.write("VST,200,118.50,2025-11-03\n"))
+        self.assertEqual(int(h.iloc[0]["shares"]), 200)
+
+    def test_negative_shares_rejected(self):
+        with self.assertRaises(ValueError):
+            load_holdings(self.write("VST,-100,118.50,2025-11-03\n"))
+
+
+class CoverageTests(unittest.TestCase):
+    def positions(self, rows):
+        return pd.DataFrame(rows, columns=["id", "structure", "symbol",
+                                           "right", "strike", "expiration",
+                                           "contracts", "entry_date",
+                                           "entry_price", "bucket"])
+
+    def holdings(self, rows):
+        return pd.DataFrame(rows, columns=["symbol", "shares", "cost_basis",
+                                           "acquired"])
+
+    def test_covered_call_needs_100_shares_per_contract(self):
+        pos = self.positions([["c1", "covered_call", "VST", "C", 180,
+                               "2026-08-21", 2, "2026-07-04", 1.5, "income"]])
+        issues = check_coverage(pos, self.holdings([["VST", 100, 118.5,
+                                                     "2025-11-03"]]))
+        self.assertTrue(any("uncovered" in i for i in issues))
+        self.assertEqual(check_coverage(
+            pos, self.holdings([["VST", 200, 118.5, "2025-11-03"]])), [])
+
+    def test_pmcc_requires_safety_gated_leaps(self):
+        pos = self.positions([
+            ["l1", "leaps_call", "MSFT", "C", 340, "2027-06-17", 1,
+             "2026-07-04", 79.54, "thesis"],
+            ["p1", "pmcc_call", "MSFT", "C", 400, "2026-08-21", 1,
+             "2026-07-04", 2.0, "income"],
+        ])
+        issues = check_coverage(pos, self.holdings([]))
+        self.assertTrue(any("safety" in i for i in issues))
+        pos.loc[1, "strike"] = 420.0
+        self.assertEqual(check_coverage(pos, self.holdings([])), [])
+
+    def test_cc_below_cost_basis_flagged(self):
+        pos = self.positions([["c1", "covered_call", "VST", "C", 110,
+                               "2026-08-21", 1, "2026-07-04", 1.5, "income"]])
+        issues = check_coverage(pos, self.holdings([["VST", 100, 118.5,
+                                                     "2025-11-03"]]))
+        self.assertTrue(any("below cost basis" in i for i in issues))

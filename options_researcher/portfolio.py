@@ -22,11 +22,17 @@ import pandas as pd
 import config
 
 POSITIONS_PATH = os.path.join("data", "positions", "positions.csv")
+HOLDINGS_PATH = os.path.join("data", "positions", "holdings.csv")
 _FIELDS = ["id", "structure", "symbol", "right", "strike", "expiration",
            "contracts", "entry_date", "entry_price", "bucket"]
+_HOLDINGS_FIELDS = ["symbol", "shares", "cost_basis", "acquired"]
 _STRUCTURES = {"leaps_call": ("C", "thesis", "long"),
                "csp": ("P", "csp", "short"),
-               "tactical_call": ("C", "tactical", "long")}
+               "tactical_call": ("C", "tactical", "long"),
+               # H5 income engine: short calls, ALWAYS backed (check_coverage
+               # makes a naked short call structurally impossible).
+               "covered_call": ("C", "income", "short"),
+               "pmcc_call": ("C", "income", "short")}
 
 
 def load_positions(path: str = POSITIONS_PATH) -> pd.DataFrame:
@@ -66,6 +72,58 @@ def load_positions(path: str = POSITIONS_PATH) -> pd.DataFrame:
     if (frame["contracts"] <= 0).any():
         raise ValueError(f"{path}: contracts must be positive")
     return frame
+
+
+def load_holdings(path: str = HOLDINGS_PATH) -> pd.DataFrame:
+    """Owner-declared 100-share lots backing covered calls. Fail-loud."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{path} missing -- seed it (header: "
+                                f"{','.join(_HOLDINGS_FIELDS)})")
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames != _HOLDINGS_FIELDS:
+            raise ValueError(f"{path}: header must be {_HOLDINGS_FIELDS}, "
+                             f"got {reader.fieldnames}")
+        frame = pd.DataFrame(list(reader), columns=_HOLDINGS_FIELDS)
+    if frame.empty:
+        return frame
+    frame["shares"] = frame["shares"].astype(int)
+    frame["cost_basis"] = frame["cost_basis"].astype(float)
+    for _, r in frame.iterrows():
+        date.fromisoformat(r["acquired"])
+    if (frame["shares"] <= 0).any() or (frame["cost_basis"] <= 0).any():
+        raise ValueError(f"{path}: shares and cost_basis must be positive")
+    return frame
+
+
+def check_coverage(frame: pd.DataFrame, holdings: pd.DataFrame) -> list[str]:
+    """Short calls must be backed: covered_call by declared shares (100 per
+    contract, strike >= that symbol's cost basis), pmcc_call by a live
+    leaps_call on the same symbol with K_short >= K_leaps + entry_price
+    (assignment then cannot lock a loss). Anything unbacked is an issue."""
+    issues = []
+    held = {r["symbol"]: r for _, r in holdings.iterrows()}
+    for _, p in frame[frame["structure"] == "covered_call"].iterrows():
+        lot = held.get(p["symbol"])
+        need = 100 * int(p["contracts"])
+        if lot is None or int(lot["shares"]) < need:
+            issues.append(f"covered_call {p['id']} uncovered: need {need} "
+                          f"shares of {p['symbol']} in holdings.csv")
+        elif float(p["strike"]) < float(lot["cost_basis"]):
+            issues.append(f"covered_call {p['id']} strike {p['strike']} "
+                          f"below cost basis {lot['cost_basis']} -- H5 bans "
+                          "locking in a sale at a loss")
+    leaps = frame[frame["structure"] == "leaps_call"]
+    for _, p in frame[frame["structure"] == "pmcc_call"].iterrows():
+        ok = False
+        for _, lp in leaps[leaps["symbol"] == p["symbol"]].iterrows():
+            if float(p["strike"]) >= float(lp["strike"]) + float(lp["entry_price"]):
+                ok = True
+        if not ok:
+            issues.append(f"pmcc_call {p['id']} fails the safety gate: "
+                          "short strike must be >= LEAPS strike + premium "
+                          "paid (else assignment can lock a loss)")
+    return issues
 
 
 def mark_position(row: pd.Series, chain: pd.DataFrame, close: float,
@@ -172,18 +230,33 @@ def analyze(path: str = POSITIONS_PATH) -> dict:
         for _, row in frame[frame["symbol"] == sym].iterrows():
             marks.append(mark_position(row, chain, close, as_of, earn))
     issues = check_buckets(frame)
-    print(f"H4 book @ latest cache -- {len(marks)} position(s)")
+    holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
+                else pd.DataFrame(columns=_HOLDINGS_FIELDS))
+    coverage = check_coverage(frame, holdings)
+    print(f"H5 book @ latest cache -- {len(marks)} position(s)")
     for m in marks:
         flags = " ".join(m["flags"]) or "-"
         pnl = "n/a" if m["pnl"] is None else f"${m['pnl']:,.0f}"
         print(f"  [{m['id']}] {m['structure']} {m['symbol']} "
               f"{m['strike']:.0f} exp {m['expiration']} (dte {m['dte']}) "
               f"x{m['contracts']}  pnl {pnl}  {flags}")
+        if m["structure"] == "csp" and m["dte"] <= 0:
+            print(f"    EXPIRED: if the close finished below {m['strike']:.0f}, "
+                  f"add 100 sh/contract of {m['symbol']} @ {m['strike']:.0f} "
+                  "to holdings.csv and remove this row; otherwise just "
+                  "remove it (premium kept).")
     for issue in issues:
         print(f"  BUCKET BREACH: {issue}")
-    if not issues:
-        print("  buckets: all within H4 caps")
-    return {"marks": marks, "bucket_issues": issues}
+    for issue in coverage:
+        print(f"  COVERAGE BREACH: {issue}")
+    if not issues and not coverage:
+        print("  buckets + coverage: all green")
+    if coverage:
+        raise RuntimeError("uncovered/mispriced short call in the book -- "
+                           "fix positions.csv or holdings.csv before "
+                           "trusting any number above")
+    return {"marks": marks, "bucket_issues": issues,
+            "coverage_issues": coverage}
 
 
 if __name__ == "__main__":
