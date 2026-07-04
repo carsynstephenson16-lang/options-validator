@@ -80,3 +80,45 @@ def build_daily_features(symbol: str, start_iso: str, end_iso: str, *,
     f["iv_rank"] = ranks
     f["earnings_week"] = _earnings_flags(list(f.index), earnings)
     return f
+
+
+import os
+
+FEATURES_DIR = os.path.join(".tmp", "research")
+
+
+def save_features(symbol: str, frame: pd.DataFrame) -> str:
+    os.makedirs(FEATURES_DIR, exist_ok=True)
+    path = os.path.join(FEATURES_DIR, f"{symbol}_features.parquet")
+    frame.to_parquet(path)
+    return path
+
+
+def load_features(symbol: str) -> pd.DataFrame:
+    return pd.read_parquet(
+        os.path.join(FEATURES_DIR, f"{symbol}_features.parquet"))
+
+
+def build_all(end_iso: str = None):
+    """Build + cache feature frames for the whole universe. Post-2022 reads
+    are explicit allow_oos=True (disclosed; facts.log PIVOT_4NAME_SCOPE)."""
+    import config
+    from data.underlying_closes import load_closes
+    from options_researcher.chains import load_range
+    from options_researcher.earnings import load_earnings
+
+    end_iso = end_iso or config.BACKTEST_END
+    for symbol in config.UNIVERSE:
+        closes = load_closes(symbol, "2017-01-01", end_iso, allow_oos=True)
+        chains = load_range(symbol, config.BACKTEST_START, end_iso,
+                            allow_oos=True)
+        earn = load_earnings(symbol)
+        frame = build_daily_features(symbol, config.BACKTEST_START, end_iso,
+                                     closes=closes, chains=chains,
+                                     earnings=earn)
+        path = save_features(symbol, frame)
+        print(f"{symbol}: {len(frame)} rows -> {path}")
+
+
+if __name__ == "__main__":
+    build_all()

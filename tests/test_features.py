@@ -72,5 +72,25 @@ class FeatureFrameTests(unittest.TestCase):
         self.assertNotIn(isos[30], f.index)  # day simply absent (fail closed)
 
 
+import os
+import tempfile
+from unittest import mock
+
+from options_researcher import features
+
+
+class CacheRoundTripTests(unittest.TestCase):
+    def test_save_and_load_roundtrip(self):
+        isos, closes, chains = fixture(60)
+        f = build_daily_features("VST", isos[0], isos[-1],
+                                 closes=closes, chains=chains, earnings=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(features, "FEATURES_DIR", tmp):
+                path = features.save_features("VST", f)
+                self.assertTrue(os.path.exists(path))
+                back = features.load_features("VST")
+        pd.testing.assert_frame_equal(back, f)
+
+
 if __name__ == "__main__":
     unittest.main()
