@@ -114,3 +114,33 @@ class ParitySpotTests(unittest.TestCase):
         est = underlying_closes.parity_spot_from_chain(
             chain[chain["right"] == "P"], "2024-05-24")
         self.assertTrue(est != est)
+
+
+class YahooPayloadTests(unittest.TestCase):
+    @staticmethod
+    def payload(ts, closes, tz="America/New_York"):
+        return {"chart": {"error": None, "result": [{
+            "meta": {"exchangeTimezoneName": tz},
+            "timestamp": ts,
+            "indicators": {"quote": [{"close": closes}]}}]}}
+
+    def test_error_payload_raises(self):
+        with self.assertRaises(RuntimeError):
+            underlying_closes.yahoo_rows_from_payload(
+                {"chart": {"error": {"code": "Not Found"}, "result": None}})
+
+    def test_rows_parse_and_skip_nulls(self):
+        # 2022-06-03 20:00 UTC == 16:00 ET
+        rows = underlying_closes.yahoo_rows_from_payload(
+            self.payload([1654286400, 1654545600], [122.35, None]))
+        self.assertEqual(rows, [("2022-06-03", 122.35)])
+
+    def test_unsplit_multiplies_presplit_only(self):
+        rows = [("2022-06-03", 122.35), ("2022-06-06", 124.79)]
+        out = underlying_closes.unsplit(rows, "AMZN")
+        self.assertAlmostEqual(out[0][1], 2447.0)
+        self.assertAlmostEqual(out[1][1], 124.79)
+
+    def test_unsplit_noop_for_unsplit_symbols(self):
+        rows = [("2020-01-02", 160.62)]
+        self.assertEqual(underlying_closes.unsplit(rows, "MSFT"), rows)

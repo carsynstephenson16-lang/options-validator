@@ -124,6 +124,81 @@ def fetch_underlying_eod_av(symbol: str) -> str:
     return store_closes(symbol, rows_to_frame(av_rows_from_payload(payload)))
 
 
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+# Known splits inside the data window. Yahoo's chart-API `close` is
+# SPLIT-adjusted (not dividend-adjusted); this repo needs RAW closes aligned
+# with raw option strikes, so pre-split rows are multiplied back. First
+# split-adjusted trading day is the key; ratio multiplies earlier closes.
+SPLITS = {"AMZN": [("2022-06-06", 20.0)]}
+
+
+def yahoo_rows_from_payload(payload: dict) -> list[tuple[str, float]]:
+    """(iso_date, split-adjusted close) rows from a Yahoo v8 chart payload.
+    Raises loudly on error payloads or empty series (fail closed)."""
+    import datetime as _dt
+    import zoneinfo
+
+    chart = payload.get("chart") or {}
+    if chart.get("error"):
+        raise RuntimeError(f"Yahoo chart error: {chart['error']}")
+    results = chart.get("result") or []
+    if not results:
+        raise RuntimeError("Yahoo chart returned no result")
+    r = results[0]
+    ts = r.get("timestamp") or []
+    closes = (r.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+    if not ts or len(ts) != len(closes):
+        raise RuntimeError("Yahoo chart payload missing/misaligned timestamps")
+    tz = zoneinfo.ZoneInfo(r.get("meta", {}).get("exchangeTimezoneName",
+                                                 "America/New_York"))
+    rows = []
+    for t, c in zip(ts, closes):
+        if c is None:
+            continue
+        d = _dt.datetime.fromtimestamp(t, tz).date().isoformat()
+        rows.append((d, float(c)))
+    if not rows:
+        raise RuntimeError("Yahoo chart returned no non-null closes")
+    return rows
+
+
+def unsplit(rows: list[tuple[str, float]], symbol: str) -> list[tuple[str, float]]:
+    """Undo split adjustment so closes align with raw option strikes."""
+    out = rows
+    for first_adjusted_day, ratio in SPLITS.get(symbol, []):
+        out = [(d, c * ratio) if d < first_adjusted_day else (d, c)
+               for d, c in out]
+    return out
+
+
+def fetch_underlying_eod_yahoo(symbol: str) -> str:
+    """Full-history RAW daily closes via the free Yahoo v8 chart API
+    (provider decision 2026-07-04: ThetaData stock history and AlphaVantage
+    full history are paid tiers; Stooq blocks scripts; Yahoo chart works
+    keyless). Split adjustment undone via the SPLITS registry; validated
+    against ThetaData FREE recent-window true closes AND the parity series
+    before first use (see facts.log). Blind: never prints a price."""
+    import json
+    import urllib.request
+
+    # Explicit epoch bounds, NOT range=max: Yahoo silently degrades 1d bars
+    # to monthly on very long ranges (observed live 2026-07-04: range=max
+    # returned 34-233 rows). 2017-01-01..BACKTEST_END+1d keeps true dailies.
+    import calendar
+    from datetime import date as _date
+
+    p1 = calendar.timegm(_date(2017, 1, 1).timetuple())
+    p2 = calendar.timegm(_date.fromisoformat(config.BACKTEST_END).timetuple()) + 86400
+    url = (YAHOO_CHART_URL.format(symbol=symbol)
+           + f"?period1={p1}&period2={p2}&interval=1d")
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+    with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310 (https)
+        payload = json.load(resp)
+    rows = unsplit(yahoo_rows_from_payload(payload), symbol)
+    return store_closes(symbol, rows_to_frame(rows))
+
+
 def parity_spot_from_chain(chain: pd.DataFrame, today_iso: str, *,
                            min_dte: int = 15, max_dte: int = 60,
                            n_strikes: int = 5) -> float:
