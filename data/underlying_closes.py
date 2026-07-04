@@ -78,3 +78,97 @@ def fetch_underlying_eod(symbol: str, start_iso: str, end_iso: str) -> str:
     rows = [(ts.date().isoformat(), float(c))
             for ts, c in zip(df["last_trade"], df["close"])]
     return store_closes(symbol, rows_to_frame(rows))
+
+
+AV_QUERY_URL = "https://www.alphavantage.co/query"
+
+
+def av_rows_from_payload(payload: dict) -> list[tuple[str, float]]:
+    """(iso_date, close) rows from a TIME_SERIES_DAILY payload. Raises
+    loudly on gate/limit payloads so a refused response can never be cached
+    as an empty series (same policy as the parked alphavantage chain
+    fetcher on the data-layer branch)."""
+    for k in ("Information", "Note", "Error Message"):
+        if k in payload:
+            raise RuntimeError(f"Alpha Vantage refused: {payload[k]}")
+    series = payload.get("Time Series (Daily)") or {}
+    if not series:
+        raise RuntimeError("Alpha Vantage returned no daily rows")
+    return [(d, float(v["4. close"])) for d, v in series.items()]
+
+
+def fetch_underlying_eod_av(symbol: str) -> str:
+    """Full-history UNADJUSTED daily closes via Alpha Vantage
+    TIME_SERIES_DAILY (free tier; ALPHAVANTAGE_API_KEY from the env).
+    Unadjusted is CORRECT for this repo: cached chains quote raw strikes,
+    so raw closes stay aligned across splits (e.g. AMZN 2022 20:1).
+    Provider rationale (2026-07-04): ThetaData stock history needs a paid
+    STANDARD stock tier (options tier doesn't cover it; live probe: recent
+    window only on FREE). Blind: writes parquet, never prints a price.
+
+    ORCHESTRATOR-ONLY, like fetch_underlying_eod.
+    """
+    import json
+    import urllib.parse
+    import urllib.request
+
+    key = os.environ.get("ALPHAVANTAGE_API_KEY", "")
+    if not key:
+        raise RuntimeError("ALPHAVANTAGE_API_KEY missing from environment "
+                           "(run via `uv run --env-file .env ...`)")
+    url = AV_QUERY_URL + "?" + urllib.parse.urlencode({
+        "function": "TIME_SERIES_DAILY", "symbol": symbol,
+        "outputsize": "full", "apikey": key})
+    with urllib.request.urlopen(url, timeout=60) as resp:  # nosec B310 (https)
+        payload = json.load(resp)
+    return store_closes(symbol, rows_to_frame(av_rows_from_payload(payload)))
+
+
+def parity_spot_from_chain(chain: pd.DataFrame, today_iso: str, *,
+                           min_dte: int = 15, max_dte: int = 60,
+                           n_strikes: int = 5) -> float:
+    """Underlying spot inferred from put-call parity on the nearest MONTHLY
+    expiry: median over the n_strikes nearest-ATM strikes of
+    C_mid - P_mid + K (r=0, no dividend PV -- documented level bias well
+    under 1%, measured against true closes in the validation runner).
+    NaN when the day has no usable expiry or no P/C overlap (fail closed)."""
+    from datetime import date as _date
+
+    from options_researcher.chains import nearest_monthly
+
+    today = _date.fromisoformat(today_iso)
+    exp = nearest_monthly(chain, today, min_dte=min_dte, max_dte=max_dte)
+    if exp is None:
+        return float("nan")
+    exp_dates = pd.to_datetime(chain["expiration"]).dt.date
+    sane = (chain["bid"] > 0) & (chain["ask"] >= chain["bid"])
+    sub = chain[(exp_dates == exp) & sane]
+    calls = sub[sub["right"] == "C"].set_index("strike")
+    puts = sub[sub["right"] == "P"].set_index("strike")
+    ks = calls.index.intersection(puts.index)
+    if len(ks) == 0:
+        return float("nan")
+    c_mid = (calls.loc[ks, "bid"] + calls.loc[ks, "ask"]) / 2
+    p_mid = (puts.loc[ks, "bid"] + puts.loc[ks, "ask"]) / 2
+    spots = c_mid - p_mid + pd.Series(ks, index=ks, dtype=float)
+    rough = float(spots.median())
+    nearest = spots.loc[sorted(ks, key=lambda k: abs(k - rough))[:n_strikes]]
+    return float(nearest.median())
+
+
+def build_parity_closes(symbol: str, start_iso: str, end_iso: str, *,
+                        allow_oos: bool = False) -> str:
+    """INTERIM close series derived from our own cached chains via parity
+    (provider decision 2026-07-04: ThetaData stock history and AlphaVantage
+    full-history both require paid tiers; Stooq blocks programmatic access).
+    Validated against true recent-window closes before use; see facts.log."""
+    from options_researcher.chains import load_range
+
+    chains = load_range(symbol, start_iso, end_iso, allow_oos=allow_oos)
+    rows = [(day, parity_spot_from_chain(chain, day))
+            for day, chain in sorted(chains.items())]
+    rows = [(d, s) for d, s in rows if pd.notna(s)]
+    if not rows:
+        raise RuntimeError(f"no parity spots derivable for {symbol} "
+                           f"{start_iso}..{end_iso}")
+    return store_closes(symbol, rows_to_frame(rows))
