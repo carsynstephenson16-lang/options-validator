@@ -35,5 +35,30 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("https://cdn", html)
 
 
+class MainTests(unittest.TestCase):
+    def test_main_writes_html_file_and_prints_path(self):
+        import io
+        import os
+        import tempfile
+        from contextlib import redirect_stdout
+        from unittest import mock
+
+        from options_researcher import dashboard
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = os.path.join(tmp, "dashboard", "index.html")
+            with mock.patch.object(dashboard, "OUTPUT_PATH", out_path):
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    dashboard.main(book={"marks": [], "bucket_issues": []},
+                                   facts=[], reports=[], closes={})
+            self.assertTrue(os.path.exists(out_path))
+            with open(out_path) as f:
+                content = f.read()
+            self.assertIn("MISSION CONTROL", content)
+            self.assertIn(out_path, buf.getvalue())
+            self.assertIn("browser", buf.getvalue().lower())
+
+
 if __name__ == "__main__":
     unittest.main()

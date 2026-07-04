@@ -62,6 +62,7 @@ uv run python analysis/feasibility.py                       # sizing vs the slee
 uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample scoreboard
 uv run python -m options_researcher.attractiveness            # which options look attractive today
 uv run python -m options_researcher.portfolio                 # mark the H5 paper book
+uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
 ```
 
 `smoke_test.py` probes a single in-sample chain (cached parquet, or the
@@ -124,14 +125,17 @@ paper-trading window.
    `uv run python -m options_researcher.h4_backtest` replays the seeded
    book's frozen rules (2023-01..2026-06: combined +$14.7k, 9/14 quarters
    positive, worst quarter −$5.1k — evidence only, never the verdict).
-7. **Dashboard (M7)**: plan ready for a future session —
-   `docs/superpowers/plans/2026-07-04-m7-dashboard-plan.md`.
+7. ~~**Dashboard (M7)**~~ — DONE 2026-07-04:
+   `uv run python -m options_researcher.dashboard` writes a self-contained
+   `.tmp/dashboard/index.html` (dark, game-styled, no network/JS deps) —
+   party cards per name, the live book, quest log, and an achievement wall
+   built from `ledger/facts.log`.
 
 **Scope status: COMPLETE.** Live hypothesis: **H5 Sector Income Core**
 (specs/2026-07-04-h5-sector-income-core-design.md; ledger trial 6; H4
 superseded at zero cycles, book carried over, window clock restarted).
 Remaining: the passive forward window (≥ 2 quarters → scoreboard verdict),
-declaring 100-share lots in data/positions/holdings.csv to activate the
+declaring more 100-share lots in data/positions/holdings.csv to activate the
 covered-call engine, and executing the M7 dashboard plan.
 
 ## Known limitations

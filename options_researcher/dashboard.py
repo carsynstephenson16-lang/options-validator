@@ -23,9 +23,12 @@ disk.
 from __future__ import annotations
 
 import html as _html
+import os
 from datetime import datetime as _datetime
 from datetime import timezone
 from glob import glob
+
+OUTPUT_PATH = os.path.join(".tmp", "dashboard", "index.html")
 
 # One entry per major fact tag seen in `ledger/facts.log` (see
 # `grep -o '\t[A-Z_0-9]*' ledger/facts.log | sort -u`). Routine/negative
@@ -544,3 +547,22 @@ def render(data: dict) -> str:
 </body>
 </html>
 """
+
+
+def main(**assemble_kwargs) -> str:
+    """Assemble real (or injected, for tests) project state, render it, and
+    write it to OUTPUT_PATH. Read-only over project data; the only write is
+    the dashboard HTML file itself. Returns the written path."""
+    data = assemble(**assemble_kwargs)
+    out_html = render(data)
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    with open(OUTPUT_PATH, "w") as f:
+        f.write(out_html)
+    abs_path = os.path.abspath(OUTPUT_PATH)
+    print(f"wrote {abs_path}")
+    print("open it in your browser to see mission control")
+    return abs_path
+
+
+if __name__ == "__main__":
+    main()
