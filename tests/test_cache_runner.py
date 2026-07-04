@@ -356,7 +356,7 @@ class DryRunTests(_CacheRunnerTestCase):
 
     def test_dry_run_counts_already_cached_tasks_via_cache_path_exists(self):
         cache_runner.trading_days = lambda start, end: ["2022-12-28", "2022-12-29"]
-        self._touch_cache_file("SPY", "2022-12-28")
+        self._touch_cache_file(config.UNIVERSE[0], "2022-12-28")
 
         result = cache_runner.dry_run()
 

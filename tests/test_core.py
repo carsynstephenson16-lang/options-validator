@@ -339,11 +339,12 @@ class HonestRiskCapConfigTests(unittest.TestCase):
                                     f"width {width} no longer fits the cap")
 
     def test_concentration_is_documented_reality(self):
-        # 9 concurrent positions x $600 = $5,400 =~ 38.6% of the sleeve at
-        # simultaneous risk, in a high-correlation universe. The cap is
-        # PER-TRADE; the portfolio view must stay visible in feasibility.
+        # 4 concurrent positions x $600 = $2,400 =~ 17.1% of the sleeve at
+        # simultaneous risk, in ONE AI-infrastructure cluster (VST/CEG power +
+        # MSFT/AMZN cloud). The cap is PER-TRADE; the portfolio view must stay
+        # visible in feasibility.
         worst = len(config.UNIVERSE) * config.MAX_LOSS_PER_TRADE
-        self.assertAlmostEqual(worst / config.RISK_SLEEVE, 0.38571, places=4)
+        self.assertAlmostEqual(worst / config.RISK_SLEEVE, 0.17143, places=4)
 
 
 if __name__ == "__main__":

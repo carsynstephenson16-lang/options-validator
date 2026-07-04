@@ -48,16 +48,16 @@ STARTING_CAPITAL     = 25_000    # account equity used by the backtest engine
 # ---------------------------------------------------------------------------
 # UNIVERSE & WINDOW
 # ---------------------------------------------------------------------------
-# CONCENTRATION FLAG: SPY and QQQ overlap heavily with AAPL/MSFT/NVDA/AMZN,
-# and PLTR/NOW/VST add high-beta thematic exposure rather than clean
-# diversification. This universe is much closer to one growth/AI/power-risk
-# cluster than 9 independent bets. In a risk-off or tech/AI drawdown, short-put
-# spreads across these symbols can lose together. Treat "diversification" here
-# with suspicion.
-UNIVERSE             = [
-    "SPY", "QQQ", "MSFT", "AAPL", "NVDA",
-    "VST", "PLTR", "AMZN", "NOW",
-]
+# PROJECT SCOPE (owner decision 2026-07-03): the research universe is four
+# names on one thesis -- nuclear/data-center power (VST, CEG) + Mag-7 cloud/AI
+# (MSFT, AMZN). CONCENTRATION FLAG (unchanged in spirit): these four are one
+# AI-infrastructure cluster, not four independent bets; in a risk-off or AI
+# drawdown they can lose together. Treat "diversification" here with suspicion.
+# Ordering note: smoke/demo paths use UNIVERSE[0]; CEG is listed LAST because
+# it has no cached chains yet (spun off 2022-02; fetch pending, see README).
+# H1/H2/H3-era registered records carry their own frozen scope in the ledger
+# and are unaffected by this edit.
+UNIVERSE             = ["MSFT", "AMZN", "VST", "CEG"]
 BACKTEST_START       = "2018-01-01"   # must span 2018 / 2020 / 2022 regimes
 # OOS WINDOW EXTENSION (2026-07-02, decided BLIND at pre-registration -- before
 # any paid or post-IN_SAMPLE_END market data was fetched or opened): end moved
