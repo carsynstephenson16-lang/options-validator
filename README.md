@@ -60,6 +60,8 @@ uv run python -m unittest discover -s tests                 # discipline layer
 uv run python options_researcher/profile_tradability.py     # 4-name liquidity profile
 uv run python analysis/feasibility.py                       # sizing vs the sleeve
 uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample scoreboard
+uv run python -m options_researcher.attractiveness            # which options look attractive today
+uv run python -m options_researcher.portfolio                 # mark the H5 paper book
 ```
 
 `smoke_test.py` probes a single in-sample chain (cached parquet, or the
@@ -125,8 +127,12 @@ paper-trading window.
 7. **Dashboard (M7)**: plan ready for a future session —
    `docs/superpowers/plans/2026-07-04-m7-dashboard-plan.md`.
 
-**Scope status: COMPLETE** except (a) the passive forward paper window
-(≥ 2 quarters → scoreboard verdict) and (b) executing the M7 plan.
+**Scope status: COMPLETE.** Live hypothesis: **H5 Sector Income Core**
+(specs/2026-07-04-h5-sector-income-core-design.md; ledger trial 6; H4
+superseded at zero cycles, book carried over, window clock restarted).
+Remaining: the passive forward window (≥ 2 quarters → scoreboard verdict),
+declaring 100-share lots in data/positions/holdings.csv to activate the
+covered-call engine, and executing the M7 dashboard plan.
 
 ## Known limitations
 
