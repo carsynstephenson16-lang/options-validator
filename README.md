@@ -110,8 +110,15 @@ paper-trading window.
 4. ~~**Structure menu**~~ — DELIVERED 2026-07-04, awaiting owner picks:
    `docs/superpowers/2026-07-04-structure-menu.md` (recommended H4: AMZN
    monthly 0.20Δ covered call; close-data Option A/B decision bundled).
-5. **First 4-name hypothesis (H4)**: pre-registered like H1/H2 were, with a
-   forward paper window as the primary validation — gated on the menu picks.
+5. ~~**First 4-name hypothesis (H4)**~~ — FROZEN 2026-07-04 (owner picks:
+   1–2 LEAPS thesis-bucket + 1 cash-secured put + monthly tactical calls;
+   `docs/superpowers/specs/2026-07-04-h4-preregistration.md`, ledger trial 5).
+   **Now live: the forward paper window.** Add positions to
+   `data/positions/positions.csv`, then
+   `uv run python -m options_researcher.portfolio` marks the book
+   (conservative fills), flags rolls/earnings/assignment, and enforces the
+   H4 risk buckets. Window ≥ 2 quarters → scoreboard verdict.
+6. **Dashboard (M7)**: game-style mission control — next design session.
 
 ## Known limitations
 
