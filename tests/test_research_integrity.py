@@ -1105,9 +1105,9 @@ class RunBacktestSeamTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_reveal_seam_gate_runs_before_the_unwired_data_path(self):
-        # No registration exists -> the gate must refuse BEFORE reaching the
-        # NotImplementedError ThetaData fetch inside the injected run function.
+    def test_reveal_seam_gate_refuses_before_any_backtest_values_are_opened(self):
+        # No registration exists -> the gate must refuse before the run function
+        # can open registered OOS chain values.
         with self.assertRaises(experiments.OOSGateError):
             run_backtest.reveal_out_of_sample("H1", base_dir=self.base,
                                               git_clean_tracked=lambda paths: True)

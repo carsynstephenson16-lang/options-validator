@@ -12,14 +12,14 @@ whole point is to find that out cheaply, before risking money.
 | Piece | File | State |
 |---|---|---|
 | Parameters | `config.py` | complete |
-| Feasibility check | `analysis/feasibility.py` | runs today |
-| Scoreboard | `metrics.py` | runs today (synthetic demo) |
+| Feasibility check | `analysis/feasibility.py` | measured from cached in-sample chains |
+| Scoreboard | `metrics.py`, `tools/score_backtest.py` | real-cache in-sample scoreboard available |
 | Sizing / cost helpers | `strategies/base.py` | complete |
-| Liquidity / caching helpers | `data/thetadata_adapter.py` | helpers done; fetch is Phase 0 |
-| Strategy A (put credit spread) | `strategies/put_credit_spread.py` | logic done; Lumibot calls Phase 0 |
-| Backtest wrapper | `harness/run_backtest.py` | Phase 0 |
-| Smoke test | `smoke_test.py` | Phase 0 (needs ThetaData) |
-| Tests | `tests/test_core.py` | passing (`unittest`) |
+| Liquidity / caching helpers | `data/thetadata_adapter.py` | official ThetaData client + parquet cache wired |
+| Strategy A (put credit spread) | `strategies/put_credit_spread.py` | offline Lumibot/PandasData path wired |
+| Backtest wrapper | `harness/run_backtest.py` | chunked real-cache backtest wired |
+| Smoke test | `smoke_test.py` | wired in-sample ThetaData/cache probe |
+| Tests | `tests/` | passing (`unittest`) |
 
 ## Quickstart (the parts that work now)
 
@@ -30,12 +30,14 @@ against an arbitrary system Python.
 ```bash
 uv sync
 uv run python analysis/feasibility.py     # can a spread even fit your risk sleeve?
-uv run python metrics.py                  # see the scoreboard on synthetic trades
+uv run python tools/score_backtest.py --symbols SPY,QQQ --json
 uv run python -m unittest discover -s tests   # run the test suite
 ```
 
-`smoke_test.py` is intentionally blocked until ThetaData chain fetching is
-wired and verified.
+`smoke_test.py` is wired for a single in-sample chain probe. It will use a
+cached parquet file when present, or the official ThetaData Python client on a
+cache miss. Post-`IN_SAMPLE_END` values remain sealed unless the OOS reveal gate
+explicitly opens them.
 
 ## Capital & risk
 
@@ -51,22 +53,21 @@ nine concurrent positions ≈ $5,400 at simultaneous risk (~38.6% of the sleeve)
 in a universe that is far fewer than nine independent bets -- in a growth/AI or
 tech drawdown, many of them can lose together.
 
-## Phase plan
+## Current research state
 
-- **Phase 0** -- make the environment reproducible, then verify the
-  load-bearing assumptions from the *installed*
-  Lumibot/ThetaData (chain access, multi-leg orders, quote-based fills,
-  per-contract fees). Wire the ThetaData fetch and run the smoke test.
-  **Stop and confirm before building further.**
-- **Phase 1** -- finish the ThetaData adapter + smoke test.
-- **Phase 2** -- finish Strategy A + the backtest wrapper; produce a scoreboard.
-- **Phase 3** -- width sweep ($1 / $2 / $5) reporting expectancy *and* feasibility
-  (**in-sample only** -- exactly one pre-registered width may ever reveal OOS;
-  the sweep must not spend the `OOS_LOOK_BUDGET`).
-- **Phase 4** -- (optional, later) Strategy B + an apples-to-apples comparison.
+- ThetaData's official Python client fetches EOD greeks/NBBO/IV plus open
+  interest into local parquet cache files.
+- Lumibot remains the engine, but backtests run fully offline through
+  per-contract PandasData objects built from the cache.
+- H1 (`SPY,QQQ`, $2-wide) and H2 (`SPY,QQQ`, $5-wide) both failed in-sample
+  after conservative fills and fees. The owner declined OOS reveal, so the
+  holdout remains sealed and `OOS_LOOK_BUDGET` is still unspent.
+- Any new strategy, symbol scope, width, stop, signal, or fill-model change is a
+  new hypothesis and must preserve the OOS gate.
 
 A live "scanner / suggestor" is a **separate project** that only makes sense
-*after* a strategy survives Phases 0-4. Building it first is premature.
+*after* a strategy survives this validation process. Building it first is
+premature.
 
 ## Known limitations (don't paper over these)
 

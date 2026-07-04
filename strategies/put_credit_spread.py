@@ -1,10 +1,10 @@
 """
 strategies/put_credit_spread.py -- Strategy A: defined-risk put credit spread.
 
-STATUS: PHASE 0. The LOGIC (selection, sizing, exits) is config-driven and
-expressed faithfully. Every method marked VERIFY wraps a Lumibot/ThetaData call
-that you must confirm against the INSTALLED library before trusting a backtest.
-Do not assume this is tested end-to-end.
+STATUS: REAL-DATA OFFLINE PATH WIRED. Selection uses cached ThetaData
+greeks/OI/NBBO chains through the injected chain provider. Lumibot remains the
+backtest engine for event flow, quote-side fills, cash, positions, and fees via
+the offline PandasData feed.
 
 Hypothesis: implied vol tends to exceed realized (the volatility risk premium),
 so selling a ~30-delta put and capping the downside with a long put $W lower
@@ -32,6 +32,110 @@ try:
     from lumibot.strategies import Strategy  # VERIFY import path
 except Exception:                            # pragma: no cover
     Strategy = object
+
+
+@dataclass(frozen=True)
+class SpreadSelection:
+    """Decision-compatible entry candidate or the exact fail-closed reason."""
+
+    accepted: bool
+    reason: str
+    expiration: str | None = None
+    short_put: object | None = None
+    long_put: object | None = None
+    credit: float | None = None
+    contracts: int = 0
+    economic_max_loss: float | None = None
+
+
+def select_put_credit_spread_candidate(
+    chain,
+    today: Date,
+    *,
+    width: float,
+    delta: float,
+    dte_band: tuple[int, int],
+    haircut: float = config.SLIPPAGE_HAIRCUT,
+) -> SpreadSelection:
+    """Pure entry selection shared by the strategy and measured feasibility.
+
+    This intentionally mirrors the pre-existing entry logic: nearest expiry in
+    band, nearest absolute put delta, exact-width lower long leg, both-leg
+    liquidity, conservative credit, then economic-risk sizing.
+    """
+    lo, hi = dte_band
+    puts = chain[chain["right"] == "P"]
+    dtes = {
+        e: (Date.fromisoformat(str(e)) - today).days
+        for e in puts["expiration"].unique()
+    }
+    in_band = {e: d for e, d in dtes.items() if max(lo, config.DTE_MIN) <= d <= hi}
+    if not in_band:
+        return SpreadSelection(False, "no_expiration")
+
+    expiration = min(in_band, key=lambda e: in_band[e])
+    expiry_puts = puts[puts["expiration"] == expiration]
+    if expiry_puts.empty:
+        return SpreadSelection(False, "short_delta_missing", expiration=str(expiration))
+
+    short_put = expiry_puts.loc[(expiry_puts["delta"].abs() - delta).abs().idxmin()]
+    long_rows = expiry_puts[expiry_puts["strike"] == short_put.strike - width]
+    if long_rows.empty:
+        return SpreadSelection(
+            False,
+            "long_strike_missing",
+            expiration=str(expiration),
+            short_put=short_put,
+        )
+    long_put = long_rows.iloc[0]
+
+    if not (
+        passes_liquidity(short_put.open_interest, short_put.bid, short_put.ask)
+        and passes_liquidity(long_put.open_interest, long_put.bid, long_put.ask)
+    ):
+        return SpreadSelection(
+            False,
+            "liquidity",
+            expiration=str(expiration),
+            short_put=short_put,
+            long_put=long_put,
+        )
+
+    credit = entry_credit_conservative(
+        short_put.bid, short_put.ask, long_put.bid, long_put.ask, haircut
+    )
+    if credit <= 0:
+        return SpreadSelection(
+            False,
+            "non_positive_credit",
+            expiration=str(expiration),
+            short_put=short_put,
+            long_put=long_put,
+            credit=credit,
+        )
+
+    contracts, economic_max_loss = size_defined_risk(width, credit)
+    if contracts < 1:
+        return SpreadSelection(
+            False,
+            "risk_budget_too_small",
+            expiration=str(expiration),
+            short_put=short_put,
+            long_put=long_put,
+            credit=credit,
+            economic_max_loss=economic_max_loss,
+        )
+
+    return SpreadSelection(
+        True,
+        "accepted",
+        expiration=str(expiration),
+        short_put=short_put,
+        long_put=long_put,
+        credit=credit,
+        contracts=contracts,
+        economic_max_loss=economic_max_loss,
+    )
 
 
 class PutCreditSpread(Strategy):
@@ -67,37 +171,49 @@ class PutCreditSpread(Strategy):
 
     # ----- ENTRY ---------------------------------------------------------
     def _try_enter(self, symbol):
-        chain = self._get_eod_chain(symbol)                       # VERIFY
+        chain = self._get_eod_chain(symbol)
         if chain is None:
             self.log_message(f"{symbol}: no chain available, skip"); return
 
-        expiry = self._pick_expiration(chain, self.dte_band)
-        if expiry is None:
+        selection = select_put_credit_spread_candidate(
+            chain,
+            self._today(),
+            width=self.width,
+            delta=self.delta,
+            dte_band=self.dte_band,
+            haircut=self.haircut,
+        )
+        if selection.reason == "no_expiration":
             self.log_message(
                 f"{symbol}: no expiration in {self.dte_band} DTE band, skip"); return
-
-        short_put = self._strike_nearest_delta(chain, expiry, self.delta)   # VERIFY
-        long_put = self._strike_below(chain, expiry, short_put, self.width)  # VERIFY
-        if short_put is None or long_put is None:
+        if selection.reason in {"short_delta_missing", "long_strike_missing"}:
             self.log_message(f"{symbol}: legs unavailable, skip"); return
-
-        if not (self._liquid(short_put) and self._liquid(long_put)):
+        if selection.reason == "liquidity":
             self.log_message(f"{symbol}: failed liquidity filter, skip"); return
-
-        credit = entry_credit_conservative(
-            short_put.bid, short_put.ask, long_put.bid, long_put.ask, self.haircut)
-        if credit <= 0:
+        if selection.reason == "non_positive_credit":
             self.log_message(f"{symbol}: non-positive credit, skip"); return
-
-        contracts, economic_max_loss = size_defined_risk(self.width, credit)
-        if contracts < 1:
+        if selection.reason == "risk_budget_too_small":
             self.log_message(
                 f"{symbol}: risk budget too small for ${self.width} width "
-                f"(economic max loss ${economic_max_loss:.0f} > budget). "
+                f"(economic max loss ${selection.economic_max_loss:.0f} > budget). "
                 "Skip -- NOT rounding up.")
             return
+        if not selection.accepted:
+            raise RuntimeError(f"unexpected spread selection state: {selection!r}")
 
-        self._submit_spread(symbol, expiry, short_put, long_put, contracts, credit)  # VERIFY
+        expiry = selection.expiration
+        short_put = selection.short_put
+        long_put = selection.long_put
+        contracts = selection.contracts
+        credit = selection.credit
+        economic_max_loss = selection.economic_max_loss
+        assert expiry is not None
+        assert short_put is not None
+        assert long_put is not None
+        assert credit is not None
+        assert economic_max_loss is not None
+
+        self._submit_spread(symbol, expiry, short_put, long_put, contracts, credit)
         self.log_message(
             f"{symbol}: SOLD {contracts}x ${self.width}-wide put spread, "
             f"credit ${credit:.2f}, economic max loss "

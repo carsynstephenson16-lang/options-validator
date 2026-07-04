@@ -19,10 +19,10 @@ replace the old four-endpoint REST fetch:
   the inner join below drops those contracts, which is the existing
   fail-closed design (untradeable under the liquidity gate anyway).
 
-Note: Lumibot ships ThetaDataBacktesting natively, so inside the backtest loop
-Lumibot pulls its own quote data for FILLS. This adapter exists because the
-installed lumibot exposes NO greeks and NO open interest (verified 2026-07-02):
-strike selection by delta and the both-legs OI liquidity gate need this chain.
+Backtests run fully offline from parquet: this adapter supplies the real
+greeks/OI/NBBO chain values, and data/pandas_feed.py turns cached chains into
+per-contract Lumibot PandasData objects for quote-side fills. ThetaData is not
+called from the backtest loop.
 
 Integrity: any date after config.IN_SAMPLE_END is refused unless the caller is
 the OOS reveal path (allow_oos=True) -- "just printing a chain" after 2022 is

@@ -3,11 +3,10 @@ smoke_test.py -- minute-one check for the paid ThetaData month: fetch ONE
 symbol's chain for ONE in-sample day, summarize it, and record an audit fact.
 
 The adapter (data/thetadata_adapter.py) is wired, not stubbed. This script
-fails loud if ThetaTerminal is not running/authenticated, or if the account
-does not have Options Standard history back to 2022-12-30 -- there is no
-fallback path. A clean run is the go signal: it is the first time the
-greeks/IV column-name guesses in the adapter get hit against a real terminal,
-so they either get confirmed here or this script is where they fail loud.
+reads a cached parquet chain when available and otherwise fetches through the
+official ThetaData Python client. There is no synthetic fallback path: missing
+credentials, missing options entitlement, or unexpected provider schema must
+fail loud.
 
 SMOKE_TEST_DATE must NEVER be moved to a date after config.IN_SAMPLE_END --
 this script only ever touches in-sample data (the adapter also guards this,

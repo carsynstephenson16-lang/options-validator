@@ -93,9 +93,6 @@ def main(argv=None) -> int:
         except (experiments.OOSGateError, ledger.LedgerError) as exc:
             print(f"OOS GATE REFUSED: {exc}", file=sys.stderr)
             return 1
-        except NotImplementedError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
         print("OOS revealed")
         return 0
 
