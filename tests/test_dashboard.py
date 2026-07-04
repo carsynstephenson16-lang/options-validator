@@ -23,5 +23,17 @@ class AssembleTests(unittest.TestCase):
         self.assertIn("MSFT", d["sparklines"])
 
 
+class RenderTests(unittest.TestCase):
+    def test_render_contains_sections_and_no_external_assets(self):
+        from options_researcher.dashboard import render
+        html = render(assemble(book={"marks": [], "bucket_issues": []},
+                               facts=[], reports=[], closes={}))
+        for token in ("MISSION CONTROL", "PARTY", "QUEST LOG",
+                      "ACHIEVEMENTS", "<style>"):
+            self.assertIn(token, html)
+        self.assertNotIn("http://", html)
+        self.assertNotIn("https://cdn", html)
+
+
 if __name__ == "__main__":
     unittest.main()
