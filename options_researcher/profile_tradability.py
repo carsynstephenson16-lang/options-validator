@@ -3,8 +3,13 @@
 import glob
 import os
 import sys
+from datetime import date as _date
 from datetime import datetime
+
 import pandas as pd
+
+from options_researcher.chains import puts_in_window
+
 
 def profile_symbol(symbol, cache_dir):
     """Profile tradability for a single symbol."""
@@ -52,29 +57,21 @@ def profile_symbol(symbol, cache_dir):
                   file=sys.stderr)
             continue
 
-        # Filter to PUTs with valid bid/ask
-        df_put = df[(df['right'] == 'P') & (df['bid'] > 0) & (df['ask'] >= df['bid'])].copy()
+        # Filter to PUTs with valid quotes inside the 25-60 DTE window
+        win = puts_in_window(df, _date.fromisoformat(date_str), 25, 60)
 
-        if df_put.empty:
+        if win.empty:
             continue
 
-        # Convert expiration to date
-        df_put['expiration_date'] = pd.to_datetime(df_put['expiration']).dt.date
-
-        # Find expiration closest to 37 DTE, within [25, 60]
-        df_put['dte'] = (pd.to_datetime(df_put['expiration_date']) - pd.Timestamp(file_date)).dt.days
-
-        valid_exp = df_put[(df_put['dte'] >= 25) & (df_put['dte'] <= 60)]
-        if valid_exp.empty:
-            continue
-
-        # Get expiration nearest to 37 DTE
-        valid_exp = valid_exp.copy()
-        valid_exp['dte_diff'] = abs(valid_exp['dte'] - 37)
-        nearest_exp = valid_exp.loc[valid_exp['dte_diff'].idxmin(), 'expiration_date']
+        # Get expiration nearest to 37 DTE (intentionally nearest-37-DTE,
+        # NOT nearest-monthly -- this profiler is the weekly-fragmentation
+        # detector)
+        win = win.copy()
+        win['dte_diff'] = abs(win['dte'] - 37)
+        nearest_exp = win.loc[win['dte_diff'].idxmin(), 'exp_date']
 
         # Filter to that expiration
-        df_exp = df_put[df_put['expiration_date'] == nearest_exp].copy()
+        df_exp = win[win['exp_date'] == nearest_exp].copy()
 
         if df_exp.empty:
             continue
