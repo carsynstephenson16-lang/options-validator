@@ -265,7 +265,7 @@ def _party_card(symbol: str, color: str, role: str, sparklines: dict,
 
 def _book_rows(marks: list[dict]) -> str:
     if not marks:
-        return '<tr><td colspan="8" class="empty">No open marks.</td></tr>'
+        return '<tr><td colspan="9" class="empty">No open marks.</td></tr>'
     rows = []
     for m in marks:
         pnl = m.get("pnl", 0.0) or 0.0
