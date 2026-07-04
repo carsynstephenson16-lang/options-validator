@@ -26,3 +26,6 @@ results/*
 # `git add -f` if a specific note ever needs to be committed.
 /20??-??-??.md
 /Untitled*.md
+
+# session scratch (web research cache)
+.firecrawl/
