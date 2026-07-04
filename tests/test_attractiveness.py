@@ -72,3 +72,36 @@ class CCCardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PMCCCardTests(unittest.TestCase):
+    def test_only_safe_strikes_and_golden_numbers(self):
+        from options_researcher.attractiveness import pmcc_card_rows
+        # MSFT LEAPS strike 340 + premium 79.54 => safety strike 419.54.
+        # $400 call is UNSAFE (below), must be excluded; $420 is safe.
+        chain = chain_rows([("C", 400.0, 0.28, 3.00),
+                            ("C", 420.0, 0.20, 1.50),
+                            ("P", 340.0, -0.30, 5.00)])   # for expiry discovery
+        rows = pmcc_card_rows("MSFT", chain, "2026-06-30",
+                              leaps_strike=340.0, leaps_premium=79.54,
+                              close=373.0, iv_rank=0.88,
+                              earnings_in_cycle=False)
+        self.assertEqual([r["strike"] for r in rows], [420.0])  # 400 excluded
+        r = rows[0]
+        h = config.SLIPPAGE_HAIRCUT
+        credit = 1.50 * (1 - h) * 100 - config.COMMISSION_PER_CONTRACT
+        self.assertAlmostEqual(r["credit"], credit, places=2)
+        self.assertAlmostEqual(r["yield_mo"], credit / (79.54 * 100), places=6)
+        self.assertEqual(r["grades"]["safety"], "GREEN")
+        self.assertIn("419.54", r["verdict"])          # states the safe floor
+        self.assertIn("LEAPS", r["verdict"])
+
+    def test_no_safe_strike_returns_empty(self):
+        from options_researcher.attractiveness import pmcc_card_rows
+        chain = chain_rows([("C", 400.0, 0.20, 3.00),
+                            ("P", 340.0, -0.30, 5.00)])
+        rows = pmcc_card_rows("MSFT", chain, "2026-06-30",
+                              leaps_strike=340.0, leaps_premium=79.54,
+                              close=373.0, iv_rank=0.88,
+                              earnings_in_cycle=False)
+        self.assertEqual(rows, [])                      # 400 < 419.54, no safe

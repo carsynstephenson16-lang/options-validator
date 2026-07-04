@@ -134,6 +134,55 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
     return out
 
 
+def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
+                   leaps_strike: float, leaps_premium: float, close: float,
+                   iv_rank: float, earnings_in_cycle: bool) -> list[dict]:
+    """SELL-A-CALL-AGAINST-YOUR-LEAPS (poor man's covered call) candidates.
+
+    HARD safety gate: only strikes >= leaps_strike + leaps_premium are shown,
+    because at/above that floor an assignment can be covered by exercising the
+    LEAPS WITHOUT locking a loss (you keep the call credit on top). Yield is
+    measured against the LEAPS premium actually deployed, not 100x stock.
+    """
+    h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
+    safety_strike = leaps_strike + leaps_premium
+    calls = _monthly_rows(chain, day, "C")
+    if calls.empty:
+        return []
+    safe = calls[calls["strike"] >= safety_strike].copy()
+    if safe.empty:
+        return []
+    safe["dist"] = (safe["delta"].abs() - config.H5_INCOME_DELTA).abs()
+    safe = safe.nsmallest(N_CANDIDATES, "dist")
+    leaps_cost = leaps_premium * 100.0
+    out = []
+    for _, r in safe.iterrows():
+        k = float(r["strike"])
+        credit = float(r["bid"]) * (1 - h) * 100 - comm
+        yield_mo = credit / leaps_cost
+        grades = {
+            "yield": grade(yield_mo, config.H5_CC_YIELD_GREEN,
+                           config.H5_CC_YIELD_AMBER),
+            "safety": "GREEN",   # by construction: only safe strikes reach here
+            "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
+                              else "AMBER"),
+            "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "liquidity": ("GREEN" if passes_liquidity(
+                r["open_interest"], r["bid"], r["ask"]) else "RED"),
+        }
+        verdict = (f"sells a ${k:.0f} call for ${credit:,.0f} against your "
+                   f"{symbol} LEAPS; SAFE because ${k:.0f} >= LEAPS strike "
+                   f"${leaps_strike:.0f} + premium ${leaps_premium:.2f} = "
+                   f"${safety_strike:.2f}, so assignment can't lock a loss; "
+                   f"income {100 * yield_mo:.2f}%/mo on the ${leaps_cost:,.0f} "
+                   "you put into the LEAPS.")
+        out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
+                    "dte": int(r["dte"]), "credit": credit,
+                    "yield_mo": yield_mo, "grades": grades,
+                    "verdict": verdict})
+    return out
+
+
 def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                     close: float, iv_rank: float,
                     bucket_room: float) -> list[dict]:
@@ -188,9 +237,13 @@ def main():
                 else pd.DataFrame(columns=["symbol", "shares", "cost_basis"]))
     positions = load_positions()
     thesis_used = 0.0
+    held_leaps = {}   # symbol -> (strike, entry_price) of a held LEAPS
     if not positions.empty:
         t = positions[positions["bucket"] == "thesis"]
         thesis_used = float((t["entry_price"] * 100 * t["contracts"]).sum())
+        for _, lp in positions[positions["structure"] == "leaps_call"].iterrows():
+            held_leaps.setdefault(lp["symbol"],
+                                  (float(lp["strike"]), float(lp["entry_price"])))
     bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
 
     print("WHICH OPTIONS LOOK ATTRACTIVE TODAY? (frozen H5 rubric; "
@@ -228,7 +281,8 @@ def main():
         if not rows:
             print("  no candidates near the target delta this cycle")
         lot = holdings[holdings["symbol"] == symbol] if len(holdings) else []
-        if len(lot):
+        held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
+        if held_shares >= 100:
             print("-- SELL A COVERED CALL? (rent out shares you hold)")
             for c in cc_card_rows(symbol, chain, day, close=close,
                                   cost_basis=float(lot.iloc[0]["cost_basis"]),
@@ -240,9 +294,27 @@ def main():
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
                 print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
                 print(f"    [{badges}]")
-        else:
-            print("-- COVERED CALLS: declare your 100-share lots in "
-                  "data/positions/holdings.csv to see these cards")
+        elif held_shares > 0:
+            print(f"-- COVERED CALL: you hold {held_shares} sh of {symbol} -- "
+                  "a covered call needs 100 per contract; use the LEAPS lane "
+                  "below (PMCC) or add shares.")
+        if symbol in held_leaps:
+            k_leaps, prem_leaps = held_leaps[symbol]
+            print(f"-- SELL A CALL AGAINST YOUR LEAPS? (PMCC; LEAPS ${k_leaps:.0f} "
+                  f"cost ${prem_leaps:.2f})")
+            pmcc = pmcc_card_rows(symbol, chain, day, leaps_strike=k_leaps,
+                                  leaps_premium=prem_leaps, close=close,
+                                  iv_rank=iv_rank,
+                                  earnings_in_cycle=earn_in_cycle)
+            for c in pmcc:
+                badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
+                print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+                print(f"    [{badges}]")
+            if not pmcc:
+                print(f"  no SAFE strike this cycle: the rule needs a call at "
+                      f"${k_leaps + prem_leaps:.2f}+ and none is listed / all "
+                      "too far out to pay -- selling closer would risk locking "
+                      "a loss, so H5 shows nothing.")
         if symbol in config.H4_THESIS_NAMES:
             print(f"-- BUY A LEAPS? (bucket room ${bucket_room:,.0f})")
             for c in leaps_card_rows(symbol, chain, day, close=close,
