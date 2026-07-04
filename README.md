@@ -93,9 +93,15 @@ paper-trading window.
 
 1. ~~**CEG data**~~ — DONE 2026-07-04: 1,100 chains cached, profiler re-run
    (see findings above; `ledger/facts.log` CEG_CACHE_COMPLETE).
-2. **VST + CEG monthly-expiry check**: does open interest concentrate in
-   monthlies? (Decides whether the power names are tradable at all under
-   honest gates — currently the single most important open question.)
+2. ~~**VST + CEG monthly-expiry check**~~ — DONE 2026-07-04, and it flipped
+   the picture: open interest is 85–100% concentrated in **monthly**
+   expirations for all four names, and at the nearest monthly (~30 DTE) the
+   2024–26 medians PASS the frozen gates on every name (VST OI 220 / 5.1%
+   spread; CEG 212 / 5.5%; MSFT 3,213 / 2.6%; AMZN 6,462 / 2.1%). Rule
+   adopted: every structure targets monthlies. See
+   `options_researcher/profile_monthlies.py`. Remaining steps now follow
+   `docs/superpowers/specs/2026-07-04-research-platform-completion-design.md`
+   (M1 research core → … → M7 dashboard).
 3. **Behavior studies** (facts, not verdicts): per name — implied vol vs
    later realized moves, behavior around earnings, reaction to large
    sector/market moves. Produces the feature set for any predictive idea.
