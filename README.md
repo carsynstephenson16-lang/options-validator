@@ -118,7 +118,15 @@ paper-trading window.
    `uv run python -m options_researcher.portfolio` marks the book
    (conservative fills), flags rolls/earnings/assignment, and enforces the
    H4 risk buckets. Window ≥ 2 quarters → scoreboard verdict.
-6. **Dashboard (M7)**: game-style mission control — next design session.
+6. **Composite evidence backtest** — DONE 2026-07-04:
+   `uv run python -m options_researcher.h4_backtest` replays the seeded
+   book's frozen rules (2023-01..2026-06: combined +$14.7k, 9/14 quarters
+   positive, worst quarter −$5.1k — evidence only, never the verdict).
+7. **Dashboard (M7)**: plan ready for a future session —
+   `docs/superpowers/plans/2026-07-04-m7-dashboard-plan.md`.
+
+**Scope status: COMPLETE** except (a) the passive forward paper window
+(≥ 2 quarters → scoreboard verdict) and (b) executing the M7 plan.
 
 ## Known limitations
 
