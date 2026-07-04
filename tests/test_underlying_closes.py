@@ -53,3 +53,12 @@ class UnderlyingClosesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FetchNormalizationTests(unittest.TestCase):
+    def test_rows_to_frame_normalizes(self):
+        rows = [("2023-01-04", 385.12), ("2023-01-03", 384.20)]
+        frame = underlying_closes.rows_to_frame(rows)
+        self.assertEqual(list(frame.columns), ["date", "close"])
+        self.assertEqual(list(frame["date"]), ["2023-01-04", "2023-01-03"])
+        self.assertAlmostEqual(float(frame["close"].iloc[1]), 384.20)

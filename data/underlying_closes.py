@@ -50,3 +50,31 @@ def load_closes(symbol: str, start_iso: str, end_iso: str, *,
     df = pd.read_parquet(_path(symbol))
     s = df.set_index("date")["close"].sort_index().astype(float)
     return s.loc[start_iso:end_iso]
+
+
+def rows_to_frame(rows) -> pd.DataFrame:
+    """Normalize (iso_date, close) pairs from the fetch into the storage
+    schema. Pure; unit-tested without network."""
+    return pd.DataFrame(rows, columns=["date", "close"])
+
+
+def fetch_underlying_eod(symbol: str, start_iso: str, end_iso: str) -> str:
+    """One-shot BLIND pull of daily closes via the installed ThetaData
+    client's stock_history_eod. Response shape verified LIVE 2026-07-04:
+    columns include open/high/low/CLOSE/volume plus last-NBBO fields, no
+    date index -- the trading day is last_trade (tz America/New_York).
+    Writes the cache and returns the path; never prints a price.
+
+    ORCHESTRATOR-ONLY: tests never call this; the controlling session runs
+    the actual pull after review.
+    """
+    from datetime import date as _date
+
+    from data.thetadata_adapter import _client
+
+    df = _client().stock_history_eod(symbol,
+                                     _date.fromisoformat(start_iso),
+                                     _date.fromisoformat(end_iso))
+    rows = [(ts.date().isoformat(), float(c))
+            for ts, c in zip(df["last_trade"], df["close"])]
+    return store_closes(symbol, rows_to_frame(rows))
