@@ -102,14 +102,16 @@ paper-trading window.
    `options_researcher/profile_monthlies.py`. Remaining steps now follow
    `docs/superpowers/specs/2026-07-04-research-platform-completion-design.md`
    (M1 research core → … → M7 dashboard).
-3. **Behavior studies** (facts, not verdicts): per name — implied vol vs
-   later realized moves, behavior around earnings, reaction to large
-   sector/market moves. Produces the feature set for any predictive idea.
-4. **Structure menu per name from measured liquidity**: which defined-risk
-   structures (spreads, covered calls / LEAPS-based, condors) clear friction
-   arithmetic on each name's real grids and spreads.
-5. **First 4-name hypothesis**: pre-registered like H1/H2 were, with its own
-   validation design declared before any P&L is computed.
+3. ~~**Behavior studies**~~ — DONE 2026-07-04 (`reports/2026-07-04-*.md`):
+   (A) high IV rank did NOT mean rich premium — realized met/exceeded
+   implied on all four names; (B) earnings IV run-up/crush is real on
+   MSFT/AMZN only; (C) monthly 0.20Δ covered calls ≈ buy-and-hold on AMZN
+   (+$8/47 cycles) but gave up $3.3k/42 cycles on VST's bull run.
+4. ~~**Structure menu**~~ — DELIVERED 2026-07-04, awaiting owner picks:
+   `docs/superpowers/2026-07-04-structure-menu.md` (recommended H4: AMZN
+   monthly 0.20Δ covered call; close-data Option A/B decision bundled).
+5. **First 4-name hypothesis (H4)**: pre-registered like H1/H2 were, with a
+   forward paper window as the primary validation — gated on the menu picks.
 
 ## Known limitations
 
