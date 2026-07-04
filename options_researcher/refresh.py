@@ -24,7 +24,7 @@ def run_refresh(steps=None) -> dict:
 def default_steps():
     import config
     from data import cache_runner
-    from data.underlying_closes import build_parity_closes
+    from data.underlying_closes import fetch_underlying_eod_yahoo
     from options_researcher import features
     from options_researcher.studies import (covered_call_income,
                                             earnings_behavior,
@@ -36,13 +36,11 @@ def default_steps():
         return {"in_sample": a, "oos_blind": b}
 
     def closes():
-        out = {}
-        for symbol in config.UNIVERSE:
-            start = "2022-02-09" if symbol == "CEG" else "2018-01-02"
-            out[symbol] = build_parity_closes(symbol, start,
-                                              config.BACKTEST_END,
-                                              allow_oos=True)
-        return out
+        # Yahoo = level-exact primary (validated $0.0000 vs true closes,
+        # facts.log UNDERLYING_CLOSES_YAHOO); parity builder remains a
+        # cross-check tool, not a refresh step.
+        return {symbol: fetch_underlying_eod_yahoo(symbol)
+                for symbol in config.UNIVERSE}
 
     def feats():
         features.build_all()

@@ -5,27 +5,27 @@ Descriptive income table, NOT a verdict. Benchmark is buy-and-hold on the same s
 ## VST (from 2023-01-01)
 
 ### target delta 0.20 — 42 cycles, 13 assigned
-- premium collected: $5,823; CC total: $10,818; buy-and-hold: $14,148; difference: $-3,330
-- worst cycle (CC): $-3,092
+- premium collected: $5,823; CC total: $11,050; buy-and-hold: $14,148; difference: $-3,098
+- worst cycle (CC): $-2,981
 
 ### target delta 0.30 — 42 cycles, 16 assigned
-- premium collected: $10,462; CC total: $9,949; buy-and-hold: $14,148; difference: $-4,198
-- worst cycle (CC): $-2,863
+- premium collected: $10,462; CC total: $10,223; buy-and-hold: $14,148; difference: $-3,925
+- worst cycle (CC): $-2,752
 
-### target delta 0.40 — 42 cycles, 22 assigned
-- premium collected: $15,610; CC total: $9,262; buy-and-hold: $14,148; difference: $-4,885
-- worst cycle (CC): $-2,388
+### target delta 0.40 — 42 cycles, 23 assigned
+- premium collected: $15,610; CC total: $9,673; buy-and-hold: $14,148; difference: $-4,475
+- worst cycle (CC): $-2,277
 
 ## AMZN (from 2022-07-01)
 
-### target delta 0.20 — 47 cycles, 9 assigned
-- premium collected: $7,594; CC total: $13,551; buy-and-hold: $13,542; difference: $8
-- worst cycle (CC): $-2,650
+### target delta 0.20 — 47 cycles, 8 assigned
+- premium collected: $7,594; CC total: $14,057; buy-and-hold: $13,483; difference: $574
+- worst cycle (CC): $-2,641
 
-### target delta 0.30 — 47 cycles, 18 assigned
-- premium collected: $13,170; CC total: $12,840; buy-and-hold: $13,542; difference: $-702
-- worst cycle (CC): $-2,430
+### target delta 0.30 — 47 cycles, 15 assigned
+- premium collected: $13,170; CC total: $13,924; buy-and-hold: $13,483; difference: $441
+- worst cycle (CC): $-2,421
 
-### target delta 0.40 — 47 cycles, 22 assigned
-- premium collected: $19,757; CC total: $12,654; buy-and-hold: $13,542; difference: $-888
-- worst cycle (CC): $-2,272
+### target delta 0.40 — 47 cycles, 18 assigned
+- premium collected: $19,757; CC total: $13,993; buy-and-hold: $13,483; difference: $510
+- worst cycle (CC): $-2,263

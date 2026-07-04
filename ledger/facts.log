@@ -10520,3 +10520,17 @@
 2026-07-04T15:05:00.472833+00:00	STUDY_C AMZN d=0.30: cycles=47 assigned=18 cc_total=12,840 bh_total=13,542
 2026-07-04T15:05:00.587377+00:00	STUDY_C AMZN d=0.40: cycles=47 assigned=22 cc_total=12,654 bh_total=13,542
 2026-07-04T15:20:08.219234+00:00	UNDERLYING_CLOSES_YAHOO 2026-07-04: primary close source switched to free Yahoo v8 chart API (keyless; explicit epoch bounds -- range=max silently degrades to monthly bars). AMZN unsplit x20 pre-2022-06-06 via SPLITS registry. VALIDATION: vs ThetaData recent-window TRUE closes max|diff|=$0.0000 on all 4 names (n=41 each); vs parity series full-history return-diff 3-12bps median with parity sitting +0.15..0.30pct above (known undiscounted-K bias) -- two independent confirmations. AMZN split bridge exact (2447.00 -> 124.79). Closes are now LEVEL-EXACT: the paid-feed owner option is CLOSED as unnecessary; parity builder retained as cross-check tool. Study C +-1pct borderline band no longer load-bearing but retained as belt-and-suspenders.
+2026-07-04T15:21:21.639896+00:00	STUDY_A MSFT: iv_rank>=0.70 days n=508 iv_med=0.314 fwd_rv_med=0.335
+2026-07-04T15:21:21.644260+00:00	STUDY_A AMZN: iv_rank>=0.70 days n=500 iv_med=0.406 fwd_rv_med=0.435
+2026-07-04T15:21:21.647322+00:00	STUDY_A VST: iv_rank>=0.70 days n=536 iv_med=0.489 fwd_rv_med=0.508
+2026-07-04T15:21:21.650251+00:00	STUDY_A CEG: iv_rank>=0.70 days n=278 iv_med=0.507 fwd_rv_med=0.587
+2026-07-04T15:21:22.031888+00:00	STUDY_B MSFT: n=34 runup_med=+0.039 crush_med=-0.076 absmove_med=2.97%
+2026-07-04T15:21:22.040057+00:00	STUDY_B AMZN: n=34 runup_med=+0.052 crush_med=-0.145 absmove_med=3.33%
+2026-07-04T15:21:22.047601+00:00	STUDY_B VST: n=31 runup_med=-0.043 crush_med=+0.004 absmove_med=3.47%
+2026-07-04T15:21:22.051160+00:00	STUDY_B CEG: n=17 runup_med=-0.060 crush_med=-0.009 absmove_med=4.81%
+2026-07-04T15:21:23.923530+00:00	STUDY_C VST d=0.20: cycles=42 assigned=13 cc_total=11,050 bh_total=14,148
+2026-07-04T15:21:24.002714+00:00	STUDY_C VST d=0.30: cycles=42 assigned=16 cc_total=10,223 bh_total=14,148
+2026-07-04T15:21:24.083398+00:00	STUDY_C VST d=0.40: cycles=42 assigned=23 cc_total=9,673 bh_total=14,148
+2026-07-04T15:21:26.325102+00:00	STUDY_C AMZN d=0.20: cycles=47 assigned=8 cc_total=14,057 bh_total=13,483
+2026-07-04T15:21:26.441320+00:00	STUDY_C AMZN d=0.30: cycles=47 assigned=15 cc_total=13,924 bh_total=13,483
+2026-07-04T15:21:26.555589+00:00	STUDY_C AMZN d=0.40: cycles=47 assigned=18 cc_total=13,993 bh_total=13,483
