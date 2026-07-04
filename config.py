@@ -54,7 +54,7 @@ STARTING_CAPITAL     = 25_000    # account equity used by the backtest engine
 # AI-infrastructure cluster, not four independent bets; in a risk-off or AI
 # drawdown they can lose together. Treat "diversification" here with suspicion.
 # Ordering note: smoke/demo paths use UNIVERSE[0]; CEG is listed LAST because
-# it has no cached chains yet (spun off 2022-02; fetch pending, see README).
+# its history is shortest (spun off 2022-02; chains cached 2022-02-09+).
 # H1/H2/H3-era registered records carry their own frozen scope in the ledger
 # and are unaffected by this edit.
 UNIVERSE             = ["MSFT", "AMZN", "VST", "CEG"]
@@ -135,3 +135,22 @@ BOOTSTRAP_BLOCK_EXPONENT = 1 / 3  # n^(1/3) blocking rate (Politis-White / Lahir
 BOOTSTRAP_BLOCK_CONSTANTS = [0.5, 1, 2, 4]  # mean block = round(c * n_cohorts**exp)
 COHORT_GRANULARITY       = "week"  # cross-sectional cohort key = ISO week of entry_date
 FILL_MODEL_ID            = "conservative_bid_ask_plus_haircut_v1"  # bump if fill logic changes
+
+# ---------------------------------------------------------------------------
+# H4 RISK BUCKETS (owner decisions 2026-07-04; frozen with the H4 prereg).
+# THESIS: LEAPS calls, premium-capped (equity-replacement accounting).
+# TACTICAL: short-dated long calls under the existing $600 economic cap.
+# CSP: exactly one cash-secured put; collateral lives on the EQUITY side.
+# ---------------------------------------------------------------------------
+H4_THESIS_MAX_PREMIUM_PER_NAME = 4_000   # $ per underlying
+H4_THESIS_MAX_PREMIUM_TOTAL    = 10_000  # $ across all LEAPS
+H4_THESIS_MAX_POSITIONS        = 2
+H4_THESIS_NAMES                = ["MSFT", "VST", "CEG"]
+H4_THESIS_DELTA                = 0.70
+H4_THESIS_DTE_BAND             = (270, 500)
+H4_THESIS_ROLL_DTE             = 90      # roll LEAPS at or below this DTE
+H4_TACTICAL_MAX_OPEN           = 2       # $600 per-trade cap unchanged
+H4_TACTICAL_DELTA              = 0.40
+H4_CSP_MAX_POSITIONS           = 1
+H4_CSP_NAMES                   = ["VST", "AMZN"]
+H4_CSP_DELTA                   = 0.20
