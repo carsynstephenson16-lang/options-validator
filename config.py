@@ -34,8 +34,8 @@ RISK_SLEEVE          = 14_000    # $ genuinely willing to lose (cash + swing;
 # credits it is what makes the strategy TRADABLE at all: the 1% rule ($140)
 # sat below the $2-wide ECONOMIC max loss ($142.60), i.e. zero contracts.
 # The cap is PER TRADE, not per cluster: len(UNIVERSE) concurrent positions
-# put ~$5,400 (~38.6% of the sleeve) at SIMULTANEOUS risk in the current
-# 9-symbol universe. These names are emphatically not 9 independent bets --
+# put ~$2,400 (~17.1% of the sleeve) at SIMULTANEOUS risk in the current
+# 4-symbol universe. These names are emphatically not 4 independent bets --
 # analysis/feasibility.py prints the portfolio view. Never raise this cap to
 # make a width "fit"; that is reverse-engineering risk to fit the trade, the
 # exact mistake this file warns against.
@@ -137,7 +137,8 @@ COHORT_GRANULARITY       = "week"  # cross-sectional cohort key = ISO week of en
 FILL_MODEL_ID            = "conservative_bid_ask_plus_haircut_v1"  # bump if fill logic changes
 
 # ---------------------------------------------------------------------------
-# H4 RISK BUCKETS (owner decisions 2026-07-04; frozen with the H4 prereg).
+# H4/H5 RISK BUCKETS (owner decisions 2026-07-04; H5 scanner-first correction
+# 2026-07-06). These caps constrain candidates and any tracked positions.
 # THESIS: LEAPS calls, premium-capped (equity-replacement accounting).
 # TACTICAL: short-dated long calls under the existing $600 economic cap.
 # CSP: exactly one cash-secured put; collateral lives on the EQUITY side.
@@ -147,7 +148,13 @@ H4_THESIS_MAX_PREMIUM_PER_NAME = 10_000  # $ per underlying (owner amendment
                                          # ~1y LEAPS priced above the blind 4k
                                          # estimate; TOTAL below unchanged, so
                                          # effectively ONE full-size LEAPS)
-H4_THESIS_MAX_PREMIUM_TOTAL    = 10_000  # $ across all LEAPS (unchanged)
+H4_THESIS_MAX_PREMIUM_TOTAL    = 16_000  # $ across all LEAPS (owner amendment
+                                         # 2026-07-06: 10k -> 16k; scanner
+                                         # budget room for up to two full-size
+                                         # LEAPS if later selected. No LEAPS
+                                         # are currently open. Sizing cap, NOT
+                                         # an edge parameter; logged in
+                                         # ledger/facts.log)
 H4_THESIS_MAX_POSITIONS        = 2
 H4_THESIS_NAMES                = ["MSFT", "VST", "CEG"]
 H4_THESIS_DELTA                = 0.70
