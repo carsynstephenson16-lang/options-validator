@@ -222,3 +222,27 @@ class RenderTests(unittest.TestCase):
         html = ad.render(d)
         self.assertIn("LEAPS value not counted", html)   # PMCC note branch
         self.assertIn("roll reminder", html)             # leaps countdown branch
+
+
+class MainTests(unittest.TestCase):
+    def test_main_writes_file_and_prints_path(self):
+        import io
+        import os
+        import tempfile
+        from contextlib import redirect_stdout
+        from unittest import mock
+
+        section = {"symbol": "MSFT", "as_of": "2026-06-30", "close": 373.02,
+                   "iv_rank": 0.88,
+                   "groups": [{"kind": "put", "title": "SELL A PUT?",
+                               "cards": [], "empty": "none this cycle"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "dashboard", "attractiveness.html")
+            with mock.patch.object(ad, "OUTPUT_PATH", out):
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    path = ad.main(symbol_sections=[section],
+                                   rv21_by_symbol={"MSFT": 1.1})
+                self.assertTrue(os.path.exists(out))
+                self.assertIn("attractiveness.html", buf.getvalue())
+                self.assertEqual(path, os.path.abspath(out))
