@@ -176,3 +176,49 @@ class RenderTests(unittest.TestCase):
         html = ad.render(assembled)
         self.assertNotIn("<x>&", html)
         self.assertIn("&lt;x&gt;&amp;", html)
+
+    def test_render_defines_label_css(self):
+        # The scenario tags / notes / countdown lean on the .label class;
+        # regressing the copied stylesheet would silently unstyle them.
+        html = ad.render(self._assembled())
+        self.assertIn(".label", html)
+
+    def test_render_skipped_card(self):
+        d = ad.assemble(
+            symbol_sections=[{
+                "symbol": "VST", "as_of": "2026-06-30", "close": 112.0,
+                "iv_rank": 0.3,
+                "groups": [{"kind": "cc", "title": "SELL A COVERED CALL?",
+                            "cards": [{"strike": 110.0,
+                                       "skipped": "strike below cost basis"}],
+                            "empty": None}]}],
+            rv21_by_symbol={"VST": 0.5})
+        html = ad.render(d)
+        self.assertIn("strike below cost basis", html)
+        # a skipped card carries no scenario table
+        self.assertNotIn("Your gain or loss", html)
+
+    def test_render_pmcc_note_and_leaps_countdown(self):
+        d = ad.assemble(
+            symbol_sections=[{
+                "symbol": "MSFT", "as_of": "2026-06-30", "close": 373.02,
+                "iv_rank": 0.88,
+                "groups": [
+                    {"kind": "pmcc", "title": "PMCC",
+                     "leaps_strike": 340.0, "leaps_premium": 79.54,
+                     "cards": [{"strike": 420.0, "expiry": "2026-07-17",
+                                "dte": 17, "credit": 100.0,
+                                "grades": {"safety": "GREEN"},
+                                "verdict": "safe strike"}],
+                     "empty": None},
+                    {"kind": "leaps", "title": "BUY A LEAPS?",
+                     "cards": [{"strike": 340.0, "expiry": "2027-06-17",
+                                "dte": 352, "cost": 7954.0, "breakeven": 419.54,
+                                "grades": {"fits_bucket": "RED"},
+                                "verdict": "buys upside"}],
+                     "empty": None},
+                ]}],
+            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11})
+        html = ad.render(d)
+        self.assertIn("LEAPS value not counted", html)   # PMCC note branch
+        self.assertIn("roll reminder", html)             # leaps countdown branch

@@ -437,6 +437,10 @@ _STYLE = """
     color: #6b7280;
     font-style: italic;
   }
+  .label {
+    color: #9aa4c0;
+    font-size: 0.85em;
+  }
 """
 
 
@@ -457,8 +461,12 @@ def _badges(grades: dict) -> str:
 
 def _pnl_cell(row: dict) -> str:
     pnl = row["pnl"]
-    color = "#2fd27d" if pnl >= 0 else "#ff5470"
-    sign = "+" if pnl >= 0 else "-"
+    # Derive the sign from the whole-dollar figure we actually display, so a
+    # value that rounds to $0 (e.g. a breakeven row a few cents negative)
+    # never shows as "-$0".
+    rounded = round(pnl)
+    color = "#2fd27d" if rounded >= 0 else "#ff5470"
+    sign = "+" if rounded >= 0 else "-"
     body = f'<span style="color:{color}">{sign}${abs(pnl):,.0f}</span>'
     if row["note"]:
         body += f' <span class="label">({_esc(row["note"])})</span>'
