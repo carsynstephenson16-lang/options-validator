@@ -1,0 +1,77 @@
+"""tests/test_attractiveness_dashboard.py"""
+import math
+import unittest
+
+from options_researcher import attractiveness_dashboard as ad
+
+
+class PriceLadderTests(unittest.TestCase):
+    def test_ladder_uses_moves_strike_breakeven_and_tags(self):
+        rows = ad._price_ladder(close=100.0, rv21=math.sqrt(12) * 0.10,
+                                strike=95.0, breakeven=97.0)
+        # monthly_move = 0.10 -> points at 80,90,100,110,120 plus 95,97
+        prices = [r["price"] for r in rows]
+        self.assertEqual(prices, sorted(prices))          # ascending
+        self.assertEqual(len(prices), len(set(prices)))   # deduped
+        self.assertTrue(all(p > 0 for p in prices))
+        tag_by_price = {r["price"]: r["tag"] for r in rows}
+        self.assertEqual(tag_by_price[100.0], "today")
+        self.assertEqual(tag_by_price[95.0], "strike")
+        self.assertEqual(tag_by_price[97.0], "breakeven")
+
+    def test_invalid_vol_falls_back_to_close_strike_breakeven(self):
+        rows = ad._price_ladder(close=100.0, rv21=float("nan"),
+                                strike=95.0, breakeven=97.0)
+        self.assertEqual([r["price"] for r in rows], [95.0, 97.0, 100.0])
+
+    def test_nonpositive_prices_dropped(self):
+        # huge vol would push the -2 sigma point below zero
+        rows = ad._price_ladder(close=10.0, rv21=math.sqrt(12) * 0.60,
+                                strike=10.0, breakeven=None)
+        self.assertTrue(all(r["price"] > 0 for r in rows))
+
+
+class PayoffTests(unittest.TestCase):
+    def test_put_pnl(self):
+        self.assertAlmostEqual(ad._put_pnl(145.0, 145.0, 212.20), 212.20, 2)
+        self.assertAlmostEqual(ad._put_pnl(130.0, 145.0, 212.20), -1287.80, 2)
+
+    def test_cc_pnl_vs_today(self):
+        # called away at strike above today: credit + 100*(strike-close)
+        self.assertAlmostEqual(ad._cc_pnl(180.0, 175.0, 150.0, 160.0),
+                               150.0 + 1500.0, 2)
+        # below strike: marked at scenario price
+        self.assertAlmostEqual(ad._cc_pnl(150.0, 175.0, 150.0, 160.0),
+                               150.0 - 1000.0, 2)
+
+    def test_pmcc_split(self):
+        above = ad._pmcc_pnl(430.0, 420.0, 340.0, 7954.0, 100.0)
+        self.assertAlmostEqual(above[0], (420.0 - 340.0) * 100 - 7954.0 + 100.0, 2)
+        self.assertEqual(above[1], "")
+        below = ad._pmcc_pnl(400.0, 420.0, 340.0, 7954.0, 100.0)
+        self.assertAlmostEqual(below[0], 100.0, 2)
+        self.assertIn("LEAPS value not counted", below[1])
+
+    def test_leaps_pnl(self):
+        self.assertAlmostEqual(ad._leaps_pnl(457.32, 340.0, 7954.0),
+                               (457.32 - 340.0) * 100 - 7954.0, 2)
+        self.assertAlmostEqual(ad._leaps_pnl(300.0, 340.0, 7954.0), -7954.0, 2)
+
+
+class ScenarioRowsTests(unittest.TestCase):
+    def test_put_scenarios_carry_pnl_and_tags(self):
+        card = {"strike": 145.0, "credit": 212.20}
+        rows = ad.scenario_rows(card, "put", close=160.0,
+                                rv21=math.sqrt(12) * 0.10)
+        self.assertTrue(rows)
+        self.assertTrue(any(r["tag"] == "strike" for r in rows))
+        strike_row = next(r for r in rows if r["tag"] == "strike")
+        self.assertAlmostEqual(strike_row["pnl"], 212.20, 2)
+
+    def test_pmcc_scenarios_note_below_strike(self):
+        card = {"strike": 420.0, "credit": 100.0,
+                "leaps_strike": 340.0, "leaps_cost": 7954.0}
+        rows = ad.scenario_rows(card, "pmcc", close=373.02,
+                                rv21=math.sqrt(12) * 0.11)
+        below = [r for r in rows if r["price"] < 420.0]
+        self.assertTrue(below and all(r["note"] for r in below))
