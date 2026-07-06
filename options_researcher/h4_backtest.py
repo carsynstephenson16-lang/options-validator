@@ -15,9 +15,13 @@ from __future__ import annotations
 import pandas as pd
 
 import config
-from options_researcher.studies.covered_call_income import compute_cc_cycles  # noqa: F401 (menu parity)
-from options_researcher.studies.long_call_carry import (compute_leaps_cycles,
-                                                        compute_long_call_cycles)
+from options_researcher.studies.covered_call_income import (
+    compute_cc_cycles,  # noqa: F401 (menu parity)
+)
+from options_researcher.studies.long_call_carry import (
+    compute_leaps_cycles,
+    compute_long_call_cycles,
+)
 from options_researcher.studies.short_put_vertical import compute_put_cycles
 
 ERA_START = "2023-01-01"          # VST tradable era bounds the composite

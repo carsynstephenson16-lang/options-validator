@@ -1,10 +1,14 @@
 """tests/test_features.py"""
+import os
+import tempfile
 import unittest
 from datetime import date
+from unittest import mock
 
 import numpy as np
 import pandas as pd
 
+from options_researcher import features
 from options_researcher.features import build_daily_features
 
 
@@ -21,7 +25,6 @@ def fixture(n_days=300, last_iv=0.90):
     closes = pd.Series(np.full(n_days, 100.0), index=isos)
     chains = {}
     for i, (ts, iso) in enumerate(zip(days, isos)):
-        exp = (ts + pd.offsets.BDay(1)).to_period("M")  # unused helper var
         # nearest monthly ~35 calendar days out: use the 3rd Friday trick by
         # just offsetting 35 days -- tests only need SOME in-band expiration;
         # is_monthly is not consulted by atm_iv (nearest_monthly is), so give
@@ -70,13 +73,6 @@ class FeatureFrameTests(unittest.TestCase):
         f = build_daily_features("VST", isos[0], isos[-1],
                                  closes=closes, chains=chains, earnings=[])
         self.assertNotIn(isos[30], f.index)  # day simply absent (fail closed)
-
-
-import os
-import tempfile
-from unittest import mock
-
-from options_researcher import features
 
 
 class CacheRoundTripTests(unittest.TestCase):

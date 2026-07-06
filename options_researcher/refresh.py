@@ -26,9 +26,7 @@ def default_steps():
     from data import cache_runner
     from data.underlying_closes import fetch_underlying_eod_yahoo
     from options_researcher import features
-    from options_researcher.studies import (covered_call_income,
-                                            earnings_behavior,
-                                            iv_vs_realized)
+    from options_researcher.studies import covered_call_income, earnings_behavior, iv_vs_realized
 
     def chains():
         a = cache_runner.cache_in_sample()

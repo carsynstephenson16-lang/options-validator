@@ -12,7 +12,8 @@ in-band monthly gets NaN atm_iv. No fallbacks, no interpolation.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+import os
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -81,8 +82,6 @@ def build_daily_features(symbol: str, start_iso: str, end_iso: str, *,
     f["earnings_week"] = _earnings_flags(list(f.index), earnings)
     return f
 
-
-import os
 
 FEATURES_DIR = os.path.join(".tmp", "research")
 

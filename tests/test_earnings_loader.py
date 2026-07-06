@@ -7,7 +7,6 @@ from unittest import mock
 
 from options_researcher import earnings
 
-
 GOOD = "date,when,source_url\n2024-02-01,amc,https://example.com/a\n2024-04-30,amc,https://example.com/b\n"
 
 

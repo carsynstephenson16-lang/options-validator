@@ -162,7 +162,7 @@ def profile_symbol(symbol, cache_dir):
     if first_year_good:
         print(f"  First year with spread <= 10% AND OI >= 100: {first_year_good}")
     else:
-        print(f"  First year with spread <= 10% AND OI >= 100: NONE")
+        print("  First year with spread <= 10% AND OI >= 100: NONE")
 
     # Most recent grid step
     if year_stats:

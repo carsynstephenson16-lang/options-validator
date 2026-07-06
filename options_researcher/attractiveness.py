@@ -17,7 +17,7 @@ import pandas as pd
 
 import config
 from data.thetadata_adapter import passes_liquidity
-from options_researcher.chains import nearest_monthly, puts_in_window
+from options_researcher.chains import nearest_monthly
 
 DELTA_BAND = 0.15
 N_CANDIDATES = 3
@@ -230,8 +230,7 @@ def main():
     from data.underlying_closes import load_closes
     from options_researcher.earnings import load_earnings
     from options_researcher.features import load_features
-    from options_researcher.portfolio import (HOLDINGS_PATH, load_holdings,
-                                              load_positions)
+    from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
 
     holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
                 else pd.DataFrame(columns=["symbol", "shares", "cost_basis"]))

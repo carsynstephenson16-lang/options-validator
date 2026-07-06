@@ -7,8 +7,13 @@ from datetime import date
 import pandas as pd
 
 import config
-from options_researcher.portfolio import (check_buckets, load_positions,
-                                          mark_position)
+from options_researcher.portfolio import (
+    check_buckets,
+    check_coverage,
+    load_holdings,
+    load_positions,
+    mark_position,
+)
 
 HDR = "id,structure,symbol,right,strike,expiration,contracts,entry_date,entry_price,bucket\n"
 
@@ -115,13 +120,6 @@ class BucketTests(unittest.TestCase):
         self.assertEqual(check_buckets(f), [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-from options_researcher.portfolio import check_coverage, load_holdings
-
-
 class HoldingsTests(unittest.TestCase):
     def write(self, body):
         import tempfile
@@ -178,3 +176,7 @@ class CoverageTests(unittest.TestCase):
         issues = check_coverage(pos, self.holdings([["VST", 100, 118.5,
                                                      "2025-11-03"]]))
         self.assertTrue(any("below cost basis" in i for i in issues))
+
+
+if __name__ == "__main__":
+    unittest.main()

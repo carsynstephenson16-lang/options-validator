@@ -4,8 +4,7 @@ import unittest
 import pandas as pd
 
 import config
-from options_researcher.attractiveness import (cc_card_rows, grade,
-                                               put_card_rows)
+from options_researcher.attractiveness import cc_card_rows, grade, put_card_rows
 
 
 def chain_rows(specs, exp="2026-07-17"):

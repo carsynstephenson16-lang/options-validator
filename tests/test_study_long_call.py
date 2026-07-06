@@ -5,7 +5,9 @@ import pandas as pd
 
 import config
 from options_researcher.studies.long_call_carry import (
-    compute_leaps_cycles, compute_long_call_cycles)
+    compute_leaps_cycles,
+    compute_long_call_cycles,
+)
 
 
 def chain(rows_spec):

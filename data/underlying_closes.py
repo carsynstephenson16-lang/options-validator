@@ -178,13 +178,12 @@ def fetch_underlying_eod_yahoo(symbol: str) -> str:
     keyless). Split adjustment undone via the SPLITS registry; validated
     against ThetaData FREE recent-window true closes AND the parity series
     before first use (see facts.log). Blind: never prints a price."""
-    import json
-    import urllib.request
-
     # Explicit epoch bounds, NOT range=max: Yahoo silently degrades 1d bars
     # to monthly on very long ranges (observed live 2026-07-04: range=max
     # returned 34-233 rows). 2017-01-01..BACKTEST_END+1d keeps true dailies.
     import calendar
+    import json
+    import urllib.request
     from datetime import date as _date
 
     p1 = calendar.timegm(_date(2017, 1, 1).timetuple())
