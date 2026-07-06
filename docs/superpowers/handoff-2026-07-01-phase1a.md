@@ -40,6 +40,13 @@ statistical honesty outranks getting a PASS.
   data/thetadata_adapter.py          (trade structure & why trades correlate)
 - docs/superpowers/specs/2026-07-01-reproducible-foundation-design.md
 - docs/superpowers/plans/2026-07-01-reproducible-foundation.md
+- docs/superpowers/specs/2026-07-01-research-integrity-foundation-design.md
+  (CURRENT reconciled Phase 1A spec; this supersedes the rough guidance below
+  anywhere they differ)
+- docs/superpowers/plans/2026-07-01-research-integrity-foundation.md
+  (CURRENT task-by-task TDD implementation plan)
+- docs/superpowers/reviews/2026-07-01-phase1a-implementation-audit.md
+  (Codex audit notes and fix-now catches)
 - Memory (persists across sessions; VERIFY any file/line it cites still exists):
   /Users/carsynstephenson/.claude/projects/-Users-carsynstephenson-Downloads-options-validator/memory/MEMORY.md
   + learning-layer-direction.md and phase-1a-research-integrity.md in that folder.
@@ -58,25 +65,26 @@ that must be true before run #1, or run #1 records a lie and every later
 "learning" step learns from contaminated output. It is NOT the broad learning
 layer (that comes last) and it is NOT the statistical gates (Phase 1B, deferred).
 
-ORGANIZING PRINCIPLE (non-negotiable): every integrity guarantee must be CODE or
-a HOOK, never a CLAUDE.md/memory rule. Memory/docs are "context, not enforced
-configuration." To block an action regardless of what the agent decides, use a
-PreToolUse hook. The guarantees live in harness/run_backtest.py + metrics.py +
-hooks, not in prose.
+ORGANIZING PRINCIPLE (non-negotiable): deterministic code owns every verdict.
+Memory/docs are "context, not enforced configuration." Phase 1A builds the code
+seams and deterministic gates; it does NOT build Claude Code hooks or an
+external anchor yet (threat model C now, hooks/external anchoring later).
 
 Phase 1A components (enforcement substrate only):
 1. Append-only, tamper-evident experiment ledger. Log run #1 as it happens
    (don't reconstruct). Per run: hypothesis ID, pre-registered decision
-   threshold, code SHA + config hash + cost-model hash + DATA-WINDOW hash,
-   in-sample result, out-of-sample result (write-once, timestamped), cumulative
-   trial count, verdict. Stub the Phase-1B fields (DSR/PBO) — don't compute them.
+   threshold, code SHA (audit), config hash, cost-model hash, source hash,
+   data-window hash, risk_basis, in-sample result, registered OOS window,
+   cumulative trial count, verdict. The run record stays immutable with
+   oos_result=null; a reveal appends a separate oos_reveal record. Stub the
+   Phase-1B fields (DSR/PBO) — don't compute them.
 2. Pre-registered hypothesis + threshold gate: the hypothesis and its pass
    threshold must be written BEFORE the OOS result field can be populated.
 3. Write-once OOS + enforced IN_SAMPLE_END. CONFIRMED: config.IN_SAMPLE_END
    exists but is used by ZERO code today — the split is currently aspirational.
-   Enforce IS ≤ 2022-12-31 vs OOS after; OOS window touched ONCE per hypothesis;
-   a finite, logged GLOBAL OOS look budget (holdout leaks through the researcher,
-   so after ~3–5 hypotheses the window is spent).
+   Enforce IS ≤ 2022-12-31 vs OOS after and exact registered OOS-window
+   membership; OOS window touched ONCE per hypothesis; GLOBAL OOS look budget is
+   fixed at 3 and hashed into the frozen surface.
 4. Trial COUNTER incrementing on INTENT-TO-SELECT (eyeballed configs, discarded
    runs, a width sweep of 3 = 3). Monotonic across the whole program; never
    reset by renaming a failed test as a "new hypothesis."
@@ -91,12 +99,13 @@ Phase 1A components (enforcement substrate only):
      - Cross-sectional: UNIVERSE = SPY/QQQ/AAPL/MSFT/NVDA ≈ 1.5 independent bets
        (config flags this); the 5 names lose in the same week.
    Effect: variance underestimated → 90% CI too tight → FALSE PASS at the
-   loss-gated verdict. FIX: prefer the stationary bootstrap (Politis–Romano) and
-   resample by ENTRY-DATE COHORT so BOTH clustering axes survive. A plain
-   time-block bootstrap still overstates confidence on the cross-sectional axis —
-   cohort resampling is required, not optional. TDD it: a synthetic
-   autocorrelated / cross-correlated series where the IID CI under-covers and the
-   new method widens appropriately.
+   loss-gated verdict. FIX: primary = block bootstrap over the time-ordered
+   sequence of ISO entry-week cohorts, so same-week cross-sectional co-movement
+   is indivisible and contiguous weekly blocks preserve regimes. Cross-check =
+   stationary bootstrap (Politis–Romano) over the same weekly-cohort sequence.
+   Sweep the fixed, hashed block-length envelope and report the widest CI across
+   both families. TDD it: a synthetic autocorrelated / cross-correlated series
+   where the IID CI under-covers and the new method widens appropriately.
 
 # Phase 1B (DEFERRED — do NOT build in 1A)
 Deflated Sharpe Ratio, PBO/CSCV, multiple-testing deflation that CONSUMES the
@@ -127,29 +136,32 @@ certifier stays the loss-gated, dependence-aware CI (component 6).
   → (5) broad learning-layer spec last.
 
 # Process (non-negotiable)
-1. Design + creative work → use the superpowers brainstorming skill FIRST. Do
-   not write code until the Phase-1A design is approved. Ask clarifying
-   questions ONE at a time.
-2. Then writing-plans → executing-plans (or subagent-driven-development). TDD:
-   failing test first, minimal impl, verify with real command output, commit.
+1. The reconciled design and implementation plan already exist in
+   docs/superpowers/specs/2026-07-01-research-integrity-foundation-design.md and
+   docs/superpowers/plans/2026-07-01-research-integrity-foundation.md. Read them
+   first and follow them unless the user explicitly asks for another design pass.
+2. Execute TDD: failing test first, minimal impl, verify with real command
+   output, commit only when the user asks.
 3. Make no "it passes"/"it's fixed" claim without showing the command output.
 4. Work on a branch; commit only when the user asks.
 
 # Definition of done for Phase 1A
 The enforcement substrate is true BEFORE run #1: an append-only ledger; a
-pre-registration gate; write-once OOS with an enforced IN_SAMPLE_END and a global
-look budget; a monotonic intent-to-select counter; frozen+hashed cost/fill
-params; and a dependence-aware (stationary + entry-date-cohort) bootstrap
-replacing the IID one — each enforced by CODE or a HOOK, each covered by a test,
-all 12+ existing tests still green, committed on a branch. Phase-1B stat fields
-are stubbed, not computed.
+pre-registration gate; write-once OOS with enforced IN_SAMPLE_END, exact
+registered OOS-window membership, frozen source/config/cost surfaces, and global
+look budget = 3; a monotonic intent-to-select counter; frozen+hashed cost/fill
+params; and a dependence-aware weekly-cohort block bootstrap with stationary
+cross-check replacing the IID one — each enforced by deterministic code/seams,
+each covered by a test, all existing tests still green. Phase-1B stat fields are
+stubbed, not computed.
 
 # Sources (verified accurate)
-Anthropic "Building effective agents"; Claude Code memory docs (memory ≠
-enforcement → use PreToolUse hooks); Bailey/Borwein/López de Prado/Zhu PBO
-(holdout unreliable → CSCV); Harvey/Liu/Zhu (t>3 multiple-testing hurdle); Carr &
-López de Prado (calibrating rules via backtest = overfitting); block-bootstrap
-for dependent data (Künsch 1989; Politis–Romano 1994).
+Anthropic "Building effective agents"; Claude Code memory docs (memory is not
+enforcement; hooks are a later threat-B layer, not Phase 1A); Bailey/Borwein/
+López de Prado/Zhu PBO (holdout unreliable → CSCV); Harvey/Liu/Zhu (t>3
+multiple-testing hurdle); Carr & López de Prado (calibrating rules via backtest =
+overfitting); block-bootstrap for dependent data (Künsch 1989; Politis–Romano
+1994).
 
 Start by: reading the files above, then invoking the brainstorming skill to
 design the Phase-1A Research Integrity Foundation. Ask me clarifying questions

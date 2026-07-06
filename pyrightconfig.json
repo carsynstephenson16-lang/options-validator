@@ -1,0 +1,22 @@
+{
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "include": [
+    "analysis",
+    "harness",
+    "research",
+    "config.py",
+    "metrics.py"
+  ],
+  "exclude": [
+    ".cache",
+    ".venv",
+    "docs",
+    "results",
+    "tests"
+  ],
+  "reportMissingTypeStubs": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none"
+}
