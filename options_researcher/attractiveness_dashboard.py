@@ -38,9 +38,14 @@ def _price_ladder(*, close: float, rv21: float, strike: float,
         p = _round_cents(price)
         if p <= 0:
             return
-        # anchor tags (today/strike/breakeven) win over untagged move points
-        if tag or p not in tagged:
-            tagged[p] = tag if tag else tagged.get(p, "")
+        existing = tagged.get(p)
+        if existing is None:
+            tagged[p] = tag
+        elif tag and tag not in existing.split(", "):
+            # An anchor tag joins the row: replace a prior untagged move-point
+            # placeholder, or combine when two anchors coincide to the penny
+            # (e.g. strike == breakeven) so no label is silently dropped.
+            tagged[p] = tag if not existing else f"{existing}, {tag}"
 
     if monthly == monthly and monthly > 0:  # finite, positive
         for k in (-2, -1, 1, 2):

@@ -30,6 +30,14 @@ class PriceLadderTests(unittest.TestCase):
                                 strike=10.0, breakeven=None)
         self.assertTrue(all(r["price"] > 0 for r in rows))
 
+    def test_coinciding_anchor_tags_are_combined(self):
+        # strike and breakeven landing on the same rounded price keep both
+        # labels instead of the later one silently overwriting the earlier.
+        rows = ad._price_ladder(close=100.0, rv21=float("nan"),
+                                strike=95.0, breakeven=95.0)
+        tag_by_price = {r["price"]: r["tag"] for r in rows}
+        self.assertEqual(tag_by_price[95.0], "strike, breakeven")
+
 
 class PayoffTests(unittest.TestCase):
     def test_put_pnl(self):
@@ -75,3 +83,7 @@ class ScenarioRowsTests(unittest.TestCase):
                                 rv21=math.sqrt(12) * 0.11)
         below = [r for r in rows if r["price"] < 420.0]
         self.assertTrue(below and all(r["note"] for r in below))
+
+    def test_unknown_structure_raises(self):
+        with self.assertRaises(ValueError):
+            ad.scenario_rows({"strike": 1.0}, "bogus", close=1.0, rv21=1.0)
