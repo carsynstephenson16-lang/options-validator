@@ -163,6 +163,8 @@ def assemble(*, symbol_sections: list[dict] | None = None,
                     cards.append({**card, "scenarios": [], "headline": "",
                                   "countdown": ""})
                     continue
+                # shallow copy: nested dicts (e.g. grades) are shared, not
+                # duplicated -- fine because nothing here mutates them in place.
                 enriched = dict(card)
                 if kind == "pmcc":
                     enriched["leaps_strike"] = float(grp["leaps_strike"])
@@ -243,7 +245,8 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
              else "no candidates near the target delta this cycle"}]
 
         lot = holdings[holdings["symbol"] == symbol] if len(holdings) else []
-        if len(lot) and int(lot.iloc[0]["shares"]) >= 100:
+        held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
+        if held_shares >= 100:
             groups.append({"kind": "cc",
                            "title": "SELL A COVERED CALL? (rent out your shares)",
                            "cards": cc_card_rows(
@@ -252,16 +255,27 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                                iv_rank=iv_rank,
                                earnings_in_cycle=earn_in_cycle),
                            "empty": None})
+        elif held_shares > 0:
+            groups.append({"kind": "cc",
+                           "title": "SELL A COVERED CALL? (rent out your shares)",
+                           "cards": [],
+                           "empty": (f"you hold {held_shares} sh of {symbol} -- a "
+                                     "covered call needs 100 per contract; use "
+                                     "the LEAPS lane (PMCC) or add shares.")})
         if symbol in held_leaps:
             lk, lp = held_leaps[symbol]
+            pmcc_cards = pmcc_card_rows(
+                symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
+                close=close, iv_rank=iv_rank, earnings_in_cycle=earn_in_cycle)
             groups.append({"kind": "pmcc",
                            "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
                            "leaps_strike": lk, "leaps_premium": lp,
-                           "cards": pmcc_card_rows(
-                               symbol, chain, day, leaps_strike=lk,
-                               leaps_premium=lp, close=close, iv_rank=iv_rank,
-                               earnings_in_cycle=earn_in_cycle),
-                           "empty": None})
+                           "cards": pmcc_cards,
+                           "empty": None if pmcc_cards else
+                           (f"no SAFE strike this cycle: the rule needs a call "
+                            f"at ${lk + lp:.2f}+ and none is listed / all too "
+                            "far out to pay -- selling closer would risk locking "
+                            "a loss, so H5 shows nothing.")})
         if symbol in config.H4_THESIS_NAMES:
             groups.append({"kind": "leaps",
                            "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
