@@ -261,8 +261,10 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                            "title": "SELL A COVERED CALL? (rent out your shares)",
                            "cards": [],
                            "empty": (f"you hold {held_shares} sh of {symbol} -- a "
-                                     "covered call needs 100 per contract; use "
-                                     "the LEAPS lane (PMCC) or add shares.")})
+                                     "covered call needs 100 per contract. "
+                                     "Covered-call rows appear after a declared "
+                                     "100-share lot; PMCC rows appear only after "
+                                     "a real LEAPS is recorded.")})
         if symbol in held_leaps:
             lk, lp = held_leaps[symbol]
             pmcc_cards = pmcc_card_rows(

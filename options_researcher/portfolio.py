@@ -1,12 +1,12 @@
-"""options_researcher/portfolio.py -- H4 book tracker/analyzer.
+"""options_researcher/portfolio.py -- recorded option tracker/analyzer.
 
-The owner's forward paper window runs through this module: positions live in
-data/positions/positions.csv, and analyze() marks them against the LATEST
-cached chain day per symbol with the frozen conservative convention (long
-legs liquidate at bid x (1 - haircut); short legs cost ask x (1 + haircut)
-to close; both entry and exit commissions counted). It also enforces the H4
-risk buckets and raises flags -- it never trades, never advises, and a
-missing quote is reported loudly, never bridged.
+The scanner does not create positions. If the owner intentionally records an
+option in data/positions/positions.csv, analyze() marks it against the LATEST
+cached chain day per symbol with the frozen conservative convention (long legs
+liquidate at bid x (1 - haircut); short legs cost ask x (1 + haircut) to
+close; both entry and exit commissions counted). It also enforces the H4/H5
+risk buckets and raises flags -- it never trades, never advises, and a missing
+quote is reported loudly, never bridged.
 
 Structures: leaps_call (long C, thesis bucket), csp (short P, csp bucket),
 tactical_call (long C, tactical bucket).
@@ -171,7 +171,7 @@ def mark_position(row: pd.Series, chain: pd.DataFrame, close: float,
 
 
 def check_buckets(frame: pd.DataFrame) -> list[str]:
-    """H4 bucket-rule violations (config-frozen caps)."""
+    """H4/H5 bucket-rule violations (config-frozen caps)."""
     issues = []
     thesis = frame[frame["bucket"] == "thesis"]
     if len(thesis) > config.H4_THESIS_MAX_POSITIONS:
@@ -214,7 +214,7 @@ def analyze(path: str = POSITIONS_PATH) -> dict:
 
     frame = load_positions(path)
     if frame.empty:
-        print("book is empty -- add positions to", path)
+        print("scanner mode: no open options recorded in", path)
         return {"marks": [], "bucket_issues": []}
     marks = []
     for sym in sorted(frame["symbol"].unique()):
@@ -233,7 +233,7 @@ def analyze(path: str = POSITIONS_PATH) -> dict:
     holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
                 else pd.DataFrame(columns=_HOLDINGS_FIELDS))
     coverage = check_coverage(frame, holdings)
-    print(f"H5 book @ latest cache -- {len(marks)} position(s)")
+    print(f"recorded options @ latest cache -- {len(marks)} position(s)")
     for m in marks:
         flags = " ".join(m["flags"]) or "-"
         pnl = "n/a" if m["pnl"] is None else f"${m['pnl']:,.0f}"
@@ -252,7 +252,7 @@ def analyze(path: str = POSITIONS_PATH) -> dict:
     if not issues and not coverage:
         print("  buckets + coverage: all green")
     if coverage:
-        raise RuntimeError("uncovered/mispriced short call in the book -- "
+        raise RuntimeError("uncovered/mispriced short call in recorded options -- "
                            "fix positions.csv or holdings.csv before "
                            "trusting any number above")
     return {"marks": marks, "bucket_issues": issues,

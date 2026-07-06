@@ -1,10 +1,10 @@
-"""options_researcher/dashboard.py -- M7 game-style dashboard.
+"""options_researcher/dashboard.py -- scanner/watchlist dashboard.
 
-assemble() gathers real project state (the book, the facts ledger, report
-files, and a handful of underlying closes) into one plain dict. render()
-turns that dict into a single self-contained HTML string (dark, game-styled,
-inline <style> only -- no network calls, no external assets, no JS
-frameworks). Neither function mutates positions, the ledger, or reports;
+assemble() gathers real project state (recorded options if any, the facts
+ledger, report files, and a handful of underlying closes) into one plain dict.
+render() turns that dict into a single self-contained HTML string (dark,
+game-styled, inline <style> only -- no network calls, no external assets, no
+JS frameworks). Neither function mutates positions, the ledger, or reports;
 neither makes a network call.
 
 Every assemble() argument can be injected for tests; when omitted, the real
@@ -48,13 +48,15 @@ ACHIEVEMENTS = {
     "UNDERLYING_CLOSES_PARITY": (
         "MacGyver Data", "Built a close price series out of your own option chains"),
     "H4_PAPER_WINDOW_SEEDED": (
-        "Party Assembled", "The book went live with real seeded positions"),
+        "Historical Seed", "Old paper rows were seeded, then later cleared"),
     "H4_BUCKET_AMENDMENT": (
-        "Full Loadout", "LEAPS slot filled -- the forward paper window is fully seeded"),
+        "Budget Amended", "Sizing room changed; not a live position"),
     "H4_EVIDENCE_BACKTEST": (
-        "Field Report", "Ran the combined evidence backtest across the whole book"),
+        "Field Report", "Ran historical evidence; not the current book"),
     "H5_REGISTERED": (
-        "New Quest", "Sector Income Core registered -- the next hypothesis is live"),
+        "Scanner Online", "Sector Income Core registered as the candidate rubric"),
+    "H5_SCANNER_RESET": (
+        "Clean Slate", "Current state reset to scanner-first: no options open"),
     "H1_REGISTERED": (
         "First Blood", "First hypothesis registered end-to-end"),
     "H1_SCOPE_DECISION": (
@@ -158,17 +160,17 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
 
 _PARTY = [
     # (symbol, accent color, role line)
-    ("MSFT", "#4da3ff", "The Tank — LEAPS core"),
-    ("AMZN", "#ff9900", "Bench — returns with covered calls"),
-    ("VST", "#ffd23f", "Dual-class — CSP + tactical"),
-    ("CEG", "#7CFC9B", "Reserve — LEAPS slot 2"),
+    ("MSFT", "#4da3ff", "Watch — LEAPS depth"),
+    ("AMZN", "#ff9900", "Watch — income candidates"),
+    ("VST", "#ffd23f", "Held — 38 shares, no options"),
+    ("CEG", "#7CFC9B", "Watch — power-side candidate"),
 ]
 
 _QUEST_LOG_COMPLETED = [
-    "M1", "M2", "M3", "M4", "M5", "M6", "seeded window",
+    "M1", "M2", "M3", "M4", "M5", "M6", "scanner dashboard",
 ]
-_QUEST_LOG_ACTIVE = "Survive 2 quarters of forward window"
-_QUEST_LOG_LOCKED = "Dashboard v2 (live sparkline history)"
+_QUEST_LOG_ACTIVE = "Find an attractive candidate, then record it intentionally"
+_QUEST_LOG_LOCKED = "Forward paper window starts after first tracked option"
 
 _GRAVEYARD = [
     "H1 $2-wide (FAIL)",
@@ -265,7 +267,7 @@ def _party_card(symbol: str, color: str, role: str, sparklines: dict,
 
 def _book_rows(marks: list[dict]) -> str:
     if not marks:
-        return '<tr><td colspan="9" class="empty">No open marks.</td></tr>'
+        return '<tr><td colspan="9" class="empty">No open options recorded.</td></tr>'
     rows = []
     for m in marks:
         pnl = m.get("pnl", 0.0) or 0.0
@@ -289,7 +291,7 @@ def _book_rows(marks: list[dict]) -> str:
 
 def _bucket_banner(bucket_issues: list[str]) -> str:
     if not bucket_issues:
-        return '<div class="banner banner-green">ALL BUCKETS GREEN</div>'
+        return '<div class="banner banner-green">RECORDED OPTION RULES GREEN</div>'
     items = "".join(f"<li>{_esc(issue)}</li>" for issue in bucket_issues)
     return f'<div class="banner banner-red"><ul>{items}</ul></div>'
 
@@ -504,7 +506,7 @@ def render(data: dict) -> str:
 
 <div class="panel">
   <h1>MISSION CONTROL</h1>
-  <div class="header-sub">H4 FORWARD WINDOW &mdash; as of {_esc(as_of)}</div>
+  <div class="header-sub">SCANNER MODE &mdash; as of {_esc(as_of)}</div>
 </div>
 
 <div class="panel">

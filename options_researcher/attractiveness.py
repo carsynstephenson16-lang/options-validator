@@ -295,8 +295,9 @@ def main():
                 print(f"    [{badges}]")
         elif held_shares > 0:
             print(f"-- COVERED CALL: you hold {held_shares} sh of {symbol} -- "
-                  "a covered call needs 100 per contract; use the LEAPS lane "
-                  "below (PMCC) or add shares.")
+                  "a covered call needs 100 per contract. The scanner will "
+                  "only show covered calls after a declared 100-share lot, "
+                  "and PMCC rows only after a real LEAPS is recorded.")
         if symbol in held_leaps:
             k_leaps, prem_leaps = held_leaps[symbol]
             print(f"-- SELL A CALL AGAINST YOUR LEAPS? (PMCC; LEAPS ${k_leaps:.0f} "

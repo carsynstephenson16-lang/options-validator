@@ -1,8 +1,10 @@
 # H5 "Sector Income Core" + Attractiveness Evaluator — design (2026-07-04)
 
-**Status: DRAFT awaiting owner review. Supersedes H4's structure list at
-registration (book carries over; zero H4 cycles completed, so no
-results-based selection is possible — recorded in the ledger at switch).**
+**Status: REGISTERED, scanner-first correction 2026-07-06.** Supersedes H4's
+structure list at registration. Correction: no options currently carry over;
+`data/positions/positions.csv` starts empty, and the owner currently holds 38
+shares of VST only. The evaluator is a scanner/researcher first; positions are
+added only after a candidate is attractive enough to track intentionally.
 
 **Owner brief this answers:** "buy LEAPS, then sell puts and covered calls —
 build me a design that helps me define which options look attractive; I'm a
@@ -34,7 +36,7 @@ to OWN), AMZN's covered calls beat buy-and-hold on exact closes (Study C).
 
 | Engine | Rule (all selections nearest-delta, monthly = standard 3rd-Friday cycle, conservative fills, no stops) |
 |---|---|
-| CORE | LEAPS calls 0.70Δ, DTE 270–500 nearest 365; names MSFT (held) + CEG when bucket room; roll at DTE ≤ 90; bucket $10k/name, $10k total, ≤2 positions (unchanged) |
+| CORE | LEAPS calls 0.70Δ, DTE 270–500 nearest 365; names MSFT/VST/CEG as candidates only until one is deliberately recorded; roll at DTE ≤ 90 after entry; bucket $10k/name, $16k total, ≤2 positions |
 | ENTRY | Exactly 1 CSP at a time: 0.20Δ nearest monthly, names {VST, AMZN}; collateral 100×strike on the equity side; assignment accepted → the 100-share lot moves into INCOME |
 | INCOME | CC 0.20Δ nearest monthly against every declared 100-share lot in `data/positions/holdings.csv` (schema: symbol,shares,cost_basis,acquired). Strike must also satisfy: assignment price ≥ cost_basis (never locked into selling at a loss); if the 0.20Δ strike sits BELOW cost basis (stock under water), the cycle is SKIPPED and the card says exactly that — no chasing premium below basis. PMCC lane: short call vs a held LEAPS only if K_short ≥ K_LEAPS + net_debit/100 (assignment can then never lock a loss); evaluator prints the truth if that strike pays too little to bother |
 | TACTICAL | 0–2 long 0.40Δ monthly calls under the $600 cap (unchanged) |
@@ -88,10 +90,12 @@ holdings.csv at the strike price as cost basis.
 ## 5. Registration & verdict (unchanged machinery)
 
 H5 registers via ledger trial-log with this doc's hash; H4 recorded
-SUPERSEDED-AT-ZERO-CYCLES; the 3 live positions carry over; the forward
-paper window clock RESTARTS at H5 registration (≥ 2 quarters → the frozen
-loss-gated scoreboard). In-era evidence for the new engines already exists
-(Studies C/E); the composite evidence backtest gains a CC leg re-run as
+SUPERSEDED-AT-ZERO-CYCLES. Scanner-first correction 2026-07-06: the prior
+seeded option rows were not the owner's real current positions and have been
+cleared. The forward paper window starts only after the owner intentionally
+records an actual paper/live option in `positions.csv`, then runs for at least
+2 quarters before the frozen loss-gated scoreboard can issue a verdict.
+In-era evidence for the engines already exists (Studies C/E); it remains
 evidence only.
 
 ## 6. Testing
