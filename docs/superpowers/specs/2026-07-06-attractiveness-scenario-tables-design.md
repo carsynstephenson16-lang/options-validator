@@ -53,6 +53,14 @@ existing `assemble()` / `render()` / `main()` separation already used by
   card-builder functions (`put_card_rows`, `cc_card_rows`, `pmcc_card_rows`,
   `leaps_card_rows`) unmodified. Every argument is injectable for tests,
   matching `dashboard.assemble()`'s pattern.
+- **PMCC enrichment.** `pmcc_card_rows()`'s returned dicts carry only
+  `strike/expiry/dte/credit/yield_mo/grades/verdict` — they omit the
+  `leaps_strike`/`leaps_premium` the PMCC scenario math needs. `assemble()`
+  therefore rebuilds `held_leaps` the same way `attractiveness.main()` does
+  (`symbol -> (leaps_strike, leaps_entry_price)` from the positions frame)
+  and attaches `leaps_strike` + `leaps_cost` (= `leaps_premium * 100`) to
+  each PMCC card before handing it to the scenario-math helper. The
+  card-builder functions themselves stay unmodified.
 - A shared pure function computes the price ladder and per-structure payoff
   rows for each candidate (see "Scenario math" below). No file I/O, no
   network.
@@ -70,14 +78,27 @@ All payoffs are per single contract (matching how `attractiveness.py`
 candidates already compute `credit`/`cost`, which assume 1 contract).
 
 **Price ladder** (shared across structures): given `close` and `rv21`,
-`monthly_move = rv21 / sqrt(12)`. Candidate price points are
+`monthly_move = rv21 / sqrt(12)`. When `monthly_move` is valid
+(finite and > 0) the candidate price points are
 `close * (1 - 2*monthly_move)`, `close * (1 - monthly_move)`, `close`,
 `close * (1 + monthly_move)`, `close * (1 + 2*monthly_move)`, plus the
-candidate's own `strike` and (where applicable) `breakeven`. All points are
-merged into one ascending, deduplicated list of rows. Rows carry an optional
-plain-text tag (`strike`, `breakeven`, `today`) and otherwise show no label,
-per owner feedback to drop word/percent annotations — the one relevant date
-is shown once in the card header instead of repeated per row.
+candidate's own `strike` and (where applicable) `breakeven`.
+
+**Invalid / missing vol.** `rv21` can be missing or non-positive, in which
+case `attractiveness.py` already yields a non-finite monthly move
+([attractiveness.py:58](../../../options_researcher/attractiveness.py#L58)).
+When `monthly_move` is not finite or `<= 0`, drop the ±move points entirely
+and build the ladder from just `close`, `strike`, and (where applicable)
+`breakeven` — never invent price points from a bad vol number.
+
+**Rounding / sanity.** Round every ladder price to cents before use;
+deduplicate rows by the rounded-cents value; drop any non-positive price
+(a stock can't trade at or below $0, and `close * (1 - 2*monthly_move)`
+can go negative for a high-vol name). All surviving points are merged into
+one ascending list of rows. Rows carry an optional plain-text tag
+(`strike`, `breakeven`, `today`) and otherwise show no label, per owner
+feedback to drop word/percent annotations — the one relevant date is shown
+once in the card header instead of repeated per row.
 
 **Per structure, at expiration:**
 
@@ -110,16 +131,31 @@ card shows:
 
 1. A one-line header: what the trade is, the premium/cost, and "result by
    `<expiry date>` (`<dte>` days out)".
-2. The scenario table: `Price | tag | You end up with`, colored green/red
-   by sign, sorted ascending by price.
+2. The scenario table: `Price | tag | Your gain or loss`, colored green/red
+   by sign, sorted ascending by price. The column reads "Your gain or loss"
+   (not "You end up with") because every cell is a P&L delta, not a single
+   cash-account ending balance — the numbers mix option-only P&L (put),
+   share-movement-vs-today (covered call), and the PMCC credit-only /
+   safe-floor split, so the label must not imply one uniform ending value.
+   The wording stays plain per the owner's less-jargon constraint (no
+   literal "P&L" abbreviation in the UI).
 3. The existing plain-language `verdict` sentence and grade badges
    (yield/cushion/liquidity/etc.) carried over unchanged from
    `attractiveness.py`'s card dicts — the table augments this, it doesn't
    replace it.
 4. For LEAPS cards only: the days-remaining / roll-due line described above.
 
-Skipped candidates (e.g. covered call below cost basis) and "no candidates
-this cycle" messages are carried over verbatim from the existing card dicts.
+**Skipped and no-candidate cases are different shapes — handle them
+separately.** A skipped covered call is a real card dict carrying a
+`"skipped"` string ([attractiveness.py:104-108](../../../options_researcher/attractiveness.py#L104-L108));
+render it as a plain one-line note with **no scenario table, no expiry
+header, no payoff chart**. The "no candidates near the target delta this
+cycle" case is not card data at all — it is a bare `print` in the terminal
+path ([attractiveness.py:281-282](../../../options_researcher/attractiveness.py#L281-L282));
+in the HTML it surfaces as an empty-state line under that structure's
+heading, again with no table or header. Only fully-formed candidate dicts
+(those with `strike`/`expiry`/`credit`-or-`cost`) get scenario tables and
+expiry headers.
 
 ## Testing
 
