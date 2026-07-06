@@ -31,7 +31,7 @@ The platform has two layers, and the separation is deliberate:
 | Tradability profile | `options_researcher/profile_tradability.py` — first findings below |
 | Backtest path | Offline Lumibot/PandasData harness + `tools/score_backtest.py` scoreboard CLI, wired against the real cache |
 | Feasibility | `analysis/feasibility.py` — credits measured from cached chains, not assumed |
-| Discipline layer | 256 tests green (`uv run python -m unittest discover -s tests`) |
+| Discipline layer | 333 tests green (`uv run python -m unittest discover -s tests`, 2026-07-06) |
 | Strategy history | H1 ($2-wide SPY/QQQ put spread), H2 ($5-wide): registered, honest in-sample **FAILs**. H3R (SPY conditional-VRP): archived un-run at scope pivot. Ledger records are permanent; OOS budget 0/3 spent |
 
 ### What the first profile says (sampled days, ~37-DTE puts)
@@ -63,6 +63,7 @@ uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample s
 uv run python -m options_researcher.attractiveness            # which options look attractive today
 uv run python -m options_researcher.portfolio                 # mark the H5 paper book
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
+uv run python -m options_researcher.attractiveness_dashboard    # interactive at-expiration scenario view (writes .tmp/dashboard/attractiveness.html)
 ```
 
 `smoke_test.py` probes a single in-sample chain (cached parquet, or the
