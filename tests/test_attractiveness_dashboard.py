@@ -87,3 +87,50 @@ class ScenarioRowsTests(unittest.TestCase):
     def test_unknown_structure_raises(self):
         with self.assertRaises(ValueError):
             ad.scenario_rows({"strike": 1.0}, "bogus", close=1.0, rv21=1.0)
+
+
+class AssembleTests(unittest.TestCase):
+    def _fake_symbol(self):
+        return {
+            "symbol": "MSFT", "as_of": "2026-06-30", "close": 373.02,
+            "iv_rank": 0.88,
+            "groups": [
+                {"kind": "put", "title": "SELL A PUT?",
+                 "cards": [{"strike": 350.0, "expiry": "2026-07-17",
+                            "dte": 17, "credit": 250.0, "yield_mo": 0.0071,
+                            "grades": {"yield": "AMBER"},
+                            "verdict": "you'd be promising..."}],
+                 "empty": None},
+                {"kind": "pmcc", "title": "SELL A CALL AGAINST YOUR LEAPS?",
+                 "leaps_strike": 340.0, "leaps_premium": 79.54,
+                 "cards": [{"strike": 420.0, "expiry": "2026-07-17",
+                            "dte": 17, "credit": 100.0, "yield_mo": 0.0126,
+                            "grades": {"safety": "GREEN"},
+                            "verdict": "sells a $420 call..."}],
+                 "empty": None},
+            ],
+        }
+
+    def test_assemble_attaches_scenarios_and_enriches_pmcc(self):
+        d = ad.assemble(symbol_sections=[self._fake_symbol()],
+                        rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11})
+        put_card = d["symbols"][0]["groups"][0]["cards"][0]
+        self.assertTrue(put_card["scenarios"])
+        self.assertIn("Sell", put_card["headline"])
+        pmcc_card = d["symbols"][0]["groups"][1]["cards"][0]
+        self.assertEqual(pmcc_card["leaps_strike"], 340.0)
+        self.assertAlmostEqual(pmcc_card["leaps_cost"], 7954.0, 2)
+        self.assertTrue(any(r["note"] for r in pmcc_card["scenarios"]))
+
+    def test_skipped_card_gets_no_scenarios(self):
+        section = {"symbol": "VST", "as_of": "2026-06-30", "close": 112.0,
+                   "iv_rank": 0.3,
+                   "groups": [{"kind": "cc", "title": "SELL A COVERED CALL?",
+                               "cards": [{"strike": 110.0,
+                                          "skipped": "strike below cost basis"}],
+                               "empty": None}]}
+        d = ad.assemble(symbol_sections=[section],
+                        rv21_by_symbol={"VST": 0.5})
+        card = d["symbols"][0]["groups"][0]["cards"][0]
+        self.assertEqual(card["scenarios"], [])
+        self.assertEqual(card["headline"], "")

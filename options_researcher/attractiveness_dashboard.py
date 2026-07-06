@@ -115,3 +115,161 @@ def scenario_rows(card: dict, structure: str, *, close: float,
                                                       cost)), "note": ""}
                 for row in ladder]
     raise ValueError(f"unknown structure {structure!r}")
+
+
+def _headline(symbol: str, kind: str, card: dict) -> str:
+    verbs = {"put": "Sell the {sym} ${k:.0f} put",
+             "cc": "Sell the {sym} ${k:.0f} covered call",
+             "pmcc": "Sell the {sym} ${k:.0f} call vs your LEAPS",
+             "leaps": "Buy the {sym} ${k:.0f} LEAPS"}
+    k = float(card["strike"])
+    lead = verbs[kind].format(sym=symbol, k=k)
+    if kind == "leaps":
+        money = f"costs ${float(card['cost']):,.0f}"
+    else:
+        money = f"collect ${float(card['credit']):,.0f} now"
+    return (f"{lead} — {money} — result by {card['expiry']} "
+            f"({card['dte']} days out)")
+
+
+def _countdown(card: dict) -> str:
+    import config
+    dte = int(card["dte"])
+    roll = config.H4_THESIS_ROLL_DTE
+    return (f"{dte} days until expiration · roll reminder kicks in with "
+            f"{roll} days left")
+
+
+def assemble(*, symbol_sections: list[dict] | None = None,
+             rv21_by_symbol: dict[str, float] | None = None) -> dict:
+    """Attach scenario tables + headlines to gathered candidate sections.
+
+    Both arguments default to the real project state (see _gather_all);
+    inject them to unit-test without touching disk or the network."""
+    if symbol_sections is None:
+        symbol_sections, rv21_by_symbol = _gather_all()
+    rv21_by_symbol = rv21_by_symbol or {}
+
+    out_symbols = []
+    for sec in symbol_sections:
+        sym = sec["symbol"]
+        rv21 = float(rv21_by_symbol.get(sym, float("nan")))
+        out_groups = []
+        for grp in sec["groups"]:
+            kind = grp["kind"]
+            cards = []
+            for card in grp["cards"]:
+                if "skipped" in card:
+                    cards.append({**card, "scenarios": [], "headline": "",
+                                  "countdown": ""})
+                    continue
+                enriched = dict(card)
+                if kind == "pmcc":
+                    enriched["leaps_strike"] = float(grp["leaps_strike"])
+                    enriched["leaps_cost"] = float(grp["leaps_premium"]) * 100.0
+                enriched["scenarios"] = scenario_rows(
+                    enriched, kind, close=float(sec["close"]), rv21=rv21)
+                enriched["headline"] = _headline(sym, kind, enriched)
+                enriched["countdown"] = (_countdown(enriched)
+                                         if kind == "leaps" else "")
+                cards.append(enriched)
+            out_groups.append({"kind": kind, "title": grp["title"],
+                               "cards": cards, "empty": grp.get("empty")})
+        out_symbols.append({"symbol": sym, "close": float(sec["close"]),
+                            "iv_rank": float(sec["iv_rank"]),
+                            "as_of": sec["as_of"], "groups": out_groups})
+    return {"symbols": out_symbols}
+
+
+def _gather_all() -> tuple[list[dict], dict[str, float]]:
+    """Load real per-symbol candidate sections + rv21, mirroring
+    attractiveness.main()'s data gathering (no printing)."""
+    import glob
+    from datetime import date
+
+    import pandas as pd
+
+    import config
+    from data.underlying_closes import load_closes
+    from options_researcher.attractiveness import (
+        cc_card_rows,
+        leaps_card_rows,
+        pmcc_card_rows,
+        put_card_rows,
+    )
+    from options_researcher.chains import nearest_monthly
+    from options_researcher.earnings import load_earnings
+    from options_researcher.features import load_features
+    from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
+
+    holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
+                else pd.DataFrame(columns=["symbol", "shares", "cost_basis"]))
+    positions = load_positions()
+    thesis_used = 0.0
+    held_leaps: dict[str, tuple[float, float]] = {}
+    if not positions.empty:
+        t = positions[positions["bucket"] == "thesis"]
+        thesis_used = float((t["entry_price"] * 100 * t["contracts"]).sum())
+        for _, lp in positions[positions["structure"] == "leaps_call"].iterrows():
+            held_leaps.setdefault(lp["symbol"],
+                                  (float(lp["strike"]), float(lp["entry_price"])))
+    bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
+
+    sections: list[dict] = []
+    rv21_by_symbol: dict[str, float] = {}
+    for symbol in config.UNIVERSE:
+        files = sorted(glob.glob(os.path.join(".cache", "chains",
+                                              f"{symbol}_*.parquet")))
+        if not files:
+            continue
+        day = os.path.basename(files[-1]).split("_")[1].replace(".parquet", "")
+        chain = pd.read_parquet(files[-1])
+        row = load_features(symbol).iloc[-1]
+        close = float(load_closes(symbol, "2018-01-01", day,
+                                  allow_oos=True).iloc[-1])
+        rv21 = float(row["rv21"])
+        rv21_by_symbol[symbol] = rv21
+        iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
+        exp = nearest_monthly(chain, date.fromisoformat(day))
+        earn_in_cycle = bool(exp is not None and any(
+            date.fromisoformat(day) < e <= exp for e in load_earnings(symbol)))
+
+        put_cards = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
+                                  iv_rank=iv_rank, earnings_in_cycle=earn_in_cycle)
+        groups: list[dict] = [
+            {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
+             "cards": put_cards,
+             "empty": None if put_cards
+             else "no candidates near the target delta this cycle"}]
+
+        lot = holdings[holdings["symbol"] == symbol] if len(holdings) else []
+        if len(lot) and int(lot.iloc[0]["shares"]) >= 100:
+            groups.append({"kind": "cc",
+                           "title": "SELL A COVERED CALL? (rent out your shares)",
+                           "cards": cc_card_rows(
+                               symbol, chain, day, close=close,
+                               cost_basis=float(lot.iloc[0]["cost_basis"]),
+                               iv_rank=iv_rank,
+                               earnings_in_cycle=earn_in_cycle),
+                           "empty": None})
+        if symbol in held_leaps:
+            lk, lp = held_leaps[symbol]
+            groups.append({"kind": "pmcc",
+                           "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
+                           "leaps_strike": lk, "leaps_premium": lp,
+                           "cards": pmcc_card_rows(
+                               symbol, chain, day, leaps_strike=lk,
+                               leaps_premium=lp, close=close, iv_rank=iv_rank,
+                               earnings_in_cycle=earn_in_cycle),
+                           "empty": None})
+        if symbol in config.H4_THESIS_NAMES:
+            groups.append({"kind": "leaps",
+                           "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
+                           "cards": leaps_card_rows(symbol, chain, day,
+                                                    close=close, iv_rank=iv_rank,
+                                                    bucket_room=bucket_room),
+                           "empty": None})
+
+        sections.append({"symbol": symbol, "as_of": day, "close": close,
+                         "iv_rank": iv_rank, "groups": groups})
+    return sections, rv21_by_symbol
