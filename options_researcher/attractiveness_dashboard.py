@@ -12,6 +12,7 @@ there is deliberately no Black-Scholes / time-value model anywhere here.
 """
 from __future__ import annotations
 
+import html as _html
 import math
 import os
 
@@ -287,3 +288,238 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
         sections.append({"symbol": symbol, "as_of": day, "close": close,
                          "iv_rank": iv_rank, "groups": groups})
     return sections, rv21_by_symbol
+
+
+_GRADE_COLORS = {"GREEN": "#2fd27d", "AMBER": "#caa53d", "RED": "#ff5470"}
+
+_STYLE = """
+  :root {
+    color-scheme: dark;
+  }
+  body {
+    background: #0b0e17;
+    color: #e6e9f2;
+    font-family: ui-monospace, Menlo, monospace;
+    margin: 0;
+    padding: 24px;
+  }
+  h1, h2 {
+    font-family: ui-monospace, Menlo, monospace;
+    letter-spacing: 0.08em;
+  }
+  .panel {
+    background: #141a2a;
+    border: 1px solid #2a3350;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .header-sub {
+    color: #9aa4c0;
+    font-size: 0.9em;
+  }
+  .party-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .party-card {
+    background: #141a2a;
+    border: 1px solid #2a3350;
+    border-left: 3px solid;
+    border-radius: 12px;
+    padding: 12px;
+    min-width: 180px;
+    flex: 1;
+  }
+  .party-name {
+    font-weight: bold;
+    font-size: 1.2em;
+  }
+  .party-role {
+    color: #9aa4c0;
+    font-size: 0.85em;
+    margin-bottom: 8px;
+  }
+  .sparkline {
+    display: block;
+    margin: 6px 0;
+  }
+  .party-badges {
+    margin-top: 6px;
+  }
+  .pnl-badge {
+    font-weight: bold;
+    margin-right: 6px;
+  }
+  .pnl-none {
+    color: #6b7280;
+    font-size: 0.85em;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #2a3350;
+    font-size: 0.9em;
+  }
+  .pill {
+    display: inline-block;
+    color: #0b0e17;
+    border-radius: 999px;
+    padding: 2px 8px;
+    margin-right: 4px;
+    font-size: 0.75em;
+    font-weight: bold;
+  }
+  .banner {
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+  .banner-green {
+    background: #163d2c;
+    color: #2fd27d;
+    font-weight: bold;
+  }
+  .banner-red {
+    background: #3d1620;
+    color: #ff5470;
+    font-weight: bold;
+  }
+  .quest-log {
+    padding-left: 20px;
+  }
+  .quest-done {
+    color: #6b7280;
+  }
+  .quest-active {
+    color: #ffd23f;
+    font-weight: bold;
+  }
+  .quest-locked {
+    color: #4b5270;
+  }
+  .ach-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .ach-tile {
+    background: #1b2338;
+    border: 1px solid #2a3350;
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 160px;
+  }
+  .ach-title {
+    font-weight: bold;
+    color: #ffd23f;
+  }
+  .ach-flavor {
+    color: #9aa4c0;
+    font-size: 0.85em;
+    margin-top: 4px;
+  }
+  .graveyard {
+    margin-top: 16px;
+    color: #6b7280;
+  }
+  .graveyard-title {
+    font-weight: bold;
+    color: #ff5470;
+    margin-bottom: 6px;
+  }
+  .empty {
+    color: #6b7280;
+    font-style: italic;
+  }
+"""
+
+
+def _esc(v) -> str:
+    return _html.escape(str(v))
+
+
+def _badges(grades: dict) -> str:
+    if not grades:
+        return ""
+    pills = []
+    for k, v in grades.items():
+        color = _GRADE_COLORS.get(v, "#6b7280")
+        pills.append(f'<span class="pill" style="background:{color}">'
+                     f'{_esc(k)}:{_esc(v)}</span>')
+    return f'<div class="party-badges">{"".join(pills)}</div>'
+
+
+def _pnl_cell(row: dict) -> str:
+    pnl = row["pnl"]
+    color = "#2fd27d" if pnl >= 0 else "#ff5470"
+    sign = "+" if pnl >= 0 else "-"
+    body = f'<span style="color:{color}">{sign}${abs(pnl):,.0f}</span>'
+    if row["note"]:
+        body += f' <span class="label">({_esc(row["note"])})</span>'
+    return body
+
+
+def _scenario_table(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    trs = []
+    for r in rows:
+        tag = _esc(r["tag"]) if r["tag"] else ""
+        trs.append(f"<tr><td>${r['price']:,.2f}</td>"
+                   f'<td class="label">{tag}</td>'
+                   f"<td>{_pnl_cell(r)}</td></tr>")
+    return ("<table><thead><tr><th>Price</th><th></th>"
+            "<th>Your gain or loss</th></tr></thead><tbody>"
+            + "".join(trs) + "</tbody></table>")
+
+
+def _card_html(card: dict) -> str:
+    if "skipped" in card:
+        return (f'<div class="panel"><div class="label">'
+                f'{_esc(card["skipped"])}</div></div>')
+    parts = ['<div class="panel">',
+             f'<div class="party-name">{_esc(card["headline"])}</div>',
+             _scenario_table(card["scenarios"]),
+             f'<div class="header-sub">{_esc(card.get("verdict", ""))}</div>',
+             _badges(card.get("grades", {}))]
+    if card.get("countdown"):
+        parts.append(f'<div class="label">{_esc(card["countdown"])}</div>')
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def _group_html(grp: dict) -> str:
+    head = f'<h3>{_esc(grp["title"])}</h3>'
+    if not grp["cards"]:
+        empty = grp.get("empty") or "none this cycle"
+        body = f'<div class="empty">{_esc(empty)}</div>'
+    else:
+        body = "".join(_card_html(c) for c in grp["cards"])
+    return head + body
+
+
+def render(data: dict) -> str:
+    """Render the assemble() dict into one self-contained HTML string.
+    Pure string templating: no file I/O, no network, no external assets.
+    Every value from `data` is html.escape()'d before embedding."""
+    symbols_html = ""
+    for sec in data["symbols"]:
+        groups = "".join(_group_html(g) for g in sec["groups"])
+        symbols_html += (
+            f'<div class="panel"><h2>{_esc(sec["symbol"])} '
+            f'&mdash; close ${sec["close"]:,.2f} &mdash; '
+            f'IV-rank {sec["iv_rank"]:.2f}</h2>{groups}</div>')
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<title>WHICH OPTIONS LOOK ATTRACTIVE?</title>'
+        f'<style>{_STYLE}</style></head><body>'
+        '<div class="panel"><h1>WHICH OPTIONS LOOK ATTRACTIVE TODAY?</h1>'
+        '<div class="header-sub">at-expiration payoff &mdash; not a '
+        'prediction</div></div>'
+        f'{symbols_html}</body></html>')

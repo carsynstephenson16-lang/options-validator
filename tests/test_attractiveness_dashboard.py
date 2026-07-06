@@ -134,3 +134,45 @@ class AssembleTests(unittest.TestCase):
         card = d["symbols"][0]["groups"][0]["cards"][0]
         self.assertEqual(card["scenarios"], [])
         self.assertEqual(card["headline"], "")
+
+
+class RenderTests(unittest.TestCase):
+    def _assembled(self):
+        return ad.assemble(
+            symbol_sections=[{
+                "symbol": "MSFT", "as_of": "2026-06-30", "close": 373.02,
+                "iv_rank": 0.88,
+                "groups": [
+                    {"kind": "put", "title": "SELL A PUT?",
+                     "cards": [{"strike": 350.0, "expiry": "2026-07-17",
+                                "dte": 17, "credit": 250.0,
+                                "grades": {"yield": "AMBER"},
+                                "verdict": "promise to buy lower"}],
+                     "empty": None},
+                    {"kind": "cc", "title": "SELL A COVERED CALL?",
+                     "cards": [], "empty": "no candidates this cycle"},
+                ]}],
+            rv21_by_symbol={"MSFT": 1.1})
+
+    def test_render_has_label_and_no_external_assets(self):
+        html = ad.render(self._assembled())
+        self.assertIn("Your gain or loss", html)
+        self.assertNotIn("You end up with", html)
+        self.assertNotIn("http://", html)
+        self.assertNotIn("https://cdn", html)
+        self.assertIn("<style>", html)
+
+    def test_render_shows_empty_state_line(self):
+        html = ad.render(self._assembled())
+        self.assertIn("no candidates this cycle", html)
+
+    def test_render_shows_grade_badges(self):
+        html = ad.render(self._assembled())
+        self.assertIn("yield:AMBER", html)
+
+    def test_render_escapes_dynamic_text(self):
+        assembled = self._assembled()
+        assembled["symbols"][0]["groups"][0]["cards"][0]["verdict"] = "<x>&"
+        html = ad.render(assembled)
+        self.assertNotIn("<x>&", html)
+        self.assertIn("&lt;x&gt;&amp;", html)
