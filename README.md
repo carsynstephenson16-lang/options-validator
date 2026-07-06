@@ -31,7 +31,7 @@ The platform has two layers, and the separation is deliberate:
 | Tradability profile | `options_researcher/profile_tradability.py` — first findings below |
 | Backtest path | Offline Lumibot/PandasData harness + `tools/score_backtest.py` scoreboard CLI, wired against the real cache |
 | Feasibility | `analysis/feasibility.py` — credits measured from cached chains, not assumed |
-| Discipline layer | 333 tests green (`uv run python -m unittest discover -s tests`, 2026-07-06) |
+| Discipline layer | 354 tests green (`uv run python -m unittest discover -s tests`, 2026-07-06) |
 | Strategy history | H1 ($2-wide SPY/QQQ put spread), H2 ($5-wide): registered, honest in-sample **FAILs**. H3R (SPY conditional-VRP): archived un-run at scope pivot. Ledger records are permanent; OOS budget 0/3 spent |
 
 ### What the first profile says (sampled days, ~37-DTE puts)
@@ -131,6 +131,15 @@ paper-trading window.
    `.tmp/dashboard/index.html` (dark, game-styled, no network/JS deps) —
    party cards per name, the live book, quest log, and an achievement wall
    built from `ledger/facts.log`.
+8. ~~**Attractiveness scenario view**~~ — DONE 2026-07-06:
+   `uv run python -m options_researcher.attractiveness_dashboard` writes a
+   self-contained `.tmp/dashboard/attractiveness.html` over the same
+   candidates the `attractiveness` CLI prints. Each candidate gets a
+   plain-language "if the stock is at price X, your gain or loss is Y" table
+   priced **at expiration** (intrinsic value only — no options-pricing
+   model), with the PMCC honest-split (credit-only below the short strike,
+   safe-floor above) and a LEAPS roll-due countdown. Reuses the M7 CSS; no
+   network/JS deps.
 
 **Scope status: COMPLETE.** Live hypothesis: **H5 Sector Income Core**
 (specs/2026-07-04-h5-sector-income-core-design.md; ledger trial 6; H4
