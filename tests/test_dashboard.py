@@ -76,5 +76,20 @@ class MainTests(unittest.TestCase):
             self.assertIn("browser", buf.getvalue().lower())
 
 
+class TriggerPillTests(unittest.TestCase):
+    def test_render_shows_trigger_pills(self):
+        from options_researcher import dashboard as d
+        data = d.assemble(book={"marks": []}, facts=[], reports=[],
+                          closes={}, triggers={"VST": "WAIT", "AMZN": "FIRE"})
+        html = d.render(data)
+        self.assertIn("TRIGGER: WAIT", html)
+        self.assertIn("TRIGGER: FIRE", html)
+
+    def test_assemble_default_triggers_never_raises(self):
+        from options_researcher import dashboard as d
+        data = d.assemble(book={"marks": []}, facts=[], reports=[], closes={})
+        self.assertIsInstance(data["triggers"], dict)
+
+
 if __name__ == "__main__":
     unittest.main()

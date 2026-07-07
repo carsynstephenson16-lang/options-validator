@@ -6,7 +6,7 @@ You are an autonomous senior software engineer and quantitative systems builder 
 
 Your job is to produce correct, tested, maintainable work. Prioritize correctness, reliability, security, reproducibility, and clear implementation over speed.
 
-This project is an options strategy validation harness. Treat options research, quantitative strategy work, market data, and backtest logic as high-risk. Never invent data, prices, probabilities, API behavior, broker behavior, or current market facts.
+This project is an options research platform for VST, CEG, MSFT, and AMZN (owner scope decision 2026-07-03; see README.md) with a strategy validation harness. Treat options research, quantitative strategy work, market data, and backtest logic as high-risk. Never invent data, prices, probabilities, API behavior, broker behavior, or current market facts.
 
 ## Default Work Style
 
@@ -75,6 +75,8 @@ If a check cannot run because of missing dependencies, credentials, data, intern
 Do not claim a strategy has edge without evidence from data, costs, slippage, and out-of-sample testing.
 Treat backtests as fragile until checked for lookahead bias, survivorship bias, data leakage, bad fills, spread costs, commission costs, liquidity limits, and regime dependence.
 For options work, account for bid/ask spread, IV, Greeks, assignment risk, early exercise risk, earnings, liquidity, open interest, margin, and max loss.
+Label every important factual claim about options mechanics, broker behavior, margin, assignment, fees, or data as Repo-verified, Test-verified, Official-source, Inference, or Assumption.
+Never cite blogs, Reddit, YouTube, or forums for assignment, margin, fills, or fees when an official source exists.
 For this repo, keep research, market data, fill assumptions, fair value estimates, execution simulation, and risk controls separated.
 Never place, route, or simulate live trades as real trades unless the user explicitly asks and the code path is clearly configured for live execution.
 Default to paper trading, dry-run mode, or simulation mode.
@@ -83,6 +85,8 @@ Log every decision path for trading bots.
 Do not hardcode current prices, event probabilities, or market odds.
 If live data access is unavailable, return a blocker instead of guessing.
 Do not expand this repo into a live scanner, suggestor, or trading bot unless the README phase plan is explicitly changed first.
+Do not use "proven," "confirmed," "edge found," "works," or "guaranteed" about backtest results. Use "survived this test," "not yet rejected," "rejected," or "consistent with zero edge."
+Current phase: Phase 0 - get one strategy to one honest verdict. Before adding a new capability, ticker, strategy, or tool, answer: "Does this move the current phase to a verdict?" If no, write it into `ideas-parking-lot.md` and continue the phase.
 
 ## Data Rules
 

@@ -1,10 +1,10 @@
-"""options_researcher/dashboard.py -- M7 game-style dashboard.
+"""options_researcher/dashboard.py -- scanner/watchlist dashboard.
 
-assemble() gathers real project state (the book, the facts ledger, report
-files, and a handful of underlying closes) into one plain dict. render()
-turns that dict into a single self-contained HTML string (dark, game-styled,
-inline <style> only -- no network calls, no external assets, no JS
-frameworks). Neither function mutates positions, the ledger, or reports;
+assemble() gathers real project state (recorded options if any, the facts
+ledger, report files, and a handful of underlying closes) into one plain dict.
+render() turns that dict into a single self-contained HTML string (dark,
+game-styled, inline <style> only -- no network calls, no external assets, no
+JS frameworks). Neither function mutates positions, the ledger, or reports;
 neither makes a network call.
 
 Every assemble() argument can be injected for tests; when omitted, the real
@@ -15,6 +15,9 @@ project state is loaded:
   closes    -> last ~60 closes per config.UNIVERSE symbol via
                data.underlying_closes.load_closes(sym, start, end,
                allow_oos=True) (display only -- never feeds a verdict)
+  triggers  -> {symbol: "WAIT"/"FIRE"} from entry_watch._gather() (display
+               only -- never feeds a verdict; tolerant of load failure,
+               falls back to {} so the dashboard still renders)
 
 render(data) is pure string templating over the dict assemble() returns. It
 does no file I/O; Task 3's CLI is responsible for writing the result to
@@ -48,13 +51,15 @@ ACHIEVEMENTS = {
     "UNDERLYING_CLOSES_PARITY": (
         "MacGyver Data", "Built a close price series out of your own option chains"),
     "H4_PAPER_WINDOW_SEEDED": (
-        "Party Assembled", "The book went live with real seeded positions"),
+        "Historical Seed", "Old paper rows were seeded, then later cleared"),
     "H4_BUCKET_AMENDMENT": (
-        "Full Loadout", "LEAPS slot filled -- the forward paper window is fully seeded"),
+        "Budget Amended", "Sizing room changed; not a live position"),
     "H4_EVIDENCE_BACKTEST": (
-        "Field Report", "Ran the combined evidence backtest across the whole book"),
+        "Field Report", "Ran historical evidence; not the current book"),
     "H5_REGISTERED": (
-        "New Quest", "Sector Income Core registered -- the next hypothesis is live"),
+        "Scanner Online", "Sector Income Core registered as the candidate rubric"),
+    "H5_SCANNER_RESET": (
+        "Clean Slate", "Current state reset to scanner-first: no options open"),
     "H1_REGISTERED": (
         "First Blood", "First hypothesis registered end-to-end"),
     "H1_SCOPE_DECISION": (
@@ -116,7 +121,8 @@ def _default_closes() -> dict[str, list[float]]:
 
 def assemble(*, book: dict | None = None, facts: list[str] | None = None,
             reports: list[str] | None = None,
-            closes: dict[str, list[float]] | None = None) -> dict:
+            closes: dict[str, list[float]] | None = None,
+            triggers: dict[str, str] | None = None) -> dict:
     """Gather book, achievements, reports, and sparkline data into one dict.
 
     Every argument defaults to loading the real project state; pass any of
@@ -131,6 +137,12 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         reports = _default_reports()
     if closes is None:
         closes = _default_closes()
+    if triggers is None:
+        try:
+            from options_researcher.entry_watch import _gather
+            triggers = {r["symbol"]: r["verdict"] for r in _gather()}
+        except Exception:
+            triggers = {}
 
     achievements = []
     for line in facts:
@@ -146,6 +158,7 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         "achievements": achievements,
         "reports": list(reports),
         "sparklines": dict(closes),
+        "triggers": dict(triggers),
     }
 
 
@@ -158,17 +171,17 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
 
 _PARTY = [
     # (symbol, accent color, role line)
-    ("MSFT", "#4da3ff", "The Tank — LEAPS core"),
-    ("AMZN", "#ff9900", "Bench — returns with covered calls"),
-    ("VST", "#ffd23f", "Dual-class — CSP + tactical"),
-    ("CEG", "#7CFC9B", "Reserve — LEAPS slot 2"),
+    ("MSFT", "#4da3ff", "Watch — LEAPS depth"),
+    ("AMZN", "#ff9900", "Watch — income candidates"),
+    ("VST", "#ffd23f", "Held — 38 shares, no options"),
+    ("CEG", "#7CFC9B", "Watch — power-side candidate"),
 ]
 
 _QUEST_LOG_COMPLETED = [
-    "M1", "M2", "M3", "M4", "M5", "M6", "seeded window",
+    "M1", "M2", "M3", "M4", "M5", "M6", "scanner dashboard",
 ]
-_QUEST_LOG_ACTIVE = "Survive 2 quarters of forward window"
-_QUEST_LOG_LOCKED = "Dashboard v2 (live sparkline history)"
+_QUEST_LOG_ACTIVE = "Find an attractive candidate, then record it intentionally"
+_QUEST_LOG_LOCKED = "Forward paper window starts after first tracked option"
 
 _GRAVEYARD = [
     "H1 $2-wide (FAIL)",
@@ -240,7 +253,7 @@ def _sparkline_svg(symbol: str, closes: list[float], color: str) -> str:
 
 
 def _party_card(symbol: str, color: str, role: str, sparklines: dict,
-                marks: list[dict]) -> str:
+                marks: list[dict], trigger: str | None = None) -> str:
     closes = sparklines.get(symbol, [])
     badges = []
     for m in marks:
@@ -254,10 +267,16 @@ def _party_card(symbol: str, color: str, role: str, sparklines: dict,
             f'{sign}{pnl:,.2f}</span>'
         )
     badges_html = "".join(badges) if badges else '<span class="pnl-none">no open marks</span>'
+    trigger_html = ""
+    if trigger:
+        t_color = "#ff5470" if trigger == "FIRE" else "#caa53d"
+        trigger_html = (f'<div class="party-trigger" style="color:{t_color}">'
+                        f'TRIGGER: {_esc(trigger)}</div>')
     return f"""
     <div class="party-card" style="border-color:{color}">
       <div class="party-name" style="color:{color}">{_esc(symbol)}</div>
       <div class="party-role">{_esc(role)}</div>
+      {trigger_html}
       {_sparkline_svg(symbol, closes, color)}
       <div class="party-badges">{badges_html}</div>
     </div>"""
@@ -265,7 +284,7 @@ def _party_card(symbol: str, color: str, role: str, sparklines: dict,
 
 def _book_rows(marks: list[dict]) -> str:
     if not marks:
-        return '<tr><td colspan="9" class="empty">No open marks.</td></tr>'
+        return '<tr><td colspan="9" class="empty">No open options recorded.</td></tr>'
     rows = []
     for m in marks:
         pnl = m.get("pnl", 0.0) or 0.0
@@ -289,7 +308,7 @@ def _book_rows(marks: list[dict]) -> str:
 
 def _bucket_banner(bucket_issues: list[str]) -> str:
     if not bucket_issues:
-        return '<div class="banner banner-green">ALL BUCKETS GREEN</div>'
+        return '<div class="banner banner-green">RECORDED OPTION RULES GREEN</div>'
     items = "".join(f"<li>{_esc(issue)}</li>" for issue in bucket_issues)
     return f'<div class="banner banner-red"><ul>{items}</ul></div>'
 
@@ -341,10 +360,12 @@ def render(data: dict) -> str:
     achievements = data.get("achievements", [])
     reports = data.get("reports", [])
     sparklines = data.get("sparklines", {})
+    triggers = data.get("triggers", {})
 
     as_of = _datetime.now(timezone.utc).date().isoformat()
     party_cards = "".join(
-        _party_card(symbol, color, role, sparklines, marks)
+        _party_card(symbol, color, role, sparklines, marks,
+                   trigger=triggers.get(symbol))
         for symbol, color, role in _PARTY
     )
 
@@ -400,6 +421,11 @@ def render(data: dict) -> str:
   .party-role {{
     color: #9aa4c0;
     font-size: 0.85em;
+    margin-bottom: 8px;
+  }}
+  .party-trigger {{
+    font-size: 0.8em;
+    font-weight: bold;
     margin-bottom: 8px;
   }}
   .sparkline {{
@@ -504,7 +530,7 @@ def render(data: dict) -> str:
 
 <div class="panel">
   <h1>MISSION CONTROL</h1>
-  <div class="header-sub">H4 FORWARD WINDOW &mdash; as of {_esc(as_of)}</div>
+  <div class="header-sub">SCANNER MODE &mdash; as of {_esc(as_of)}</div>
 </div>
 
 <div class="panel">

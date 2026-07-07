@@ -11,6 +11,11 @@ __pycache__/
 
 # Local Claude Code agent config / permissions -- never commit
 .claude/
+!ov/.claude/
+!ov/.claude/**
+ov/.claude/**/__pycache__/
+ov/.claude/**/*.pyc
+CLAUDE.local.md
 
 .cache/
 results/*
@@ -26,9 +31,13 @@ results/*
 # `git add -f` if a specific note ever needs to be committed.
 /20??-??-??.md
 /Untitled*.md
+/Untitled*.canvas
 
 # session scratch (web research cache)
 .firecrawl/
 
 # disposable intermediates (WAT convention)
 .tmp/
+
+# superpowers brainstorming companion scratch (mockups, not deliverables)
+.superpowers/

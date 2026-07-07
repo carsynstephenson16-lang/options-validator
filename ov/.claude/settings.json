@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_live_trading.py\"",
+            "timeout": 15,
+            "statusMessage": "Checking for live-trading code..."
+          }
+        ]
+      }
+    ]
+  }
+}

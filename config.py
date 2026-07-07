@@ -34,8 +34,8 @@ RISK_SLEEVE          = 14_000    # $ genuinely willing to lose (cash + swing;
 # credits it is what makes the strategy TRADABLE at all: the 1% rule ($140)
 # sat below the $2-wide ECONOMIC max loss ($142.60), i.e. zero contracts.
 # The cap is PER TRADE, not per cluster: len(UNIVERSE) concurrent positions
-# put ~$5,400 (~38.6% of the sleeve) at SIMULTANEOUS risk in the current
-# 9-symbol universe. These names are emphatically not 9 independent bets --
+# put ~$2,400 (~17.1% of the sleeve) at SIMULTANEOUS risk in the current
+# 4-symbol universe. These names are emphatically not 4 independent bets --
 # analysis/feasibility.py prints the portfolio view. Never raise this cap to
 # make a width "fit"; that is reverse-engineering risk to fit the trade, the
 # exact mistake this file warns against.
@@ -137,7 +137,8 @@ COHORT_GRANULARITY       = "week"  # cross-sectional cohort key = ISO week of en
 FILL_MODEL_ID            = "conservative_bid_ask_plus_haircut_v1"  # bump if fill logic changes
 
 # ---------------------------------------------------------------------------
-# H4 RISK BUCKETS (owner decisions 2026-07-04; frozen with the H4 prereg).
+# H4/H5 RISK BUCKETS (owner decisions 2026-07-04; H5 scanner-first correction
+# 2026-07-06). These caps constrain candidates and any tracked positions.
 # THESIS: LEAPS calls, premium-capped (equity-replacement accounting).
 # TACTICAL: short-dated long calls under the existing $600 economic cap.
 # CSP: exactly one cash-secured put; collateral lives on the EQUITY side.
@@ -147,7 +148,13 @@ H4_THESIS_MAX_PREMIUM_PER_NAME = 10_000  # $ per underlying (owner amendment
                                          # ~1y LEAPS priced above the blind 4k
                                          # estimate; TOTAL below unchanged, so
                                          # effectively ONE full-size LEAPS)
-H4_THESIS_MAX_PREMIUM_TOTAL    = 10_000  # $ across all LEAPS (unchanged)
+H4_THESIS_MAX_PREMIUM_TOTAL    = 16_000  # $ across all LEAPS (owner amendment
+                                         # 2026-07-06: 10k -> 16k; scanner
+                                         # budget room for up to two full-size
+                                         # LEAPS if later selected. No LEAPS
+                                         # are currently open. Sizing cap, NOT
+                                         # an edge parameter; logged in
+                                         # ledger/facts.log)
 H4_THESIS_MAX_POSITIONS        = 2
 H4_THESIS_NAMES                = ["MSFT", "VST", "CEG"]
 H4_THESIS_DELTA                = 0.70
@@ -176,4 +183,22 @@ H5_CC_UPSIDE_GREEN = 0.03
 H5_IVR_SELL_GREEN  = 0.5
 H5_IVR_BUY_GREEN   = 0.3
 H5_IVR_BUY_RED     = 0.7
+# Seller VRP-PROXY gate: GREEN when front-month atm_iv (0.50d nearest monthly,
+# 15-60 DTE, FORWARD-looking) >= rv21 (trailing 21-trading-day realized,
+# BACKWARD-looking), i.e. iv_minus_rv >= 0. DESCRIPTIVE ONLY and a PROXY, not a
+# true variance risk premium: it compares implied to TRAILING realized, not to
+# realized over the option's own cycle, and the tenors only roughly match.
+# Anchor is the SIGN of the proxy, not a tuned level. Separate badge from
+# H5_IVR_SELL_GREEN (IV vs its own 1yr history).
+H5_VRP_SELL_GREEN  = 0.0
 H5_INCOME_DELTA    = 0.20     # CSP + CC short-leg target delta (band +/-0.15)
+
+# H5 LEAPS entry trigger (owner-frozen 2026-07-07; ledger
+# H5_ENTRY_TRIGGER_PREREG). ALL conditions must hold before the owner even
+# evaluates an entry: close <= level AND iv_rank <= H5_ENTRY_IVR_MAX AND the
+# 0.70-delta LEAPS candidate passes the liquidity gates. IVR_MAX is 0.5 (not
+# the GREEN 0.3) because a pullback that hits the price level typically
+# RAISES IV-rank; demanding bottom-tercile IV simultaneously risks a trigger
+# that can never fire.
+H5_ENTRY_TRIGGERS = {"VST": 140.0, "AMZN": 220.0}
+H5_ENTRY_IVR_MAX = 0.5

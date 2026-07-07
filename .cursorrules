@@ -1,8 +1,13 @@
-# Options Validation Harness -- rules for AI agents working in this repo
+# Options Research Platform -- rules for AI agents working in this repo
 
 ## What this project is
-A research/validation harness answering ONE question: does a strategy have
-positive expectancy AFTER realistic costs, across 2018/2020/2022 regimes?
+An options research platform for four AI-infrastructure names (VST, CEG,
+MSFT, AMZN — owner scope decision 2026-07-03; see README.md): study how
+their options actually behave, then build and validate strategies with
+positive expectancy AFTER realistic costs. The legacy 2018/2020/2022
+in-sample + sealed-holdout machinery is kept for backtests; new hypotheses
+pre-register their own validation design (e.g. forward paper windows),
+because 2023+ is not a credible blind holdout for these names.
 It is NOT a live trading bot. It must never place real orders.
 A "no edge after costs" finding is a SUCCESS, not a failure to fix.
 
@@ -40,3 +45,22 @@ A "no edge after costs" finding is a SUCCESS, not a failure to fix.
 ## Scope
 Validator only. No live order placement, no scanner/suggestor, no parameter
 optimizer unless explicitly added to the phase plan.
+
+## Claim discipline
+- Label every important factual claim about options mechanics, broker behavior,
+  margin, assignment, fees, or data as Repo-verified, Test-verified,
+  Official-source, Inference, or Assumption.
+- Never cite blogs, Reddit, YouTube, or forums for assignment, margin, fills,
+  or fees when an official source exists.
+
+## Vocabulary discipline
+- Do not use "proven," "confirmed," "edge found," "works," or "guaranteed"
+  about backtest results.
+- Use "survived this test," "not yet rejected," "rejected," or "consistent
+  with zero edge."
+
+## Scope guard
+Current phase: Phase 0 - get one strategy to one honest verdict. Before adding
+a new capability, ticker, strategy, or tool, answer: "Does this move the
+current phase to a verdict?" If no, write it into `ideas-parking-lot.md` and
+continue the phase.

@@ -107,7 +107,7 @@ def scenario_rows(card: dict, structure: str, *, close: float,
             pnl, note = _pmcc_pnl(row["price"], strike, lk, lc, credit)
             out.append({**row, "pnl": _round_cents(pnl), "note": note})
         return out
-    if structure == "leaps":
+    if structure in ("leaps", "long_call"):
         cost = float(card["cost"])
         breakeven = float(card["breakeven"])
         ladder = _price_ladder(close=close, rv21=rv21, strike=strike,
@@ -122,10 +122,11 @@ def _headline(symbol: str, kind: str, card: dict) -> str:
     verbs = {"put": "Sell the {sym} ${k:.0f} put",
              "cc": "Sell the {sym} ${k:.0f} covered call",
              "pmcc": "Sell the {sym} ${k:.0f} call vs your LEAPS",
-             "leaps": "Buy the {sym} ${k:.0f} LEAPS"}
+             "leaps": "Buy the {sym} ${k:.0f} LEAPS",
+             "long_call": "Buy the {sym} ${k:.0f} call"}
     k = float(card["strike"])
     lead = verbs[kind].format(sym=symbol, k=k)
-    if kind == "leaps":
+    if kind in ("leaps", "long_call"):
         money = f"costs ${float(card['cost']):,.0f}"
     else:
         money = f"collect ${float(card['credit']):,.0f} now"
@@ -174,7 +175,8 @@ def assemble(*, symbol_sections: list[dict] | None = None,
                     enriched, kind, close=float(sec["close"]), rv21=rv21)
                 enriched["headline"] = _headline(sym, kind, enriched)
                 enriched["countdown"] = (_countdown(enriched)
-                                         if kind == "leaps" else "")
+                                         if kind in ("leaps", "long_call")
+                                         else "")
                 cards.append(enriched)
             out_groups.append({"kind": kind, "title": grp["title"],
                                "cards": cards, "empty": grp.get("empty")})
@@ -197,12 +199,14 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
     from options_researcher.attractiveness import (
         cc_card_rows,
         leaps_card_rows,
+        long_call_card_rows,
         pmcc_card_rows,
         put_card_rows,
     )
     from options_researcher.chains import nearest_monthly
     from options_researcher.earnings import load_earnings
     from options_researcher.features import load_features
+    from options_researcher.fomc import load_fomc
     from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
 
     holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
@@ -233,12 +237,18 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
         rv21 = float(row["rv21"])
         rv21_by_symbol[symbol] = rv21
         iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
+        iv_minus_rv = (float(row["iv_minus_rv"])
+                       if pd.notna(row["iv_minus_rv"]) else 0.0)
         exp = nearest_monthly(chain, date.fromisoformat(day))
         earn_in_cycle = bool(exp is not None and any(
             date.fromisoformat(day) < e <= exp for e in load_earnings(symbol)))
+        fomc_in_cycle = bool(exp is not None and any(
+            date.fromisoformat(day) < m <= exp for m in load_fomc()))
 
         put_cards = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
-                                  iv_rank=iv_rank, earnings_in_cycle=earn_in_cycle)
+                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                                  earnings_in_cycle=earn_in_cycle,
+                                  fomc_in_cycle=fomc_in_cycle)
         groups: list[dict] = [
             {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
              "cards": put_cards,
@@ -253,21 +263,25 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                            "cards": cc_card_rows(
                                symbol, chain, day, close=close,
                                cost_basis=float(lot.iloc[0]["cost_basis"]),
-                               iv_rank=iv_rank,
-                               earnings_in_cycle=earn_in_cycle),
+                               iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                               earnings_in_cycle=earn_in_cycle,
+                               fomc_in_cycle=fomc_in_cycle),
                            "empty": None})
         elif held_shares > 0:
             groups.append({"kind": "cc",
                            "title": "SELL A COVERED CALL? (rent out your shares)",
                            "cards": [],
                            "empty": (f"you hold {held_shares} sh of {symbol} -- a "
-                                     "covered call needs 100 per contract; use "
-                                     "the LEAPS lane (PMCC) or add shares.")})
+                                     "covered call needs 100 per contract. "
+                                     "Covered-call rows appear after a declared "
+                                     "100-share lot; PMCC rows appear only after "
+                                     "a real LEAPS is recorded.")})
         if symbol in held_leaps:
             lk, lp = held_leaps[symbol]
             pmcc_cards = pmcc_card_rows(
                 symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
-                close=close, iv_rank=iv_rank, earnings_in_cycle=earn_in_cycle)
+                close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                earnings_in_cycle=earn_in_cycle, fomc_in_cycle=fomc_in_cycle)
             groups.append({"kind": "pmcc",
                            "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
                            "leaps_strike": lk, "leaps_premium": lp,
@@ -278,16 +292,54 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                             "far out to pay -- selling closer would risk locking "
                             "a loss, so H5 shows nothing.")})
         if symbol in config.H4_THESIS_NAMES:
+            leaps_cards = leaps_card_rows(symbol, chain, day, close=close,
+                                          iv_rank=iv_rank, bucket_room=bucket_room)
             groups.append({"kind": "leaps",
                            "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
-                           "cards": leaps_card_rows(symbol, chain, day,
-                                                    close=close, iv_rank=iv_rank,
-                                                    bucket_room=bucket_room),
-                           "empty": None})
+                           "preview": False, "cards": leaps_cards, "empty": None})
+            # PMCC PREVIEW: if no LEAPS is actually held, show what selling a
+            # safe call against the *previewed* LEAPS would look like.
+            if symbol not in held_leaps and leaps_cards:
+                lc = leaps_cards[0]
+                lk, lp = float(lc["strike"]), float(lc["cost"]) / 100.0
+                preview_pmcc = pmcc_card_rows(
+                    symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
+                    close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                    earnings_in_cycle=earn_in_cycle, fomc_in_cycle=fomc_in_cycle)
+                groups.append({
+                    "kind": "pmcc", "preview": True,
+                    "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
+                    "leaps_strike": lk, "leaps_premium": lp,
+                    "cards": preview_pmcc,
+                    "empty": None if preview_pmcc else
+                    (f"no SAFE strike this cycle: needs a call at "
+                     f"${lk + lp:.2f}+ that still pays; none listed.")})
+
+        # TACTICAL long-call preview (descriptive; not an H5 income lane).
+        long_calls = long_call_card_rows(symbol, chain, day, close=close,
+                                         iv_rank=iv_rank)
+        groups.append({"kind": "long_call", "preview": True,
+                       "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
+                       "cards": long_calls,
+                       "empty": None if long_calls
+                       else "no call near the tactical delta this cycle"})
 
         sections.append({"symbol": symbol, "as_of": day, "close": close,
                          "iv_rank": iv_rank, "groups": groups})
     return sections, rv21_by_symbol
+
+
+def sections_json(sections: list[dict] | None = None) -> str:
+    """Serialize the scanner's candidate sections to JSON. Defaults to the real
+    project state via _gather_all(); accepts an explicit list for testing."""
+    import json
+
+    if sections is None:
+        sections, _ = _gather_all()
+    _dates = {s["as_of"] for s in sections} if sections else set()
+    as_of = next(iter(_dates)) if len(_dates) == 1 else None
+    return json.dumps({"as_of": as_of, "sections": sections},
+                      indent=2, sort_keys=False)
 
 
 _GRADE_COLORS = {"GREEN": "#2fd27d", "AMBER": "#caa53d", "RED": "#ff5470"}
@@ -548,4 +600,8 @@ def main(**assemble_kwargs) -> str:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--json" in sys.argv:
+        print(sections_json())
+    else:
+        main()

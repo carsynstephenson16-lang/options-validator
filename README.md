@@ -1,12 +1,14 @@
-# Options Research Platform — VST · CEG · MSFT · AMZN
+# Options Scanner & Research Platform — VST · CEG · MSFT · AMZN
 
-**Mission (owner decision 2026-07-03):** research how the options of four
-AI-infrastructure names — Vistra (VST) and Constellation (CEG) on the
-nuclear/data-center power side, Microsoft (MSFT) and Amazon (AMZN) on the
-Mag-7 cloud side — actually behave, and only then build and validate option
-strategies on them. **Research only. This is NOT a live bot and places no
-orders.** "No edge after costs" is a successful finding — the point is to
-learn that cheaply, before risking money.
+**Mission (owner decision 2026-07-03; clarified 2026-07-06):** research how
+the options of four AI-infrastructure names — Vistra (VST) and Constellation
+(CEG) on the nuclear/data-center power side, Microsoft (MSFT) and Amazon
+(AMZN) on the Mag-7 cloud side — actually behave, then scan for contracts
+that look attractive enough to consider. **Scanner first. Research only.
+This is NOT a live bot and places no orders.** A candidate becomes a tracked
+position only after the owner intentionally adds it to `data/positions/`.
+"No edge after costs" is a successful finding — the point is to learn that
+cheaply, before risking money.
 
 The platform has two layers, and the separation is deliberate:
 
@@ -17,10 +19,11 @@ The platform has two layers, and the separation is deliberate:
    dependence-aware confidence intervals, an append-only research ledger, and
    a sealed-holdout protocol. This layer exists because it already caught
    three tempting strategies (H1, H2, H3-draft) that would have lost money.
-2. **The research layer** (`options_researcher/`, new): descriptive and
-   predictive studies of the four names' options — liquidity, strike grids,
+2. **The research layer** (`options_researcher/`, new): descriptive studies
+   and scanner views for the four names' options — liquidity, strike grids,
    implied-vol behavior, how option prices react around big moves — that
-   produce *facts first*, and only later feed pre-registered strategy tests.
+   produce *facts first*, then candidate cards, and only later tracked
+   positions or pre-registered strategy tests.
 
 ## Current status
 
@@ -31,10 +34,12 @@ The platform has two layers, and the separation is deliberate:
 | Tradability profile | `options_researcher/profile_tradability.py` — first findings below |
 | Backtest path | Offline Lumibot/PandasData harness + `tools/score_backtest.py` scoreboard CLI, wired against the real cache |
 | Feasibility | `analysis/feasibility.py` — credits measured from cached chains, not assumed |
+| Current holdings | `data/positions/holdings.csv` records 39 VST shares. `data/positions/positions.csv` is empty: no options are currently open or paper-tracked. |
+| Scanner mode | `options_researcher.attractiveness` and `options_researcher.attractiveness_dashboard` show candidates; they never add trades or mutate positions. |
 | Discipline layer | 354 tests green (`uv run python -m unittest discover -s tests`, 2026-07-06) |
 | Strategy history | H1 ($2-wide SPY/QQQ put spread), H2 ($5-wide): registered, honest in-sample **FAILs**. H3R (SPY conditional-VRP): archived un-run at scope pivot. Ledger records are permanent; OOS budget 0/3 spent |
 
-### What the first profile says (sampled days, ~37-DTE puts)
+### What the early profile said (sampled days, ~37-DTE puts)
 
 - **MSFT**: tradable under our gates since 2019; spreads ~3–9%; $5 strike
   grid since 2021. Best-behaved name of the four.
@@ -50,6 +55,9 @@ The platform has two layers, and the separation is deliberate:
   2024 (OI 87), collapsed at sampled expiries in 2025–26. Only ~4.5 years of
   option history exist at all. The monthly-expiry check decides CEG too.
 
+Later correction: the monthly-expiry check below changed the VST/CEG picture.
+For scanner purposes, monthly expirations are the default target.
+
 ## Quickstart
 
 Python 3.12 managed by uv; the lockfile is the source of truth.
@@ -61,7 +69,8 @@ uv run python options_researcher/profile_tradability.py     # 4-name liquidity p
 uv run python analysis/feasibility.py                       # sizing vs the sleeve
 uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample scoreboard
 uv run python -m options_researcher.attractiveness            # which options look attractive today
-uv run python -m options_researcher.portfolio                 # mark the H5 paper book
+uv run python -m options_researcher.entry_watch                # WAIT/FIRE vs the frozen entry triggers
+uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard    # interactive at-expiration scenario view (writes .tmp/dashboard/attractiveness.html)
 ```
@@ -73,11 +82,14 @@ sealed for the legacy holdout machinery unless the reveal gate opens them.
 ## Capital & risk
 
 `RISK_SLEEVE` ($14k) and `MAX_LOSS_PER_TRADE` ($600 economic max loss, owner
-decision 2026-07-02) live in `config.py`. Four concurrent positions ≈ $2,400
-≈ 17.1% of the sleeve at simultaneous risk — and these four names are **one
-AI-infrastructure cluster, not four independent bets**; in an AI or
-power-sector drawdown they can lose together. Never size against net worth,
-and never raise the cap to make a structure "fit".
+decision 2026-07-02) live in `config.py`. The current recorded state has **no
+open options**, so the sleeve is not committed. If the scanner later surfaces
+an attractive candidate and the owner adds it, four concurrent option
+positions would put about $2,400, or 17.1% of the sleeve, at simultaneous
+risk — and these four names are **one AI-infrastructure cluster, not four
+independent bets**; in an AI or power-sector drawdown they can lose together.
+Never size against net worth, and never raise the cap to make a structure
+"fit".
 
 ## Research rules (non-negotiable, inherited)
 
@@ -114,39 +126,44 @@ paper-trading window.
 4. ~~**Structure menu**~~ — DELIVERED 2026-07-04, awaiting owner picks:
    `docs/superpowers/2026-07-04-structure-menu.md` (recommended H4: AMZN
    monthly 0.20Δ covered call; close-data Option A/B decision bundled).
-5. ~~**First 4-name hypothesis (H4)**~~ — FROZEN 2026-07-04 (owner picks:
-   1–2 LEAPS thesis-bucket + 1 cash-secured put + monthly tactical calls;
-   `docs/superpowers/specs/2026-07-04-h4-preregistration.md`, ledger trial 5).
-   **Now live: the forward paper window.** Add positions to
-   `data/positions/positions.csv`, then
-   `uv run python -m options_researcher.portfolio` marks the book
-   (conservative fills), flags rolls/earnings/assignment, and enforces the
-   H4 risk buckets. Window ≥ 2 quarters → scoreboard verdict.
+5. ~~**First 4-name hypothesis (H4)**~~ — FROZEN 2026-07-04, then superseded
+   by H5 before any completed cycles. The old seeded rows were not the
+   owner's real current positions and have been cleared. Current mode:
+   scanner first; add a row to `data/positions/positions.csv` only after a
+   candidate is attractive enough to track intentionally.
 6. **Composite evidence backtest** — DONE 2026-07-04:
-   `uv run python -m options_researcher.h4_backtest` replays the seeded
-   book's frozen rules (2023-01..2026-06: combined +$14.7k, 9/14 quarters
-   positive, worst quarter −$5.1k — evidence only, never the verdict).
+   `uv run python -m options_researcher.h4_backtest` replays the old H4
+   recipe (2023-01..2026-06: combined +$14.7k, 9/14 quarters positive, worst
+   quarter −$5.1k). This is historical evidence only, not the current book and
+   never the verdict.
 7. ~~**Dashboard (M7)**~~ — DONE 2026-07-04:
    `uv run python -m options_researcher.dashboard` writes a self-contained
    `.tmp/dashboard/index.html` (dark, game-styled, no network/JS deps) —
-   party cards per name, the live book, quest log, and an achievement wall
-   built from `ledger/facts.log`.
+   watch cards per name, any recorded options, quest log, and an achievement
+   wall built from `ledger/facts.log`.
 8. ~~**Attractiveness scenario view**~~ — DONE 2026-07-06:
    `uv run python -m options_researcher.attractiveness_dashboard` writes a
    self-contained `.tmp/dashboard/attractiveness.html` over the same
    candidates the `attractiveness` CLI prints. Each candidate gets a
    plain-language "if the stock is at price X, your gain or loss is Y" table
    priced **at expiration** (intrinsic value only — no options-pricing
-   model), with the PMCC honest-split (credit-only below the short strike,
-   safe-floor above) and a LEAPS roll-due countdown. Reuses the M7 CSS; no
-   network/JS deps.
+   model). PMCC rows only appear after a real LEAPS is recorded in
+   `positions.csv`; covered-call rows only appear after a declared 100-share
+   lot. Reuses the M7 CSS; no network/JS deps.
 
-**Scope status: COMPLETE.** Live hypothesis: **H5 Sector Income Core**
-(specs/2026-07-04-h5-sector-income-core-design.md; ledger trial 6; H4
-superseded at zero cycles, book carried over, window clock restarted).
-Remaining: the passive forward window (≥ 2 quarters → scoreboard verdict) and
-declaring more 100-share lots in data/positions/holdings.csv to activate the
-covered-call engine.
+**Scope status: scanner tooling complete.** Current operating mode:
+**H5 Sector Income Core scanner/researcher**
+(`docs/superpowers/specs/2026-07-04-h5-sector-income-core-design.md`; ledger
+trial 6; H4 superseded at zero cycles).
+Current recorded holdings: 39 VST shares and no options. Remaining: run the
+scanner, decide whether anything is attractive enough to add, then start the
+forward paper window only after an actual tracked option is entered.
+LEAPS entry triggers are pre-registered (owner-frozen 2026-07-07, ledger
+H5_ENTRY_TRIGGER_PREREG): evaluate only when close ≤ trigger (VST $140,
+AMZN $220) AND IV-rank ≤ 0.5 AND the LEAPS passes the liquidity gates —
+`options_researcher.entry_watch` prints the live WAIT/FIRE status. The
+ThetaData subscription cancels ~2026-07-25 per
+`docs/superpowers/2026-07-07-thetadata-cancel-checklist.md`.
 
 ## Known limitations
 
