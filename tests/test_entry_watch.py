@@ -53,5 +53,32 @@ class TriggerStatusTests(unittest.TestCase):
                          config.H5_ENTRY_TRIGGERS["AMZN"])
 
 
+class MainTests(unittest.TestCase):
+    def _rows(self):
+        return [{"symbol": "VST", "close": 158.63, "trigger": 140.0,
+                 "iv_rank": 0.47, "price_ok": False, "iv_ok": True,
+                 "liq_ok": True, "unmet": ["close $158.63 > trigger $140.00"],
+                 "verdict": "WAIT", "close_asof": "2026-07-06",
+                 "chain_asof": "2026-07-06"},
+                {"symbol": "AMZN", "close": 219.00, "trigger": 220.0,
+                 "iv_rank": 0.30, "price_ok": True, "iv_ok": True,
+                 "liq_ok": True, "unmet": [], "verdict": "FIRE",
+                 "close_asof": "2026-07-06", "chain_asof": "2026-07-02"}]
+
+    def test_main_prints_verdicts_and_staleness(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            ew.main(rows=self._rows())
+        out = buf.getvalue()
+        self.assertIn("VST", out)
+        self.assertIn("WAIT", out)
+        self.assertIn("FIRE", out)
+        self.assertIn("evaluate", out.lower())
+        self.assertIn("stale", out.lower())
+        self.assertIn("never auto-enters", out)
+
+
 if __name__ == "__main__":
     unittest.main()
