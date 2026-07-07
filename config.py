@@ -183,4 +183,12 @@ H5_CC_UPSIDE_GREEN = 0.03
 H5_IVR_SELL_GREEN  = 0.5
 H5_IVR_BUY_GREEN   = 0.3
 H5_IVR_BUY_RED     = 0.7
+# Seller VRP-PROXY gate: GREEN when front-month atm_iv (0.50d nearest monthly,
+# 15-60 DTE, FORWARD-looking) >= rv21 (trailing 21-trading-day realized,
+# BACKWARD-looking), i.e. iv_minus_rv >= 0. DESCRIPTIVE ONLY and a PROXY, not a
+# true variance risk premium: it compares implied to TRAILING realized, not to
+# realized over the option's own cycle, and the tenors only roughly match.
+# Anchor is the SIGN of the proxy, not a tuned level. Separate badge from
+# H5_IVR_SELL_GREEN (IV vs its own 1yr history).
+H5_VRP_SELL_GREEN  = 0.0
 H5_INCOME_DELTA    = 0.20     # CSP + CC short-leg target delta (band +/-0.15)

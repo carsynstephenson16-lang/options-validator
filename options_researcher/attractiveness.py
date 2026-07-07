@@ -45,8 +45,19 @@ def _monthly_rows(chain: pd.DataFrame, day: str, right: str) -> pd.DataFrame:
     return rows
 
 
+def _vrp_seller_grade(iv_minus_rv: float) -> str:
+    """VRP PROXY, descriptive only. GREEN when front-month implied (atm_iv,
+    forward-looking) sits at/above trailing 21d realized (iv_minus_rv >= 0);
+    AMBER otherwise. NOT a true variance risk premium: trailing realized is
+    not realized over the option's own cycle, and the tenors only roughly
+    match. Surfaces premium richness vs recent realized -- which IV-rank
+    (IV vs its own history) cannot see -- but never forecasts future vol."""
+    return "GREEN" if iv_minus_rv >= config.H5_VRP_SELL_GREEN else "AMBER"
+
+
 def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                   close: float, rv21: float, iv_rank: float,
+                  iv_minus_rv: float,
                   earnings_in_cycle: bool) -> list[dict]:
     """SELL-A-PUT candidates near the H5 income delta."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
@@ -70,6 +81,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                              config.H5_CUSHION_AMBER),
             "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
                               else "AMBER"),
+            "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
@@ -89,6 +101,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 
 def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                  close: float, cost_basis: float, iv_rank: float,
+                 iv_minus_rv: float,
                  earnings_in_cycle: bool) -> list[dict]:
     """SELL-A-COVERED-CALL candidates (against a declared 100-share lot)."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
@@ -117,6 +130,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                             else "AMBER"),
             "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
                               else "AMBER"),
+            "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
@@ -136,7 +150,8 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 
 def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    leaps_strike: float, leaps_premium: float, close: float,
-                   iv_rank: float, earnings_in_cycle: bool) -> list[dict]:
+                   iv_rank: float, iv_minus_rv: float,
+                   earnings_in_cycle: bool) -> list[dict]:
     """SELL-A-CALL-AGAINST-YOUR-LEAPS (poor man's covered call) candidates.
 
     HARD safety gate: only strikes >= leaps_strike + leaps_premium are shown,
@@ -166,6 +181,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "safety": "GREEN",   # by construction: only safe strikes reach here
             "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
                               else "AMBER"),
+            "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
@@ -261,6 +277,8 @@ def main():
                                   allow_oos=True).iloc[-1])
         rv21 = float(row["rv21"])
         iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
+        iv_minus_rv = (float(row["iv_minus_rv"])
+                       if pd.notna(row["iv_minus_rv"]) else 0.0)
         exp = nearest_monthly(chain, date.fromisoformat(day))
         earn_in_cycle = False
         if exp is not None:
@@ -270,7 +288,8 @@ def main():
               f"IV-rank {iv_rank:.2f} ===")
         print("-- SELL A PUT? (promise to buy 100 sh lower)")
         rows = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
-                             iv_rank=iv_rank, earnings_in_cycle=earn_in_cycle)
+                             iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                             earnings_in_cycle=earn_in_cycle)
         for c in rows or []:
             badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
             print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
@@ -285,7 +304,7 @@ def main():
             print("-- SELL A COVERED CALL? (rent out shares you hold)")
             for c in cc_card_rows(symbol, chain, day, close=close,
                                   cost_basis=float(lot.iloc[0]["cost_basis"]),
-                                  iv_rank=iv_rank,
+                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                                   earnings_in_cycle=earn_in_cycle):
                 if "skipped" in c:
                     print(f"  ${c['strike']:.0f}: {c['skipped']}")
@@ -304,7 +323,7 @@ def main():
                   f"cost ${prem_leaps:.2f})")
             pmcc = pmcc_card_rows(symbol, chain, day, leaps_strike=k_leaps,
                                   leaps_premium=prem_leaps, close=close,
-                                  iv_rank=iv_rank,
+                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                                   earnings_in_cycle=earn_in_cycle)
             for c in pmcc:
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
