@@ -149,7 +149,7 @@ def run_topup(symbols=None, *, today=None, ledger_dir: str = "ledger",
 
     symbols = list(config.UNIVERSE) if symbols is None else list(symbols)
     today = today or _dt.datetime.now(_ZoneInfo("America/New_York")).date().isoformat()
-                  
+
     last = latest_cached_date(symbols)
     if last is None:
         raise RuntimeError(
