@@ -107,7 +107,7 @@ def scenario_rows(card: dict, structure: str, *, close: float,
             pnl, note = _pmcc_pnl(row["price"], strike, lk, lc, credit)
             out.append({**row, "pnl": _round_cents(pnl), "note": note})
         return out
-    if structure == "leaps":
+    if structure in ("leaps", "long_call"):
         cost = float(card["cost"])
         breakeven = float(card["breakeven"])
         ladder = _price_ladder(close=close, rv21=rv21, strike=strike,
@@ -122,10 +122,11 @@ def _headline(symbol: str, kind: str, card: dict) -> str:
     verbs = {"put": "Sell the {sym} ${k:.0f} put",
              "cc": "Sell the {sym} ${k:.0f} covered call",
              "pmcc": "Sell the {sym} ${k:.0f} call vs your LEAPS",
-             "leaps": "Buy the {sym} ${k:.0f} LEAPS"}
+             "leaps": "Buy the {sym} ${k:.0f} LEAPS",
+             "long_call": "Buy the {sym} ${k:.0f} call"}
     k = float(card["strike"])
     lead = verbs[kind].format(sym=symbol, k=k)
-    if kind == "leaps":
+    if kind in ("leaps", "long_call"):
         money = f"costs ${float(card['cost']):,.0f}"
     else:
         money = f"collect ${float(card['credit']):,.0f} now"
@@ -174,7 +175,8 @@ def assemble(*, symbol_sections: list[dict] | None = None,
                     enriched, kind, close=float(sec["close"]), rv21=rv21)
                 enriched["headline"] = _headline(sym, kind, enriched)
                 enriched["countdown"] = (_countdown(enriched)
-                                         if kind == "leaps" else "")
+                                         if kind in ("leaps", "long_call")
+                                         else "")
                 cards.append(enriched)
             out_groups.append({"kind": kind, "title": grp["title"],
                                "cards": cards, "empty": grp.get("empty")})

@@ -84,6 +84,14 @@ class ScenarioRowsTests(unittest.TestCase):
         below = [r for r in rows if r["price"] < 420.0]
         self.assertTrue(below and all(r["note"] for r in below))
 
+    def test_long_call_scenarios_carry_pnl(self):
+        card = {"strike": 340.0, "cost": 7954.0, "breakeven": 419.54}
+        rows = ad.scenario_rows(card, "long_call", close=373.02,
+                                rv21=math.sqrt(12) * 0.11)
+        self.assertTrue(rows)
+        strike_row = next(r for r in rows if r["tag"] == "strike")
+        self.assertAlmostEqual(strike_row["pnl"], -7954.0, 2)
+
     def test_unknown_structure_raises(self):
         with self.assertRaises(ValueError):
             ad.scenario_rows({"strike": 1.0}, "bogus", close=1.0, rv21=1.0)
