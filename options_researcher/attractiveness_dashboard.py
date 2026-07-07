@@ -336,10 +336,10 @@ def sections_json(sections: list[dict] | None = None) -> str:
 
     if sections is None:
         sections, _ = _gather_all()
-        _dates = {s["as_of"] for s in sections} if sections else set()
-        as_of = next(iter(_dates)) if len(_dates) == 1 else None
-        return json.dumps({"as_of": as_of, "sections": sections},
-                          indent=2, sort_keys=False)
+    _dates = {s["as_of"] for s in sections} if sections else set()
+    as_of = next(iter(_dates)) if len(_dates) == 1 else None
+    return json.dumps({"as_of": as_of, "sections": sections},
+                      indent=2, sort_keys=False)
 
 
 _GRADE_COLORS = {"GREEN": "#2fd27d", "AMBER": "#caa53d", "RED": "#ff5470"}
