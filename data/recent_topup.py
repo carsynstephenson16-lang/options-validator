@@ -141,14 +141,15 @@ def audit_day(symbol: str, date: str, *, cache_dir=None) -> dict:
 def run_topup(symbols=None, *, today=None, ledger_dir: str = "ledger",
               dry_run: bool = False, do_audit: bool = True) -> dict:
     import datetime as _dt
+    from zoneinfo import ZoneInfo as _ZoneInfo
 
     from data.cache_runner import _run_window
     from data.thetadata_adapter import blind_cache_chain
     from research import facts
 
     symbols = list(config.UNIVERSE) if symbols is None else list(symbols)
-    today = today or _dt.date.today().isoformat()
-
+    today = today or _dt.datetime.now(_ZoneInfo("America/New_York")).date().isoformat()
+                  
     last = latest_cached_date(symbols)
     if last is None:
         raise RuntimeError(
