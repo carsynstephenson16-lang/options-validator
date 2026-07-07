@@ -7,13 +7,13 @@ import config
 from options_researcher.attractiveness import cc_card_rows, grade, put_card_rows
 
 
-def chain_rows(specs, exp="2026-07-17"):
+def chain_rows(specs, exp="2026-07-17", *, vega=0.0, iv=0.5):
     rows = []
     for right, strike, delta, bid in specs:
         rows.append({"expiration": exp, "strike": strike, "right": right,
                      "bid": bid, "ask": bid + 0.10, "open_interest": 500,
-                     "iv": 0.5, "delta": delta, "gamma": 0.0, "theta": 0.0,
-                     "vega": 0.0})
+                     "iv": iv, "delta": delta, "gamma": 0.0, "theta": 0.0,
+                     "vega": vega})
     return pd.DataFrame(rows)
 
 
@@ -108,6 +108,52 @@ class LongCallTests(unittest.TestCase):
                                    close=160.0, iv_rank=0.9)
         self.assertEqual(rows[0]["grades"]["fits_cap"], "RED")      # ~$718 > 600
         self.assertEqual(rows[0]["grades"]["iv_for_buyer"], "RED")  # rank 0.9 >= 0.7
+
+    def test_long_call_card_speaks_vega_and_iv(self):
+        from options_researcher.attractiveness import long_call_card_rows
+        chain = chain_rows([("C", 170.0, 0.40, 3.00), ("P", 150.0, -0.20, 2.0)],
+                           vega=42.0, iv=0.35)
+        rows = long_call_card_rows("VST", chain, "2026-06-30",
+                                   close=160.0, iv_rank=0.3)
+        self.assertIn("implied vol drops 1 point", rows[0]["verdict"])
+        self.assertIn("35%", rows[0]["verdict"])
+        self.assertAlmostEqual(rows[0]["vega"], 42.0)
+        self.assertAlmostEqual(rows[0]["iv"], 0.35)
+
+    def test_long_call_omits_vol_when_nan(self):
+        from options_researcher.attractiveness import long_call_card_rows
+        chain = chain_rows([("C", 170.0, 0.40, 3.00), ("P", 150.0, -0.20, 2.0)],
+                           vega=42.0, iv=0.35)
+        chain.loc[0, "vega"] = float("nan")
+        rows = long_call_card_rows("VST", chain, "2026-06-30",
+                                   close=160.0, iv_rank=0.3)
+        self.assertNotIn("implied vol drops 1 point", rows[0]["verdict"])
+        self.assertIsNone(rows[0]["vega"])
+        self.assertIsNone(rows[0]["iv"])
+
+
+class LeapsCardTests(unittest.TestCase):
+    def test_leaps_card_speaks_vega_and_iv(self):
+        from options_researcher.attractiveness import leaps_card_rows
+        chain = chain_rows([("C", 350.0, 0.70, 80.0)], exp="2027-06-17",
+                           vega=129.24, iv=0.378)
+        rows = leaps_card_rows("MSFT", chain, "2026-06-30", close=373.0,
+                               iv_rank=0.5, bucket_room=10_000.0)
+        self.assertIn("implied vol drops 1 point", rows[0]["verdict"])
+        self.assertIn("129", rows[0]["verdict"])
+        self.assertAlmostEqual(rows[0]["vega"], 129.24)
+        self.assertAlmostEqual(rows[0]["iv"], 0.378)
+
+    def test_leaps_omits_vol_when_nan(self):
+        from options_researcher.attractiveness import leaps_card_rows
+        chain = chain_rows([("C", 350.0, 0.70, 80.0)], exp="2027-06-17",
+                           vega=129.24, iv=0.378)
+        chain.loc[0, "iv"] = float("nan")
+        rows = leaps_card_rows("MSFT", chain, "2026-06-30", close=373.0,
+                               iv_rank=0.5, bucket_room=10_000.0)
+        self.assertNotIn("implied vol drops 1 point", rows[0]["verdict"])
+        self.assertIsNone(rows[0]["vega"])
+        self.assertIsNone(rows[0]["iv"])
 
 
 class SectionsJsonTests(unittest.TestCase):

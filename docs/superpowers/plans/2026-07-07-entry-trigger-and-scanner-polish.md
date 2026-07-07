@@ -652,32 +652,33 @@ Expected: new tests FAIL (missing prose/keys)
 
 - [ ] **Step 3: Implement**
 
-In `leaps_card_rows`, after the `extrinsic` line:
+Add a shared helper (both card builders call it) and guard **before** any
+`float()` — never extract then validate:
 
 ```python
+def _vol_prose(r) -> tuple[float | None, float | None, str]:
+    if not (pd.notna(r.get("vega")) and pd.notna(r.get("iv"))):
+        return None, None, ""
     vega = float(r["vega"])
     contract_iv = float(r["iv"])
+    sentence = (
+        f"this contract's own implied vol is {contract_iv:.0%}; if "
+        f"implied vol drops 1 point the option loses ~${vega:,.0f} "
+        f"(vega), on top of time decay; "
+    )
+    return vega, contract_iv, sentence
 ```
 
-extend the verdict string (before "max loss"):
+In `leaps_card_rows` and `long_call_card_rows`, after the `extrinsic` line:
 
 ```python
-               f"this contract's own implied vol is {contract_iv:.0%}; if "
-               f"implied vol drops 1 point the option loses ~${vega:,.0f} "
-               f"(vega), on top of time decay; "
+    vega, contract_iv, vol_sentence = _vol_prose(r)
 ```
 
-and add `"vega": vega, "iv": contract_iv,` to the returned dict. Make the
-equivalent change in `long_call_card_rows` (same fields exist on its rows).
-Guard: if `vega` or `iv` is missing/NaN in the row, omit the sentence and
-set the keys to `None` — never print a number that isn't there (skip-and-log
-ethos):
-
-```python
-    has_vol = pd.notna(r.get("vega")) and pd.notna(r.get("iv"))
-```
-
-(build the verdict with or without the vol sentence based on `has_vol`).
+Insert `{vol_sentence}` in the verdict before "max loss", and add
+`"vega": vega, "iv": contract_iv` to the returned dict. When `vega` or `iv`
+is missing/NaN, the helper returns `(None, None, "")` — omit the sentence and
+never print a number that isn't there (skip-and-log ethos).
 
 - [ ] **Step 4: Run suite + CLI**
 

@@ -45,6 +45,20 @@ def _monthly_rows(chain: pd.DataFrame, day: str, right: str) -> pd.DataFrame:
     return rows
 
 
+def _vol_prose(r) -> tuple[float | None, float | None, str]:
+    """Return (vega, iv, sentence) for card verdicts; skip on missing/NaN."""
+    if not (pd.notna(r.get("vega")) and pd.notna(r.get("iv"))):
+        return None, None, ""
+    vega = float(r["vega"])
+    contract_iv = float(r["iv"])
+    sentence = (
+        f"this contract's own implied vol is {contract_iv:.0%}; if "
+        f"implied vol drops 1 point the option loses ~${vega:,.0f} "
+        f"(vega), on top of time decay; "
+    )
+    return vega, contract_iv, sentence
+
+
 def _vrp_seller_grade(iv_minus_rv: float) -> str:
     """VRP PROXY, descriptive only. GREEN when front-month implied (atm_iv,
     forward-looking) sits at/above trailing 21d realized (iv_minus_rv >= 0);
@@ -215,6 +229,7 @@ def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
     breakeven = k + cost / 100.0
     dte = int(r["dte"])
     extrinsic = max(0.0, cost / 100.0 - max(0.0, close - k))
+    vega, contract_iv, vol_sentence = _vol_prose(r)
     grades = {
         "fits_bucket": "GREEN" if cost <= bucket_room else "RED",
         "iv_for_buyer": grade(iv_rank, config.H5_IVR_BUY_GREEN,
@@ -228,10 +243,11 @@ def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                f"{r['exp_date']}; breakeven ${breakeven:,.0f} "
                f"({100 * (breakeven / close - 1):+.1f}% move needed); time "
                f"decay costs ~${extrinsic * 100 / max(dte, 1):,.2f}/day if "
-               "the stock goes nowhere; max loss = what you paid, ever.")
+               f"the stock goes nowhere; {vol_sentence}"
+               "max loss = what you paid, ever.")
     return [{"strike": k, "expiry": r["exp_date"].isoformat(), "dte": dte,
              "cost": cost, "breakeven": breakeven, "grades": grades,
-             "verdict": verdict}]
+             "verdict": verdict, "vega": vega, "iv": contract_iv}]
 
 
 def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
@@ -253,6 +269,7 @@ def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
         breakeven = k + cost / 100.0
         dte = int(r["dte"])
         extrinsic = max(0.0, cost / 100.0 - max(0.0, close - k))
+        vega, contract_iv, vol_sentence = _vol_prose(r)
         grades = {
             "fits_cap": "GREEN" if cost <= config.MAX_LOSS_PER_TRADE else "RED",
             "iv_for_buyer": grade(iv_rank, config.H5_IVR_BUY_GREEN,
@@ -265,11 +282,13 @@ def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    f"({dte} days); breakeven ${breakeven:,.2f} "
                    f"({100 * (breakeven / close - 1):+.1f}% move needed); time "
                    f"decay ~${extrinsic * 100 / max(dte, 1):,.2f}/day if the "
-                   f"stock goes nowhere; max loss = ${cost:,.0f} (the premium), "
+                   f"stock goes nowhere; {vol_sentence}"
+                   f"max loss = ${cost:,.0f} (the premium), "
                    "ever. TACTICAL preview, not an H5 income lane.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": dte, "cost": cost, "breakeven": breakeven,
-                    "grades": grades, "verdict": verdict})
+                    "grades": grades, "verdict": verdict,
+                    "vega": vega, "iv": contract_iv})
     return out
 
 
