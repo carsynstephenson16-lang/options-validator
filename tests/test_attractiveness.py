@@ -31,7 +31,7 @@ class PutCardTests(unittest.TestCase):
         chain = chain_rows([("P", 145.0, -0.20, 2.15)])
         rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
                              rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
-                             earnings_in_cycle=False)
+                             earnings_in_cycle=False, fomc_in_cycle=False)
         r = rows[0]
         h = config.SLIPPAGE_HAIRCUT
         credit = 2.15 * (1 - h) * 100 - config.COMMISSION_PER_CONTRACT
@@ -44,6 +44,25 @@ class PutCardTests(unittest.TestCase):
         self.assertIn("promising", r["verdict"].lower())
 
 
+class FomcCardTests(unittest.TestCase):
+    """FOMC-in-cycle is a descriptive AMBER/GREEN badge, parallel to
+    earnings-in-cycle -- it never gates, scores, or ranks a candidate."""
+
+    def test_fomc_in_cycle_grades_amber(self):
+        chain = chain_rows([("P", 145.0, -0.20, 2.15)])
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=True)
+        self.assertEqual(rows[0]["grades"]["fomc"], "AMBER")
+
+    def test_fomc_not_in_cycle_grades_green(self):
+        chain = chain_rows([("P", 145.0, -0.20, 2.15)])
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=False)
+        self.assertEqual(rows[0]["grades"]["fomc"], "GREEN")
+
+
 class VrpSellerTests(unittest.TestCase):
     """Seller lanes grade premium richness on the variance risk premium
     (iv_minus_rv), not on IV-rank alone. GREEN when IV >= trailing realized
@@ -54,21 +73,21 @@ class VrpSellerTests(unittest.TestCase):
         chain = chain_rows([("P", 145.0, -0.20, 2.15)])
         rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
                              rv21=0.50, iv_rank=0.62, iv_minus_rv=0.05,
-                             earnings_in_cycle=False)
+                             earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual(rows[0]["grades"]["vrp_for_seller"], "GREEN")
 
     def test_negative_vrp_grades_amber_on_put(self):
         chain = chain_rows([("P", 145.0, -0.20, 2.15)])
         rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
                              rv21=0.50, iv_rank=0.62, iv_minus_rv=-0.07,
-                             earnings_in_cycle=False)
+                             earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual(rows[0]["grades"]["vrp_for_seller"], "AMBER")
 
     def test_vrp_badge_on_covered_call(self):
         chain = chain_rows([("C", 175.0, 0.20, 1.60), ("P", 145.0, -0.20, 2.0)])
         rows = cc_card_rows("VST", chain, "2026-06-30", close=160.0,
                             cost_basis=118.5, iv_rank=0.6, iv_minus_rv=-0.02,
-                            earnings_in_cycle=False)
+                            earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual(rows[0]["grades"]["vrp_for_seller"], "AMBER")
 
     def test_vrp_badge_on_pmcc(self):
@@ -77,7 +96,7 @@ class VrpSellerTests(unittest.TestCase):
         rows = pmcc_card_rows("MSFT", chain, "2026-06-30",
                               leaps_strike=340.0, leaps_premium=79.54,
                               close=373.0, iv_rank=0.88, iv_minus_rv=0.03,
-                              earnings_in_cycle=False)
+                              earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual(rows[0]["grades"]["vrp_for_seller"], "GREEN")
 
 
@@ -177,7 +196,7 @@ class CCCardTests(unittest.TestCase):
                             ("P", 100.0, -0.30, 1.00)])
         rows = cc_card_rows("VST", chain, "2026-06-30", close=112.0,
                             cost_basis=118.5, iv_rank=0.3, iv_minus_rv=0.0,
-                            earnings_in_cycle=False)
+                            earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertIn("skipped", rows[0])
         self.assertIn("cost basis", rows[0]["skipped"])
 
@@ -186,7 +205,7 @@ class CCCardTests(unittest.TestCase):
                             ("P", 145.0, -0.20, 2.00)])
         rows = cc_card_rows("VST", chain, "2026-06-30", close=160.0,
                             cost_basis=118.5, iv_rank=0.6, iv_minus_rv=0.01,
-                            earnings_in_cycle=True)
+                            earnings_in_cycle=True, fomc_in_cycle=False)
         r = rows[0]
         h = config.SLIPPAGE_HAIRCUT
         credit = 1.60 * (1 - h) * 100 - config.COMMISSION_PER_CONTRACT
@@ -211,7 +230,7 @@ class PMCCCardTests(unittest.TestCase):
         rows = pmcc_card_rows("MSFT", chain, "2026-06-30",
                               leaps_strike=340.0, leaps_premium=79.54,
                               close=373.0, iv_rank=0.88, iv_minus_rv=0.0,
-                              earnings_in_cycle=False)
+                              earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual([r["strike"] for r in rows], [420.0])  # 400 excluded
         r = rows[0]
         h = config.SLIPPAGE_HAIRCUT
@@ -229,5 +248,5 @@ class PMCCCardTests(unittest.TestCase):
         rows = pmcc_card_rows("MSFT", chain, "2026-06-30",
                               leaps_strike=340.0, leaps_premium=79.54,
                               close=373.0, iv_rank=0.88, iv_minus_rv=0.0,
-                              earnings_in_cycle=False)
+                              earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual(rows, [])                      # 400 < 419.54, no safe

@@ -72,7 +72,8 @@ def _vrp_seller_grade(iv_minus_rv: float) -> str:
 def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                   close: float, rv21: float, iv_rank: float,
                   iv_minus_rv: float,
-                  earnings_in_cycle: bool) -> list[dict]:
+                  earnings_in_cycle: bool,
+                  fomc_in_cycle: bool) -> list[dict]:
     """SELL-A-PUT candidates near the H5 income delta."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
     puts = _monthly_rows(chain, day, "P")
@@ -97,6 +98,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
@@ -116,7 +118,8 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                  close: float, cost_basis: float, iv_rank: float,
                  iv_minus_rv: float,
-                 earnings_in_cycle: bool) -> list[dict]:
+                 earnings_in_cycle: bool,
+                 fomc_in_cycle: bool) -> list[dict]:
     """SELL-A-COVERED-CALL candidates (against a declared 100-share lot)."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
     calls = _monthly_rows(chain, day, "C")
@@ -146,6 +149,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
@@ -165,7 +169,8 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    leaps_strike: float, leaps_premium: float, close: float,
                    iv_rank: float, iv_minus_rv: float,
-                   earnings_in_cycle: bool) -> list[dict]:
+                   earnings_in_cycle: bool,
+                   fomc_in_cycle: bool) -> list[dict]:
     """SELL-A-CALL-AGAINST-YOUR-LEAPS (poor man's covered call) candidates.
 
     HARD safety gate: only strikes >= leaps_strike + leaps_premium are shown,
@@ -197,6 +202,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
@@ -304,6 +310,7 @@ def main():
     from data.underlying_closes import load_closes
     from options_researcher.earnings import load_earnings
     from options_researcher.features import load_features
+    from options_researcher.fomc import load_fomc
     from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
 
     holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
@@ -342,12 +349,17 @@ def main():
         if exp is not None:
             earn_in_cycle = any(date.fromisoformat(day) < e <= exp
                                 for e in load_earnings(symbol))
+        fomc_in_cycle = False
+        if exp is not None:
+            fomc_in_cycle = any(date.fromisoformat(day) < m <= exp
+                                for m in load_fomc())
         print(f"\n=== {symbol} @ {day}  close ${close:,.2f}  "
               f"IV-rank {iv_rank:.2f} ===")
         print("-- SELL A PUT? (promise to buy 100 sh lower)")
         rows = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
                              iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                             earnings_in_cycle=earn_in_cycle)
+                             earnings_in_cycle=earn_in_cycle,
+                             fomc_in_cycle=fomc_in_cycle)
         for c in rows or []:
             badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
             print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
@@ -363,7 +375,8 @@ def main():
             for c in cc_card_rows(symbol, chain, day, close=close,
                                   cost_basis=float(lot.iloc[0]["cost_basis"]),
                                   iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle):
+                                  earnings_in_cycle=earn_in_cycle,
+                                  fomc_in_cycle=fomc_in_cycle):
                 if "skipped" in c:
                     print(f"  ${c['strike']:.0f}: {c['skipped']}")
                     continue
@@ -382,7 +395,8 @@ def main():
             pmcc = pmcc_card_rows(symbol, chain, day, leaps_strike=k_leaps,
                                   leaps_premium=prem_leaps, close=close,
                                   iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle)
+                                  earnings_in_cycle=earn_in_cycle,
+                                  fomc_in_cycle=fomc_in_cycle)
             for c in pmcc:
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
                 print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")

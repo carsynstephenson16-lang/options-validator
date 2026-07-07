@@ -206,6 +206,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
     from options_researcher.chains import nearest_monthly
     from options_researcher.earnings import load_earnings
     from options_researcher.features import load_features
+    from options_researcher.fomc import load_fomc
     from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
 
     holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
@@ -241,10 +242,13 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
         exp = nearest_monthly(chain, date.fromisoformat(day))
         earn_in_cycle = bool(exp is not None and any(
             date.fromisoformat(day) < e <= exp for e in load_earnings(symbol)))
+        fomc_in_cycle = bool(exp is not None and any(
+            date.fromisoformat(day) < m <= exp for m in load_fomc()))
 
         put_cards = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
                                   iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle)
+                                  earnings_in_cycle=earn_in_cycle,
+                                  fomc_in_cycle=fomc_in_cycle)
         groups: list[dict] = [
             {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
              "cards": put_cards,
@@ -260,7 +264,8 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                                symbol, chain, day, close=close,
                                cost_basis=float(lot.iloc[0]["cost_basis"]),
                                iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                               earnings_in_cycle=earn_in_cycle),
+                               earnings_in_cycle=earn_in_cycle,
+                               fomc_in_cycle=fomc_in_cycle),
                            "empty": None})
         elif held_shares > 0:
             groups.append({"kind": "cc",
@@ -276,7 +281,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
             pmcc_cards = pmcc_card_rows(
                 symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
                 close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                earnings_in_cycle=earn_in_cycle)
+                earnings_in_cycle=earn_in_cycle, fomc_in_cycle=fomc_in_cycle)
             groups.append({"kind": "pmcc",
                            "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
                            "leaps_strike": lk, "leaps_premium": lp,
@@ -300,7 +305,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                 preview_pmcc = pmcc_card_rows(
                     symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
                     close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                    earnings_in_cycle=earn_in_cycle)
+                    earnings_in_cycle=earn_in_cycle, fomc_in_cycle=fomc_in_cycle)
                 groups.append({
                     "kind": "pmcc", "preview": True,
                     "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
