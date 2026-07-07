@@ -15,6 +15,9 @@ project state is loaded:
   closes    -> last ~60 closes per config.UNIVERSE symbol via
                data.underlying_closes.load_closes(sym, start, end,
                allow_oos=True) (display only -- never feeds a verdict)
+  triggers  -> {symbol: "WAIT"/"FIRE"} from entry_watch._gather() (display
+               only -- never feeds a verdict; tolerant of load failure,
+               falls back to {} so the dashboard still renders)
 
 render(data) is pure string templating over the dict assemble() returns. It
 does no file I/O; Task 3's CLI is responsible for writing the result to
@@ -118,7 +121,8 @@ def _default_closes() -> dict[str, list[float]]:
 
 def assemble(*, book: dict | None = None, facts: list[str] | None = None,
             reports: list[str] | None = None,
-            closes: dict[str, list[float]] | None = None) -> dict:
+            closes: dict[str, list[float]] | None = None,
+            triggers: dict[str, str] | None = None) -> dict:
     """Gather book, achievements, reports, and sparkline data into one dict.
 
     Every argument defaults to loading the real project state; pass any of
@@ -133,6 +137,12 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         reports = _default_reports()
     if closes is None:
         closes = _default_closes()
+    if triggers is None:
+        try:
+            from options_researcher.entry_watch import _gather
+            triggers = {r["symbol"]: r["verdict"] for r in _gather()}
+        except Exception:
+            triggers = {}
 
     achievements = []
     for line in facts:
@@ -148,6 +158,7 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         "achievements": achievements,
         "reports": list(reports),
         "sparklines": dict(closes),
+        "triggers": dict(triggers),
     }
 
 
@@ -242,7 +253,7 @@ def _sparkline_svg(symbol: str, closes: list[float], color: str) -> str:
 
 
 def _party_card(symbol: str, color: str, role: str, sparklines: dict,
-                marks: list[dict]) -> str:
+                marks: list[dict], trigger: str | None = None) -> str:
     closes = sparklines.get(symbol, [])
     badges = []
     for m in marks:
@@ -256,10 +267,16 @@ def _party_card(symbol: str, color: str, role: str, sparklines: dict,
             f'{sign}{pnl:,.2f}</span>'
         )
     badges_html = "".join(badges) if badges else '<span class="pnl-none">no open marks</span>'
+    trigger_html = ""
+    if trigger:
+        t_color = "#ff5470" if trigger == "FIRE" else "#caa53d"
+        trigger_html = (f'<div class="party-trigger" style="color:{t_color}">'
+                        f'TRIGGER: {_esc(trigger)}</div>')
     return f"""
     <div class="party-card" style="border-color:{color}">
       <div class="party-name" style="color:{color}">{_esc(symbol)}</div>
       <div class="party-role">{_esc(role)}</div>
+      {trigger_html}
       {_sparkline_svg(symbol, closes, color)}
       <div class="party-badges">{badges_html}</div>
     </div>"""
@@ -343,10 +360,12 @@ def render(data: dict) -> str:
     achievements = data.get("achievements", [])
     reports = data.get("reports", [])
     sparklines = data.get("sparklines", {})
+    triggers = data.get("triggers", {})
 
     as_of = _datetime.now(timezone.utc).date().isoformat()
     party_cards = "".join(
-        _party_card(symbol, color, role, sparklines, marks)
+        _party_card(symbol, color, role, sparklines, marks,
+                   trigger=triggers.get(symbol))
         for symbol, color, role in _PARTY
     )
 
@@ -402,6 +421,11 @@ def render(data: dict) -> str:
   .party-role {{
     color: #9aa4c0;
     font-size: 0.85em;
+    margin-bottom: 8px;
+  }}
+  .party-trigger {{
+    font-size: 0.8em;
+    font-weight: bold;
     margin-bottom: 8px;
   }}
   .sparkline {{
