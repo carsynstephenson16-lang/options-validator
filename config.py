@@ -192,3 +192,13 @@ H5_IVR_BUY_RED     = 0.7
 # H5_IVR_SELL_GREEN (IV vs its own 1yr history).
 H5_VRP_SELL_GREEN  = 0.0
 H5_INCOME_DELTA    = 0.20     # CSP + CC short-leg target delta (band +/-0.15)
+
+# H5 LEAPS entry trigger (owner-frozen 2026-07-07; ledger
+# H5_ENTRY_TRIGGER_PREREG). ALL conditions must hold before the owner even
+# evaluates an entry: close <= level AND iv_rank <= H5_ENTRY_IVR_MAX AND the
+# 0.70-delta LEAPS candidate passes the liquidity gates. IVR_MAX is 0.5 (not
+# the GREEN 0.3) because a pullback that hits the price level typically
+# RAISES IV-rank; demanding bottom-tercile IV simultaneously risks a trigger
+# that can never fire.
+H5_ENTRY_TRIGGERS = {"VST": 140.0, "AMZN": 220.0}
+H5_ENTRY_IVR_MAX = 0.5

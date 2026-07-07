@@ -45,6 +45,20 @@ def _monthly_rows(chain: pd.DataFrame, day: str, right: str) -> pd.DataFrame:
     return rows
 
 
+def _vol_prose(r) -> tuple[float | None, float | None, str]:
+    """Return (vega, iv, sentence) for card verdicts; skip on missing/NaN."""
+    if not (pd.notna(r.get("vega")) and pd.notna(r.get("iv"))):
+        return None, None, ""
+    vega = float(r["vega"])
+    contract_iv = float(r["iv"])
+    sentence = (
+        f"this contract's own implied vol is {contract_iv:.0%}; if "
+        f"implied vol drops 1 point the option loses ~${vega:,.0f} "
+        f"(vega), on top of time decay; "
+    )
+    return vega, contract_iv, sentence
+
+
 def _vrp_seller_grade(iv_minus_rv: float) -> str:
     """VRP PROXY, descriptive only. GREEN when front-month implied (atm_iv,
     forward-looking) sits at/above trailing 21d realized (iv_minus_rv >= 0);
@@ -58,7 +72,8 @@ def _vrp_seller_grade(iv_minus_rv: float) -> str:
 def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                   close: float, rv21: float, iv_rank: float,
                   iv_minus_rv: float,
-                  earnings_in_cycle: bool) -> list[dict]:
+                  earnings_in_cycle: bool,
+                  fomc_in_cycle: bool) -> list[dict]:
     """SELL-A-PUT candidates near the H5 income delta."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
     puts = _monthly_rows(chain, day, "P")
@@ -83,6 +98,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
@@ -102,7 +118,8 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                  close: float, cost_basis: float, iv_rank: float,
                  iv_minus_rv: float,
-                 earnings_in_cycle: bool) -> list[dict]:
+                 earnings_in_cycle: bool,
+                 fomc_in_cycle: bool) -> list[dict]:
     """SELL-A-COVERED-CALL candidates (against a declared 100-share lot)."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
     calls = _monthly_rows(chain, day, "C")
@@ -132,6 +149,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
@@ -151,7 +169,8 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    leaps_strike: float, leaps_premium: float, close: float,
                    iv_rank: float, iv_minus_rv: float,
-                   earnings_in_cycle: bool) -> list[dict]:
+                   earnings_in_cycle: bool,
+                   fomc_in_cycle: bool) -> list[dict]:
     """SELL-A-CALL-AGAINST-YOUR-LEAPS (poor man's covered call) candidates.
 
     HARD safety gate: only strikes >= leaps_strike + leaps_premium are shown,
@@ -183,6 +202,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
@@ -215,6 +235,7 @@ def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
     breakeven = k + cost / 100.0
     dte = int(r["dte"])
     extrinsic = max(0.0, cost / 100.0 - max(0.0, close - k))
+    vega, contract_iv, vol_sentence = _vol_prose(r)
     grades = {
         "fits_bucket": "GREEN" if cost <= bucket_room else "RED",
         "iv_for_buyer": grade(iv_rank, config.H5_IVR_BUY_GREEN,
@@ -228,10 +249,53 @@ def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                f"{r['exp_date']}; breakeven ${breakeven:,.0f} "
                f"({100 * (breakeven / close - 1):+.1f}% move needed); time "
                f"decay costs ~${extrinsic * 100 / max(dte, 1):,.2f}/day if "
-               "the stock goes nowhere; max loss = what you paid, ever.")
+               f"the stock goes nowhere; {vol_sentence}"
+               "max loss = what you paid, ever.")
     return [{"strike": k, "expiry": r["exp_date"].isoformat(), "dte": dte,
              "cost": cost, "breakeven": breakeven, "grades": grades,
-             "verdict": verdict}]
+             "verdict": verdict, "vega": vega, "iv": contract_iv}]
+
+
+def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
+                        close: float, iv_rank: float) -> list[dict]:
+    """BUY-A-SHORT-DATED-CALL candidates (TACTICAL lane, H4_TACTICAL_DELTA on
+    the nearest monthly). A long call's max loss IS its premium, so fits_cap
+    grades cost against MAX_LOSS_PER_TRADE. iv_for_buyer prefers LOW IV-rank.
+    Descriptive scanner preview -- NOT an H5 income lane, never sized/tracked."""
+    h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
+    calls = _monthly_rows(chain, day, "C")
+    if calls.empty:
+        return []
+    calls["dist"] = (calls["delta"].abs() - config.H4_TACTICAL_DELTA).abs()
+    calls = calls[calls["dist"] <= DELTA_BAND].nsmallest(N_CANDIDATES, "dist")
+    out = []
+    for _, r in calls.iterrows():
+        k = float(r["strike"])
+        cost = float(r["ask"]) * (1 + h) * 100 + comm
+        breakeven = k + cost / 100.0
+        dte = int(r["dte"])
+        extrinsic = max(0.0, cost / 100.0 - max(0.0, close - k))
+        vega, contract_iv, vol_sentence = _vol_prose(r)
+        grades = {
+            "fits_cap": "GREEN" if cost <= config.MAX_LOSS_PER_TRADE else "RED",
+            "iv_for_buyer": grade(iv_rank, config.H5_IVR_BUY_GREEN,
+                                  config.H5_IVR_BUY_RED, higher_is_better=False),
+            "liquidity": ("GREEN" if passes_liquidity(
+                r["open_interest"], r["bid"], r["ask"]) else "RED"),
+        }
+        verdict = (f"${cost:,.0f} buys ~{abs(float(r['delta'])):.0%} of the "
+                   f"upside of 100 sh of {symbol} until {r['exp_date']} "
+                   f"({dte} days); breakeven ${breakeven:,.2f} "
+                   f"({100 * (breakeven / close - 1):+.1f}% move needed); time "
+                   f"decay ~${extrinsic * 100 / max(dte, 1):,.2f}/day if the "
+                   f"stock goes nowhere; {vol_sentence}"
+                   f"max loss = ${cost:,.0f} (the premium), "
+                   "ever. TACTICAL preview, not an H5 income lane.")
+        out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
+                    "dte": dte, "cost": cost, "breakeven": breakeven,
+                    "grades": grades, "verdict": verdict,
+                    "vega": vega, "iv": contract_iv})
+    return out
 
 
 STUDY_A_LINE = ("  honesty: this name's options pay above their own median "
@@ -246,6 +310,7 @@ def main():
     from data.underlying_closes import load_closes
     from options_researcher.earnings import load_earnings
     from options_researcher.features import load_features
+    from options_researcher.fomc import load_fomc
     from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
 
     holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
@@ -284,12 +349,17 @@ def main():
         if exp is not None:
             earn_in_cycle = any(date.fromisoformat(day) < e <= exp
                                 for e in load_earnings(symbol))
+        fomc_in_cycle = False
+        if exp is not None:
+            fomc_in_cycle = any(date.fromisoformat(day) < m <= exp
+                                for m in load_fomc())
         print(f"\n=== {symbol} @ {day}  close ${close:,.2f}  "
               f"IV-rank {iv_rank:.2f} ===")
         print("-- SELL A PUT? (promise to buy 100 sh lower)")
         rows = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
                              iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                             earnings_in_cycle=earn_in_cycle)
+                             earnings_in_cycle=earn_in_cycle,
+                             fomc_in_cycle=fomc_in_cycle)
         for c in rows or []:
             badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
             print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
@@ -305,7 +375,8 @@ def main():
             for c in cc_card_rows(symbol, chain, day, close=close,
                                   cost_basis=float(lot.iloc[0]["cost_basis"]),
                                   iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle):
+                                  earnings_in_cycle=earn_in_cycle,
+                                  fomc_in_cycle=fomc_in_cycle):
                 if "skipped" in c:
                     print(f"  ${c['strike']:.0f}: {c['skipped']}")
                     continue
@@ -324,7 +395,8 @@ def main():
             pmcc = pmcc_card_rows(symbol, chain, day, leaps_strike=k_leaps,
                                   leaps_premium=prem_leaps, close=close,
                                   iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle)
+                                  earnings_in_cycle=earn_in_cycle,
+                                  fomc_in_cycle=fomc_in_cycle)
             for c in pmcc:
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
                 print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
@@ -345,4 +417,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--json" in sys.argv:
+        from options_researcher.attractiveness_dashboard import sections_json
+        print(sections_json())
+    else:
+        main()
