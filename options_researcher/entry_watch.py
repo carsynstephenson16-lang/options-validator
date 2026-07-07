@@ -19,10 +19,12 @@ from data.thetadata_adapter import passes_liquidity
 
 
 def trigger_status(symbol: str, *, close: float, iv_rank: float,
-                   leaps_row) -> dict:
+                   leaps_row: pd.Series | None,
+                   chain_missing: bool = False) -> dict:
     """Grade one name against the frozen entry trigger. `leaps_row` is the
     0.70-delta LEAPS candidate row from the latest cached chain, or None
-    when no candidate exists in the DTE band."""
+    when no candidate exists in the DTE band. `chain_missing=True` means no
+    cached chain file exists at all (a data gap, not a benign no-candidate)."""
     level = config.H5_ENTRY_TRIGGERS[symbol]
     price_ok = close <= level
     iv_ok = iv_rank <= config.H5_ENTRY_IVR_MAX  # NaN compares False
@@ -34,8 +36,13 @@ def trigger_status(symbol: str, *, close: float, iv_rank: float,
     if not iv_ok:
         unmet.append(f"IV-rank {iv_rank:.2f} > {config.H5_ENTRY_IVR_MAX}")
     if not liq_ok:
-        unmet.append("LEAPS fails liquidity gates" if leaps_row is not None
-                     else "no LEAPS candidate in DTE band")
+        if leaps_row is not None:
+            unmet.append("LEAPS fails liquidity gates")
+        elif chain_missing:
+            unmet.append("no cached chain file (.cache/chains) "
+                         "-- run the top-up")
+        else:
+            unmet.append("no LEAPS candidate in DTE band")
     return {"symbol": symbol, "close": close, "trigger": level,
             "iv_rank": iv_rank, "price_ok": price_ok, "iv_ok": iv_ok,
             "liq_ok": liq_ok, "unmet": unmet,
@@ -55,8 +62,10 @@ def _gather() -> list[dict]:
         closes = load_closes(symbol, "2018-01-01", today, allow_oos=True)
         close = float(closes.iloc[-1])
         close_asof = str(closes.index[-1])[:10]
-        ivr = load_features(symbol)["iv_rank"].iloc[-1]
+        features = load_features(symbol)
+        ivr = features["iv_rank"].iloc[-1]
         iv_rank = float(ivr) if pd.notna(ivr) else float("nan")
+        iv_asof = str(features.index[-1])[:10]
         files = sorted(glob.glob(os.path.join(".cache", "chains",
                                               f"{symbol}_*.parquet")))
         leaps_row, chain_asof = None, None
@@ -67,9 +76,10 @@ def _gather() -> list[dict]:
             leaps_row = _leaps_candidate(chain, date.fromisoformat(chain_asof),
                                          config.H4_THESIS_DELTA)
         row = trigger_status(symbol, close=close, iv_rank=iv_rank,
-                             leaps_row=leaps_row)
+                             leaps_row=leaps_row, chain_missing=not files)
         row["close_asof"] = close_asof
         row["chain_asof"] = chain_asof
+        row["iv_asof"] = iv_asof
         out.append(row)
     return out
 
@@ -94,6 +104,9 @@ def main(rows: list[dict] | None = None) -> None:
         if r["chain_asof"] and r["chain_asof"] < r["close_asof"]:
             print(f"  note: chain cache is stale ({r['chain_asof']} < close "
                   f"{r['close_asof']}) -- liquidity check may be outdated")
+        if r["iv_asof"] and r["iv_asof"] < r["close_asof"]:
+            print(f"  note: IV-rank is stale (features built {r['iv_asof']} "
+                  f"< close {r['close_asof']}) -- rerun the feature refresh")
 
 
 if __name__ == "__main__":
