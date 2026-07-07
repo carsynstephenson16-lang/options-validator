@@ -69,6 +69,7 @@ uv run python options_researcher/profile_tradability.py     # 4-name liquidity p
 uv run python analysis/feasibility.py                       # sizing vs the sleeve
 uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample scoreboard
 uv run python -m options_researcher.attractiveness            # which options look attractive today
+uv run python -m options_researcher.entry_watch                # WAIT/FIRE vs the frozen entry triggers
 uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard    # interactive at-expiration scenario view (writes .tmp/dashboard/attractiveness.html)
@@ -157,6 +158,12 @@ trial 6; H4 superseded at zero cycles).
 Current recorded holdings: 39 VST shares and no options. Remaining: run the
 scanner, decide whether anything is attractive enough to add, then start the
 forward paper window only after an actual tracked option is entered.
+LEAPS entry triggers are pre-registered (owner-frozen 2026-07-07, ledger
+H5_ENTRY_TRIGGER_PREREG): evaluate only when close ≤ trigger (VST $140,
+AMZN $220) AND IV-rank ≤ 0.5 AND the LEAPS passes the liquidity gates —
+`options_researcher.entry_watch` prints the live WAIT/FIRE status. The
+ThetaData subscription cancels ~2026-07-25 per
+`docs/superpowers/2026-07-07-thetadata-cancel-checklist.md`.
 
 ## Known limitations
 
