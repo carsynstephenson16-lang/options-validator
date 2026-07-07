@@ -234,6 +234,45 @@ def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
              "verdict": verdict}]
 
 
+def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
+                        close: float, iv_rank: float) -> list[dict]:
+    """BUY-A-SHORT-DATED-CALL candidates (TACTICAL lane, H4_TACTICAL_DELTA on
+    the nearest monthly). A long call's max loss IS its premium, so fits_cap
+    grades cost against MAX_LOSS_PER_TRADE. iv_for_buyer prefers LOW IV-rank.
+    Descriptive scanner preview -- NOT an H5 income lane, never sized/tracked."""
+    h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
+    calls = _monthly_rows(chain, day, "C")
+    if calls.empty:
+        return []
+    calls["dist"] = (calls["delta"].abs() - config.H4_TACTICAL_DELTA).abs()
+    calls = calls[calls["dist"] <= DELTA_BAND].nsmallest(N_CANDIDATES, "dist")
+    out = []
+    for _, r in calls.iterrows():
+        k = float(r["strike"])
+        cost = float(r["ask"]) * (1 + h) * 100 + comm
+        breakeven = k + cost / 100.0
+        dte = int(r["dte"])
+        extrinsic = max(0.0, cost / 100.0 - max(0.0, close - k))
+        grades = {
+            "fits_cap": "GREEN" if cost <= config.MAX_LOSS_PER_TRADE else "RED",
+            "iv_for_buyer": grade(iv_rank, config.H5_IVR_BUY_GREEN,
+                                  config.H5_IVR_BUY_RED, higher_is_better=False),
+            "liquidity": ("GREEN" if passes_liquidity(
+                r["open_interest"], r["bid"], r["ask"]) else "RED"),
+        }
+        verdict = (f"${cost:,.0f} buys ~{abs(float(r['delta'])):.0%} of the "
+                   f"upside of 100 sh of {symbol} until {r['exp_date']} "
+                   f"({dte} days); breakeven ${breakeven:,.2f} "
+                   f"({100 * (breakeven / close - 1):+.1f}% move needed); time "
+                   f"decay ~${extrinsic * 100 / max(dte, 1):,.2f}/day if the "
+                   f"stock goes nowhere; max loss = ${cost:,.0f} (the premium), "
+                   "ever. TACTICAL preview, not an H5 income lane.")
+        out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
+                    "dte": dte, "cost": cost, "breakeven": breakeven,
+                    "grades": grades, "verdict": verdict})
+    return out
+
+
 STUDY_A_LINE = ("  honesty: this name's options pay above their own median "
                 "right now -- Study A measured that extra pay comes with "
                 "extra REAL movement, not free money.")
@@ -345,4 +384,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--json" in sys.argv:
+        from options_researcher.attractiveness_dashboard import sections_json
+        print(sections_json())
+    else:
+        main()

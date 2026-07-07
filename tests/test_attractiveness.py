@@ -81,6 +81,50 @@ class VrpSellerTests(unittest.TestCase):
         self.assertEqual(rows[0]["grades"]["vrp_for_seller"], "GREEN")
 
 
+class LongCallTests(unittest.TestCase):
+    """TACTICAL short-dated long call: buy ~H4_TACTICAL_DELTA on the nearest
+    monthly. Max loss = premium, so fits_cap grades cost vs MAX_LOSS_PER_TRADE;
+    iv_for_buyer prefers LOW IV-rank. Descriptive preview, not an H5 income lane."""
+
+    def test_picks_tactical_delta_and_grades(self):
+        # a put row must exist so nearest_monthly can resolve the expiration
+        from options_researcher.attractiveness import long_call_card_rows
+        chain = chain_rows([("C", 170.0, 0.40, 3.00), ("P", 150.0, -0.20, 2.0)])
+        rows = long_call_card_rows("VST", chain, "2026-06-30",
+                                   close=160.0, iv_rank=0.3)
+        r = rows[0]
+        self.assertEqual(r["strike"], 170.0)
+        ask = 3.00 + 0.10  # chain_rows sets ask = bid + 0.10
+        cost = ask * (1 + config.SLIPPAGE_HAIRCUT) * 100 + config.COMMISSION_PER_CONTRACT
+        self.assertAlmostEqual(r["cost"], cost, places=2)      # ~$313.75
+        self.assertEqual(r["grades"]["fits_cap"], "GREEN")     # <= 600
+        self.assertEqual(r["grades"]["iv_for_buyer"], "GREEN")  # rank 0.3 <= 0.3
+        self.assertIn("liquidity", r["grades"])
+
+    def test_over_cap_and_high_iv_grade_red(self):
+        from options_researcher.attractiveness import long_call_card_rows
+        chain = chain_rows([("C", 170.0, 0.40, 7.00), ("P", 150.0, -0.20, 2.0)])
+        rows = long_call_card_rows("VST", chain, "2026-06-30",
+                                   close=160.0, iv_rank=0.9)
+        self.assertEqual(rows[0]["grades"]["fits_cap"], "RED")      # ~$718 > 600
+        self.assertEqual(rows[0]["grades"]["iv_for_buyer"], "RED")  # rank 0.9 >= 0.7
+
+
+class SectionsJsonTests(unittest.TestCase):
+    def test_serializes_sections_to_json(self):
+        import json
+
+        from options_researcher.attractiveness_dashboard import sections_json
+        fake = [{"symbol": "VST", "as_of": "2026-06-30", "close": 158.63,
+                 "iv_rank": 0.47, "groups": [
+                     {"kind": "put", "title": "SELL A PUT?", "preview": False,
+                      "cards": [{"strike": 145.0, "credit": 212.0,
+                                 "grades": {"liquidity": "RED"}}], "empty": None}]}]
+        out = json.loads(sections_json(fake))
+        self.assertEqual(out["sections"][0]["symbol"], "VST")
+        self.assertEqual(out["sections"][0]["groups"][0]["cards"][0]["strike"], 145.0)
+
+
 class CCCardTests(unittest.TestCase):
     def test_below_basis_skipped_with_message(self):
         chain = chain_rows([("C", 110.0, 0.20, 1.50),

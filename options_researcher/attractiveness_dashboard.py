@@ -197,6 +197,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
     from options_researcher.attractiveness import (
         cc_card_rows,
         leaps_card_rows,
+        long_call_card_rows,
         pmcc_card_rows,
         put_card_rows,
     )
@@ -284,16 +285,53 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                             "far out to pay -- selling closer would risk locking "
                             "a loss, so H5 shows nothing.")})
         if symbol in config.H4_THESIS_NAMES:
+            leaps_cards = leaps_card_rows(symbol, chain, day, close=close,
+                                          iv_rank=iv_rank, bucket_room=bucket_room)
             groups.append({"kind": "leaps",
                            "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
-                           "cards": leaps_card_rows(symbol, chain, day,
-                                                    close=close, iv_rank=iv_rank,
-                                                    bucket_room=bucket_room),
-                           "empty": None})
+                           "preview": False, "cards": leaps_cards, "empty": None})
+            # PMCC PREVIEW: if no LEAPS is actually held, show what selling a
+            # safe call against the *previewed* LEAPS would look like.
+            if symbol not in held_leaps and leaps_cards:
+                lc = leaps_cards[0]
+                lk, lp = float(lc["strike"]), float(lc["cost"]) / 100.0
+                preview_pmcc = pmcc_card_rows(
+                    symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
+                    close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                    earnings_in_cycle=earn_in_cycle)
+                groups.append({
+                    "kind": "pmcc", "preview": True,
+                    "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
+                    "leaps_strike": lk, "leaps_premium": lp,
+                    "cards": preview_pmcc,
+                    "empty": None if preview_pmcc else
+                    (f"no SAFE strike this cycle: needs a call at "
+                     f"${lk + lp:.2f}+ that still pays; none listed.")})
+
+        # TACTICAL long-call preview (descriptive; not an H5 income lane).
+        long_calls = long_call_card_rows(symbol, chain, day, close=close,
+                                         iv_rank=iv_rank)
+        groups.append({"kind": "long_call", "preview": True,
+                       "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
+                       "cards": long_calls,
+                       "empty": None if long_calls
+                       else "no call near the tactical delta this cycle"})
 
         sections.append({"symbol": symbol, "as_of": day, "close": close,
                          "iv_rank": iv_rank, "groups": groups})
     return sections, rv21_by_symbol
+
+
+def sections_json(sections: list[dict] | None = None) -> str:
+    """Serialize the scanner's candidate sections to JSON. Defaults to the real
+    project state via _gather_all(); accepts an explicit list for testing."""
+    import json
+
+    if sections is None:
+        sections, _ = _gather_all()
+    as_of = sections[0]["as_of"] if sections else None
+    return json.dumps({"as_of": as_of, "sections": sections},
+                      indent=2, sort_keys=False)
 
 
 _GRADE_COLORS = {"GREEN": "#2fd27d", "AMBER": "#caa53d", "RED": "#ff5470"}
@@ -554,4 +592,8 @@ def main(**assemble_kwargs) -> str:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--json" in sys.argv:
+        print(sections_json())
+    else:
+        main()
