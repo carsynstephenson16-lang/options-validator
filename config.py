@@ -161,8 +161,9 @@ H4_THESIS_MAX_PREMIUM_TOTAL    = 16_000  # $ across all LEAPS (owner amendment
                                          # budget room for up to two full-size
                                          # LEAPS if later selected. No LEAPS
                                          # are currently open. Sizing cap, NOT
-                                         # an edge parameter; logged in
-                                         # ledger/facts.log)
+                                         # an edge parameter; noted in
+                                         # ledger/facts.log, which is advisory
+                                         # and un-chained -- see ledger/README)
 H4_THESIS_MAX_POSITIONS        = 2
 H4_THESIS_NAMES                = ["MSFT", "VST", "CEG"]
 H4_THESIS_DELTA                = 0.70
