@@ -160,8 +160,11 @@ def mark_position(row: pd.Series, chain: pd.DataFrame, close: float,
     if row["structure"] == "leaps_call" and out["dte"] <= config.H4_THESIS_ROLL_DTE:
         out["flags"].append(f"ROLL_DUE(dte<={config.H4_THESIS_ROLL_DTE})")
     if row["structure"] == "csp" and close and \
-            abs(close - float(row["strike"])) / float(row["strike"]) <= 0.02:
-        out["flags"].append("ASSIGNMENT_WATCH(|close-K|<=2%)")
+            abs(close - float(row["strike"])) / float(row["strike"]) \
+            <= config.ASSIGNMENT_WATCH_PCT:
+        out["flags"].append(
+            f"ASSIGNMENT_WATCH(|close-K|<={config.ASSIGNMENT_WATCH_PCT:.0%})")
+
     horizon = date.fromisoformat(as_of)
     for e in earnings:
         if 0 <= (e - horizon).days <= 7:

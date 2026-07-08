@@ -58,6 +58,14 @@ STARTING_CAPITAL     = 25_000    # account equity used by the backtest engine
 # H1/H2/H3-era registered records carry their own frozen scope in the ledger
 # and are unaffected by this edit.
 UNIVERSE             = ["MSFT", "AMZN", "VST", "CEG"]
+# Per-name study start dates ("eras") used by the descriptive studies
+# (options_researcher/studies/*). AMZN starts POST-SPLIT: the close series is
+# deliberately RAW (strike-aligned), so the 2022-06 20:1 split would read as a
+# -95% cycle and corrupt cross-split P&L arithmetic; pre-split AMZN also had
+# no usable fine strike grid (profiler finding). VST/CEG start 2023 (usable
+# chain history); MSFT spans the full window.
+STUDY_ERA_START      = {"MSFT": "2018-01-02", "AMZN": "2022-07-01",
+                        "VST": "2023-01-01", "CEG": "2023-01-01"}
 BACKTEST_START       = "2018-01-01"   # must span 2018 / 2020 / 2022 regimes
 # OOS WINDOW EXTENSION (2026-07-02, decided BLIND at pre-registration -- before
 # any paid or post-IN_SAMPLE_END market data was fetched or opened): end moved
@@ -191,7 +199,13 @@ H5_IVR_BUY_RED     = 0.7
 # Anchor is the SIGN of the proxy, not a tuned level. Separate badge from
 # H5_IVR_SELL_GREEN (IV vs its own 1yr history).
 H5_VRP_SELL_GREEN  = 0.0
-H5_INCOME_DELTA    = 0.20     # CSP + CC short-leg target delta (band +/-0.15)
+H5_INCOME_DELTA    = 0.20     # CSP + CC short-leg target delta
+H5_INCOME_DELTA_BAND = 0.15   # acceptance band around any target delta
+                              # (single source: evaluator + studies import it)
+
+# Portfolio flag: a short put is ASSIGNMENT_WATCH when the close sits within
+# this fraction of the strike (descriptive flag only, never an action).
+ASSIGNMENT_WATCH_PCT = 0.02
 
 # H5 LEAPS entry trigger (owner-frozen 2026-07-07; ledger
 # H5_ENTRY_TRIGGER_PREREG). ALL conditions must hold before the owner even

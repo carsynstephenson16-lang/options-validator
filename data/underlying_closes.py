@@ -129,6 +129,8 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 # SPLIT-adjusted (not dividend-adjusted); this repo needs RAW closes aligned
 # with raw option strikes, so pre-split rows are multiplied back. First
 # split-adjusted trading day is the key; ratio multiplies earlier closes.
+# Provenance: AMZN 20-for-1 split, effective first trade 2022-06-06
+# (Official-source: Amazon 2022-03-09 8-K / press release; SEC EDGAR).
 SPLITS = {"AMZN": [("2022-06-06", 20.0)]}
 
 

@@ -20,8 +20,8 @@ import pandas as pd
 import config
 from options_researcher.chains import atm_row, nearest_monthly
 
-DELTA_BAND = 0.15
-LEAPS_BAND = (270, 500)
+DELTA_BAND = config.H5_INCOME_DELTA_BAND
+LEAPS_BAND = config.H4_THESIS_DTE_BAND
 
 
 def _row_at(chains: dict, day_iso: str, expiration, strike: float,
@@ -133,8 +133,7 @@ def main():
 
     os.makedirs("reports", exist_ok=True)
     today = _date.today().isoformat()
-    eras = {"MSFT": "2018-01-02", "AMZN": "2022-07-01",
-            "VST": "2023-01-01", "CEG": "2023-01-01"}
+    eras = config.STUDY_ERA_START
     lines = [f"# Study D — long calls & LEAPS carry ({today})", "",
              "Descriptive; conservative fills; level-exact closes. "
              "Post-2022 data disclosed (facts.log PIVOT_4NAME_SCOPE).", ""]

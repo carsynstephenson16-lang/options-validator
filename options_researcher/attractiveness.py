@@ -19,7 +19,7 @@ import config
 from data.thetadata_adapter import passes_liquidity
 from options_researcher.chains import nearest_monthly
 
-DELTA_BAND = 0.15
+DELTA_BAND = config.H5_INCOME_DELTA_BAND
 N_CANDIDATES = 3
 
 

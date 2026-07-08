@@ -24,7 +24,7 @@ import pandas as pd
 import config
 from options_researcher.chains import atm_row, nearest_monthly
 
-DELTA_BAND = 0.15
+DELTA_BAND = config.H5_INCOME_DELTA_BAND
 
 
 def compute_cc_cycles(symbol: str, closes: pd.Series,
@@ -74,11 +74,9 @@ def main():
 
     os.makedirs("reports", exist_ok=True)
     today = _date.today().isoformat()
-    # AMZN starts POST-SPLIT: the close series is deliberately RAW
-    # (strike-aligned), so the 2022-06 20:1 split reads as a -95% cycle and
-    # corrupts cross-split P&L arithmetic; pre-split AMZN also had no usable
-    # fine strike grid (profiler finding). VST has no splits in-window.
-    eras = {"VST": "2023-01-01", "AMZN": "2022-07-01"}
+    # Era starts live in config.STUDY_ERA_START (see the AMZN post-split
+    # note there). This study covers only the two names with declared lots.
+    eras = {s: config.STUDY_ERA_START[s] for s in ("VST", "AMZN")}
     lines = [f"# Study C — monthly covered-call income vs buy-and-hold ({today})",
              "", "Descriptive income table, NOT a verdict. Benchmark is "
              "buy-and-hold on the same shares: premium's cost is capped "

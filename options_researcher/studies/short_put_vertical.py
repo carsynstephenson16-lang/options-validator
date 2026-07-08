@@ -25,7 +25,7 @@ import config
 from options_researcher.chains import atm_row, nearest_monthly
 from strategies.base import entry_credit_conservative
 
-DELTA_BAND = 0.15
+DELTA_BAND = config.H5_INCOME_DELTA_BAND
 
 
 def _long_wing(chain: pd.DataFrame, expiration: date, strike: float):
@@ -114,8 +114,7 @@ def main():
 
     os.makedirs("reports", exist_ok=True)
     today = _date.today().isoformat()
-    eras = {"MSFT": "2018-01-02", "AMZN": "2022-07-01",
-            "VST": "2023-01-01", "CEG": "2023-01-01"}
+    eras = config.STUDY_ERA_START
     lines = [f"# Study E — monthly short puts & bull put spreads, hold to expiry ({today})",
              "", "Descriptive economics of the owner's priority structures; "
              "NOT a verdict. No stops (H1 measured the stop as the loss "

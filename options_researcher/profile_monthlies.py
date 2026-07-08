@@ -16,13 +16,14 @@ from datetime import date
 
 import pandas as pd
 
+import config
 from options_researcher.chains import is_monthly, third_friday  # noqa: F401
 
 CACHE_DIR = os.path.join(".cache", "chains")
-SYMBOLS = ["VST", "CEG", "MSFT", "AMZN"]
+SYMBOLS = list(config.UNIVERSE)
 DTE_LO, DTE_HI = 15, 60          # window wide enough to always contain a monthly
 SAMPLE_EVERY = 5
-OI_FLOOR, SPREAD_MAX = 100, 0.10  # the frozen liquidity gates (config values)
+OI_FLOOR, SPREAD_MAX = config.MIN_OPEN_INTEREST, config.MAX_SPREAD_PCT
 
 
 def day_stats(df: pd.DataFrame, file_date: date):

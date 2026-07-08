@@ -8,6 +8,7 @@ from datetime import datetime
 
 import pandas as pd
 
+import config
 from options_researcher.chains import puts_in_window
 
 
@@ -183,7 +184,7 @@ def main():
         print(f"ERROR: cache dir not found: {cache_dir}")
         sys.exit(1)
 
-    for symbol in ["VST", "CEG", "MSFT", "AMZN"]:
+    for symbol in config.UNIVERSE:
         profile_symbol(symbol, cache_dir)
 
 
