@@ -175,4 +175,3 @@ Use these questions:
 - [[2026-07-03-offline-pandas-backtesting-spike]]
 - [[2026-07-03-oos-reveal-runbook]]
 - [[specs/2026-07-03-h1-preregistration-scope-decision]]
-
