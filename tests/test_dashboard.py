@@ -90,6 +90,33 @@ class TriggerPillTests(unittest.TestCase):
         data = d.assemble(book={"marks": []}, facts=[], reports=[], closes={})
         self.assertIsInstance(data["triggers"], dict)
 
+    def test_assemble_warns_on_stderr_when_entry_watch_fails(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        from options_researcher import dashboard as d
+        from options_researcher import entry_watch
+        err = io.StringIO()
+        with mock.patch.object(entry_watch, "_gather",
+                               side_effect=OSError("no cache")), \
+                contextlib.redirect_stderr(err):
+            data = d.assemble(book={"marks": []}, facts=[], reports=[],
+                              closes={})
+        self.assertEqual(data["triggers"], {})
+        self.assertIn("WARN entry-watch unavailable", err.getvalue())
+
+    def test_assemble_propagates_unexpected_entry_watch_errors(self):
+        from unittest import mock
+
+        from options_researcher import dashboard as d
+        from options_researcher import entry_watch
+        with mock.patch.object(entry_watch, "_gather",
+                               side_effect=ZeroDivisionError("bug")):
+            with self.assertRaises(ZeroDivisionError):
+                d.assemble(book={"marks": []}, facts=[], reports=[],
+                           closes={})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import html as _html
 import os
+import sys
 from datetime import datetime as _datetime
 from datetime import timezone
 from glob import glob
@@ -141,7 +142,11 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         try:
             from options_researcher.entry_watch import _gather
             triggers = {r["symbol"]: r["verdict"] for r in _gather()}
-        except Exception:
+        except (OSError, KeyError, ValueError, ImportError) as e:
+            # Expected data-gap failures only; anything else must crash
+            # loudly rather than render a silently-empty trigger panel.
+            print(f"WARN entry-watch unavailable, trigger panel empty: {e}",
+                  file=sys.stderr)
             triggers = {}
 
     achievements = []

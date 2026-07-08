@@ -70,7 +70,7 @@ def profile_symbol(symbol: str) -> None:
         iso = os.path.basename(f).split("_")[1].replace(".parquet", "")
         try:
             df = pd.read_parquet(f)
-        except Exception as e:
+        except (OSError, ValueError) as e:  # ArrowIOError/ArrowInvalid bases
             print(f"WARN unreadable cache file skipped: {f}: {e}", file=sys.stderr)
             continue
         s = day_stats(df, date.fromisoformat(iso))

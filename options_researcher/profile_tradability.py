@@ -53,7 +53,7 @@ def profile_symbol(symbol, cache_dir):
         # Read parquet
         try:
             df = pd.read_parquet(file_path)
-        except Exception as e:
+        except (OSError, ValueError) as e:  # ArrowIOError/ArrowInvalid bases
             print(f"WARN unreadable cache file skipped: {file_path}: {e}",
                   file=sys.stderr)
             continue
@@ -108,7 +108,7 @@ def profile_symbol(symbol, cache_dir):
         df_exp_mid['mid'] = (df_exp_mid['bid'] + df_exp_mid['ask']) / 2
         df_exp_mid = df_exp_mid[df_exp_mid['mid'] > 0]
         df_exp_mid['spread_pct'] = (df_exp_mid['ask'] - df_exp_mid['bid']) / df_exp_mid['mid']
-        n_liquid = len(df_exp_mid[(df_exp_mid['open_interest'] >= 100) & (df_exp_mid['spread_pct'] <= 0.10)])
+        n_liquid = len(df_exp_mid[(df_exp_mid['open_interest'] >= config.MIN_OPEN_INTEREST) & (df_exp_mid['spread_pct'] <= config.MAX_SPREAD_PCT)])
 
         # Record stats
         if year not in year_stats:
@@ -156,7 +156,8 @@ def profile_symbol(symbol, cache_dir):
         stats = year_stats[year]
         median_spread = pd.Series(stats['spreads']).median()
         median_oi = pd.Series(stats['ois']).median()
-        if median_spread <= 10.0 and median_oi >= 100:
+        if (median_spread <= config.MAX_SPREAD_PCT * 100
+                and median_oi >= config.MIN_OPEN_INTEREST):
             first_year_good = year
             break
 
