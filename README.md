@@ -63,7 +63,7 @@ For scanner purposes, monthly expirations are the default target.
 Python 3.12 managed by uv; the lockfile is the source of truth.
 
 ```bash
-uv sync
+uv sync --frozen
 uv run python -m unittest discover -s tests                 # discipline layer
 uv run python options_researcher/profile_tradability.py     # 4-name liquidity profile
 uv run python analysis/feasibility.py                       # sizing vs the sleeve
@@ -78,6 +78,28 @@ uv run python -m options_researcher.attractiveness_dashboard    # interactive at
 `smoke_test.py` probes a single in-sample chain (cached parquet, or the
 official ThetaData client on a cache miss). Post-`IN_SAMPLE_END` values stay
 sealed for the legacy holdout machinery unless the reveal gate opens them.
+
+### Reproducing a ledger record
+
+A fresh clone canNOT re-run a logged experiment as-is; three things are
+required, in order:
+
+1. **The dependency surface**: `uv sync --frozen` (the lock is folded into
+   each record's `source_hash`).
+2. **The exact code**: `git checkout <code_sha>` from the ledger record —
+   `config.py` drifts between hypotheses by design, and the reveal gate's
+   `config_hash` check will refuse a drifted tree.
+3. **The exact data**: the parquet chain cache (`.cache/chains/`, ~2.3 GB)
+   is gitignored and re-fetchable only with a live ThetaData subscription.
+   `data/chain_cache_manifest.txt` freezes its per-file sha256 —
+   `uv run python tools/cache_manifest.py verify` proves a (re-fetched or
+   copied) cache is byte-identical to the one the records were produced
+   from. Regenerate with `... generate` only on a deliberate cache change,
+   and commit the diff alongside the change that caused it.
+
+H4/H5 forward-window entries are time-dependent paper marks, not
+re-runnable point results; their "reproduction" is the positions CSVs plus
+the dated reports.
 
 ## Capital & risk
 
