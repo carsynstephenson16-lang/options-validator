@@ -22,8 +22,8 @@ changes, update `.cursorrules` and `AGENTS.md` together so they don't drift.
 ## Commands (verified 2026-07-06)
 
 ```bash
-uv sync                                          # Python 3.12; uv.lock is source of truth
-uv run python -m unittest discover -s tests      # full suite: 333 tests, ~6 s, offline
+uv sync --frozen                                 # Python 3.12; uv.lock is source of truth
+uv run python -m unittest discover -s tests      # full suite (~6 s, offline); exit code is the verdict
 uv run ruff check .                              # lint (CI-enforced)
 uv run pyright                                   # types; only pyrightconfig.json "include" paths
 uv run pre-commit run --all-files                # ruff --fix, pyright, hygiene hooks
@@ -48,7 +48,7 @@ the ThetaData terminal or subscription needs owner sign-off first.
 - `harness/`, `strategies/`, `tools/` — offline Lumibot backtest path and scoreboard CLI.
 - `analysis/`, `metrics.py` — feasibility and shared metrics.
 - `ledger/` — append-only research ledger (`facts.log`, trials). Never rewrite or delete entries.
-- `data/` — parquet chain cache; `positions/positions.csv` and `positions/holdings.csv` drive the paper book.
+- `data/` — parquet chain cache; `data/positions/positions.csv` and `data/positions/holdings.csv` drive the paper book.
 - `reports/`, `docs/superpowers/` — dated findings, frozen specs, and pre-registrations.
 - `tests/` — unittest suite. `.tmp/`, `results/`, `.cache/` are disposable and gitignored.
 
@@ -110,8 +110,9 @@ attempt to work around the hook, and treat a hook block as correct by default.
 
 ## Scope guard (always on)
 
-Current phase: Phase 0 — get one strategy to one honest verdict. Before adding
-any new capability, ticker, strategy, or tool, answer in one sentence: "Does
-this move the current phase to a verdict?" If no, write the idea into
-`ideas-parking-lot.md` and continue the phase. Parked ideas are not rejected
-ideas; they're just not now.
+The live scope gate is README.md "Scope status" (currently: H5 Sector Income
+Core scanner/researcher, driving one strategy to one honest verdict via its
+forward paper window). Before adding any new capability, ticker, strategy, or
+tool, answer in one sentence: "Does this move the current scope to a verdict?"
+If no, write the idea into `ideas-parking-lot.md` and continue. Parked ideas
+are not rejected ideas; they're just not now.

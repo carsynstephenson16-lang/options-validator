@@ -86,7 +86,7 @@ Do not hardcode current prices, event probabilities, or market odds.
 If live data access is unavailable, return a blocker instead of guessing.
 Do not expand this repo into a live scanner, suggestor, or trading bot unless the README phase plan is explicitly changed first.
 Do not use "proven," "confirmed," "edge found," "works," or "guaranteed" about backtest results. Use "survived this test," "not yet rejected," "rejected," or "consistent with zero edge."
-Current phase: Phase 0 - get one strategy to one honest verdict. Before adding a new capability, ticker, strategy, or tool, answer: "Does this move the current phase to a verdict?" If no, write it into `ideas-parking-lot.md` and continue the phase.
+The live scope gate is README.md "Scope status" (currently: H5 Sector Income Core scanner/researcher, driving one strategy to one honest verdict via its forward paper window). Before adding a new capability, ticker, strategy, or tool, answer: "Does this move the current scope to a verdict?" If no, write it into `ideas-parking-lot.md` and continue.
 
 ## Data Rules
 

@@ -60,7 +60,8 @@ optimizer unless explicitly added to the phase plan.
   with zero edge."
 
 ## Scope guard
-Current phase: Phase 0 - get one strategy to one honest verdict. Before adding
-a new capability, ticker, strategy, or tool, answer: "Does this move the
-current phase to a verdict?" If no, write it into `ideas-parking-lot.md` and
-continue the phase.
+The live scope gate is README.md "Scope status" (currently: H5 Sector Income
+Core scanner/researcher, driving one strategy to one honest verdict via its
+forward paper window). Before adding a new capability, ticker, strategy, or
+tool, answer: "Does this move the current scope to a verdict?" If no, write
+it into `ideas-parking-lot.md` and continue.

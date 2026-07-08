@@ -36,7 +36,7 @@ The platform has two layers, and the separation is deliberate:
 | Feasibility | `analysis/feasibility.py` — credits measured from cached chains, not assumed |
 | Current holdings | `data/positions/holdings.csv` records 39 VST shares. `data/positions/positions.csv` is empty: no options are currently open or paper-tracked. |
 | Scanner mode | `options_researcher.attractiveness` and `options_researcher.attractiveness_dashboard` show candidates; they never add trades or mutate positions. |
-| Discipline layer | 354 tests green (`uv run python -m unittest discover -s tests`, 2026-07-06) |
+| Discipline layer | Full unittest suite green (`uv run python -m unittest discover -s tests`; exit code is the verdict — don't trust a hardcoded count) |
 | Strategy history | H1 ($2-wide SPY/QQQ put spread), H2 ($5-wide): registered, honest in-sample **FAILs**. H3R (SPY conditional-VRP): archived un-run at scope pivot. Ledger records are permanent; OOS budget 0/3 spent |
 
 ### What the early profile said (sampled days, ~37-DTE puts)
