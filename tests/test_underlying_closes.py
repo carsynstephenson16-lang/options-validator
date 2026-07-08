@@ -144,3 +144,20 @@ class YahooPayloadTests(unittest.TestCase):
     def test_unsplit_noop_for_unsplit_symbols(self):
         rows = [("2020-01-02", 160.62)]
         self.assertEqual(underlying_closes.unsplit(rows, "MSFT"), rows)
+
+
+class YahooFetchWindowTests(unittest.TestCase):
+    """The fetch window must reach TODAY when today is past BACKTEST_END:
+    the pre-registered entry watch (H5_ENTRY_TRIGGER_PREREG) grades live
+    triggers, and a window clamped to the frozen backtest end leaves it
+    grading month-old closes."""
+
+    def test_end_extends_to_today_when_past_backtest_end(self):
+        self.assertEqual(
+            underlying_closes.yahoo_fetch_end("2026-07-08", "2026-06-30"),
+            "2026-07-08")
+
+    def test_end_stays_at_backtest_end_when_today_is_before_it(self):
+        self.assertEqual(
+            underlying_closes.yahoo_fetch_end("2026-05-01", "2026-06-30"),
+            "2026-06-30")

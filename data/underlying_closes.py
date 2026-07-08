@@ -173,6 +173,15 @@ def unsplit(rows: list[tuple[str, float]], symbol: str) -> list[tuple[str, float
     return out
 
 
+def yahoo_fetch_end(today_iso: str, backtest_end_iso: str) -> str:
+    """End bound for the Yahoo closes fetch: BACKTEST_END or today, whichever
+    is later. The blind cache may extend past the frozen backtest window --
+    the pre-registered entry watch (H5_ENTRY_TRIGGER_PREREG) needs current
+    closes -- while backtests stay bounded because load_closes gates on the
+    RANGE each caller requests, not on what the cache holds."""
+    return max(today_iso, backtest_end_iso)
+
+
 def fetch_underlying_eod_yahoo(symbol: str) -> str:
     """Full-history RAW daily closes via the free Yahoo v8 chart API
     (provider decision 2026-07-04: ThetaData stock history and AlphaVantage
@@ -189,7 +198,8 @@ def fetch_underlying_eod_yahoo(symbol: str) -> str:
     from datetime import date as _date
 
     p1 = calendar.timegm(_date(2017, 1, 1).timetuple())
-    p2 = calendar.timegm(_date.fromisoformat(config.BACKTEST_END).timetuple()) + 86400
+    end_iso = yahoo_fetch_end(_date.today().isoformat(), config.BACKTEST_END)
+    p2 = calendar.timegm(_date.fromisoformat(end_iso).timetuple()) + 86400
     url = (YAHOO_CHART_URL.format(symbol=symbol)
            + f"?period1={p1}&period2={p2}&interval=1d")
     req = urllib.request.Request(
