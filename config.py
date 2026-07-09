@@ -111,6 +111,14 @@ A_SHORT_PUT_DELTA    = 0.30          # sell the ~30-delta put (match on |delta|)
 # quotes replace ASSUMED_CREDIT_FRAC in feasibility.py.
 A_SPREAD_WIDTH       = 2             # buy the put this many $ lower
 A_TARGET_DTE         = (30, 45)      # nearest expiration in band and >= DTE_MIN
+
+# Attractiveness expiration ladder: (target_dte, lo, hi) per bucket. Per-bucket
+# accept windows (NOT a flat tolerance) so the 2-week bucket can't pull in a
+# ~4 DTE option. Windows are disjoint; the upper tolerance widens with tenor
+# because monthlies thin to ~30-day spacing far out. Owner-frozen 2026-07-09.
+A_LADDER_BUCKETS     = ((14, 10, 21), (30, 24, 38), (60, 50, 75),
+                        (90, 76, 105), (120, 106, 140))
+
 A_PROFIT_TARGET      = 0.50          # close at 50% of entry credit captured
 A_STOP_LOSS          = 2.0           # close if loss reaches 2x entry credit
 A_CLOSE_AT_DTE       = 7             # always close by 7 DTE

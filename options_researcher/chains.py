@@ -8,6 +8,7 @@ here and nowhere else.
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 
 import pandas as pd
@@ -63,6 +64,30 @@ def nearest_monthly(chain: pd.DataFrame, today: date, *,
     win = puts_in_window(chain, today, min_dte, max_dte)
     monthlies = sorted(e for e in win["exp_date"].unique() if is_monthly(e))
     return monthlies[0] if monthlies else None
+
+
+def ladder_expirations(chain: pd.DataFrame, today: date,
+                       buckets=None) -> list[tuple[int, date]]:
+    """For each (target, lo, hi) in config.A_LADDER_BUCKETS, the available
+    expiration whose DTE is nearest `target` inside [lo, hi] (weekly OR
+    monthly). Buckets with no in-window expiration are omitted and logged.
+    Disjoint windows mean each expiration maps to at most one bucket, so no
+    dedup is needed."""
+    import config
+    if buckets is None:
+        buckets = config.A_LADDER_BUCKETS
+    exp_dates = sorted({d for d in pd.to_datetime(chain["expiration"]).dt.date})
+    out: list[tuple[int, date]] = []
+    for target, lo, hi in buckets:
+        in_win = [e for e in exp_dates if lo <= (e - today).days <= hi]
+        if not in_win:
+            logging.getLogger(__name__).info(
+                "ladder: no expiration in [%d,%d] DTE (target %d) as of %s",
+                lo, hi, target, today)
+            continue
+        out.append((target, min(in_win,
+                                key=lambda e: abs((e - today).days - target))))
+    return out
 
 
 def atm_row(chain: pd.DataFrame, expiration: date, *,
