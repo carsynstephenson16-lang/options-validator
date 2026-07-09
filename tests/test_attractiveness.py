@@ -43,6 +43,19 @@ class PutCardTests(unittest.TestCase):
         self.assertEqual(r["grades"]["iv_for_seller"], "GREEN")
         self.assertIn("promising", r["verdict"].lower())
 
+    def test_verdict_states_annualized_not_percent_per_month(self):
+        """Cards ladder out to 14-120 DTE, so the verdict must state the
+        honest period yield over the bucket's own DTE plus the annualized
+        figure -- never the misleading '%/mo' shorthand that assumes a
+        ~30-day cycle."""
+        chain = chain_rows([("P", 145.0, -0.20, 2.15)])
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=False)
+        verdict = rows[0]["verdict"]
+        self.assertIn("%/yr", verdict)
+        self.assertNotIn("%/mo", verdict)
+
 
 class FomcCardTests(unittest.TestCase):
     """FOMC-in-cycle is a descriptive AMBER/GREEN badge, parallel to
@@ -215,6 +228,45 @@ class CCCardTests(unittest.TestCase):
         self.assertIn("rents out", r["verdict"])
 
 
+class LadderMetricTests(unittest.TestCase):
+    def test_put_card_has_annualized_yield(self):
+        from options_researcher.attractiveness import put_card_rows
+        chain = chain_rows([("P", 145.0, -0.20, 2.15)])  # exp 2026-07-17
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=False)
+        r = rows[0]
+        expected = r["yield_mo"] * 365.0 / r["dte"]
+        self.assertAlmostEqual(r["annualized_yield"], expected, places=6)
+
+    def test_long_call_has_breakeven_move_and_cost_per_delta(self):
+        from options_researcher.attractiveness import long_call_card_rows
+        # a put row must exist so nearest_monthly can resolve the expiration
+        chain = chain_rows([("C", 165.0, 0.40, 4.00),
+                            ("P", 150.0, -0.20, 2.0)])  # exp 2026-07-17
+        rows = long_call_card_rows("VST", chain, "2026-06-30",
+                                   close=160.0, iv_rank=0.30)
+        r = rows[0]
+        self.assertAlmostEqual(r["breakeven_move"],
+                               r["breakeven"] / 160.0 - 1.0, places=6)
+        self.assertAlmostEqual(r["cost_per_delta"],
+                               r["cost"] / (100.0 * 0.40), places=6)
+
+    def test_exp_param_targets_a_specific_expiration(self):
+        from datetime import date
+
+        from options_researcher.attractiveness import put_card_rows
+        chain = pd.concat([
+            chain_rows([("P", 145.0, -0.20, 2.15)], exp="2026-07-17"),
+            chain_rows([("P", 140.0, -0.20, 3.00)], exp="2026-09-18"),
+        ], ignore_index=True)
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=False,
+                             exp=date(2026, 9, 18))
+        self.assertEqual(rows[0]["expiry"], "2026-09-18")
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -250,3 +302,79 @@ class PMCCCardTests(unittest.TestCase):
                               close=373.0, iv_rank=0.88, iv_minus_rv=0.0,
                               earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual(rows, [])                      # 400 < 419.54, no safe
+
+
+class RankLadderTests(unittest.TestCase):
+    def test_rank_cards_marks_single_leader_higher_better(self):
+        from options_researcher.attractiveness import rank_cards
+        cards = [{"annualized_yield": 0.10}, {"annualized_yield": 0.25},
+                 {"annualized_yield": 0.18}]
+        ranked = rank_cards(cards, "annualized_yield", higher_is_better=True)
+        self.assertEqual([c["annualized_yield"] for c in ranked],
+                         [0.25, 0.18, 0.10])
+        self.assertEqual([c["rank_leader"] for c in ranked],
+                         [True, False, False])
+
+    def test_rank_cards_nan_sorts_last_never_leads(self):
+        from options_researcher.attractiveness import rank_cards
+        cards = [{"breakeven_move": float("nan")}, {"breakeven_move": 0.05}]
+        ranked = rank_cards(cards, "breakeven_move", higher_is_better=False)
+        self.assertEqual(ranked[0]["breakeven_move"], 0.05)
+        self.assertTrue(ranked[0]["rank_leader"])
+        self.assertFalse(ranked[1]["rank_leader"])
+
+    def test_ladder_cards_one_per_bucket_ranked(self):
+        from options_researcher.attractiveness import ladder_cards, put_card_rows
+        # two expirations -> two buckets (17 DTE and ~80 DTE from 2026-06-30)
+        chain = pd.concat([
+            chain_rows([("P", 150.0, -0.20, 2.00)], exp="2026-07-17"),
+            chain_rows([("P", 150.0, -0.20, 5.00)], exp="2026-09-18"),
+        ], ignore_index=True)
+        rows = ladder_cards(put_card_rows, "VST", chain, "2026-06-30",
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=160.0, rv21=0.50, iv_rank=0.62,
+                            iv_minus_rv=0.04, earnings_in_cycle=False,
+                            fomc_in_cycle=False)
+        self.assertEqual(len(rows), 2)              # one per filled bucket
+        self.assertTrue(rows[0]["rank_leader"])     # best annualized yield first
+        self.assertGreaterEqual(rows[0]["annualized_yield"],
+                                rows[1]["annualized_yield"])
+
+    def test_rank_cards_all_non_finite_has_no_leader(self):
+        from options_researcher.attractiveness import rank_cards
+        cards = [{"annualized_yield": float("nan")}, {"other": 1.0}]
+        ranked = rank_cards(cards, "annualized_yield", higher_is_better=True)
+        self.assertTrue(all(not c["rank_leader"] for c in ranked))
+
+    def test_ladder_cards_empty_when_no_bucket_fills(self):
+        from options_researcher.attractiveness import ladder_cards, put_card_rows
+        # single 4-DTE expiration -> below every bucket floor -> no buckets
+        chain = chain_rows([("P", 150.0, -0.20, 2.00)], exp="2026-07-02")
+        rows = ladder_cards(put_card_rows, "VST", chain, "2026-06-30",
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=160.0, rv21=0.50, iv_rank=0.62,
+                            iv_minus_rv=0.04, earnings_in_cycle=False,
+                            fomc_in_cycle=False)
+        self.assertEqual(rows, [])
+
+    def test_ladder_cards_recomputes_earnings_per_bucket(self):
+        """A long-dated bucket must NOT inherit the nearest monthly's
+        earnings window: an earnings date between the two expirations puts
+        the near card outside its own cycle (GREEN) and the far card inside
+        its own cycle (AMBER)."""
+        from datetime import date
+
+        from options_researcher.attractiveness import ladder_cards, put_card_rows
+        chain = pd.concat([
+            chain_rows([("P", 150.0, -0.20, 2.00)], exp="2026-07-17"),
+            chain_rows([("P", 150.0, -0.20, 5.00)], exp="2026-09-18"),
+        ], ignore_index=True)
+        rows = ladder_cards(put_card_rows, "VST", chain, "2026-06-30",
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=160.0, rv21=0.50, iv_rank=0.62,
+                            iv_minus_rv=0.04,
+                            earnings_dates=[date(2026, 8, 20)],
+                            fomc_dates=[])
+        by_expiry = {r["expiry"]: r for r in rows}
+        self.assertEqual(by_expiry["2026-07-17"]["grades"]["earnings"], "GREEN")
+        self.assertEqual(by_expiry["2026-09-18"]["grades"]["earnings"], "AMBER")

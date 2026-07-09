@@ -32,9 +32,11 @@ def grade(value: float, green: float, amber: float, *,
                                            else "RED")
 
 
-def _monthly_rows(chain: pd.DataFrame, day: str, right: str) -> pd.DataFrame:
+def _expiry_rows(chain: pd.DataFrame, day: str, right: str,
+                 exp: date | None = None) -> pd.DataFrame:
     today = date.fromisoformat(day)
-    exp = nearest_monthly(chain, today)
+    if exp is None:
+        exp = nearest_monthly(chain, today)
     if exp is None:
         return pd.DataFrame()
     exp_dates = pd.to_datetime(chain["expiration"]).dt.date
@@ -43,6 +45,61 @@ def _monthly_rows(chain: pd.DataFrame, day: str, right: str) -> pd.DataFrame:
     rows["exp_date"] = exp
     rows["dte"] = (exp - today).days
     return rows
+
+
+def rank_cards(cards: list[dict], key: str, *,
+               higher_is_better: bool) -> list[dict]:
+    """Sort cards by ONE transparent numeric field and flag the leader.
+    Cards missing the key or holding NaN sort last and never lead. Mutates
+    each card's `rank_leader` and returns the sorted list. Callers MUST use
+    the returned list for ordering; `rank_leader` is set in place but the
+    input list's order is unchanged."""
+    def finite(c):
+        v = c.get(key)
+        return isinstance(v, (int, float)) and v == v
+    good = sorted((c for c in cards if finite(c)),
+                  key=lambda c: float(c[key]), reverse=higher_is_better)
+    bad = [c for c in cards if not finite(c)]
+    ranked = good + bad
+    for i, c in enumerate(ranked):
+        c["rank_leader"] = bool(good) and i == 0
+    return ranked
+
+
+def ladder_cards(builder, symbol: str, chain: pd.DataFrame, day: str, *,
+                 rank_key: str, higher_is_better: bool,
+                 earnings_dates=None, fomc_dates=None, **kwargs) -> list[dict]:
+    """Run `builder` once per ladder expiration, keep the delta-target card
+    (the first, since builders sort by delta distance) from each filled
+    bucket, then rank the buckets by `rank_key`.
+
+    PRECONDITION: `builder` MUST return candidates ordered best-first (the
+    four laddering-compatible builders — put_card_rows, cc_card_rows,
+    pmcc_card_rows, long_call_card_rows — do, via nsmallest on delta distance)
+    and MUST accept an `exp=` keyword. `leaps_card_rows` is NOT compatible (no
+    `exp` param, its own long tenor) and must not be passed here.
+
+    If `earnings_dates` / `fomc_dates` are given, the in-cycle badges are
+    recomputed PER BUCKET against each bucket's own expiration (a long-dated
+    card must not inherit the nearest monthly's earnings/FOMC window) and
+    injected as `earnings_in_cycle` / `fomc_in_cycle` into the builder call.
+    """
+    from options_researcher.chains import ladder_expirations
+    day_date = date.fromisoformat(day)
+    picked: list[dict] = []
+    for _target, exp in ladder_expirations(chain, day_date):
+        call_kwargs = dict(kwargs)
+        if earnings_dates is not None:
+            call_kwargs["earnings_in_cycle"] = any(
+                day_date < e <= exp for e in earnings_dates)
+        if fomc_dates is not None:
+            call_kwargs["fomc_in_cycle"] = any(
+                day_date < m <= exp for m in fomc_dates)
+        cards = builder(symbol, chain, day, exp=exp, **call_kwargs)
+        cards = [c for c in cards if "skipped" not in c]
+        if cards:
+            picked.append(cards[0])
+    return rank_cards(picked, rank_key, higher_is_better=higher_is_better)
 
 
 def _vol_prose(r) -> tuple[float | None, float | None, str]:
@@ -73,10 +130,11 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                   close: float, rv21: float, iv_rank: float,
                   iv_minus_rv: float,
                   earnings_in_cycle: bool,
-                  fomc_in_cycle: bool) -> list[dict]:
+                  fomc_in_cycle: bool,
+                  exp: date | None = None) -> list[dict]:
     """SELL-A-PUT candidates near the H5 income delta."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
-    puts = _monthly_rows(chain, day, "P")
+    puts = _expiry_rows(chain, day, "P", exp)
     if puts.empty:
         return []
     puts["dist"] = (puts["delta"].abs() - config.H5_INCOME_DELTA).abs()
@@ -102,15 +160,17 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
+        ann = yield_mo * 365.0 / max(int(r["dte"]), 1)
         verdict = (f"you'd be promising to buy 100 sh of {symbol} at "
                    f"${k:.0f} (${k * 100:,.0f} set aside); pays "
-                   f"${credit:,.0f} now = {100 * yield_mo:.2f}%/mo "
-                   f"(~{100 * yield_mo * 12:.0f}%/yr); the stock is "
+                   f"${credit:,.0f} now = {100 * yield_mo:.2f}% over "
+                   f"{int(r['dte'])}d (~{100 * ann:.0f}%/yr); the stock is "
                    f"{100 * otm:.1f}% above your promise level and its "
                    f"typical monthly wiggle is {100 * monthly_move:.1f}%.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
                     "yield_mo": yield_mo, "cushion": cushion,
+                    "annualized_yield": yield_mo * 365.0 / max(int(r["dte"]), 1),
                     "grades": grades, "verdict": verdict})
     return out
 
@@ -119,10 +179,11 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                  close: float, cost_basis: float, iv_rank: float,
                  iv_minus_rv: float,
                  earnings_in_cycle: bool,
-                 fomc_in_cycle: bool) -> list[dict]:
+                 fomc_in_cycle: bool,
+                 exp: date | None = None) -> list[dict]:
     """SELL-A-COVERED-CALL candidates (against a declared 100-share lot)."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
-    calls = _monthly_rows(chain, day, "C")
+    calls = _expiry_rows(chain, day, "C", exp)
     if calls.empty:
         return []
     calls["dist"] = (calls["delta"].abs() - config.H5_INCOME_DELTA).abs()
@@ -153,8 +214,10 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
+        ann = yield_mo * 365.0 / max(int(r["dte"]), 1)
         verdict = (f"rents out your 100 sh for ${credit:,.0f} "
-                   f"({100 * yield_mo:.2f}%/mo of today's value); if "
+                   f"({100 * yield_mo:.2f}% of today's value over "
+                   f"{int(r['dte'])}d, ~{100 * ann:.0f}%/yr); if "
                    f"{symbol} finishes above ${k:.0f} you sell at "
                    f"${k * 100:,.0f} = {100 * (k / close - 1):+.1f}% vs today "
                    f"({100 * (k / cost_basis - 1):+.1f}% vs your cost) -- "
@@ -162,6 +225,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
                     "yield_mo": yield_mo, "upside": upside,
+                    "annualized_yield": yield_mo * 365.0 / max(int(r["dte"]), 1),
                     "grades": grades, "verdict": verdict})
     return out
 
@@ -170,7 +234,8 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    leaps_strike: float, leaps_premium: float, close: float,
                    iv_rank: float, iv_minus_rv: float,
                    earnings_in_cycle: bool,
-                   fomc_in_cycle: bool) -> list[dict]:
+                   fomc_in_cycle: bool,
+                   exp: date | None = None) -> list[dict]:
     """SELL-A-CALL-AGAINST-YOUR-LEAPS (poor man's covered call) candidates.
 
     HARD safety gate: only strikes >= leaps_strike + leaps_premium are shown,
@@ -180,7 +245,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
     """
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
     safety_strike = leaps_strike + leaps_premium
-    calls = _monthly_rows(chain, day, "C")
+    calls = _expiry_rows(chain, day, "C", exp)
     if calls.empty:
         return []
     safe = calls[calls["strike"] >= safety_strike].copy()
@@ -206,16 +271,19 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
+        ann = yield_mo * 365.0 / max(int(r["dte"]), 1)
         verdict = (f"sells a ${k:.0f} call for ${credit:,.0f} against your "
                    f"{symbol} LEAPS; SAFE because ${k:.0f} >= LEAPS strike "
                    f"${leaps_strike:.0f} + premium ${leaps_premium:.2f} = "
                    f"${safety_strike:.2f}, so assignment can't lock a loss; "
-                   f"income {100 * yield_mo:.2f}%/mo on the ${leaps_cost:,.0f} "
+                   f"income {100 * yield_mo:.2f}% over {int(r['dte'])}d "
+                   f"(~{100 * ann:.0f}%/yr) on the ${leaps_cost:,.0f} "
                    "you put into the LEAPS.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
-                    "yield_mo": yield_mo, "grades": grades,
-                    "verdict": verdict})
+                    "yield_mo": yield_mo,
+                    "annualized_yield": yield_mo * 365.0 / max(int(r["dte"]), 1),
+                    "grades": grades, "verdict": verdict})
     return out
 
 
@@ -257,13 +325,15 @@ def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 
 
 def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
-                        close: float, iv_rank: float) -> list[dict]:
+                        close: float, iv_rank: float,
+                        exp: date | None = None) -> list[dict]:
     """BUY-A-SHORT-DATED-CALL candidates (TACTICAL lane, H4_TACTICAL_DELTA on
-    the nearest monthly). A long call's max loss IS its premium, so fits_cap
-    grades cost against MAX_LOSS_PER_TRADE. iv_for_buyer prefers LOW IV-rank.
+    the expiration passed via `exp` -- the nearest monthly only when `exp` is
+    None). A long call's max loss IS its premium, so fits_cap grades cost
+    against MAX_LOSS_PER_TRADE. iv_for_buyer prefers LOW IV-rank.
     Descriptive scanner preview -- NOT an H5 income lane, never sized/tracked."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
-    calls = _monthly_rows(chain, day, "C")
+    calls = _expiry_rows(chain, day, "C", exp)
     if calls.empty:
         return []
     calls["dist"] = (calls["delta"].abs() - config.H4_TACTICAL_DELTA).abs()
@@ -293,6 +363,11 @@ def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    "ever. TACTICAL preview, not an H5 income lane.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": dte, "cost": cost, "breakeven": breakeven,
+                    "breakeven_move": breakeven / close - 1.0,
+                    # denominator is nonzero: the delta-band filter above
+                    # (dist <= DELTA_BAND around H4_TACTICAL_DELTA) excludes
+                    # |delta| -> 0 contracts before we get here.
+                    "cost_per_delta": cost / (100.0 * abs(float(r["delta"]))),
                     "grades": grades, "verdict": verdict,
                     "vega": vega, "iv": contract_iv})
     return out
@@ -344,25 +419,23 @@ def main():
         iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
         iv_minus_rv = (float(row["iv_minus_rv"])
                        if pd.notna(row["iv_minus_rv"]) else 0.0)
-        exp = nearest_monthly(chain, date.fromisoformat(day))
-        earn_in_cycle = False
-        if exp is not None:
-            earn_in_cycle = any(date.fromisoformat(day) < e <= exp
-                                for e in load_earnings(symbol))
-        fomc_in_cycle = False
-        if exp is not None:
-            fomc_in_cycle = any(date.fromisoformat(day) < m <= exp
-                                for m in load_fomc())
+        earnings = load_earnings(symbol)
+        fomcs = load_fomc()
         print(f"\n=== {symbol} @ {day}  close ${close:,.2f}  "
               f"IV-rank {iv_rank:.2f} ===")
-        print("-- SELL A PUT? (promise to buy 100 sh lower)")
-        rows = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
-                             iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                             earnings_in_cycle=earn_in_cycle,
-                             fomc_in_cycle=fomc_in_cycle)
+        print("-- SELL A PUT? (ladder; ranked by annualized income on capital)")
+        rows = ladder_cards(put_card_rows, symbol, chain, day,
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=close, rv21=rv21, iv_rank=iv_rank,
+                            iv_minus_rv=iv_minus_rv,
+                            earnings_dates=earnings,
+                            fomc_dates=fomcs)
         for c in rows or []:
+            star = "★ " if c.get("rank_leader") else "  "
             badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
-            print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+            print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                  f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                  f"{c['verdict']}")
             print(f"    [{badges}]")
             if c["grades"]["iv_for_seller"] == "GREEN":
                 print(STUDY_A_LINE)
@@ -372,17 +445,22 @@ def main():
         held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
         if held_shares >= 100:
             print("-- SELL A COVERED CALL? (rent out shares you hold)")
-            for c in cc_card_rows(symbol, chain, day, close=close,
-                                  cost_basis=float(lot.iloc[0]["cost_basis"]),
-                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle,
-                                  fomc_in_cycle=fomc_in_cycle):
-                if "skipped" in c:
-                    print(f"  ${c['strike']:.0f}: {c['skipped']}")
-                    continue
+            rows = ladder_cards(cc_card_rows, symbol, chain, day,
+                               rank_key="annualized_yield",
+                               higher_is_better=True, close=close,
+                               cost_basis=float(lot.iloc[0]["cost_basis"]),
+                               iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                               earnings_dates=earnings,
+                               fomc_dates=fomcs)
+            for c in rows:
+                star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
-                print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+                print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                      f"{c['verdict']}")
                 print(f"    [{badges}]")
+            if not rows:
+                print("  no candidate above your cost basis this cycle")
         elif held_shares > 0:
             print(f"-- COVERED CALL: you hold {held_shares} sh of {symbol} -- "
                   "a covered call needs 100 per contract. The scanner will "
@@ -392,14 +470,19 @@ def main():
             k_leaps, prem_leaps = held_leaps[symbol]
             print(f"-- SELL A CALL AGAINST YOUR LEAPS? (PMCC; LEAPS ${k_leaps:.0f} "
                   f"cost ${prem_leaps:.2f})")
-            pmcc = pmcc_card_rows(symbol, chain, day, leaps_strike=k_leaps,
-                                  leaps_premium=prem_leaps, close=close,
-                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle,
-                                  fomc_in_cycle=fomc_in_cycle)
+            pmcc = ladder_cards(pmcc_card_rows, symbol, chain, day,
+                               rank_key="annualized_yield",
+                               higher_is_better=True, leaps_strike=k_leaps,
+                               leaps_premium=prem_leaps, close=close,
+                               iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                               earnings_dates=earnings,
+                               fomc_dates=fomcs)
             for c in pmcc:
+                star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
-                print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+                print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                      f"{c['verdict']}")
                 print(f"    [{badges}]")
             if not pmcc:
                 print(f"  no SAFE strike this cycle: the rule needs a call at "
@@ -414,6 +497,19 @@ def main():
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
                 print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
                 print(f"    [{badges}]")
+        print("-- BUY A CALL? (tactical ladder; ranked by smallest move needed)")
+        lc = ladder_cards(long_call_card_rows, symbol, chain, day,
+                         rank_key="breakeven_move", higher_is_better=False,
+                         close=close, iv_rank=iv_rank)
+        for c in lc:
+            star = "★ " if c.get("rank_leader") else "  "
+            badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
+            print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                  f"({c['dte']}d, move {100 * c['breakeven_move']:+.1f}%, "
+                  f"${c['cost_per_delta']:,.0f}/delta): {c['verdict']}")
+            print(f"    [{badges}]")
+        if not lc:
+            print("  no tactical long call near the target delta this cycle")
 
 
 if __name__ == "__main__":

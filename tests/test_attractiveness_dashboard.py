@@ -130,6 +130,38 @@ class AssembleTests(unittest.TestCase):
         self.assertAlmostEqual(pmcc_card["leaps_cost"], 7954.0, 2)
         self.assertTrue(any(r["note"] for r in pmcc_card["scenarios"]))
 
+    def test_multi_card_ladder_group_survives_and_marks_one_leader(self):
+        # A real ladder group carries several expirations; only the ranked
+        # leader's headline gets the star.
+        section = {
+            "symbol": "MSFT", "as_of": "2026-06-30", "close": 373.02,
+            "iv_rank": 0.88,
+            "groups": [
+                {"kind": "put", "title": "SELL A PUT?",
+                 "cards": [
+                     {"strike": 350.0, "expiry": "2026-07-17", "dte": 17,
+                      "credit": 250.0, "yield_mo": 0.0071,
+                      "grades": {"yield": "AMBER"},
+                      "verdict": "near-dated put...", "rank_leader": False},
+                     {"strike": 345.0, "expiry": "2026-08-21", "dte": 52,
+                      "credit": 420.0, "yield_mo": 0.0122,
+                      "grades": {"yield": "GREEN"},
+                      "verdict": "further-dated put...", "rank_leader": True},
+                 ],
+                 "empty": None},
+            ],
+        }
+        d = ad.assemble(symbol_sections=[section],
+                        rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11})
+        cards = d["symbols"][0]["groups"][0]["cards"]
+        self.assertEqual(len(cards), 2)                      # both survive
+        headlines = [c["headline"] for c in cards]
+        self.assertEqual(len(headlines), 2)
+        starred = [h for h in headlines if "★" in h]
+        self.assertEqual(len(starred), 1)                    # exactly one leader
+        leader = next(c for c in cards if c["rank_leader"])
+        self.assertIn("★", leader["headline"])
+
     def test_skipped_card_gets_no_scenarios(self):
         section = {"symbol": "VST", "as_of": "2026-06-30", "close": 112.0,
                    "iv_rank": 0.3,
@@ -142,6 +174,21 @@ class AssembleTests(unittest.TestCase):
         card = d["symbols"][0]["groups"][0]["cards"][0]
         self.assertEqual(card["scenarios"], [])
         self.assertEqual(card["headline"], "")
+
+
+class HeadlineTests(unittest.TestCase):
+    def test_headline_marks_ladder_leader(self):
+        leader = {"strike": 145.0, "expiry": "2026-08-15", "dte": 60,
+                  "credit": 210.0, "rank_leader": True}
+        s = ad._headline("VST", "put", leader)
+        self.assertIn("★", s)
+        self.assertIn("60 days out", s)
+
+    def test_headline_no_star_when_not_leader(self):
+        card = {"strike": 145.0, "expiry": "2026-08-15", "dte": 60,
+                "credit": 210.0, "rank_leader": False}
+        s = ad._headline("VST", "put", card)
+        self.assertNotIn("★", s)
 
 
 class RenderTests(unittest.TestCase):
