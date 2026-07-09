@@ -43,6 +43,19 @@ class PutCardTests(unittest.TestCase):
         self.assertEqual(r["grades"]["iv_for_seller"], "GREEN")
         self.assertIn("promising", r["verdict"].lower())
 
+    def test_verdict_states_annualized_not_percent_per_month(self):
+        """Cards ladder out to 14-120 DTE, so the verdict must state the
+        honest period yield over the bucket's own DTE plus the annualized
+        figure -- never the misleading '%/mo' shorthand that assumes a
+        ~30-day cycle."""
+        chain = chain_rows([("P", 145.0, -0.20, 2.15)])
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=False)
+        verdict = rows[0]["verdict"]
+        self.assertIn("%/yr", verdict)
+        self.assertNotIn("%/mo", verdict)
+
 
 class FomcCardTests(unittest.TestCase):
     """FOMC-in-cycle is a descriptive AMBER/GREEN badge, parallel to
@@ -343,3 +356,25 @@ class RankLadderTests(unittest.TestCase):
                             iv_minus_rv=0.04, earnings_in_cycle=False,
                             fomc_in_cycle=False)
         self.assertEqual(rows, [])
+
+    def test_ladder_cards_recomputes_earnings_per_bucket(self):
+        """A long-dated bucket must NOT inherit the nearest monthly's
+        earnings window: an earnings date between the two expirations puts
+        the near card outside its own cycle (GREEN) and the far card inside
+        its own cycle (AMBER)."""
+        from datetime import date
+
+        from options_researcher.attractiveness import ladder_cards, put_card_rows
+        chain = pd.concat([
+            chain_rows([("P", 150.0, -0.20, 2.00)], exp="2026-07-17"),
+            chain_rows([("P", 150.0, -0.20, 5.00)], exp="2026-09-18"),
+        ], ignore_index=True)
+        rows = ladder_cards(put_card_rows, "VST", chain, "2026-06-30",
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=160.0, rv21=0.50, iv_rank=0.62,
+                            iv_minus_rv=0.04,
+                            earnings_dates=[date(2026, 8, 20)],
+                            fomc_dates=[])
+        by_expiry = {r["expiry"]: r for r in rows}
+        self.assertEqual(by_expiry["2026-07-17"]["grades"]["earnings"], "GREEN")
+        self.assertEqual(by_expiry["2026-09-18"]["grades"]["earnings"], "AMBER")
