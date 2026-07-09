@@ -443,6 +443,8 @@ def main():
                       f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
                       f"{c['verdict']}")
                 print(f"    [{badges}]")
+            if not rows:
+                print("  no candidate above your cost basis this cycle")
         elif held_shares > 0:
             print(f"-- COVERED CALL: you hold {held_shares} sh of {symbol} -- "
                   "a covered call needs 100 per contract. The scanner will "
@@ -462,7 +464,9 @@ def main():
             for c in pmcc:
                 star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
-                print(f"{star}${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+                print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                      f"{c['verdict']}")
                 print(f"    [{badges}]")
             if not pmcc:
                 print(f"  no SAFE strike this cycle: the rule needs a call at "
