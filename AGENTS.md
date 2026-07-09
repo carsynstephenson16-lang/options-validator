@@ -97,6 +97,18 @@ Keep raw data separate from cleaned data.
 Make transformations reproducible.
 Save important assumptions near the code that depends on them.
 
+## Obsidian LLM Wiki
+
+This repo is also opened as an Obsidian vault. The LLM-maintained wiki layer
+lives under `wiki/`; raw source material lives under `wiki/raw/` and must be
+treated as immutable. Read `wiki/index.md` before wiki-oriented work and append
+every ingest, filed query result, or lint pass to `wiki/log.md`.
+
+The wiki is derived operator memory, not project truth. For strategy verdicts,
+market data, configuration, and reproducibility, the canonical sources remain
+`ledger/`, `data/`, `reports/`, `docs/superpowers/`, tests, and committed
+source files. If the wiki conflicts with canonical evidence, fix the wiki.
+
 ## Security Rules
 
 Keep credentials in environment variables or a secrets manager.
