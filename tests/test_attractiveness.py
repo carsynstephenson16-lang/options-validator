@@ -289,3 +289,40 @@ class PMCCCardTests(unittest.TestCase):
                               close=373.0, iv_rank=0.88, iv_minus_rv=0.0,
                               earnings_in_cycle=False, fomc_in_cycle=False)
         self.assertEqual(rows, [])                      # 400 < 419.54, no safe
+
+
+class RankLadderTests(unittest.TestCase):
+    def test_rank_cards_marks_single_leader_higher_better(self):
+        from options_researcher.attractiveness import rank_cards
+        cards = [{"annualized_yield": 0.10}, {"annualized_yield": 0.25},
+                 {"annualized_yield": 0.18}]
+        ranked = rank_cards(cards, "annualized_yield", higher_is_better=True)
+        self.assertEqual([c["annualized_yield"] for c in ranked],
+                         [0.25, 0.18, 0.10])
+        self.assertEqual([c["rank_leader"] for c in ranked],
+                         [True, False, False])
+
+    def test_rank_cards_nan_sorts_last_never_leads(self):
+        from options_researcher.attractiveness import rank_cards
+        cards = [{"breakeven_move": float("nan")}, {"breakeven_move": 0.05}]
+        ranked = rank_cards(cards, "breakeven_move", higher_is_better=False)
+        self.assertEqual(ranked[0]["breakeven_move"], 0.05)
+        self.assertTrue(ranked[0]["rank_leader"])
+        self.assertFalse(ranked[1]["rank_leader"])
+
+    def test_ladder_cards_one_per_bucket_ranked(self):
+        from options_researcher.attractiveness import ladder_cards, put_card_rows
+        # two expirations -> two buckets (17 DTE and ~80 DTE from 2026-06-30)
+        chain = pd.concat([
+            chain_rows([("P", 150.0, -0.20, 2.00)], exp="2026-07-17"),
+            chain_rows([("P", 150.0, -0.20, 5.00)], exp="2026-09-18"),
+        ], ignore_index=True)
+        rows = ladder_cards(put_card_rows, "VST", chain, "2026-06-30",
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=160.0, rv21=0.50, iv_rank=0.62,
+                            iv_minus_rv=0.04, earnings_in_cycle=False,
+                            fomc_in_cycle=False)
+        self.assertEqual(len(rows), 2)              # one per filled bucket
+        self.assertTrue(rows[0]["rank_leader"])     # best annualized yield first
+        self.assertGreaterEqual(rows[0]["annualized_yield"],
+                                rows[1]["annualized_yield"])

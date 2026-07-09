@@ -47,6 +47,38 @@ def _expiry_rows(chain: pd.DataFrame, day: str, right: str,
     return rows
 
 
+def rank_cards(cards: list[dict], key: str, *,
+               higher_is_better: bool) -> list[dict]:
+    """Sort cards by ONE transparent numeric field and flag the leader.
+    Cards missing the key or holding NaN sort last and never lead. Mutates
+    each card's `rank_leader` and returns the sorted list."""
+    def finite(c):
+        v = c.get(key)
+        return isinstance(v, (int, float)) and v == v
+    good = sorted((c for c in cards if finite(c)),
+                  key=lambda c: float(c[key]), reverse=higher_is_better)
+    bad = [c for c in cards if not finite(c)]
+    ranked = good + bad
+    for i, c in enumerate(ranked):
+        c["rank_leader"] = bool(good) and i == 0
+    return ranked
+
+
+def ladder_cards(builder, symbol: str, chain: pd.DataFrame, day: str, *,
+                 rank_key: str, higher_is_better: bool, **kwargs) -> list[dict]:
+    """Run `builder` once per ladder expiration, keep the delta-target card
+    (the first, since builders sort by delta distance) from each filled
+    bucket, then rank the buckets by `rank_key`."""
+    from options_researcher.chains import ladder_expirations
+    picked: list[dict] = []
+    for _target, exp in ladder_expirations(chain, date.fromisoformat(day)):
+        cards = builder(symbol, chain, day, exp=exp, **kwargs)
+        cards = [c for c in cards if "skipped" not in c]
+        if cards:
+            picked.append(cards[0])
+    return rank_cards(picked, rank_key, higher_is_better=higher_is_better)
+
+
 def _vol_prose(r) -> tuple[float | None, float | None, str]:
     """Return (vega, iv, sentence) for card verdicts; skip on missing/NaN."""
     if not (pd.notna(r.get("vega")) and pd.notna(r.get("iv"))):
