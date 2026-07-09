@@ -239,3 +239,46 @@ regulatory-tail pricing; it also fails the liquidity screen. Not a trade.
 
 Registration happens in the chained ledger only after the owner fills the
 blanks. Until then H6 does not exist as a hypothesis; this memo is context.
+
+---
+
+## 11. Owner revision V2 (2026-07-08, facts.log H6_OWNER_INPUTS_V2) and the concrete proposal
+
+Owner: **$2,000/month max capital at risk** (hard at-risk semantics);
+put-spread proposal REJECTED as too conservative; rejection-criterion
+indifference ("meh") — so every number below is stated explicitly and the
+owner confirms or overrides; silence is not registration.
+
+**H6 v1 proposal: "post-earnings tactical long calls"** (every value
+LLM-proposed unless marked owner):
+
+- **Names:** NVDA, PLTR, AMZN. CEG is excluded by DATA: its 45–90 DTE
+  calls quoted 14–17% spreads on 2026-07-06 — fails MAX_SPREAD_PCT on the
+  leg this structure trades (Repo-verified from cache). SMCI/NOW/CRWV/
+  TEM/HYLN already failed §8.
+- **Entry:** only in the first 5 trading sessions AFTER a name's earnings
+  report (the crush is behind, the gap is behind); never in the 5 sessions
+  before one. Contract must pass MIN_OPEN_INTEREST / MAX_SPREAD_PCT.
+- **Contract:** single long call, nearest monthly 45–90 DTE, target delta
+  0.40 (band ±0.15 reused). Cache pricing 07-06/07-07: NVDA 0.42Δ Sep18
+  ≈ $1,035; PLTR 0.40Δ Sep18 ≈ $865; AMZN 0.41Δ Sep18 ≈ $1,150 — i.e.
+  roughly TWO contracts per month inside the cap.
+- **Sizing (owner):** total premium at risk ≤ $2,000/month; max one
+  contract per name, max 2 concurrent positions. Premium = max loss;
+  the cap cannot be gapped through (defined risk).
+- **Exit (proposed, frozen at registration):** close at 21 DTE at
+  conservative fills; NO intramonth stop (H1 evidence: stops were the
+  loss engine); no profit-take in v1 (each extra rule is a fittable knob).
+- **Validation:** forward paper window in the tracked book; descriptive
+  backtest on NVDA/PLTR history allowed as context, never as the verdict.
+- **REJECTS H6 (proposed, needs owner literal confirm):** after 8
+  completed positions, if bootstrap CI90 upper bound of per-trade
+  expectancy < 0 → REJECT; hard kill regardless: 3 consecutive months
+  of full-cap loss → REJECT.
+- **Justifies continuing:** CI90 lower bound > 0 after 8 completed
+  positions → extend the window, nothing more.
+
+Honesty line (unchanged by the excitement): this is a directional bet
+that AI names drift up post-earnings. It has no demonstrated edge; the
+forward window exists to measure whether it has one. "No edge after
+costs" remains a successful outcome.
