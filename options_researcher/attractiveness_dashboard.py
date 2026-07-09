@@ -130,7 +130,8 @@ def _headline(symbol: str, kind: str, card: dict) -> str:
         money = f"costs ${float(card['cost']):,.0f}"
     else:
         money = f"collect ${float(card['credit']):,.0f} now"
-    return (f"{lead} — {money} — result by {card['expiry']} "
+    star = "★ " if card.get("rank_leader") else ""
+    return (f"{star}{lead} — {money} — result by {card['expiry']} "
             f"({card['dte']} days out)")
 
 
@@ -198,6 +199,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
     from data.underlying_closes import load_closes
     from options_researcher.attractiveness import (
         cc_card_rows,
+        ladder_cards,
         leaps_card_rows,
         long_call_card_rows,
         pmcc_card_rows,
@@ -245,10 +247,12 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
         fomc_in_cycle = bool(exp is not None and any(
             date.fromisoformat(day) < m <= exp for m in load_fomc()))
 
-        put_cards = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
-                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle,
-                                  fomc_in_cycle=fomc_in_cycle)
+        put_cards = ladder_cards(put_card_rows, symbol, chain, day,
+                                 rank_key="annualized_yield",
+                                 higher_is_better=True, close=close, rv21=rv21,
+                                 iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                                 earnings_in_cycle=earn_in_cycle,
+                                 fomc_in_cycle=fomc_in_cycle)
         groups: list[dict] = [
             {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
              "cards": put_cards,
@@ -260,8 +264,10 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
         if held_shares >= 100:
             groups.append({"kind": "cc",
                            "title": "SELL A COVERED CALL? (rent out your shares)",
-                           "cards": cc_card_rows(
-                               symbol, chain, day, close=close,
+                           "cards": ladder_cards(
+                               cc_card_rows, symbol, chain, day,
+                               rank_key="annualized_yield",
+                               higher_is_better=True, close=close,
                                cost_basis=float(lot.iloc[0]["cost_basis"]),
                                iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                                earnings_in_cycle=earn_in_cycle,
@@ -278,8 +284,10 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                                      "a real LEAPS is recorded.")})
         if symbol in held_leaps:
             lk, lp = held_leaps[symbol]
-            pmcc_cards = pmcc_card_rows(
-                symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
+            pmcc_cards = ladder_cards(
+                pmcc_card_rows, symbol, chain, day,
+                rank_key="annualized_yield", higher_is_better=True,
+                leaps_strike=lk, leaps_premium=lp,
                 close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                 earnings_in_cycle=earn_in_cycle, fomc_in_cycle=fomc_in_cycle)
             groups.append({"kind": "pmcc",
@@ -302,8 +310,10 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
             if symbol not in held_leaps and leaps_cards:
                 lc = leaps_cards[0]
                 lk, lp = float(lc["strike"]), float(lc["cost"]) / 100.0
-                preview_pmcc = pmcc_card_rows(
-                    symbol, chain, day, leaps_strike=lk, leaps_premium=lp,
+                preview_pmcc = ladder_cards(
+                    pmcc_card_rows, symbol, chain, day,
+                    rank_key="annualized_yield", higher_is_better=True,
+                    leaps_strike=lk, leaps_premium=lp,
                     close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                     earnings_in_cycle=earn_in_cycle, fomc_in_cycle=fomc_in_cycle)
                 groups.append({
@@ -316,8 +326,10 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                      f"${lk + lp:.2f}+ that still pays; none listed.")})
 
         # TACTICAL long-call preview (descriptive; not an H5 income lane).
-        long_calls = long_call_card_rows(symbol, chain, day, close=close,
-                                         iv_rank=iv_rank)
+        long_calls = ladder_cards(long_call_card_rows, symbol, chain, day,
+                                  rank_key="breakeven_move",
+                                  higher_is_better=False, close=close,
+                                  iv_rank=iv_rank)
         groups.append({"kind": "long_call", "preview": True,
                        "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
                        "cards": long_calls,

@@ -144,6 +144,22 @@ class AssembleTests(unittest.TestCase):
         self.assertEqual(card["headline"], "")
 
 
+class HeadlineTests(unittest.TestCase):
+    def test_headline_marks_ladder_leader(self):
+        from options_researcher.attractiveness_dashboard import _headline
+        leader = {"strike": 145.0, "expiry": "2026-08-15", "dte": 60,
+                  "credit": 210.0, "rank_leader": True}
+        s = _headline("VST", "put", leader)
+        self.assertIn("★", s)
+        self.assertIn("60 days out", s)
+
+    def test_headline_no_star_when_not_leader(self):
+        card = {"strike": 145.0, "expiry": "2026-08-15", "dte": 60,
+                "credit": 210.0, "rank_leader": False}
+        s = ad._headline("VST", "put", card)
+        self.assertNotIn("★", s)
+
+
 class RenderTests(unittest.TestCase):
     def _assembled(self):
         return ad.assemble(
