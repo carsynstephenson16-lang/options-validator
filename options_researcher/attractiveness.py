@@ -407,14 +407,19 @@ def main():
                                 for m in load_fomc())
         print(f"\n=== {symbol} @ {day}  close ${close:,.2f}  "
               f"IV-rank {iv_rank:.2f} ===")
-        print("-- SELL A PUT? (promise to buy 100 sh lower)")
-        rows = put_card_rows(symbol, chain, day, close=close, rv21=rv21,
-                             iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                             earnings_in_cycle=earn_in_cycle,
-                             fomc_in_cycle=fomc_in_cycle)
+        print("-- SELL A PUT? (ladder; ranked by annualized income on capital)")
+        rows = ladder_cards(put_card_rows, symbol, chain, day,
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=close, rv21=rv21, iv_rank=iv_rank,
+                            iv_minus_rv=iv_minus_rv,
+                            earnings_in_cycle=earn_in_cycle,
+                            fomc_in_cycle=fomc_in_cycle)
         for c in rows or []:
+            star = "★ " if c.get("rank_leader") else "  "
             badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
-            print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+            print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                  f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                  f"{c['verdict']}")
             print(f"    [{badges}]")
             if c["grades"]["iv_for_seller"] == "GREEN":
                 print(STUDY_A_LINE)
@@ -424,16 +429,19 @@ def main():
         held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
         if held_shares >= 100:
             print("-- SELL A COVERED CALL? (rent out shares you hold)")
-            for c in cc_card_rows(symbol, chain, day, close=close,
-                                  cost_basis=float(lot.iloc[0]["cost_basis"]),
-                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle,
-                                  fomc_in_cycle=fomc_in_cycle):
-                if "skipped" in c:
-                    print(f"  ${c['strike']:.0f}: {c['skipped']}")
-                    continue
+            rows = ladder_cards(cc_card_rows, symbol, chain, day,
+                               rank_key="annualized_yield",
+                               higher_is_better=True, close=close,
+                               cost_basis=float(lot.iloc[0]["cost_basis"]),
+                               iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                               earnings_in_cycle=earn_in_cycle,
+                               fomc_in_cycle=fomc_in_cycle)
+            for c in rows:
+                star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
-                print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+                print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                      f"{c['verdict']}")
                 print(f"    [{badges}]")
         elif held_shares > 0:
             print(f"-- COVERED CALL: you hold {held_shares} sh of {symbol} -- "
@@ -444,14 +452,17 @@ def main():
             k_leaps, prem_leaps = held_leaps[symbol]
             print(f"-- SELL A CALL AGAINST YOUR LEAPS? (PMCC; LEAPS ${k_leaps:.0f} "
                   f"cost ${prem_leaps:.2f})")
-            pmcc = pmcc_card_rows(symbol, chain, day, leaps_strike=k_leaps,
-                                  leaps_premium=prem_leaps, close=close,
-                                  iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                  earnings_in_cycle=earn_in_cycle,
-                                  fomc_in_cycle=fomc_in_cycle)
+            pmcc = ladder_cards(pmcc_card_rows, symbol, chain, day,
+                               rank_key="annualized_yield",
+                               higher_is_better=True, leaps_strike=k_leaps,
+                               leaps_premium=prem_leaps, close=close,
+                               iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                               earnings_in_cycle=earn_in_cycle,
+                               fomc_in_cycle=fomc_in_cycle)
             for c in pmcc:
+                star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
-                print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
+                print(f"{star}${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
                 print(f"    [{badges}]")
             if not pmcc:
                 print(f"  no SAFE strike this cycle: the rule needs a call at "
@@ -466,6 +477,19 @@ def main():
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
                 print(f"  ${c['strike']:.0f} {c['expiry']}: {c['verdict']}")
                 print(f"    [{badges}]")
+        print("-- BUY A CALL? (tactical ladder; ranked by smallest move needed)")
+        lc = ladder_cards(long_call_card_rows, symbol, chain, day,
+                         rank_key="breakeven_move", higher_is_better=False,
+                         close=close, iv_rank=iv_rank)
+        for c in lc:
+            star = "★ " if c.get("rank_leader") else "  "
+            badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
+            print(f"{star}${c['strike']:.0f} {c['expiry']} "
+                  f"({c['dte']}d, move {100 * c['breakeven_move']:+.1f}%, "
+                  f"${c['cost_per_delta']:,.0f}/delta): {c['verdict']}")
+            print(f"    [{badges}]")
+        if not lc:
+            print("  no tactical long call near the target delta this cycle")
 
 
 if __name__ == "__main__":
