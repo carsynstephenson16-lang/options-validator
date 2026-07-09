@@ -32,9 +32,11 @@ def grade(value: float, green: float, amber: float, *,
                                            else "RED")
 
 
-def _monthly_rows(chain: pd.DataFrame, day: str, right: str) -> pd.DataFrame:
+def _expiry_rows(chain: pd.DataFrame, day: str, right: str,
+                 exp: date | None = None) -> pd.DataFrame:
     today = date.fromisoformat(day)
-    exp = nearest_monthly(chain, today)
+    if exp is None:
+        exp = nearest_monthly(chain, today)
     if exp is None:
         return pd.DataFrame()
     exp_dates = pd.to_datetime(chain["expiration"]).dt.date
@@ -73,10 +75,11 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                   close: float, rv21: float, iv_rank: float,
                   iv_minus_rv: float,
                   earnings_in_cycle: bool,
-                  fomc_in_cycle: bool) -> list[dict]:
+                  fomc_in_cycle: bool,
+                  exp: date | None = None) -> list[dict]:
     """SELL-A-PUT candidates near the H5 income delta."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
-    puts = _monthly_rows(chain, day, "P")
+    puts = _expiry_rows(chain, day, "P", exp)
     if puts.empty:
         return []
     puts["dist"] = (puts["delta"].abs() - config.H5_INCOME_DELTA).abs()
@@ -111,6 +114,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
                     "yield_mo": yield_mo, "cushion": cushion,
+                    "annualized_yield": yield_mo * 365.0 / max(int(r["dte"]), 1),
                     "grades": grades, "verdict": verdict})
     return out
 
@@ -119,10 +123,11 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                  close: float, cost_basis: float, iv_rank: float,
                  iv_minus_rv: float,
                  earnings_in_cycle: bool,
-                 fomc_in_cycle: bool) -> list[dict]:
+                 fomc_in_cycle: bool,
+                 exp: date | None = None) -> list[dict]:
     """SELL-A-COVERED-CALL candidates (against a declared 100-share lot)."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
-    calls = _monthly_rows(chain, day, "C")
+    calls = _expiry_rows(chain, day, "C", exp)
     if calls.empty:
         return []
     calls["dist"] = (calls["delta"].abs() - config.H5_INCOME_DELTA).abs()
@@ -162,6 +167,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
                     "yield_mo": yield_mo, "upside": upside,
+                    "annualized_yield": yield_mo * 365.0 / max(int(r["dte"]), 1),
                     "grades": grades, "verdict": verdict})
     return out
 
@@ -170,7 +176,8 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    leaps_strike: float, leaps_premium: float, close: float,
                    iv_rank: float, iv_minus_rv: float,
                    earnings_in_cycle: bool,
-                   fomc_in_cycle: bool) -> list[dict]:
+                   fomc_in_cycle: bool,
+                   exp: date | None = None) -> list[dict]:
     """SELL-A-CALL-AGAINST-YOUR-LEAPS (poor man's covered call) candidates.
 
     HARD safety gate: only strikes >= leaps_strike + leaps_premium are shown,
@@ -180,7 +187,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
     """
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
     safety_strike = leaps_strike + leaps_premium
-    calls = _monthly_rows(chain, day, "C")
+    calls = _expiry_rows(chain, day, "C", exp)
     if calls.empty:
         return []
     safe = calls[calls["strike"] >= safety_strike].copy()
@@ -214,8 +221,9 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    "you put into the LEAPS.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
-                    "yield_mo": yield_mo, "grades": grades,
-                    "verdict": verdict})
+                    "yield_mo": yield_mo,
+                    "annualized_yield": yield_mo * 365.0 / max(int(r["dte"]), 1),
+                    "grades": grades, "verdict": verdict})
     return out
 
 
@@ -257,13 +265,14 @@ def leaps_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
 
 
 def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
-                        close: float, iv_rank: float) -> list[dict]:
+                        close: float, iv_rank: float,
+                        exp: date | None = None) -> list[dict]:
     """BUY-A-SHORT-DATED-CALL candidates (TACTICAL lane, H4_TACTICAL_DELTA on
     the nearest monthly). A long call's max loss IS its premium, so fits_cap
     grades cost against MAX_LOSS_PER_TRADE. iv_for_buyer prefers LOW IV-rank.
     Descriptive scanner preview -- NOT an H5 income lane, never sized/tracked."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
-    calls = _monthly_rows(chain, day, "C")
+    calls = _expiry_rows(chain, day, "C", exp)
     if calls.empty:
         return []
     calls["dist"] = (calls["delta"].abs() - config.H4_TACTICAL_DELTA).abs()
@@ -293,6 +302,8 @@ def long_call_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    "ever. TACTICAL preview, not an H5 income lane.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": dte, "cost": cost, "breakeven": breakeven,
+                    "breakeven_move": breakeven / close - 1.0,
+                    "cost_per_delta": cost / (100.0 * abs(float(r["delta"]))),
                     "grades": grades, "verdict": verdict,
                     "vega": vega, "iv": contract_iv})
     return out

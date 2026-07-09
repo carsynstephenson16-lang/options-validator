@@ -215,6 +215,45 @@ class CCCardTests(unittest.TestCase):
         self.assertIn("rents out", r["verdict"])
 
 
+class LadderMetricTests(unittest.TestCase):
+    def test_put_card_has_annualized_yield(self):
+        from options_researcher.attractiveness import put_card_rows
+        chain = chain_rows([("P", 145.0, -0.20, 2.15)])  # exp 2026-07-17
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=False)
+        r = rows[0]
+        expected = r["yield_mo"] * 365.0 / r["dte"]
+        self.assertAlmostEqual(r["annualized_yield"], expected, places=6)
+
+    def test_long_call_has_breakeven_move_and_cost_per_delta(self):
+        from options_researcher.attractiveness import long_call_card_rows
+        # a put row must exist so nearest_monthly can resolve the expiration
+        chain = chain_rows([("C", 165.0, 0.40, 4.00),
+                            ("P", 150.0, -0.20, 2.0)])  # exp 2026-07-17
+        rows = long_call_card_rows("VST", chain, "2026-06-30",
+                                   close=160.0, iv_rank=0.30)
+        r = rows[0]
+        self.assertAlmostEqual(r["breakeven_move"],
+                               r["breakeven"] / 160.0 - 1.0, places=6)
+        self.assertAlmostEqual(r["cost_per_delta"],
+                               r["cost"] / (100.0 * 0.40), places=6)
+
+    def test_exp_param_targets_a_specific_expiration(self):
+        from datetime import date
+
+        from options_researcher.attractiveness import put_card_rows
+        chain = pd.concat([
+            chain_rows([("P", 145.0, -0.20, 2.15)], exp="2026-07-17"),
+            chain_rows([("P", 140.0, -0.20, 3.00)], exp="2026-09-18"),
+        ], ignore_index=True)
+        rows = put_card_rows("VST", chain, "2026-06-30", close=160.0,
+                             rv21=0.50, iv_rank=0.62, iv_minus_rv=0.04,
+                             earnings_in_cycle=False, fomc_in_cycle=False,
+                             exp=date(2026, 9, 18))
+        self.assertEqual(rows[0]["expiry"], "2026-09-18")
+
+
 if __name__ == "__main__":
     unittest.main()
 
