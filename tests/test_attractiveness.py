@@ -326,3 +326,20 @@ class RankLadderTests(unittest.TestCase):
         self.assertTrue(rows[0]["rank_leader"])     # best annualized yield first
         self.assertGreaterEqual(rows[0]["annualized_yield"],
                                 rows[1]["annualized_yield"])
+
+    def test_rank_cards_all_non_finite_has_no_leader(self):
+        from options_researcher.attractiveness import rank_cards
+        cards = [{"annualized_yield": float("nan")}, {"other": 1.0}]
+        ranked = rank_cards(cards, "annualized_yield", higher_is_better=True)
+        self.assertTrue(all(not c["rank_leader"] for c in ranked))
+
+    def test_ladder_cards_empty_when_no_bucket_fills(self):
+        from options_researcher.attractiveness import ladder_cards, put_card_rows
+        # single 4-DTE expiration -> below every bucket floor -> no buckets
+        chain = chain_rows([("P", 150.0, -0.20, 2.00)], exp="2026-07-02")
+        rows = ladder_cards(put_card_rows, "VST", chain, "2026-06-30",
+                            rank_key="annualized_yield", higher_is_better=True,
+                            close=160.0, rv21=0.50, iv_rank=0.62,
+                            iv_minus_rv=0.04, earnings_in_cycle=False,
+                            fomc_in_cycle=False)
+        self.assertEqual(rows, [])

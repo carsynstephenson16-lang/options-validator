@@ -51,7 +51,9 @@ def rank_cards(cards: list[dict], key: str, *,
                higher_is_better: bool) -> list[dict]:
     """Sort cards by ONE transparent numeric field and flag the leader.
     Cards missing the key or holding NaN sort last and never lead. Mutates
-    each card's `rank_leader` and returns the sorted list."""
+    each card's `rank_leader` and returns the sorted list. Callers MUST use
+    the returned list for ordering; `rank_leader` is set in place but the
+    input list's order is unchanged."""
     def finite(c):
         v = c.get(key)
         return isinstance(v, (int, float)) and v == v
@@ -68,7 +70,14 @@ def ladder_cards(builder, symbol: str, chain: pd.DataFrame, day: str, *,
                  rank_key: str, higher_is_better: bool, **kwargs) -> list[dict]:
     """Run `builder` once per ladder expiration, keep the delta-target card
     (the first, since builders sort by delta distance) from each filled
-    bucket, then rank the buckets by `rank_key`."""
+    bucket, then rank the buckets by `rank_key`.
+
+    PRECONDITION: `builder` MUST return candidates ordered best-first (the
+    four laddering-compatible builders — put_card_rows, cc_card_rows,
+    pmcc_card_rows, long_call_card_rows — do, via nsmallest on delta distance)
+    and MUST accept an `exp=` keyword. `leaps_card_rows` is NOT compatible (no
+    `exp` param, its own long tenor) and must not be passed here.
+    """
     from options_researcher.chains import ladder_expirations
     picked: list[dict] = []
     for _target, exp in ladder_expirations(chain, date.fromisoformat(day)):
