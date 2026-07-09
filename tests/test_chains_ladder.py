@@ -42,3 +42,14 @@ class LadderExpirationsTests(unittest.TestCase):
         chain = _chain(["2026-07-21", "2026-07-29"])
         got = ladder_expirations(chain, self.today)
         self.assertEqual(got[0], (14, date(2026, 7, 21)))
+
+    def test_dedups_multiple_strikes_at_same_expiration(self):
+        # realistic chain shape: several strikes share one expiration date
+        rows = []
+        for k in (95.0, 100.0, 105.0):
+            rows.append({"expiration": "2026-07-26", "strike": k, "right": "P",
+                         "bid": 1.0, "ask": 1.1, "open_interest": 500,
+                         "iv": 0.5, "delta": -0.2})
+        chain = pd.DataFrame(rows)
+        got = ladder_expirations(chain, self.today)
+        self.assertEqual(got, [(14, date(2026, 7, 26))])  # one bucket, one date

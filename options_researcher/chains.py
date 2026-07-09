@@ -67,16 +67,17 @@ def nearest_monthly(chain: pd.DataFrame, today: date, *,
 
 
 def ladder_expirations(chain: pd.DataFrame, today: date,
-                       buckets=None) -> list[tuple[int, date]]:
+                       buckets: tuple[tuple[int, int, int], ...] | None = None
+                       ) -> list[tuple[int, date]]:
     """For each (target, lo, hi) in config.A_LADDER_BUCKETS, the available
     expiration whose DTE is nearest `target` inside [lo, hi] (weekly OR
     monthly). Buckets with no in-window expiration are omitted and logged.
-    Disjoint windows mean each expiration maps to at most one bucket, so no
-    dedup is needed."""
+    Disjoint windows mean each expiration maps to at most one bucket (identical
+    expirations across strike rows are collapsed first)."""
     import config
     if buckets is None:
         buckets = config.A_LADDER_BUCKETS
-    exp_dates = sorted({d for d in pd.to_datetime(chain["expiration"]).dt.date})
+    exp_dates = sorted(set(pd.to_datetime(chain["expiration"]).dt.date))
     out: list[tuple[int, date]] = []
     for target, lo, hi in buckets:
         in_win = [e for e in exp_dates if lo <= (e - today).days <= hi]
