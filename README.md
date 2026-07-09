@@ -173,10 +173,17 @@ paper-trading window.
    `positions.csv`; covered-call rows only appear after a declared 100-share
    lot. Reuses the M7 CSS; no network/JS deps.
 
-**Scope status: scanner tooling complete.** Current operating mode:
+**Scope status: two live hypotheses, forward paper windows.**
 **H5 Sector Income Core scanner/researcher**
 (`docs/superpowers/specs/2026-07-04-h5-sector-income-core-design.md`; ledger
-trial 6; H4 superseded at zero cycles).
+trial 6; H4 superseded at zero cycles) and **H6 post-earnings tactical long
+calls** (ledger trial 7, registered 2026-07-08; NVDA/PLTR/AMZN; ≤$2k
+premium/month; design + screen evidence in
+`docs/superpowers/2026-07-08-h6-monthly-income-candidate-memo-DRAFT.md`).
+H6 entry evaluation still needs: NVDA/PLTR earnings CSVs (sourced), NVDA
+split entries in the closes SPLITS registry, and feature builds for the
+IVR gate — until then the pre-earnings lane is blocked by design (unknown
+IV-rank never passes).
 Current recorded holdings: 39 VST shares and no options. Remaining: run the
 scanner, decide whether anything is attractive enough to add, then start the
 forward paper window only after an actual tracked option is entered.
