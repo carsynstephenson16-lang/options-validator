@@ -103,3 +103,139 @@ Nothing in this memo ranks, scores, or suggests specific trades; it is a
 design-gate document. Next step is a filled-in pre-registration WITH the
 owner, then (if data spend approved) a data audit on any newly fetched
 chains before first use.
+
+---
+
+## 5. Owner inputs recorded (same day, 2026-07-08 — facts.log H6_OWNER_INPUTS)
+
+1. **Tickers:** "hyln now" = HYLN *and* NOW, plus **SMCI** added. Candidate
+   list (9): CRWV, PLTR, HYLN, NOW, CEG, TEM, NVDA, AMZN, SMCI.
+2. **Data:** ThetaData sub active (owner statement); fetch approved. A
+   six-week EOD window (2026-05-26..2026-07-07) for the 7 uncached names
+   was pulled and audited the same day (facts.log H6_DATA_PULL).
+3. **Capital:** total budget **$45k** (owner-asserted). Conflicts with the
+   recorded $7k-liquid / $20k-sleeve figures; owner statement supersedes,
+   drift noted and NOT silently reconciled.
+4. **Monthly loss budget: $800.** Open semantics question for registration:
+   is $800 (a) the maximum capital AT RISK per month (hard, structural), or
+   (b) a realized-loss stop for the month? The difference decides which
+   structures are even legal (see §6).
+5. **Timing doctrine:** avoid IV-crush exposure now (pre-earnings); "really
+   trade" after earnings.
+
+## 6. What the $800/month budget does to the structure menu (Inference — arithmetic, not opinion)
+
+- **Cash-secured puts on $100+ names cannot honor a hard $800 cap.** One
+  0.20Δ CSP on a ~$150 name puts ~$14-15k at risk; an earnings-adjacent gap
+  can realize a multi-thousand-dollar loss in one day. Under semantics (a),
+  CSPs on most of this list are ILLEGAL structures. Under (b) they carry
+  gap-through-the-stop risk that a stop cannot bound.
+- **Defined-risk spreads fit the cap mechanically**: a $5-wide put spread
+  collecting ~$1.00 risks ~$400/contract → two contracts/month max; a
+  $10-wide risks ~$900 → one contract and it breaches on a full loss.
+  So a hard $800 cap forces the trade H1/H2 already rejected after costs,
+  in tiny size, where fixed costs (commissions + half-spread) weigh
+  HEAVIEST. This is the central tension of H6 and it must be stated in the
+  registration, not discovered after.
+- **Consistency check the owner should confirm:** $800/month against $45k
+  is a ~1.8%/month worst-case burn — coherent as risk appetite, but note
+  the income side at that risk level is correspondingly small; "highest
+  profit margin" and "$800 max monthly loss" pull in opposite directions.
+
+## 7. Pre/post-earnings design sketch (aligned with the timing doctrine)
+
+All four candidate names' earnings cluster late July–early Aug. IV-crush
+mechanics (Inference from standard option pricing; no forecast): implied
+vol on the front expirations inflates into a report and collapses after.
+Therefore:
+
+- **Now → each name's report: NO new long-premium positions** on candidate
+  names (debit spreads/calls bought now pay the inflated vol and eat the
+  crush even when direction is right). Short premium "wins" the crush but
+  carries the gap through the report — incompatible with a hard $800 cap.
+  Pre-earnings period = data collection, watchlists, and the H5 lanes on
+  already-cached names if their gates pass. Standing aside IS the trade.
+- **After each report:** vol resets; entries per whichever §3 structure the
+  owner picks, gated on the frozen liquidity checks and sized to the $800
+  budget. This becomes H6's entry-timing rule if the owner freezes it:
+  e.g. "no entry in the N trading days before a scheduled report; entries
+  allowed from the first session after the report."
+- **What H6 still needs before registration:** (i) the $800 semantics call
+  (§5.4), (ii) ONE structure from §3, (iii) the numeric rejection
+  criterion, (iv) per-name earnings dates pinned from IR pages, (v) the
+  liquidity screen results from the new-name data pull (feasibility gate:
+  names failing MIN_OPEN_INTEREST / MAX_SPREAD_PCT on the contracts the
+  strategy would trade are OUT regardless of preference).
+
+---
+
+## 8. Liquidity screen results (2026-07-08 pull; Repo-verified from cached chains)
+
+Six-week EOD window (2026-05-26..2026-07-07), 29 trading days per name,
+audit verdict PASS WITH WARNINGS across all 203 name-days (warnings are
+IV=NaN/0 on non-selectable deep-ITM/far-OTM rows only; zero BLOCKs).
+Profiler = ATM ~37-DTE puts, frozen gates MIN_OPEN_INTEREST=100,
+MAX_SPREAD_PCT=10%. A correction to §2: NOW trades ~$106 post-split
+(mkt cap ~$110B) — the "CSPs capital-infeasible" assumption was stale;
+NOW fails on LIQUIDITY, not capital.
+
+| Name | Median ATM spread % | Median ATM OI | Liquid strikes (median) | Screen verdict |
+|------|--------------------:|--------------:|------------------------:|----------------|
+| NVDA | 1.17 | 732 | 14 | **PASS** (deep history 2018+ in legacy cache; 2022+ passes gates) |
+| PLTR | 3.13 | 172 | 9 | **PASS** (history 2021+ passes gates) |
+| SMCI | 17.18 | 128 | 0 | **FAIL (marginal)** — OI fine, spreads blown out in the current crisis regime; recheck post-probe/earnings |
+| NOW  | 13.33 | 61 | 0 | **FAIL** — ATM monthly puts have failed these gates EVERY year 2018–2026 (repo data) |
+| CRWV | 10.57 | 56 | 0 | **FAIL** (thin OI, borderline spreads; ~1yr listed history) |
+| TEM  | 18.48 | 0  | 0 | **FAIL** |
+| HYLN | 26.89 | 69 | 0 | **FAIL (hard)** — ~128 rows/day, median ONE contract chain-wide passes the gates |
+
+Feasible set for monthly structures under the frozen gates, as of this
+screen: **NVDA, PLTR (new) + CEG, AMZN (already in universe).** Failing
+names are not banned opinions — they are gate readings from our own data
+and can be rescreened later (SMCI especially, once its crisis IV regime
+resolves).
+
+## 9. Earnings + IV landscape (web research 2026-07-08/09; secondary sources, labeled)
+
+| Name | Next earnings | Confirmed? | Price ~7/8 | IV context (Barchart snapshot 7/9) |
+|------|--------------|-----------|-----------:|-------------------------------------|
+| NOW  | **Jul 22** | company-confirmed | ~$106 | IV rank ~86, percentile 95 — biggest earnings-IV ramp of the list |
+| MSFT | Jul 29 | company-confirmed | ~$382 | — |
+| AMZN | ~Jul 30 | estimated | ~$242-244 | — |
+| PLTR | ~Aug 3 | estimated | ~$132 | IV ~60%, rank ~57 |
+| SMCI | ~Aug 4 | estimated | ~$27 | IV ~99%, percentile 99 — **crisis-driven** (Taiwan export probe + $7B dilution), not earnings premium |
+| CEG  | Aug 6 | IR-confirmed | ~$245 | — |
+| TEM  | ~Aug 7 | estimated | ~$57 | IV ~79%, rank ~54; short interest ~30% of float |
+| VST  | Aug 7 | company-confirmed | ~$155 | — |
+| CRWV | ~Aug 11 | estimated (least reliable) | ~$90 | IV ~97% (Meta-resale scare), rank ~51 |
+| HYLN | ~Aug 11 | estimated | ~$4 | IV ~143% |
+| NVDA | ~Aug 26 | estimated | ~$201 | IV ~41%, rank ~40 — no earnings ramp yet |
+
+Doctrine mapping ("no IV-crush exposure now; real trades after earnings"):
+the earliest post-earnings windows on feasible names open ~Jul 31 (AMZN),
+~Aug 4 (PLTR), Aug 7 (CEG); NVDA not until ~Aug 27. Between now and then,
+long premium on these names buys inflated vol; short premium eats the gap
+— under the $800 budget, standing aside on candidates IS the position.
+SMCI note: 99th-percentile IV looks like "juicy premium" and is actually
+regulatory-tail pricing; it also fails the liquidity screen. Not a trade.
+
+## 10. Proposed H6 registration skeleton (Claude PROPOSES, owner ENTERS/OVERRIDES every number)
+
+| Field | Proposal (LLM-asserted, reasoning inline) |
+|-------|--------------------------------------------|
+| Name/version | H6 "post-earnings monthly income" v1 |
+| Tickers | NVDA, PLTR, CEG, AMZN (screen §8; others excluded by gates) |
+| Structure | ONE of §3 — given $800 hard cap, the only mechanically legal defaults are defined-risk spreads (§6); owner picks width |
+| Entry rule | no entry within N days BEFORE a scheduled report (owner picks N, e.g. 5); entries allowed from first session after the report; liquidity gates on BOTH legs |
+| Short-leg delta | 0.20 (reuse H5_INCOME_DELTA; band ±0.15) unless owner overrides |
+| Expiry | nearest monthly, 20–45 DTE at entry |
+| Exit rule | owner must pick: hold-to-expiry vs profit-take/stop (H1 evidence: the stop was the loss engine) |
+| Max at-risk per month | $800 TOTAL across all open H6 positions (semantics (a)); if owner meant (b), redesign needed |
+| Capital assumption | $45k total (owner-asserted 2026-07-08) |
+| Earnings handling | skip-entry-before, enter-after (the doctrine itself) |
+| Validation design | forward paper window (2023+ backtests not credible for AI names); backtest only as descriptive context on NVDA/PLTR history |
+| REJECTS H6 | e.g. "expectancy CI90 upper bound < 0 after M losses" — owner must set M and the window |
+| Justifies continuing | owner must set before first entry |
+
+Registration happens in the chained ledger only after the owner fills the
+blanks. Until then H6 does not exist as a hypothesis; this memo is context.
