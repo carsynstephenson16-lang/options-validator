@@ -55,3 +55,19 @@ class TestH7Freeze(unittest.TestCase):
         )
         self.assertEqual(config.H7_BACKTEST_START, "2018-01-02")
         self.assertEqual(config.H7_BACKTEST_END, "2026-06-30")
+
+    def test_v1_2_amendment_constants(self):
+        # ledger H7_AMENDMENT_V1_2 (f880b4d1...), owner-ratified 2026-07-10
+        self.assertEqual(config.H7C_CLOSE_AT_DTE, 7)
+        self.assertEqual(config.H7_DELTA_TOLERANCE, 0.07)
+        self.assertEqual(config.H7_LANE_PRIORITY, ("a", "b", "c"))
+        self.assertEqual(config.H7C_TIEBREAK, "credit_to_width")
+
+    def test_previously_hardcoded_registered_numbers(self):
+        self.assertEqual(config.H7_IV_TENOR_DTE_BAND, (72, 108))
+        self.assertEqual(config.H7_NTM_BAND, 0.10)
+        self.assertEqual(config.H7_DD_LOOKBACK_D, 252)
+        self.assertEqual(config.H7B_RV_WINDOW_D, 20)
+        self.assertEqual(config.H7B_RV_HISTORY_D, 252)
+        self.assertEqual(config.H7B_RV_MIN_HISTORY_D, 106)
+        self.assertEqual(config.H7_EARNINGS_KNOWN_HORIZON_D, 45)

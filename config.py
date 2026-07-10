@@ -278,3 +278,29 @@ H7C_CLOSE_BEFORE_EARNINGS = True  # registered: short premium NEVER held
 #                                   through a report; runner hard-closes by
 #                                   the last session before any scheduled
 #                                   report (review R13 pinned the constant)
+
+# --- 7b-0 additions -------------------------------------------------------
+# Owner-ratified gate decisions, ledger H7_AMENDMENT_V1_2 (f880b4d1...):
+H7C_CLOSE_AT_DTE = 7             # v1.2(4): hard-close H7c at 7 DTE (mirrors H7_CLOSE_AT_DTE)
+H7_DELTA_TOLERANCE = 0.07        # v1.2(7): +/-0.07 around EVERY registered delta target
+#                                  (replaces the borrowed H5_INCOME_DELTA_BAND=0.15)
+H7_LANE_PRIORITY = ("a", "b", "c")  # v1.2(1,2): same-day sleeve tie-break; a beats b on one name
+H7C_TIEBREAK = "credit_to_width"    # v1.2(3): concurrent H7c candidates -> highest credit/width
+# v1.2(5): H7C_STOP_CREDIT_MULT semantics = close when the EOD conservative
+# buy-back mark >= 2x entry credit; realized exit recorded (H1/H2 semantics).
+# v1.2(6): the pre-registered backtest is an ISOLATED-LANE DIAGNOSTIC --
+# per-symbol/per-lane, portfolio caps NOT simulated; a different estimand
+# from live. The forward paper window carries the portfolio-coupled test.
+
+# Registered numbers previously hardcoded in the signal/watch layer (7b-0
+# NO-GO remediation: every decision number lives on this freeze surface):
+H7_IV_TENOR_DTE_BAND = (72, 108)  # registered IV measure: ATM ~90d, +/-18d
+H7_NTM_BAND = 0.10               # admission NTM = strikes within +/-10% of raw spot
+H7_DD_LOOKBACK_D = 252           # "52wk high" = trailing 252 sessions
+H7B_RV_WINDOW_D = 20             # registered "20d RV"
+H7B_RV_HISTORY_D = 252           # "...vs own 1yr history"
+H7B_RV_MIN_HISTORY_D = 106       # "min 6mo listed": 126 sessions minus the RV window
+H7_EARNINGS_KNOWN_HORIZON_D = 45  # LLM-PROPOSED (owner ratification pending):
+#                                   earnings coverage = a known future report date
+#                                   OR one within the last 45 calendar days; else
+#                                   the symbol FAILS CLOSED (EARNINGS-UNKNOWN).
