@@ -128,6 +128,67 @@ class BuildOptionDataTests(unittest.TestCase):
         self.assertEqual(len(feed), 0)
 
 
+class RightsGeneralizationTests(unittest.TestCase):
+    """7b-1: asset identity includes the option right so calls and puts can
+    never collide; H1's puts-only defaults stay byte-identical."""
+
+    def test_call_and_put_same_strike_are_distinct_assets(self):
+        p = pandas_feed.option_asset("SPY", "2022-07-01", 395.0)
+        c = pandas_feed.option_asset("SPY", "2022-07-01", 395.0, right="CALL")
+        self.assertNotEqual(p, c)
+        self.assertEqual(str(c.right), "CALL")
+        self.assertEqual(str(p.right), "PUT")
+
+    def test_right_normalization(self):
+        self.assertEqual(
+            pandas_feed.option_asset("SPY", "2022-07-01", 395.0, right="C"),
+            pandas_feed.option_asset("SPY", "2022-07-01", 395.0, right="CALL"))
+        self.assertEqual(
+            pandas_feed.option_asset("SPY", "2022-07-01", 395.0, right="p"),
+            pandas_feed.option_asset("SPY", "2022-07-01", 395.0))
+
+    def test_feed_coexistence_calls_and_puts(self):
+        chains = {
+            "2022-06-01": synth_chain([
+                ("2022-07-01", 395.0, "C", 2.0, 2.1, 500, 0.55),
+                ("2022-07-01", 395.0, "P", 1.0, 1.1, 500, -0.30),
+            ]),
+        }
+        feed = pandas_feed.build_option_data(
+            chains, "SPY", exp_max="2022-09-16", rights=("C", "P"))
+        self.assertEqual(len(feed), 2)
+        self.assertIn(pandas_feed.option_asset("SPY", "2022-07-01", 395.0), feed)
+        self.assertIn(
+            pandas_feed.option_asset("SPY", "2022-07-01", 395.0, right="CALL"),
+            feed)
+
+    def test_default_rights_still_exclude_calls(self):
+        chains = {
+            "2022-06-01": synth_chain([
+                ("2022-07-01", 395.0, "C", 2.0, 2.1, 500, 0.55),
+                ("2022-07-01", 395.0, "P", 1.0, 1.1, 500, -0.30),
+            ]),
+        }
+        feed = pandas_feed.build_option_data(chains, "SPY", exp_max="2022-09-16")
+        self.assertEqual(
+            list(feed), [pandas_feed.option_asset("SPY", "2022-07-01", 395.0)])
+
+    def test_call_inclusion_band_is_plumbing_not_selection(self):
+        # a 0.99-delta deep-ITM call never enters the band -> excluded; the
+        # strategy fails loud if it ever selects an excluded leg
+        chains = {
+            "2022-06-01": synth_chain([
+                ("2022-07-01", 200.0, "C", 90.0, 91.0, 500, 0.99),
+                ("2022-07-01", 395.0, "C", 2.0, 2.1, 500, 0.55),
+            ]),
+        }
+        feed = pandas_feed.build_option_data(
+            chains, "SPY", exp_max="2022-09-16", rights=("C",))
+        self.assertEqual(
+            list(feed),
+            [pandas_feed.option_asset("SPY", "2022-07-01", 395.0, right="CALL")])
+
+
 class LoadCachedChainsTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

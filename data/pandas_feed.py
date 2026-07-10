@@ -42,10 +42,17 @@ except Exception:  # pragma: no cover
 
 NY_TZ = "America/New_York"
 BAR_HOUR = 16
-# generous inclusion band for candidate legs (short ~0.30 delta, long width
-# below); far-OTM lottery tickets and deep-ITM puts can never be legs
+# generous inclusion band for candidate PUT legs (short ~0.30 delta, long
+# width below); far-OTM lottery tickets and deep-ITM puts can never be legs
 DELTA_MIN = 0.03
 DELTA_MAX = 0.65
+# generous inclusion band for candidate CALL legs (7b-1: H7 long calls
+# 0.55-0.70, spread legs 0.60/0.25, each +/-H7_DELTA_TOLERANCE). Plumbing,
+# not a tunable: strategies fail LOUD when a selected leg has no feed Data,
+# so a band miss can abort a run but can never bias one.
+CALL_DELTA_MIN = 0.10
+CALL_DELTA_MAX = 0.90
+_RIGHT_BANDS = {"P": (DELTA_MIN, DELTA_MAX), "C": (CALL_DELTA_MIN, CALL_DELTA_MAX)}
 
 _USD = None
 
@@ -57,15 +64,27 @@ def _usd():
     return _USD
 
 
-def option_asset(symbol: str, expiration_iso: str, strike: float):
-    """The ONE canonical put-contract Asset key. The feed and the strategy must
-    build byte-identical keys or orders can never fill."""
+def _normalize_right(right: str) -> str:
+    r = str(right).strip().upper()
+    if r in ("P", "PUT"):
+        return "PUT"
+    if r in ("C", "CALL"):
+        return "CALL"
+    raise ValueError(f"unknown option right: {right!r}")
+
+
+def option_asset(symbol: str, expiration_iso: str, strike: float,
+                 right: str = "PUT"):
+    """The ONE canonical contract Asset key. The feed and the strategy must
+    build byte-identical keys or orders can never fill. `right` defaults to
+    PUT so every pre-7b-1 (H1) call site is unchanged; calls and puts at the
+    same (expiration, strike) are DISTINCT assets."""
     return Asset(
         symbol=str(symbol).strip().upper(),
         asset_type=Asset.AssetType.OPTION,
         expiration=Date.fromisoformat(str(expiration_iso)),
         strike=float(strike),
-        right="PUT",
+        right=_normalize_right(right),
     )
 
 
@@ -92,17 +111,20 @@ def load_cached_chains(symbol: str, start_iso: str, end_iso: str, *,
 
 def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
                       exp_max: str, haircut: float = config.SLIPPAGE_HAIRCUT,
-                      delta_min: float = DELTA_MIN,
-                      delta_max: float = DELTA_MAX) -> dict:
-    """Per-contract Lumibot Data for every put in `chains` expiring on or
-    before `exp_max` whose |delta| ever enters [delta_min, delta_max]."""
+                      delta_min: float | None = None,
+                      delta_max: float | None = None,
+                      rights: tuple[str, ...] = ("P",)) -> dict:
+    """Per-contract Lumibot Data for every contract of the requested rights
+    in `chains` expiring on or before `exp_max` whose |delta| ever enters the
+    right's inclusion band. Defaults (puts only, put band) reproduce the H1
+    feed byte-for-byte; H7 passes rights=("C", "P")."""
     frames = []
     for iso_day, chain in chains.items():
-        puts = chain[chain["right"] == "P"]
-        puts = puts[(puts["expiration"] > iso_day) & (puts["expiration"] <= exp_max)]
-        if puts.empty:
+        rows = chain[chain["right"].isin(rights)]
+        rows = rows[(rows["expiration"] > iso_day) & (rows["expiration"] <= exp_max)]
+        if rows.empty:
             continue
-        f = puts[["expiration", "strike", "bid", "ask", "delta"]].copy()
+        f = rows[["expiration", "strike", "right", "bid", "ask", "delta"]].copy()
         f["day"] = iso_day
         frames.append(f)
     if not frames:
@@ -110,8 +132,12 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
     rows = pd.concat(frames, ignore_index=True)
 
     feed: dict = {}
-    for (exp, strike), grp in rows.groupby(["expiration", "strike"]):
-        if not grp["delta"].abs().between(delta_min, delta_max).any():
+    for (exp, strike, right), grp in rows.groupby(["expiration", "strike", "right"]):
+        lo, hi = _RIGHT_BANDS[right]
+        if delta_min is not None or delta_max is not None:
+            lo = delta_min if delta_min is not None else lo
+            hi = delta_max if delta_max is not None else hi
+        if not grp["delta"].abs().between(lo, hi).any():
             continue
         grp = grp.sort_values("day")
         idx = pd.DatetimeIndex(
@@ -126,6 +152,6 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
             },
             index=idx,
         )
-        asset = option_asset(symbol, str(exp), float(strike))
+        asset = option_asset(symbol, str(exp), float(strike), right=right)
         feed[asset] = Data(asset, df, timestep="day", quote=_usd())
     return feed
