@@ -168,3 +168,91 @@ registration.
 3. Verify the NOW split assumption before the backtest runs.
 4. Update the operating-manual standing line (owner edit, drafted in session).
 5. Decide the optional SMCI backfill (separate approved pull).
+
+## v1.1 addendum — external-report adjudication + first owner inputs (2026-07-09)
+
+Two external reports (a PDF, "Quantitative Volatility and Options
+Tradability…", and a markdown deep-research file) were judged against the
+cache and three web-verification subagents (trail: facts.log
+`REPORT_ADJUDICATION 2026-07-09`). Grades: **PDF — structurally useful,
+factually unreliable** (its CrowdStrike "75% deployment-failure plunge" is a
+fabrication conflating the 2026-07-02 4:1 split print, the Feb-2026 −17%
+sector selloff, and the Jul-2024 outage — CRWD actually sits at all-time
+highs; its Micron consensus figures, by contrast, were CONFIRMED).
+**MD report — sloppier** (internal duplication; TEM numbers wrong); useful
+mainly where it converges with the PDF.
+
+### Owner-typed numbers (ledger-logged)
+- **`H7_MONTHLY_AT_RISK` = $6,000** (owner, 2026-07-09; supersedes the $2,000
+  proposal). Disclosed before entry: one full-cap trade = 43% of RISK_SLEEVE;
+  H6 ($2k) + H7 ($6k) = $8k/mo max new risk vs the $14k sleeve; global
+  `MAX_LOSS_PER_TRADE = 600` unchanged, H5 surfaces untouched.
+
+### Adopted from the reports (measurement-calibrated; frozen at registration)
+1. **Per-lane liquidity admission** (PDF's 5% gate, redesigned): monthlies
+   only; a name is admissible FOR A LANE if the lane's target DTE band shows
+   ≥5 NTM contracts with OI ≥ 100 and spread ≤ 5% on the evaluation day.
+   Execution gate stays ≤ 10% per leg. Measured 2026-07-07: all six names
+   pass at front monthlies; TEM fails the 60–120d band (21.8% ATM at ~101d)
+   → watch-only for H7a/H7b; HYLN excluded outright.
+2. **H7c quality floor** (PDF's floor, our delta): net credit ≥ 30% of width
+   at short-put Δ ≤ 0.30. Measured 2026-07-07 (a par-IV day): achievable at
+   0.30Δ (CRWV 32.1%, SMCI 31.5%, NOW 28.4%), NOT at 0.20Δ (best 23%) — and
+   it self-excludes low-IV names (NVDA 20.0% at 0.30Δ).
+3. **H7c concurrency cap = 1** open position across the basket: these names
+   are one AI factor; short premium across several of them is one trade
+   (PDF §8.3, adopted).
+4. **Earnings-calendar hardening**: dates enter from company PRs with a
+   Confirmed/Estimated flag; Estimated dates get conservative treatment in
+   the 5-session ban. Motivating refutation: PDF claimed TEM reports Aug 7;
+   TEM's own PR (2026-07-09) says **Jul 30**. Current dates: NOW Jul 22
+   (Confirmed), TEM Jul 30 (Confirmed), AMD Aug 4 (Confirmed), SMCI Aug 4*,
+   PLTR Aug 3*, CRWV Aug 11 or 18* (unresolved), NVDA Aug 26*, CRWD Aug 26*,
+   MU Sep 29* — (*) aggregator estimates, refresh before use.
+5. **Benchmark column**: every H7 paper trade logs the same-window underlying
+   stock move next to the option P&L (index-correlation check, PDF §8.2).
+
+### Split registry — backtest blockers (Official-source dates, cache-confirmed)
+`data/underlying_closes.py` SPLITS needs, before any H7 signal/backtest runs:
+- NVDA: `("2021-07-20", 4.0), ("2024-06-10", 10.0)`
+- NOW: `("2025-12-18", 5.0)` — and audit the NOW 2025-12-18 cache day (parity
+  jumps 12-17 → 12-19; the first split-adjusted day may be missing/empty)
+- AMZN 20:1 2022-06-06 already present. If added later: SMCI
+  `("2024-10-01", 10.0)`, AVGO `("2024-07-15", 10.0)`. CRWD split 4:1
+  2026-07-02 (relevant only if it ever enters). PLTR/MSFT/VST/CEG/CRWV/TEM:
+  no splits (verified).
+
+### Universe adjudication (nothing auto-added; the story axis stays the owner's)
+- **CRWV — stays in.** Monthly NTM spreads: median 4.6%, max 11.2% over 29
+  days including a −13.6% day at 2.6%/2.3% — the PDF's "options poor /
+  exclude" is refuted at monthly tenors. The −46% drawdown from the 52-wk
+  high is real; the Meta-Compute overhang (Bloomberg 2026-07-01) and ~65%
+  top-two-customer revenue concentration (Q1'26 10-Q) are the owner's story
+  call, now with verified numbers.
+- **CRWD — not added.** The "recovery candidate" premise is inverted (at
+  all-time highs) and its 2026-07-02 4:1 split is fragmenting the options
+  record. Revisit ≥1 quarter post-split.
+- **MU — not added.** ~$992 spot / ~99 IV: ATM structures ≈ $20k, a misfit
+  even at the $6k sleeve except narrow spreads; most binary regime risk of
+  the candidates. (Its fundamentals claims were CONFIRMED — exclusion is
+  capital/structure fit, not disbelief.)
+- **AMD, AVGO — deferred to registration.** Liquidity-superior (Cboe chains,
+  Official); AMD's ~$5.6k ATM call now fits the $6k sleeve (93% of a month).
+  Admission requires the owner adding them to the story watchlist + approving
+  the data pull + a same-day feasibility profile.
+- SNOW/ZS/DDOG/ANET/PANW/VRT/DELL/ARM/ON/OKTA/TEAM: parking-lot candidates.
+  SYM/OKLO: rejected (both reports agree; illiquid/binary).
+
+### Rejected report ideas (with the measurement that killed them)
+- **Debit-spreads-only for the drawdown lane** (PDF "required modification"):
+  IV was at or BELOW trailing RV on all six names 2026-07-07 — the spec's
+  IV-vs-RV switch already routes call vs spread by measurement, not blanket
+  rule.
+- **IVR > 80th percentile as the sole H7c trigger**: incomputable for young
+  names (no 1-yr IV history) and redundant next to IV ≥ RV × k + the credit
+  floor.
+- **"Spreads blow out in stress" as a universe purge**: refuted at monthly
+  tenors (SMCI's −27.4% day: 3.1%/3.9% NTM). The horror prints live in
+  weeklies, which are already excluded.
+- **PDF's "72-hour clearing event"**: absorbed, not added — the 20-day-high
+  reclaim already enforces multi-session stabilization; no extra knob.
