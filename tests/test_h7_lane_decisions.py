@@ -190,3 +190,37 @@ class TestReviewCounterexamples(unittest.TestCase):
             closes=closes_series(DEEP_RECLAIM), chain=ch, spot=74.0,
             today=TODAY, month_spent=0.0, banned=False,
         ))
+
+
+class TestDeltaToleranceV12(unittest.TestCase):
+    """v1.2(7): +/-0.07 acceptance around every registered delta target.
+    The borrowed H5_INCOME_DELTA_BAND=0.15 loosened registered behavior."""
+
+    def test_spread_short_leg_beyond_007_is_skipped(self):
+        ch = chain(74.0, iv=0.48)  # par-IV route -> debit spread
+        calls = ch.right == "C"
+        # push every call delta below 0.33 up to 0.35: nearest to the 0.25
+        # short target is now 0.10 away -- inside 0.15, outside 0.07
+        ch.loc[calls & (ch.delta < 0.33), "delta"] = 0.35
+        self.assertIsNone(decide_lane_a(
+            closes=closes_series(DEEP_RECLAIM), chain=ch, spot=74.0,
+            today=TODAY, month_spent=0.0, banned=False,
+        ))
+
+    def test_h7c_short_floor_tightens_to_0_23(self):
+        ch = chain(74.0, iv=1.20)  # rich-IV route -> lane c
+        puts = ch.right == "P"
+        # remove the only |delta| in [0.23, 0.30] (the 0.28 row): floor is
+        # now 0.30-0.07=0.23, so a 0.20 candidate must NOT be sold (the old
+        # 0.15 band would have accepted anything down to |delta|=0.15)
+        ch.loc[puts & (ch.delta.abs().between(0.27, 0.29)), "delta"] = -0.20
+        self.assertIsNone(decide_lane_c(
+            symbol="XXXX", closes=closes_series(DEEP_RECLAIM), chain=ch,
+            spot=74.0, today=TODAY, month_spent=0.0, banned=False, open_h7c=0,
+        ))
+
+    def test_h7_no_longer_borrows_the_h5_band(self):
+        import inspect
+
+        import strategies.h7_lanes as m
+        self.assertNotIn("H5_INCOME_DELTA_BAND", inspect.getsource(m))

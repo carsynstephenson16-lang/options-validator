@@ -22,7 +22,7 @@ from options_researcher.chains import is_monthly
 
 def drawdown_pct(closes: pd.Series) -> float:
     """Drawdown of the last close from the trailing 52-week (252-session) high."""
-    window = closes.iloc[-252:]
+    window = closes.iloc[-config.H7_DD_LOOKBACK_D:]
     return 1.0 - float(window.iloc[-1]) / float(window.max())
 
 
@@ -85,12 +85,15 @@ def rv_annualized(closes: pd.Series, lookback: int) -> float:
     return float(rets.std() * math.sqrt(252))
 
 
-def rv_percentile(closes: pd.Series, window: int = 20, history: int = 252) -> float:
+def rv_percentile(closes: pd.Series, window: int | None = None,
+                  history: int | None = None) -> float:
     """Percentile of the current `window`-day RV within its own history.
     Names with under ~6 months of usable history return 1.0 (never passes),
     per the registration's minimum-listing rule."""
+    window = config.H7B_RV_WINDOW_D if window is None else window
+    history = config.H7B_RV_HISTORY_D if history is None else history
     rv = closes.pct_change().rolling(window).std().dropna().iloc[-history:]
-    if len(rv) < 106:  # ~6 months listed (126 sessions) minus the RV window
+    if len(rv) < config.H7B_RV_MIN_HISTORY_D:
         return 1.0
     return float((rv <= rv.iloc[-1]).mean())
 
@@ -117,12 +120,13 @@ def iv_route(iv: float, rv: float) -> str:
 
 
 def atm_iv_90d(chain: pd.DataFrame, spot: float, today: date,
-               dte_band: tuple[int, int] = (72, 108)) -> float:
+               dte_band: tuple[int, int] | None = None) -> float:
     """The registration's IV measure: ATM call IV at THE expiration nearest
     90 DTE (+/-18d) -- pick the expiration first, then the ATM strike within
     it (review finding R2: pooling all in-band rows let a farther expiration
     win the ATM tie and shift the routing ratio). Returns 0.0 when no
     two-sided quotes exist in band -- iv_route treats that as 'none'."""
+    dte_band = config.H7_IV_TENOR_DTE_BAND if dte_band is None else dte_band
     df = chain[(chain.right == "C") & (chain.bid > 0) & (chain.ask > 0)].copy()
     if df.empty:
         return 0.0
@@ -155,7 +159,8 @@ def lane_admission(chain: pd.DataFrame, *, spot: float, today: date,
     ntm = df[
         exp.map(is_monthly)
         & dte.between(*dte_band)
-        & df.strike.between(0.9 * spot, 1.1 * spot)
+        & df.strike.between((1 - config.H7_NTM_BAND) * spot,
+                            (1 + config.H7_NTM_BAND) * spot)
         & (df.open_interest >= config.MIN_OPEN_INTEREST)
         & (spread <= config.H7_ADMIT_MAX_SPREAD_PCT)
     ]

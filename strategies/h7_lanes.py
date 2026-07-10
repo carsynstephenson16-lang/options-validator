@@ -33,13 +33,10 @@ from strategies.base import entry_credit_conservative
 
 # Structural epsilon for "strictly lower strike", not a strategy number.
 _MIN_STRIKE_GAP = 0.5
-# Repo-standard acceptance band around any target delta (config comment on
-# H5_INCOME_DELTA_BAND: "acceptance band around any target delta").
-_DELTA_BAND = None  # resolved at call time from config to honor the freeze test
-
-
 def _delta_band() -> float:
-    return float(config.H5_INCOME_DELTA_BAND)
+    """v1.2(7): the H7-specific frozen acceptance band around every
+    registered delta target."""
+    return float(config.H7_DELTA_TOLERANCE)
 
 
 def _monthly_rows(chain: pd.DataFrame, today: Date, band: tuple[int, int],
