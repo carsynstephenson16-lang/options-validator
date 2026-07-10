@@ -96,26 +96,54 @@ def assemble_name(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
     return card
 
 
-def _open_h7_positions(today: date) -> tuple[tuple, int, float]:
-    """(symbols, open lane-c count, at-risk opened this calendar month) from
-    the H7 paper book. H5/H6 books are separate files -- matching on
-    positions.csv conflated the hypotheses' one-per-underlying rules (R11)."""
-    symbols, open_c, month_spent = set(), 0, 0.0
+class H7BookError(RuntimeError):
+    """The H7 position book is unreadable or malformed. FAIL CLOSED: no
+    entry can be evaluated against an unknown book (NO-GO remediation --
+    the old code treated any book error as an empty book, which silently
+    lifted the one-per-underlying, lane-c-concurrency, and sleeve gates)."""
+
+
+_BOOK_COLUMNS = ("symbol", "lane", "opened", "at_risk", "closed")
+
+
+def open_h7_book(today: date, *, path: Path = H7_POSITIONS_PATH
+                 ) -> tuple[tuple, int, float]:
+    """(open symbols, open lane-c count, at-risk opened this calendar month).
+
+    Book conventions: append-only; closing a position sets `closed`
+    (YYYY-MM-DD), never deletes the row. month_spent sums at_risk over rows
+    OPENED this month regardless of closed status -- the sleeve caps risk
+    OPENED per month, so a same-month close must not resurrect budget."""
+    symbols: set[str] = set()
+    open_c, month_spent = 0, 0.0
     month = today.isoformat()[:7]
     try:
-        with H7_POSITIONS_PATH.open() as f:
-            for row in csv.DictReader(f):
-                sym = (row.get("symbol") or "").upper()
+        with path.open() as f:
+            reader = csv.DictReader(f)
+            if tuple(reader.fieldnames or ()) != _BOOK_COLUMNS:
+                raise H7BookError(
+                    f"{path}: header {reader.fieldnames} != {_BOOK_COLUMNS}")
+            for i, row in enumerate(reader, start=2):
+                sym = (row["symbol"] or "").strip().upper()
                 if not sym:
-                    continue
-                symbols.add(sym)
-                if (row.get("lane") or "").lower() == "c":
-                    open_c += 1
-                if (row.get("opened") or "").startswith(month):
-                    month_spent += float(row.get("at_risk") or 0.0)
-    except OSError:
-        pass
-    return tuple(symbols), open_c, month_spent
+                    raise H7BookError(f"{path}:{i}: empty symbol")
+                opened = (row["opened"] or "").strip()
+                date.fromisoformat(opened)  # malformed date -> ValueError
+                at_risk = float(row["at_risk"])
+                closed = (row["closed"] or "").strip()
+                if closed:
+                    date.fromisoformat(closed)
+                else:
+                    symbols.add(sym)
+                    if (row["lane"] or "").strip().lower() == "c":
+                        open_c += 1
+                if opened.startswith(month):
+                    month_spent += at_risk
+    except H7BookError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise H7BookError(f"{path}: {type(e).__name__}: {e}") from e
+    return tuple(sorted(symbols)), open_c, month_spent
 
 
 def main() -> int:
@@ -124,7 +152,11 @@ def main() -> int:
     # 252 trading sessions of signal history plus weekend/holiday slack
     start_iso = (today - timedelta(days=560)).isoformat()
     calendar = load_calendar()
-    open_syms, open_c, month_spent = _open_h7_positions(today)
+    try:
+        open_syms, open_c, month_spent = open_h7_book(today)
+    except H7BookError as e:
+        print(f"H7 BOOK ERROR -- refusing to evaluate entries (fail closed): {e}")
+        return 2
     names = [s for s in config.H7_WATCHLIST + config.H7_CORE_LONG_ONLY
              if s not in config.H7_EXCLUDED]
     print(f"H7 WATCH {today_iso} (registered f1887c9d; alerts only, never trades)")
