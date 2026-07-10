@@ -93,12 +93,13 @@ def iv_route(iv: float, rv: float) -> str:
 
 
 def lane_admission(chain: pd.DataFrame, *, spot: float, today: date,
-                   dte_band: tuple[int, int]) -> tuple[bool, int]:
-    """Admission per lane per day: >= H7_ADMIT_MIN_CONTRACTS NTM monthly calls
-    inside the lane's DTE band with OI >= MIN_OPEN_INTEREST and spread <=
+                   dte_band: tuple[int, int], right: str = "C") -> tuple[bool, int]:
+    """Admission per lane per day: >= H7_ADMIT_MIN_CONTRACTS NTM monthly
+    contracts of the lane's TRADED right (calls for a/b, puts for c) inside
+    the lane's DTE band with OI >= MIN_OPEN_INTEREST and spread <=
     H7_ADMIT_MAX_SPREAD_PCT. Execution gates (MAX_SPREAD_PCT, both legs) are
     checked separately at trade construction."""
-    df = chain[(chain.right == "C") & (chain.bid > 0) & (chain.ask > 0)].copy()
+    df = chain[(chain.right == right) & (chain.bid > 0) & (chain.ask > 0)].copy()
     if df.empty:
         return False, 0
     exp = pd.to_datetime(df.expiration).dt.date

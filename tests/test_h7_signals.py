@@ -92,6 +92,16 @@ class TestAdmission(unittest.TestCase):
         self.assertTrue(ok)
         self.assertGreaterEqual(n, 5)
 
+    def test_admission_counts_the_traded_right_only(self):
+        # a calls-only chain must NOT admit a puts lane (H7c trades puts)
+        ch = self._chain(spread_pct=0.04, oi=500)
+        ok, n = sig.lane_admission(
+            ch, spot=100.0, today=pd.Timestamp("2026-07-10").date(),
+            dte_band=(30, 45), right="P",
+        )
+        self.assertFalse(ok)
+        self.assertEqual(n, 0)
+
     def test_admission_fails_wide_or_thin(self):
         wide = self._chain(spread_pct=0.08, oi=500)   # > 5% admission gate
         ok, _ = sig.lane_admission(
