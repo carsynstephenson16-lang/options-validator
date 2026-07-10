@@ -48,7 +48,7 @@ class TestLaneA(unittest.TestCase):
     def test_armed_cheap_iv_buys_call_within_budget(self):
         action = decide_lane_a(
             closes=closes_series(DEEP_RECLAIM), chain=chain(74.0, iv=0.30),
-            today=TODAY, month_spent=0.0, banned=False,
+            spot=74.0, today=TODAY, month_spent=0.0, banned=False,
         )
         self.assertIsNotNone(action)
         self.assertEqual(action["kind"], "long_call")
@@ -61,7 +61,7 @@ class TestLaneA(unittest.TestCase):
         # RV of the reclaim tape is ~0.45; iv 0.48 -> ratio ~1.07 (par band)
         action = decide_lane_a(
             closes=closes_series(DEEP_RECLAIM), chain=chain(74.0, iv=0.48),
-            today=TODAY, month_spent=0.0, banned=False,
+            spot=74.0, today=TODAY, month_spent=0.0, banned=False,
         )
         self.assertIsNotNone(action)
         self.assertEqual(action["kind"], "call_debit_spread")
@@ -71,18 +71,18 @@ class TestLaneA(unittest.TestCase):
     def test_budget_ban_and_unarmed_return_none(self):
         s = closes_series(DEEP_RECLAIM)
         ch = chain(74.0, iv=0.30)
-        self.assertIsNone(decide_lane_a(closes=s, chain=ch, today=TODAY,
+        self.assertIsNone(decide_lane_a(closes=s, chain=ch, spot=74.0, today=TODAY,
                                         month_spent=5900.0, banned=False))
-        self.assertIsNone(decide_lane_a(closes=s, chain=ch, today=TODAY,
+        self.assertIsNone(decide_lane_a(closes=s, chain=ch, spot=74.0, today=TODAY,
                                         month_spent=0.0, banned=True))
         self.assertIsNone(decide_lane_a(closes=closes_series(QUIET_COIL),
-                                        chain=ch, today=TODAY,
+                                        chain=ch, spot=100.0, today=TODAY,
                                         month_spent=0.0, banned=False))
 
     def test_rich_iv_is_not_lane_a_business(self):
         action = decide_lane_a(
             closes=closes_series(DEEP_RECLAIM), chain=chain(74.0, iv=1.20),
-            today=TODAY, month_spent=0.0, banned=False,
+            spot=74.0, today=TODAY, month_spent=0.0, banned=False,
         )
         self.assertIsNone(action)
 
@@ -92,10 +92,10 @@ class TestLaneB(unittest.TestCase):
         # a coil compresses FROM volatility: wild 200 sessions, then a tight
         # 60-session cycle puts current 20d RV in the bottom quartile of its
         # own 1yr history (a flat prefix would invert the percentile)
-        path = [100.0, 110.0, 90.0, 105.0, 95.0] * 40 + [98.0, 99.0, 100.0, 101.0] * 15
+        path = [100.0, 95.0, 105.0, 80.0, 120.0] * 40 + [98.0, 99.0, 100.0, 101.0] * 15
         action = decide_lane_b(
             closes=closes_series(path), chain=chain(100.0, iv=0.10),
-            today=TODAY, month_spent=0.0, banned=False,
+            spot=101.0, today=TODAY, month_spent=0.0, banned=False,
         )
         self.assertIsNotNone(action)
         self.assertEqual(action["kind"], "long_call")
@@ -105,14 +105,15 @@ class TestLaneB(unittest.TestCase):
         path = [100.0] * 200 + [80.0, 120.0] * 30
         self.assertIsNone(decide_lane_b(
             closes=closes_series(path), chain=chain(100.0, iv=0.10),
-            today=TODAY, month_spent=0.0, banned=False,
+            spot=100.0, today=TODAY, month_spent=0.0, banned=False,
         ))
 
 
 class TestLaneC(unittest.TestCase):
     def test_rich_iv_stabilized_sells_put_spread_meeting_floor(self):
         action = decide_lane_c(
-            closes=closes_series(DEEP_RECLAIM), chain=chain(74.0, iv=1.20),
+            symbol="XXXX", closes=closes_series(DEEP_RECLAIM),
+            chain=chain(74.0, iv=1.20), spot=74.0,
             today=TODAY, month_spent=0.0, banned=False, open_h7c=0,
         )
         self.assertIsNotNone(action)
@@ -124,13 +125,15 @@ class TestLaneC(unittest.TestCase):
 
     def test_concurrency_cap_blocks_second_position(self):
         self.assertIsNone(decide_lane_c(
-            closes=closes_series(DEEP_RECLAIM), chain=chain(74.0, iv=1.20),
+            symbol="XXXX", closes=closes_series(DEEP_RECLAIM),
+            chain=chain(74.0, iv=1.20), spot=74.0,
             today=TODAY, month_spent=0.0, banned=False, open_h7c=1,
         ))
 
     def test_cheap_iv_is_not_lane_c_business(self):
         self.assertIsNone(decide_lane_c(
-            closes=closes_series(DEEP_RECLAIM), chain=chain(74.0, iv=0.30),
+            symbol="XXXX", closes=closes_series(DEEP_RECLAIM),
+            chain=chain(74.0, iv=0.30), spot=74.0,
             today=TODAY, month_spent=0.0, banned=False, open_h7c=0,
         ))
 
@@ -143,6 +146,47 @@ class TestLaneCThinCredit(unittest.TestCase):
         ch.loc[puts, "bid"] = 0.30
         ch.loc[puts, "ask"] = 0.34
         self.assertIsNone(decide_lane_c(
-            closes=closes_series(DEEP_RECLAIM), chain=ch,
+            symbol="XXXX", closes=closes_series(DEEP_RECLAIM), chain=ch,
+            spot=74.0, today=TODAY, month_spent=0.0, banned=False, open_h7c=0,
+        ))
+
+
+class TestReviewCounterexamples(unittest.TestCase):
+    def test_core_symbol_never_gets_lane_c(self):
+        # R9: H7c stays H5's book on core names, enforced in the decide layer
+        self.assertIsNone(decide_lane_c(
+            symbol="MSFT", closes=closes_series(DEEP_RECLAIM),
+            chain=chain(74.0, iv=1.20), spot=74.0,
             today=TODAY, month_spent=0.0, banned=False, open_h7c=0,
+        ))
+
+    def test_lane_b_fires_only_on_the_transition_day(self):
+        # R14: level-true coil must not emit an action every day
+        base = [100.0, 95.0, 105.0, 80.0, 120.0] * 40 + [98.0, 99.0, 100.0, 101.0] * 15
+        second_day = base + [100.0]
+        self.assertIsNone(decide_lane_b(
+            closes=closes_series(second_day), chain=chain(100.0, iv=0.10),
+            spot=100.0, today=TODAY, month_spent=0.0, banned=False,
+        ))
+
+    def test_fills_charge_the_adverse_side(self):
+        # R6: single-call cost must be at least the ask side, never mid-based
+        action = decide_lane_a(
+            closes=closes_series(DEEP_RECLAIM), chain=chain(74.0, iv=0.30),
+            spot=74.0, today=TODAY, month_spent=0.0, banned=False,
+        )
+        self.assertIsNotNone(action)
+        ch = chain(74.0, iv=0.30)
+        row = ch[(ch.right == "C") & (ch.strike == action["strike"])
+                 & (ch.expiration == action["expiration"])].iloc[0]
+        self.assertGreaterEqual(action["cost"], float(row.ask) * 100)
+
+    def test_off_band_spread_deltas_are_skipped_not_traded(self):
+        # R7: a chain with no legs near 0.60/0.25 must not build a spread
+        ch = chain(74.0, iv=0.48)
+        calls = ch.right == "C"
+        ch.loc[calls, "delta"] = 0.95  # all deltas far from both targets
+        self.assertIsNone(decide_lane_a(
+            closes=closes_series(DEEP_RECLAIM), chain=ch, spot=74.0,
+            today=TODAY, month_spent=0.0, banned=False,
         ))

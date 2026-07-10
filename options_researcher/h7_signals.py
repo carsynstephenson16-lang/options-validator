@@ -1,7 +1,13 @@
 """Pure H7 signal functions. Frozen numbers come from config (registration
-f1887c9d...). Everything here is a function of raw closes and/or one day's
-cached chain -- no I/O, no state -- so the watcher and the backtest cannot
-drift apart."""
+f1887c9d...). Everything here is a function of closes and/or one day's cached
+chain -- no I/O, no state -- so the watcher and the backtest cannot drift
+apart.
+
+CLOSES CONTRACT (review finding R1, 2026-07-10): every `closes` argument in
+this module MUST be the split-ADJUSTED (continuous) series from
+data.underlying_closes.load_closes_adjusted. Raw as-traded closes read a 5:1
+split as an -80% crash and fabricate drawdowns/RV. Chain-side math (strikes,
+spot, admission) uses RAW spot -- callers pass it separately."""
 
 from __future__ import annotations
 
@@ -51,6 +57,24 @@ def lane_a_armed(closes: pd.Series) -> bool:
     )
 
 
+def episode_low(closes: pd.Series) -> float:
+    """The drawdown episode's low: minimum close since the last fresh
+    20-session-low event (the same re-arm anchor reclaimed_20d_high uses).
+    This is the registered H7a stop reference ('close below signal low')."""
+    n = config.H7A_RECLAIM_LOOKBACK_D
+    if len(closes) < n + 2:
+        return float(closes.min())
+    prior_low = closes.shift(1).rolling(n).min()
+    new_lows = (closes < prior_low).fillna(False)
+    rearm = -1
+    for i in range(len(closes) - 2, -1, -1):
+        if bool(new_lows.iloc[i]):
+            rearm = i
+            break
+    window = closes.iloc[rearm:] if rearm >= 0 else closes.iloc[-(n + 5):]
+    return float(window.min())
+
+
 def range_pct(closes: pd.Series, lookback: int) -> float:
     w = closes.iloc[-lookback:]
     return (float(w.max()) - float(w.min())) / float(w.iloc[-1])
@@ -66,7 +90,7 @@ def rv_percentile(closes: pd.Series, window: int = 20, history: int = 252) -> fl
     Names with under ~6 months of usable history return 1.0 (never passes),
     per the registration's minimum-listing rule."""
     rv = closes.pct_change().rolling(window).std().dropna().iloc[-history:]
-    if len(rv) < 126:
+    if len(rv) < 106:  # ~6 months listed (126 sessions) minus the RV window
         return 1.0
     return float((rv <= rv.iloc[-1]).mean())
 
@@ -94,9 +118,11 @@ def iv_route(iv: float, rv: float) -> str:
 
 def atm_iv_90d(chain: pd.DataFrame, spot: float, today: date,
                dte_band: tuple[int, int] = (72, 108)) -> float:
-    """The registration's IV measure: ATM call IV at the expiration nearest
-    ~90 DTE (+/-18d). Returns 0.0 when no two-sided quotes exist in band --
-    iv_route treats that as 'none' (no trade), never as cheap."""
+    """The registration's IV measure: ATM call IV at THE expiration nearest
+    90 DTE (+/-18d) -- pick the expiration first, then the ATM strike within
+    it (review finding R2: pooling all in-band rows let a farther expiration
+    win the ATM tie and shift the routing ratio). Returns 0.0 when no
+    two-sided quotes exist in band -- iv_route treats that as 'none'."""
     df = chain[(chain.right == "C") & (chain.bid > 0) & (chain.ask > 0)].copy()
     if df.empty:
         return 0.0
@@ -105,7 +131,10 @@ def atm_iv_90d(chain: pd.DataFrame, spot: float, today: date,
     df = df[df.dte.between(*dte_band)]
     if df.empty:
         return 0.0
-    row = df.loc[(df.strike - spot).abs().idxmin()]
+    target = (dte_band[0] + dte_band[1]) // 2
+    best_exp = df.loc[(df.dte - target).abs().idxmin(), "expiration"]
+    within = df[df.expiration == best_exp]
+    row = within.loc[(within.strike - spot).abs().idxmin()]
     return float(row.iv)
 
 

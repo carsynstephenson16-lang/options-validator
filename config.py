@@ -273,3 +273,8 @@ H7_EARNINGS_BAN_SESSIONS = 5    # no new entries within 5 sessions pre-report
 H7_BACKTEST_SYMBOLS = ["NOW", "NVDA", "PLTR", "MSFT", "AMZN", "VST", "CEG", "SMCI"]
 H7_BACKTEST_START = "2018-01-02"
 H7_BACKTEST_END = "2026-06-30"
+
+H7C_CLOSE_BEFORE_EARNINGS = True  # registered: short premium NEVER held
+#                                   through a report; runner hard-closes by
+#                                   the last session before any scheduled
+#                                   report (review R13 pinned the constant)

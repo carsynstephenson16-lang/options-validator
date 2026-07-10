@@ -43,3 +43,28 @@ class TestUnsplit(unittest.TestCase):
     def test_symbol_without_splits_is_untouched(self):
         rows = [("2024-06-06", 120.0)]
         self.assertEqual(unsplit(rows, "MSFT"), rows)
+
+
+class TestAdjustedClosesForSignals(unittest.TestCase):
+    """Review R1: raw (unsplit) closes align with strikes but read a split as
+    a crash; signals must consume the adjusted series instead."""
+
+    def test_adjustment_factor_is_future_split_product(self):
+        from data.underlying_closes import adjustment_factor
+        self.assertEqual(adjustment_factor("NVDA", "2021-07-19"), 40.0)
+        self.assertEqual(adjustment_factor("NVDA", "2021-07-20"), 10.0)
+        self.assertEqual(adjustment_factor("NVDA", "2024-06-10"), 1.0)
+        self.assertEqual(adjustment_factor("MSFT", "2020-01-01"), 1.0)
+
+    def test_adjusted_series_is_continuous_across_the_boundary(self):
+        import pandas as pd
+
+        from data.underlying_closes import adjusted_from_raw
+        raw = pd.Series([1200.0, 1210.0, 122.0],
+                        index=["2024-06-06", "2024-06-07", "2024-06-10"])
+        adj = adjusted_from_raw(raw, "NVDA")
+        self.assertAlmostEqual(adj.iloc[0], 120.0)
+        self.assertAlmostEqual(adj.iloc[1], 121.0)
+        self.assertAlmostEqual(adj.iloc[2], 122.0)
+        # no fabricated crash: max day-over-day move ~1%
+        self.assertLess(adj.pct_change().abs().max(), 0.02)

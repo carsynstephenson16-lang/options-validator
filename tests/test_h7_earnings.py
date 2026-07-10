@@ -40,3 +40,23 @@ class TestEarningsBan(unittest.TestCase):
         # confirmed date governs; the stale September estimate must not extend the ban
         self.assertFalse(entries_banned("X", date(2026, 9, 1), cal))
         self.assertTrue(entries_banned("X", date(2026, 8, 18), cal))
+
+
+class TestReviewCounterexamples(unittest.TestCase):
+    def test_holiday_cluster_does_not_shorten_the_ban(self):
+        # R3: report Mon 2026-11-30; Thanksgiving 11-26 -- Fri 11-20 IS the
+        # 5th session before and must be banned
+        cal = {"X": {"confirmed": [date(2026, 11, 30)], "estimated": []}}
+        self.assertTrue(entries_banned("X", date(2026, 11, 20), cal))
+
+    def test_past_confirmation_does_not_disable_next_quarters_estimate(self):
+        # R4: stale confirmed 07-22 + next quarter's estimate 10-20
+        cal = {"X": {"confirmed": [date(2026, 7, 22)],
+                     "estimated": [date(2026, 10, 20)]}}
+        self.assertTrue(entries_banned("X", date(2026, 10, 15), cal))
+
+    def test_two_quarters_do_not_collapse_into_one_long_ban(self):
+        # R5: confirmed July and October reports; September must be free
+        cal = {"X": {"confirmed": [date(2026, 7, 22), date(2026, 10, 21)],
+                     "estimated": []}}
+        self.assertFalse(entries_banned("X", date(2026, 9, 1), cal))

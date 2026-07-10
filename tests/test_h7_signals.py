@@ -113,3 +113,30 @@ class TestAdmission(unittest.TestCase):
             thin, spot=100.0, today=pd.Timestamp("2026-07-10").date(), dte_band=(30, 45)
         )
         self.assertFalse(ok)
+
+
+class TestReviewCounterexamples(unittest.TestCase):
+    def test_episode_low_is_the_drawdown_low_not_a_recent_window(self):
+        # R8: low at 60, long 78-82 base, reclaim much later -- stop ref must
+        # be 60, not the recent base floor
+        path = [100] * 30 + [60] + [80.0, 79.0, 81.0, 78.0, 82.0] * 9 + [83.0]
+        s = closes(path)
+        self.assertAlmostEqual(sig.episode_low(s), 60.0)
+
+    def test_atm_iv_uses_the_expiration_nearest_90(self):
+        # R2: two in-band expirations; the farther one has a closer ATM strike
+        # and must NOT win
+        rows = []
+        for exp, dte_iv, strikes in (
+            ("2026-09-25", 0.40, [99.0]),          # 79 DTE from 2026-07-08 (nearest 90)
+            ("2026-10-23", 0.80, [100.0]),         # 107 DTE, ATM-closer strike
+        ):
+            for k in strikes:
+                rows.append({"expiration": exp, "strike": k, "right": "C",
+                             "bid": 5.0, "ask": 5.2, "open_interest": 500,
+                             "iv": dte_iv, "delta": 0.5, "gamma": 0.0,
+                             "theta": 0.0, "vega": 0.0})
+        chain = pd.DataFrame(rows)
+        iv = sig.atm_iv_90d(chain, spot=100.0,
+                            today=pd.Timestamp("2026-07-08").date())
+        self.assertEqual(iv, 0.40)

@@ -42,7 +42,12 @@ def store_closes(symbol: str, frame: pd.DataFrame) -> str:
 def load_closes(symbol: str, start_iso: str, end_iso: str, *,
                 allow_oos: bool = False) -> pd.Series:
     """Date-indexed float close Series over [start_iso, end_iso].
-    Fail-closed OOS gate on the END of the requested range."""
+    Fail-closed OOS gate on the END of the requested range.
+
+    RAW (as-traded) closes: aligned with raw option strikes, DISCONTINUOUS at
+    split boundaries. Correct for strike/spot/chain math; NEVER feed these to
+    trailing price signals (52wk high, 20d high, RV, range) -- a 5:1 split
+    reads as an -80% crash. Signals use load_closes_adjusted()."""
     if not allow_oos and end_iso > config.IN_SAMPLE_END:
         raise OOSDataTouchError(
             f"load_closes({symbol}, end={end_iso}) exceeds IN_SAMPLE_END="
@@ -50,6 +55,38 @@ def load_closes(symbol: str, start_iso: str, end_iso: str, *,
     df = pd.read_parquet(_path(symbol))
     s = df.set_index("date")["close"].sort_index().astype(float)
     return s.loc[start_iso:end_iso]
+
+
+def adjustment_factor(symbol: str, iso_date: str) -> float:
+    """raw_close = adjusted_close * factor at `iso_date`: the product of the
+    ratios of all splits whose first split-adjusted day is AFTER iso_date.
+    1.0 after a symbol's last split (so live spot is unchanged)."""
+    factor = 1.0
+    for first_adjusted_day, ratio in SPLITS.get(symbol, []):
+        if iso_date < first_adjusted_day:
+            factor *= ratio
+    return factor
+
+
+def adjusted_from_raw(raw: pd.Series, symbol: str) -> pd.Series:
+    """Split-CONTINUOUS closes from a raw date-indexed series: each row is
+    divided by its date's adjustment factor. This is the ONLY series trailing
+    price signals may consume (h7_signals; ledger review 2026-07-10)."""
+    if symbol not in SPLITS:
+        return raw
+    factors = pd.Series(
+        [adjustment_factor(symbol, str(d)) for d in raw.index],
+        index=raw.index, dtype=float,
+    )
+    return raw / factors
+
+
+def load_closes_adjusted(symbol: str, start_iso: str, end_iso: str, *,
+                         allow_oos: bool = False) -> pd.Series:
+    """Split-adjusted (continuous) closes for signal computation."""
+    return adjusted_from_raw(
+        load_closes(symbol, start_iso, end_iso, allow_oos=allow_oos), symbol
+    )
 
 
 def rows_to_frame(rows) -> pd.DataFrame:
