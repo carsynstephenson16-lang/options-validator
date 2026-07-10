@@ -29,7 +29,13 @@ import config
 from data.underlying_closes import adjustment_factor, load_closes_adjusted
 from options_researcher import h7_signals as sig
 from options_researcher.chains import load_range
-from options_researcher.h7_earnings import earnings_covered, entries_banned, load_calendar
+from options_researcher.h7_earnings import (
+    GATE_BANNED,
+    GATE_CLEAR,
+    GATE_UNKNOWN,
+    earnings_gate,
+    load_assertions,
+)
 from strategies.h7_lanes import decide_lane_a, decide_lane_b, decide_lane_c
 
 H7_POSITIONS_PATH = Path("data/positions/h7_positions.csv")
@@ -66,16 +72,16 @@ def check_alignment(closes: pd.Series, chain_day: str | None,
     return None
 
 
-def _lane_state(*, armed: bool, admitted: bool, banned: bool, covered: bool,
+def _lane_state(*, armed: bool, admitted: bool, gate: str,
                 has_open: bool, route: str, budget_left: float,
                 basket_full: bool) -> str:
     """Human-readable REASON ladder only. The final ENTRY-OK is authorized
     exclusively by a non-None decide_lane_* action in assemble_name."""
     if has_open:
         return "POSITION-OPEN"
-    if not covered:
+    if gate == GATE_UNKNOWN:
         return "EARNINGS-UNKNOWN"   # fail closed: next report date unknown
-    if banned:
+    if gate == GATE_BANNED:
         return "EARNINGS-BAN"
     if not admitted:
         return "WATCH-ONLY"
@@ -104,26 +110,29 @@ def _decide(lane: str, *, symbol: str, closes: pd.Series, chain: pd.DataFrame,
 
 
 def assemble_name(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
-                  today: date, calendar: dict, open_positions: tuple,
-                  spot: float | None = None, open_h7c: int = 0,
-                  month_spent: float = 0.0) -> dict:
+                  today: date, assertions: list, known_as_of,
+                  open_positions: tuple, spot: float | None = None,
+                  open_h7c: int = 0, month_spent: float = 0.0) -> dict:
     """`closes` MUST be split-adjusted and end at the evaluation session;
     `chain` MUST be that same session's snapshot (main enforces via
     check_alignment). `spot` is the RAW price aligned with the chain's
     strikes -- defaults to the last adjusted close (correct live, after a
-    symbol's final split)."""
+    symbol's final split). Earnings state comes from the typed point-in-time
+    gate; UNKNOWN fails closed."""
     spot = float(closes.iloc[-1]) if spot is None else float(spot)
     rv = sig.rv_annualized(closes, config.H7_RV_LOOKBACK_D)
     iv = sig.atm_iv_90d(chain, spot, today)
     route = sig.iv_route(iv=iv, rv=rv)
-    covered = earnings_covered(symbol, today, calendar)
-    banned = entries_banned(symbol, today, calendar)
+    gate, gate_reason = earnings_gate(symbol, today, assertions,
+                                      known_as_of=known_as_of)
+    banned = gate != GATE_CLEAR   # decide_lane_* fail closed on non-CLEAR
     has_open = symbol in open_positions
     budget_left = config.H7_MONTHLY_AT_RISK - month_spent
 
     card: dict = {
         "symbol": symbol, "spot": spot, "rv21": rv, "iv90": iv, "route": route,
-        "budget_left": budget_left,
+        "budget_left": budget_left, "earnings_gate": gate,
+        "earnings_reason": gate_reason,
         "benchmark_note": (
             f"underlying move is logged alongside every paper trade "
             f"(spot ref {spot:.2f} @ {today.isoformat()})"
@@ -150,7 +159,7 @@ def assemble_name(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
             lane_route = "none" if route == "h7c" else route
             basket_full = False
         state = _lane_state(armed=armed_fn(closes), admitted=admitted,
-                            banned=banned, covered=covered, has_open=has_open,
+                            gate=gate, has_open=has_open,
                             route=lane_route, budget_left=budget_left,
                             basket_full=basket_full)
         action = None
@@ -242,10 +251,11 @@ def main(argv: list[str] | None = None) -> int:
     # 252 trading sessions of signal history plus weekend/holiday slack
     start_iso = (eval_date - timedelta(days=560)).isoformat()
 
+    known_as_of = datetime.now(ZoneInfo("UTC"))
     try:
-        calendar = load_calendar()
-    except Exception as e:  # fail closed: cannot verify earnings bans
-        print(f"H7 CALENDAR ERROR -- refusing to evaluate entries: "
+        assertions = load_assertions()
+    except Exception as e:  # fail closed: cannot verify earnings state
+        print(f"H7 EARNINGS-ASSERTIONS ERROR -- refusing to evaluate entries: "
               f"{type(e).__name__}: {e}")
         return 2
     try:
@@ -278,7 +288,8 @@ def main(argv: list[str] | None = None) -> int:
             continue
         raw_spot = float(closes.iloc[-1]) * adjustment_factor(symbol, eval_iso)
         card = assemble_name(symbol=symbol, closes=closes, chain=chain,
-                             today=eval_date, calendar=calendar,
+                             today=eval_date, assertions=assertions,
+                             known_as_of=known_as_of,
                              open_positions=open_syms, spot=raw_spot,
                              open_h7c=open_c, month_spent=month_spent)
         print(

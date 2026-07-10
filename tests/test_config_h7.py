@@ -70,4 +70,11 @@ class TestH7Freeze(unittest.TestCase):
         self.assertEqual(config.H7B_RV_WINDOW_D, 20)
         self.assertEqual(config.H7B_RV_HISTORY_D, 252)
         self.assertEqual(config.H7B_RV_MIN_HISTORY_D, 106)
-        self.assertEqual(config.H7_EARNINGS_KNOWN_HORIZON_D, 45)
+
+    def test_earnings_gate_constants_owner_ratified_7b01(self):
+        # owner decisions 2026-07-10 (ledger H7_OWNER_DECISIONS_7B01): the 45d
+        # value is ratified but as a POST-REPORT GRACE -- only a verified
+        # occurred/realized report starts it; expired estimates never do.
+        self.assertEqual(config.H7_EARNINGS_POST_REPORT_GRACE_D, 45)
+        self.assertEqual(config.H7_EARNINGS_ESTIMATE_CLUSTER_D, 14)
+        self.assertFalse(hasattr(config, "H7_EARNINGS_KNOWN_HORIZON_D"))

@@ -1,0 +1,14 @@
+symbol,event_id,fiscal_period,expected_date,session_timing,status,source_url,known_as_of_utc,checked_at_utc,notes
+NOW,NOW-2026Q2,2026Q2,2026-07-22,unknown,confirmed,label:company_pr,2026-07-09T20:00:00+00:00,2026-07-09T20:00:00+00:00,migrated from calendar.csv 2026-07-09 adjudication; exact URL not retained -- weak provenance disclosed
+TEM,TEM-2026Q2,2026Q2,2026-07-30,unknown,confirmed,label:company_pr,2026-07-09T20:00:00+00:00,2026-07-09T20:00:00+00:00,migrated; company PR verified 2026-07-09 (ledger REPORT_ADJUDICATION); URL not retained
+AMD,AMD-2026Q2,2026Q2,2026-08-04,unknown,confirmed,label:company_pr,2026-07-09T20:00:00+00:00,2026-07-09T20:00:00+00:00,migrated; URL not retained
+SMCI,SMCI-FY26Q4,FY26Q4,2026-08-04,unknown,estimated,label:nasdaq_calendar,2026-07-09T20:00:00+00:00,2026-07-09T20:00:00+00:00,migrated aggregator estimate
+SMCI,SMCI-FY26Q4,FY26Q4,2026-08-11,unknown,estimated,label:tipranks,2026-07-09T20:00:01+00:00,2026-07-09T20:00:01+00:00,migrated aggregator estimate; same event as SMCI-FY26Q4 -- later known_as_of supersedes in views
+PLTR,PLTR-2026Q2,2026Q2,2026-08-03,unknown,estimated,label:nasdaq_calendar,2026-07-09T20:00:02+00:00,2026-07-09T20:00:02+00:00,migrated aggregator estimate
+PLTR,PLTR-2026Q2-alt,2026Q2,2026-08-10,unknown,estimated,label:tipranks,2026-07-09T20:00:03+00:00,2026-07-09T20:00:03+00:00,migrated; kept as distinct event_id so BOTH estimates ban conservatively (cluster rule)
+CRWV,CRWV-2026Q2,2026Q2,2026-08-11,unknown,estimated,label:nasdaq_calendar,2026-07-09T20:00:04+00:00,2026-07-09T20:00:04+00:00,migrated aggregator estimate
+CRWV,CRWV-2026Q2-alt,2026Q2,2026-08-18,unknown,estimated,label:tipranks,2026-07-09T20:00:05+00:00,2026-07-09T20:00:05+00:00,migrated; distinct event_id keeps the conservative cluster ban
+NVDA,NVDA-FY27Q2,FY27Q2,2026-08-26,unknown,estimated,label:nasdaq_calendar,2026-07-09T20:00:06+00:00,2026-07-09T20:00:06+00:00,migrated aggregator estimate
+AVGO,AVGO-FY26Q3,FY26Q3,2026-09-02,unknown,estimated,label:ir_language_unverified,2026-07-09T20:00:07+00:00,2026-07-09T20:00:07+00:00,migrated; weakest provenance in the store
+CRWD,CRWD-FY27Q2,FY27Q2,2026-08-26,unknown,estimated,label:nasdaq_calendar,2026-07-09T20:00:08+00:00,2026-07-09T20:00:08+00:00,migrated aggregator estimate
+MU,MU-FY26Q4,FY26Q4,2026-09-29,unknown,estimated,label:tipranks,2026-07-09T20:00:09+00:00,2026-07-09T20:00:09+00:00,migrated aggregator estimate

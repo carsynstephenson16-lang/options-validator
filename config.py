@@ -300,7 +300,13 @@ H7_DD_LOOKBACK_D = 252           # "52wk high" = trailing 252 sessions
 H7B_RV_WINDOW_D = 20             # registered "20d RV"
 H7B_RV_HISTORY_D = 252           # "...vs own 1yr history"
 H7B_RV_MIN_HISTORY_D = 106       # "min 6mo listed": 126 sessions minus the RV window
-H7_EARNINGS_KNOWN_HORIZON_D = 45  # LLM-PROPOSED (owner ratification pending):
-#                                   earnings coverage = a known future report date
-#                                   OR one within the last 45 calendar days; else
-#                                   the symbol FAILS CLOSED (EARNINGS-UNKNOWN).
+# Owner-ratified 2026-07-10 (ledger H7_OWNER_DECISIONS_7B01): the earnings
+# gate is CLEAR only when a point-in-time-valid assertion identifies the NEXT
+# scheduled report, OR the company is PROVEN (a distinct occurred/verified
+# realized-report record) to have reported within the previous grace window.
+# Day grace+1 without a valid future assertion = EARNINGS-UNKNOWN (fails
+# closed). Expired estimates / old scheduled dates NEVER start the grace.
+H7_EARNINGS_POST_REPORT_GRACE_D = 45
+H7_EARNINGS_ESTIMATE_CLUSTER_D = 14   # estimates within this many days refer
+#                                       to the same report (frozen 7b-0.1;
+#                                       was module-private in h7_earnings.py)

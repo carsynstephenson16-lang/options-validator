@@ -4,16 +4,29 @@ executable action from the same inputs -- the watcher has no lane logic of
 its own. Earnings coverage and the paper book fail CLOSED."""
 
 import unittest
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 
 from options_researcher import h7_watch
 
 TODAY = date(2026, 7, 8)
-# far-future confirmed report: covered, and outside the 5-session ban
-CAL_OK = {"XXXX": {"confirmed": [date(2026, 9, 18)], "estimated": []},
-          "VST": {"confirmed": [date(2026, 9, 18)], "estimated": []}}
+KNOWN = datetime.fromisoformat("2026-07-08T21:00:00+00:00")
+
+
+def _assertion(symbol, expected, status="confirmed", event="E1",
+               known="2026-07-01T12:00:00+00:00"):
+    ts = datetime.fromisoformat(known)
+    return {"symbol": symbol, "event_id": f"{symbol}-{event}",
+            "fiscal_period": "FY26Q2",
+            "expected_date": date.fromisoformat(expected),
+            "session_timing": "amc", "status": status,
+            "source_url": "https://example.test/ir",
+            "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}
+
+
+# far-future confirmed reports: gate CLEAR, outside the 5-session ban
+ASSERT_OK = [_assertion("XXXX", "2026-09-18"), _assertion("VST", "2026-09-18")]
 DEEP_RECLAIM = [130.0] * 200 + [62.0] * 25 + [70.0]
 
 
@@ -51,7 +64,7 @@ def _chain(center: float, iv: float):
 def _card(**over):
     args = dict(symbol="XXXX", closes=_closes(DEEP_RECLAIM),
                 chain=_chain(center=70.0, iv=0.40), today=TODAY,
-                calendar=CAL_OK, open_positions=())
+                assertions=ASSERT_OK, known_as_of=KNOWN, open_positions=())
     args.update(over)
     return h7_watch.assemble_name(**args)
 
@@ -96,19 +109,20 @@ class TestEntryOkIsDecideBacked(unittest.TestCase):
 
 
 class TestFailClosedStates(unittest.TestCase):
-    def test_uncovered_symbol_is_earnings_unknown(self):
-        card = _card(calendar={})
+    def test_no_assertions_is_earnings_unknown(self):
+        card = _card(assertions=[])
         self.assertEqual(card["lane_a"]["state"], "EARNINGS-UNKNOWN")
         self.assertEqual(card["lane_c"]["state"], "EARNINGS-UNKNOWN")
 
-    def test_stale_past_only_calendar_is_earnings_unknown(self):
-        cal = {"XXXX": {"confirmed": [date(2026, 3, 10)], "estimated": []}}
-        card = _card(calendar=cal)
+    def test_expired_estimate_is_earnings_unknown(self):
+        # a passed estimate never marked occurred grants nothing (owner rule)
+        rows = [_assertion("XXXX", "2026-06-10", status="estimated")]
+        card = _card(assertions=rows)
         self.assertEqual(card["lane_a"]["state"], "EARNINGS-UNKNOWN")
 
     def test_banned_symbol_reports_ban_not_entry(self):
-        cal = {"XXXX": {"confirmed": [date(2026, 7, 10)], "estimated": []}}
-        card = _card(calendar=cal)
+        rows = [_assertion("XXXX", "2026-07-10")]
+        card = _card(assertions=rows)
         self.assertEqual(card["lane_a"]["state"], "EARNINGS-BAN")
 
     def test_open_position_blocks_new_entry(self):
