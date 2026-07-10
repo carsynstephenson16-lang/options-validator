@@ -41,3 +41,7 @@ results/*
 
 # superpowers brainstorming companion scratch (mockups, not deliverables)
 .superpowers/
+node_modules/
+
+# Crawlee local run output
+storage/

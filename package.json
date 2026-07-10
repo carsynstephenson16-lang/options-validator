@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "node crawler.js"
+  },
+  "dependencies": {
+    "crawlee": "^3.17.0",
+    "playwright": "^1.61.1"
+  }
+}
