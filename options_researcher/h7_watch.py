@@ -1,11 +1,20 @@
 """H7 daily watcher -- reports lane states per name; NEVER trades, never
 mutates positions (candidate -> position only via the owner editing
-data/positions/, same as H5). Run: uv run python -m options_researcher.h7_watch
+data/positions/h7_positions.csv). Run:
+    uv run python -m options_researcher.h7_watch [--as-of YYYY-MM-DD]
 
-Lane states: EXCLUDED (config) / WATCH-ONLY (admission fail) / QUIET (no
-signal or dead-zone IV) / EARNINGS-BAN / POSITION-OPEN / ENTRY-OK. ENTRY-OK
-additionally reports the IV route (call / spread / h7c). Data gaps print as
-DATA-GAP lines and are skipped, never papered over (EOD-gap house rule).
+7b-0 contract (ledger H7_7B_NOGO remediation):
+- ONE completed session: closes and the chain snapshot must both end exactly
+  at evaluation_session(run date); anything else is a DATA-GAP line. No
+  stale-chain fallback, no wall-clock DTE math, no intraday rows.
+- ENTRY-OK is printed ONLY when strategies.h7_lanes.decide_lane_* returned an
+  executable action from those same inputs; the watcher carries no lane
+  logic of its own. Armed-but-unexecutable prints NO-EXECUTABLE.
+- FAIL CLOSED: unreadable/malformed position book -> exit 2, no evaluation;
+  a symbol whose next report date is unknown -> EARNINGS-UNKNOWN, no entry.
+
+Lane states: EXCLUDED / POSITION-OPEN / EARNINGS-UNKNOWN / EARNINGS-BAN /
+WATCH-ONLY / QUIET / BASKET-CAP / BUDGET-SPENT / NO-EXECUTABLE / ENTRY-OK.
 """
 
 from __future__ import annotations
@@ -20,7 +29,8 @@ import config
 from data.underlying_closes import adjustment_factor, load_closes_adjusted
 from options_researcher import h7_signals as sig
 from options_researcher.chains import load_range
-from options_researcher.h7_earnings import entries_banned, load_calendar
+from options_researcher.h7_earnings import earnings_covered, entries_banned, load_calendar
+from strategies.h7_lanes import decide_lane_a, decide_lane_b, decide_lane_c
 
 H7_POSITIONS_PATH = Path("data/positions/h7_positions.csv")
 
@@ -56,10 +66,15 @@ def check_alignment(closes: pd.Series, chain_day: str | None,
     return None
 
 
-def _lane_state(*, armed: bool, admitted: bool, banned: bool, has_open: bool,
-                route: str, budget_left: float, basket_full: bool) -> str:
+def _lane_state(*, armed: bool, admitted: bool, banned: bool, covered: bool,
+                has_open: bool, route: str, budget_left: float,
+                basket_full: bool) -> str:
+    """Human-readable REASON ladder only. The final ENTRY-OK is authorized
+    exclusively by a non-None decide_lane_* action in assemble_name."""
     if has_open:
         return "POSITION-OPEN"
+    if not covered:
+        return "EARNINGS-UNKNOWN"   # fail closed: next report date unknown
     if banned:
         return "EARNINGS-BAN"
     if not admitted:
@@ -73,17 +88,35 @@ def _lane_state(*, armed: bool, admitted: bool, banned: bool, has_open: bool,
     return "ENTRY-OK"
 
 
+def _decide(lane: str, *, symbol: str, closes: pd.Series, chain: pd.DataFrame,
+            spot: float, today: date, month_spent: float, banned: bool,
+            open_h7c: int):
+    """Dispatch to the SINGLE decision authority (strategies.h7_lanes)."""
+    if lane == "lane_a":
+        return decide_lane_a(closes=closes, chain=chain, spot=spot,
+                             today=today, month_spent=month_spent, banned=banned)
+    if lane == "lane_b":
+        return decide_lane_b(closes=closes, chain=chain, spot=spot,
+                             today=today, month_spent=month_spent, banned=banned)
+    return decide_lane_c(symbol=symbol, closes=closes, chain=chain, spot=spot,
+                         today=today, month_spent=month_spent, banned=banned,
+                         open_h7c=open_h7c)
+
+
 def assemble_name(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
                   today: date, calendar: dict, open_positions: tuple,
                   spot: float | None = None, open_h7c: int = 0,
                   month_spent: float = 0.0) -> dict:
-    """`closes` MUST be split-adjusted (signals); `spot` is the RAW price
-    aligned with the chain's strikes -- defaults to the last adjusted close,
-    which is only correct after a symbol's final split (live use)."""
+    """`closes` MUST be split-adjusted and end at the evaluation session;
+    `chain` MUST be that same session's snapshot (main enforces via
+    check_alignment). `spot` is the RAW price aligned with the chain's
+    strikes -- defaults to the last adjusted close (correct live, after a
+    symbol's final split)."""
     spot = float(closes.iloc[-1]) if spot is None else float(spot)
     rv = sig.rv_annualized(closes, config.H7_RV_LOOKBACK_D)
     iv = sig.atm_iv_90d(chain, spot, today)
     route = sig.iv_route(iv=iv, rv=rv)
+    covered = earnings_covered(symbol, today, calendar)
     banned = entries_banned(symbol, today, calendar)
     has_open = symbol in open_positions
     budget_left = config.H7_MONTHLY_AT_RISK - month_spent
@@ -104,7 +137,7 @@ def assemble_name(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
     for lane, armed_fn, band in lanes:
         if lane == "lane_c" and symbol in config.H7_CORE_LONG_ONLY:
             card[lane] = {"state": "EXCLUDED", "route": "none",
-                          "admitted_contracts": 0}
+                          "admitted_contracts": 0, "action": None}
             continue
         admitted, n = sig.lane_admission(
             chain, spot=spot, today=today, dte_band=band,
@@ -116,14 +149,22 @@ def assemble_name(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
         else:
             lane_route = "none" if route == "h7c" else route
             basket_full = False
-        card[lane] = {
-            "state": _lane_state(armed=armed_fn(closes), admitted=admitted,
-                                 banned=banned, has_open=has_open,
-                                 route=lane_route, budget_left=budget_left,
-                                 basket_full=basket_full),
-            "admitted_contracts": n,
-            "route": lane_route,
-        }
+        state = _lane_state(armed=armed_fn(closes), admitted=admitted,
+                            banned=banned, covered=covered, has_open=has_open,
+                            route=lane_route, budget_left=budget_left,
+                            basket_full=basket_full)
+        action = None
+        if state == "ENTRY-OK":
+            action = _decide(lane, symbol=symbol, closes=closes, chain=chain,
+                             spot=spot, today=today, month_spent=month_spent,
+                             banned=banned, open_h7c=open_h7c)
+            if action is None:
+                # armed + admitted + routed, but no executable structure at
+                # frozen tolerances/gates. NEVER report ENTRY-OK without an
+                # action (7b-0 exit condition).
+                state = "NO-EXECUTABLE"
+        card[lane] = {"state": state, "admitted_contracts": n,
+                      "route": lane_route, "action": action}
     return card
 
 
@@ -177,49 +218,67 @@ def open_h7_book(today: date, *, path: Path = H7_POSITIONS_PATH
     return tuple(sorted(symbols)), open_c, month_spent
 
 
-def main() -> int:
-    today = date.today()
-    today_iso = today.isoformat()
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    parser = argparse.ArgumentParser(
+        description="H7 daily watcher (alerts only, never trades)")
+    parser.add_argument(
+        "--as-of",
+        help="evaluate the last completed session before this date "
+             "(default: today, America/New_York); useful against a cache "
+             "that has not been topped up today")
+    args = parser.parse_args(argv)
+
+    ny_today = datetime.now(ZoneInfo("America/New_York")).date()
+    run_date = date.fromisoformat(args.as_of) if args.as_of else ny_today
+    if run_date > ny_today:
+        print(f"--as-of {run_date} is in the future; refusing.")
+        return 2
+    eval_date = evaluation_session(run_date)
+    eval_iso = eval_date.isoformat()
     # 252 trading sessions of signal history plus weekend/holiday slack
-    start_iso = (today - timedelta(days=560)).isoformat()
-    calendar = load_calendar()
+    start_iso = (eval_date - timedelta(days=560)).isoformat()
+
     try:
-        open_syms, open_c, month_spent = open_h7_book(today)
+        calendar = load_calendar()
+    except Exception as e:  # fail closed: cannot verify earnings bans
+        print(f"H7 CALENDAR ERROR -- refusing to evaluate entries: "
+              f"{type(e).__name__}: {e}")
+        return 2
+    try:
+        open_syms, open_c, month_spent = open_h7_book(eval_date)
     except H7BookError as e:
         print(f"H7 BOOK ERROR -- refusing to evaluate entries (fail closed): {e}")
         return 2
+
     names = [s for s in config.H7_WATCHLIST + config.H7_CORE_LONG_ONLY
              if s not in config.H7_EXCLUDED]
-    print(f"H7 WATCH {today_iso} (registered f1887c9d; alerts only, never trades)")
+    print(f"H7 WATCH session={eval_iso} run={run_date.isoformat()} "
+          f"(registered f1887c9d + v1.2 f880b4d1; alerts only, never trades)")
     print(f"sleeve: ${config.H7_MONTHLY_AT_RISK - month_spent:.0f} of "
           f"${config.H7_MONTHLY_AT_RISK} left this month; "
           f"open H7c {open_c}/{config.H7C_MAX_CONCURRENT}")
     for symbol in names:
         try:
-            closes = load_closes_adjusted(symbol, start_iso, today_iso,
+            closes = load_closes_adjusted(symbol, start_iso, eval_iso,
                                           allow_oos=True)
             if closes.empty:
                 raise RuntimeError("no cached underlying closes")  # R12
-            chains_by_day = load_range(symbol, today_iso, today_iso, allow_oos=True)
-            chain = chains_by_day.get(today_iso)
-            if chain is None:
-                # fall back to the latest cached chain day this week, disclosed
-                recent = load_range(
-                    symbol,
-                    (pd.Timestamp(today) - pd.Timedelta(days=6)).date().isoformat(),
-                    today_iso, allow_oos=True,
-                )
-                if not recent:
-                    raise RuntimeError("no cached chain in the last 6 days")
-                last_day = max(recent)
-                chain = recent[last_day]
-                print(f"{symbol}: note chain as of {last_day} (cache lag)")
+            chains_by_day = load_range(symbol, eval_iso, eval_iso, allow_oos=True)
+            chain = chains_by_day.get(eval_iso)
+            chain_day = eval_iso if chain is not None else None
+            gap = check_alignment(closes, chain_day, eval_iso)
+            if gap:
+                raise RuntimeError(gap)
         except Exception as e:  # a gap is a report line, not a crash
             print(f"{symbol}: DATA-GAP ({type(e).__name__}: {e}) -- skipped")
             continue
-        raw_spot = float(closes.iloc[-1]) * adjustment_factor(symbol, today_iso)
+        raw_spot = float(closes.iloc[-1]) * adjustment_factor(symbol, eval_iso)
         card = assemble_name(symbol=symbol, closes=closes, chain=chain,
-                             today=today, calendar=calendar,
+                             today=eval_date, calendar=calendar,
                              open_positions=open_syms, spot=raw_spot,
                              open_h7c=open_c, month_spent=month_spent)
         print(
@@ -228,6 +287,10 @@ def main() -> int:
             f"a={card['lane_a']['state']} b={card['lane_b']['state']} "
             f"c={card['lane_c']['state']}"
         )
+        for lane in ("lane_a", "lane_b", "lane_c"):
+            action = card[lane]["action"]
+            if action is not None:
+                print(f"    {lane} action: {action}")
     return 0
 
 
