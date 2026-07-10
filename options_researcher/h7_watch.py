@@ -29,6 +29,7 @@ import config
 from data.underlying_closes import adjustment_factor, load_closes_adjusted
 from options_researcher import h7_signals as sig
 from options_researcher.chains import load_range
+from options_researcher.h7_board import resolve_board
 from options_researcher.h7_earnings import (
     GATE_BANNED,
     GATE_CLEAR,
@@ -267,10 +268,14 @@ def main(argv: list[str] | None = None) -> int:
     names = [s for s in config.H7_WATCHLIST + config.H7_CORE_LONG_ONLY
              if s not in config.H7_EXCLUDED]
     print(f"H7 WATCH session={eval_iso} run={run_date.isoformat()} "
-          f"(registered f1887c9d + v1.2 f880b4d1; alerts only, never trades)")
+          f"(registered f1887c9d + v1.2 f880b4d1; allocation-grade -- "
+          f"board resolver enforced; alerts only, never trades)")
     print(f"sleeve: ${config.H7_MONTHLY_AT_RISK - month_spent:.0f} of "
           f"${config.H7_MONTHLY_AT_RISK} left this month; "
           f"open H7c {open_c}/{config.H7C_MAX_CONCURRENT}")
+
+    # pass 1: assemble every name's card (per-symbol gates + decide actions)
+    cards: list[tuple[str, dict]] = []
     for symbol in names:
         try:
             closes = load_closes_adjusted(symbol, start_iso, eval_iso,
@@ -287,21 +292,41 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{symbol}: DATA-GAP ({type(e).__name__}: {e}) -- skipped")
             continue
         raw_spot = float(closes.iloc[-1]) * adjustment_factor(symbol, eval_iso)
-        card = assemble_name(symbol=symbol, closes=closes, chain=chain,
-                             today=eval_date, assertions=assertions,
-                             known_as_of=known_as_of,
-                             open_positions=open_syms, spot=raw_spot,
-                             open_h7c=open_c, month_spent=month_spent)
+        cards.append((symbol, assemble_name(
+            symbol=symbol, closes=closes, chain=chain, today=eval_date,
+            assertions=assertions, known_as_of=known_as_of,
+            open_positions=open_syms, spot=raw_spot,
+            open_h7c=open_c, month_spent=month_spent)))
+
+    # pass 2: board-level allocation (7b-0.1) -- ENTRY-OK survives only if
+    # the resolver accepts it; every displaced candidate shows its reason
+    candidates = [
+        {"symbol": symbol, "lane": lane_key[-1], "session": eval_iso,
+         "action": card[lane_key]["action"]}
+        for symbol, card in cards
+        for lane_key in ("lane_a", "lane_b", "lane_c")
+        if card[lane_key]["state"] == "ENTRY-OK"
+    ]
+    _, displaced = resolve_board(
+        candidates, open_h7c=open_c,
+        sleeve_left=config.H7_MONTHLY_AT_RISK - month_spent,
+        open_symbols=open_syms)
+    displaced_by_key = {(d["symbol"], d["lane"]): d["rejection"]
+                        for d in displaced}
+    for symbol, card in cards:
+        for lane_key in ("lane_a", "lane_b", "lane_c"):
+            reason = displaced_by_key.get((symbol, lane_key[-1]))
+            if reason and card[lane_key]["state"] == "ENTRY-OK":
+                card[lane_key]["state"] = f"DISPLACED({reason})"
         print(
             f"{symbol}: spot {card['spot']:.2f} IV90 {card['iv90']:.0%} "
             f"RV21 {card['rv21']:.0%} route={card['route']} | "
             f"a={card['lane_a']['state']} b={card['lane_b']['state']} "
             f"c={card['lane_c']['state']}"
         )
-        for lane in ("lane_a", "lane_b", "lane_c"):
-            action = card[lane]["action"]
-            if action is not None:
-                print(f"    {lane} action: {action}")
+        for lane_key in ("lane_a", "lane_b", "lane_c"):
+            if card[lane_key]["state"] == "ENTRY-OK":
+                print(f"    {lane_key} action: {card[lane_key]['action']}")
     return 0
 
 
