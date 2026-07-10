@@ -225,3 +225,51 @@ ASSIGNMENT_WATCH_PCT = 0.02
 # that can never fire.
 H5_ENTRY_TRIGGERS = {"VST": 140.0, "AMZN": 220.0}
 H5_ENTRY_IVR_MAX = 0.5
+
+# ---------------------------------------------------------------------------
+# H7 -- swing options on volatile AI names (REGISTERED 2026-07-09, ledger
+# trial_intent f1887c9d...; amendment e266770f... adds SMCI to the backtest
+# set). Three lanes: H7a drawdown+stabilization long, H7b coil long, H7c
+# rich-IV bull put spread. Values are FROZEN; changing any requires a logged
+# hypothesis version (see .claude/skills/ledger-discipline). Spec:
+# docs/superpowers/specs/2026-07-09-h7-swing-options-design.md (+v1.1).
+# ---------------------------------------------------------------------------
+H7_WATCHLIST = ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO"]
+H7_CORE_LONG_ONLY = ["VST", "CEG", "MSFT", "AMZN"]  # H7a/b eligible; H7c stays H5's book
+H7_EXCLUDED = ["HYLN"]                              # dead chain (~128 rows/day)
+
+H7A_DRAWDOWN_MIN = 0.25         # drawdown from 52wk high to arm lane a
+H7A_RECLAIM_LOOKBACK_D = 20     # stabilization = first close > prior 20d high
+H7B_RANGE_MAX = 0.15            # (60d high - low)/spot coil ceiling
+H7B_RANGE_LOOKBACK_D = 60
+H7B_RV_PCTILE_MAX = 0.25        # 20d RV vs own 1yr history (min 6mo listed)
+H7_RV_LOOKBACK_D = 21           # trailing realized vol (close-to-close, annualized)
+H7_IV_CHEAP_K = 1.00            # IV <= RV*k -> single long call
+H7_IV_PAR_K = 1.15              # cheap_k < IV <= par_k -> call debit spread
+H7_IV_RICH_K = 1.25             # IV >= RV*k -> H7c short-premium branch
+
+H7_LONG_DELTA_BAND = (0.55, 0.70)
+H7_LONG_DTE_BAND = (60, 120)
+H7_SPREAD_LONG_DELTA = 0.60
+H7_SPREAD_SHORT_DELTA = 0.25
+H7_LONG_TP_PCT = 1.00           # +100% take profit on long premium
+H7_SPREAD_TP_FRAC_MAX = 0.75    # close debit spread at 75% of max value
+H7_CLOSE_AT_DTE = 30            # time exit for the long lanes
+
+H7C_SHORT_DELTA_MAX = 0.30
+H7C_DTE_BAND = (30, 45)
+H7C_CREDIT_FLOOR_FRAC = 0.30    # net credit >= 30% of width or no trade
+H7C_WIDTH_FRAC_OF_SPOT = 0.10
+H7C_TP_FRAC = 0.50              # buy back at 50% of credit
+H7C_STOP_CREDIT_MULT = 2.0      # stop at 2x credit
+H7C_MAX_CONCURRENT = 1          # one short-premium position basket-wide
+
+H7_MONTHLY_AT_RISK = 6000       # owner-typed 2026-07-09; all lanes combined
+H7_MAX_OPEN_PER_UNDERLYING = 1
+H7_ADMIT_MIN_CONTRACTS = 5      # per-lane admission: >=5 NTM monthly contracts
+H7_ADMIT_MAX_SPREAD_PCT = 0.05  # ...with spread <= 5% and OI >= MIN_OPEN_INTEREST
+H7_EARNINGS_BAN_SESSIONS = 5    # no new entries within 5 sessions pre-report
+
+H7_BACKTEST_SYMBOLS = ["NOW", "NVDA", "PLTR", "MSFT", "AMZN", "VST", "CEG", "SMCI"]
+H7_BACKTEST_START = "2018-01-02"
+H7_BACKTEST_END = "2026-06-30"
