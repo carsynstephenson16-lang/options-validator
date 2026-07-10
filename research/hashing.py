@@ -109,3 +109,18 @@ def data_window_hash(window: dict) -> str:
     """Hash of the data-window identity. Once ThetaData is wired this also folds in
     a content digest of the cached chains; in Phase 1A it hashes the identity dict."""
     return sha256_hex(canonical_json(window))
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic source-hash contract v2 (7b-2, owner decision 2026-07-10).
+# The legacy SOURCE_HASH_PATHS above stays byte-identical so every historical
+# ledger entry keeps verifying; H7 diagnostic records bind this WIDER surface
+# (everything that can affect a diagnostic verdict) and carry an explicit
+# source_hash_version so the contract is versioned, never retro-changed.
+# ---------------------------------------------------------------------------
+DIAGNOSTIC_SOURCE_PATHS_V2 = SOURCE_HASH_PATHS + ("options_researcher", "tools")
+DIAGNOSTIC_SOURCE_HASH_VERSION = 2
+
+
+def diagnostic_source_hash(root=None) -> str:
+    return source_hash(paths=DIAGNOSTIC_SOURCE_PATHS_V2, root=root)

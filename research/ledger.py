@@ -21,7 +21,13 @@ TRIAL_TYPES = {"run", "trial_intent"}
 # budget counts TOUCHED hypotheses (attempts union reveals), never just
 # successful reveals, so a crashed attempt still burned its look.
 OOS_TYPES = {"oos_attempt", "oos_reveal"}
-VALID_ENTRY_TYPES = TRIAL_TYPES | OOS_TYPES
+# Diagnostic records (7b-2, owner decision 2026-07-10): isolated-lane H7
+# diagnostics are NON-TRIAL entries -- they never increment trial_count and
+# never carry IS/OOS semantics. An attempt is committed BEFORE execution and
+# binds lane/scope/window/estimand plus every verdict-affecting hash; a
+# result is write-once and refers to exactly one prior attempt.
+DIAGNOSTIC_TYPES = {"diagnostic_attempt", "diagnostic_result"}
+VALID_ENTRY_TYPES = TRIAL_TYPES | OOS_TYPES | DIAGNOSTIC_TYPES
 VALID_RISK_BASES = {"capital_at_risk", "economic_max_loss"}
 RESERVED_KEYS = {"seq", "prev_hash", "record_hash"}
 CHAIN_KEYS = RESERVED_KEYS | {"trial_count", "entry_type"}
@@ -61,11 +67,36 @@ OOS_REVEAL_KEYS = CHAIN_KEYS | {
     "budget_used",
     "budget_total",
 }
+DIAGNOSTIC_ATTEMPT_KEYS = CHAIN_KEYS | {
+    "timestamp",
+    "diagnostic_id",
+    "hypothesis_id",
+    "lane",
+    "scope",
+    "window",
+    "estimand",
+    "code_sha",
+    "config_hash",
+    "cost_model_hash",
+    "source_hash_v2",
+    "source_hash_version",
+    "data_manifest_hash",
+    "registration_hashes",
+}
+DIAGNOSTIC_RESULT_KEYS = CHAIN_KEYS | {
+    "timestamp",
+    "diagnostic_id",
+    "attempt_hash",
+    "result",
+}
+H7_LANES = {"a", "b", "c"}
 ALLOWED_KEYS_BY_TYPE = {
     "trial_intent": TRIAL_INTENT_KEYS,
     "run": RUN_KEYS,
     "oos_attempt": OOS_ATTEMPT_KEYS,
     "oos_reveal": OOS_REVEAL_KEYS,
+    "diagnostic_attempt": DIAGNOSTIC_ATTEMPT_KEYS,
+    "diagnostic_result": DIAGNOSTIC_RESULT_KEYS,
 }
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -108,8 +139,8 @@ def _expected_trial_count(records: list[dict], entry_type: str):
     count = sum(1 for r in records if r.get("entry_type") in TRIAL_TYPES)
     if entry_type in TRIAL_TYPES:
         return count + 1
-    if entry_type in OOS_TYPES:
-        return count
+    if entry_type in OOS_TYPES | DIAGNOSTIC_TYPES:
+        return count   # diagnostics are NON-trials: the count never moves
     return None
 
 
@@ -228,6 +259,8 @@ def _verify_semantic_records(records: list[dict]) -> None:
     touched_hypotheses = set()   # attempts union reveals: the budget basis
     revealed_hypotheses = set()
     oos_budget_total = None
+    diagnostic_attempts: dict[str, str] = {}   # diagnostic_id -> record_hash
+    diagnostic_results: set[str] = set()       # write-once per diagnostic_id
 
     for i, rec in enumerate(records):
         entry_type = rec.get("entry_type")
@@ -320,6 +353,52 @@ def _verify_semantic_records(records: list[dict]) -> None:
             touched_hypotheses.add(hypothesis_id)
             if entry_type == "oos_reveal":
                 revealed_hypotheses.add(hypothesis_id)
+        elif entry_type == "diagnostic_attempt":
+            _require_timestamp(rec, "timestamp", i)
+            diagnostic_id = _require_canonical_text(rec, "diagnostic_id", i)
+            if diagnostic_id in diagnostic_attempts:
+                raise LedgerError(
+                    f"duplicate diagnostic_attempt at seq {i}: {diagnostic_id!r}")
+            _require_canonical_text(rec, "hypothesis_id", i)
+            lane = _require_canonical_text(rec, "lane", i)
+            if lane not in H7_LANES:
+                raise LedgerError(f"unknown diagnostic lane at seq {i}: {lane!r}")
+            _require_scope(rec, i)
+            _require_window(rec, "window", i)
+            _require_canonical_text(rec, "estimand", i)
+            _require_git_sha(rec, "code_sha", i)
+            _require_sha256_hex(rec, "config_hash", i)
+            _require_sha256_hex(rec, "cost_model_hash", i)
+            _require_sha256_hex(rec, "source_hash_v2", i)
+            _require_positive_int(rec, "source_hash_version", i)
+            _require_sha256_hex(rec, "data_manifest_hash", i)
+            reg = rec.get("registration_hashes")
+            if (not isinstance(reg, list) or not reg
+                    or not all(isinstance(h, str) and SHA256_RE.fullmatch(h)
+                               for h in reg)):
+                raise LedgerError(
+                    f"registration_hashes must be a non-empty list of "
+                    f"sha256 hex strings at seq {i}")
+            diagnostic_attempts[diagnostic_id] = rec.get("record_hash", "")
+        elif entry_type == "diagnostic_result":
+            _require_timestamp(rec, "timestamp", i)
+            diagnostic_id = _require_canonical_text(rec, "diagnostic_id", i)
+            if diagnostic_id not in diagnostic_attempts:
+                raise LedgerError(
+                    f"diagnostic_result at seq {i} has no prior "
+                    f"diagnostic_attempt: {diagnostic_id!r}")
+            if diagnostic_id in diagnostic_results:
+                raise LedgerError(
+                    f"duplicate diagnostic_result at seq {i}: "
+                    f"{diagnostic_id!r} (results are write-once)")
+            attempt_hash = _require_sha256_hex(rec, "attempt_hash", i)
+            if attempt_hash != diagnostic_attempts[diagnostic_id]:
+                raise LedgerError(
+                    f"diagnostic_result attempt_hash mismatch at seq {i}: "
+                    f"does not bind the recorded attempt for "
+                    f"{diagnostic_id!r}")
+            _require_dict(rec, "result", i)
+            diagnostic_results.add(diagnostic_id)
 
 
 def append(body: dict, base_dir="ledger") -> str:
