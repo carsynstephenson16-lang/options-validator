@@ -25,6 +25,37 @@ from options_researcher.h7_earnings import entries_banned, load_calendar
 H7_POSITIONS_PATH = Path("data/positions/h7_positions.csv")
 
 
+def evaluation_session(run_date: date) -> date:
+    """The latest COMPLETED XNYS session strictly before `run_date`. The
+    watcher never evaluates the run date itself: its EOD is not final (the
+    top-up policy in data/recent_topup.py excludes it for the same reason),
+    and an intraday snapshot must never masquerade as a close."""
+    from data.cache_runner import trading_days
+
+    run_iso = run_date.isoformat()
+    days = trading_days((run_date - timedelta(days=14)).isoformat(), run_iso)
+    prior = [d for d in days if d < run_iso]
+    return date.fromisoformat(prior[-1])
+
+
+def check_alignment(closes: pd.Series, chain_day: str | None,
+                    eval_iso: str) -> str | None:
+    """Gap reason, or None when closes end EXACTLY at the evaluation session
+    and the chain snapshot is EXACTLY that session. No fallback, no mixing:
+    every decide_lane_* input shares one completed session or nothing runs."""
+    last = str(closes.index[-1])[:10]
+    if last > eval_iso:
+        return (f"closes contain {last}, after session {eval_iso} -- possible "
+                f"intraday row, refuse (re-pull closes)")
+    if last < eval_iso:
+        return (f"closes end {last}, need {eval_iso} -- stale cache "
+                f"(run the closes refresh / data.recent_topup)")
+    if chain_day != eval_iso:
+        return (f"chain snapshot {chain_day or 'MISSING'}, need {eval_iso} "
+                f"-- stale cache (run data.recent_topup)")
+    return None
+
+
 def _lane_state(*, armed: bool, admitted: bool, banned: bool, has_open: bool,
                 route: str, budget_left: float, basket_full: bool) -> str:
     if has_open:

@@ -95,6 +95,21 @@ def rows_to_frame(rows) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["date", "close"])
 
 
+def drop_same_day_rows(rows: list[tuple[str, float]],
+                       today_iso: str) -> list[tuple[str, float]]:
+    """Remove rows dated on/after the fetch's NY date: a same-day 'close'
+    fetched intraday is a partial print, and once stored it poisons every
+    later signal read (7b-0 NO-GO remediation). Applied by BOTH fetchers."""
+    return [(d, c) for d, c in rows if d < today_iso]
+
+
+def _now_ny_iso() -> str:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+
 def fetch_underlying_eod(symbol: str, start_iso: str, end_iso: str) -> str:
     """One-shot BLIND pull of daily closes via the installed ThetaData
     client's stock_history_eod. Response shape verified LIVE 2026-07-04:
@@ -114,7 +129,8 @@ def fetch_underlying_eod(symbol: str, start_iso: str, end_iso: str) -> str:
                                      _date.fromisoformat(end_iso))
     rows = [(ts.date().isoformat(), float(c))
             for ts, c in zip(df["last_trade"], df["close"])]
-    return store_closes(symbol, rows_to_frame(rows))
+    return store_closes(
+        symbol, rows_to_frame(drop_same_day_rows(rows, _now_ny_iso())))
 
 
 AV_QUERY_URL = "https://www.alphavantage.co/query"
@@ -255,7 +271,8 @@ def fetch_underlying_eod_yahoo(symbol: str) -> str:
     with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310 (https)
         payload = json.load(resp)
     rows = unsplit(yahoo_rows_from_payload(payload), symbol)
-    return store_closes(symbol, rows_to_frame(rows))
+    return store_closes(
+        symbol, rows_to_frame(drop_same_day_rows(rows, _now_ny_iso())))
 
 
 def parity_spot_from_chain(chain: pd.DataFrame, today_iso: str, *,
