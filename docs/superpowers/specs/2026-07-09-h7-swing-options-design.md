@@ -1,7 +1,11 @@
 # H7 — swing options on volatile AI names (three lanes) — design
 
 **Date:** 2026-07-09
-**Status:** approved design, pending spec review; numbers NOT yet frozen
+**Status:** REGISTERED 2026-07-09 (ledger `f1887c9d`) + amendments v1.1
+(`e266770f`, SMCI backtest name) and v1.2 (`f880b4d1`, owner gate decisions).
+Frozen numbers live in `config.py` (H7 block), locked by
+`tests/test_config_h7.py`. Backtest launch gated by
+`docs/superpowers/plans/2026-07-10-h7-7b-delta.md` (7b-0..7b-3).
 **Scope class:** NEW hypothesis track, authorized by owner scope override
 (facts.log `SCOPE_OVERRIDE 2026-07-09`, owner decision "option C" overriding
 the operating manual's no-new-builds-before-first-verdict standing rule).

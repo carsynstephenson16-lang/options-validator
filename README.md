@@ -173,7 +173,7 @@ paper-trading window.
    `positions.csv`; covered-call rows only appear after a declared 100-share
    lot. Reuses the M7 CSS; no network/JS deps.
 
-**Scope status: two live hypotheses, forward paper windows.**
+**Scope status: three live hypotheses, forward paper windows.**
 **H5 Sector Income Core scanner/researcher**
 (`docs/superpowers/specs/2026-07-04-h5-sector-income-core-design.md`; ledger
 trial 6; H4 superseded at zero cycles) and **H6 post-earnings tactical long
@@ -184,6 +184,16 @@ H6 entry evaluation still needs: NVDA/PLTR earnings CSVs (sourced), NVDA
 split entries in the closes SPLITS registry, and feature builds for the
 IVR gate — until then the pre-earnings lane is blocked by design (unknown
 IV-rank never passes).
+**H7 swing options on volatile AI names** (ledger trial 8, registered
+2026-07-09, `f1887c9d` + amendments v1.1/v1.2; owner scope override
+2026-07-09): three separately-judged lanes on CRWV/TEM/PLTR/NOW/SMCI/NVDA/
+AMD/AVGO (+ core names, long lanes only). Daily screen:
+`uv run python -m options_researcher.h7_watch` (7b-0: session-aligned,
+executes the registered decide functions, fails closed on unknown earnings
+or book errors). The pre-registered isolated-lane diagnostic backtest is
+BLOCKED behind the 7b-1/7b-2 gates
+(`docs/superpowers/plans/2026-07-10-h7-7b-delta.md`); watcher output before
+7b-0 was not decision-grade (ledger `H7_7B_NOGO`).
 Current recorded holdings: 39 VST shares and no options. Remaining: run the
 scanner, decide whether anything is attractive enough to add, then start the
 forward paper window only after an actual tracked option is entered.
