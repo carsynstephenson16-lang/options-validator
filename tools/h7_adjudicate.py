@@ -21,7 +21,11 @@ Usage (7b-3 only, after the audit receipt + committed diagnostic_attempt):
 
 from __future__ import annotations
 
-import config
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config  # noqa: E402
 from metrics import scoreboard
 
 VERDICTS = ("REJECTED", "INCONCLUSIVE_INSUFFICIENT", "INCONCLUSIVE_NO_EDGE",
