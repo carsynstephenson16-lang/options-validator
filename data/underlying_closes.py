@@ -131,7 +131,18 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 # split-adjusted trading day is the key; ratio multiplies earlier closes.
 # Provenance: AMZN 20-for-1 split, effective first trade 2022-06-06
 # (Official-source: Amazon 2022-03-09 8-K / press release; SEC EDGAR).
-SPLITS = {"AMZN": [("2022-06-06", 20.0)]}
+# NVDA 4:1 first split-adjusted trade 2021-07-20 and 10:1 2024-06-10
+# (Official-source: company PRs). NOW 5:1 first split-adjusted trade
+# 2025-12-18 (Official-source: SEC 8-K 2025-12-05; OCC memo #57868).
+# SMCI 10:1 first split-adjusted trade 2024-10-01 (Official-source: company
+# 8-K). All boundaries independently confirmed by parity-spot discontinuities
+# in the local chain cache (ledger facts REPORT_ADJUDICATION 2026-07-09).
+SPLITS = {
+    "AMZN": [("2022-06-06", 20.0)],
+    "NVDA": [("2021-07-20", 4.0), ("2024-06-10", 10.0)],
+    "NOW": [("2025-12-18", 5.0)],
+    "SMCI": [("2024-10-01", 10.0)],
+}
 
 
 def yahoo_rows_from_payload(payload: dict) -> list[tuple[str, float]]:
