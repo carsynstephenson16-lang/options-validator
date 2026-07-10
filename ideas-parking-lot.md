@@ -74,6 +74,75 @@ never a ranking.
   threshold + a demonstration that it adds signal *beyond* the existing VRP
   proxy and IV-rank badges (don't add a redundant axis).
 
+## Volatile-name drawdown-reversal scanner + probability layer (parked 2026-07-09)
+
+Context: owner proposal 2026-07-09 — a daily watcher over high-beta AI names
+(CRWV, TEM, PLTR, NOW, VST, CEG; possibly microcaps) that catches names at the
+bottom of a drawdown and buys calls/LEAPS into the recovery, short- and
+long-horizon variants; plus a TradingView/Pine chart layer, recovery-probability
+forecasts, and Kelly/Sharpe-based identification. Standing rule (Operating
+Manual 2026-07-06): nothing new gets built until the first verdict lands.
+Related, already-recorded facts: the 2026-07-08 H6 liquidity screen
+(facts `H6_DATA_PULL`; H6 registration in `experiments.jsonl`) tested most of
+this universe on real chains — **SMCI/NOW/CRWV/TEM/HYLN failed the liquidity
+gates; CEG's 45–90DTE call legs failed MAX_SPREAD_PCT; NVDA/PLTR/AMZN passed
+and are live in H6** (post-earnings tactical long calls).
+
+### Mechanical drawdown-reversal entry signal (H7 candidate)
+- **What:** a pre-registerable entry trigger of the form
+  drawdown-from-52w-high ≥ X% AND mechanical reversal confirmation (e.g. close
+  above the N-day high) AND IVR ≤ Y AND both-leg liquidity gates; instrument =
+  defined-risk long calls / LEAPS; exits and kill criteria frozen at
+  registration; verdict gates on losses. The systematic version of "catch the
+  bottom, ride the recovery."
+- **Why parked:** does not move H5/H6 to a verdict. Chart-reading as
+  discretion was already rejected 2026-07-07 (belongs in the equity-research
+  repo) — this survives only as coded, testable signals. Most of the proposed
+  universe fails today's liquidity gates (above). CRWV/TEM listing history
+  (Assumption: 2025 / 2024 IPOs — verify) is too short to backtest drawdown
+  "cycles"; names with real history (MSFT/AMZN 2018+, PLTR in the legacy
+  cache) could support a base-rate study, but the window design must respect
+  the sealed legacy holdout (reveal budget 0/3).
+- **Gate before building:** first H5/H6 verdict lands (or an explicit owner
+  override logged in the ledger) + owner decision + pre-registration with a
+  mechanical universe rule (e.g. "optionable, passes OI/spread gates on both
+  legs"), frozen X/Y/N, exits, and the numeric result that rejects it. Any
+  threshold an LLM proposes is LLM-asserted until tested; owner enters the
+  frozen numbers herself.
+
+### Market-implied probability readout (small; display-only)
+- **What:** risk-neutral P(close ≤ level by expiry) for the four names, read
+  from the cached chains — e.g. "P(VST ≤ $140 by Dec)" next to `entry_watch`.
+  The honest substitute for asking an LLM to predict recoveries with
+  probabilities. Labeled risk-neutral ≠ real-world on the display.
+- **Why parked (lightly):** display-only and cheap (no new data), but it must
+  never grade or rank without pre-registration; needs a one-page spec first.
+- **Gate:** owner nod + short spec.
+
+### TradingView / Pine chart layer
+- No TradingView MCP is connected to this environment (checked 2026-07-09),
+  and Pine cannot join ThetaData chains. The 2026-07-07 decision already
+  routed discretionary chart reading to the equity-research repo. If a chart
+  signal matters here, it gets coded (pandas on cached closes) and
+  pre-registered like any other rule — see H7 above.
+
+### Kelly / Sharpe layer
+- Kelly and Sharpe size and evaluate a *measured* edge; they cannot identify
+  mispricings. Kelly becomes relevant only after a hypothesis survives its
+  window with a positive expectancy CI after costs — then it's a `config.py`
+  sizing decision with its own registration. Until then
+  MAX_LOSS_PER_TRADE / RISK_SLEEVE govern.
+
+### Microcaps / combining projects
+- HYLN's entire chain was ~128 rows/day in the 2026-07-08 pull; microcap
+  options broadly cannot pass MIN_OPEN_INTEREST / MAX_SPREAD_PCT, so a
+  microcap options scanner has no tradable output under this repo's cost
+  model. Microcap *equity* ideas belong in the equity-research book; the
+  cross-book review covers the portfolio view.
+
+**Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
+audit, whichever comes first.
+
 ## Explicitly rejected (not parked)
 
 From the 2026-07-06 deep-research report (and the 2026-07-07 10-point
