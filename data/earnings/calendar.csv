@@ -1,0 +1,14 @@
+symbol,report_date,status,source,checked
+NOW,2026-07-22,confirmed,company_pr,2026-07-09
+TEM,2026-07-30,confirmed,company_pr,2026-07-09
+AMD,2026-08-04,confirmed,company_pr,2026-07-09
+SMCI,2026-08-04,estimated,nasdaq_calendar,2026-07-09
+SMCI,2026-08-11,estimated,tipranks,2026-07-09
+PLTR,2026-08-03,estimated,nasdaq_calendar,2026-07-09
+PLTR,2026-08-10,estimated,tipranks,2026-07-09
+CRWV,2026-08-11,estimated,nasdaq_calendar,2026-07-09
+CRWV,2026-08-18,estimated,tipranks,2026-07-09
+NVDA,2026-08-26,estimated,nasdaq_calendar,2026-07-09
+AVGO,2026-09-02,estimated,ir_language_unverified,2026-07-09
+CRWD,2026-08-26,estimated,nasdaq_calendar,2026-07-09
+MU,2026-09-29,estimated,tipranks,2026-07-09
