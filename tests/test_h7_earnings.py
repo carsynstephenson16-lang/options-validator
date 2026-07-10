@@ -5,7 +5,7 @@ EARLIEST estimate for the symbol and stays on until past the LATEST."""
 import unittest
 from datetime import date
 
-from options_researcher.h7_earnings import entries_banned, load_calendar
+from options_researcher.h7_earnings import earnings_covered, entries_banned, load_calendar
 
 
 class TestEarningsBan(unittest.TestCase):
@@ -60,3 +60,29 @@ class TestReviewCounterexamples(unittest.TestCase):
         cal = {"X": {"confirmed": [date(2026, 7, 22), date(2026, 10, 21)],
                      "estimated": []}}
         self.assertFalse(entries_banned("X", date(2026, 9, 1), cal))
+
+
+class TestEarningsCoverage(unittest.TestCase):
+    """NO-GO remediation: a symbol whose next report the calendar does not
+    know must FAIL CLOSED (no entry), not silently pass as never-banned."""
+
+    def test_unknown_symbol_is_not_covered(self):
+        self.assertFalse(earnings_covered("ZZZZ", date(2026, 7, 8), {}))
+
+    def test_future_date_covers(self):
+        cal = {"ZZZZ": {"confirmed": [date(2026, 9, 18)], "estimated": []}}
+        self.assertTrue(earnings_covered("ZZZZ", date(2026, 7, 8), cal))
+
+    def test_recent_past_report_covers(self):
+        # reported 20 days ago -> next report ~a quarter away, ban horizon clear
+        cal = {"ZZZZ": {"confirmed": [date(2026, 6, 18)], "estimated": []}}
+        self.assertTrue(earnings_covered("ZZZZ", date(2026, 7, 8), cal))
+
+    def test_stale_past_only_calendar_does_not_cover(self):
+        # last known report 120 days ago: the NEXT report is due and unknown
+        cal = {"ZZZZ": {"confirmed": [date(2026, 3, 10)], "estimated": []}}
+        self.assertFalse(earnings_covered("ZZZZ", date(2026, 7, 8), cal))
+
+    def test_estimated_rows_also_cover(self):
+        cal = {"ZZZZ": {"confirmed": [], "estimated": [date(2026, 8, 11)]}}
+        self.assertTrue(earnings_covered("ZZZZ", date(2026, 7, 8), cal))

@@ -85,3 +85,18 @@ def entries_banned(symbol: str, on: date, cal: dict[str, dict]) -> bool:
     if not rec:
         return False
     return any(start <= on <= end for start, end in _ban_windows(rec))
+
+
+def earnings_covered(symbol: str, on: date, cal: dict[str, dict]) -> bool:
+    """Fail-closed coverage check (7b-0). True iff the calendar plausibly
+    knows the symbol's NEXT report: any date on/after `on`, or one within the
+    last H7_EARNINGS_KNOWN_HORIZON_D calendar days (just reported -- the next
+    report is a full quarter out, beyond the ban horizon). A symbol with no
+    rows, or only stale past rows, is NOT covered: the watcher must block
+    entries rather than trade blind into an unknown report date."""
+    rec = cal.get(symbol.upper())
+    if not rec:
+        return False
+    dates = rec["confirmed"] + rec["estimated"]
+    horizon = timedelta(days=config.H7_EARNINGS_KNOWN_HORIZON_D)
+    return any(d >= on or (on - d) <= horizon for d in dates)
