@@ -22,8 +22,6 @@ from options_researcher import h7_signals as sig
 from options_researcher.chains import load_range
 from options_researcher.h7_earnings import entries_banned, load_calendar
 
-_IV90_DTE_BAND = (72, 108)  # +/-18d around the registration's ~90d IV measure
-
 
 def _lane_state(*, armed: bool, admitted: bool, banned: bool,
                 has_open: bool, route: str) -> str:
@@ -38,24 +36,11 @@ def _lane_state(*, armed: bool, admitted: bool, banned: bool,
     return "ENTRY-OK"
 
 
-def _atm_iv_90d(chain: pd.DataFrame, spot: float, today: date) -> float:
-    df = chain[(chain.right == "C") & (chain.bid > 0) & (chain.ask > 0)].copy()
-    if df.empty:
-        return 0.0
-    exp = pd.to_datetime(df.expiration).dt.date
-    df = df.assign(dte=exp.map(lambda d: (d - today).days))
-    df = df[df.dte.between(*_IV90_DTE_BAND)]
-    if df.empty:
-        return 0.0
-    row = df.loc[(df.strike - spot).abs().idxmin()]
-    return float(row.iv)
-
-
 def assemble_name(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
                   today: date, calendar: dict, open_positions: tuple) -> dict:
     spot = float(closes.iloc[-1])
     rv = sig.rv_annualized(closes, config.H7_RV_LOOKBACK_D)
-    iv = _atm_iv_90d(chain, spot, today)
+    iv = sig.atm_iv_90d(chain, spot, today)
     route = sig.iv_route(iv=iv, rv=rv)
     banned = entries_banned(symbol, today, calendar)
     has_open = symbol in open_positions

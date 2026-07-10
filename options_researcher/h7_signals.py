@@ -92,6 +92,23 @@ def iv_route(iv: float, rv: float) -> str:
     return "none"
 
 
+def atm_iv_90d(chain: pd.DataFrame, spot: float, today: date,
+               dte_band: tuple[int, int] = (72, 108)) -> float:
+    """The registration's IV measure: ATM call IV at the expiration nearest
+    ~90 DTE (+/-18d). Returns 0.0 when no two-sided quotes exist in band --
+    iv_route treats that as 'none' (no trade), never as cheap."""
+    df = chain[(chain.right == "C") & (chain.bid > 0) & (chain.ask > 0)].copy()
+    if df.empty:
+        return 0.0
+    exp = pd.to_datetime(df.expiration).dt.date
+    df = df.assign(dte=exp.map(lambda d: (d - today).days))
+    df = df[df.dte.between(*dte_band)]
+    if df.empty:
+        return 0.0
+    row = df.loc[(df.strike - spot).abs().idxmin()]
+    return float(row.iv)
+
+
 def lane_admission(chain: pd.DataFrame, *, spot: float, today: date,
                    dte_band: tuple[int, int], right: str = "C") -> tuple[bool, int]:
     """Admission per lane per day: >= H7_ADMIT_MIN_CONTRACTS NTM monthly
