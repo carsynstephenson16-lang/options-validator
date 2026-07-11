@@ -31,10 +31,40 @@ from metrics import scoreboard
 VERDICTS = ("REJECTED", "INCONCLUSIVE_INSUFFICIENT", "INCONCLUSIVE_NO_EDGE",
             "SURVIVED_NON_BLIND_DIAGNOSTIC")
 
+_GAP_FIELDS = ("symbol", "lane", "session", "stage", "reason")
 
-def adjudicate_lane(trades: list[dict], lane: str) -> dict:
+
+class CoverageError(ValueError):
+    """The result does not account for every eligible session (7b-2R
+    finding 6). A data hole must never be adjudicated as if it were an
+    opportunity-free market."""
+
+
+def refuse_unexplained_gaps(coverage: dict | None, gaps) -> None:
+    """Raise CoverageError unless every eligible session is either
+    simulated or covered by a well-formed structured gap record."""
+    if coverage is None:
+        raise CoverageError(
+            "result carries no coverage accounting -- refusing to "
+            "adjudicate (was this produced by the gated runner?)")
+    for g in gaps or ():
+        missing = [f for f in _GAP_FIELDS if not g.get(f)]
+        if missing:
+            raise CoverageError(f"malformed gap record (no {missing}): {g}")
+    for sym, cov in sorted(coverage.items()):
+        if cov.get("unaccounted"):
+            raise CoverageError(
+                f"{sym}: {len(cov['unaccounted'])} eligible session(s) "
+                f"neither simulated nor gap-explained, e.g. "
+                f"{cov['unaccounted'][:5]}")
+
+
+def adjudicate_lane(trades: list[dict], lane: str, *,
+                    coverage: dict | None = None, gaps=()) -> dict:
     """Map one lane's closed-trade dicts onto the frozen H7 vocabulary.
+    Refuses (CoverageError) results with unexplained eligible-session gaps.
     Pure: no I/O, no ledger writes (recording is the caller's job)."""
+    refuse_unexplained_gaps(coverage, gaps)
     board = scoreboard(trades, label=f"H7{lane} isolated diagnostic")
     n_losses = board["n_losses"]
     ci_lo, ci_hi = board["expectancy_CI90"]
@@ -73,7 +103,9 @@ def main(argv: list[str] | None = None) -> int:
                              '{"lane": "a", "trades": [...]}')
     args = parser.parse_args(argv)
     payload = json.loads(Path(args.results_json).read_text())
-    out = adjudicate_lane(payload["trades"], payload["lane"])
+    out = adjudicate_lane(payload["trades"], payload["lane"],
+                          coverage=payload.get("coverage"),
+                          gaps=payload.get("gaps", ()))
     print(json.dumps(out, indent=2))
     return 0
 

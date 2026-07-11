@@ -359,7 +359,9 @@ class MonthlyRiskAcrossChunks(unittest.TestCase):
                        blocked_until, *, month_risk_seed=None, **kw):
             seeds.append(dict(month_risk_seed or {}))
             return {"trades": [], "cancelled": [], "quarantined": [],
-                    "month_risk": {"2022-01": 4200.0}}
+                    "month_risk": {"2022-01": 4200.0}, "gaps": [],
+                    "coverage": {"eligible": 0, "evaluated": 0,
+                                 "unaccounted": []}}
 
         adj, raw = closes_pair(T_SIG)
         with mock.patch.object(run_h7, "_run_chunk", fake_chunk), \
@@ -370,6 +372,70 @@ class MonthlyRiskAcrossChunks(unittest.TestCase):
         self.assertEqual(len(seeds), 2)          # 2021 + 2022 chunks
         self.assertEqual(seeds[0], {})
         self.assertEqual(seeds[1], {"2022-01": 4200.0})   # carried over
+
+
+class DataGapRecords(unittest.TestCase):
+    """7b-2R finding 6: input holes emit structured gap records; an empty
+    chunk is per-session records, never a silent no-op."""
+
+    def _chunk(self, chains, adj, raw, eligible, start, cutoff, end):
+        def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False,
+                        eligible=None, refused=None):
+            return {d: c for d, c in chains.items()
+                    if start_iso <= d <= end_iso}
+
+        with mock.patch.object(pandas_feed, "load_cached_chains",
+                               fake_loader):
+            return run_h7._run_chunk(
+                "a", SYM, start, cutoff, end, None,
+                closes_adj=adj, closes_raw=raw, assertions=FAR_REPORT,
+                allow_oos=False, eligible=eligible)
+
+    def test_missing_chain_session_is_gap_recorded(self):
+        days = [s for s in SESSIONS if "2022-06-02" <= s <= "2022-06-13"]
+        chains = default_chains("2022-06-02", "2022-06-13")
+        del chains["2022-06-08"]
+        # flat closes: never armed (QUIET is a non-opportunity, not a gap)
+        adj, raw = closes_pair(T_SIG, post=[130.0] * 6, reclaim=130.0,
+                               pre_lo=130.0)
+        out = self._chunk(chains, adj, raw, set(days),
+                          "2022-06-02", "2022-06-13", "2022-09-30")
+        self.assertEqual(out["trades"], [])
+        # a chain-less day has no feed bars, so the engine cannot even
+        # iterate it: it surfaces as session_not_simulated -- what matters
+        # is that it is RECORDED, never a silent no-trade
+        recs = [g for g in out["gaps"] if g["session"] == "2022-06-08"]
+        self.assertTrue(recs)
+        self.assertEqual(recs[0]["reason"], "session_not_simulated")
+        self.assertEqual(out["coverage"]["unaccounted"], [])
+        self.assertEqual(out["coverage"]["evaluated"], len(days) - 1)
+
+    def test_empty_chunk_emits_per_session_gap_records(self):
+        days = [s for s in SESSIONS if "2022-06-02" <= s <= "2022-06-13"]
+        adj, raw = closes_pair(T_SIG, post=[70.0] * 6)
+        out = self._chunk({}, adj, raw, set(days),
+                          "2022-06-02", "2022-06-13", "2022-06-13")
+        self.assertEqual(len(out["gaps"]), len(days))
+        self.assertTrue(all(g["reason"] == "no_chains_in_window"
+                            for g in out["gaps"]))
+        self.assertEqual(out["coverage"],
+                         {"eligible": len(days), "evaluated": 0,
+                          "unaccounted": []})
+
+    def test_unsimulated_tail_sessions_are_gap_recorded(self):
+        # feed data ends 06-13 but the decision domain runs to 06-21: the
+        # engine cannot iterate past its data; those sessions must surface
+        days = [s for s in SESSIONS if "2022-06-02" <= s <= "2022-06-21"]
+        chains = default_chains("2022-06-02", "2022-06-13")
+        adj, raw = closes_pair(T_SIG, post=[130.0] * 12, reclaim=130.0,
+                               pre_lo=130.0)
+        out = self._chunk(chains, adj, raw, set(days),
+                          "2022-06-02", "2022-06-21", "2022-09-30")
+        tail = [s for s in days if s > "2022-06-13"]
+        recorded = {g["session"] for g in out["gaps"]
+                    if g["reason"] == "session_not_simulated"}
+        self.assertTrue(set(tail) <= recorded)
+        self.assertEqual(out["coverage"]["unaccounted"], [])
 
 
 class WarmupBoundary(unittest.TestCase):

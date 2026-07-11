@@ -94,14 +94,29 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
                     "stage": "chain_load",
                     "reason": "present_but_excluded_by_manifest"}
                    for day in refused]
-    empty = {"trades": [], "cancelled": [], "quarantined": quarantined,
-             "month_risk": dict(month_risk_seed or {})}
+    # decision-coverage domain: the eligible sessions this chunk OWNS
+    # (through its decision cutoff; the exit-only tail past `cutoff` belongs
+    # to the next chunk or is the disclosed final-window suppression)
+    domain = ([] if eligible is None
+              else sorted(d for d in eligible if sim_start <= d <= cutoff))
+
+    def whole_domain_gap(reason: str) -> dict:
+        # 7b-2R finding 6: an empty chunk is N per-session gap records,
+        # never a silent no-op indistinguishable from "no opportunity"
+        return {"trades": [], "cancelled": [], "quarantined": quarantined,
+                "month_risk": dict(month_risk_seed or {}),
+                "gaps": [{"symbol": symbol, "lane": lane, "session": d,
+                          "stage": "chunk", "reason": reason}
+                         for d in domain],
+                "coverage": {"eligible": len(domain), "evaluated": 0,
+                             "unaccounted": []}}
+
     if not chains:
-        return empty
+        return whole_domain_gap("no_chains_in_window")
     feed = pandas_feed.build_option_data(
         chains, symbol, exp_max=sim_end, rights=("C", "P"))
     if not feed:
-        return empty
+        return whole_domain_gap("empty_feed")
 
     fee = TradingFee(per_contract_fee=config.COMMISSION_PER_CONTRACT)
     end_dt = datetime.combine(
@@ -158,10 +173,24 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
             "cancelled_on": sim_end, "reason": "window_end",
             "kind": strat._pending["action"]["kind"],
         })
+    gaps = list(strat.gap_records)
+    visited = strat.visited_sessions
+    for d in domain:
+        if d not in visited:
+            gaps.append({"symbol": symbol, "lane": lane, "session": d,
+                         "stage": "iteration",
+                         "reason": "session_not_simulated"})
+    gap_sessions = {g["session"] for g in gaps}
+    unaccounted = [d for d in domain
+                   if d not in visited and d not in gap_sessions]
     return {"trades": list(strat.closed_trades),
             "cancelled": list(strat.cancelled_entries),
             "quarantined": quarantined,
-            "month_risk": dict(strat._month_risk)}
+            "month_risk": dict(strat._month_risk),
+            "gaps": gaps,
+            "coverage": {"eligible": len(domain),
+                         "evaluated": len(visited & set(domain)),
+                         "unaccounted": unaccounted}}
 
 
 def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
@@ -198,6 +227,8 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
     trades: list[dict] = []
     cancelled: list[dict] = []
     quarantined: list[dict] = []
+    gaps: list[dict] = []
+    coverage: dict[str, dict] = {}
     for symbol in symbols or config.H7_BACKTEST_SYMBOLS:
         eligible = set(manifest[symbol]["eligible"])
         closes_adj, closes_raw = _load_closes(
@@ -216,6 +247,12 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
             trades.extend(chunk_trades)
             cancelled.extend(out["cancelled"])
             quarantined.extend(out["quarantined"])
+            gaps.extend(out["gaps"])
+            cov = coverage.setdefault(
+                symbol, {"eligible": 0, "evaluated": 0, "unaccounted": []})
+            cov["eligible"] += out["coverage"]["eligible"]
+            cov["evaluated"] += out["coverage"]["evaluated"]
+            cov["unaccounted"].extend(out["coverage"]["unaccounted"])
             # 7b-2R finding 5: months straddling the seam keep their opened
             # risk; a later same-month signal in the next chunk cannot
             # reuse a sleeve the previous chunk already consumed
@@ -227,4 +264,4 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
                 blocked_until = max(tail_exits) if tail_exits else None
     trades.sort(key=lambda t: (t["entry_date"], t["symbol"]))
     return {"lane": lane, "trades": trades, "cancelled": cancelled,
-            "quarantined": quarantined}
+            "quarantined": quarantined, "gaps": gaps, "coverage": coverage}

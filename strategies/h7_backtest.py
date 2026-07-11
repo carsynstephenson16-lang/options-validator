@@ -162,6 +162,17 @@ class H7LaneBacktest(Strategy):
             params.get("month_risk_seed") or {})
         self.closed_trades: list[dict] = []
         self.cancelled_entries: list[dict] = []
+        # 7b-2R finding 6: a data hole must never read as "no opportunity".
+        # Every simulated session is recorded; every input gap emits a
+        # structured record the adjudicator can audit.
+        self.visited_sessions: set[str] = set()
+        self.gap_records: list[dict] = []
+
+    def _gap(self, iso: str, stage: str, reason: str) -> None:
+        rec = {"symbol": self.symbol, "lane": self.lane, "session": iso,
+               "stage": stage, "reason": reason}
+        if rec not in self.gap_records:
+            self.gap_records.append(rec)
 
     # ----- engine adapter (the ONLY place with the guarded method names) ----
     def _engine_submit_leg(self, asset, qty: int, side: str) -> None:
@@ -172,6 +183,7 @@ class H7LaneBacktest(Strategy):
     # ----- main loop -------------------------------------------------------
     def on_trading_iteration(self):
         iso = self._today().isoformat()
+        self.visited_sessions.add(iso)
         self._sync_fills()
         pos = self._pos
         if pos is not None and pos.state == "pending_exit":
@@ -235,13 +247,18 @@ class H7LaneBacktest(Strategy):
 
     def _compute_decision(self, iso: str) -> None:
         closes = self._closes_adj.loc[:iso]
-        if len(closes) < WARMUP_SESSIONS or str(closes.index[-1])[:10] != iso:
-            return  # not warm, or no close for this session (gap): no signal
+        if len(closes) < WARMUP_SESSIONS:
+            return  # warm-up: disclosed structural suppression, not a gap
+        if str(closes.index[-1])[:10] != iso:
+            self._gap(iso, "decision", "adjusted_close_missing_for_session")
+            return
         chain = self._chain_provider(self.symbol, iso)
         if chain is None:
+            self._gap(iso, "decision", "chain_missing_for_session")
             return
         raw = self._closes_raw.loc[:iso]
         if raw.empty or str(raw.index[-1])[:10] != iso:
+            self._gap(iso, "decision", "raw_close_missing_for_session")
             return
         spot = float(raw.iloc[-1])
         gate, _ = earnings_gate(self.symbol, Date.fromisoformat(iso),
@@ -458,6 +475,10 @@ class H7LaneBacktest(Strategy):
 
         # EOD-observed triggers on today's conservative marks
         marks = self._conservative_marks(iso)
+        if marks is None:
+            # open position, unpriceable session: hold is correct, but the
+            # monitoring hole must be visible (7b-2R finding 6)
+            self._gap(iso, "exit_monitor", "no_valid_marks_or_chain")
         entry = pos.entry_cost
         if marks is not None and entry is not None:
             liq, buyback = marks
