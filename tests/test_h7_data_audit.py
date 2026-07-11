@@ -157,11 +157,19 @@ class TestManifestAndExceptions(unittest.TestCase):
             self.assertEqual(e["basis"], "official")
             self.assertTrue(e["source_urls"])   # cited, not asserted
 
-    def test_current_registry_coverage_entries_are_unratified(self):
-        # the three data_coverage entries carry no ratified_by hash yet, so
-        # they block against ANY ledger (here: the real one, lazily read)
-        syms = sorted({e["symbol"] for e in unratified_coverage_entries()})
-        self.assertEqual(syms, ["CEG", "PLTR", "SMCI"])
+    def test_current_registry_coverage_entries_are_ratified_by_v1_3(self):
+        # H7_AMENDMENT_V1_3 (2026-07-11): the three data_coverage entries
+        # carry the amendment's real record_hash and verify against the
+        # REAL ledger -- and against any other ledger they must still block
+        self.assertEqual(unratified_coverage_entries(), ())
+        from data.audit_exceptions import H7_AUDIT_EXCEPTIONS
+        coverage = [e for e in H7_AUDIT_EXCEPTIONS
+                    if e["basis"] == "data_coverage"]
+        self.assertEqual(len(coverage), 3)
+        hashes = {e["ratified_by"] for e in coverage}
+        self.assertEqual(len(hashes), 1)          # one amendment covers all
+        blocked = unratified_coverage_entries(ledger_records=[])
+        self.assertEqual(len(blocked), 3)         # foreign ledger: refused
 
     def test_manifest_counts_expected_and_excluded(self):
         m = audit.expected_manifest(
