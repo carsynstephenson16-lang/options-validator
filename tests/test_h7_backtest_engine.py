@@ -88,14 +88,16 @@ def closes_pair(last_iso, post=(), pre_hi=130.0, pre_lo=62.0, reclaim=70.0,
 
 def run_engine(lane, chains, closes_adj, closes_raw, assertions,
                start, end, cutoff=None):
-    def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False):
+    def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False,
+                    eligible=None, refused=None):
         return {d: c for d, c in chains.items() if start_iso <= d <= end_iso}
 
     with mock.patch.object(pandas_feed, "load_cached_chains", fake_loader):
-        return run_h7._run_chunk(
+        trades, cancelled, _quarantined = run_h7._run_chunk(
             lane, SYM, start, cutoff or end, end, None,
             closes_adj=closes_adj, closes_raw=closes_raw,
             assertions=assertions, allow_oos=False)
+        return trades, cancelled
 
 
 def default_chains(first, last, overrides_by_day=None, drop_by_day=None,
@@ -391,7 +393,8 @@ class YearBoundaryContinuity(unittest.TestCase):
                         dtype=float)
         cls.adj = adj
 
-        def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False):
+        def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False,
+                        eligible=None, refused=None):
             return {d: c for d, c in chains.items()
                     if start_iso <= d <= end_iso}
 
@@ -422,7 +425,8 @@ class FinalWindowSuppression(unittest.TestCase):
         chains = default_chains("2022-06-02", "2022-07-26")
         adj, raw = closes_pair(T_SIG, post=[70.0] * 40)
 
-        def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False):
+        def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False,
+                        eligible=None, refused=None):
             return {d: c for d, c in chains.items()
                     if start_iso <= d <= end_iso}
 

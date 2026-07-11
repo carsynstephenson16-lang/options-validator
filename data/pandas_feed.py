@@ -89,13 +89,22 @@ def option_asset(symbol: str, expiration_iso: str, strike: float,
 
 
 def load_cached_chains(symbol: str, start_iso: str, end_iso: str, *,
-                       allow_oos: bool = False) -> dict[str, pd.DataFrame]:
-    """Read every cached chain for `symbol` in [start_iso, end_iso] from the
-    local parquet cache. The cache IS the trading calendar: a missing file is
-    a non-trading day (real data gaps were CACHE_GAP-logged at cache time).
-    Never fetches: on a cache hit get_eod_chain reads parquet only, and dates
-    past IN_SAMPLE_END raise OOSDataTouchError unless allow_oos (holdout
-    guard, enforced by the adapter even for cached files)."""
+                       allow_oos: bool = False,
+                       eligible: set[str] | None = None,
+                       refused: list[str] | None = None
+                       ) -> dict[str, pd.DataFrame]:
+    """Read cached chains for `symbol` in [start_iso, end_iso] from the
+    local parquet cache. Never fetches: on a cache hit get_eod_chain reads
+    parquet only, and dates past IN_SAMPLE_END raise OOSDataTouchError
+    unless allow_oos (holdout guard, enforced by the adapter even for
+    cached files).
+
+    `eligible` (7b-2R finding 2): when given, ONLY days in the set are
+    loaded -- a file that exists outside it is never parsed; its day is
+    appended to `refused` (caller-supplied list) so the quarantine is
+    reported, not silent. The H7 runner ALWAYS passes the canonical
+    data.h7_manifest eligible set; eligible=None is the legacy H1 path and
+    synthetic-test path only."""
     start = Date.fromisoformat(start_iso)
     end = Date.fromisoformat(end_iso)
     chains: dict[str, pd.DataFrame] = {}
@@ -103,8 +112,12 @@ def load_cached_chains(symbol: str, start_iso: str, end_iso: str, *,
     while d <= end:
         iso = d.isoformat()
         if thetadata_adapter._cache_path(symbol, iso).exists():
-            chains[iso] = thetadata_adapter.get_eod_chain(
-                symbol, iso, allow_oos=allow_oos)
+            if eligible is not None and iso not in eligible:
+                if refused is not None:
+                    refused.append(iso)
+            else:
+                chains[iso] = thetadata_adapter.get_eod_chain(
+                    symbol, iso, allow_oos=allow_oos)
         d += timedelta(days=1)
     return chains
 

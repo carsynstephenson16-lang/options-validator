@@ -71,21 +71,31 @@ def _load_closes(symbol: str, start_iso: str, end_iso: str, *,
 def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
                sim_end: str, blocked_until: str | None, *,
                closes_adj, closes_raw, assertions, allow_oos: bool,
-               known_as_of_fn=None) -> tuple[list[dict], list[dict]]:
-    """One symbol, one lane, one chunk, one Lumibot backtest -- offline."""
+               known_as_of_fn=None, eligible: set[str] | None = None
+               ) -> tuple[list[dict], list[dict], list[dict]]:
+    """One symbol, one lane, one chunk, one Lumibot backtest -- offline.
+    Returns (trades, cancelled_entries, quarantined). `eligible` is the
+    canonical manifest's eligible-session set (7b-2R finding 2): cache
+    files outside it are refused, never parsed, and reported."""
     from lumibot.backtesting import PandasDataBacktesting
     from lumibot.entities import TradingFee
 
     from strategies.h7_backtest import H7LaneBacktest
 
+    refused: list[str] = []
     chains = pandas_feed.load_cached_chains(
-        symbol, sim_start, sim_end, allow_oos=allow_oos)
+        symbol, sim_start, sim_end, allow_oos=allow_oos,
+        eligible=eligible, refused=refused)
+    quarantined = [{"symbol": symbol, "lane": lane, "session": day,
+                    "stage": "chain_load",
+                    "reason": "present_but_excluded_by_manifest"}
+                   for day in refused]
     if not chains:
-        return [], []
+        return [], [], quarantined
     feed = pandas_feed.build_option_data(
         chains, symbol, exp_max=sim_end, rights=("C", "P"))
     if not feed:
-        return [], []
+        return [], [], quarantined
 
     fee = TradingFee(per_contract_fee=config.COMMISSION_PER_CONTRACT)
     end_dt = datetime.combine(
@@ -141,14 +151,23 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
             "cancelled_on": sim_end, "reason": "window_end",
             "kind": strat._pending["action"]["kind"],
         })
-    return list(strat.closed_trades), list(strat.cancelled_entries)
+    return (list(strat.closed_trades), list(strat.cancelled_entries),
+            quarantined)
 
 
 def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
              symbols: list[str] | None = None, allow_oos: bool = False,
              assertions: list | None = None,
-             known_as_of_fn=None) -> dict:
-    """Run one lane across symbols/chunks; returns {"trades", "cancelled"}.
+             known_as_of_fn=None, manifest: dict | None = None) -> dict:
+    """Run one lane across symbols/chunks; returns {"trades", "cancelled",
+    "quarantined"}.
+
+    `manifest` is the canonical eligible-session manifest (7b-2R finding 2):
+    the runner loads ONLY chain files it names eligible; files inside
+    excluded intervals are quarantined and reported, never consumed. When
+    None it is computed from data.h7_manifest (identical enumeration to the
+    audit); the gated 7b-3 launch path passes the receipt-bound manifest
+    and separately verifies the two are equal.
 
     The registered H7 window (H7_BACKTEST_START..H7_BACKTEST_END) extends
     past IN_SAMPLE_END as a DISCLOSED non-blind diagnostic; reaching it
@@ -161,26 +180,35 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
         assertions = load_assertions()
     start_d = Date.fromisoformat(start or config.H7_BACKTEST_START)
     end_d = Date.fromisoformat(end or config.H7_BACKTEST_END)
+    if manifest is None:
+        from data.h7_manifest import eligible_manifest
+        manifest = eligible_manifest(
+            symbols=symbols or config.H7_BACKTEST_SYMBOLS,
+            start=start_d.isoformat(), end=end_d.isoformat())
 
     trades: list[dict] = []
     cancelled: list[dict] = []
+    quarantined: list[dict] = []
     for symbol in symbols or config.H7_BACKTEST_SYMBOLS:
+        eligible = set(manifest[symbol]["eligible"])
         closes_adj, closes_raw = _load_closes(
             symbol, start_d.isoformat(), end_d.isoformat(), allow_oos=allow_oos)
         blocked_until: str | None = None
         chunks = _year_chunks(start_d, end_d)
         for i, (sim_start, cutoff, sim_end) in enumerate(chunks):
-            chunk_trades, chunk_cancelled = _run_chunk(
+            chunk_trades, chunk_cancelled, chunk_quarantined = _run_chunk(
                 lane, symbol, sim_start, cutoff, sim_end, blocked_until,
                 closes_adj=closes_adj, closes_raw=closes_raw,
                 assertions=assertions, allow_oos=allow_oos,
-                known_as_of_fn=known_as_of_fn)
+                known_as_of_fn=known_as_of_fn, eligible=eligible)
             trades.extend(chunk_trades)
             cancelled.extend(chunk_cancelled)
+            quarantined.extend(chunk_quarantined)
             if i + 1 < len(chunks):
                 next_start = chunks[i + 1][0]
                 tail_exits = [t["exit_date"] for t in chunk_trades
                               if t.get("exit_date") and t["exit_date"] >= next_start]
                 blocked_until = max(tail_exits) if tail_exits else None
     trades.sort(key=lambda t: (t["entry_date"], t["symbol"]))
-    return {"lane": lane, "trades": trades, "cancelled": cancelled}
+    return {"lane": lane, "trades": trades, "cancelled": cancelled,
+            "quarantined": quarantined}
