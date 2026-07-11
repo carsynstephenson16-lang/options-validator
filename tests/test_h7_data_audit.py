@@ -65,10 +65,30 @@ def run(tmp_dirs, sym="NVDA", assertions=None, fetch_times=None,
 
 
 class TestManifestAndExceptions(unittest.TestCase):
-    def test_registry_covers_the_smci_suspension(self):
+    def test_registry_covers_the_smci_untradable_interval(self):
         self.assertIsNotNone(excluded("SMCI", "2019-06-03"))
         self.assertIsNone(excluded("SMCI", "2020-05-05"))
         self.assertIsNone(excluded("NVDA", "2019-06-03"))
+
+    def test_registry_separates_listing_status_from_options_coverage(self):
+        # 7b-2R finding 2: suspension / delisted / coverage-gap are distinct
+        self.assertEqual(excluded("SMCI", "2018-08-23")["kind"],
+                         "underlying_suspended")
+        self.assertEqual(excluded("SMCI", "2019-06-03")["kind"], "delisted")
+        self.assertEqual(excluded("SMCI", "2020-03-02")["kind"],
+                         "options_coverage_gap")
+        self.assertEqual(excluded("SMCI", "2020-03-02")["basis"],
+                         "data_coverage")
+        for e in (excluded("SMCI", "2018-08-23"),
+                  excluded("PLTR", "2019-06-03"),
+                  excluded("CEG", "2021-06-03")):
+            self.assertEqual(e["basis"], "official")
+            self.assertTrue(e["source_urls"])   # cited, not asserted
+
+    def test_unratified_coverage_entries_surface(self):
+        from data.audit_exceptions import unratified_coverage_entries
+        syms = sorted({e["symbol"] for e in unratified_coverage_entries()})
+        self.assertEqual(syms, ["CEG", "PLTR", "SMCI"])
 
     def test_manifest_counts_expected_and_excluded(self):
         m = audit.expected_manifest(
@@ -77,7 +97,8 @@ class TestManifestAndExceptions(unittest.TestCase):
                       "2018-08-23", "2018-08-24", "2018-08-27"])
         self.assertEqual(len(m["SMCI"]["expected"]), 3)   # 20th..22nd
         self.assertEqual(len(m["SMCI"]["excluded"]), 3)   # 23rd onward
-        self.assertEqual(m["SMCI"]["excluded"]["2018-08-23"], "suspension")
+        self.assertEqual(m["SMCI"]["excluded"]["2018-08-23"],
+                         "underlying_suspended")
 
 
 class TestAuditVerdicts(unittest.TestCase):
