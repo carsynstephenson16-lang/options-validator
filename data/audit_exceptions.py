@@ -12,7 +12,11 @@ invents exclusions. Each entry carries provenance with a `basis`:
                           owner-ratified scope amendment before any
                           diagnostic may launch; the audit BLOCKS on them
                           (unratified_coverage_entries) until `ratified_by`
-                          names the ledger amendment.
+                          is MECHANICALLY verified: it must be the exact
+                          64-char lowercase record_hash of an H7
+                          trial_intent record in the ledger (7b-2R.1
+                          finding D -- a bare truthy label is not
+                          ratification).
 
 7b-2R corrections baked in:
   * SMCI is three segments, not one "suspension": the Nasdaq suspension
@@ -30,6 +34,10 @@ exclusion intervals exactly, so manifest counts are unchanged.
 """
 
 from __future__ import annotations
+
+import re
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 H7_AUDIT_EXCEPTIONS = (
     {
@@ -160,9 +168,31 @@ def excluded(symbol: str, iso_day: str,
     return None
 
 
-def unratified_coverage_entries(registry=H7_AUDIT_EXCEPTIONS) -> tuple:
-    """data_coverage entries with no owner-ratified amendment yet. The
-    audit BLOCKS while this is non-empty: an exclusion the archive cannot
-    prove is a scope question only the owner may settle (7b-2R finding 2)."""
+def unratified_coverage_entries(registry=H7_AUDIT_EXCEPTIONS, *,
+                                ledger_records=None) -> tuple:
+    """data_coverage entries with no MECHANICALLY VERIFIED owner
+    ratification. The audit BLOCKS while this is non-empty: an exclusion
+    the archive cannot prove is a scope question only the owner may settle
+    (7b-2R finding 2).
+
+    Ratification is mechanical (7b-2R.1 finding D): `ratified_by` must be
+    a 64-char lowercase hex string equal to the record_hash of a ledger
+    record with entry_type == "trial_intent" and hypothesis_id == "H7".
+    Any other value -- a label, a random hash, an unregistered hash --
+    leaves the entry blocking. When `ledger_records` is None the real
+    ledger is read (research.ledger.read_all("ledger"))."""
+    if ledger_records is None:
+        from research import ledger
+        ledger_records = ledger.read_all("ledger")
+    h7_intent_hashes = {
+        r.get("record_hash") for r in ledger_records
+        if (r.get("entry_type") == "trial_intent"
+            and r.get("hypothesis_id") == "H7")}
+
+    def _ratified(entry: dict) -> bool:
+        rb = entry.get("ratified_by")
+        return (isinstance(rb, str) and bool(_SHA256_RE.fullmatch(rb))
+                and rb in h7_intent_hashes)
+
     return tuple(e for e in registry
-                 if e["basis"] == "data_coverage" and not e.get("ratified_by"))
+                 if e["basis"] == "data_coverage" and not _ratified(e))

@@ -1,17 +1,21 @@
-"""7b-2 C2 / 7b-2R finding 3: the formal H7 data audit v2 -- one canonical
-manifest, tiered provenance with NO mtime fallback, UNKNOWN-vs-DATA_GAP
-earnings split, lane-aware puts, and a receipt that binds (and --verify
-recomputes) EVERY verdict input."""
+"""7b-2R.1: the formal H7 data audit v3 -- one canonical manifest, tiered
+provenance with NO mtime fallback, NO coverage-declaration escape hatch
+(every UNKNOWN earnings session is a blocking DATA_GAP with a reason
+breakdown), mechanical ledger-hash ratification of data_coverage
+exclusions, unreadable/warn findings with identities, and a receipt whose
+--verify RECOMPUTES the whole audit instead of self-hashing stored maps."""
 
+import json
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
 import pandas as pd
 
-from data.audit_exceptions import excluded
+from data.audit_exceptions import excluded, unratified_coverage_entries
+from research import ledger
 from research.hashing import sha256_file
 from tools import h7_data_audit as audit
 
@@ -19,7 +23,7 @@ SESSIONS = ["2022-06-01", "2022-06-02", "2022-06-03", "2022-06-06",
             "2022-06-07"]
 NO_EXCLUSIONS: tuple = ()
 TRACKED_CTX = {"commit": "deadbeef", "committed": "2026-07-10T09:12:06-04:00",
-               "adapter_endpoint_ok": True}
+               "adapter_blob": None, "adapter_endpoint_ok": True}
 
 
 def clear_assertions(sym="NVDA"):
@@ -30,6 +34,33 @@ def clear_assertions(sym="NVDA"):
              "session_timing": "amc", "status": "confirmed",
              "source_url": "https://example.test/ir",
              "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}]
+
+
+def stale_occurred_assertions(sym="NVDA"):
+    """One realized report far outside the post-report grace window: the
+    gate is UNKNOWN with the grace_expired reason on every June session."""
+    ts = datetime.fromisoformat("2022-01-06T00:00:00+00:00")
+    return [{"symbol": sym, "event_id": f"{sym}-E0", "fiscal_period": "FY22Q4",
+             "event_class": "actual_quarterly_earnings",
+             "expected_date": datetime(2022, 1, 5).date(),
+             "occurred_date": datetime(2022, 1, 5).date(),
+             "session_timing": "amc", "status": "occurred",
+             "source_url": "https://example.test/ir",
+             "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}]
+
+
+def conflicting_assertions(sym="NVDA"):
+    """Two unresolved schedule assertions for one fiscal period."""
+    ts = datetime.fromisoformat("2022-01-01T00:00:00+00:00")
+    base = {"symbol": sym, "fiscal_period": "FY23Q1",
+            "event_class": "actual_quarterly_earnings",
+            "session_timing": "amc", "status": "confirmed",
+            "source_url": "https://example.test/ir",
+            "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}
+    return [dict(base, event_id=f"{sym}-C1",
+                 expected_date=datetime(2022, 7, 1).date()),
+            dict(base, event_id=f"{sym}-C2",
+                 expected_date=datetime(2022, 7, 15).date())]
 
 
 def chain_frame(rows=None):
@@ -70,9 +101,29 @@ def good_facts(chain_dir, sym="NVDA"):
     return facts
 
 
+def seed_h7_intent(base) -> str:
+    """A tmp ledger with one H7 trial_intent; returns its record_hash
+    (mirrors tests/test_ledger_diagnostics.py's _seed_h7_registration)."""
+    return ledger.append({
+        "entry_type": "trial_intent",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "hypothesis_id": "H7",
+        "reason": "synthetic H7 registration for ratification tests",
+    }, base_dir=base)
+
+
+def coverage_entry(ratified_by=None) -> tuple:
+    e = {"symbol": "NVDA", "start": "2022-06-02", "end": "2022-06-03",
+         "kind": "options_coverage_gap", "basis": "data_coverage",
+         "source_urls": ()}
+    if ratified_by is not None:
+        e["ratified_by"] = ratified_by
+    return (e,)
+
+
 def run(tmp_dirs, sym="NVDA", assertions=None, fetch_facts=None,
-        sessions=SESSIONS, registry=NO_EXCLUSIONS, coverage_decls=(),
-        tracked_manifest=None, tracked_context=TRACKED_CTX):
+        sessions=SESSIONS, registry=NO_EXCLUSIONS, tracked_manifest=None,
+        tracked_context=TRACKED_CTX, ledger_records=()):
     chain_dir, closes_dir = tmp_dirs
     with mock.patch.object(audit, "continuity_breaks", lambda s, d: []):
         return audit.run_audit(
@@ -82,9 +133,8 @@ def run(tmp_dirs, sym="NVDA", assertions=None, fetch_facts=None,
                         else clear_assertions(sym)),
             fetch_facts=(good_facts(chain_dir, sym)
                          if fetch_facts is None else fetch_facts),
-            registry=registry, coverage_decls=list(coverage_decls),
-            tracked_manifest=tracked_manifest or {},
-            tracked_context=tracked_context)
+            registry=registry, tracked_manifest=tracked_manifest or {},
+            tracked_context=tracked_context, ledger_records=ledger_records)
 
 
 class TestManifestAndExceptions(unittest.TestCase):
@@ -107,8 +157,9 @@ class TestManifestAndExceptions(unittest.TestCase):
             self.assertEqual(e["basis"], "official")
             self.assertTrue(e["source_urls"])   # cited, not asserted
 
-    def test_unratified_coverage_entries_surface(self):
-        from data.audit_exceptions import unratified_coverage_entries
+    def test_current_registry_coverage_entries_are_unratified(self):
+        # the three data_coverage entries carry no ratified_by hash yet, so
+        # they block against ANY ledger (here: the real one, lazily read)
         syms = sorted({e["symbol"] for e in unratified_coverage_entries()})
         self.assertEqual(syms, ["CEG", "PLTR", "SMCI"])
 
@@ -121,6 +172,62 @@ class TestManifestAndExceptions(unittest.TestCase):
         self.assertEqual(len(m["SMCI"]["excluded"]), 3)   # 23rd onward
         self.assertEqual(m["SMCI"]["excluded"]["2018-08-23"],
                          "underlying_suspended")
+
+
+class TestMechanicalRatification(unittest.TestCase):
+    """7b-2R.1 finding D: ratified_by must be the record_hash of an H7
+    trial_intent in the ledger -- a truthy label is NOT ratification."""
+
+    def test_h7_intent_record_hash_ratifies(self):
+        with tempfile.TemporaryDirectory() as base:
+            rec_hash = seed_h7_intent(base)
+            records = ledger.read_all(base)
+            self.assertEqual(unratified_coverage_entries(
+                coverage_entry(rec_hash), ledger_records=records), ())
+
+    def test_random_hex_and_labels_do_not_ratify(self):
+        with tempfile.TemporaryDirectory() as base:
+            seed_h7_intent(base)
+            records = ledger.read_all(base)
+            for bogus in ("f" * 64, "H7_AMENDMENT_EXAMPLE", "", None):
+                ents = unratified_coverage_entries(
+                    coverage_entry(bogus), ledger_records=records)
+                self.assertEqual(len(ents), 1, bogus)
+
+    def test_non_h7_intent_hash_does_not_ratify(self):
+        with tempfile.TemporaryDirectory() as base:
+            h6_hash = ledger.append({
+                "entry_type": "trial_intent",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "hypothesis_id": "H6",
+                "reason": "not an H7 registration",
+            }, base_dir=base)
+            records = ledger.read_all(base)
+            ents = unratified_coverage_entries(
+                coverage_entry(h6_hash), ledger_records=records)
+            self.assertEqual(len(ents), 1)
+
+    def test_unratified_data_coverage_exclusion_blocks_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dirs = build_cache(tmp, days=["2022-06-01", "2022-06-06",
+                                          "2022-06-07"])
+            report = run(dirs, registry=coverage_entry("f" * 64))
+        self.assertEqual(report["verdict"], "BLOCK")
+        self.assertEqual(
+            report["block_findings"]["unratified_coverage_exclusions"], 1)
+        self.assertEqual(report["unratified_coverage_exclusions"][0]["symbol"],
+                         "NVDA")
+
+    def test_ledger_ratified_data_coverage_exclusion_does_not_block(self):
+        with tempfile.TemporaryDirectory() as base:
+            rec_hash = seed_h7_intent(base)
+            records = ledger.read_all(base)
+            with tempfile.TemporaryDirectory() as tmp:
+                dirs = build_cache(tmp, days=["2022-06-01", "2022-06-06",
+                                              "2022-06-07"])
+                report = run(dirs, registry=coverage_entry(rec_hash),
+                             ledger_records=records)
+        self.assertEqual(report["verdict"], "PASS")
 
 
 class TestAuditVerdicts(unittest.TestCase):
@@ -173,6 +280,31 @@ class TestAuditVerdicts(unittest.TestCase):
         self.assertEqual(report["verdict"], "PASS")
         self.assertEqual(report["warn_findings"]["crossed_books"], 5)
         self.assertEqual(report["warn_findings"]["one_sided_books"], 5)
+
+    def test_unreadable_file_blocks_with_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dirs = build_cache(tmp)
+            (dirs[0] / "NVDA_2022-06-02.parquet").write_bytes(
+                b"not a parquet file")
+            report = run(dirs)
+        self.assertEqual(report["verdict"], "BLOCK")
+        self.assertEqual(report["block_findings"]["unreadable_files"], 1)
+        (identity,) = report["unreadable_file_identities"]
+        self.assertEqual(identity["file"], "NVDA_2022-06-02")
+        self.assertTrue(identity["error"])          # exception type name
+        self.assertLessEqual(len(identity["message"]), 200)
+
+    def test_warn_detail_carries_per_day_identities(self):
+        frame = chain_frame([
+            ("2022-07-15", 100.0, "C", 2.5, 2.1, 500, 0.55),   # crossed
+            ("2022-07-15", 100.0, "P", 1.0, 1.1, 500, -0.30),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            report = run(build_cache(tmp, frame=frame))
+        self.assertEqual(report["warn_detail"]["crossed_books"],
+                         {f"NVDA_{d}": 1 for d in SESSIONS})
+        self.assertEqual(report["warn_detail"]["missing_calls"], {})
+        self.assertEqual(len(report["warn_detail_hash"]), 64)
 
 
 class TestProvenanceTiers(unittest.TestCase):
@@ -248,39 +380,55 @@ class TestProvenanceTiers(unittest.TestCase):
         self.assertEqual(report["provenance_tiers"]["unproven"], 3)
 
 
-class TestEarningsSplit(unittest.TestCase):
-    """UNKNOWN-vs-DATA_GAP (owner decision H7_7B2R_DECISIONS): both keep
-    the trading gate closed; only DATA_GAP blocks the audit."""
+class TestEarningsDataGap(unittest.TestCase):
+    """Coverage declarations are REJECTED (owner decision 2026-07-11):
+    there is no proven_unknown tier. EVERY UNKNOWN-gate session is a
+    blocking DATA_GAP, with per-symbol identities and a reason breakdown
+    keyed to the exported gate-reason constants."""
 
-    def test_unknown_without_coverage_declaration_is_data_gap(self):
+    def test_empty_archive_blocks_with_no_assertions_reason(self):
         with tempfile.TemporaryDirectory() as tmp:
             report = run(build_cache(tmp), assertions=[])
         self.assertEqual(report["verdict"], "BLOCK")
         self.assertEqual(
             report["block_findings"]["earnings_data_gap_sessions"], 5)
         self.assertEqual(report["earnings_data_gap_by_symbol"]["NVDA"], 5)
-        self.assertEqual(len(report["earnings_data_gap_days"]["NVDA"]), 5)
+        self.assertEqual(report["earnings_data_gap_days"]["NVDA"], SESSIONS)
+        self.assertEqual(report["earnings_data_gap_reasons"]["NVDA"],
+                         {"no_assertions": 5, "grace_expired": 0,
+                          "conflict": 0, "other": 0})
 
-    def test_unknown_inside_declared_coverage_is_proven_unknown(self):
-        decls = [{"symbol": "NVDA", "start": "2022-01-01",
-                  "end": "2022-12-31", "basis": "sec_full_text",
-                  "source_urls": ["https://efts.sec.gov/"]}]
+    def test_grace_expired_unknown_is_still_a_blocking_data_gap(self):
         with tempfile.TemporaryDirectory() as tmp:
-            report = run(build_cache(tmp), assertions=[],
-                         coverage_decls=decls)
-        self.assertEqual(report["verdict"], "PASS")
+            report = run(build_cache(tmp),
+                         assertions=stale_occurred_assertions())
+        self.assertEqual(report["verdict"], "BLOCK")
         self.assertEqual(
-            report["warn_findings"]["earnings_proven_unknown_sessions"], 5)
+            report["block_findings"]["earnings_data_gap_sessions"], 5)
         self.assertEqual(
-            report["earnings_proven_unknown_by_symbol"]["NVDA"], 5)
+            report["earnings_data_gap_reasons"]["NVDA"]["grace_expired"], 5)
+
+    def test_conflicting_assertions_are_a_data_gap_with_conflict_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = run(build_cache(tmp),
+                         assertions=conflicting_assertions())
+        self.assertEqual(report["verdict"], "BLOCK")
+        self.assertEqual(
+            report["earnings_data_gap_reasons"]["NVDA"]["conflict"], 5)
+
+    def test_coverage_declaration_mechanism_is_gone(self):
+        self.assertFalse(hasattr(audit, "load_coverage_declarations"))
+        self.assertFalse(hasattr(audit, "COVERAGE_PATH"))
+        self.assertFalse(hasattr(audit, "_covered"))
 
 
-class TestLaneAwareAndRegistry(unittest.TestCase):
+class TestLaneAwareAndClassification(unittest.TestCase):
     def test_missing_puts_warn_for_put_lane_symbol(self):
         frame = chain_frame([("2022-07-15", 100.0, "C", 2.0, 2.1, 500, 0.55)])
         with tempfile.TemporaryDirectory() as tmp:
             report = run(build_cache(tmp, frame=frame))
         self.assertEqual(report["warn_findings"]["missing_puts"], 5)
+        self.assertEqual(len(report["warn_detail"]["missing_puts"]), 5)
 
     def test_missing_puts_inapplicable_for_core_long_only_symbol(self):
         # VST is H7c-ineligible: its diagnostic never trades puts, so the
@@ -292,31 +440,6 @@ class TestLaneAwareAndRegistry(unittest.TestCase):
         self.assertNotIn("missing_puts", report["warn_findings"])
         self.assertEqual(report["warn_findings"]["missing_puts_inapplicable"], 5)
         self.assertEqual(len(report["missing_puts_inapplicable"]), 5)
-
-    def test_unratified_data_coverage_exclusion_blocks(self):
-        registry = ({"symbol": "NVDA", "start": "2022-06-02",
-                     "end": "2022-06-03", "kind": "options_coverage_gap",
-                     "basis": "data_coverage", "source_urls": ()},)
-        with tempfile.TemporaryDirectory() as tmp:
-            dirs = build_cache(tmp, days=["2022-06-01", "2022-06-06",
-                                          "2022-06-07"])
-            report = run(dirs, registry=registry)
-        self.assertEqual(report["verdict"], "BLOCK")
-        self.assertEqual(
-            report["block_findings"]["unratified_coverage_exclusions"], 1)
-        self.assertEqual(report["unratified_coverage_exclusions"][0]["symbol"],
-                         "NVDA")
-
-    def test_ratified_data_coverage_exclusion_does_not_block(self):
-        registry = ({"symbol": "NVDA", "start": "2022-06-02",
-                     "end": "2022-06-03", "kind": "options_coverage_gap",
-                     "basis": "data_coverage", "source_urls": (),
-                     "ratified_by": "H7_AMENDMENT_EXAMPLE"},)
-        with tempfile.TemporaryDirectory() as tmp:
-            dirs = build_cache(tmp, days=["2022-06-01", "2022-06-06",
-                                          "2022-06-07"])
-            report = run(dirs, registry=registry)
-        self.assertEqual(report["verdict"], "PASS")
 
     def test_present_but_excluded_and_unexpected_are_reported(self):
         registry = ({"symbol": "NVDA", "start": "2022-06-02",
@@ -353,111 +476,160 @@ class TestContinuity(unittest.TestCase):
                     chain_dir=dirs[0], closes_dir=dirs[1], sessions=SESSIONS,
                     assertions=clear_assertions(),
                     fetch_facts=good_facts(dirs[0]),
-                    registry=NO_EXCLUSIONS, coverage_decls=[],
-                    tracked_manifest={}, tracked_context=TRACKED_CTX)
+                    registry=NO_EXCLUSIONS, tracked_manifest={},
+                    tracked_context=TRACKED_CTX, ledger_records=())
         self.assertEqual(report["verdict"], "BLOCK")
         self.assertEqual(
             report["block_findings"]["adjusted_continuity_breaks"], 1)
 
 
-class TestReceiptV2(unittest.TestCase):
-    """--verify recomputes every bound input class; one mutation test per
-    class (7b-2R finding 3)."""
+class TestSessionCalendarIdentity(unittest.TestCase):
+    def test_binds_actual_close_timestamps(self):
+        ident = audit.session_calendar_identity(SESSIONS)
+        self.assertEqual(len(ident["session_closes_hash"]), 64)
+        # dropping a session changes the bound closes, not just the list
+        other = audit.session_calendar_identity(SESSIONS[:-1])
+        self.assertNotEqual(ident["session_closes_hash"],
+                            other["session_closes_hash"])
+        self.assertNotEqual(ident["sessions_hash"], other["sessions_hash"])
 
-    def _receipt(self, tmp):
+
+class TestReceiptV3(unittest.TestCase):
+    """--verify RECOMPUTES the audit (7b-2R.1 finding B): one mutation test
+    per input class, each failing by a named key."""
+
+    def _write(self, tmp, registry=NO_EXCLUSIONS):
         dirs = build_cache(tmp)
-        report = run(dirs)
-        earnings = Path(tmp) / "assertions_v2.csv"
-        earnings.write_text("synthetic-store\n")
-        coverage = Path(tmp) / "coverage.json"
-        coverage.write_text("[]\n")
-        receipt_path = Path(tmp) / "receipt_v2.json"
+        facts = good_facts(dirs[0])
+        report = run(dirs, fetch_facts=facts, registry=registry)
+        gating = Path(tmp) / "gating_v3.csv"
+        gating.write_text("synthetic-gating-store\n")
+        raw = Path(tmp) / "assertions_v2.csv"
+        raw.write_text("synthetic-raw-store\n")
+        receipt_path = Path(tmp) / "receipt_v3.json"
         audit.write_receipt(report, path=receipt_path,
-                            earnings_path=earnings, coverage_path=coverage)
-        return dirs, earnings, coverage, receipt_path
+                            earnings_gating_path=gating,
+                            earnings_raw_path=raw)
+        return {"dirs": dirs, "facts": facts, "gating": gating, "raw": raw,
+                "path": receipt_path, "registry": registry}
 
-    def _verify(self, dirs, earnings, coverage, receipt_path, registry=None):
-        return audit.verify_receipt(
-            receipt_path, chain_dir=dirs[0], closes_dir=dirs[1],
-            earnings_path=earnings, coverage_path=coverage,
-            registry=NO_EXCLUSIONS if registry is None else registry)
+    def _verify(self, ctx, **over):
+        kw = dict(chain_dir=ctx["dirs"][0], closes_dir=ctx["dirs"][1],
+                  sessions=SESSIONS, assertions=clear_assertions(),
+                  fetch_facts=ctx["facts"], registry=ctx["registry"],
+                  tracked_manifest={}, tracked_context=TRACKED_CTX,
+                  ledger_records=(), earnings_gating_path=ctx["gating"],
+                  earnings_raw_path=ctx["raw"])
+        kw.update(over)
+        with mock.patch.object(audit, "continuity_breaks", lambda s, d: []):
+            return audit.verify_receipt(ctx["path"], **kw)
 
-    def test_roundtrip_valid(self):
+    def test_roundtrip_with_identical_inputs_is_valid(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
-            ok, failures = self._verify(*args)
+            ctx = self._write(tmp)
+            ok, failures = self._verify(ctx)
         self.assertEqual(failures, [])
         self.assertTrue(ok)
 
     def test_chain_mutation_invalidates(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
+            ctx = self._write(tmp)
             chain_frame([("2022-07-15", 100.0, "C", 9.9, 9.99, 500, 0.55)]
-                        ).to_parquet(args[0][0] / "NVDA_2022-06-02.parquet")
-            ok, failures = self._verify(*args)
+                        ).to_parquet(ctx["dirs"][0] / "NVDA_2022-06-02.parquet")
+            ok, failures = self._verify(ctx)
         self.assertFalse(ok)
-        self.assertTrue(any(f.startswith("chain:") for f in failures))
+        self.assertIn("files_hash", failures)
+
+    def test_new_unexpected_file_invalidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = self._write(tmp)
+            chain_frame().to_parquet(ctx["dirs"][0] /
+                                     "NVDA_2022-05-31.parquet")
+            ok, failures = self._verify(ctx)
+        self.assertFalse(ok)
+        self.assertIn("cache_classification", failures)
+        self.assertIn("counts", failures)
+
+    def test_changed_fetch_fact_invalidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = self._write(tmp)
+            facts = {k: dict(v) for k, v in ctx["facts"].items()}
+            facts[("NVDA", "2022-06-02")]["sha256"] = "0" * 64
+            ok, failures = self._verify(ctx, fetch_facts=facts)
+        self.assertFalse(ok)
+        self.assertIn("block_findings", failures)
+        self.assertIn("verdict", failures)
+
+    def test_tracked_manifest_context_change_invalidates(self):
+        drift = dict(TRACKED_CTX, adapter_blob="a" * 40,
+                     adapter_endpoint_ok=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = self._write(tmp)
+            ok, failures = self._verify(ctx, tracked_context=drift)
+        self.assertFalse(ok)
+        self.assertIn("tracked_manifest", failures)
+        self.assertIn("tracked_manifest.adapter_blob", failures)
+        self.assertIn("tracked_manifest.adapter_endpoint_ok", failures)
 
     def test_closes_mutation_invalidates(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
+            ctx = self._write(tmp)
             pd.DataFrame({"date": SESSIONS, "close": [1.0] * 5}).to_parquet(
-                args[0][1] / "NVDA.parquet")
-            ok, failures = self._verify(*args)
+                ctx["dirs"][1] / "NVDA.parquet")
+            ok, failures = self._verify(ctx)
         self.assertFalse(ok)
-        self.assertIn("closes:NVDA", failures)
+        self.assertIn("closes_hashes", failures)
 
-    def test_earnings_store_mutation_invalidates(self):
+    def test_earnings_gating_store_mutation_invalidates(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
-            args[1].write_text("tampered\n")
-            ok, failures = self._verify(*args)
+            ctx = self._write(tmp)
+            ctx["gating"].write_text("tampered\n")
+            ok, failures = self._verify(ctx)
         self.assertFalse(ok)
-        self.assertIn("earnings_store_hash", failures)
+        self.assertIn("earnings_gating_hash", failures)
 
-    def test_coverage_mutation_invalidates(self):
+    def test_earnings_raw_store_mutation_invalidates(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
-            args[2].write_text('[{"symbol": "NVDA"}]\n')
-            ok, failures = self._verify(*args)
+            ctx = self._write(tmp)
+            ctx["raw"].write_text("tampered\n")
+            ok, failures = self._verify(ctx)
         self.assertFalse(ok)
-        self.assertIn("earnings_coverage_hash", failures)
+        self.assertIn("earnings_raw_hash", failures)
 
     def test_exception_registry_change_invalidates(self):
         other = ({"symbol": "NVDA", "start": "2022-06-02",
                   "end": "2022-06-02", "kind": "x", "basis": "official",
                   "source_urls": ("https://x",)},)
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
-            ok, failures = self._verify(*args, registry=other)
+            ctx = self._write(tmp)
+            ok, failures = self._verify(ctx, registry=other)
         self.assertFalse(ok)
         self.assertIn("exception_registry_hash", failures)
 
     def test_config_change_invalidates(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
+            ctx = self._write(tmp)
             with mock.patch.object(audit, "config_hash", lambda: "0" * 64):
-                ok, failures = self._verify(*args)
+                ok, failures = self._verify(ctx)
         self.assertFalse(ok)
         self.assertIn("config_hash", failures)
 
     def test_source_surface_change_invalidates(self):
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
+            ctx = self._write(tmp)
             with mock.patch.object(audit, "diagnostic_source_hash",
                                    lambda: "0" * 64):
-                ok, failures = self._verify(*args)
+                ok, failures = self._verify(ctx)
         self.assertFalse(ok)
         self.assertIn("diagnostic_source_hash", failures)
 
     def test_receipt_field_tamper_invalidates(self):
-        import json
         with tempfile.TemporaryDirectory() as tmp:
-            args = self._receipt(tmp)
-            receipt = json.loads(args[3].read_text())
+            ctx = self._write(tmp)
+            receipt = json.loads(ctx["path"].read_text())
             receipt["verdict"] = "PASS-TAMPERED"
-            args[3].write_text(json.dumps(receipt))
-            ok, failures = self._verify(*args)
+            ctx["path"].write_text(json.dumps(receipt))
+            ok, failures = self._verify(ctx)
         self.assertFalse(ok)
         self.assertIn("receipt_hash", failures)
 
@@ -466,25 +638,16 @@ class TestReceiptV2(unittest.TestCase):
                      "end": "2022-06-03", "kind": "x", "basis": "official",
                      "source_urls": ("https://x",)},)
         with tempfile.TemporaryDirectory() as tmp:
-            dirs = build_cache(tmp)
-            report = run(dirs, registry=registry)
-            earnings = Path(tmp) / "assertions_v2.csv"
-            earnings.write_text("synthetic-store\n")
-            coverage = Path(tmp) / "coverage.json"
-            coverage.write_text("[]\n")
-            receipt_path = Path(tmp) / "receipt_v2.json"
-            audit.write_receipt(report, path=receipt_path,
-                                earnings_path=earnings,
-                                coverage_path=coverage)
+            ctx = self._write(tmp, registry=registry)
             chain_frame([("2022-07-15", 1.0, "C", 1.0, 1.1, 5, 0.5)]
-                        ).to_parquet(dirs[0] / "NVDA_2022-06-02.parquet")
-            ok, failures = audit.verify_receipt(
-                receipt_path, chain_dir=dirs[0], closes_dir=dirs[1],
-                earnings_path=earnings, coverage_path=coverage,
-                registry=registry)
+                        ).to_parquet(ctx["dirs"][0] / "NVDA_2022-06-02.parquet")
+            ok, failures = self._verify(ctx)
         self.assertFalse(ok)
-        self.assertTrue(any(f.startswith("quarantined:") for f in failures))
+        self.assertIn("quarantined_files_hash", failures)
 
-    def test_v1_receipt_is_never_the_verify_target(self):
+    def test_v3_is_the_verify_target_and_v1_v2_are_blocked(self):
+        self.assertTrue(str(audit.RECEIPT_PATH).endswith("receipt_v3.json"))
         self.assertNotEqual(audit.RECEIPT_PATH, audit.V1_RECEIPT_PATH)
-        self.assertTrue(str(audit.RECEIPT_PATH).endswith("receipt_v2.json"))
+        self.assertNotEqual(audit.RECEIPT_PATH, audit.V2_RECEIPT_PATH)
+        self.assertNotEqual(audit.V1_RECEIPT_PATH, audit.V2_RECEIPT_PATH)
+        self.assertEqual(audit.AUDIT_VERSION, "h7-data-audit/3")
