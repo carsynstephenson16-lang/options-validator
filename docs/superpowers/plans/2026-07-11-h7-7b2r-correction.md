@@ -1,6 +1,8 @@
 # H7 7b-2R correction arc (2026-07-11)
 
-**Status: EXECUTING.** Base commit `679325c`. Ordered by the owner's
+**Status: EXECUTED 2026-07-11 (sections 1–8 complete; section 9 verification
+ran green; audit v2 executed — see the hard-stop report and receipt_v2 for
+the verdict).** Base commit `679325c`. Ordered by the owner's
 independent review of 7b-0..7b-2 (2026-07-11): eight launch blockers found,
 three result-corrupting. 7b-3 REMAINS CLOSED: no backtest, no
 diagnostic_attempt, no lane P&L, no adjudication, and the existing blocked
