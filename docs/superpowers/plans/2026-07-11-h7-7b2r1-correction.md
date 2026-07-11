@@ -1,6 +1,6 @@
 # H7 7b-2R.1 correction release (2026-07-11)
 
-**Status: EXECUTING.** Base commit `56d63be`. Ordered by the owner's second
+**Status: EXECUTED 2026-07-11 (all corrections landed; see the hard-stop report and receipt_v3 for the corrected audit verdict).** Base commit `56d63be`. Ordered by the owner's second
 independent review: NO-GO on 7b-3; the historical diagnostic remains
 closed; hard-stop for independent review at the end.
 
