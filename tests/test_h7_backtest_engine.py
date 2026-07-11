@@ -34,6 +34,7 @@ def A(expected, status="confirmed", event="E1",
     return {"symbol": SYM, "event_id": f"{SYM}-{event}",
             "fiscal_period": f"FY-{event}",   # one period per event: two
             # events with one period would (correctly) read as a conflict
+            "event_class": "actual_quarterly_earnings",
             "expected_date": date.fromisoformat(expected),
             "session_timing": "amc", "status": status,
             "source_url": "https://example.test/ir",

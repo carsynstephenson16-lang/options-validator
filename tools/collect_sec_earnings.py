@@ -1,11 +1,16 @@
 """tools/collect_sec_earnings.py -- ONE bounded collection pass (7b-2R
 section 8, owner-authorized 2026-07-11) over the eight H7 backtest names.
 
-Collects OCCURRED-report assertions from SEC EDGAR: every 8-K carrying
-item 2.02 (Results of Operations) in the H7 window, with the filing's
+Collects RAW Item 2.02 filing records from SEC EDGAR into the v2 RAW
+evidence store (data/earnings/assertions_v2.csv), with the filing's
 acceptanceDateTime as the true point-in-time known_as_of and the filing's
-period-of-report as the occurred date. Appends v2 assertion rows and
-prints per-symbol coverage counts for the coverage report.
+period-of-report as the occurred date.
+
+7b-2R.1: RAW COLLECTION ONLY. An Item 2.02 filing is not automatically an
+earnings report (it may be a preliminary release or a business update).
+Rows collected here are UNCLASSIFIED and can never gate; promotion into
+the v3 gating store (data/earnings/gating_v3.csv) is a separate,
+per-record, classified and source-verified act.
 
 WHAT THIS DELIBERATELY DOES NOT DO (owner rules):
   * no announcement-date inference from eventual report dates;
@@ -38,9 +43,25 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import config
-from options_researcher.h7_earnings import ASSERTIONS_PATH, load_assertions
+from options_researcher.h7_earnings import (
+    RAW_ASSERTIONS_PATH,
+    load_raw_assertions,
+)
 
-UA = "options-validator research carsynstephenson16@gmail.com"
+
+def _user_agent() -> str:
+    """SEC requires an identifying User-Agent. It comes from the
+    environment (SEC_USER_AGENT in .env), never from committed source
+    (7b-2R.1 E); missing configuration fails closed."""
+    ua = os.environ.get("SEC_USER_AGENT", "").strip()
+    if not ua:
+        raise SystemExit(
+            "SEC_USER_AGENT is not set -- refusing to hit data.sec.gov. "
+            "Add e.g. SEC_USER_AGENT='project-name contact@example.com' "
+            "to .env (see .env.example).")
+    return ua
+
+
 CIKS = {
     "NOW": 1373715, "NVDA": 1045810, "PLTR": 1321655, "MSFT": 789019,
     "AMZN": 1018724, "VST": 1692819, "CEG": 1868275, "SMCI": 1375365,
@@ -49,7 +70,7 @@ NY = ZoneInfo("America/New_York")
 
 
 def _get(url: str):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    req = urllib.request.Request(url, headers={"User-Agent": _user_agent()})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())
 
@@ -120,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
-    current = load_assertions()
+    current = load_raw_assertions()
     existing = {(a["symbol"], (a["occurred_date"] or a["expected_date"]))
                 for a in current if a["status"] == "occurred"}
     existing = {(s, d.isoformat() if d else "") for s, d in existing}
@@ -143,11 +164,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(f"DRY RUN: {len(all_rows)} rows NOT appended")
         return 0
-    with Path(ASSERTIONS_PATH).open("a", newline="") as f:
+    with Path(RAW_ASSERTIONS_PATH).open("a", newline="") as f:
         csv.writer(f).writerows(all_rows)
-    load_assertions()   # fail loud if the append broke the store
-    print(f"appended {len(all_rows)} occurred assertions to "
-          f"{ASSERTIONS_PATH}; store re-validates")
+    load_raw_assertions()   # fail loud if the append broke the store
+    print(f"appended {len(all_rows)} RAW (non-gating) Item 2.02 records to "
+          f"{RAW_ASSERTIONS_PATH}; store re-validates")
     return 0
 
 

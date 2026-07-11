@@ -73,12 +73,13 @@ class TestReviewCounterexamples(unittest.TestCase):
 
 
 def A(symbol, expected, status="confirmed", event="E1",
-      known="2026-07-01T12:00:00+00:00", url="https://example.test/ir"):
+      known="2026-07-01T12:00:00+00:00", url="https://example.test/ir",
+      clazz="actual_quarterly_earnings"):
     """Assertion-record fixture in the load_assertions output shape."""
     from datetime import datetime
     ts = datetime.fromisoformat(known)
     return {"symbol": symbol, "event_id": f"{symbol}-{event}",
-            "fiscal_period": "FY26Q2",
+            "fiscal_period": "FY26Q2", "event_class": clazz,
             "expected_date": date.fromisoformat(expected),
             "session_timing": "amc", "status": status, "source_url": url,
             "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}
@@ -166,19 +167,21 @@ class TestEarningsGateTyped(unittest.TestCase):
             next_report("ZZZZ", date(2026, 12, 1), rows, known_as_of=_now()))
 
 
-class TestLoadAssertionsV2(unittest.TestCase):
-    HEADER = ("record_id,symbol,event_id,fiscal_period,record_type,status,"
-              "expected_date,occurred_date,session_timing,source_type,"
-              "source_url,known_as_of_utc,checked_at_utc,supersedes,notes\n")
-    ROW = ("R1,MSFT,MSFT-FY26Q4,FY26Q4,assertion,confirmed,2026-07-29,,amc,"
+class TestLoadGatingStoreV3(unittest.TestCase):
+    HEADER = ("record_id,symbol,event_id,fiscal_period,record_type,"
+              "event_class,status,expected_date,occurred_date,"
+              "session_timing,source_type,source_url,known_as_of_utc,"
+              "checked_at_utc,supersedes,promoted_from,notes\n")
+    ROW = ("R1,MSFT,MSFT-FY26Q4,FY26Q4,assertion,actual_quarterly_earnings,"
+           "confirmed,2026-07-29,,amc,"
            "company_pr,https://example.test/ir,2026-07-10T15:00:00+00:00,"
-           "2026-07-10T15:00:00+00:00,,\n")
+           "2026-07-10T15:00:00+00:00,,,\n")
 
     def _load(self, text):
         import tempfile
         from pathlib import Path
         with tempfile.TemporaryDirectory() as tmp:
-            p = Path(tmp) / "assertions_v2.csv"
+            p = Path(tmp) / "gating_v3.csv"
             p.write_text(text)
             return load_assertions(p)
 
@@ -187,6 +190,28 @@ class TestLoadAssertionsV2(unittest.TestCase):
         self.assertEqual(rows[0]["symbol"], "MSFT")
         self.assertEqual(rows[0]["expected_date"], date(2026, 7, 29))
         self.assertEqual(rows[0]["record_type"], "assertion")
+        self.assertEqual(rows[0]["event_class"], "actual_quarterly_earnings")
+
+    def test_bad_event_class_fails_closed(self):
+        bad = self.ROW.replace("actual_quarterly_earnings", "rumor")
+        with self.assertRaises(ValueError):
+            self._load(self.HEADER + bad)
+
+    def test_actual_quarterly_requires_fiscal_period(self):
+        # 7b-2R.1: gating records need fiscal-period identity
+        bad = self.ROW.replace("MSFT-FY26Q4,FY26Q4", "MSFT-FY26Q4,")
+        with self.assertRaises(ValueError):
+            self._load(self.HEADER + bad)
+
+    def test_unclassified_rows_load_but_never_gate(self):
+        row = self.ROW.replace("actual_quarterly_earnings", "unclassified"
+                               ).replace("confirmed,2026-07-29,",
+                                         "occurred,,2026-07-01")
+        rows = self._load(self.HEADER + row)
+        self.assertEqual(rows[0]["event_class"], "unclassified")
+        state, reason = earnings_gate("MSFT", date(2026, 7, 10), rows,
+                                      known_as_of=_now())
+        self.assertEqual(state, GATE_UNKNOWN)   # fail closed: non-gating
 
     def test_bad_status_fails_closed(self):
         bad = self.ROW.replace("confirmed", "rumored")
@@ -217,8 +242,8 @@ class TestLoadAssertionsV2(unittest.TestCase):
             self._load(self.HEADER + self.ROW + self.ROW)
 
     def test_supersedes_must_reference_an_earlier_record(self):
-        bad = self.ROW.replace(",2026-07-10T15:00:00+00:00,,\n",
-                               ",2026-07-10T15:00:00+00:00,R99,\n")
+        bad = self.ROW.replace(",2026-07-10T15:00:00+00:00,,,\n",
+                               ",2026-07-10T15:00:00+00:00,R99,,\n")
         with self.assertRaises(ValueError):
             self._load(self.HEADER + bad)
 
@@ -235,10 +260,11 @@ class TestLoadAssertionsV2(unittest.TestCase):
 
     def test_retraction_removes_record_from_later_views(self):
         from datetime import datetime
-        retract = ("R2,MSFT,MSFT-FY26Q4,FY26Q4,retraction,confirmed,"
+        retract = ("R2,MSFT,MSFT-FY26Q4,FY26Q4,retraction,"
+                   "actual_quarterly_earnings,confirmed,"
                    "2026-07-29,,amc,company_pr,https://example.test/oops,"
                    "2026-07-12T15:00:00+00:00,2026-07-12T15:00:00+00:00,"
-                   "R1,\n")
+                   "R1,,\n")
         rows = self._load(self.HEADER + self.ROW + retract)
         before = assertions_view(
             rows, datetime.fromisoformat("2026-07-11T00:00:00+00:00"))
@@ -248,11 +274,92 @@ class TestLoadAssertionsV2(unittest.TestCase):
         self.assertEqual(after, [])
         self.assertEqual(len(rows), 2)   # append-only: nothing deleted
 
-    def test_committed_assertions_file_is_valid(self):
+    def test_committed_gating_file_is_valid_and_all_verified_actuals(self):
         rows = load_assertions()
         self.assertGreater(len(rows), 0)
         for a in rows:
             self.assertTrue(a["source_url"].startswith("https://"))
+            self.assertEqual(a["event_class"], "actual_quarterly_earnings")
+            self.assertTrue(a["fiscal_period"])
+
+    def test_committed_raw_store_is_valid_and_never_gates(self):
+        from options_researcher.h7_earnings import load_raw_assertions
+        raw = load_raw_assertions()
+        self.assertGreater(len(raw), 250)   # the 254-row bulk collection
+        self.assertTrue(all(a["event_class"] == "unclassified" for a in raw))
+        # feeding the raw store to the gate yields UNKNOWN, never CLEAR
+        state, reason = earnings_gate("NVDA", date(2024, 3, 1), raw,
+                                      known_as_of=_now())
+        self.assertEqual(state, GATE_UNKNOWN)
+
+
+class TestEventClassGating(unittest.TestCase):
+    """7b-2R.1: only a VERIFIED actual quarterly release starts grace.
+    Regressions around SMCI's closely spaced update/earnings filings
+    (2024-01-18 business update vs 2024-01-29 quarterly earnings)."""
+
+    def _at(self, iso):
+        from datetime import datetime
+        return datetime.fromisoformat(f"{iso}T23:00:00+00:00")
+
+    def _smci(self, iso, clazz, event):
+        a = A("SMCI", iso, status="occurred", event=event, clazz=clazz,
+              known=f"{iso}T22:00:00+00:00")
+        a["occurred_date"] = a["expected_date"]
+        return a
+
+    def test_business_update_does_not_start_grace(self):
+        update = self._smci("2024-01-18", "business_update", "U1")
+        state, reason = earnings_gate("SMCI", date(2024, 2, 15), [update],
+                                      known_as_of=self._at("2024-02-15"))
+        self.assertEqual(state, GATE_UNKNOWN)   # nothing gating exists
+
+    def test_preliminary_does_not_start_grace(self):
+        prelim = self._smci("2024-01-18", "preliminary_earnings", "P1")
+        state, _ = earnings_gate("SMCI", date(2024, 2, 15), [prelim],
+                                 known_as_of=self._at("2024-02-15"))
+        self.assertEqual(state, GATE_UNKNOWN)
+
+    def test_actual_earnings_eleven_days_later_starts_grace(self):
+        update = self._smci("2024-01-18", "business_update", "U1")
+        actual = self._smci("2024-01-29", "actual_quarterly_earnings",
+                            "FY24Q2")
+        state, _ = earnings_gate("SMCI", date(2024, 2, 15), [update, actual],
+                                 known_as_of=self._at("2024-02-15"))
+        self.assertEqual(state, GATE_CLEAR)     # grace runs from 01-29 ONLY
+        # day 45 from 01-29 = 03-14 CLEAR; day 46 = 03-15 UNKNOWN (grace
+        # measured from the ACTUAL, never stretched by the update)
+        self.assertEqual(
+            earnings_gate("SMCI", date(2024, 3, 14), [update, actual],
+                          known_as_of=self._at("2024-03-14"))[0], GATE_CLEAR)
+        self.assertEqual(
+            earnings_gate("SMCI", date(2024, 3, 15), [update, actual],
+                          known_as_of=self._at("2024-03-15"))[0],
+            GATE_UNKNOWN)
+
+    def test_update_does_not_erase_scheduled_quarterly_risk(self):
+        # a business update landing days before a CONFIRMED quarterly report
+        # must not change the gate around that report at all
+        schedule = A("SMCI", "2024-01-29", status="confirmed",
+                     event="FY24Q2", known="2024-01-05T00:00:00+00:00")
+        update = self._smci("2024-01-18", "business_update", "U1")
+        for on in (date(2024, 1, 19), date(2024, 1, 24), date(2024, 1, 26)):
+            with_update = earnings_gate("SMCI", on, [schedule, update],
+                                        known_as_of=self._at(on.isoformat()))
+            without = earnings_gate("SMCI", on, [schedule],
+                                    known_as_of=self._at(on.isoformat()))
+            self.assertEqual(with_update, without)
+        # and inside the 5-session pre-report window it is BANNED
+        state, _ = earnings_gate("SMCI", date(2024, 1, 24),
+                                 [schedule, update],
+                                 known_as_of=self._at("2024-01-24"))
+        self.assertEqual(state, GATE_BANNED)
+
+    def test_next_report_ignores_non_gating_events(self):
+        update = self._smci("2026-08-01", "business_update", "U9")
+        self.assertIsNone(
+            next_report("SMCI", date(2026, 7, 20), [update],
+                        known_as_of=self._at("2026-07-20")))
 
 
 class TestConflictSemantics(unittest.TestCase):
@@ -306,7 +413,8 @@ class TestSessionCloseCutoff(unittest.TestCase):
         from datetime import datetime
         ts = datetime.fromisoformat(accepted_utc)
         return {"symbol": symbol, "event_id": f"{symbol}-Q", "fiscal_period":
-                "Q", "expected_date": None,
+                "Q", "event_class": "actual_quarterly_earnings",
+                "expected_date": None,
                 "occurred_date": date(2026, 4, 29), "session_timing": "amc",
                 "status": "occurred", "source_url": "https://sec.gov/x",
                 "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}

@@ -103,16 +103,43 @@ GATE_UNKNOWN = "UNKNOWN"    # always fails closed
 # v1 store: PRESERVED as historical evidence, no longer consumed (7b-2R
 # finding 4 -- its label:* placeholder sources are not causal facts).
 ASSERTIONS_V1_PATH = Path("data/earnings/assertions.csv")
-ASSERTIONS_PATH = Path("data/earnings/assertions_v2.csv")
-_ASSERT_COLUMNS = ("record_id", "symbol", "event_id", "fiscal_period",
-                   "record_type", "status", "expected_date", "occurred_date",
-                   "session_timing", "source_type", "source_url",
-                   "known_as_of_utc", "checked_at_utc", "supersedes", "notes")
+# v2 store: RAW evidence only after 7b-2R.1 (owner decision 2026-07-11) --
+# bulk SEC Item 2.02 collection lands here and is NEVER consumed by the
+# gate directly. Promotion into the gating store is a separate, per-record,
+# classified act.
+RAW_ASSERTIONS_PATH = Path("data/earnings/assertions_v2.csv")
+# v3 GATING store: the only store the strategy/watcher/audit gate reads.
+ASSERTIONS_PATH = Path("data/earnings/gating_v3.csv")
+_RAW_COLUMNS = ("record_id", "symbol", "event_id", "fiscal_period",
+                "record_type", "status", "expected_date", "occurred_date",
+                "session_timing", "source_type", "source_url",
+                "known_as_of_utc", "checked_at_utc", "supersedes", "notes")
+_GATING_COLUMNS = ("record_id", "symbol", "event_id", "fiscal_period",
+                   "record_type", "event_class", "status", "expected_date",
+                   "occurred_date", "session_timing", "source_type",
+                   "source_url", "known_as_of_utc", "checked_at_utc",
+                   "supersedes", "promoted_from", "notes")
 _ASSERT_STATUSES = ("estimated", "confirmed", "occurred")
 _ASSERT_TIMINGS = ("bmo", "amc", "unknown")
 _ASSERT_RECORD_TYPES = ("assertion", "retraction")
 _ASSERT_SOURCE_TYPES = ("sec_filing", "company_pr", "company_ir",
                         "exchange_notice", "aggregator")
+# 7b-2R.1: an Item 2.02 filing is not automatically an earnings report.
+# Only a VERIFIED actual quarterly release may start the grace window;
+# preliminary results and business updates neither start grace nor erase
+# the risk of a later scheduled quarterly report; unclassified rows are
+# non-gating and fail closed.
+EVENT_CLASSES = ("actual_quarterly_earnings", "preliminary_earnings",
+                 "business_update", "other_item_202", "unclassified")
+GATING_EVENT_CLASS = "actual_quarterly_earnings"
+
+# Reason taxonomy exported for the audit's UNKNOWN split: only a
+# grace-expired UNKNOWN can ever be considered PROVEN_UNKNOWN; an empty
+# archive or a conflict is ALWAYS DATA_GAP (owner decision 2026-07-11).
+GATE_REASON_NO_ASSERTIONS = "no gating point-in-time assertions for symbol"
+GATE_REASON_GRACE_EXPIRED = ("next report unknown: no live future assertion "
+                             "and no proven report within the grace window")
+GATE_REASON_CONFLICT_PREFIX = "conflicting"
 
 
 def _utc(value: str, ctx: str):
@@ -126,23 +153,18 @@ def _utc(value: str, ctx: str):
     return stamp
 
 
-def load_assertions(path: Path = ASSERTIONS_PATH) -> list[dict]:
-    """Parse and validate the append-only v2 assertions store. FAILS CLOSED
-    on any malformed row (owner rule: conflicting/malformed/absent -> UNKNOWN
-    is enforced by the gate; a malformed FILE is a raise, not a guess).
-
-    v2 schema (7b-2R finding 4): stable record identity, assertion vs
-    retraction record types, expected AND occurred dates, source type,
-    exact https:// source URL (label:* placeholders are REJECTED), explicit
-    supersession target."""
+def _load_store(path: Path, columns: tuple, *, gating: bool) -> list[dict]:
+    """Shared validator for the append-only stores. FAILS CLOSED on any
+    malformed row (owner rule: conflicting/malformed/absent -> UNKNOWN is
+    enforced by the gate; a malformed FILE is a raise, not a guess)."""
     rows: list[dict] = []
     last_checked = None
     seen_ids: set[str] = set()
     with path.open() as f:
         reader = csv.DictReader(f)
-        if tuple(reader.fieldnames or ()) != _ASSERT_COLUMNS:
+        if tuple(reader.fieldnames or ()) != columns:
             raise ValueError(
-                f"{path}: header {reader.fieldnames} != {_ASSERT_COLUMNS}")
+                f"{path}: header {reader.fieldnames} != {columns}")
         for i, row in enumerate(reader, start=2):
             ctx = f"{path}:{i}"
             record_id = (row["record_id"] or "").strip()
@@ -173,6 +195,18 @@ def load_assertions(path: Path = ASSERTIONS_PATH) -> list[dict]:
                 raise ValueError(
                     f"{ctx}: source_url must be an exact https:// URL "
                     f"(label:* placeholders are not causal facts): {url!r}")
+            if gating:
+                event_class = (row["event_class"] or "").strip().lower()
+                if event_class not in EVENT_CLASSES:
+                    raise ValueError(f"{ctx}: event_class must be one of "
+                                     f"{EVENT_CLASSES}")
+                fiscal = (row["fiscal_period"] or "").strip()
+                if event_class == GATING_EVENT_CLASS and not fiscal:
+                    raise ValueError(
+                        f"{ctx}: a {GATING_EVENT_CLASS} record requires "
+                        f"fiscal-period identity (7b-2R.1)")
+            else:
+                event_class = "unclassified"   # raw rows NEVER gate
             supersedes = (row["supersedes"] or "").strip()
             if supersedes and supersedes not in seen_ids:
                 raise ValueError(f"{ctx}: supersedes {supersedes!r} does not "
@@ -202,6 +236,7 @@ def load_assertions(path: Path = ASSERTIONS_PATH) -> list[dict]:
                 "event_id": event_id,
                 "fiscal_period": (row["fiscal_period"] or "").strip(),
                 "record_type": record_type,
+                "event_class": event_class,
                 "status": status,
                 "expected_date": (date.fromisoformat(expected_raw)
                                   if expected_raw else None),
@@ -213,9 +248,26 @@ def load_assertions(path: Path = ASSERTIONS_PATH) -> list[dict]:
                 "known_as_of_utc": _utc(row["known_as_of_utc"], ctx),
                 "checked_at_utc": checked,
                 "supersedes": supersedes,
+                "promoted_from": (row.get("promoted_from") or "").strip(),
                 "notes": (row["notes"] or "").strip(),
             })
     return rows
+
+
+def load_assertions(path: Path = ASSERTIONS_PATH) -> list[dict]:
+    """The v3 GATING store: the ONLY assertions the strategy, watcher and
+    audit gate on. Every row carries an event_class; only
+    actual_quarterly_earnings records participate in the gate, and those
+    require fiscal-period identity plus an exact source URL (7b-2R.1:
+    promotion is separate from raw SEC collection; nothing is
+    bulk-labeled)."""
+    return _load_store(path, _GATING_COLUMNS, gating=True)
+
+
+def load_raw_assertions(path: Path = RAW_ASSERTIONS_PATH) -> list[dict]:
+    """The v2 RAW evidence store (bulk SEC Item 2.02 collection). Rows are
+    validated but marked unclassified: they can never gate."""
+    return _load_store(path, _RAW_COLUMNS, gating=False)
 
 
 def _report_date(a: dict) -> date:
@@ -260,10 +312,15 @@ def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
     2026-07-11: never silently trust either source, never just ban both).
     UNKNOWN always fails closed."""
     sym = symbol.upper()
+    # 7b-2R.1: only VERIFIED actual quarterly earnings records gate.
+    # Preliminary results, business updates, other Item 2.02 events and
+    # unclassified rows are invisible here -- they never start grace and
+    # never erase the risk of a later scheduled quarterly report.
     view = [a for a in assertions_view(assertions, known_as_of)
-            if a["symbol"] == sym]
+            if a["symbol"] == sym
+            and a.get("event_class") == GATING_EVENT_CLASS]
     if not view:
-        return GATE_UNKNOWN, "no point-in-time assertions for symbol"
+        return GATE_UNKNOWN, GATE_REASON_NO_ASSERTIONS
     live = [a for a in view if a["status"] in ("estimated", "confirmed")]
     by_period: dict[str, set] = {}
     for a in live:
@@ -272,16 +329,15 @@ def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
                 a["expected_date"])
     for period, dates in sorted(by_period.items()):
         if len(dates) > 1 and max(dates) >= on:
-            return GATE_UNKNOWN, (f"conflicting unresolved schedule "
-                                  f"assertions for {period}")
+            return GATE_UNKNOWN, (f"{GATE_REASON_CONFLICT_PREFIX} unresolved "
+                                  f"schedule assertions for {period}")
     future = [a for a in live if a["expected_date"] >= on]
     grace = timedelta(days=config.H7_EARNINGS_POST_REPORT_GRACE_D)
     occurred_recent = [a for a in view
                        if a["status"] == "occurred"
                        and timedelta(0) <= (on - _report_date(a)) <= grace]
     if not future and not occurred_recent:
-        return GATE_UNKNOWN, ("next report unknown: no live future assertion "
-                              "and no proven report within the grace window")
+        return GATE_UNKNOWN, GATE_REASON_GRACE_EXPIRED
     rec = {
         "confirmed": [_report_date(a) for a in view
                       if a["status"] in ("confirmed", "occurred")],
@@ -301,5 +357,7 @@ def next_report(symbol: str, on: date, assertions: list[dict], *,
     sym = symbol.upper()
     upcoming = [_report_date(a)
                 for a in assertions_view(assertions, known_as_of)
-                if a["symbol"] == sym and _report_date(a) >= on]
+                if a["symbol"] == sym
+                and a.get("event_class") == GATING_EVENT_CLASS
+                and _report_date(a) >= on]
     return min(upcoming) if upcoming else None

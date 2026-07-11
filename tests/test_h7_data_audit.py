@@ -25,6 +25,7 @@ TRACKED_CTX = {"commit": "deadbeef", "committed": "2026-07-10T09:12:06-04:00",
 def clear_assertions(sym="NVDA"):
     ts = datetime.fromisoformat("2020-01-01T00:00:00+00:00")
     return [{"symbol": sym, "event_id": f"{sym}-E1", "fiscal_period": "FYX",
+             "event_class": "actual_quarterly_earnings",
              "expected_date": datetime(2022, 12, 15).date(),
              "session_timing": "amc", "status": "confirmed",
              "source_url": "https://example.test/ir",

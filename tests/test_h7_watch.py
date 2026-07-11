@@ -19,6 +19,7 @@ def _assertion(symbol, expected, status="confirmed", event="E1",
     ts = datetime.fromisoformat(known)
     return {"symbol": symbol, "event_id": f"{symbol}-{event}",
             "fiscal_period": "FY26Q2",
+            "event_class": "actual_quarterly_earnings",
             "expected_date": date.fromisoformat(expected),
             "session_timing": "amc", "status": status,
             "source_url": "https://example.test/ir",

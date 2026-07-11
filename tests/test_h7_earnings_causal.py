@@ -20,6 +20,7 @@ def A(symbol, expected, status="confirmed", event="E1",
     ts = datetime.fromisoformat(known)
     return {"symbol": symbol, "event_id": f"{symbol}-{event}",
             "fiscal_period": "FYX",
+            "event_class": "actual_quarterly_earnings",
             "expected_date": date.fromisoformat(expected),
             "session_timing": "amc", "status": status, "source_url": url,
             "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}
@@ -92,31 +93,31 @@ class TestCausalGateProofs(unittest.TestCase):
         from options_researcher.h7_earnings import load_assertions
 
         header = ("record_id,symbol,event_id,fiscal_period,record_type,"
-                  "status,expected_date,occurred_date,session_timing,"
-                  "source_type,source_url,known_as_of_utc,checked_at_utc,"
-                  "supersedes,notes\n")
+                  "event_class,status,expected_date,occurred_date,"
+                  "session_timing,source_type,source_url,known_as_of_utc,"
+                  "checked_at_utc,supersedes,promoted_from,notes\n")
         cases = (
             # unknown status
-            "R1,Z,Z-1,FY,assertion,leaked,2026-08-01,,amc,company_pr,"
+            "R1,Z,Z-1,FY,assertion,actual_quarterly_earnings,leaked,2026-08-01,,amc,company_pr,"
             "https://x,2026-07-01T00:00:00+00:00,"
-            "2026-07-01T00:00:00+00:00,,\n",
+            "2026-07-01T00:00:00+00:00,,,\n",
             # timezone-naive timestamp
-            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,"
+            "R1,Z,Z-1,FY,assertion,actual_quarterly_earnings,confirmed,2026-08-01,,amc,company_pr,"
             "https://x,2026-07-01T00:00:00,2026-07-01T00:00:00+00:00,,\n",
             # missing source URL
-            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,,"
+            "R1,Z,Z-1,FY,assertion,actual_quarterly_earnings,confirmed,2026-08-01,,amc,company_pr,,"
             "2026-07-01T00:00:00+00:00,2026-07-01T00:00:00+00:00,,\n",
             # label:* placeholder source (7b-2R: not a causal fact)
-            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,"
+            "R1,Z,Z-1,FY,assertion,actual_quarterly_earnings,confirmed,2026-08-01,,amc,company_pr,"
             "label:pr,2026-07-01T00:00:00+00:00,"
-            "2026-07-01T00:00:00+00:00,,\n",
+            "2026-07-01T00:00:00+00:00,,,\n",
             # append-only violation (checked_at decreases)
-            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,"
+            "R1,Z,Z-1,FY,assertion,actual_quarterly_earnings,confirmed,2026-08-01,,amc,company_pr,"
             "https://x,2026-07-02T00:00:00+00:00,"
             "2026-07-02T00:00:00+00:00,,\n"
-            "R2,Z,Z-2,FY,assertion,confirmed,2026-11-01,,amc,company_pr,"
+            "R2,Z,Z-2,FY,assertion,actual_quarterly_earnings,confirmed,2026-11-01,,amc,company_pr,"
             "https://x,2026-07-01T00:00:00+00:00,"
-            "2026-07-01T00:00:00+00:00,,\n",
+            "2026-07-01T00:00:00+00:00,,,\n",
         )
         for body in cases:
             with tempfile.TemporaryDirectory() as tmp:
