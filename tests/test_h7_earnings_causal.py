@@ -8,7 +8,6 @@ import unittest
 from datetime import date, datetime
 
 from options_researcher.h7_earnings import (
-    GATE_BANNED,
     GATE_CLEAR,
     GATE_UNKNOWN,
     assertions_view,
@@ -92,39 +91,50 @@ class TestCausalGateProofs(unittest.TestCase):
 
         from options_researcher.h7_earnings import load_assertions
 
-        header = ("symbol,event_id,fiscal_period,expected_date,"
-                  "session_timing,status,source_url,known_as_of_utc,"
-                  "checked_at_utc,notes\n")
+        header = ("record_id,symbol,event_id,fiscal_period,record_type,"
+                  "status,expected_date,occurred_date,session_timing,"
+                  "source_type,source_url,known_as_of_utc,checked_at_utc,"
+                  "supersedes,notes\n")
         cases = (
             # unknown status
-            "Z,Z-1,FY,2026-08-01,amc,leaked,https://x,"
-            "2026-07-01T00:00:00+00:00,2026-07-01T00:00:00+00:00,\n",
+            "R1,Z,Z-1,FY,assertion,leaked,2026-08-01,,amc,company_pr,"
+            "https://x,2026-07-01T00:00:00+00:00,"
+            "2026-07-01T00:00:00+00:00,,\n",
             # timezone-naive timestamp
-            "Z,Z-1,FY,2026-08-01,amc,confirmed,https://x,"
-            "2026-07-01T00:00:00,2026-07-01T00:00:00+00:00,\n",
+            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,"
+            "https://x,2026-07-01T00:00:00,2026-07-01T00:00:00+00:00,,\n",
             # missing source URL
-            "Z,Z-1,FY,2026-08-01,amc,confirmed,,"
-            "2026-07-01T00:00:00+00:00,2026-07-01T00:00:00+00:00,\n",
+            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,,"
+            "2026-07-01T00:00:00+00:00,2026-07-01T00:00:00+00:00,,\n",
+            # label:* placeholder source (7b-2R: not a causal fact)
+            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,"
+            "label:pr,2026-07-01T00:00:00+00:00,"
+            "2026-07-01T00:00:00+00:00,,\n",
             # append-only violation (checked_at decreases)
-            "Z,Z-1,FY,2026-08-01,amc,confirmed,https://x,"
-            "2026-07-02T00:00:00+00:00,2026-07-02T00:00:00+00:00,\n"
-            "Z,Z-2,FY,2026-11-01,amc,confirmed,https://x,"
-            "2026-07-01T00:00:00+00:00,2026-07-01T00:00:00+00:00,\n",
+            "R1,Z,Z-1,FY,assertion,confirmed,2026-08-01,,amc,company_pr,"
+            "https://x,2026-07-02T00:00:00+00:00,"
+            "2026-07-02T00:00:00+00:00,,\n"
+            "R2,Z,Z-2,FY,assertion,confirmed,2026-11-01,,amc,company_pr,"
+            "https://x,2026-07-01T00:00:00+00:00,"
+            "2026-07-01T00:00:00+00:00,,\n",
         )
         for body in cases:
             with tempfile.TemporaryDirectory() as tmp:
-                p = Path(tmp) / "assertions.csv"
+                p = Path(tmp) / "assertions_v2.csv"
                 p.write_text(header + body)
                 with self.assertRaises(ValueError):
                     load_assertions(p)
-        # conflicting distinct-event schedules are treated CONSERVATIVELY:
-        # both ban windows apply (never a silent pick of one source)
+        # conflicting unresolved dates for the SAME symbol/fiscal period ->
+        # UNKNOWN (owner decision 2026-07-11: the archive cannot say which
+        # source is right, so the next report date is not known -- never
+        # silently pick one, never merely ban both)
         rows = [A("ZZZZ", "2026-08-04", event="Qx"),
                 A("ZZZZ", "2026-08-18", event="Qy")]
         on = date(2026, 8, 4)
-        state, _ = earnings_gate("ZZZZ", on, rows,
-                                 known_as_of=AT("2026-08-04T23:59:59+00:00"))
-        self.assertEqual(state, GATE_BANNED)
+        state, reason = earnings_gate(
+            "ZZZZ", on, rows, known_as_of=AT("2026-08-04T23:59:59+00:00"))
+        self.assertEqual(state, GATE_UNKNOWN)
+        self.assertIn("conflicting", reason)
 
     def test_8_h7c_earnings_risk_reevaluated_every_session_while_open(self):
         # engine-level proof lives in

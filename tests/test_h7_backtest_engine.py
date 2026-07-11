@@ -32,7 +32,9 @@ def A(expected, status="confirmed", event="E1",
       known="2020-01-01T00:00:00+00:00"):
     ts = datetime.fromisoformat(known)
     return {"symbol": SYM, "event_id": f"{SYM}-{event}",
-            "fiscal_period": "FYX", "expected_date": date.fromisoformat(expected),
+            "fiscal_period": f"FY-{event}",   # one period per event: two
+            # events with one period would (correctly) read as a conflict
+            "expected_date": date.fromisoformat(expected),
             "session_timing": "amc", "status": status,
             "source_url": "https://example.test/ir",
             "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}

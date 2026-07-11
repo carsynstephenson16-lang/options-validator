@@ -58,7 +58,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date as Date
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import config
 from data import pandas_feed
@@ -103,9 +103,12 @@ def primary_exit_reason(reasons: list[str]) -> str:
 
 
 def _default_known_as_of(iso_day: str) -> datetime:
-    """Backtest causality cutoff for session T: the end of T in UTC."""
-    d = Date.fromisoformat(iso_day)
-    return datetime(d.year, d.month, d.day, 23, 59, 59, tzinfo=timezone.utc)
+    """Backtest causality cutoff for session T: the ACTUAL XNYS close of T
+    in UTC (early closes included). An announcement published after the
+    close -- e.g. an 8-K accepted 20:03 UTC -- is NOT in T's information set
+    and becomes visible at T+1 (7b-2R finding 4)."""
+    from data.cache_runner import session_close_utc
+    return session_close_utc(iso_day)
 
 
 @dataclass

@@ -252,7 +252,15 @@ def main(argv: list[str] | None = None) -> int:
     # 252 trading sessions of signal history plus weekend/holiday slack
     start_iso = (eval_date - timedelta(days=560)).isoformat()
 
-    known_as_of = datetime.now(ZoneInfo("UTC"))
+    if args.as_of:
+        # historical replay: the information cutoff is the evaluation
+        # session's ACTUAL close, never the wall clock (7b-2R finding 4 --
+        # datetime.now() here was lookahead: a replay of last Tuesday could
+        # see announcements published after Tuesday's close)
+        from data.cache_runner import session_close_utc
+        known_as_of = session_close_utc(eval_iso)
+    else:
+        known_as_of = datetime.now(ZoneInfo("UTC"))
     try:
         assertions = load_assertions()
     except Exception as e:  # fail closed: cannot verify earnings state

@@ -176,10 +176,10 @@ def run_audit(symbols=None, start=None, end=None, *, chain_dir=CHAIN_DIR,
     if fetch_times is None:
         fetch_times = fetch_times_from_ledger()
     if known_as_of_fn is None:
-        def known_as_of_fn(iso):
-            d = Date.fromisoformat(iso)
-            return datetime(d.year, d.month, d.day, 23, 59, 59,
-                            tzinfo=ZoneInfo("UTC"))
+        # the session's information cutoff is its ACTUAL close (7b-2R
+        # finding 4) -- the same helper the strategy and watcher use
+        from data.cache_runner import session_close_utc
+        known_as_of_fn = session_close_utc
 
     counts = {"expected": 0, "present": 0, "missing": 0, "excluded": 0,
               "duplicate_files": 0}
