@@ -59,6 +59,7 @@ H7_AUDIT_EXCEPTIONS = (
         "end": "2020-10-05",
         "kind": "options_inception_unverified",
         "basis": "data_coverage",
+        "ratified_by": "6faa494538a87e3ff802815ac9301ec6c004963c118745df1ab66a69b9491e5c",   # H7_AMENDMENT_V1_3: archive-availability gap ONLY
         "source_urls": (
             "https://www.miaxglobal.com/alerts/2020/10/12/miax-exchange-group-options-markets-listing-palantir-technologies-inc-pltr",
         ),
@@ -91,6 +92,7 @@ H7_AUDIT_EXCEPTIONS = (
         "end": "2022-02-08",
         "kind": "options_inception_unverified",
         "basis": "data_coverage",
+        "ratified_by": "6faa494538a87e3ff802815ac9301ec6c004963c118745df1ab66a69b9491e5c",   # H7_AMENDMENT_V1_3: archive-availability gap ONLY
         "source_urls": (),
         "provenance": ("no official option-listing notice found for CEG "
                        "options inception (MIAX per-class alerts had ceased "
@@ -144,6 +146,7 @@ H7_AUDIT_EXCEPTIONS = (
         "end": "2020-05-04",
         "kind": "options_coverage_gap",
         "basis": "data_coverage",
+        "ratified_by": "6faa494538a87e3ff802815ac9301ec6c004963c118745df1ab66a69b9491e5c",   # H7_AMENDMENT_V1_3: archive-availability gap ONLY
         "source_urls": (
             "https://www.sec.gov/Archives/edgar/data/1375365/000137536520000004/form8-k20200109.htm",
         ),
