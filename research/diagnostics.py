@@ -11,14 +11,17 @@ prior attempt by its record hash.
 
 from __future__ import annotations
 
+import subprocess
 from datetime import datetime, timezone
 
 from research import ledger
 from research.hashing import (
     DIAGNOSTIC_SOURCE_HASH_VERSION,
+    canonical_json,
     config_hash,
     cost_model_hash,
     diagnostic_source_hash,
+    sha256_hex,
 )
 
 
@@ -104,7 +107,7 @@ def verify_attempt_current(diagnostic_id: str, *, base_dir="ledger",
     """The 7b-3 launch gate: the recorded attempt's hashes must match the
     CURRENT code/config/cost surfaces, its source-hash version must be the
     exactly supported one, its registration bindings must match the ledger,
-    and its bound v2 receipt must exist, verify, be PASS, and match both
+    and its bound audit receipt must exist, verify, be PASS, and match both
     the attempt's receipt_hash and data_manifest_hash (7b-2R finding 7 --
     the earlier version omitted receipt/registration/scope/source-version
     checks). Returns the attempt record on success."""
@@ -139,12 +142,12 @@ def verify_attempt_current(diagnostic_id: str, *, base_dir="ledger",
         from tools.h7_data_audit import RECEIPT_PATH, verify_receipt
         if not RECEIPT_PATH.exists():
             raise DiagnosticError(
-                f"attempt {diagnostic_id!r}: no v2 audit receipt at "
+                f"attempt {diagnostic_id!r}: no current audit receipt at "
                 f"{RECEIPT_PATH}")
         ok, failures = verify_receipt()
         if not ok:
             raise DiagnosticError(
-                f"attempt {diagnostic_id!r}: v2 receipt fails verification "
+                f"attempt {diagnostic_id!r}: audit receipt fails verification "
                 f"({failures}) -- an input mutated since the audit")
         receipt = json.loads(RECEIPT_PATH.read_text())
     if receipt.get("verdict") != "PASS":
@@ -160,3 +163,68 @@ def verify_attempt_current(diagnostic_id: str, *, base_dir="ledger",
             f"attempt {diagnostic_id!r}: data_manifest_hash does not match "
             f"the receipt's eligible-session manifest")
     return rec
+
+
+def _ledger_git_status(base_dir: str) -> str:
+    """Porcelain git status for the ledger dir (a seam for test mocking)."""
+    out = subprocess.run(["git", "status", "--porcelain", base_dir],
+                         capture_output=True, text=True,
+                         cwd=ledger.REPO_ROOT)
+    return out.stdout.strip()
+
+
+def require_anchored_ledger(base_dir: str = "ledger") -> None:
+    """The ledger chain must verify AND the ledger dir must carry no
+    uncommitted git changes: an attempt authorizes execution only once it
+    is anchored (committed). Raises DiagnosticError otherwise."""
+    ledger.verify(base_dir=base_dir)
+    dirty = _ledger_git_status(base_dir)
+    if dirty:
+        raise DiagnosticError(
+            f"ledger dir {base_dir!r} has uncommitted changes -- the "
+            f"attempt must be anchored (committed) before execution:\n"
+            f"{dirty}")
+
+
+def authorize_oos_run(diagnostic_id, *, lane, window, symbols, manifest,
+                      base_dir="ledger") -> dict:
+    """The OOS gate at the execution boundary (7b-2R.1 finding A).
+
+    Called by harness.run_h7_backtest.run_lane BEFORE any loader touches
+    post-IN_SAMPLE_END data. There is no freely constructible authorization
+    object: the only thing that opens an OOS window is a committed, current
+    diagnostic_attempt whose bound v2 PASS receipt manifest is exactly the
+    manifest the runner is about to consume. Returns the attempt record on
+    success; raises DiagnosticError on the first failing gate."""
+    if not diagnostic_id:
+        raise DiagnosticError(
+            "OOS window requires a verified diagnostic id -- run_lane past "
+            "IN_SAMPLE_END launches only via tools/h7_run_diagnostic.py")
+    require_anchored_ledger(base_dir)
+    results = [r for r in ledger.read_all(base_dir)
+               if r.get("entry_type") == "diagnostic_result"
+               and r.get("diagnostic_id") == diagnostic_id]
+    if results:
+        raise DiagnosticError(
+            f"{diagnostic_id!r} already has a write-once result; a "
+            f"diagnostic is never rerun under the same id")
+    attempt = verify_attempt_current(diagnostic_id, base_dir=base_dir)
+    if attempt["lane"] != lane:
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r} authorizes lane "
+            f"{attempt['lane']!r}, not {lane!r}")
+    if sorted(attempt["scope"]["symbols"]) != sorted(symbols):
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r} authorizes symbols "
+            f"{sorted(attempt['scope']['symbols'])}, not {sorted(symbols)}")
+    if dict(attempt["window"]) != dict(window):
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r} authorizes window "
+            f"{attempt['window']}, not {window}")
+    manifest_hash = sha256_hex(canonical_json(manifest))
+    if manifest_hash != attempt.get("data_manifest_hash"):
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r}: runner manifest hash "
+            f"{manifest_hash} != the attempt's data_manifest_hash -- the "
+            f"runner would not consume exactly the audited inputs")
+    return attempt

@@ -15,8 +15,15 @@ without a forward window; a SURVIVED lane still owes the registered forward
 paper window before any further step. The verdict gates on LOSSES
 (config.MIN_LOSSES_FOR_VERDICT), never on win rate.
 
-Usage (7b-3 only, after the audit receipt + committed diagnostic_attempt):
-    uv run python tools/h7_adjudicate.py results/h7/lane_a.json
+Usage (display only -- results are never inspectable before they are
+ledgered; 7b-2R.1 finding A removed the arbitrary-file CLI):
+    uv run python tools/h7_adjudicate.py <diagnostic_id>
+
+The CLI prints the STORED adjudication from the write-once ledgered
+diagnostic_result; it never recomputes a verdict from caller-supplied
+input. `adjudicate_lane` stays a pure library function used by the gated
+launch command (tools/h7_run_diagnostic.py), which ledgers raw result +
+adjudication before anything is printed.
 """
 
 from __future__ import annotations
@@ -92,21 +99,34 @@ def adjudicate_lane(trades: list[dict], lane: str, *,
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, base_dir: str = "ledger") -> int:
+    """Print the STORED adjudication of an already-ledgered diagnostic
+    result. Refuses (exit 2) when the ledger does not verify or no
+    write-once diagnostic_result exists for the id -- never adjudicates
+    arbitrary caller-supplied JSON."""
     import argparse
     import json
-    from pathlib import Path
+
+    from research import ledger
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("results_json",
-                        help="path to a lane result file: "
-                             '{"lane": "a", "trades": [...]}')
+    parser.add_argument("diagnostic_id",
+                        help="id of a LEDGERED diagnostic_result to display")
     args = parser.parse_args(argv)
-    payload = json.loads(Path(args.results_json).read_text())
-    out = adjudicate_lane(payload["trades"], payload["lane"],
-                          coverage=payload.get("coverage"),
-                          gaps=payload.get("gaps", ()))
-    print(json.dumps(out, indent=2))
+    try:
+        ledger.verify(base_dir=base_dir)
+    except ledger.LedgerError as e:
+        print(f"REFUSED: ledger does not verify: {e}")
+        return 2
+    results = [r for r in ledger.read_all(base_dir)
+               if r.get("entry_type") == "diagnostic_result"
+               and r.get("diagnostic_id") == args.diagnostic_id]
+    if not results:
+        print(f"REFUSED: {args.diagnostic_id!r} has no ledgered result; "
+              f"results are never inspectable before they are ledgered "
+              f"(launch via tools/h7_run_diagnostic.py)")
+        return 2
+    print(json.dumps(results[-1]["result"]["adjudication"], indent=2))
     return 0
 
 

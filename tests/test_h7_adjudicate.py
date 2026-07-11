@@ -1,9 +1,15 @@
 """7b-2 C4: the H7 adjudicator's four-verdict vocabulary, loss gating, and
-kill-not-bless language."""
+kill-not-bless language. 7b-2R.1 finding A: the CLI displays only
+already-ledgered results; arbitrary JSON is never adjudicated."""
 
+import contextlib
+import io
+import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
+from research import diagnostics, ledger
+from tools import h7_adjudicate
 from tools.h7_adjudicate import VERDICTS, CoverageError
 from tools.h7_adjudicate import adjudicate_lane as _adjudicate_lane
 
@@ -98,3 +104,53 @@ class TestGapRefusal(unittest.TestCase):
                    "stage": "decision",
                    "reason": "chain_missing_for_session"}])
         self.assertIn(out["verdict"], VERDICTS)
+
+
+class TestGatedCLI(unittest.TestCase):
+    """7b-2R.1 finding A: the CLI accepts a diagnostic id, refuses anything
+    not already ledgered, and prints the STORED adjudication -- it never
+    recomputes a verdict from caller-supplied input."""
+
+    @staticmethod
+    def _seed_result(base, adjudication):
+        ledger.append({
+            "entry_type": "trial_intent",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hypothesis_id": "H7",
+            "reason": "synthetic H7 registration",
+        }, base_dir=base)
+        diagnostics.record_diagnostic_attempt(
+            diagnostic_id="H7a-diag-1", lane="a", symbols=["NVDA"],
+            window={"start": "2018-01-02", "end": "2026-06-30"},
+            estimand="isolated-lane non-blind diagnostic",
+            data_manifest_hash="c" * 64, receipt_hash="b" * 64,
+            base_dir=base)
+        diagnostics.record_diagnostic_result(
+            diagnostic_id="H7a-diag-1",
+            result={"raw": {"trades": []}, "adjudication": adjudication},
+            base_dir=base)
+
+    def test_unledgered_id_is_refused_with_exit_2(self):
+        with tempfile.TemporaryDirectory() as base:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = h7_adjudicate.main(["some-id"], base_dir=base)
+        self.assertEqual(rc, 2)
+        self.assertIn("never inspectable", buf.getvalue())
+
+    def test_prints_only_the_stored_adjudication(self):
+        stored = {"lane": "a", "verdict": "REJECTED", "n_trades": 30,
+                  "n_losses": 30}
+        with tempfile.TemporaryDirectory() as base:
+            self._seed_result(base, stored)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = h7_adjudicate.main(["H7a-diag-1"], base_dir=base)
+        self.assertEqual(rc, 0)
+        self.assertIn('"REJECTED"', buf.getvalue())
+
+    def test_cli_never_adjudicates_arbitrary_files(self):
+        import inspect
+        src = inspect.getsource(h7_adjudicate.main)
+        self.assertNotIn("results_json", src)      # no file-path argument
+        self.assertNotIn("adjudicate_lane(", src)  # never recomputes

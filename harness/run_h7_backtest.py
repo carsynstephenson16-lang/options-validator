@@ -9,6 +9,13 @@ only. No full-window H7 experiment may run before the 7b-2 gates pass, a
 diagnostic_attempt ledger record is committed, and the owner's independent
 review clears 7b-3 (ledger H7_7B_NOGO + H7_OWNER_DECISIONS_7B01).
 
+OOS GATE (7b-2R.1 finding A): the gate lives INSIDE the execution boundary.
+There is no capability object a caller could construct; run_lane itself
+calls research.diagnostics.authorize_oos_run before any loader touches a
+window ending past config.IN_SAMPLE_END, and refuses (DiagnosticError)
+unless a committed, current diagnostic_attempt with a v2 PASS receipt
+authorizes exactly this lane/window/symbols/manifest.
+
 Chunking (memory, not statistics), same contract as the H1 runner:
   * interior chunks allow entries through Dec 31 and simulate
     H7_MAX_HOLD_DAYS into the next year so every position exits inside its
@@ -193,26 +200,11 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
                          "unaccounted": unaccounted}}
 
 
-class DiagnosticCapability:
-    """Authorization token for reading past IN_SAMPLE_END (7b-2R finding 7:
-    the public allow_oos=True escape hatch is REMOVED from run_lane).
-    Production issuance happens ONLY inside tools/h7_run_diagnostic.py,
-    after the full launch gate (verified ledger attempt + v2 PASS receipt);
-    synthetic unit tests may construct one via for_synthetic_fixtures()."""
-
-    def __init__(self, *, attempt_hash: str):
-        self.attempt_hash = attempt_hash
-
-    @classmethod
-    def for_synthetic_fixtures(cls) -> "DiagnosticCapability":
-        return cls(attempt_hash="synthetic-fixture-only")
-
-
 def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
              symbols: list[str] | None = None,
              assertions: list | None = None,
              known_as_of_fn=None, manifest: dict | None = None,
-             capability: DiagnosticCapability | None = None) -> dict:
+             diagnostic_id: str | None = None) -> dict:
     """Run one lane across symbols/chunks; returns {"trades", "cancelled",
     "quarantined", "gaps", "coverage"}.
 
@@ -220,33 +212,47 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
     the runner loads ONLY chain files it names eligible; files inside
     excluded intervals are quarantined and reported, never consumed. When
     None it is computed from data.h7_manifest (identical enumeration to the
-    audit); the gated 7b-3 launch path passes the receipt-bound manifest
-    and separately verifies the two are equal.
+    audit; it reads only the session calendar + exception registry, never
+    market data).
 
     The registered H7 window (H7_BACKTEST_START..H7_BACKTEST_END) extends
-    past IN_SAMPLE_END as a DISCLOSED non-blind diagnostic; reaching it
-    requires a DiagnosticCapability, issued only by the gated launch
-    command behind a committed diagnostic_attempt + v2 PASS receipt."""
+    past IN_SAMPLE_END as a DISCLOSED non-blind diagnostic. The OOS gate
+    lives INSIDE this execution boundary (7b-2R.1 finding A): before ANY
+    loader runs, a window ending past IN_SAMPLE_END must be authorized by
+    research.diagnostics.authorize_oos_run against the committed
+    diagnostic_attempt named by `diagnostic_id` (anchored ledger, current
+    hashes, v2 PASS receipt whose manifest is exactly this runner's
+    inputs). No id, or any failing gate, raises DiagnosticError before a
+    single OOS chain or close is touched. In-sample windows need no id and
+    run with allow_oos=False, unchanged."""
     if lane not in ("a", "b", "c"):
         raise ValueError(f"unknown H7 lane: {lane!r}")
-    allow_oos = capability is not None
-    if assertions is None:
-        from options_researcher.h7_earnings import load_assertions
-        assertions = load_assertions()
     start_d = Date.fromisoformat(start or config.H7_BACKTEST_START)
     end_d = Date.fromisoformat(end or config.H7_BACKTEST_END)
+    run_symbols = list(symbols or config.H7_BACKTEST_SYMBOLS)
     if manifest is None:
         from data.h7_manifest import eligible_manifest
         manifest = eligible_manifest(
-            symbols=symbols or config.H7_BACKTEST_SYMBOLS,
+            symbols=run_symbols,
             start=start_d.isoformat(), end=end_d.isoformat())
+    needs_oos = end_d.isoformat() > config.IN_SAMPLE_END
+    if needs_oos:
+        from research.diagnostics import authorize_oos_run
+        authorize_oos_run(
+            diagnostic_id, lane=lane,
+            window={"start": start_d.isoformat(), "end": end_d.isoformat()},
+            symbols=run_symbols, manifest=manifest)
+    allow_oos = needs_oos
+    if assertions is None:
+        from options_researcher.h7_earnings import load_assertions
+        assertions = load_assertions()
 
     trades: list[dict] = []
     cancelled: list[dict] = []
     quarantined: list[dict] = []
     gaps: list[dict] = []
     coverage: dict[str, dict] = {}
-    for symbol in symbols or config.H7_BACKTEST_SYMBOLS:
+    for symbol in run_symbols:
         eligible = set(manifest[symbol]["eligible"])
         closes_adj, closes_raw = _load_closes(
             symbol, start_d.isoformat(), end_d.isoformat(), allow_oos=allow_oos)
