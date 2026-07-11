@@ -90,9 +90,11 @@ EXIT_PRIORITY = ("pre_earnings", "earnings_unknown", "scheduled_dte",
                  "underlying_stop", "credit_stop", "profit_target")
 
 # Warm-up before any signal may fire: the 52-week-high window plus the
-# reclaim lookback plus the two-session edge context (config-derived; the
-# lane-b RV-history rule additionally self-blocks inside rv_percentile).
-WARMUP_SESSIONS = config.H7_DD_LOOKBACK_D + config.H7A_RECLAIM_LOOKBACK_D + 2
+# reclaim lookback plus the edge-trigger context (all three terms frozen in
+# config, 7b-2R finding 5; the lane-b RV-history rule additionally
+# self-blocks inside rv_percentile).
+WARMUP_SESSIONS = (config.H7_DD_LOOKBACK_D + config.H7A_RECLAIM_LOOKBACK_D
+                   + config.H7_WARMUP_EXTRA_SESSIONS)
 
 
 def primary_exit_reason(reasons: list[str]) -> str:
@@ -154,7 +156,10 @@ class H7LaneBacktest(Strategy):
         self._trading_days_fn = params.get("trading_days_fn")
         self._pos: _H7Position | None = None
         self._pending: dict | None = None               # decision awaiting T+1
-        self._month_risk: dict[str, float] = {}
+        # 7b-2R finding 5: risk opened per calendar month survives year-chunk
+        # seams -- the runner seeds the next chunk with this chunk's ledger
+        self._month_risk: dict[str, float] = dict(
+            params.get("month_risk_seed") or {})
         self.closed_trades: list[dict] = []
         self.cancelled_entries: list[dict] = []
 
@@ -295,7 +300,7 @@ class H7LaneBacktest(Strategy):
             return
         legs_rows = self._leg_rows(chain, action, exp_iso)
         if legs_rows is None:
-            self._cancel(pending, "leg_missing_or_one_sided", iso)
+            self._cancel(pending, "leg_missing_or_invalid_quote", iso)
             return
         if not all(passes_liquidity(r.open_interest, r.bid, r.ask)
                    for r in legs_rows.values()):
@@ -319,7 +324,8 @@ class H7LaneBacktest(Strategy):
             if rows.empty:
                 return None
             r = rows.iloc[0]
-            return r if (r.bid > 0 and r.ask > 0) else None
+            # finite, two-sided, uncrossed -- everywhere (7b-2R finding 5)
+            return r if pandas_feed.quote_valid(r.bid, r.ask) else None
 
         kind = action["kind"]
         if kind == "long_call":
@@ -334,21 +340,30 @@ class H7LaneBacktest(Strategy):
         return None if lo is None or hi is None else {"long": lo, "short": hi}
 
     def _revalidate_economics(self, action, rows, budget):
-        """Executable economics at T+1 adverse quotes, decide-layer formulas.
+        """Executable economics at T+1 quotes priced through the ONE
+        canonical adverse transform (== the engine's exact fill prices,
+        7b-2R finding 5), decide-layer formulas, vertical bounds enforced.
         Returns (at_risk_dollars, width) or None."""
+        n = config.H7_DIAGNOSTIC_CONTRACTS
         kind = action["kind"]
         if kind == "long_call":
-            cost = _buy_fill(rows["long"]) * 100 + _round_trip_commission(1)
+            cost = (_buy_fill(rows["long"]) * 100 + _round_trip_commission(1)) * n
             return (cost, None) if cost <= budget else None
         if kind == "call_debit_spread":
             debit = _buy_fill(rows["long"]) - _sell_fill(rows["short"])
-            cost = debit * 100 + _round_trip_commission(2)
-            return (cost, None) if 0 < cost <= budget else None
+            spread_w = (float(action["short_strike"])
+                        - float(action["long_strike"]))
+            if not 0 < debit <= spread_w:   # vertical bounds
+                return None
+            cost = (debit * 100 + _round_trip_commission(2)) * n
+            return (cost, None) if cost <= budget else None
         width = float(action["short_strike"]) - float(action["long_strike"])
         credit = _sell_fill(rows["short"]) - _buy_fill(rows["long"])
-        if credit <= 0 or credit < config.H7C_CREDIT_FLOOR_FRAC * width:
+        if not 0 < credit < width:          # vertical bounds
             return None
-        max_loss = (width - credit) * 100 + _round_trip_commission(2)
+        if credit < config.H7C_CREDIT_FLOOR_FRAC * width:
+            return None
+        max_loss = ((width - credit) * 100 + _round_trip_commission(2)) * n
         return (max_loss, width) if max_loss <= budget else None
 
     def _submit_entry(self, action, exp_iso, iso, signal_date, at_risk, width):
@@ -379,7 +394,8 @@ class H7LaneBacktest(Strategy):
                 raise RuntimeError(
                     f"selected leg(s) missing from the offline feed: {missing}")
         for asset, side in legs.values():
-            self._engine_submit_leg(asset, 1, side)
+            self._engine_submit_leg(asset, config.H7_DIAGNOSTIC_CONTRACTS,
+                                    side)
         adj = self._closes_adj.loc[:iso]
         self._pos = _H7Position(
             lane=self.lane, structure=kind, symbol=sym,
@@ -474,38 +490,52 @@ class H7LaneBacktest(Strategy):
                 pos.exit_decision_date = iso
 
     def _conservative_marks(self, iso: str):
-        """(long-structure liquidation per share, h7c buyback per share);
-        None when today's chain or a needed leg quote is missing (hold)."""
+        """(long-structure liquidation per share, h7c buyback per share)
+        priced through the canonical adverse transform; None when today's
+        chain, a needed leg quote, or the combination is unusable (hold).
+        7b-2R finding 5: legs must be finite/two-sided/uncrossed (a positive
+        crossed book previously priced exits), and spread combinations
+        outside defensible vertical bounds are INVALID marks, never P&L."""
         pos = self._pos
         assert pos is not None
         chain = self._chain_provider(self.symbol, iso)
         if chain is None:
             return None
         exp_iso = pos.expiration.isoformat()
-        h = config.SLIPPAGE_HAIRCUT
 
         def row(asset):
             right = "C" if str(asset.right) == "CALL" else "P"
             rows = chain[(chain["right"] == right)
                          & (chain["expiration"] == exp_iso)
                          & (chain["strike"] == float(asset.strike))]
-            return None if rows.empty else rows.iloc[0]
+            if rows.empty:
+                return None
+            r = rows.iloc[0]
+            return r if pandas_feed.quote_valid(r.bid, r.ask) else None
 
         if pos.structure == "long_call":
             r = row(pos.legs["long"][0])
-            if r is None or not r.bid > 0:
+            if r is None:
                 return None
-            return (float(r.bid) * (1 - h), None)
+            return (pandas_feed.adverse_sell(r.bid), None)
         lo, hi = row(pos.legs["long"][0]), row(pos.legs["short"][0])
         if lo is None or hi is None:
             return None
         if pos.structure == "call_debit_spread":
-            if not (lo.bid > 0 and hi.ask > 0):
+            liq = (pandas_feed.adverse_sell(lo.bid)
+                   - pandas_feed.adverse_buy(hi.ask))
+            spread_w = (float(pos.action["short_strike"])
+                        - float(pos.action["long_strike"]))
+            if not 0 <= liq <= spread_w:
                 return None
-            return (float(lo.bid) * (1 - h) - float(hi.ask) * (1 + h), None)
-        if not (hi.ask > 0 and lo.bid > 0):
+            return (liq, None)
+        buyback = (pandas_feed.adverse_buy(hi.ask)
+                   - pandas_feed.adverse_sell(lo.bid))
+        width = pos.width or (float(pos.action["short_strike"])
+                              - float(pos.action["long_strike"]))
+        if not 0 <= buyback <= width:
             return None
-        return (None, float(hi.ask) * (1 + h) - float(lo.bid) * (1 - h))
+        return (None, buyback)
 
     def _execute_exit(self, iso: str) -> None:
         pos = self._pos
@@ -519,31 +549,50 @@ class H7LaneBacktest(Strategy):
         rows = (None if chain is None
                 else self._leg_rows(chain, pos.action,
                                     pos.expiration.isoformat()))
-        if rows is None:
+        if rows is None or not self._exit_bounds_ok(pos, rows):
             return  # pending-exit retained; first valid later session retries
         for asset, entry_side in pos.legs.values():
-            self._engine_submit_leg(asset, 1, _flip(entry_side))
+            self._engine_submit_leg(asset, config.H7_DIAGNOSTIC_CONTRACTS,
+                                    _flip(entry_side))
         pos.state = "pending_exit"
         pos.exit_date = iso
 
+    @staticmethod
+    def _exit_bounds_ok(pos: _H7Position, rows) -> bool:
+        """The exit combination the engine WILL fill (canonical transform ==
+        exact feed prices) must sit inside defensible vertical bounds; an
+        out-of-bounds combination is an invalid mark and the exit stays
+        pending (7b-2R finding 5 -- never let broken quotes inflate or
+        deflate P&L)."""
+        if pos.structure == "long_call":
+            return True   # single leg sells at bid >= 0; no vertical bound
+        width = (float(pos.action["short_strike"])
+                 - float(pos.action["long_strike"]))
+        if pos.structure == "call_debit_spread":
+            liq = (_sell_fill(rows["long"]) - _buy_fill(rows["short"]))
+            return 0 <= liq <= width
+        buyback = (_buy_fill(rows["short"]) - _sell_fill(rows["long"]))
+        return 0 <= buyback <= width
+
     def _finalize(self, pos: _H7Position) -> None:
         entry = pos.entry_cost or 0.0
+        n = config.H7_DIAGNOSTIC_CONTRACTS
         if pos.structure == "long_call":
             ((asset, _),) = pos.legs.values()
             proceeds = pos.exit_fills[asset]
-            pnl = (proceeds - entry) * 100 - _round_trip_commission(1)
-            at_risk = entry * 100 + _round_trip_commission(1)
+            pnl = ((proceeds - entry) * 100 - _round_trip_commission(1)) * n
+            at_risk = (entry * 100 + _round_trip_commission(1)) * n
         elif pos.structure == "call_debit_spread":
             proceeds = (pos.exit_fills[pos.legs["long"][0]]
                         - pos.exit_fills[pos.legs["short"][0]])
-            pnl = (proceeds - entry) * 100 - _round_trip_commission(2)
-            at_risk = entry * 100 + _round_trip_commission(2)
+            pnl = ((proceeds - entry) * 100 - _round_trip_commission(2)) * n
+            at_risk = (entry * 100 + _round_trip_commission(2)) * n
         else:
             debit = (pos.exit_fills[pos.legs["short"][0]]
                      - pos.exit_fills[pos.legs["long"][0]])
-            pnl = (entry - debit) * 100 - _round_trip_commission(2)
+            pnl = ((entry - debit) * 100 - _round_trip_commission(2)) * n
             width = pos.width or 0.0
-            at_risk = (width - entry) * 100 + _round_trip_commission(2)
+            at_risk = ((width - entry) * 100 + _round_trip_commission(2)) * n
         adj = self._closes_adj.loc[:(pos.exit_date or "")]
         self.closed_trades.append({
             "pnl": pnl,

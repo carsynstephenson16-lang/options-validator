@@ -26,10 +26,10 @@ from datetime import date as Date
 import pandas as pd
 
 import config
+from data.pandas_feed import adverse_buy, adverse_sell, quote_valid
 from data.thetadata_adapter import passes_liquidity
 from options_researcher import h7_signals as sig
 from options_researcher.chains import is_monthly
-from strategies.base import entry_credit_conservative
 
 # Structural epsilon for "strictly lower strike", not a strategy number.
 _MIN_STRIKE_GAP = 0.5
@@ -41,7 +41,8 @@ def _delta_band() -> float:
 
 def _monthly_rows(chain: pd.DataFrame, today: Date, band: tuple[int, int],
                   right: str) -> pd.DataFrame:
-    df = chain[(chain.right == right) & (chain.bid > 0) & (chain.ask > 0)].copy()
+    usable = [quote_valid(b, a) for b, a in zip(chain.bid, chain.ask)]
+    df = chain[(chain.right == right) & pd.Series(usable, index=chain.index)].copy()
     if df.empty:
         return df
     exp = pd.to_datetime(df.expiration).dt.date
@@ -60,13 +61,16 @@ def _liquid(row) -> bool:
 
 
 def _buy_fill(row) -> float:
-    """Adverse-side buy: ask plus haircut (half-spread rule, R6)."""
-    return float(row.ask) * (1 + config.SLIPPAGE_HAIRCUT)
+    """Adverse-side buy via the ONE canonical transform (ask plus haircut,
+    ceiled to the cent) -- identical to the engine feed's fill price, so
+    budget/credit thresholds are checked on EXACT executable prices
+    (7b-2R finding 5)."""
+    return adverse_buy(row.ask)
 
 
 def _sell_fill(row) -> float:
-    """Adverse-side sell: bid minus haircut."""
-    return float(row.bid) * (1 - config.SLIPPAGE_HAIRCUT)
+    """Adverse-side sell: bid minus haircut, floored to the cent."""
+    return adverse_sell(row.bid)
 
 
 def _round_trip_commission(legs: int) -> float:
@@ -121,8 +125,13 @@ def _long_action(closes: pd.Series, chain: pd.DataFrame, spot: float,
     if float(lo_row.strike) + _MIN_STRIKE_GAP > float(hi_row.strike):
         return None
     debit = _buy_fill(lo_row) - _sell_fill(hi_row)
+    spread_width = float(hi_row.strike) - float(lo_row.strike)
+    # vertical bounds (7b-2R finding 5): a debit outside (0, width] is a
+    # broken/crossed combination, not a trade
+    if not 0 < debit <= spread_width:
+        return None
     cost = debit * 100 + _round_trip_commission(legs=2)
-    if cost <= 0 or cost > budget or not (_liquid(lo_row) and _liquid(hi_row)):
+    if cost > budget or not (_liquid(lo_row) and _liquid(hi_row)):
         return None
     return {"lane": lane, "kind": "call_debit_spread", "expiration": str(lo_row.exp),
             "long_strike": float(lo_row.strike), "short_strike": float(hi_row.strike),
@@ -185,8 +194,10 @@ def decide_lane_c(*, symbol: str, closes: pd.Series, chain: pd.DataFrame,
     width = float(short.strike) - float(lg.strike)
     if width <= 0:
         return None
-    credit = entry_credit_conservative(short.bid, short.ask, lg.bid, lg.ask)
-    if credit <= 0 or credit < config.H7C_CREDIT_FLOOR_FRAC * width:
+    credit = _sell_fill(short) - _buy_fill(lg)
+    # vertical bounds (7b-2R finding 5): entry credit strictly inside
+    # (0, width); credit >= width is free money = broken data, never a trade
+    if not 0 < credit < width or credit < config.H7C_CREDIT_FLOOR_FRAC * width:
         return None
     max_loss = (width - credit) * 100 + _round_trip_commission(legs=2)
     budget = config.H7_MONTHLY_AT_RISK - month_spent

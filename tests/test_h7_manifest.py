@@ -7,8 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data import h7_manifest, pandas_feed
-from data import thetadata_adapter
+from data import h7_manifest, pandas_feed, thetadata_adapter
 
 SESSIONS = ["2022-06-01", "2022-06-02", "2022-06-03", "2022-06-06"]
 

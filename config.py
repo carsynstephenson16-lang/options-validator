@@ -310,3 +310,18 @@ H7_EARNINGS_POST_REPORT_GRACE_D = 45
 H7_EARNINGS_ESTIMATE_CLUSTER_D = 14   # estimates within this many days refer
 #                                       to the same report (frozen 7b-0.1;
 #                                       was module-private in h7_earnings.py)
+# 7b-2R finding 5 (owner review 2026-07-11): verdict-affecting numbers that
+# had escaped into module constants move onto the freeze surface so any
+# change invalidates config_hash and stales a committed diagnostic attempt.
+H7_DIAGNOSTIC_CONTRACTS = 1      # per-position sizing of the isolated-lane
+#                                  diagnostic (F3). NOTE: the decide-layer
+#                                  sleeve math prices ONE contract; changing
+#                                  this requires revisiting that math.
+FEED_PUT_DELTA_BAND = (0.03, 0.65)   # offline-feed PUT inclusion band
+FEED_CALL_DELTA_BAND = (0.10, 0.90)  # offline-feed CALL inclusion band
+#   (plumbing, not tunables: strategies fail LOUD when a selected leg has no
+#    feed Data -- a band miss can abort a run, never bias one. They still
+#    gate which contracts CAN trade, hence frozen.)
+H7_MAX_HOLD_BUFFER_D = 2         # chunk horizon = H7_LONG_DTE_BAND[1] + this
+H7_WARMUP_EXTRA_SESSIONS = 2     # warm-up = DD lookback + reclaim lookback + this
+H7_CLOSES_LOOKBACK_D = 600       # calendar-day closes preload before a chunk

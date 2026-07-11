@@ -95,11 +95,11 @@ def run_engine(lane, chains, closes_adj, closes_raw, assertions,
         return {d: c for d, c in chains.items() if start_iso <= d <= end_iso}
 
     with mock.patch.object(pandas_feed, "load_cached_chains", fake_loader):
-        trades, cancelled, _quarantined = run_h7._run_chunk(
+        out = run_h7._run_chunk(
             lane, SYM, start, cutoff or end, end, None,
             closes_adj=closes_adj, closes_raw=closes_raw,
             assertions=assertions, allow_oos=False)
-        return trades, cancelled
+        return out["trades"], out["cancelled"]
 
 
 def default_chains(first, last, overrides_by_day=None, drop_by_day=None,
@@ -296,6 +296,80 @@ class PendingExitRetry(unittest.TestCase):
         self.assertEqual(t["exit_reason"], "profit_target")
         self.assertEqual(t["exit_decision_date"], "2022-06-08")
         self.assertEqual(t["exit_date"], "2022-06-10")
+
+
+class CrossedExitQuoteRetainsPending(unittest.TestCase):
+    def test_crossed_book_on_exit_session_never_fills(self):
+        pump = {("2022-09-16", 67.5, "C"): {"bid": 25.00, "ask": 25.50}}
+        crossed = {("2022-09-16", 67.5, "C"): {"bid": 25.60, "ask": 25.00}}
+        # TP observed 06-08 -> exit queued 06-09; 06-09's book is CROSSED
+        # (positive both sides -- the pre-7b-2R lookup would have priced it)
+        # -> invalid, pending retained; valid again 06-10 -> executes there
+        chains = default_chains(
+            "2022-06-02", "2022-06-14",
+            overrides_by_day={"2022-06-08": pump, "2022-06-09": crossed,
+                              "2022-06-10": pump, "2022-06-13": pump})
+        adj, raw = closes_pair(T_SIG, post=[70.0] * 6)
+        trades, _ = run_engine(
+            "a", chains, adj, raw, FAR_REPORT, "2022-06-02", "2022-09-30")
+        self.assertEqual(len(trades), 1)
+        t = trades[0]
+        self.assertEqual(t["exit_decision_date"], "2022-06-08")
+        self.assertEqual(t["exit_date"], "2022-06-10")
+
+
+class MonthlyRiskAcrossChunks(unittest.TestCase):
+    """7b-2R finding 5: risk opened in a month must bind that month in the
+    NEXT chunk too -- previously each chunk started with a fresh sleeve."""
+
+    def test_seeded_month_risk_blocks_a_new_entry(self):
+        pump = {("2022-09-16", 67.5, "C"): {"bid": 25.00, "ask": 25.50}}
+        chains = default_chains(
+            "2022-06-02", "2022-06-13",
+            overrides_by_day={"2022-06-08": pump, "2022-06-09": pump,
+                              "2022-06-10": pump})
+        adj, raw = closes_pair(T_SIG, post=[70.0] * 6)
+
+        def fake_loader(symbol, start_iso, end_iso, *, allow_oos=False,
+                        eligible=None, refused=None):
+            return {d: c for d, c in chains.items()
+                    if start_iso <= d <= end_iso}
+
+        def run(seed):
+            with mock.patch.object(pandas_feed, "load_cached_chains",
+                                   fake_loader):
+                return run_h7._run_chunk(
+                    "a", SYM, "2022-06-02", "2022-09-30", "2022-09-30",
+                    None, closes_adj=adj, closes_raw=raw,
+                    assertions=FAR_REPORT, allow_oos=False,
+                    month_risk_seed=seed)
+
+        # entry costs ~$999; an untouched sleeve trades...
+        self.assertEqual(len(run(None)["trades"]), 1)
+        # ...but a June already carrying $5,500 of opened risk cannot
+        out = run({"2022-06": 5500.0})
+        self.assertEqual(out["trades"], [])
+        self.assertEqual(out["cancelled"], [])   # suppressed at decision
+        self.assertEqual(out["month_risk"], {"2022-06": 5500.0})
+
+    def test_run_lane_threads_month_risk_between_chunks(self):
+        seeds = []
+
+        def fake_chunk(lane, symbol, sim_start, cutoff, sim_end,
+                       blocked_until, *, month_risk_seed=None, **kw):
+            seeds.append(dict(month_risk_seed or {}))
+            return {"trades": [], "cancelled": [], "quarantined": [],
+                    "month_risk": {"2022-01": 4200.0}}
+
+        adj, raw = closes_pair(T_SIG)
+        with mock.patch.object(run_h7, "_run_chunk", fake_chunk), \
+             mock.patch.object(run_h7, "_load_closes",
+                               lambda sym, s, e, allow_oos: (adj, raw)):
+            run_h7.run_lane("a", start="2021-06-01", end="2022-06-30",
+                            symbols=[SYM], assertions=FAR_REPORT)
+        self.assertEqual(len(seeds), 2)          # 2021 + 2022 chunks
+        self.assertEqual(seeds[0], {})
+        self.assertEqual(seeds[1], {"2022-01": 4200.0})   # carried over
 
 
 class WarmupBoundary(unittest.TestCase):

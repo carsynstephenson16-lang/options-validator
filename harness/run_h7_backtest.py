@@ -34,12 +34,13 @@ from data import pandas_feed
 
 # Longest possible hold: entry executes at T+1 (one session after the
 # decision) on a contract at the top of the long DTE band; expiration bounds
-# the exit even if every scheduled exit is data-gapped to the wire.
-H7_MAX_HOLD_DAYS = config.H7_LONG_DTE_BAND[1] + 2
+# the exit even if every scheduled exit is data-gapped to the wire. Both
+# terms frozen in config (7b-2R finding 5).
+H7_MAX_HOLD_DAYS = config.H7_LONG_DTE_BAND[1] + config.H7_MAX_HOLD_BUFFER_D
 
 # How far back the closes series must reach before `start` so the first
 # in-window session is already warm (sessions -> calendar-day slack).
-_CLOSES_LOOKBACK_DAYS = 600
+_CLOSES_LOOKBACK_DAYS = config.H7_CLOSES_LOOKBACK_D
 
 
 def _year_chunks(start: Date, end: Date) -> list[tuple[str, str, str]]:
@@ -71,12 +72,15 @@ def _load_closes(symbol: str, start_iso: str, end_iso: str, *,
 def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
                sim_end: str, blocked_until: str | None, *,
                closes_adj, closes_raw, assertions, allow_oos: bool,
-               known_as_of_fn=None, eligible: set[str] | None = None
-               ) -> tuple[list[dict], list[dict], list[dict]]:
+               known_as_of_fn=None, eligible: set[str] | None = None,
+               month_risk_seed: dict | None = None) -> dict:
     """One symbol, one lane, one chunk, one Lumibot backtest -- offline.
-    Returns (trades, cancelled_entries, quarantined). `eligible` is the
-    canonical manifest's eligible-session set (7b-2R finding 2): cache
-    files outside it are refused, never parsed, and reported."""
+    Returns {"trades", "cancelled", "quarantined", "month_risk"}.
+    `eligible` is the canonical manifest's eligible-session set (7b-2R
+    finding 2): cache files outside it are refused, never parsed, and
+    reported. `month_risk_seed` carries risk already opened per calendar
+    month into this chunk (7b-2R finding 5: a January entry from a December
+    signal must still bind January's sleeve in the next chunk)."""
     from lumibot.backtesting import PandasDataBacktesting
     from lumibot.entities import TradingFee
 
@@ -90,12 +94,14 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
                     "stage": "chain_load",
                     "reason": "present_but_excluded_by_manifest"}
                    for day in refused]
+    empty = {"trades": [], "cancelled": [], "quarantined": quarantined,
+             "month_risk": dict(month_risk_seed or {})}
     if not chains:
-        return [], [], quarantined
+        return empty
     feed = pandas_feed.build_option_data(
         chains, symbol, exp_max=sim_end, rights=("C", "P"))
     if not feed:
-        return [], [], quarantined
+        return empty
 
     fee = TradingFee(per_contract_fee=config.COMMISSION_PER_CONTRACT)
     end_dt = datetime.combine(
@@ -110,6 +116,7 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
         "tradeable_assets": set(feed.keys()),
         "entry_cutoff": cutoff,
         "blocked_until": blocked_until,
+        "month_risk_seed": dict(month_risk_seed or {}),
     }
     if known_as_of_fn is not None:
         parameters["known_as_of_fn"] = known_as_of_fn
@@ -151,8 +158,10 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
             "cancelled_on": sim_end, "reason": "window_end",
             "kind": strat._pending["action"]["kind"],
         })
-    return (list(strat.closed_trades), list(strat.cancelled_entries),
-            quarantined)
+    return {"trades": list(strat.closed_trades),
+            "cancelled": list(strat.cancelled_entries),
+            "quarantined": quarantined,
+            "month_risk": dict(strat._month_risk)}
 
 
 def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
@@ -194,16 +203,23 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
         closes_adj, closes_raw = _load_closes(
             symbol, start_d.isoformat(), end_d.isoformat(), allow_oos=allow_oos)
         blocked_until: str | None = None
+        month_risk: dict = {}
         chunks = _year_chunks(start_d, end_d)
         for i, (sim_start, cutoff, sim_end) in enumerate(chunks):
-            chunk_trades, chunk_cancelled, chunk_quarantined = _run_chunk(
+            out = _run_chunk(
                 lane, symbol, sim_start, cutoff, sim_end, blocked_until,
                 closes_adj=closes_adj, closes_raw=closes_raw,
                 assertions=assertions, allow_oos=allow_oos,
-                known_as_of_fn=known_as_of_fn, eligible=eligible)
+                known_as_of_fn=known_as_of_fn, eligible=eligible,
+                month_risk_seed=month_risk)
+            chunk_trades = out["trades"]
             trades.extend(chunk_trades)
-            cancelled.extend(chunk_cancelled)
-            quarantined.extend(chunk_quarantined)
+            cancelled.extend(out["cancelled"])
+            quarantined.extend(out["quarantined"])
+            # 7b-2R finding 5: months straddling the seam keep their opened
+            # risk; a later same-month signal in the next chunk cannot
+            # reuse a sleeve the previous chunk already consumed
+            month_risk = out["month_risk"]
             if i + 1 < len(chunks):
                 next_start = chunks[i + 1][0]
                 tail_exits = [t["exit_date"] for t in chunk_trades

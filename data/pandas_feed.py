@@ -42,17 +42,38 @@ except Exception:  # pragma: no cover
 
 NY_TZ = "America/New_York"
 BAR_HOUR = 16
-# generous inclusion band for candidate PUT legs (short ~0.30 delta, long
-# width below); far-OTM lottery tickets and deep-ITM puts can never be legs
-DELTA_MIN = 0.03
-DELTA_MAX = 0.65
-# generous inclusion band for candidate CALL legs (7b-1: H7 long calls
-# 0.55-0.70, spread legs 0.60/0.25, each +/-H7_DELTA_TOLERANCE). Plumbing,
-# not a tunable: strategies fail LOUD when a selected leg has no feed Data,
-# so a band miss can abort a run but can never bias one.
-CALL_DELTA_MIN = 0.10
-CALL_DELTA_MAX = 0.90
+# feed inclusion bands live in frozen config (7b-2R finding 5: they can
+# change trade inclusion, so they participate in config_hash). Values are
+# unchanged; the H1 feed stays byte-identical.
+DELTA_MIN, DELTA_MAX = config.FEED_PUT_DELTA_BAND
+CALL_DELTA_MIN, CALL_DELTA_MAX = config.FEED_CALL_DELTA_BAND
 _RIGHT_BANDS = {"P": (DELTA_MIN, DELTA_MAX), "C": (CALL_DELTA_MIN, CALL_DELTA_MAX)}
+
+
+def adverse_buy(ask, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
+    """THE canonical executable BUY price (7b-2R finding 5): ask plus
+    haircut, rounded UP to the cent -- exactly the price the pre-widened
+    feed charges a market buy. Decide layer, T+1 revalidation, exit marks
+    and P&L must all price buys through here, so no threshold can pass on
+    unrounded math and then fill a cent worse in the engine."""
+    return math.ceil(float(ask) * (1 + haircut) * 100) / 100
+
+
+def adverse_sell(bid, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
+    """Canonical executable SELL price: bid minus haircut, rounded DOWN."""
+    return math.floor(float(bid) * (1 - haircut) * 100) / 100
+
+
+def quote_valid(bid, ask) -> bool:
+    """A usable book: finite, two-sided, uncrossed (7b-2R finding 5 --
+    entry, exit lookup and marks must all reject non-finite, one-sided and
+    crossed quotes; a positive crossed book previously priced exits)."""
+    try:
+        b, a = float(bid), float(ask)
+    except (TypeError, ValueError):
+        return False
+    return (math.isfinite(b) and math.isfinite(a)
+            and b > 0 and a > 0 and b <= a)
 
 _USD = None
 
@@ -159,8 +180,8 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
         ask = grp["ask"].to_numpy(dtype=float)
         df = pd.DataFrame(
             {
-                "bid": [math.floor(b * (1 - haircut) * 100) / 100 for b in bid],
-                "ask": [math.ceil(a * (1 + haircut) * 100) / 100 for a in ask],
+                "bid": [adverse_sell(b, haircut) for b in bid],
+                "ask": [adverse_buy(a, haircut) for a in ask],
                 "close": (bid + ask) / 2.0,
             },
             index=idx,
