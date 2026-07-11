@@ -81,6 +81,7 @@ DIAGNOSTIC_ATTEMPT_KEYS = CHAIN_KEYS | {
     "source_hash_v2",
     "source_hash_version",
     "data_manifest_hash",
+    "receipt_hash",
     "registration_hashes",
 }
 DIAGNOSTIC_RESULT_KEYS = CHAIN_KEYS | {
@@ -372,6 +373,7 @@ def _verify_semantic_records(records: list[dict]) -> None:
             _require_sha256_hex(rec, "source_hash_v2", i)
             _require_positive_int(rec, "source_hash_version", i)
             _require_sha256_hex(rec, "data_manifest_hash", i)
+            _require_sha256_hex(rec, "receipt_hash", i)
             reg = rec.get("registration_hashes")
             if (not isinstance(reg, list) or not reg
                     or not all(isinstance(h, str) and SHA256_RE.fullmatch(h)

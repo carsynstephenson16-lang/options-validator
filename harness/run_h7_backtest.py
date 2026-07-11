@@ -193,12 +193,28 @@ def _run_chunk(lane: str, symbol: str, sim_start: str, cutoff: str,
                          "unaccounted": unaccounted}}
 
 
+class DiagnosticCapability:
+    """Authorization token for reading past IN_SAMPLE_END (7b-2R finding 7:
+    the public allow_oos=True escape hatch is REMOVED from run_lane).
+    Production issuance happens ONLY inside tools/h7_run_diagnostic.py,
+    after the full launch gate (verified ledger attempt + v2 PASS receipt);
+    synthetic unit tests may construct one via for_synthetic_fixtures()."""
+
+    def __init__(self, *, attempt_hash: str):
+        self.attempt_hash = attempt_hash
+
+    @classmethod
+    def for_synthetic_fixtures(cls) -> "DiagnosticCapability":
+        return cls(attempt_hash="synthetic-fixture-only")
+
+
 def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
-             symbols: list[str] | None = None, allow_oos: bool = False,
+             symbols: list[str] | None = None,
              assertions: list | None = None,
-             known_as_of_fn=None, manifest: dict | None = None) -> dict:
+             known_as_of_fn=None, manifest: dict | None = None,
+             capability: DiagnosticCapability | None = None) -> dict:
     """Run one lane across symbols/chunks; returns {"trades", "cancelled",
-    "quarantined"}.
+    "quarantined", "gaps", "coverage"}.
 
     `manifest` is the canonical eligible-session manifest (7b-2R finding 2):
     the runner loads ONLY chain files it names eligible; files inside
@@ -209,10 +225,11 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
 
     The registered H7 window (H7_BACKTEST_START..H7_BACKTEST_END) extends
     past IN_SAMPLE_END as a DISCLOSED non-blind diagnostic; reaching it
-    requires allow_oos=True, which only the 7b-3 launch path (behind a
-    committed diagnostic_attempt ledger record) may pass."""
+    requires a DiagnosticCapability, issued only by the gated launch
+    command behind a committed diagnostic_attempt + v2 PASS receipt."""
     if lane not in ("a", "b", "c"):
         raise ValueError(f"unknown H7 lane: {lane!r}")
+    allow_oos = capability is not None
     if assertions is None:
         from options_researcher.h7_earnings import load_assertions
         assertions = load_assertions()

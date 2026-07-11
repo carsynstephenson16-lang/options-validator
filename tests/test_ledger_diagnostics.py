@@ -12,6 +12,9 @@ from research import diagnostics, experiments, hashing, ledger
 
 WINDOW = {"start": "2018-01-02", "end": "2026-06-30"}
 MANIFEST = "c" * 64
+RECEIPT_HASH = "b" * 64
+OK_RECEIPT = {"verdict": "PASS", "receipt_hash": RECEIPT_HASH,
+              "manifest_hash": MANIFEST}
 
 
 def _seed_h7_registration(base):
@@ -28,7 +31,8 @@ def _attempt(base, diagnostic_id="H7a-diag-1", lane="a"):
     return diagnostics.record_diagnostic_attempt(
         diagnostic_id=diagnostic_id, lane=lane, symbols=["NVDA", "SMCI"],
         window=WINDOW, estimand="isolated-lane non-blind diagnostic (v1.2(6))",
-        data_manifest_hash=MANIFEST, base_dir=base)
+        data_manifest_hash=MANIFEST, receipt_hash=RECEIPT_HASH,
+        base_dir=base)
 
 
 class TestDiagnosticRecords(unittest.TestCase):
@@ -119,6 +123,7 @@ class TestDiagnosticRecords(unittest.TestCase):
                     "code_sha": "e" * 40, "config_hash": "a" * 64,
                     "cost_model_hash": "a" * 64, "source_hash_v2": "a" * 64,
                     "source_hash_version": 2, "data_manifest_hash": "a" * 64,
+                    "receipt_hash": "a" * 64,
                     "registration_hashes": ["a" * 64],
                     "smuggled_state": True,
                 }, base_dir=base)
@@ -140,12 +145,59 @@ class TestDiagnosticRecords(unittest.TestCase):
         with tempfile.TemporaryDirectory() as base:
             _seed_h7_registration(base)
             _attempt(base)
-            diagnostics.verify_attempt_current("H7a-diag-1", base_dir=base)
+            diagnostics.verify_attempt_current("H7a-diag-1", base_dir=base,
+                                               receipt=OK_RECEIPT)
             with mock.patch.object(diagnostics, "diagnostic_source_hash",
                                    lambda: "f" * 64):
                 with self.assertRaises(diagnostics.DiagnosticError):
                     diagnostics.verify_attempt_current(
-                        "H7a-diag-1", base_dir=base)
+                        "H7a-diag-1", base_dir=base, receipt=OK_RECEIPT)
+
+    def test_launch_gate_refuses_non_pass_receipt(self):
+        with tempfile.TemporaryDirectory() as base:
+            _seed_h7_registration(base)
+            _attempt(base)
+            bad = dict(OK_RECEIPT, verdict="BLOCK")
+            with self.assertRaises(diagnostics.DiagnosticError):
+                diagnostics.verify_attempt_current("H7a-diag-1",
+                                                   base_dir=base, receipt=bad)
+
+    def test_launch_gate_refuses_receipt_hash_mismatch(self):
+        with tempfile.TemporaryDirectory() as base:
+            _seed_h7_registration(base)
+            _attempt(base)
+            other = dict(OK_RECEIPT, receipt_hash="e" * 64)
+            with self.assertRaises(diagnostics.DiagnosticError):
+                diagnostics.verify_attempt_current(
+                    "H7a-diag-1", base_dir=base, receipt=other)
+
+    def test_launch_gate_refuses_manifest_mismatch(self):
+        with tempfile.TemporaryDirectory() as base:
+            _seed_h7_registration(base)
+            _attempt(base)
+            other = dict(OK_RECEIPT, manifest_hash="e" * 64)
+            with self.assertRaises(diagnostics.DiagnosticError):
+                diagnostics.verify_attempt_current(
+                    "H7a-diag-1", base_dir=base, receipt=other)
+
+    def test_launch_gate_refuses_unsupported_source_version(self):
+        with tempfile.TemporaryDirectory() as base:
+            _seed_h7_registration(base)
+            _attempt(base)
+            with mock.patch.object(diagnostics,
+                                   "DIAGNOSTIC_SOURCE_HASH_VERSION", 3):
+                with self.assertRaises(diagnostics.DiagnosticError):
+                    diagnostics.verify_attempt_current(
+                        "H7a-diag-1", base_dir=base, receipt=OK_RECEIPT)
+
+    def test_launch_gate_refuses_changed_registration_set(self):
+        with tempfile.TemporaryDirectory() as base:
+            _seed_h7_registration(base)
+            _attempt(base)
+            _seed_h7_registration(base)   # a NEW H7 registration afterwards
+            with self.assertRaises(diagnostics.DiagnosticError):
+                diagnostics.verify_attempt_current(
+                    "H7a-diag-1", base_dir=base, receipt=OK_RECEIPT)
 
     def test_real_ledger_still_verifies(self):
         ledger.verify("ledger")

@@ -53,10 +53,12 @@ def h7_registration_hashes(base_dir="ledger") -> list[str]:
 def record_diagnostic_attempt(*, diagnostic_id: str, lane: str,
                               symbols: list[str], window: dict,
                               estimand: str, data_manifest_hash: str,
+                              receipt_hash: str,
                               base_dir="ledger") -> str:
     """Append the pre-execution attempt record. Returns its record hash,
-    which the eventual result must bind. The caller commits the ledger to
-    git BEFORE any execution (owner rule)."""
+    which the eventual result must bind. `receipt_hash` binds the v2 PASS
+    audit receipt this attempt is authorized by (7b-2R finding 7). The
+    caller commits the ledger to git BEFORE any execution (owner rule)."""
     body = {
         "entry_type": "diagnostic_attempt",
         "timestamp": _now(),
@@ -72,6 +74,7 @@ def record_diagnostic_attempt(*, diagnostic_id: str, lane: str,
         "source_hash_v2": diagnostic_source_hash(),
         "source_hash_version": DIAGNOSTIC_SOURCE_HASH_VERSION,
         "data_manifest_hash": data_manifest_hash,
+        "receipt_hash": receipt_hash,
         "registration_hashes": h7_registration_hashes(base_dir),
     }
     return ledger.append(body, base_dir=base_dir)
@@ -96,10 +99,15 @@ def record_diagnostic_result(*, diagnostic_id: str, result: dict,
     return ledger.append(body, base_dir=base_dir)
 
 
-def verify_attempt_current(diagnostic_id: str, *, base_dir="ledger") -> dict:
+def verify_attempt_current(diagnostic_id: str, *, base_dir="ledger",
+                           receipt=None) -> dict:
     """The 7b-3 launch gate: the recorded attempt's hashes must match the
-    CURRENT code/config/cost surfaces, or the attempt is stale and execution
-    must not proceed. Returns the attempt record on success."""
+    CURRENT code/config/cost surfaces, its source-hash version must be the
+    exactly supported one, its registration bindings must match the ledger,
+    and its bound v2 receipt must exist, verify, be PASS, and match both
+    the attempt's receipt_hash and data_manifest_hash (7b-2R finding 7 --
+    the earlier version omitted receipt/registration/scope/source-version
+    checks). Returns the attempt record on success."""
     attempts = [r for r in ledger.read_all(base_dir)
                 if r.get("entry_type") == "diagnostic_attempt"
                 and r.get("diagnostic_id") == diagnostic_id]
@@ -107,6 +115,11 @@ def verify_attempt_current(diagnostic_id: str, *, base_dir="ledger") -> dict:
         raise DiagnosticError(
             f"no diagnostic_attempt recorded for {diagnostic_id!r}")
     rec = attempts[-1]
+    if rec.get("source_hash_version") != DIAGNOSTIC_SOURCE_HASH_VERSION:
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r} binds source_hash_version "
+            f"{rec.get('source_hash_version')} but only "
+            f"{DIAGNOSTIC_SOURCE_HASH_VERSION} is supported")
     mismatches = []
     if rec["config_hash"] != config_hash():
         mismatches.append("config_hash")
@@ -114,8 +127,36 @@ def verify_attempt_current(diagnostic_id: str, *, base_dir="ledger") -> dict:
         mismatches.append("cost_model_hash")
     if rec["source_hash_v2"] != diagnostic_source_hash():
         mismatches.append("source_hash_v2")
+    if rec["registration_hashes"] != h7_registration_hashes(base_dir):
+        mismatches.append("registration_hashes")
     if mismatches:
         raise DiagnosticError(
             f"attempt {diagnostic_id!r} is STALE -- {mismatches} changed "
             f"since the attempt was committed; re-record before executing")
+    if receipt is None:
+        import json
+
+        from tools.h7_data_audit import RECEIPT_PATH, verify_receipt
+        if not RECEIPT_PATH.exists():
+            raise DiagnosticError(
+                f"attempt {diagnostic_id!r}: no v2 audit receipt at "
+                f"{RECEIPT_PATH}")
+        ok, failures = verify_receipt()
+        if not ok:
+            raise DiagnosticError(
+                f"attempt {diagnostic_id!r}: v2 receipt fails verification "
+                f"({failures}) -- an input mutated since the audit")
+        receipt = json.loads(RECEIPT_PATH.read_text())
+    if receipt.get("verdict") != "PASS":
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r}: bound receipt verdict is "
+            f"{receipt.get('verdict')!r}, not PASS -- launch refused")
+    if receipt.get("receipt_hash") != rec.get("receipt_hash"):
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r}: receipt_hash mismatch -- the "
+            f"attempt binds a different receipt than the current one")
+    if receipt.get("manifest_hash") != rec.get("data_manifest_hash"):
+        raise DiagnosticError(
+            f"attempt {diagnostic_id!r}: data_manifest_hash does not match "
+            f"the receipt's eligible-session manifest")
     return rec
