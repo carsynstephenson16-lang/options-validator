@@ -257,12 +257,12 @@ def run_audit(symbols=None, start=None, end=None, *, chain_dir=CHAIN_DIR,
               tracked_manifest=None, tracked_context=None,
               coverage_decls=None, facts_path: Path = FACTS_PATH,
               progress=False) -> dict:
+    from data.cache_runner import trading_days
     from options_researcher.h7_earnings import (
         GATE_UNKNOWN,
         earnings_gate,
         load_assertions,
     )
-    from data.cache_runner import trading_days
 
     symbols = list(symbols or config.H7_BACKTEST_SYMBOLS)
     start = start or config.H7_BACKTEST_START
