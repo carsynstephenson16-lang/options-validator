@@ -368,5 +368,21 @@ class TestMainCLI(RefreshBase):
         self.assertEqual(loaded[-1]["promoted_from"], "A0002")
 
 
+class TestLineEndings(RefreshBase):
+    """The stores are LF files; csv.writer's default \r\n terminator must
+    never leak in (it trips `git diff --check` and mixes endings within a
+    store). Both append paths write LF and nothing but LF."""
+
+    def test_append_raw_writes_lf_only(self):
+        append_raw(**_schedule_kwargs(), path=self.raw)
+        self.assertNotIn(b"\r", self.raw.read_bytes())
+
+    def test_promote_writes_lf_only(self):
+        promote(raw_id="A0002", event_class="actual_quarterly_earnings",
+                supersedes="", notes="", now_utc=NOW,
+                gating_path=self.gating, raw_path=self.raw)
+        self.assertNotIn(b"\r", self.gating.read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main()
