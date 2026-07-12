@@ -173,7 +173,7 @@ paper-trading window.
    `positions.csv`; covered-call rows only appear after a declared 100-share
    lot. Reuses the M7 CSS; no network/JS deps.
 
-**Scope status: two live hypotheses, forward paper windows.**
+**Scope status: three live hypotheses, forward paper windows.**
 **H5 Sector Income Core scanner/researcher**
 (`docs/superpowers/specs/2026-07-04-h5-sector-income-core-design.md`; ledger
 trial 6; H4 superseded at zero cycles) and **H6 post-earnings tactical long
@@ -184,6 +184,21 @@ H6 entry evaluation still needs: NVDA/PLTR earnings CSVs (sourced), NVDA
 split entries in the closes SPLITS registry, and feature builds for the
 IVR gate — until then the pre-earnings lane is blocked by design (unknown
 IV-rank never passes).
+**H7 swing options on volatile AI names** (ledger trial 8, registered
+2026-07-09, `f1887c9d` + amendments v1.1/v1.2/v1.3; owner scope override
+2026-07-09): three separately-judged lanes on CRWV/TEM/PLTR/NOW/SMCI/NVDA/
+AMD/AVGO (+ core names, long lanes only). Daily screen:
+`uv run python -m options_researcher.h7_watch` (session-aligned, executes
+the registered decide functions, fails closed on unknown earnings or book
+errors). **The 2018–2026 historical diagnostic is PERMANENTLY WITHDRAWN as
+verdict-capable evidence (amendment v1.3, 2026-07-11): historical earnings
+provenance cannot be causally reconstructed. The point-in-time forward
+paper window is H7's sole verdict-bearing path** (roadmap:
+`docs/superpowers/plans/2026-07-11-h7-forward-roadmap.md`, activation gated
+on independent review). Audit receipts v1/v2/v3 under `reports/h7_audit/`
+are preserved historical BLOCK artifacts; a frozen retirement gate
+(`config.H7_HISTORICAL_WITHDRAWAL_HASH`) makes every historical-diagnostic
+entry point refuse before reading market data.
 Current recorded holdings: 39 VST shares and no options. Remaining: run the
 scanner, decide whether anything is attractive enough to add, then start the
 forward paper window only after an actual tracked option is entered.

@@ -1,7 +1,19 @@
 # H7 — swing options on volatile AI names (three lanes) — design
 
 **Date:** 2026-07-09
-**Status:** approved design, pending spec review; numbers NOT yet frozen
+**Status:** REGISTERED 2026-07-09 (ledger `f1887c9d`) + amendments v1.1
+(`e266770f`, SMCI backtest name), v1.2 (`f880b4d1`, owner gate decisions)
+and **v1.3 (`6faa4945`, 2026-07-11): the 2018-2026 historical diagnostic is
+PERMANENTLY WITHDRAWN as verdict-capable H7 evidence -- historical earnings
+provenance cannot be causally reconstructed. The point-in-time forward
+paper window is the SOLE verdict-bearing path. A conditional historical
+study would be a NEW hypothesis with its own registration; it may not
+reopen H7.** Frozen numbers live in `config.py` (H7 block), locked by
+`tests/test_config_h7.py`; the retirement gate is frozen there too
+(`H7_HISTORICAL_WITHDRAWAL_HASH`). Audit receipts v1/v2/v3
+(`reports/h7_audit/`) are preserved historical BLOCK artifacts.
+Forward roadmap (documentation only, activation gated on independent
+review): `docs/superpowers/plans/2026-07-11-h7-forward-roadmap.md`.
 **Scope class:** NEW hypothesis track, authorized by owner scope override
 (facts.log `SCOPE_OVERRIDE 2026-07-09`, owner decision "option C" overriding
 the operating manual's no-new-builds-before-first-verdict standing rule).

@@ -225,3 +225,112 @@ ASSIGNMENT_WATCH_PCT = 0.02
 # that can never fire.
 H5_ENTRY_TRIGGERS = {"VST": 140.0, "AMZN": 220.0}
 H5_ENTRY_IVR_MAX = 0.5
+
+# ---------------------------------------------------------------------------
+# H7 -- swing options on volatile AI names (REGISTERED 2026-07-09, ledger
+# trial_intent f1887c9d...; amendment e266770f... adds SMCI to the backtest
+# set). Three lanes: H7a drawdown+stabilization long, H7b coil long, H7c
+# rich-IV bull put spread. Values are FROZEN; changing any requires a logged
+# hypothesis version (see .claude/skills/ledger-discipline). Spec:
+# docs/superpowers/specs/2026-07-09-h7-swing-options-design.md (+v1.1).
+# ---------------------------------------------------------------------------
+H7_WATCHLIST = ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO"]
+H7_CORE_LONG_ONLY = ["VST", "CEG", "MSFT", "AMZN"]  # H7a/b eligible; H7c stays H5's book
+H7_EXCLUDED = ["HYLN"]                              # dead chain (~128 rows/day)
+
+H7A_DRAWDOWN_MIN = 0.25         # drawdown from 52wk high to arm lane a
+H7A_RECLAIM_LOOKBACK_D = 20     # stabilization = first close > prior 20d high
+H7B_RANGE_MAX = 0.15            # (60d high - low)/spot coil ceiling
+H7B_RANGE_LOOKBACK_D = 60
+H7B_RV_PCTILE_MAX = 0.25        # 20d RV vs own 1yr history (min 6mo listed)
+H7_RV_LOOKBACK_D = 21           # trailing realized vol (close-to-close, annualized)
+H7_IV_CHEAP_K = 1.00            # IV <= RV*k -> single long call
+H7_IV_PAR_K = 1.15              # cheap_k < IV <= par_k -> call debit spread
+H7_IV_RICH_K = 1.25             # IV >= RV*k -> H7c short-premium branch
+
+H7_LONG_DELTA_BAND = (0.55, 0.70)
+H7_LONG_DTE_BAND = (60, 120)
+H7_SPREAD_LONG_DELTA = 0.60
+H7_SPREAD_SHORT_DELTA = 0.25
+H7_LONG_TP_PCT = 1.00           # +100% take profit on long premium
+H7_SPREAD_TP_FRAC_MAX = 0.75    # close debit spread at 75% of max value
+H7_CLOSE_AT_DTE = 30            # time exit for the long lanes
+
+H7C_SHORT_DELTA_MAX = 0.30
+H7C_DTE_BAND = (30, 45)
+H7C_CREDIT_FLOOR_FRAC = 0.30    # net credit >= 30% of width or no trade
+H7C_WIDTH_FRAC_OF_SPOT = 0.10
+H7C_TP_FRAC = 0.50              # buy back at 50% of credit
+H7C_STOP_CREDIT_MULT = 2.0      # stop at 2x credit
+H7C_MAX_CONCURRENT = 1          # one short-premium position basket-wide
+
+H7_MONTHLY_AT_RISK = 6000       # owner-typed 2026-07-09; all lanes combined
+H7_MAX_OPEN_PER_UNDERLYING = 1
+H7_ADMIT_MIN_CONTRACTS = 5      # per-lane admission: >=5 NTM monthly contracts
+H7_ADMIT_MAX_SPREAD_PCT = 0.05  # ...with spread <= 5% and OI >= MIN_OPEN_INTEREST
+H7_EARNINGS_BAN_SESSIONS = 5    # no new entries within 5 sessions pre-report
+
+H7_BACKTEST_SYMBOLS = ["NOW", "NVDA", "PLTR", "MSFT", "AMZN", "VST", "CEG", "SMCI"]
+H7_BACKTEST_START = "2018-01-02"
+H7_BACKTEST_END = "2026-06-30"
+
+H7C_CLOSE_BEFORE_EARNINGS = True  # registered: short premium NEVER held
+#                                   through a report; runner hard-closes by
+#                                   the last session before any scheduled
+#                                   report (review R13 pinned the constant)
+
+# --- 7b-0 additions -------------------------------------------------------
+# Owner-ratified gate decisions, ledger H7_AMENDMENT_V1_2 (f880b4d1...):
+H7C_CLOSE_AT_DTE = 7             # v1.2(4): hard-close H7c at 7 DTE (mirrors H7_CLOSE_AT_DTE)
+H7_DELTA_TOLERANCE = 0.07        # v1.2(7): +/-0.07 around EVERY registered delta target
+#                                  (replaces the borrowed H5_INCOME_DELTA_BAND=0.15)
+H7_LANE_PRIORITY = ("a", "b", "c")  # v1.2(1,2): same-day sleeve tie-break; a beats b on one name
+H7C_TIEBREAK = "credit_to_width"    # v1.2(3): concurrent H7c candidates -> highest credit/width
+# v1.2(5): H7C_STOP_CREDIT_MULT semantics = close when the EOD conservative
+# buy-back mark >= 2x entry credit; realized exit recorded (H1/H2 semantics).
+# v1.2(6): the pre-registered backtest is an ISOLATED-LANE DIAGNOSTIC --
+# per-symbol/per-lane, portfolio caps NOT simulated; a different estimand
+# from live. The forward paper window carries the portfolio-coupled test.
+
+# Registered numbers previously hardcoded in the signal/watch layer (7b-0
+# NO-GO remediation: every decision number lives on this freeze surface):
+H7_IV_TENOR_DTE_BAND = (72, 108)  # registered IV measure: ATM ~90d, +/-18d
+H7_NTM_BAND = 0.10               # admission NTM = strikes within +/-10% of raw spot
+H7_DD_LOOKBACK_D = 252           # "52wk high" = trailing 252 sessions
+H7B_RV_WINDOW_D = 20             # registered "20d RV"
+H7B_RV_HISTORY_D = 252           # "...vs own 1yr history"
+H7B_RV_MIN_HISTORY_D = 106       # "min 6mo listed": 126 sessions minus the RV window
+# Owner-ratified 2026-07-10 (ledger H7_OWNER_DECISIONS_7B01): the earnings
+# gate is CLEAR only when a point-in-time-valid assertion identifies the NEXT
+# scheduled report, OR the company is PROVEN (a distinct occurred/verified
+# realized-report record) to have reported within the previous grace window.
+# Day grace+1 without a valid future assertion = EARNINGS-UNKNOWN (fails
+# closed). Expired estimates / old scheduled dates NEVER start the grace.
+H7_EARNINGS_POST_REPORT_GRACE_D = 45
+H7_EARNINGS_ESTIMATE_CLUSTER_D = 14   # estimates within this many days refer
+#                                       to the same report (frozen 7b-0.1;
+#                                       was module-private in h7_earnings.py)
+# 7b-2R finding 5 (owner review 2026-07-11): verdict-affecting numbers that
+# had escaped into module constants move onto the freeze surface so any
+# change invalidates config_hash and stales a committed diagnostic attempt.
+H7_DIAGNOSTIC_CONTRACTS = 1      # per-position sizing of the isolated-lane
+#                                  diagnostic (F3). NOTE: the decide-layer
+#                                  sleeve math prices ONE contract; changing
+#                                  this requires revisiting that math.
+FEED_PUT_DELTA_BAND = (0.03, 0.65)   # offline-feed PUT inclusion band
+FEED_CALL_DELTA_BAND = (0.10, 0.90)  # offline-feed CALL inclusion band
+#   (plumbing, not tunables: strategies fail LOUD when a selected leg has no
+#    feed Data -- a band miss can abort a run, never bias one. They still
+#    gate which contracts CAN trade, hence frozen.)
+H7_MAX_HOLD_BUFFER_D = 2         # chunk horizon = H7_LONG_DTE_BAND[1] + this
+H7_WARMUP_EXTRA_SESSIONS = 2     # warm-up = DD lookback + reclaim lookback + this
+H7_CLOSES_LOOKBACK_D = 600       # calendar-day closes preload before a chunk
+# 7b-2R.2 (owner decision 2026-07-11): the ledger record hash of
+# H7_AMENDMENT_V1_3, which permanently WITHDREW the 2018-2026 historical H7
+# diagnostic as verdict-capable evidence. Once this record exists in a
+# ledger, every historical-diagnostic entry point (attempt recording, OOS
+# authorization, the gated runner tool) refuses BEFORE reading market data.
+# A future conditional historical study requires a NEW hypothesis and a NEW
+# registration; it may not reopen H7. Frozen here so config_hash binds it.
+H7_HISTORICAL_WITHDRAWAL_HASH = (
+    "6faa494538a87e3ff802815ac9301ec6c004963c118745df1ab66a69b9491e5c")

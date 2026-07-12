@@ -42,7 +42,12 @@ def store_closes(symbol: str, frame: pd.DataFrame) -> str:
 def load_closes(symbol: str, start_iso: str, end_iso: str, *,
                 allow_oos: bool = False) -> pd.Series:
     """Date-indexed float close Series over [start_iso, end_iso].
-    Fail-closed OOS gate on the END of the requested range."""
+    Fail-closed OOS gate on the END of the requested range.
+
+    RAW (as-traded) closes: aligned with raw option strikes, DISCONTINUOUS at
+    split boundaries. Correct for strike/spot/chain math; NEVER feed these to
+    trailing price signals (52wk high, 20d high, RV, range) -- a 5:1 split
+    reads as an -80% crash. Signals use load_closes_adjusted()."""
     if not allow_oos and end_iso > config.IN_SAMPLE_END:
         raise OOSDataTouchError(
             f"load_closes({symbol}, end={end_iso}) exceeds IN_SAMPLE_END="
@@ -52,10 +57,57 @@ def load_closes(symbol: str, start_iso: str, end_iso: str, *,
     return s.loc[start_iso:end_iso]
 
 
+def adjustment_factor(symbol: str, iso_date: str) -> float:
+    """raw_close = adjusted_close * factor at `iso_date`: the product of the
+    ratios of all splits whose first split-adjusted day is AFTER iso_date.
+    1.0 after a symbol's last split (so live spot is unchanged)."""
+    factor = 1.0
+    for first_adjusted_day, ratio in SPLITS.get(symbol, []):
+        if iso_date < first_adjusted_day:
+            factor *= ratio
+    return factor
+
+
+def adjusted_from_raw(raw: pd.Series, symbol: str) -> pd.Series:
+    """Split-CONTINUOUS closes from a raw date-indexed series: each row is
+    divided by its date's adjustment factor. This is the ONLY series trailing
+    price signals may consume (h7_signals; ledger review 2026-07-10)."""
+    if symbol not in SPLITS:
+        return raw
+    factors = pd.Series(
+        [adjustment_factor(symbol, str(d)) for d in raw.index],
+        index=raw.index, dtype=float,
+    )
+    return raw / factors
+
+
+def load_closes_adjusted(symbol: str, start_iso: str, end_iso: str, *,
+                         allow_oos: bool = False) -> pd.Series:
+    """Split-adjusted (continuous) closes for signal computation."""
+    return adjusted_from_raw(
+        load_closes(symbol, start_iso, end_iso, allow_oos=allow_oos), symbol
+    )
+
+
 def rows_to_frame(rows) -> pd.DataFrame:
     """Normalize (iso_date, close) pairs from the fetch into the storage
     schema. Pure; unit-tested without network."""
     return pd.DataFrame(rows, columns=["date", "close"])
+
+
+def drop_same_day_rows(rows: list[tuple[str, float]],
+                       today_iso: str) -> list[tuple[str, float]]:
+    """Remove rows dated on/after the fetch's NY date: a same-day 'close'
+    fetched intraday is a partial print, and once stored it poisons every
+    later signal read (7b-0 NO-GO remediation). Applied by BOTH fetchers."""
+    return [(d, c) for d, c in rows if d < today_iso]
+
+
+def _now_ny_iso() -> str:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
 
 
 def fetch_underlying_eod(symbol: str, start_iso: str, end_iso: str) -> str:
@@ -77,7 +129,8 @@ def fetch_underlying_eod(symbol: str, start_iso: str, end_iso: str) -> str:
                                      _date.fromisoformat(end_iso))
     rows = [(ts.date().isoformat(), float(c))
             for ts, c in zip(df["last_trade"], df["close"])]
-    return store_closes(symbol, rows_to_frame(rows))
+    return store_closes(
+        symbol, rows_to_frame(drop_same_day_rows(rows, _now_ny_iso())))
 
 
 AV_QUERY_URL = "https://www.alphavantage.co/query"
@@ -131,7 +184,18 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 # split-adjusted trading day is the key; ratio multiplies earlier closes.
 # Provenance: AMZN 20-for-1 split, effective first trade 2022-06-06
 # (Official-source: Amazon 2022-03-09 8-K / press release; SEC EDGAR).
-SPLITS = {"AMZN": [("2022-06-06", 20.0)]}
+# NVDA 4:1 first split-adjusted trade 2021-07-20 and 10:1 2024-06-10
+# (Official-source: company PRs). NOW 5:1 first split-adjusted trade
+# 2025-12-18 (Official-source: SEC 8-K 2025-12-05; OCC memo #57868).
+# SMCI 10:1 first split-adjusted trade 2024-10-01 (Official-source: company
+# 8-K). All boundaries independently confirmed by parity-spot discontinuities
+# in the local chain cache (ledger facts REPORT_ADJUDICATION 2026-07-09).
+SPLITS = {
+    "AMZN": [("2022-06-06", 20.0)],
+    "NVDA": [("2021-07-20", 4.0), ("2024-06-10", 10.0)],
+    "NOW": [("2025-12-18", 5.0)],
+    "SMCI": [("2024-10-01", 10.0)],
+}
 
 
 def yahoo_rows_from_payload(payload: dict) -> list[tuple[str, float]]:
@@ -207,7 +271,8 @@ def fetch_underlying_eod_yahoo(symbol: str) -> str:
     with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310 (https)
         payload = json.load(resp)
     rows = unsplit(yahoo_rows_from_payload(payload), symbol)
-    return store_closes(symbol, rows_to_frame(rows))
+    return store_closes(
+        symbol, rows_to_frame(drop_same_day_rows(rows, _now_ny_iso())))
 
 
 def parity_spot_from_chain(chain: pd.DataFrame, today_iso: str, *,

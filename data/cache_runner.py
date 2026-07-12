@@ -45,6 +45,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from functools import lru_cache
 
 import grpc  # hard dependency of thetadata; import is offline-safe
 
@@ -96,12 +97,38 @@ def _fetch_with_transport_retry(fetch_one, symbol: str, day: str):
             _sleep(wait)
 
 
+_XNYS_CAL = None
+
+
+def _xnys():
+    global _XNYS_CAL
+    if _XNYS_CAL is None:
+        import pandas_market_calendars as mcal
+        _XNYS_CAL = mcal.get_calendar("XNYS")
+    return _XNYS_CAL
+
+
 def trading_days(start: str, end: str) -> list[str]:
     """ISO date strings of XNYS trading days in [start, end], inclusive."""
-    import pandas_market_calendars as mcal
-
-    schedule = mcal.get_calendar("XNYS").schedule(start_date=start, end_date=end)
+    schedule = _xnys().schedule(start_date=start, end_date=end)
     return [ts.date().isoformat() for ts in schedule.index]
+
+
+@lru_cache(maxsize=None)
+def session_close_utc(iso_day: str):
+    """The ACTUAL XNYS market close of session `iso_day` as a tz-aware UTC
+    datetime -- early closes (July 3rd, post-Thanksgiving, ...) included.
+
+    7b-2R review finding 4: this is the ONE information cutoff for a
+    completed session, shared by the watcher replay, the backtest strategy,
+    and the data audit. The previous 23:59:59Z cutoff leaked after-close
+    knowledge (e.g. an 8-K accepted 20:03 UTC) into the same session's
+    information set. Raises ValueError for a non-session day (cached: one
+    calendar lookup per distinct day per process)."""
+    schedule = _xnys().schedule(start_date=iso_day, end_date=iso_day)
+    if schedule.empty:
+        raise ValueError(f"{iso_day} is not an XNYS session")
+    return schedule["market_close"].iloc[0].to_pydatetime()
 
 
 def _is_gap_error(exc: RuntimeError) -> bool:

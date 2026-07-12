@@ -42,10 +42,38 @@ except Exception:  # pragma: no cover
 
 NY_TZ = "America/New_York"
 BAR_HOUR = 16
-# generous inclusion band for candidate legs (short ~0.30 delta, long width
-# below); far-OTM lottery tickets and deep-ITM puts can never be legs
-DELTA_MIN = 0.03
-DELTA_MAX = 0.65
+# feed inclusion bands live in frozen config (7b-2R finding 5: they can
+# change trade inclusion, so they participate in config_hash). Values are
+# unchanged; the H1 feed stays byte-identical.
+DELTA_MIN, DELTA_MAX = config.FEED_PUT_DELTA_BAND
+CALL_DELTA_MIN, CALL_DELTA_MAX = config.FEED_CALL_DELTA_BAND
+_RIGHT_BANDS = {"P": (DELTA_MIN, DELTA_MAX), "C": (CALL_DELTA_MIN, CALL_DELTA_MAX)}
+
+
+def adverse_buy(ask, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
+    """THE canonical executable BUY price (7b-2R finding 5): ask plus
+    haircut, rounded UP to the cent -- exactly the price the pre-widened
+    feed charges a market buy. Decide layer, T+1 revalidation, exit marks
+    and P&L must all price buys through here, so no threshold can pass on
+    unrounded math and then fill a cent worse in the engine."""
+    return math.ceil(float(ask) * (1 + haircut) * 100) / 100
+
+
+def adverse_sell(bid, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
+    """Canonical executable SELL price: bid minus haircut, rounded DOWN."""
+    return math.floor(float(bid) * (1 - haircut) * 100) / 100
+
+
+def quote_valid(bid, ask) -> bool:
+    """A usable book: finite, two-sided, uncrossed (7b-2R finding 5 --
+    entry, exit lookup and marks must all reject non-finite, one-sided and
+    crossed quotes; a positive crossed book previously priced exits)."""
+    try:
+        b, a = float(bid), float(ask)
+    except (TypeError, ValueError):
+        return False
+    return (math.isfinite(b) and math.isfinite(a)
+            and b > 0 and a > 0 and b <= a)
 
 _USD = None
 
@@ -57,26 +85,47 @@ def _usd():
     return _USD
 
 
-def option_asset(symbol: str, expiration_iso: str, strike: float):
-    """The ONE canonical put-contract Asset key. The feed and the strategy must
-    build byte-identical keys or orders can never fill."""
+def _normalize_right(right: str) -> str:
+    r = str(right).strip().upper()
+    if r in ("P", "PUT"):
+        return "PUT"
+    if r in ("C", "CALL"):
+        return "CALL"
+    raise ValueError(f"unknown option right: {right!r}")
+
+
+def option_asset(symbol: str, expiration_iso: str, strike: float,
+                 right: str = "PUT"):
+    """The ONE canonical contract Asset key. The feed and the strategy must
+    build byte-identical keys or orders can never fill. `right` defaults to
+    PUT so every pre-7b-1 (H1) call site is unchanged; calls and puts at the
+    same (expiration, strike) are DISTINCT assets."""
     return Asset(
         symbol=str(symbol).strip().upper(),
         asset_type=Asset.AssetType.OPTION,
         expiration=Date.fromisoformat(str(expiration_iso)),
         strike=float(strike),
-        right="PUT",
+        right=_normalize_right(right),
     )
 
 
 def load_cached_chains(symbol: str, start_iso: str, end_iso: str, *,
-                       allow_oos: bool = False) -> dict[str, pd.DataFrame]:
-    """Read every cached chain for `symbol` in [start_iso, end_iso] from the
-    local parquet cache. The cache IS the trading calendar: a missing file is
-    a non-trading day (real data gaps were CACHE_GAP-logged at cache time).
-    Never fetches: on a cache hit get_eod_chain reads parquet only, and dates
-    past IN_SAMPLE_END raise OOSDataTouchError unless allow_oos (holdout
-    guard, enforced by the adapter even for cached files)."""
+                       allow_oos: bool = False,
+                       eligible: set[str] | None = None,
+                       refused: list[str] | None = None
+                       ) -> dict[str, pd.DataFrame]:
+    """Read cached chains for `symbol` in [start_iso, end_iso] from the
+    local parquet cache. Never fetches: on a cache hit get_eod_chain reads
+    parquet only, and dates past IN_SAMPLE_END raise OOSDataTouchError
+    unless allow_oos (holdout guard, enforced by the adapter even for
+    cached files).
+
+    `eligible` (7b-2R finding 2): when given, ONLY days in the set are
+    loaded -- a file that exists outside it is never parsed; its day is
+    appended to `refused` (caller-supplied list) so the quarantine is
+    reported, not silent. The H7 runner ALWAYS passes the canonical
+    data.h7_manifest eligible set; eligible=None is the legacy H1 path and
+    synthetic-test path only."""
     start = Date.fromisoformat(start_iso)
     end = Date.fromisoformat(end_iso)
     chains: dict[str, pd.DataFrame] = {}
@@ -84,25 +133,32 @@ def load_cached_chains(symbol: str, start_iso: str, end_iso: str, *,
     while d <= end:
         iso = d.isoformat()
         if thetadata_adapter._cache_path(symbol, iso).exists():
-            chains[iso] = thetadata_adapter.get_eod_chain(
-                symbol, iso, allow_oos=allow_oos)
+            if eligible is not None and iso not in eligible:
+                if refused is not None:
+                    refused.append(iso)
+            else:
+                chains[iso] = thetadata_adapter.get_eod_chain(
+                    symbol, iso, allow_oos=allow_oos)
         d += timedelta(days=1)
     return chains
 
 
 def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
                       exp_max: str, haircut: float = config.SLIPPAGE_HAIRCUT,
-                      delta_min: float = DELTA_MIN,
-                      delta_max: float = DELTA_MAX) -> dict:
-    """Per-contract Lumibot Data for every put in `chains` expiring on or
-    before `exp_max` whose |delta| ever enters [delta_min, delta_max]."""
+                      delta_min: float | None = None,
+                      delta_max: float | None = None,
+                      rights: tuple[str, ...] = ("P",)) -> dict:
+    """Per-contract Lumibot Data for every contract of the requested rights
+    in `chains` expiring on or before `exp_max` whose |delta| ever enters the
+    right's inclusion band. Defaults (puts only, put band) reproduce the H1
+    feed byte-for-byte; H7 passes rights=("C", "P")."""
     frames = []
     for iso_day, chain in chains.items():
-        puts = chain[chain["right"] == "P"]
-        puts = puts[(puts["expiration"] > iso_day) & (puts["expiration"] <= exp_max)]
-        if puts.empty:
+        rows = chain[chain["right"].isin(rights)]
+        rows = rows[(rows["expiration"] > iso_day) & (rows["expiration"] <= exp_max)]
+        if rows.empty:
             continue
-        f = puts[["expiration", "strike", "bid", "ask", "delta"]].copy()
+        f = rows[["expiration", "strike", "right", "bid", "ask", "delta"]].copy()
         f["day"] = iso_day
         frames.append(f)
     if not frames:
@@ -110,8 +166,12 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
     rows = pd.concat(frames, ignore_index=True)
 
     feed: dict = {}
-    for (exp, strike), grp in rows.groupby(["expiration", "strike"]):
-        if not grp["delta"].abs().between(delta_min, delta_max).any():
+    for (exp, strike, right), grp in rows.groupby(["expiration", "strike", "right"]):
+        lo, hi = _RIGHT_BANDS[right]
+        if delta_min is not None or delta_max is not None:
+            lo = delta_min if delta_min is not None else lo
+            hi = delta_max if delta_max is not None else hi
+        if not grp["delta"].abs().between(lo, hi).any():
             continue
         grp = grp.sort_values("day")
         idx = pd.DatetimeIndex(
@@ -120,12 +180,12 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
         ask = grp["ask"].to_numpy(dtype=float)
         df = pd.DataFrame(
             {
-                "bid": [math.floor(b * (1 - haircut) * 100) / 100 for b in bid],
-                "ask": [math.ceil(a * (1 + haircut) * 100) / 100 for a in ask],
+                "bid": [adverse_sell(b, haircut) for b in bid],
+                "ask": [adverse_buy(a, haircut) for a in ask],
                 "close": (bid + ask) / 2.0,
             },
             index=idx,
         )
-        asset = option_asset(symbol, str(exp), float(strike))
+        asset = option_asset(symbol, str(exp), float(strike), right=right)
         feed[asset] = Data(asset, df, timestep="day", quote=_usd())
     return feed
