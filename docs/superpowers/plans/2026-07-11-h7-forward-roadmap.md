@@ -50,7 +50,22 @@ same-day-partial guards green. The watcher already fails closed per name;
 this stage makes the whole-universe gate a single dated artifact so a
 partially-degraded day is visible BEFORE any decision output is read.
 
-## Stage 3 — Hash-chained forward event ledger
+## Stage 3 — Hash-chained forward event ledger — BUILT 2026-07-12; INACTIVE (zero real events)
+
+*Implemented as `options_researcher/h7_event_ledger.py` +
+`tests/test_h7_event_ledger.py` + `ledger/h7_forward/README.md` on
+`feature/h7-stage3-forward-event-ledger` (parent Stage 2 build `28cd415`).
+BUILD-ONLY owner authorization 2026-07-12. A SEPARATE hash-chained ledger
+(`ledger/h7_forward/events.jsonl` + `HEAD`) with its own verifier — it never
+touches `ledger/experiments.jsonl`, `ledger/HEAD`, or trial_count. Public
+API append_event/read_events/verify + `verify` CLI; idempotent by
+(event_id, logical_hash), conflicting content refused, causal references
+enforced backward, concurrent writers serialized by an exclusive lock,
+crash-DETECTING (a crash between events.jsonl fsync and HEAD replace leaves a
+stale-HEAD mismatch the next verify refuses — no auto-repair). The default
+store is ABSENT and the first real event is prohibited until Stage 8
+activation; the default verifier prints VALID EMPTY (exit 0). The original
+spec paragraph below is unchanged.*
 
 An append-only, hash-chained event log (the experiments-ledger pattern)
 for every forward-window event: gate states, board resolutions, DISPLACED

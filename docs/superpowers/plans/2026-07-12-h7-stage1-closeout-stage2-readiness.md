@@ -22,6 +22,17 @@ Stage 2 could ever be operationally authorized, all still open:
 Source health independently blocks Stage 2 authorization regardless of the
 build being complete.
 
+**Update 2026-07-12 (Stage 3 BUILD-ONLY):** The owner authorized a build-only
+Stage 3 arc — the append-only hash-chained forward-event ledger
+(`options_researcher/h7_event_ledger.py`, branch
+`feature/h7-stage3-forward-event-ledger` from `28cd415`). It is BUILT and
+INACTIVE: the default store `ledger/h7_forward/` holds zero real events (only
+a README), and the first real event stays prohibited until Stage 8
+activation. This does not change any Stage 2 blocker above (CRWV advisory,
+ThetaData daily chains, source health 11/12) and authorizes no forward event,
+paper position, Stage 4 lifecycle, or activation. Stages 4–8 remain
+unauthorized.
+
 ## Bottom line
 
 Do not build Stage 2 while Stage 1 reports 4/12 healthy. First ratify the

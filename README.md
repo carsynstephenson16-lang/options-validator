@@ -73,6 +73,7 @@ uv run python -m options_researcher.entry_watch                # WAIT/FIRE vs th
 uv run python -m options_researcher.h7_watch                    # session-aligned H7 watcher; alerts only
 uv run python -m options_researcher.h7_source_health           # earnings provenance alive? (exit 1 on any unhealthy name)
 uv run python -m options_researcher.h7_data_gate               # Stage 2 whole-universe daily data gate (read-only; BUILD-ONLY; live = NO_GO 0/12, exit 1)
+uv run python -m options_researcher.h7_event_ledger verify     # Stage 3 forward-event ledger verifier (BUILD-ONLY; default store absent -> VALID EMPTY, exit 0)
 uv run python tools/h7_refresh_earnings.py --help               # owner-run append-raw/promote refresher
 uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
