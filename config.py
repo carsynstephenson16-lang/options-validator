@@ -334,3 +334,11 @@ H7_CLOSES_LOOKBACK_D = 600       # calendar-day closes preload before a chunk
 # registration; it may not reopen H7. Frozen here so config_hash binds it.
 H7_HISTORICAL_WITHDRAWAL_HASH = (
     "6faa494538a87e3ff802815ac9301ec6c004963c118745df1ab66a69b9491e5c")
+
+# ---------------------------------------------------------------------------
+# Forward-roadmap Stage 1 (source health) -- OPERATIONAL alerting threshold,
+# NOT a registered strategy parameter: it changes when a human is warned,
+# never what the earnings gate returns or what any backtest/verdict does.
+# LLM-proposed 2026-07-11 (one trading week of runway to refresh a schedule
+# by hand before grace lapses into UNKNOWN); owner may retype.
+H7_SOURCE_HEALTH_WARN_SESSIONS = 5
