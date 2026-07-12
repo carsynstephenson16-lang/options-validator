@@ -172,18 +172,32 @@ class TestLoadGatingStoreV3(unittest.TestCase):
               "event_class,status,expected_date,occurred_date,"
               "session_timing,source_type,source_url,known_as_of_utc,"
               "checked_at_utc,supersedes,promoted_from,notes\n")
+    # Every gating assertion must cite its raw evidence (7b-2R.2 finding 4):
+    # ROW is promoted_from=A1, and RAW_ROW is the matching raw record.
     ROW = ("R1,MSFT,MSFT-FY26Q4,FY26Q4,assertion,actual_quarterly_earnings,"
            "confirmed,2026-07-29,,amc,"
            "company_pr,https://example.test/ir,2026-07-10T15:00:00+00:00,"
-           "2026-07-10T15:00:00+00:00,,,\n")
+           "2026-07-10T15:00:00+00:00,,A1,\n")
+    RAW_HEADER = ("record_id,symbol,event_id,fiscal_period,record_type,"
+                  "status,expected_date,occurred_date,session_timing,"
+                  "source_type,source_url,known_as_of_utc,checked_at_utc,"
+                  "supersedes,notes\n")
+    RAW_ROW = ("A1,MSFT,MSFT-FY26Q4,FY26Q4,assertion,"
+               "confirmed,2026-07-29,,amc,"
+               "company_pr,https://example.test/ir,2026-07-10T15:00:00+00:00,"
+               "2026-07-10T15:00:00+00:00,,\n")
 
-    def _load(self, text):
+    def _load(self, text, raw_text=None):
         import tempfile
         from pathlib import Path
+        if raw_text is None:
+            raw_text = self.RAW_HEADER + self.RAW_ROW
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "gating_v3.csv"
             p.write_text(text)
-            return load_assertions(p)
+            raw = Path(tmp) / "assertions_v2.csv"
+            raw.write_text(raw_text)
+            return load_assertions(p, raw_path=raw)
 
     def test_valid_file_loads(self):
         rows = self._load(self.HEADER + self.ROW)
@@ -207,7 +221,9 @@ class TestLoadGatingStoreV3(unittest.TestCase):
         row = self.ROW.replace("actual_quarterly_earnings", "unclassified"
                                ).replace("confirmed,2026-07-29,",
                                          "occurred,,2026-07-01")
-        rows = self._load(self.HEADER + row)
+        raw = self.RAW_HEADER + self.RAW_ROW.replace(
+            "confirmed,2026-07-29,", "occurred,,2026-07-01")
+        rows = self._load(self.HEADER + row, raw_text=raw)
         self.assertEqual(rows[0]["event_class"], "unclassified")
         state, reason = earnings_gate("MSFT", date(2026, 7, 10), rows,
                                       known_as_of=_now())
@@ -242,8 +258,8 @@ class TestLoadGatingStoreV3(unittest.TestCase):
             self._load(self.HEADER + self.ROW + self.ROW)
 
     def test_supersedes_must_reference_an_earlier_record(self):
-        bad = self.ROW.replace(",2026-07-10T15:00:00+00:00,,,\n",
-                               ",2026-07-10T15:00:00+00:00,R99,,\n")
+        bad = self.ROW.replace(",2026-07-10T15:00:00+00:00,,A1,\n",
+                               ",2026-07-10T15:00:00+00:00,R99,A1,\n")
         with self.assertRaises(ValueError):
             self._load(self.HEADER + bad)
 
@@ -273,6 +289,64 @@ class TestLoadGatingStoreV3(unittest.TestCase):
         self.assertEqual(len(before), 1)
         self.assertEqual(after, [])
         self.assertEqual(len(rows), 2)   # append-only: nothing deleted
+
+    # ------------------------------------------------------------------
+    # 7b-2R.2 finding 4: promotion must be EVIDENCE-BACKED. Every gating
+    # assertion cites a raw record via promoted_from and matches it
+    # field-for-field; missing/foreign/mismatched promotion fails closed.
+    # ------------------------------------------------------------------
+
+    def test_missing_promoted_from_fails_closed(self):
+        bad = self.ROW.replace(",2026-07-10T15:00:00+00:00,,A1,\n",
+                               ",2026-07-10T15:00:00+00:00,,,\n")
+        with self.assertRaises(ValueError) as ctx:
+            self._load(self.HEADER + bad)
+        self.assertIn("R1", str(ctx.exception))
+        self.assertIn("promoted_from", str(ctx.exception))
+
+    def test_foreign_promoted_from_fails_closed(self):
+        bad = self.ROW.replace(",2026-07-10T15:00:00+00:00,,A1,\n",
+                               ",2026-07-10T15:00:00+00:00,,A9,\n")
+        with self.assertRaises(ValueError) as ctx:
+            self._load(self.HEADER + bad)
+        self.assertIn("foreign", str(ctx.exception))
+        self.assertIn("A9", str(ctx.exception))
+
+    def test_mismatched_field_fails_closed_naming_the_field(self):
+        # gating claims 07-30 while the raw evidence says 07-29
+        bad = self.ROW.replace("2026-07-29", "2026-07-30")
+        with self.assertRaises(ValueError) as ctx:
+            self._load(self.HEADER + bad)
+        self.assertIn("expected_date", str(ctx.exception))
+        # a doctored source_url is also refused
+        bad = self.ROW.replace("https://example.test/ir",
+                               "https://example.test/other")
+        with self.assertRaises(ValueError) as ctx:
+            self._load(self.HEADER + bad)
+        self.assertIn("source_url", str(ctx.exception))
+
+    def test_matching_promotion_loads(self):
+        rows = self._load(self.HEADER + self.ROW)
+        self.assertEqual(rows[0]["promoted_from"], "A1")
+
+    def test_retraction_rows_need_no_promotion(self):
+        retract = ("R2,MSFT,MSFT-FY26Q4,FY26Q4,retraction,"
+                   "actual_quarterly_earnings,confirmed,"
+                   "2026-07-29,,amc,company_pr,https://example.test/oops,"
+                   "2026-07-12T15:00:00+00:00,2026-07-12T15:00:00+00:00,"
+                   "R1,,\n")
+        rows = self._load(self.HEADER + self.ROW + retract)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1]["record_type"], "retraction")
+        self.assertEqual(rows[1]["promoted_from"], "")
+
+    def test_committed_stores_cross_validate(self):
+        # all defaults: gating_v3.csv must promote from assertions_v2.csv
+        rows = load_assertions()
+        self.assertGreater(len(rows), 0)
+        for a in rows:
+            if a["record_type"] == "assertion":
+                self.assertTrue(a["promoted_from"], a["record_id"])
 
     def test_committed_gating_file_is_valid_and_all_verified_actuals(self):
         rows = load_assertions()

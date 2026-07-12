@@ -254,14 +254,56 @@ def _load_store(path: Path, columns: tuple, *, gating: bool) -> list[dict]:
     return rows
 
 
-def load_assertions(path: Path = ASSERTIONS_PATH) -> list[dict]:
+# Fields a promoted gating row must carry over from its raw evidence record
+# UNCHANGED. notes and checked_at_utc are deliberately excluded: promotion
+# legitimately adds classification notes and re-checks the record.
+_PROMOTION_FIELDS = ("symbol", "event_id", "fiscal_period", "status",
+                     "expected_date", "occurred_date", "session_timing",
+                     "source_type", "source_url", "known_as_of_utc")
+
+
+def load_assertions(path: Path = ASSERTIONS_PATH,
+                    raw_path: Path | None = None) -> list[dict]:
     """The v3 GATING store: the ONLY assertions the strategy, watcher and
     audit gate on. Every row carries an event_class; only
     actual_quarterly_earnings records participate in the gate, and those
-    require fiscal-period identity plus an exact source URL (7b-2R.1:
-    promotion is separate from raw SEC collection; nothing is
-    bulk-labeled)."""
-    return _load_store(path, _GATING_COLUMNS, gating=True)
+    require fiscal-period identity plus an exact source URL.
+
+    7b-2R.2 finding 4: promotion into this store is a per-record,
+    classified act that must CITE its raw evidence -- nothing unpromoted
+    can gate. Every assertion row's promoted_from must resolve to a record
+    in the RAW evidence store (`raw_path`, default RAW_ASSERTIONS_PATH)
+    and match it on every field in _PROMOTION_FIELDS. A missing, foreign,
+    or mismatched promotion refuses the WHOLE store (fail closed, matching
+    the loader's malformed-file posture). Retraction rows are exempt: a
+    retraction corrects the gating layer itself, so it has no raw
+    counterpart to cite."""
+    rows = _load_store(path, _GATING_COLUMNS, gating=True)
+    raw_by_id = {r["record_id"]: r
+                 for r in load_raw_assertions(raw_path or RAW_ASSERTIONS_PATH)}
+    for a in rows:
+        if a["record_type"] != "assertion":
+            continue   # retractions correct the gating layer itself
+        rid = a["record_id"]
+        promoted_from = a["promoted_from"]
+        if not promoted_from:
+            raise ValueError(
+                f"{path}: gating record {rid}: promoted_from is empty -- "
+                f"promotion must cite its raw evidence record; nothing "
+                f"unpromoted can gate")
+        source = raw_by_id.get(promoted_from)
+        if source is None:
+            raise ValueError(
+                f"{path}: gating record {rid}: promoted_from "
+                f"{promoted_from!r} is foreign -- no such record_id in the "
+                f"raw evidence store")
+        for field in _PROMOTION_FIELDS:
+            if a[field] != source[field]:
+                raise ValueError(
+                    f"{path}: gating record {rid}: field {field!r} does not "
+                    f"match raw evidence {promoted_from}: gating "
+                    f"{a[field]!r} != raw {source[field]!r}")
+    return rows
 
 
 def load_raw_assertions(path: Path = RAW_ASSERTIONS_PATH) -> list[dict]:
