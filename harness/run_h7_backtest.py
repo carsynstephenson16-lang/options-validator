@@ -4,10 +4,15 @@ stays the engine; this module only loads cached data, builds the
 per-contract feed (calls AND puts), runs per-symbol/per-lane/per-year
 chunks, and collects closed-trade dicts.
 
-BLOCKED UNTIL 7b-3: this runner is integration-tested on synthetic fixtures
-only. No full-window H7 experiment may run before the 7b-2 gates pass, a
-diagnostic_attempt ledger record is committed, and the owner's independent
-review clears 7b-3 (ledger H7_7B_NOGO + H7_OWNER_DECISIONS_7B01).
+PERMANENTLY WITHDRAWN for H7 (amendment v1.3, 2026-07-11): the 2018-2026
+historical H7 diagnostic is no longer verdict-capable evidence -- historical
+earnings provenance cannot be causally reconstructed. The frozen retirement
+gate (config.H7_HISTORICAL_WITHDRAWAL_HASH, checked inside
+research.diagnostics.authorize_oos_run at this runner's execution boundary)
+refuses every OOS H7 invocation before any market data is read. This module
+stays integration-tested on synthetic in-sample fixtures only; the forward
+paper window is H7's sole verdict-bearing path. A conditional historical
+study would be a NEW hypothesis with its own registration and machinery.
 
 OOS GATE (7b-2R.1 finding A): the gate lives INSIDE the execution boundary.
 There is no capability object a caller could construct; run_lane itself

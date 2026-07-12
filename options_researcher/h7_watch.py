@@ -276,8 +276,10 @@ def main(argv: list[str] | None = None) -> int:
     names = [s for s in config.H7_WATCHLIST + config.H7_CORE_LONG_ONLY
              if s not in config.H7_EXCLUDED]
     print(f"H7 WATCH session={eval_iso} run={run_date.isoformat()} "
-          f"(registered f1887c9d + v1.2 f880b4d1; allocation-grade -- "
-          f"board resolver enforced; alerts only, never trades)")
+          f"(registered f1887c9d + v1.2 f880b4d1 + v1.3 6faa4945: "
+          f"historical diagnostic WITHDRAWN, forward paper is the sole "
+          f"verdict path; allocation-grade -- board resolver enforced; "
+          f"alerts only, never trades)")
     print(f"sleeve: ${config.H7_MONTHLY_AT_RISK - month_spent:.0f} of "
           f"${config.H7_MONTHLY_AT_RISK} left this month; "
           f"open H7c {open_c}/{config.H7C_MAX_CONCURRENT}")

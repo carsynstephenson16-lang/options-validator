@@ -1,0 +1,86 @@
+# H7 forward-paper roadmap (dependency-ordered) — DOCUMENTATION ONLY
+
+**Status: PROPOSED, NOT IMPLEMENTED, NOT ACTIVATED (7b-2R.2 deliverable;
+replaces the retired 7b-F0 proposal). Nothing below exists in code beyond
+what already ships. Stage 8 — the activation gate — belongs to the next
+independent review, not to any implementation session.**
+
+Context: H7's 2018–2026 historical diagnostic is permanently withdrawn
+(amendment v1.3, `6faa4945…`); the point-in-time forward paper window is
+the sole verdict-bearing path. Each stage below depends on every stage
+above it; none may be built out of order, and building any of them is a
+separately authorized arc.
+
+## Stage 1 — Source health (earnings provenance stays alive)
+
+Per-symbol source-health reporting over the v3 gating store: newest gating
+assertion, event class/status/source type, days to expected report, STALE
+/ MISSING flags (no live future schedule; grace expiring within N
+sessions). Exit non-zero when any name is unhealthy. Owner-in-the-loop
+append-only refresher for schedules/occurrences (SEC acceptance times
+first, company IR/PR second, aggregator estimates only as disclosed
+`estimated`); every promotion cites its raw evidence row (the 7b-2R.2
+promotion contract). No crawler — recurring automation stays deferred.
+
+## Stage 2 — 12-name daily data gate
+
+A daily go/no-go over the full H7 universe (8 watchlist + 4 core names):
+chains and closes both end exactly at the evaluation session, session
+alignment verified, liquidity-relevant fields present, staleness and
+same-day-partial guards green. The watcher already fails closed per name;
+this stage makes the whole-universe gate a single dated artifact so a
+partially-degraded day is visible BEFORE any decision output is read.
+
+## Stage 3 — Hash-chained forward event ledger
+
+An append-only, hash-chained event log (the experiments-ledger pattern)
+for every forward-window event: gate states, board resolutions, DISPLACED
+lanes, entry/exit intents, owner approvals, fills, skips, data-gap days.
+Write-once, verified like `ledger/experiments.jsonl`; nothing about the
+forward window is reconstructed from memory or prose.
+
+## Stage 4 — T+1 lifecycle (paper)
+
+The watcher decides at session T; owner-approved entries execute T+1 at
+recorded quotes with the canonical adverse-price transform; exits follow
+the frozen trigger interpretations and priority; every transition lands in
+the Stage-3 event ledger with its causal inputs (chain day, closes day,
+gate reason). One position per symbol/lane; cancel-never-chase.
+
+## Stage 5 — Global risk accounting
+
+Cross-symbol enforcement of the monthly sleeve (H7_MONTHLY_AT_RISK),
+H7C_MAX_CONCURRENT, and one-open-per-underlying at the BOOK level (the
+live analogue of the board resolver), reconciled daily against
+`data/positions/h7_positions.csv` with `open_h7_book` semantics.
+
+## Stage 6 — Scoring
+
+The forward window's verdict machinery, pre-registered BEFORE the first
+entry: expectancy per trade after costs with bootstrap CI, verdict gating
+on MIN_LOSSES_FOR_VERDICT losses, per-lane cohorts, benchmark columns
+(underlying move alongside every trade). Vocabulary stays frozen:
+survived / rejected / inconclusive.
+
+## Stage 7 — Synthetic proof
+
+Before live-tick activation: a full synthetic dress rehearsal of stages
+1–6 on fixture data (the engine-test idiom) proving gate refusals, event
+ledger integrity, T+1 causality, risk caps and scoring end-to-end, with
+the results pasted into facts.log as dated evidence.
+
+## Stage 8 — Activation gate (separate; not this roadmap's to open)
+
+A distinct owner + independent-review decision that: pre-registers the
+window (start, duration, decision procedure, verdict gate) in the ledger;
+confirms ThetaData renewal for daily EOD chains (the 2026-07-25 question
+precedes any start date); and only then starts the clock. No stage below
+it authorizes activation.
+
+## Explicitly out of scope, permanently or until re-registered
+
+- Any historical H7 backtest or P&L (withdrawn; the retirement gate
+  refuses mechanically).
+- A post-earnings-only historical study — a NEW conditional hypothesis
+  with its own registration; it can never reject or validate H7.
+- Live order placement of any kind (this repo is a validator).
