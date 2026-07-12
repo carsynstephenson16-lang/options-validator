@@ -14,12 +14,13 @@ stays integration-tested on synthetic in-sample fixtures only; the forward
 paper window is H7's sole verdict-bearing path. A conditional historical
 study would be a NEW hypothesis with its own registration and machinery.
 
-OOS GATE (7b-2R.1 finding A): the gate lives INSIDE the execution boundary.
-There is no capability object a caller could construct; run_lane itself
-calls research.diagnostics.authorize_oos_run before any loader touches a
-window ending past config.IN_SAMPLE_END, and refuses (DiagnosticError)
-unless a committed, current diagnostic_attempt with a v2 PASS receipt
-authorizes exactly this lane/window/symbols/manifest.
+RETIREMENT + LEGACY OOS GATES: the public run_lane entry point first applies
+the frozen v1.3 retirement tombstone for EVERY window, including in-sample,
+before manifest or market-data work. The historical machinery below remains
+exercised only by synthetic tests that patch the private retirement-check
+seam. Behind that tombstone, the preserved 7b-2R.1 OOS gate still lives
+inside the execution boundary and requires a committed, current attempt with
+its bound audit receipt; it cannot authorize the withdrawn H7 hypothesis.
 
 Chunking (memory, not statistics), same contract as the H1 runner:
   * interior chunks allow entries through Dec 31 and simulate
@@ -53,6 +54,13 @@ H7_MAX_HOLD_DAYS = config.H7_LONG_DTE_BAND[1] + config.H7_MAX_HOLD_BUFFER_D
 # How far back the closes series must reach before `start` so the first
 # in-window session is already warm (sessions -> calendar-day slack).
 _CLOSES_LOOKBACK_DAYS = config.H7_CLOSES_LOOKBACK_D
+
+
+def _require_h7_history_not_retired() -> None:
+    """Private test seam around the unconditional public retirement gate."""
+    from research.diagnostics import require_h7_diagnostic_not_retired
+
+    require_h7_diagnostic_not_retired()
 
 
 def _year_chunks(start: Date, end: Date) -> list[tuple[str, str, str]]:
@@ -226,10 +234,15 @@ def run_lane(lane: str, start: str | None = None, end: str | None = None, *,
     loader runs, a window ending past IN_SAMPLE_END must be authorized by
     research.diagnostics.authorize_oos_run against the committed
     diagnostic_attempt named by `diagnostic_id` (anchored ledger, current
-    hashes, v2 PASS receipt whose manifest is exactly this runner's
+    hashes, bound PASS audit receipt whose manifest is exactly this runner's
     inputs). No id, or any failing gate, raises DiagnosticError before a
-    single OOS chain or close is touched. In-sample windows need no id and
-    run with allow_oos=False, unchanged."""
+    single OOS chain or close is touched. The unconditional retirement gate
+    above it means neither in-sample nor OOS history is publicly runnable for
+    H7; synthetic tests patch only the private seam."""
+    # v1.3 withdrew ALL historical H7 evidence, not only the OOS portion.
+    # This is deliberately first: even an in-sample call cannot reach a
+    # manifest, close, chain, assertion store, or P&L path on the real ledger.
+    _require_h7_history_not_retired()
     if lane not in ("a", "b", "c"):
         raise ValueError(f"unknown H7 lane: {lane!r}")
     start_d = Date.fromisoformat(start or config.H7_BACKTEST_START)

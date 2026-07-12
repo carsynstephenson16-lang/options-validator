@@ -185,6 +185,10 @@ class TestRunLaneBoundary(unittest.TestCase):
         # point the REAL authorize_oos_run at the tmp ledger (no logic is
         # mocked away) and neutralize the git-porcelain check for tmp dirs
         real = diagnostics.authorize_oos_run
+        real_retirement = diagnostics.require_h7_diagnostic_not_retired
+        stack.enter_context(mock.patch.object(
+            run_h7, "_require_h7_history_not_retired",
+            functools.partial(real_retirement, base_dir=base)))
         stack.enter_context(mock.patch.object(
             diagnostics, "authorize_oos_run",
             functools.partial(real, base_dir=base)))
@@ -309,7 +313,7 @@ class TestRunLaneBoundary(unittest.TestCase):
         self.assertTrue(chunk_flags)
         self.assertTrue(all(chunk_flags))
 
-    def test_in_sample_window_still_runs_without_id(self):
+    def test_in_sample_window_is_retired_before_loaders(self):
         def boom(*a, **k):
             raise AssertionError(
                 "authorize_oos_run must not be consulted in-sample")
@@ -324,11 +328,19 @@ class TestRunLaneBoundary(unittest.TestCase):
                 closes_flags.append(allow_oos) or (None, None)))
             stack.enter_context(mock.patch.object(
                 run_h7, "_run_chunk", lambda *a, **k: dict(EMPTY_CHUNK)))
-            out = run_h7.run_lane("a", "2022-01-03", "2022-06-30",
-                                  symbols=["NVDA"], assertions=[],
-                                  manifest=FAKE_MANIFEST)
-        self.assertEqual(out["lane"], "a")
-        self.assertEqual(closes_flags, [False])
+            with self.assertRaises(diagnostics.DiagnosticError) as ctx:
+                run_h7.run_lane("a", "2022-01-03", "2022-06-30",
+                                symbols=["NVDA"], assertions=[],
+                                manifest=FAKE_MANIFEST)
+        self.assertIn("PERMANENTLY WITHDRAWN", str(ctx.exception))
+        self.assertEqual(closes_flags, [])
+
+    def test_in_sample_retirement_fires_before_manifest_construction(self):
+        with mock.patch("data.h7_manifest.eligible_manifest") as manifest:
+            with self.assertRaises(diagnostics.DiagnosticError):
+                run_h7.run_lane("a", "2022-01-03", "2022-06-30",
+                                symbols=["NVDA"], assertions=[])
+        manifest.assert_not_called()
 
     def test_no_capability_object_and_no_privileged_params(self):
         src = inspect.getsource(run_h7)

@@ -218,7 +218,7 @@ def authorize_oos_run(diagnostic_id, *, lane, window, symbols, manifest,
     Called by harness.run_h7_backtest.run_lane BEFORE any loader touches
     post-IN_SAMPLE_END data. There is no freely constructible authorization
     object: the only thing that opens an OOS window is a committed, current
-    diagnostic_attempt whose bound v2 PASS receipt manifest is exactly the
+    diagnostic_attempt whose bound PASS audit receipt manifest is exactly the
     manifest the runner is about to consume. Returns the attempt record on
     success; raises DiagnosticError on the first failing gate. The FIRST
     gate is the frozen retirement check (7b-2R.2): once H7_AMENDMENT_V1_3

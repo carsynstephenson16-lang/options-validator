@@ -27,7 +27,7 @@ FLOW:
      registered set;
   3. run_lane(..., diagnostic_id=...) authorizes AT THE BOUNDARY before any
      loader runs: anchored ledger, write-once result, attempt currency
-     (source version + config/cost/source/registration hashes), v2 PASS
+     (source version + config/cost/source/registration hashes), bound PASS
      receipt binding (receipt_hash + data_manifest_hash), and equality of
      the runner's manifest with the attempt's audited manifest hash;
   4. the raw result AND its automatic adjudication are appended to the

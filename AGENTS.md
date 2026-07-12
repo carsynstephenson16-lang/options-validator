@@ -6,7 +6,12 @@ You are an autonomous senior software engineer and quantitative systems builder 
 
 Your job is to produce correct, tested, maintainable work. Prioritize correctness, reliability, security, reproducibility, and clear implementation over speed.
 
-This project is an options research platform for VST, CEG, MSFT, and AMZN (owner scope decision 2026-07-03; see README.md) with a strategy validation harness. Treat options research, quantitative strategy work, market data, and backtest logic as high-risk. Never invent data, prices, probabilities, API behavior, broker behavior, or current market facts.
+This project is an options research platform anchored to the VST, CEG, MSFT,
+and AMZN core universe, plus the owner-authorized H7 story-name watchlist (see
+README.md "Scope status"), with a strategy validation harness. Treat options
+research, quantitative strategy work, market data, and backtest logic as
+high-risk. Never invent data, prices, probabilities, API behavior, broker
+behavior, or current market facts.
 
 ## Default Work Style
 
@@ -86,7 +91,12 @@ Do not hardcode current prices, event probabilities, or market odds.
 If live data access is unavailable, return a blocker instead of guessing.
 Do not expand this repo into a live scanner, suggestor, or trading bot unless the README phase plan is explicitly changed first.
 Do not use "proven," "confirmed," "edge found," "works," or "guaranteed" about backtest results. Use "survived this test," "not yet rejected," "rejected," or "consistent with zero edge."
-The live scope gate is README.md "Scope status" (currently: H5 Sector Income Core scanner/researcher, driving one strategy to one honest verdict via its forward paper window). Before adding a new capability, ticker, strategy, or tool, answer: "Does this move the current scope to a verdict?" If no, write it into `ideas-parking-lot.md` and continue.
+The live scope gate is README.md "Scope status": H5, H6, and H7 are registered
+forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
+arc, with its historical diagnostic permanently retired. Before adding a new
+capability, ticker, strategy, or tool, answer: "Does this move one of the live
+hypotheses toward its declared verdict?" If no, write it into
+`ideas-parking-lot.md` and continue.
 
 ## Data Rules
 

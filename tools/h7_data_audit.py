@@ -1,9 +1,12 @@
 """tools/h7_data_audit.py -- formal, content-addressed, fail-closed audit of
 the full H7 backtest window. Version 4 (7b-2R.2, owner review 2026-07-11).
 
-v1 (receipt.json, verdict BLOCK), v2 (receipt_v2.json) and v3
-(receipt_v3.json) are retained as historical artifacts and are INELIGIBLE
-to authorize any run. v2 is superseded because its verification only
+v1 (receipt.json, verdict BLOCK), v2 (receipt_v2.json), v3
+(receipt_v3.json), and v4 (receipt_v4.json) are retained as historical
+artifacts and are INELIGIBLE to authorize any run. v4 was valid at the
+7b-2R.2 source commit; later forward-roadmap source/config changes correctly
+make current-input verification fail, and the withdrawn historical diagnostic
+means it must not be regenerated. v2 is superseded because its verification only
 self-hashed the maps STORED in the receipt instead of recomputing the
 audit: a receipt could stay "VALID" while the world it described changed
 (new unexpected files, drifted provenance facts, a mutated tracked
@@ -23,8 +26,9 @@ findings on top of the v3 corrections:
     cannot invalidate a receipt but ANY mutation of a bound fact (sha or
     timestamp, including post-close -> post-close) fails verification.
   * EXACT-AMENDMENT RATIFICATION (7b-2R.2 finding 8): a data_coverage
-    exclusion is ratified only by the exact v1.3 amendment record -- an H7
-    trial_intent whose record_hash matches ratified_by AND whose reason
+    exclusion is ratified only by the exact v1.3 amendment record -- the
+    frozen config.H7_HISTORICAL_WITHDRAWAL_HASH must match ratified_by and
+    resolve to an H7 trial_intent whose reason
     text carries the exact ratified exclusion payload
     "SYMBOL START..END" -- after the ledger chain itself verifies
     (data.audit_exceptions.unratified_coverage_entries).
@@ -45,8 +49,8 @@ v3 corrections retained from the 7b-2R.1 review findings:
     breakdown (no_assertions / grace_expired / conflict / other).
   * MECHANICAL RATIFICATION: a data_coverage registry exclusion is ratified
     only by the record_hash of an H7 trial_intent ledger record -- never by
-    a bare label (hardened in v4 to require the exact amendment record and
-    its exact exclusion payload, after chain verification).
+    a bare label (hardened in v4 to require the frozen exact amendment hash
+    and its exact exclusion payload, after chain verification).
   * Earnings stores are split (7b-2R.1): the gate reads ONLY the v3 GATING
     store (data/earnings/gating_v3.csv); the raw SEC collection
     (data/earnings/assertions_v2.csv) never gates. The receipt binds BOTH.

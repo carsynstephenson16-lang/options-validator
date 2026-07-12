@@ -37,6 +37,7 @@ from options_researcher.h7_earnings import (
     earnings_gate,
     load_assertions,
 )
+from options_researcher.h7_scope import watch_universe
 from strategies.h7_lanes import decide_lane_a, decide_lane_b, decide_lane_c
 
 H7_POSITIONS_PATH = Path("data/positions/h7_positions.csv")
@@ -273,8 +274,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"H7 BOOK ERROR -- refusing to evaluate entries (fail closed): {e}")
         return 2
 
-    names = [s for s in config.H7_WATCHLIST + config.H7_CORE_LONG_ONLY
-             if s not in config.H7_EXCLUDED]
+    names = watch_universe()
     print(f"H7 WATCH session={eval_iso} run={run_date.isoformat()} "
           f"(registered f1887c9d + v1.2 f880b4d1 + v1.3 6faa4945: "
           f"historical diagnostic WITHDRAWN, forward paper is the sole "

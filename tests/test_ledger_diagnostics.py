@@ -6,6 +6,7 @@ reveal path refuses diagnostics."""
 import tempfile
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest import mock
 
 from research import diagnostics, experiments, hashing, ledger
@@ -221,11 +222,11 @@ class TestH7RetirementTombstone(unittest.TestCase):
         with tempfile.TemporaryDirectory() as base:
             for name in ("experiments.jsonl", "HEAD"):
                 shutil.copy(f"ledger/{name}", f"{base}/{name}")
-            before = open(f"{base}/experiments.jsonl").read()
+            experiments_path = Path(base) / "experiments.jsonl"
+            before = experiments_path.read_text()
             with self.assertRaises(diagnostics.DiagnosticError):
                 _attempt(base)
-            self.assertEqual(open(f"{base}/experiments.jsonl").read(),
-                             before)   # nothing appended
+            self.assertEqual(experiments_path.read_text(), before)
 
     def test_authorize_oos_run_refuses_first_on_a_retired_ledger(self):
         import shutil
