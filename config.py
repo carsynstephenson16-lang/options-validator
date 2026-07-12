@@ -325,3 +325,12 @@ FEED_CALL_DELTA_BAND = (0.10, 0.90)  # offline-feed CALL inclusion band
 H7_MAX_HOLD_BUFFER_D = 2         # chunk horizon = H7_LONG_DTE_BAND[1] + this
 H7_WARMUP_EXTRA_SESSIONS = 2     # warm-up = DD lookback + reclaim lookback + this
 H7_CLOSES_LOOKBACK_D = 600       # calendar-day closes preload before a chunk
+# 7b-2R.2 (owner decision 2026-07-11): the ledger record hash of
+# H7_AMENDMENT_V1_3, which permanently WITHDREW the 2018-2026 historical H7
+# diagnostic as verdict-capable evidence. Once this record exists in a
+# ledger, every historical-diagnostic entry point (attempt recording, OOS
+# authorization, the gated runner tool) refuses BEFORE reading market data.
+# A future conditional historical study requires a NEW hypothesis and a NEW
+# registration; it may not reopen H7. Frozen here so config_hash binds it.
+H7_HISTORICAL_WITHDRAWAL_HASH = (
+    "6faa494538a87e3ff802815ac9301ec6c004963c118745df1ab66a69b9491e5c")

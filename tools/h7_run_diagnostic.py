@@ -1,6 +1,13 @@
 """tools/h7_run_diagnostic.py -- THE one mechanically gated command that can
 execute an H7 lane diagnostic (7b-3; 7b-2R finding 7; 7b-2R.1 finding A).
 
+PERMANENTLY RETIRED FOR H7 (7b-2R.2, amendment v1.3 2026-07-11): the
+historical H7 diagnostic was withdrawn as verdict-capable evidence, and
+the frozen retirement gate makes this command refuse outright against any
+ledger containing the v1.3 amendment -- before anchoring checks, attempt
+lookup, or any data access. The machinery below is preserved for audit
+history and for a possible FUTURE hypothesis with its own registration.
+
     uv run python tools/h7_run_diagnostic.py <diagnostic_id>
 
 There is no other launch path -- and nothing in this tool to bypass: the OOS
@@ -48,7 +55,12 @@ RESULTS_DIR = Path("results/h7")
 
 def run_gated_diagnostic(diagnostic_id: str, *, base_dir="ledger") -> dict:
     from harness.run_h7_backtest import run_lane
+    from research.diagnostics import require_h7_diagnostic_not_retired
     from tools.h7_adjudicate import adjudicate_lane
+
+    # ---- frozen retirement gate FIRST (7b-2R.2): the historical H7
+    # diagnostic is permanently withdrawn; refuse before anything else ----
+    require_h7_diagnostic_not_retired(base_dir)
 
     # ---- resolve the committed attempt (invocation comes from the ledger) --
     require_anchored_ledger(base_dir)

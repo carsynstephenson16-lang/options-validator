@@ -78,3 +78,15 @@ class TestH7Freeze(unittest.TestCase):
         self.assertEqual(config.H7_EARNINGS_POST_REPORT_GRACE_D, 45)
         self.assertEqual(config.H7_EARNINGS_ESTIMATE_CLUSTER_D, 14)
         self.assertFalse(hasattr(config, "H7_EARNINGS_KNOWN_HORIZON_D"))
+
+
+class TestH7WithdrawalFreeze(unittest.TestCase):
+    def test_withdrawal_hash_is_frozen_and_well_formed(self):
+        import re
+
+        import config
+        self.assertTrue(re.fullmatch(r"[0-9a-f]{64}",
+                                     config.H7_HISTORICAL_WITHDRAWAL_HASH))
+        self.assertEqual(
+            config.H7_HISTORICAL_WITHDRAWAL_HASH,
+            "6faa494538a87e3ff802815ac9301ec6c004963c118745df1ab66a69b9491e5c")

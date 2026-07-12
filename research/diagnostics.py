@@ -29,6 +29,28 @@ class DiagnosticError(Exception):
     pass
 
 
+def require_h7_diagnostic_not_retired(base_dir="ledger") -> None:
+    """FROZEN retirement gate (7b-2R.2, owner decision 2026-07-11): the
+    2018-2026 historical H7 diagnostic was permanently WITHDRAWN as
+    verdict-capable evidence by H7_AMENDMENT_V1_3. Once that amendment's
+    record (hash frozen in config.H7_HISTORICAL_WITHDRAWAL_HASH) exists in
+    the ledger being used, every historical-diagnostic entry point refuses
+    -- before any market data is read. A future conditional historical
+    study requires a NEW hypothesis and a NEW registration; it may not
+    reopen H7. Synthetic test ledgers (which cannot contain the frozen
+    hash) keep exercising the machinery."""
+    import config
+    for r in ledger.read_all(base_dir):
+        if r.get("record_hash") == config.H7_HISTORICAL_WITHDRAWAL_HASH:
+            raise DiagnosticError(
+                "the historical H7 diagnostic is PERMANENTLY WITHDRAWN "
+                "(H7_AMENDMENT_V1_3, ledger record "
+                f"{config.H7_HISTORICAL_WITHDRAWAL_HASH[:12]}...); the "
+                "forward paper window is the sole verdict-bearing path. A "
+                "conditional historical study needs a NEW hypothesis and "
+                "registration -- it may not reopen H7.")
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -59,9 +81,12 @@ def record_diagnostic_attempt(*, diagnostic_id: str, lane: str,
                               receipt_hash: str,
                               base_dir="ledger") -> str:
     """Append the pre-execution attempt record. Returns its record hash,
-    which the eventual result must bind. `receipt_hash` binds the v2 PASS
+    which the eventual result must bind. `receipt_hash` binds the PASS
     audit receipt this attempt is authorized by (7b-2R finding 7). The
-    caller commits the ledger to git BEFORE any execution (owner rule)."""
+    caller commits the ledger to git BEFORE any execution (owner rule).
+    Refuses outright once the H7 retirement amendment exists in this
+    ledger (7b-2R.2)."""
+    require_h7_diagnostic_not_retired(base_dir)
     body = {
         "entry_type": "diagnostic_attempt",
         "timestamp": _now(),
@@ -195,7 +220,10 @@ def authorize_oos_run(diagnostic_id, *, lane, window, symbols, manifest,
     object: the only thing that opens an OOS window is a committed, current
     diagnostic_attempt whose bound v2 PASS receipt manifest is exactly the
     manifest the runner is about to consume. Returns the attempt record on
-    success; raises DiagnosticError on the first failing gate."""
+    success; raises DiagnosticError on the first failing gate. The FIRST
+    gate is the frozen retirement check (7b-2R.2): once H7_AMENDMENT_V1_3
+    exists in the ledger, no H7 historical run can ever be authorized."""
+    require_h7_diagnostic_not_retired(base_dir)
     if not diagnostic_id:
         raise DiagnosticError(
             "OOS window requires a verified diagnostic id -- run_lane past "

@@ -199,13 +199,16 @@ class TestRunLaneBoundary(unittest.TestCase):
             h7_data_audit, "verify_receipt", lambda: (True, [])))
 
     def test_oos_window_without_id_never_touches_loaders(self):
+        # against the REAL ledger the refusal is now the 7b-2R.2 retirement
+        # tombstone (which fires before even the missing-id check); either
+        # way the loaders must never run
         with ExitStack() as stack:
             chains, closes = self._loader_spies(stack)
             with self.assertRaises(diagnostics.DiagnosticError) as ctx:
                 run_h7.run_lane("a", "2018-01-02", "2026-06-30",
                                 symbols=["NVDA"], assertions=[],
                                 manifest=FAKE_MANIFEST)
-            self.assertIn("diagnostic id", str(ctx.exception))
+            self.assertIn("PERMANENTLY WITHDRAWN", str(ctx.exception))
             self.assertEqual(chains, [])
             self.assertEqual(closes, [])
 
@@ -334,3 +337,19 @@ class TestRunLaneBoundary(unittest.TestCase):
         self.assertNotIn("capability", params)
         self.assertNotIn("allow_oos", params)
         self.assertIn("diagnostic_id", params)
+
+
+class TestRetirementTombstone(unittest.TestCase):
+    """7b-2R.2: the gated command refuses on a retired ledger before doing
+    ANYTHING -- no anchoring check, no attempt lookup, no data."""
+
+    def test_gated_command_refuses_on_the_real_amendment(self):
+        import shutil
+
+        from research.diagnostics import DiagnosticError
+        with tempfile.TemporaryDirectory() as base:
+            for name in ("experiments.jsonl", "HEAD"):
+                shutil.copy(f"ledger/{name}", f"{base}/{name}")
+            with self.assertRaises(DiagnosticError) as ctx:
+                gated.run_gated_diagnostic("any-id", base_dir=base)
+        self.assertIn("PERMANENTLY WITHDRAWN", str(ctx.exception))

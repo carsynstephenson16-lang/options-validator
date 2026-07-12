@@ -201,3 +201,67 @@ class TestDiagnosticRecords(unittest.TestCase):
 
     def test_real_ledger_still_verifies(self):
         ledger.verify("ledger")
+
+
+class TestH7RetirementTombstone(unittest.TestCase):
+    """7b-2R.2: once H7_AMENDMENT_V1_3 exists in a ledger, the historical
+    H7 diagnostic machinery refuses PERMANENTLY -- before reading any
+    market data. Synthetic ledgers (which cannot contain the frozen hash)
+    keep the machinery testable; the REAL ledger contains it."""
+
+    def test_real_ledger_is_retired(self):
+        with self.assertRaises(diagnostics.DiagnosticError) as ctx:
+            diagnostics.require_h7_diagnostic_not_retired("ledger")
+        self.assertIn("PERMANENTLY WITHDRAWN", str(ctx.exception))
+
+    def test_attempt_recording_refuses_on_a_retired_ledger(self):
+        # copy the REAL ledger into a tmp dir: refusal must fire BEFORE any
+        # append, so nothing can ever be written to the real chain
+        import shutil
+        with tempfile.TemporaryDirectory() as base:
+            for name in ("experiments.jsonl", "HEAD"):
+                shutil.copy(f"ledger/{name}", f"{base}/{name}")
+            before = open(f"{base}/experiments.jsonl").read()
+            with self.assertRaises(diagnostics.DiagnosticError):
+                _attempt(base)
+            self.assertEqual(open(f"{base}/experiments.jsonl").read(),
+                             before)   # nothing appended
+
+    def test_authorize_oos_run_refuses_first_on_a_retired_ledger(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as base:
+            for name in ("experiments.jsonl", "HEAD"):
+                shutil.copy(f"ledger/{name}", f"{base}/{name}")
+            with self.assertRaises(diagnostics.DiagnosticError) as ctx:
+                diagnostics.authorize_oos_run(
+                    "any-id", lane="a",
+                    window={"start": "2018-01-02", "end": "2026-06-30"},
+                    symbols=["NVDA"], manifest={}, base_dir=base)
+        self.assertIn("PERMANENTLY WITHDRAWN", str(ctx.exception))
+
+    def test_retirement_detected_via_frozen_config_hash(self):
+        # a synthetic ledger record whose hash is patched into the frozen
+        # constant triggers the tombstone -- proving detection is BY HASH
+        import config as cfg
+        with tempfile.TemporaryDirectory() as base:
+            _seed_h7_registration(base)
+            rec_hash = ledger.read_all(base)[-1]["record_hash"]
+            with mock.patch.object(cfg, "H7_HISTORICAL_WITHDRAWAL_HASH",
+                                   rec_hash):
+                with self.assertRaises(diagnostics.DiagnosticError):
+                    diagnostics.require_h7_diagnostic_not_retired(base)
+                with self.assertRaises(diagnostics.DiagnosticError):
+                    _attempt(base)
+            # unpatched, the same synthetic ledger still works
+            diagnostics.require_h7_diagnostic_not_retired(base)
+            _attempt(base)
+
+    def test_frozen_hash_matches_the_committed_amendment(self):
+        import config as cfg
+        recs = [r for r in ledger.read_all("ledger")
+                if r.get("record_hash") == cfg.H7_HISTORICAL_WITHDRAWAL_HASH]
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0]["entry_type"], "trial_intent")
+        self.assertEqual(recs[0]["hypothesis_id"], "H7")
+        self.assertIn("H7_AMENDMENT_V1_3", recs[0]["reason"])
+        self.assertIn("WITHDRAWN", recs[0]["reason"])
