@@ -1,13 +1,35 @@
 """tools/h7_data_audit.py -- formal, content-addressed, fail-closed audit of
-the full H7 backtest window. Version 3 (7b-2R.1, owner review 2026-07-11).
+the full H7 backtest window. Version 4 (7b-2R.2, owner review 2026-07-11).
 
-v1 (receipt.json, verdict BLOCK) and v2 (receipt_v2.json) are retained as
-historical artifacts and are INELIGIBLE to authorize any run. v2 is
-superseded because its verification only self-hashed the maps STORED in the
-receipt instead of recomputing the audit: a receipt could stay "VALID"
-while the world it described changed (new unexpected files, drifted
-provenance facts, a mutated tracked manifest, calendar drift). v3 corrects
-the 7b-2R.1 review findings:
+v1 (receipt.json, verdict BLOCK), v2 (receipt_v2.json) and v3
+(receipt_v3.json) are retained as historical artifacts and are INELIGIBLE
+to authorize any run. v2 is superseded because its verification only
+self-hashed the maps STORED in the receipt instead of recomputing the
+audit: a receipt could stay "VALID" while the world it described changed
+(new unexpected files, drifted provenance facts, a mutated tracked
+manifest, calendar drift). v3 is superseded because it bound only the
+provenance TIER per file (ledger_fact / legacy_manifest), not the
+underlying BLIND_CACHE evidence: mutating a bound fact's post-close fetch
+timestamp to a DIFFERENT post-close timestamp left the recomputed report
+identical, so verification stayed VALID. v4 corrects the 7b-2R.2 review
+findings on top of the v3 corrections:
+
+  * PROVENANCE EVIDENCE IS BOUND (7b-2R.2 finding 3): for every eligible
+    (symbol, session) whose provenance tier is ledger_fact, the receipt
+    carries the fact's own sha256 AND its exact fetch timestamp
+    ("provenance_evidence", bound through provenance_evidence_hash). The
+    binding covers ONLY the canonical relevant subset -- manifest-eligible
+    pairs -- never unrelated facts.log lines, so irrelevant extra facts
+    cannot invalidate a receipt but ANY mutation of a bound fact (sha or
+    timestamp, including post-close -> post-close) fails verification.
+  * EXACT-AMENDMENT RATIFICATION (7b-2R.2 finding 8): a data_coverage
+    exclusion is ratified only by the exact v1.3 amendment record -- an H7
+    trial_intent whose record_hash matches ratified_by AND whose reason
+    text carries the exact ratified exclusion payload
+    "SYMBOL START..END" -- after the ledger chain itself verifies
+    (data.audit_exceptions.unratified_coverage_entries).
+
+v3 corrections retained from the 7b-2R.1 review findings:
 
   * --verify RECOMPUTES THE AUDIT: verify_receipt re-runs run_audit against
     the current repo state (same window/symbols, sessions re-derived from
@@ -23,7 +45,8 @@ the 7b-2R.1 review findings:
     breakdown (no_assertions / grace_expired / conflict / other).
   * MECHANICAL RATIFICATION: a data_coverage registry exclusion is ratified
     only by the record_hash of an H7 trial_intent ledger record -- never by
-    a bare label (data.audit_exceptions.unratified_coverage_entries).
+    a bare label (hardened in v4 to require the exact amendment record and
+    its exact exclusion payload, after chain verification).
   * Earnings stores are split (7b-2R.1): the gate reads ONLY the v3 GATING
     store (data/earnings/gating_v3.csv); the raw SEC collection
     (data/earnings/assertions_v2.csv) never gates. The receipt binds BOTH.
@@ -87,19 +110,22 @@ from research.hashing import (
     sha256_hex,
 )
 
-AUDIT_VERSION = "h7-data-audit/3"
+AUDIT_VERSION = "h7-data-audit/4"
 CHAIN_DIR = Path(".cache/chains")
 CLOSES_DIR = Path(".cache/underlying")
 FACTS_PATH = Path("ledger/facts.log")
 TRACKED_MANIFEST_PATH = Path("data/chain_cache_manifest.txt")
-RECEIPT_PATH = Path("reports/h7_audit/receipt_v3.json")
+RECEIPT_PATH = Path("reports/h7_audit/receipt_v4.json")
 # Historical artifacts: PRESERVED, BLOCKED. Never written, never the verify
 # target. v1's verdict was BLOCK; v2's verification only self-hashed its
 # stored maps (7b-2R.1 finding B) and its coverage-declaration mechanism
-# could turn an empty earnings archive into PASS -- both are ineligible to
-# authorize any run.
+# could turn an empty earnings archive into PASS; v3 bound only the
+# provenance TIER per file, not the underlying BLIND_CACHE evidence, so a
+# post-close -> post-close fetch-timestamp mutation stayed VALID
+# (7b-2R.2 findings 2/3) -- all three are ineligible to authorize any run.
 V1_RECEIPT_PATH = Path("reports/h7_audit/receipt.json")
 V2_RECEIPT_PATH = Path("reports/h7_audit/receipt_v2.json")
+V3_RECEIPT_PATH = Path("reports/h7_audit/receipt_v3.json")
 # REJECTED mechanism (owner decision 2026-07-11): this file must never
 # exist. Its presence blocks the audit outright.
 REJECTED_COVERAGE_PATH = Path("data/earnings/coverage.json")
@@ -128,7 +154,7 @@ _PER_DAY_WARN_CATEGORIES = (
 # big receipt sections carried verbatim but bound through their own
 # sub-hash (receipt_hash covers the sub-hash, verify recomputes both)
 _BULK_KEYS = ("file_hashes", "quarantined_file_hashes", "provenance_map",
-              "warn_detail")
+              "provenance_evidence", "warn_detail")
 
 
 def expected_manifest(symbols=None, start=None, end=None, sessions=None,
@@ -341,6 +367,7 @@ def run_audit(symbols=None, start=None, end=None, *, chain_dir=CHAIN_DIR,
     missing_days: dict = {}
     contaminated: list = []
     provenance_map: dict = {}
+    provenance_evidence: dict = {}
     tier_counts = {"ledger_fact": 0, "legacy_manifest": 0, "unproven": 0}
     unproven: list = []
     sha_mismatch: list = []
@@ -405,6 +432,13 @@ def run_audit(symbols=None, start=None, end=None, *, chain_dir=CHAIN_DIR,
             fact = fetch_facts.get((sym, day))
             if fact is not None:
                 tier = "ledger_fact"
+                # 7b-2R.2 finding 3: bind the EVIDENCE, not just the tier --
+                # the fact's own sha256 and exact fetch timestamp, for the
+                # canonical relevant subset only (manifest-eligible pairs)
+                provenance_evidence[key] = {
+                    "sha256": fact["sha256"],
+                    "fetched": fact["fetched"].isoformat(),
+                }
                 if fact["sha256"] != digest:
                     sha_mismatch.append(key)
                 fetched_ny = fact["fetched"].astimezone(NY)
@@ -509,6 +543,9 @@ def run_audit(symbols=None, start=None, end=None, *, chain_dir=CHAIN_DIR,
         "provenance_tiers": tier_counts,
         "provenance_map": provenance_map,
         "provenance_map_hash": sha256_hex(canonical_json(provenance_map)),
+        "provenance_evidence": provenance_evidence,
+        "provenance_evidence_hash": sha256_hex(
+            canonical_json(provenance_evidence)),
         "unproven_provenance_files": sorted(unproven),
         "provenance_sha_mismatch_files": sorted(sha_mismatch),
         "block_findings": block,
@@ -591,9 +628,11 @@ def verify_receipt(path: Path = RECEIPT_PATH, *, chain_dir=CHAIN_DIR,
     4. write-time bindings are compared against the CURRENT surfaces:
        config/cost-model/diagnostic-source hashes, both earnings stores,
        the tracked manifest file sha and its git context.
-    A newly added unexpected file, a changed BLIND_CACHE fact, a mutated
-    tracked manifest, calendar drift, closes/chain/earnings mutations,
-    registry or config/source changes ALL fail with named failures."""
+    A newly added unexpected file, a changed BLIND_CACHE fact (sha OR fetch
+    timestamp -- including a post-close -> post-close timestamp mutation,
+    caught by provenance_evidence_hash), a mutated tracked manifest,
+    calendar drift, closes/chain/earnings mutations, registry or
+    config/source changes ALL fail with named failures."""
     from options_researcher.h7_earnings import (
         ASSERTIONS_PATH,
         RAW_ASSERTIONS_PATH,
@@ -660,7 +699,7 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--verify", action="store_true",
-                        help="verify the committed v3 receipt by fully "
+                        help="verify the committed v4 receipt by fully "
                              "recomputing the audit instead of writing one")
     args = parser.parse_args(argv)
     if args.verify:

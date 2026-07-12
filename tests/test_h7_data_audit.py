@@ -1,9 +1,12 @@
-"""7b-2R.1: the formal H7 data audit v3 -- one canonical manifest, tiered
-provenance with NO mtime fallback, NO coverage-declaration escape hatch
+"""7b-2R.2: the formal H7 data audit v4 -- one canonical manifest, tiered
+provenance with NO mtime fallback, the BLIND_CACHE evidence itself (sha +
+fetch timestamp) bound per fact-tier file so a post-close -> post-close
+timestamp mutation invalidates, NO coverage-declaration escape hatch
 (every UNKNOWN earnings session is a blocking DATA_GAP with a reason
-breakdown), mechanical ledger-hash ratification of data_coverage
-exclusions, unreadable/warn findings with identities, and a receipt whose
---verify RECOMPUTES the whole audit instead of self-hashing stored maps."""
+breakdown), exact-amendment mechanical ratification of data_coverage
+exclusions (chain-verified ledger, exact payload in the exact record),
+unreadable/warn findings with identities, and a receipt whose --verify
+RECOMPUTES the whole audit instead of self-hashing stored maps."""
 
 import json
 import tempfile
@@ -101,14 +104,21 @@ def good_facts(chain_dir, sym="NVDA"):
     return facts
 
 
-def seed_h7_intent(base) -> str:
+# the exact ratified exclusion payload for coverage_entry() below
+PAYLOAD = "NVDA 2022-06-02..2022-06-03"
+
+
+def seed_h7_intent(base, reason=f"synthetic H7 amendment ratifying "
+                                f"{PAYLOAD} as an archive gap") -> str:
     """A tmp ledger with one H7 trial_intent; returns its record_hash
-    (mirrors tests/test_ledger_diagnostics.py's _seed_h7_registration)."""
+    (mirrors tests/test_ledger_diagnostics.py's _seed_h7_registration).
+    The default reason carries the exact exclusion payload the 7b-2R.2
+    exact-amendment rule requires."""
     return ledger.append({
         "entry_type": "trial_intent",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hypothesis_id": "H7",
-        "reason": "synthetic H7 registration for ratification tests",
+        "reason": reason,
     }, base_dir=base)
 
 
@@ -159,8 +169,10 @@ class TestManifestAndExceptions(unittest.TestCase):
 
     def test_current_registry_coverage_entries_are_ratified_by_v1_3(self):
         # H7_AMENDMENT_V1_3 (2026-07-11): the three data_coverage entries
-        # carry the amendment's real record_hash and verify against the
-        # REAL ledger -- and against any other ledger they must still block
+        # carry the amendment's real record_hash, its reason carries each
+        # entry's EXACT exclusion payload (7b-2R.2 finding 8), and the
+        # whole thing verifies against the REAL chain-verified ledger --
+        # against any other ledger they must still block
         self.assertEqual(unratified_coverage_entries(), ())
         from data.audit_exceptions import H7_AUDIT_EXCEPTIONS
         coverage = [e for e in H7_AUDIT_EXCEPTIONS
@@ -168,6 +180,14 @@ class TestManifestAndExceptions(unittest.TestCase):
         self.assertEqual(len(coverage), 3)
         hashes = {e["ratified_by"] for e in coverage}
         self.assertEqual(len(hashes), 1)          # one amendment covers all
+        (amendment_hash,) = hashes
+        amendment = next(r for r in ledger.read_all("ledger")
+                         if r.get("record_hash") == amendment_hash)
+        self.assertEqual(amendment["entry_type"], "trial_intent")
+        self.assertEqual(amendment["hypothesis_id"], "H7")
+        for e in coverage:
+            self.assertIn(f"{e['symbol']} {e['start']}..{e['end']}",
+                          amendment["reason"])
         blocked = unratified_coverage_entries(ledger_records=[])
         self.assertEqual(len(blocked), 3)         # foreign ledger: refused
 
@@ -183,15 +203,37 @@ class TestManifestAndExceptions(unittest.TestCase):
 
 
 class TestMechanicalRatification(unittest.TestCase):
-    """7b-2R.1 finding D: ratified_by must be the record_hash of an H7
-    trial_intent in the ledger -- a truthy label is NOT ratification."""
+    """7b-2R.1 finding D, hardened 7b-2R.2 finding 8: ratified_by must be
+    the record_hash of an H7 trial_intent whose reason carries the EXACT
+    ratified exclusion payload -- a truthy label is NOT ratification, and
+    neither is an arbitrary H7 trial record that merely hash-matches."""
 
-    def test_h7_intent_record_hash_ratifies(self):
+    def test_h7_intent_with_exact_payload_ratifies(self):
         with tempfile.TemporaryDirectory() as base:
-            rec_hash = seed_h7_intent(base)
+            rec_hash = seed_h7_intent(base)   # reason contains PAYLOAD
             records = ledger.read_all(base)
             self.assertEqual(unratified_coverage_entries(
                 coverage_entry(rec_hash), ledger_records=records), ())
+
+    def test_h7_intent_without_payload_does_not_ratify(self):
+        # 7b-2R.2 finding 8: the hash matches a real H7 trial_intent, but
+        # that record never ratified THIS exclusion -- rejected
+        with tempfile.TemporaryDirectory() as base:
+            rec_hash = seed_h7_intent(
+                base, reason="an H7 trial_intent with no exclusion payload")
+            records = ledger.read_all(base)
+            ents = unratified_coverage_entries(
+                coverage_entry(rec_hash), ledger_records=records)
+            self.assertEqual(len(ents), 1)
+
+    def test_chain_is_verified_before_real_ledger_is_trusted(self):
+        # ledger_records=None must verify the chain FIRST; a tampered
+        # chain propagates instead of being silently trusted
+        with mock.patch.object(
+                ledger, "verify",
+                side_effect=ledger.LedgerError("prev_hash break at seq 3")):
+            with self.assertRaises(ledger.LedgerError):
+                unratified_coverage_entries(coverage_entry("f" * 64))
 
     def test_random_hex_and_labels_do_not_ratify(self):
         with tempfile.TemporaryDirectory() as base:
@@ -208,12 +250,22 @@ class TestMechanicalRatification(unittest.TestCase):
                 "entry_type": "trial_intent",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "hypothesis_id": "H6",
-                "reason": "not an H7 registration",
+                # carries the payload, but is NOT an H7 registration
+                "reason": f"not an H7 registration, though it says {PAYLOAD}",
             }, base_dir=base)
             records = ledger.read_all(base)
             ents = unratified_coverage_entries(
                 coverage_entry(h6_hash), ledger_records=records)
             self.assertEqual(len(ents), 1)
+
+    def test_non_trial_intent_record_does_not_ratify(self):
+        # right hypothesis, right payload, wrong entry_type -> rejected
+        fake = [{"entry_type": "diagnostic_attempt", "hypothesis_id": "H7",
+                 "reason": f"carries {PAYLOAD} but is not a trial_intent",
+                 "record_hash": "a" * 64}]
+        ents = unratified_coverage_entries(
+            coverage_entry("a" * 64), ledger_records=fake)
+        self.assertEqual(len(ents), 1)
 
     def test_unratified_data_coverage_exclusion_blocks_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -387,6 +439,31 @@ class TestProvenanceTiers(unittest.TestCase):
         self.assertEqual(report["provenance_tiers"]["legacy_manifest"], 2)
         self.assertEqual(report["provenance_tiers"]["unproven"], 3)
 
+    def test_evidence_bound_exactly_for_the_fact_tier_files(self):
+        # 7b-2R.2 finding 3: the report carries the fact's own sha AND
+        # fetch timestamp per ledger_fact file -- and ONLY for those
+        with tempfile.TemporaryDirectory() as tmp:
+            dirs = build_cache(tmp)
+            facts = good_facts(dirs[0])
+            for day in ("2022-06-06", "2022-06-07"):
+                del facts[("NVDA", day)]        # legacy-manifest tier
+            tracked = {p.name: sha256_file(p)
+                       for p in dirs[0].glob("*.parquet")}
+            report = run(dirs, fetch_facts=facts, tracked_manifest=tracked)
+            self.assertEqual(report["verdict"], "PASS")
+            self.assertEqual(report["provenance_tiers"],
+                             {"ledger_fact": 3, "legacy_manifest": 2,
+                              "unproven": 0})
+            self.assertEqual(
+                sorted(report["provenance_evidence"]),
+                [f"NVDA_{d}" for d in SESSIONS[:3]])
+            ev = report["provenance_evidence"]["NVDA_2022-06-02"]
+            self.assertEqual(
+                ev, {"sha256": facts[("NVDA", "2022-06-02")]["sha256"],
+                     "fetched": facts[("NVDA", "2022-06-02")]
+                     ["fetched"].isoformat()})
+            self.assertEqual(len(report["provenance_evidence_hash"]), 64)
+
 
 class TestEarningsDataGap(unittest.TestCase):
     """Coverage declarations are REJECTED (owner decision 2026-07-11):
@@ -502,9 +579,11 @@ class TestSessionCalendarIdentity(unittest.TestCase):
         self.assertNotEqual(ident["sessions_hash"], other["sessions_hash"])
 
 
-class TestReceiptV3(unittest.TestCase):
+class TestReceiptV4(unittest.TestCase):
     """--verify RECOMPUTES the audit (7b-2R.1 finding B): one mutation test
-    per input class, each failing by a named key."""
+    per input class, each failing by a named key. v4 additionally binds the
+    BLIND_CACHE evidence itself (7b-2R.2 finding 3), so mutating a bound
+    fact's sha OR fetch timestamp invalidates."""
 
     def _write(self, tmp, registry=NO_EXCLUSIONS):
         dirs = build_cache(tmp)
@@ -514,7 +593,7 @@ class TestReceiptV3(unittest.TestCase):
         gating.write_text("synthetic-gating-store\n")
         raw = Path(tmp) / "assertions_v2.csv"
         raw.write_text("synthetic-raw-store\n")
-        receipt_path = Path(tmp) / "receipt_v3.json"
+        receipt_path = Path(tmp) / "receipt_v4.json"
         audit.write_receipt(report, path=receipt_path,
                             earnings_gating_path=gating,
                             earnings_raw_path=raw)
@@ -558,7 +637,10 @@ class TestReceiptV3(unittest.TestCase):
         self.assertIn("cache_classification", failures)
         self.assertIn("counts", failures)
 
-    def test_changed_fetch_fact_invalidates(self):
+    def test_changed_fetch_fact_sha_invalidates(self):
+        # the FILE is unchanged; only the fact's sha drifted -- caught both
+        # by the recomputed provenance_sha_mismatch block finding and by
+        # the bound evidence itself
         with tempfile.TemporaryDirectory() as tmp:
             ctx = self._write(tmp)
             facts = {k: dict(v) for k, v in ctx["facts"].items()}
@@ -567,6 +649,53 @@ class TestReceiptV3(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("block_findings", failures)
         self.assertIn("verdict", failures)
+        self.assertIn("provenance_evidence_hash", failures)
+
+    def test_post_close_timestamp_mutation_invalidates(self):
+        # 7b-2R.2 finding 3: 23:00 UTC -> 22:00 UTC same day is still
+        # post-close, so the v3 tier binding recomputed IDENTICALLY (no
+        # contamination, no sha mismatch, verdict unchanged); only the
+        # bound evidence catches it
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = self._write(tmp)
+            facts = {k: dict(v) for k, v in ctx["facts"].items()}
+            facts[("NVDA", "2022-06-02")]["fetched"] = (
+                datetime.fromisoformat("2022-06-02T22:00:00+00:00"))
+            ok, failures = self._verify(ctx, fetch_facts=facts)
+        self.assertFalse(ok)
+        self.assertIn("provenance_evidence_hash", failures)
+        self.assertNotIn("verdict", failures)         # v3 would stay VALID
+        self.assertNotIn("block_findings", failures)
+        self.assertNotIn("provenance_map_hash", failures)
+
+    def test_irrelevant_extra_facts_never_invalidate(self):
+        # unrelated facts.log lines -- a foreign symbol and an NVDA day
+        # outside the manifest -- are NOT part of the canonical relevant
+        # subset and leave the receipt VALID
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = self._write(tmp)
+            facts = dict(ctx["facts"])
+            facts[("ZZZZ", "2022-06-02")] = {
+                "fetched": datetime.fromisoformat(
+                    "2022-06-02T23:00:00+00:00"),
+                "sha256": "b" * 64}
+            facts[("NVDA", "2021-01-04")] = {
+                "fetched": datetime.fromisoformat(
+                    "2021-01-04T14:30:00+00:00"),   # even intraday: ignored
+                "sha256": "c" * 64}
+            ok, failures = self._verify(ctx, fetch_facts=facts)
+        self.assertEqual(failures, [])
+        self.assertTrue(ok)
+
+    def test_receipt_carries_evidence_for_exactly_the_fact_tier_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = self._write(tmp)
+            receipt = json.loads(ctx["path"].read_text())
+        self.assertEqual(sorted(receipt["provenance_evidence"]),
+                         [f"NVDA_{d}" for d in SESSIONS])
+        for key, ev in receipt["provenance_evidence"].items():
+            self.assertEqual(set(ev), {"sha256", "fetched"})
+        self.assertEqual(len(receipt["provenance_evidence_hash"]), 64)
 
     def test_tracked_manifest_context_change_invalidates(self):
         drift = dict(TRACKED_CTX, adapter_blob="a" * 40,
@@ -653,9 +782,10 @@ class TestReceiptV3(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("quarantined_files_hash", failures)
 
-    def test_v3_is_the_verify_target_and_v1_v2_are_blocked(self):
-        self.assertTrue(str(audit.RECEIPT_PATH).endswith("receipt_v3.json"))
-        self.assertNotEqual(audit.RECEIPT_PATH, audit.V1_RECEIPT_PATH)
-        self.assertNotEqual(audit.RECEIPT_PATH, audit.V2_RECEIPT_PATH)
-        self.assertNotEqual(audit.V1_RECEIPT_PATH, audit.V2_RECEIPT_PATH)
-        self.assertEqual(audit.AUDIT_VERSION, "h7-data-audit/3")
+    def test_v4_is_the_verify_target_and_v1_v2_v3_are_blocked(self):
+        self.assertTrue(str(audit.RECEIPT_PATH).endswith("receipt_v4.json"))
+        historical = {audit.V1_RECEIPT_PATH, audit.V2_RECEIPT_PATH,
+                      audit.V3_RECEIPT_PATH}
+        self.assertEqual(len(historical), 3)      # all distinct
+        self.assertNotIn(audit.RECEIPT_PATH, historical)
+        self.assertEqual(audit.AUDIT_VERSION, "h7-data-audit/4")
