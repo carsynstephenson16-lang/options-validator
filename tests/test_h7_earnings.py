@@ -186,6 +186,10 @@ class TestLoadGatingStoreV3(unittest.TestCase):
                "confirmed,2026-07-29,,amc,"
                "company_pr,https://example.test/ir,2026-07-10T15:00:00+00:00,"
                "2026-07-10T15:00:00+00:00,,\n")
+    RAW_RETRACTION = (
+        "A2,MSFT,MSFT-FY26Q4,FY26Q4,retraction,confirmed,2026-07-29,,amc,"
+        "company_pr,https://example.test/oops,2026-07-12T15:00:00+00:00,"
+        "2026-07-12T15:00:00+00:00,A1,correction evidence\n")
 
     def _load(self, text, raw_text=None):
         import tempfile
@@ -280,8 +284,10 @@ class TestLoadGatingStoreV3(unittest.TestCase):
                    "actual_quarterly_earnings,confirmed,"
                    "2026-07-29,,amc,company_pr,https://example.test/oops,"
                    "2026-07-12T15:00:00+00:00,2026-07-12T15:00:00+00:00,"
-                   "R1,,\n")
-        rows = self._load(self.HEADER + self.ROW + retract)
+                   "R1,A2,\n")
+        rows = self._load(
+            self.HEADER + self.ROW + retract,
+            raw_text=self.RAW_HEADER + self.RAW_ROW + self.RAW_RETRACTION)
         before = assertions_view(
             rows, datetime.fromisoformat("2026-07-11T00:00:00+00:00"))
         after = assertions_view(
@@ -329,24 +335,68 @@ class TestLoadGatingStoreV3(unittest.TestCase):
         rows = self._load(self.HEADER + self.ROW)
         self.assertEqual(rows[0]["promoted_from"], "A1")
 
-    def test_retraction_rows_need_no_promotion(self):
+    def test_retraction_without_promoted_from_fails_closed(self):
         retract = ("R2,MSFT,MSFT-FY26Q4,FY26Q4,retraction,"
                    "actual_quarterly_earnings,confirmed,"
                    "2026-07-29,,amc,company_pr,https://example.test/oops,"
                    "2026-07-12T15:00:00+00:00,2026-07-12T15:00:00+00:00,"
                    "R1,,\n")
-        rows = self._load(self.HEADER + self.ROW + retract)
-        self.assertEqual(len(rows), 2)
-        self.assertEqual(rows[1]["record_type"], "retraction")
-        self.assertEqual(rows[1]["promoted_from"], "")
+        with self.assertRaisesRegex(ValueError, "promoted_from"):
+            self._load(
+                self.HEADER + self.ROW + retract,
+                raw_text=self.RAW_HEADER + self.RAW_ROW + self.RAW_RETRACTION)
+
+    def test_retraction_cannot_cite_an_assertion_as_its_raw_evidence(self):
+        retract = ("R2,MSFT,MSFT-FY26Q4,FY26Q4,retraction,"
+                   "actual_quarterly_earnings,confirmed,"
+                   "2026-07-29,,amc,company_pr,https://example.test/ir,"
+                   "2026-07-10T15:00:00+00:00,2026-07-12T15:00:00+00:00,"
+                   "R1,A1,\n")
+        with self.assertRaisesRegex(ValueError, "record_type"):
+            self._load(self.HEADER + self.ROW + retract)
+
+    def test_retraction_must_target_the_gating_row_for_its_raw_target(self):
+        raw_a2 = (
+            "A2,MSFT,MSFT-FY26Q4,FY26Q4,assertion,confirmed,2026-07-29,,amc,"
+            "company_pr,https://example.test/new,2026-07-11T15:00:00+00:00,"
+            "2026-07-11T15:00:00+00:00,,new evidence\n")
+        raw_a3 = (
+            "A3,MSFT,MSFT-FY26Q4,FY26Q4,retraction,confirmed,2026-07-29,,amc,"
+            "company_pr,https://example.test/retract,2026-07-12T15:00:00+00:00,"
+            "2026-07-12T15:00:00+00:00,A1,retract old A1\n")
+        gating_r2 = (
+            "R2,MSFT,MSFT-FY26Q4,FY26Q4,assertion,actual_quarterly_earnings,"
+            "confirmed,2026-07-29,,amc,company_pr,https://example.test/new,"
+            "2026-07-11T15:00:00+00:00,2026-07-11T15:00:00+00:00,,A2,\n")
+        gating_r3 = (
+            "R3,MSFT,MSFT-FY26Q4,FY26Q4,retraction,actual_quarterly_earnings,"
+            "confirmed,2026-07-29,,amc,company_pr,https://example.test/retract,"
+            "2026-07-12T15:00:00+00:00,2026-07-12T15:00:00+00:00,R2,A3,\n")
+        with self.assertRaisesRegex(ValueError, "same underlying evidence"):
+            self._load(
+                self.HEADER + self.ROW + gating_r2 + gating_r3,
+                raw_text=(self.RAW_HEADER + self.RAW_ROW + raw_a2 + raw_a3))
+
+    def test_cross_symbol_supersession_fails_closed(self):
+        raw_vst = (
+            "A2,VST,VST-2026Q3,2026Q3,assertion,confirmed,2026-11-06,,bmo,"
+            "company_pr,https://example.test/vst,2026-07-11T15:00:00+00:00,"
+            "2026-07-11T15:00:00+00:00,,schedule\n")
+        gating_vst = (
+            "R2,VST,VST-2026Q3,2026Q3,assertion,actual_quarterly_earnings,"
+            "confirmed,2026-11-06,,bmo,company_pr,https://example.test/vst,"
+            "2026-07-11T15:00:00+00:00,2026-07-11T15:00:00+00:00,R1,A2,\n")
+        with self.assertRaisesRegex(ValueError, "belongs to MSFT"):
+            self._load(
+                self.HEADER + self.ROW + gating_vst,
+                raw_text=self.RAW_HEADER + self.RAW_ROW + raw_vst)
 
     def test_committed_stores_cross_validate(self):
         # all defaults: gating_v3.csv must promote from assertions_v2.csv
         rows = load_assertions()
         self.assertGreater(len(rows), 0)
         for a in rows:
-            if a["record_type"] == "assertion":
-                self.assertTrue(a["promoted_from"], a["record_id"])
+            self.assertTrue(a["promoted_from"], a["record_id"])
 
     def test_committed_gating_file_is_valid_and_all_verified_actuals(self):
         rows = load_assertions()

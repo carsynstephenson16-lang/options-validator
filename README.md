@@ -70,7 +70,9 @@ uv run python analysis/feasibility.py                       # sizing vs the slee
 uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample scoreboard
 uv run python -m options_researcher.attractiveness            # which options look attractive today
 uv run python -m options_researcher.entry_watch                # WAIT/FIRE vs the frozen entry triggers
+uv run python -m options_researcher.h7_watch                    # session-aligned H7 watcher; alerts only
 uv run python -m options_researcher.h7_source_health           # earnings provenance alive? (exit 1 on any unhealthy name)
+uv run python tools/h7_refresh_earnings.py --help               # owner-run append-raw/promote refresher
 uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard    # interactive at-expiration scenario view (writes .tmp/dashboard/attractiveness.html)
@@ -191,9 +193,10 @@ IV-rank never passes).
 AMD/AVGO (+ core names, long lanes only). Daily screen:
 `uv run python -m options_researcher.h7_watch` (session-aligned, executes
 the registered decide functions, fails closed on unknown earnings or book
-errors). **The 2018–2026 historical diagnostic is PERMANENTLY WITHDRAWN as
-verdict-capable evidence (amendment v1.3, 2026-07-11): historical earnings
-provenance cannot be causally reconstructed. The point-in-time forward
+errors). **Repo-verified finding:** the 2018–2026 historical diagnostic is
+PERMANENTLY WITHDRAWN as verdict-capable evidence (amendment v1.3,
+2026-07-11): historical earnings provenance cannot be causally reconstructed.
+The point-in-time forward
 paper window is H7's sole verdict-bearing path** (roadmap:
 `docs/superpowers/plans/2026-07-11-h7-forward-roadmap.md`, activation gated
 on independent review). Roadmap Stage 1 is built (2026-07-11):
@@ -201,13 +204,16 @@ on independent review). Roadmap Stage 1 is built (2026-07-11):
 health over the v3 gating store, and `tools/h7_refresh_earnings.py` is the
 owner-in-the-loop append-only refresher (append-raw + promote under the
 7b-2R.2 citation contract). Stages 2–8 are not implemented; Stage 8
-(activation) stays with owner + independent review. Audit receipts v1/v2/v3 under `reports/h7_audit/`
-are preserved historical BLOCK artifacts; a frozen retirement gate
+(activation) stays with owner + independent review. Audit receipts v1–v4
+under `reports/h7_audit/` are preserved historical BLOCK artifacts; v4 was
+valid at its 7b-2R.2 source commit and is intentionally not regenerated after
+forward-roadmap source/config changes. A frozen retirement gate
 (`config.H7_HISTORICAL_WITHDRAWAL_HASH`) makes every historical-diagnostic
 entry point refuse before reading market data.
-Current recorded holdings: 39 VST shares and no options. Remaining: run the
-scanner, decide whether anything is attractive enough to add, then start the
-forward paper window only after an actual tracked option is entered.
+Current recorded holdings: 39 VST shares and no options. Remaining for H7:
+finish Stage 1 operationally (12/12 healthy), build and prove Stages 2–7 as
+separately authorized arcs, then let owner + independent review decide Stage 8
+activation. No tracked option by itself starts the H7 window.
 LEAPS entry triggers are pre-registered (owner-frozen 2026-07-07, ledger
 H5_ENTRY_TRIGGER_PREREG): evaluate only when close ≤ trigger (VST $140,
 AMZN $220) AND IV-rank ≤ 0.5 AND the LEAPS passes the liquidity gates —

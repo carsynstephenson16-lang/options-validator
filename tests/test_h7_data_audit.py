@@ -17,6 +17,7 @@ from unittest import mock
 
 import pandas as pd
 
+import config
 from data.audit_exceptions import excluded, unratified_coverage_entries
 from research import ledger
 from research.hashing import sha256_file
@@ -181,6 +182,8 @@ class TestManifestAndExceptions(unittest.TestCase):
         hashes = {e["ratified_by"] for e in coverage}
         self.assertEqual(len(hashes), 1)          # one amendment covers all
         (amendment_hash,) = hashes
+        self.assertEqual(amendment_hash,
+                         config.H7_HISTORICAL_WITHDRAWAL_HASH)
         amendment = next(r for r in ledger.read_all("ledger")
                          if r.get("record_hash") == amendment_hash)
         self.assertEqual(amendment["entry_type"], "trial_intent")
@@ -212,8 +215,10 @@ class TestMechanicalRatification(unittest.TestCase):
         with tempfile.TemporaryDirectory() as base:
             rec_hash = seed_h7_intent(base)   # reason contains PAYLOAD
             records = ledger.read_all(base)
-            self.assertEqual(unratified_coverage_entries(
-                coverage_entry(rec_hash), ledger_records=records), ())
+            with mock.patch.object(config, "H7_HISTORICAL_WITHDRAWAL_HASH",
+                                   rec_hash):
+                self.assertEqual(unratified_coverage_entries(
+                    coverage_entry(rec_hash), ledger_records=records), ())
 
     def test_h7_intent_without_payload_does_not_ratify(self):
         # 7b-2R.2 finding 8: the hash matches a real H7 trial_intent, but
@@ -222,9 +227,27 @@ class TestMechanicalRatification(unittest.TestCase):
             rec_hash = seed_h7_intent(
                 base, reason="an H7 trial_intent with no exclusion payload")
             records = ledger.read_all(base)
-            ents = unratified_coverage_entries(
-                coverage_entry(rec_hash), ledger_records=records)
+            with mock.patch.object(config, "H7_HISTORICAL_WITHDRAWAL_HASH",
+                                   rec_hash):
+                ents = unratified_coverage_entries(
+                    coverage_entry(rec_hash), ledger_records=records)
             self.assertEqual(len(ents), 1)
+
+    def test_later_h7_intent_repeating_payload_is_not_exact_amendment(self):
+        with tempfile.TemporaryDirectory() as base:
+            amendment_hash = seed_h7_intent(base)
+            later_hash = ledger.append({
+                "entry_type": "trial_intent",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "hypothesis_id": "H7",
+                "reason": f"later unrelated intent repeating {PAYLOAD}",
+            }, base_dir=base)
+            records = ledger.read_all(base)
+            with mock.patch.object(config, "H7_HISTORICAL_WITHDRAWAL_HASH",
+                                   amendment_hash):
+                entries = unratified_coverage_entries(
+                    coverage_entry(later_hash), ledger_records=records)
+            self.assertEqual(len(entries), 1)
 
     def test_chain_is_verified_before_real_ledger_is_trusted(self):
         # ledger_records=None must verify the chain FIRST; a tampered
@@ -282,7 +305,8 @@ class TestMechanicalRatification(unittest.TestCase):
         with tempfile.TemporaryDirectory() as base:
             rec_hash = seed_h7_intent(base)
             records = ledger.read_all(base)
-            with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "H7_HISTORICAL_WITHDRAWAL_HASH",
+                                   rec_hash), tempfile.TemporaryDirectory() as tmp:
                 dirs = build_cache(tmp, days=["2022-06-01", "2022-06-06",
                                               "2022-06-07"])
                 report = run(dirs, registry=coverage_entry(rec_hash),

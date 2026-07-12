@@ -1,7 +1,8 @@
 # options-validator — Claude Code instructions
 
-Research platform for the options of four AI-infrastructure names (VST, CEG,
-MSFT, AMZN). **Research only — this is NOT a live bot and places no orders.**
+Research platform anchored to four AI-infrastructure core names (VST, CEG,
+MSFT, AMZN), plus the owner-authorized H7 story-name watchlist. **Research
+only — this is NOT a live bot and places no orders.**
 A "no edge after costs" finding is a success, not a failure to fix. Mission,
 current status, and the phase roadmap live in `README.md`; treat the README
 roadmap as the scope gate — no scanner, suggestor, or optimizer beyond it.
@@ -32,7 +33,9 @@ uv run python options_researcher/profile_tradability.py
 uv run python analysis/feasibility.py
 uv run python -m options_researcher.attractiveness
 uv run python -m options_researcher.entry_watch  # WAIT/FIRE vs frozen entry triggers
+uv run python -m options_researcher.h7_watch  # session-aligned H7 watcher; alerts only
 uv run python -m options_researcher.h7_source_health  # earnings provenance health; exit 1 = refresh needed
+uv run python tools/h7_refresh_earnings.py --help  # owner-run append-raw/promote refresher
 uv run python -m options_researcher.portfolio    # mark the H5 paper book
 uv run python -m options_researcher.dashboard    # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard  # writes .tmp/dashboard/attractiveness.html
@@ -123,9 +126,10 @@ attempt to work around the hook, and treat a hook block as correct by default.
 
 ## Scope guard (always on)
 
-The live scope gate is README.md "Scope status" (currently: H5 Sector Income
-Core scanner/researcher, driving one strategy to one honest verdict via its
-forward paper window). Before adding any new capability, ticker, strategy, or
-tool, answer in one sentence: "Does this move the current scope to a verdict?"
-If no, write the idea into `ideas-parking-lot.md` and continue. Parked ideas
-are not rejected ideas; they're just not now.
+The live scope gate is README.md "Scope status": H5, H6, and H7 are registered
+forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
+arc, with its historical diagnostic permanently retired. Before adding any new
+capability, ticker, strategy, or tool, answer in one sentence: "Does this move
+one of the live hypotheses toward its declared verdict?" If no, write the idea
+into `ideas-parking-lot.md` and continue. Parked ideas are not rejected ideas;
+they're just not now.

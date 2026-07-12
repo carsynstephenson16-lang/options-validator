@@ -15,14 +15,16 @@ tools/h7_refresh_earnings.py, owner-in-the-loop.
 Run:
     uv run python -m options_researcher.h7_source_health [--as-of YYYY-MM-DD]
 
-Live runs use now-UTC as the information cutoff; --as-of D replays with the
-cutoff at the close of the last completed session before D (exact watcher
-replay semantics -- no lookahead).
+Live runs evaluate today's source coverage with now-UTC as the information
+cutoff. --as-of D replays the watcher's last completed session before D and
+uses that same session for both the gate date and its close cutoff (no
+lookahead and no calendar-date/session mismatch).
 """
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+import csv
+from datetime import date, datetime, timedelta
 
 import config
 from options_researcher.h7_earnings import (
@@ -32,16 +34,12 @@ from options_researcher.h7_earnings import (
     earnings_gate,
     load_assertions,
     next_report,
+    report_date,
 )
+from options_researcher.h7_scope import watch_universe
 
 FLAG_MISSING = "MISSING"   # no live future schedule assertion
 FLAG_STALE = "STALE"       # only grace coverage left, lapsing within N sessions
-
-
-def watch_universe() -> list[str]:
-    """Exactly the names the watcher evaluates (h7_watch.main)."""
-    return [s for s in config.H7_WATCHLIST + config.H7_CORE_LONG_ONLY
-            if s not in config.H7_EXCLUDED]
 
 
 def _sessions_between(start: date, end: date) -> int:
@@ -54,15 +52,8 @@ def _sessions_between(start: date, end: date) -> int:
     return len([d for d in days if d > start.isoformat()])
 
 
-def _asserted_date(a: dict) -> date:
-    """The date an assertion asserts (h7_earnings._report_date semantics):
-    occurred_date for realized reports, expected_date for schedules."""
-    d = a.get("occurred_date") if a["status"] == "occurred" else None
-    return d or a["expected_date"]
-
-
 def symbol_health(symbol: str, on: date, assertions: list[dict], *,
-                  known_as_of, warn_sessions: int) -> dict:
+                  known_as_of: datetime, warn_sessions: int) -> dict:
     """Health of one name's earnings provenance at `known_as_of`, for
     decisions on `on`. Pure observability over the typed gate primitives;
     adds NO gate semantics of its own."""
@@ -80,9 +71,9 @@ def symbol_health(symbol: str, on: date, assertions: list[dict], *,
                    and a["expected_date"] is not None
                    and a["expected_date"] >= on]
     grace = timedelta(days=config.H7_EARNINGS_POST_REPORT_GRACE_D)
-    occurred_recent = [_asserted_date(a) for a in view
+    occurred_recent = [report_date(a) for a in view
                        if a["status"] == "occurred"
-                       and timedelta(0) <= (on - _asserted_date(a)) <= grace]
+                       and timedelta(0) <= (on - report_date(a)) <= grace]
 
     grace_end = grace_sessions_left = None
     if live_future:
@@ -121,7 +112,6 @@ def symbol_health(symbol: str, on: date, assertions: list[dict], *,
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    from datetime import datetime
     from zoneinfo import ZoneInfo
 
     parser = argparse.ArgumentParser(
@@ -136,28 +126,44 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     ny_today = datetime.now(ZoneInfo("America/New_York")).date()
-    on = date.fromisoformat(args.as_of) if args.as_of else ny_today
-    if on > ny_today:
-        print(f"--as-of {on} is in the future; refusing.")
+    try:
+        requested_on = date.fromisoformat(args.as_of) if args.as_of else ny_today
+    except ValueError:
+        print(f"--as-of {args.as_of!r} is not YYYY-MM-DD; refusing.")
+        return 2
+    if requested_on > ny_today:
+        print(f"--as-of {requested_on} is in the future; refusing.")
         return 2
     if args.as_of:
         from data.cache_runner import session_close_utc
         from options_researcher.h7_watch import evaluation_session
 
-        known_as_of = session_close_utc(evaluation_session(on).isoformat())
+        try:
+            on = evaluation_session(requested_on)
+            known_as_of = session_close_utc(on.isoformat())
+        except (IndexError, ValueError) as exc:
+            print(f"--as-of {requested_on} has no valid prior XNYS session "
+                  f"cutoff ({exc}); refusing.")
+            return 2
     else:
+        on = requested_on
         known_as_of = datetime.now(ZoneInfo("UTC"))
 
     try:
         assertions = load_assertions()
-    except Exception as e:  # fail closed: cannot verify provenance at all
+    except (OSError, ValueError, csv.Error) as e:
+        # Fail closed on the store's documented I/O/validation failures while
+        # allowing programming defects to surface instead of masquerading as
+        # bad provenance.
         print(f"H7 SOURCE-HEALTH ERROR -- gating store unreadable (fail "
               f"closed): {type(e).__name__}: {e}")
         return 2
 
     warn = config.H7_SOURCE_HEALTH_WARN_SESSIONS
     names = watch_universe()
-    print(f"H7 SOURCE HEALTH on={on.isoformat()} "
+    replay = (f" requested_as_of={requested_on.isoformat()}"
+              if args.as_of else "")
+    print(f"H7 SOURCE HEALTH on={on.isoformat()}{replay} "
           f"known_as_of={known_as_of.isoformat()} warn<={warn} sessions "
           f"(v3 gating store; read-only)")
     unhealthy = 0

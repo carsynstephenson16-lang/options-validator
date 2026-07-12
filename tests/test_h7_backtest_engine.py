@@ -367,7 +367,8 @@ class MonthlyRiskAcrossChunks(unittest.TestCase):
         adj, raw = closes_pair(T_SIG)
         with mock.patch.object(run_h7, "_run_chunk", fake_chunk), \
              mock.patch.object(run_h7, "_load_closes",
-                               lambda sym, s, e, allow_oos: (adj, raw)):
+                               lambda sym, s, e, allow_oos: (adj, raw)), \
+             mock.patch.object(run_h7, "_require_h7_history_not_retired"):
             run_h7.run_lane("a", start="2021-06-01", end="2022-06-30",
                             symbols=[SYM], assertions=FAR_REPORT)
         self.assertEqual(len(seeds), 2)          # 2021 + 2022 chunks
@@ -543,7 +544,8 @@ class YearBoundaryContinuity(unittest.TestCase):
 
         with mock.patch.object(pandas_feed, "load_cached_chains", fake_loader), \
              mock.patch.object(run_h7, "_load_closes",
-                               lambda sym, s, e, allow_oos: (adj, adj.copy())):
+                               lambda sym, s, e, allow_oos: (adj, adj.copy())), \
+             mock.patch.object(run_h7, "_require_h7_history_not_retired"):
             out = run_h7.run_lane("a", start="2021-11-01", end="2022-06-30",
                                   symbols=[SYM], assertions=FAR_REPORT)
         cls.trades = out["trades"]
@@ -575,7 +577,8 @@ class FinalWindowSuppression(unittest.TestCase):
 
         with mock.patch.object(pandas_feed, "load_cached_chains", fake_loader), \
              mock.patch.object(run_h7, "_load_closes",
-                               lambda sym, s, e, allow_oos: (adj, raw)):
+                               lambda sym, s, e, allow_oos: (adj, raw)), \
+             mock.patch.object(run_h7, "_require_h7_history_not_retired"):
             out = run_h7.run_lane("a", start="2022-06-01", end="2022-07-26",
                                   symbols=[SYM], assertions=FAR_REPORT)
         self.assertEqual(out["trades"], [])

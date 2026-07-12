@@ -13,12 +13,14 @@ the sole verdict-bearing path. Each stage below depends on every stage
 above it; none may be built out of order, and building any of them is a
 separately authorized arc.
 
-## Stage 1 — Source health (earnings provenance stays alive) — BUILT 2026-07-11
+## Stage 1 — Source health — BUILT 2026-07-11; HARDENED 2026-07-12
 
 *(Implemented as `options_researcher/h7_source_health.py` +
 `tools/h7_refresh_earnings.py`; plan
-`2026-07-11-h7-stage1-source-health.md`. The original spec paragraph
-below is unchanged.)*
+`2026-07-11-h7-stage1-source-health.md`. Independent review added exact
+watcher replay, locked/validated appends, same-event supersession, and fully
+evidence-backed gating rows. Operational acceptance remains: backfill all 12
+names and make the live health command exit 0 before authorizing Stage 2.)*
 
 Per-symbol source-health reporting over the v3 gating store: newest gating
 assertion, event class/status/source type, days to expected report, STALE
@@ -30,6 +32,9 @@ first, company IR/PR second, aggregator estimates only as disclosed
 promotion contract). No crawler — recurring automation stays deferred.
 
 ## Stage 2 — 12-name daily data gate
+
+*Readiness/authorization boundary:*
+`2026-07-12-h7-stage1-closeout-stage2-readiness.md` *(PROPOSED only).*
 
 A daily go/no-go over the full H7 universe (8 watchlist + 4 core names):
 chains and closes both end exactly at the evaluation session, session

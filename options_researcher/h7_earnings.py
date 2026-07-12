@@ -153,6 +153,31 @@ def _utc(value: str, ctx: str):
     return stamp
 
 
+def validate_supersession_identity(record: dict, target: dict, *, ctx: str) -> None:
+    """A supersession may correct one event, never delete an unrelated one.
+
+    The target must be for the same symbol and share either the event id or
+    fiscal period. Sharing the event id permits a fiscal-identity correction;
+    sharing the fiscal period permits an event-id correction. If neither
+    identity agrees, the row is a different event and must not supersede the
+    target.
+    """
+    if record["symbol"] != target["symbol"]:
+        raise ValueError(
+            f"{ctx}: supersedes target belongs to {target['symbol']}, not "
+            f"{record['symbol']}")
+    same_event = record["event_id"] == target["event_id"]
+    same_fiscal = bool(
+        record.get("fiscal_period")
+        and target.get("fiscal_period")
+        and record["fiscal_period"] == target["fiscal_period"])
+    if not (same_event or same_fiscal):
+        raise ValueError(
+            f"{ctx}: supersedes target is a different event "
+            f"({target['event_id']!r}/{target.get('fiscal_period')!r}); "
+            "require the same event_id or fiscal_period")
+
+
 def _load_store(path: Path, columns: tuple, *, gating: bool) -> list[dict]:
     """Shared validator for the append-only stores. FAILS CLOSED on any
     malformed row (owner rule: conflicting/malformed/absent -> UNKNOWN is
@@ -160,6 +185,7 @@ def _load_store(path: Path, columns: tuple, *, gating: bool) -> list[dict]:
     rows: list[dict] = []
     last_checked = None
     seen_ids: set[str] = set()
+    seen_by_id: dict[str, dict] = {}
     with path.open() as f:
         reader = csv.DictReader(f)
         if tuple(reader.fieldnames or ()) != columns:
@@ -229,8 +255,7 @@ def _load_store(path: Path, columns: tuple, *, gating: bool) -> list[dict]:
                     f"{ctx}: checked_at_utc decreased -- the store is "
                     f"append-only; never insert or rewrite rows")
             last_checked = checked
-            seen_ids.add(record_id)
-            rows.append({
+            parsed = {
                 "record_id": record_id,
                 "symbol": sym,
                 "event_id": event_id,
@@ -250,16 +275,23 @@ def _load_store(path: Path, columns: tuple, *, gating: bool) -> list[dict]:
                 "supersedes": supersedes,
                 "promoted_from": (row.get("promoted_from") or "").strip(),
                 "notes": (row["notes"] or "").strip(),
-            })
+            }
+            if supersedes:
+                validate_supersession_identity(
+                    parsed, seen_by_id[supersedes], ctx=ctx)
+            seen_ids.add(record_id)
+            seen_by_id[record_id] = parsed
+            rows.append(parsed)
     return rows
 
 
 # Fields a promoted gating row must carry over from its raw evidence record
 # UNCHANGED. notes and checked_at_utc are deliberately excluded: promotion
 # legitimately adds classification notes and re-checks the record.
-_PROMOTION_FIELDS = ("symbol", "event_id", "fiscal_period", "status",
-                     "expected_date", "occurred_date", "session_timing",
-                     "source_type", "source_url", "known_as_of_utc")
+_PROMOTION_FIELDS = ("symbol", "event_id", "fiscal_period", "record_type",
+                     "status", "expected_date", "occurred_date",
+                     "session_timing", "source_type", "source_url",
+                     "known_as_of_utc")
 
 
 def load_assertions(path: Path = ASSERTIONS_PATH,
@@ -271,19 +303,17 @@ def load_assertions(path: Path = ASSERTIONS_PATH,
 
     7b-2R.2 finding 4: promotion into this store is a per-record,
     classified act that must CITE its raw evidence -- nothing unpromoted
-    can gate. Every assertion row's promoted_from must resolve to a record
+    can gate. Every gating row's promoted_from must resolve to a record
     in the RAW evidence store (`raw_path`, default RAW_ASSERTIONS_PATH)
     and match it on every field in _PROMOTION_FIELDS. A missing, foreign,
     or mismatched promotion refuses the WHOLE store (fail closed, matching
-    the loader's malformed-file posture). Retraction rows are exempt: a
-    retraction corrects the gating layer itself, so it has no raw
-    counterpart to cite."""
+    the loader's malformed-file posture). Retractions are evidence-backed
+    too: an uncited row must never remove a valid gating assertion."""
     rows = _load_store(path, _GATING_COLUMNS, gating=True)
     raw_by_id = {r["record_id"]: r
                  for r in load_raw_assertions(raw_path or RAW_ASSERTIONS_PATH)}
+    gating_by_id = {r["record_id"]: r for r in rows}
     for a in rows:
-        if a["record_type"] != "assertion":
-            continue   # retractions correct the gating layer itself
         rid = a["record_id"]
         promoted_from = a["promoted_from"]
         if not promoted_from:
@@ -303,6 +333,17 @@ def load_assertions(path: Path = ASSERTIONS_PATH,
                     f"{path}: gating record {rid}: field {field!r} does not "
                     f"match raw evidence {promoted_from}: gating "
                     f"{a[field]!r} != raw {source[field]!r}")
+        if a["record_type"] == "retraction":
+            gating_target = gating_by_id[a["supersedes"]]
+            raw_target = source["supersedes"]
+            if raw_target != gating_target["promoted_from"]:
+                raise ValueError(
+                    f"{path}: gating retraction {rid} targets "
+                    f"{a['supersedes']} (raw evidence "
+                    f"{gating_target['promoted_from']}) but its cited raw "
+                    f"retraction {promoted_from} targets {raw_target}; "
+                    "the raw and gating retractions must remove the same "
+                    "underlying evidence")
     return rows
 
 
@@ -312,7 +353,7 @@ def load_raw_assertions(path: Path = RAW_ASSERTIONS_PATH) -> list[dict]:
     return _load_store(path, _RAW_COLUMNS, gating=False)
 
 
-def _report_date(a: dict) -> date:
+def report_date(a: dict) -> date:
     """The date an assertion asserts: occurred_date for realized reports,
     expected_date for schedules."""
     d = a.get("occurred_date") if a["status"] == "occurred" else None
@@ -377,11 +418,11 @@ def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
     grace = timedelta(days=config.H7_EARNINGS_POST_REPORT_GRACE_D)
     occurred_recent = [a for a in view
                        if a["status"] == "occurred"
-                       and timedelta(0) <= (on - _report_date(a)) <= grace]
+                       and timedelta(0) <= (on - report_date(a)) <= grace]
     if not future and not occurred_recent:
         return GATE_UNKNOWN, GATE_REASON_GRACE_EXPIRED
     rec = {
-        "confirmed": [_report_date(a) for a in view
+        "confirmed": [report_date(a) for a in view
                       if a["status"] in ("confirmed", "occurred")],
         "estimated": [a["expected_date"] for a in view
                       if a["status"] == "estimated"],
@@ -397,9 +438,9 @@ def next_report(symbol: str, on: date, assertions: list[dict], *,
     an occurred assertion dated today still ends today's session risk).
     None when the information set names nothing on/after `on`."""
     sym = symbol.upper()
-    upcoming = [_report_date(a)
+    upcoming = [report_date(a)
                 for a in assertions_view(assertions, known_as_of)
                 if a["symbol"] == sym
                 and a.get("event_class") == GATING_EVENT_CLASS
-                and _report_date(a) >= on]
+                and report_date(a) >= on]
     return min(upcoming) if upcoming else None

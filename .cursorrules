@@ -1,10 +1,11 @@
 # Options Research Platform -- rules for AI agents working in this repo
 
 ## What this project is
-An options research platform for four AI-infrastructure names (VST, CEG,
-MSFT, AMZN — owner scope decision 2026-07-03; see README.md): study how
-their options actually behave, then build and validate strategies with
-positive expectancy AFTER realistic costs. The legacy 2018/2020/2022
+An options research platform anchored to four AI-infrastructure core names
+(VST, CEG, MSFT, AMZN — owner scope decision 2026-07-03), plus the
+owner-authorized H7 story-name watchlist (see README.md "Scope status"):
+study how their options actually behave, then build and validate strategies
+with positive expectancy AFTER realistic costs. The legacy 2018/2020/2022
 in-sample + sealed-holdout machinery is kept for backtests; new hypotheses
 pre-register their own validation design (e.g. forward paper windows),
 because 2023+ is not a credible blind holdout for these names.
@@ -60,8 +61,9 @@ optimizer unless explicitly added to the phase plan.
   with zero edge."
 
 ## Scope guard
-The live scope gate is README.md "Scope status" (currently: H5 Sector Income
-Core scanner/researcher, driving one strategy to one honest verdict via its
-forward paper window). Before adding a new capability, ticker, strategy, or
-tool, answer: "Does this move the current scope to a verdict?" If no, write
-it into `ideas-parking-lot.md` and continue.
+The live scope gate is README.md "Scope status": H5, H6, and H7 are registered
+forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
+arc, with its historical diagnostic permanently retired. Before adding a new
+capability, ticker, strategy, or tool, answer: "Does this move one of the live
+hypotheses toward its declared verdict?" If no, write it into
+`ideas-parking-lot.md` and continue.

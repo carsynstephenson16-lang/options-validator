@@ -13,15 +13,14 @@ invents exclusions. Each entry carries provenance with a `basis`:
                           diagnostic may launch; the audit BLOCKS on them
                           (unratified_coverage_entries) until `ratified_by`
                           is MECHANICALLY verified (7b-2R.1 finding D,
-                          hardened 7b-2R.2 finding 8): it must be the exact
-                          64-char lowercase record_hash of an H7
-                          trial_intent record in the ledger WHOSE reason
-                          text carries the exact ratified exclusion payload
+                          hardened 7b-2R.2 finding 8): it must be the frozen
+                          H7_AMENDMENT_V1_3 record hash, and that exact H7
+                          trial_intent record in the ledger must have reason
+                          text carrying the exact ratified exclusion payload
                           "SYMBOL START..END" -- a bare truthy label is not
-                          ratification, and neither is an arbitrary H7
-                          trial record that happens to hash-match but never
-                          ratified this exclusion. When the real ledger is
-                          consulted its hash chain is verified FIRST; a
+                          ratification, and neither is a later H7 trial
+                          record that repeats the payload. When the real
+                          ledger is consulted its hash chain is verified FIRST; a
                           tampered chain raises instead of being trusted.
 
 7b-2R corrections baked in:
@@ -42,6 +41,8 @@ exclusion intervals exactly, so manifest counts are unchanged.
 from __future__ import annotations
 
 import re
+
+import config
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -185,16 +186,16 @@ def unratified_coverage_entries(registry=H7_AUDIT_EXCEPTIONS, *,
     (7b-2R finding 2).
 
     Ratification is mechanical (7b-2R.1 finding D; hardened 7b-2R.2
-    finding 8): `ratified_by` must be a 64-char lowercase hex string equal
-    to the record_hash of a ledger record with entry_type == "trial_intent"
-    and hypothesis_id == "H7" WHOSE "reason" text contains the exact
-    ratified exclusion payload f"{symbol} {start}..{end}". An arbitrary H7
-    trial record whose hash matches but whose reason lacks the payload is
-    REJECTED. Any other value -- a label, a random hash, an unregistered
-    hash -- leaves the entry blocking. When `ledger_records` is None the
-    real ledger's hash chain is verified FIRST (research.ledger.verify --
-    a tampered chain raises rather than being silently trusted) and then
-    read (research.ledger.read_all("ledger"))."""
+    finding 8): `ratified_by` must equal the FROZEN record hash of
+    H7_AMENDMENT_V1_3 (`config.H7_HISTORICAL_WITHDRAWAL_HASH`), that exact
+    record must be an H7 trial_intent, and its "reason" text must contain
+    the exact ratified exclusion payload f"{symbol} {start}..{end}". A later
+    H7 intent that repeats the payload is NOT the amendment and cannot
+    ratify an exclusion. Any other value -- a label, a random hash, an
+    unregistered hash -- leaves the entry blocking. When `ledger_records`
+    is None the real ledger's hash chain is verified FIRST
+    (research.ledger.verify -- a tampered chain raises rather than being
+    silently trusted) and then read (research.ledger.read_all("ledger"))."""
     if ledger_records is None:
         from research import ledger
         ledger.verify("ledger")
@@ -207,6 +208,8 @@ def unratified_coverage_entries(registry=H7_AUDIT_EXCEPTIONS, *,
     def _ratified(entry: dict) -> bool:
         rb = entry.get("ratified_by")
         if not (isinstance(rb, str) and _SHA256_RE.fullmatch(rb)):
+            return False
+        if rb != config.H7_HISTORICAL_WITHDRAWAL_HASH:
             return False
         record = h7_intents.get(rb)
         if record is None:

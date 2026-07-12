@@ -9,6 +9,7 @@ import io
 import unittest
 from contextlib import redirect_stdout
 from datetime import date, datetime
+from unittest import mock
 
 import config
 from options_researcher.h7_earnings import GATE_CLEAR, GATE_UNKNOWN
@@ -153,19 +154,46 @@ class TestUniverseAndSessions(unittest.TestCase):
 
 
 class TestMainCLI(unittest.TestCase):
-    def test_as_of_replay_against_the_committed_store(self):
-        # Cutoff = close of Fri 2026-07-10 (20:00 UTC). G0006/7/8 became
-        # known 21:39 UTC that day -- AFTER the close -- so AMZN/VST/CEG
-        # have no in-view schedule and their Q1 grace is expired: honest
-        # point-in-time UNHEALTHY. MSFT's G0005 (known 07-08) is in view.
+    def test_as_of_replay_uses_the_watchers_completed_session_and_cutoff(self):
+        # Requested Sat 07-11 replays Fri 07-10. A report ON Friday is still
+        # known/BANNED for the watcher session. Evaluating the Saturday date
+        # with Friday's cutoff would incorrectly turn it UNKNOWN/MISSING.
+        rows = [A("ZZZZ", "2026-07-10", known="2026-07-01T12:00:00+00:00")]
         buf = io.StringIO()
-        with redirect_stdout(buf):
+        with mock.patch(
+                "options_researcher.h7_source_health.load_assertions",
+                return_value=rows), mock.patch(
+                "options_researcher.h7_source_health.watch_universe",
+                return_value=["ZZZZ"]), redirect_stdout(buf):
             rc = main(["--as-of", "2026-07-11"])
         out = buf.getvalue()
-        self.assertEqual(rc, 1)
-        self.assertRegex(out, r"MSFT:\s+ok")
-        self.assertRegex(out, r"VST:\s+UNHEALTHY")
-        self.assertIn("1/12 healthy", out)
+        self.assertEqual(rc, 0)
+        self.assertIn("on=2026-07-10 requested_as_of=2026-07-11", out)
+        self.assertRegex(out, r"ZZZZ:\s+ok gate=BANNED")
+        self.assertIn("1/1 healthy", out)
+
+    def test_malformed_as_of_is_refused_without_a_traceback(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = main(["--as-of", "not-a-date"])
+        self.assertEqual(rc, 2)
+        self.assertIn("not YYYY-MM-DD", buf.getvalue())
+
+    def test_store_validation_error_fails_closed(self):
+        buf = io.StringIO()
+        with mock.patch(
+                "options_researcher.h7_source_health.load_assertions",
+                side_effect=ValueError("bad header")), redirect_stdout(buf):
+            rc = main([])
+        self.assertEqual(rc, 2)
+        self.assertIn("gating store unreadable", buf.getvalue())
+
+    def test_programming_error_is_not_misreported_as_bad_store(self):
+        with mock.patch(
+                "options_researcher.h7_source_health.load_assertions",
+                side_effect=RuntimeError("programming defect")):
+            with self.assertRaisesRegex(RuntimeError, "programming defect"):
+                main([])
 
     def test_future_as_of_is_refused(self):
         buf = io.StringIO()

@@ -6,8 +6,11 @@ cites its raw evidence row (7b-2R.2) and the FULL load_assertions contract
 runs on a temp copy BEFORE the real store is touched -- a bad row can never
 poison an append-only store."""
 
+import io
 import tempfile
+import threading
 import unittest
+from contextlib import redirect_stdout
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -17,7 +20,7 @@ from options_researcher.h7_earnings import (
     load_raw_assertions,
     next_report,
 )
-from tools.h7_refresh_earnings import append_raw, main, promote
+from tools.h7_refresh_earnings import _locked_stores, append_raw, main, promote
 
 NOW = "2026-07-11T00:00:00+00:00"
 
@@ -120,6 +123,15 @@ class TestAppendRaw(RefreshBase):
         self.assertEqual(row["record_id"], "A0004")
         self.assertEqual(self.raw.read_bytes(), before)
 
+    def test_dry_run_still_validates_the_candidate_row(self):
+        before = self.raw.read_bytes()
+        with self.assertRaises(ValueError):
+            append_raw(**_schedule_kwargs(
+                source_url="http://not-https.test/ceg",
+                known_as_of="2026-07-10T12:00:00"),
+                path=self.raw, dry_run=True)
+        self.assertEqual(self.raw.read_bytes(), before)
+
     def test_naive_timestamp_is_refused_and_store_untouched(self):
         before = self.raw.read_bytes()
         with self.assertRaises(ValueError):
@@ -193,6 +205,12 @@ class TestPromote(RefreshBase):
                     supersedes="G9999", notes="", now_utc=NOW,
                     gating_path=self.gating, raw_path=self.raw)
 
+    def test_supersedes_cannot_target_another_symbol(self):
+        with self.assertRaisesRegex(SystemExit, "belongs to MSFT"):
+            promote(raw_id="A0002", event_class="actual_quarterly_earnings",
+                    supersedes="G0001", notes="", now_utc=NOW,
+                    gating_path=self.gating, raw_path=self.raw)
+
     def test_correction_flow_supersedes_the_old_schedule(self):
         # promote the original schedule, then a corrected raw row supersedes it
         promote(raw_id="A0002", event_class="actual_quarterly_earnings",
@@ -216,6 +234,57 @@ class TestPromote(RefreshBase):
             next_report("VST", date(2026, 10, 1), loaded, known_as_of=late),
             date(2026, 11, 7))
 
+    def test_evidence_backed_retraction_removes_the_promoted_record(self):
+        promoted = promote(
+            raw_id="A0002", event_class="actual_quarterly_earnings",
+            supersedes="", notes="", now_utc=NOW,
+            gating_path=self.gating, raw_path=self.raw)
+        raw_retraction = append_raw(**_schedule_kwargs(
+            symbol="VST", event_id="VST-2026Q3", fiscal_period="2026Q3",
+            status="confirmed", expected_date="2026-11-06",
+            source_type="company_pr", source_url="https://pr.test/retract",
+            known_as_of="2026-07-10T18:00:00+00:00", notes="PR withdrawn",
+            record_type="retraction", supersedes="A0002"), path=self.raw)
+        retraction = promote(
+            raw_id=raw_retraction["record_id"],
+            event_class="actual_quarterly_earnings",
+            supersedes=promoted["record_id"], notes="withdraw schedule",
+            now_utc=NOW, gating_path=self.gating, raw_path=self.raw)
+        self.assertEqual(retraction["record_type"], "retraction")
+        loaded = load_assertions(self.gating, self.raw)
+        late = datetime(2027, 1, 1, tzinfo=timezone.utc)
+        ids = {a["record_id"] for a in assertions_view(loaded, late)}
+        self.assertNotIn(promoted["record_id"], ids)
+        self.assertNotIn(retraction["record_id"], ids)
+
+    def test_retraction_must_target_the_matching_promoted_raw_record(self):
+        first = promote(
+            raw_id="A0002", event_class="actual_quarterly_earnings",
+            supersedes="", notes="", now_utc=NOW,
+            gating_path=self.gating, raw_path=self.raw)
+        corrected_raw = append_raw(**_schedule_kwargs(
+            symbol="VST", event_id="VST-2026Q3", fiscal_period="2026Q3",
+            status="confirmed", expected_date="2026-11-07",
+            source_type="company_pr", source_url="https://pr.test/corrected",
+            known_as_of="2026-07-10T18:00:00+00:00"), path=self.raw)
+        corrected = promote(
+            raw_id=corrected_raw["record_id"],
+            event_class="actual_quarterly_earnings", supersedes="",
+            notes="", now_utc=NOW, gating_path=self.gating, raw_path=self.raw)
+        retraction_raw = append_raw(**_schedule_kwargs(
+            symbol="VST", event_id="VST-2026Q3", fiscal_period="2026Q3",
+            status="confirmed", expected_date="2026-11-06",
+            source_type="company_pr", source_url="https://pr.test/retract-old",
+            known_as_of="2026-07-10T19:00:00+00:00", notes="withdraw old",
+            record_type="retraction", supersedes="A0002"), path=self.raw)
+        with self.assertRaisesRegex(SystemExit, "same evidence"):
+            promote(
+                raw_id=retraction_raw["record_id"],
+                event_class="actual_quarterly_earnings",
+                supersedes=corrected["record_id"], notes="",
+                now_utc=NOW, gating_path=self.gating, raw_path=self.raw)
+        self.assertNotEqual(first["promoted_from"], corrected["promoted_from"])
+
     def test_dry_run_writes_nothing(self):
         before = self.gating.read_bytes()
         row = promote(raw_id="A0002", event_class="actual_quarterly_earnings",
@@ -224,6 +293,42 @@ class TestPromote(RefreshBase):
                       dry_run=True)
         self.assertEqual(row["record_id"], "G0002")
         self.assertEqual(self.gating.read_bytes(), before)
+
+    def test_dry_run_still_validates_checked_at(self):
+        before = self.gating.read_bytes()
+        with self.assertRaises(ValueError):
+            promote(raw_id="A0002", event_class="actual_quarterly_earnings",
+                    supersedes="", notes="", now_utc="2026-06-01T00:00:00+00:00",
+                    gating_path=self.gating, raw_path=self.raw, dry_run=True)
+        self.assertEqual(self.gating.read_bytes(), before)
+
+
+class TestStoreLocking(RefreshBase):
+    def test_competing_writer_waits_for_the_store_lock(self):
+        first_has_lock = threading.Event()
+        release_first = threading.Event()
+        second_has_lock = threading.Event()
+
+        def first():
+            with _locked_stores(self.raw):
+                first_has_lock.set()
+                release_first.wait(timeout=2)
+
+        def second():
+            first_has_lock.wait(timeout=2)
+            with _locked_stores(self.raw):
+                second_has_lock.set()
+
+        one = threading.Thread(target=first)
+        two = threading.Thread(target=second)
+        one.start()
+        two.start()
+        self.assertTrue(first_has_lock.wait(timeout=1))
+        self.assertFalse(second_has_lock.wait(timeout=0.05))
+        release_first.set()
+        self.assertTrue(second_has_lock.wait(timeout=1))
+        one.join(timeout=1)
+        two.join(timeout=1)
 
 
 class TestMainCLI(RefreshBase):
@@ -238,6 +343,19 @@ class TestMainCLI(RefreshBase):
                    "--raw-path", str(self.raw), "--dry-run"])
         self.assertEqual(rc, 0)
         self.assertEqual(self.raw.read_bytes(), before)
+
+    def test_invalid_dry_run_via_cli_returns_2_cleanly(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = main(["append-raw", "--symbol", "CEG", "--event-id", "bad",
+                       "--fiscal-period", "2026Q3", "--status", "confirmed",
+                       "--expected-date", "2026-11-05", "--timing", "bmo",
+                       "--source-type", "company_ir", "--source-url",
+                       "http://not-https.test/ceg", "--known-as-of",
+                       "2026-07-10T12:00:00", "--raw-path", str(self.raw),
+                       "--dry-run"])
+        self.assertEqual(rc, 2)
+        self.assertIn("REFUSED", buf.getvalue())
 
     def test_promote_via_cli(self):
         rc = main(["promote", "--raw-id", "A0002",
