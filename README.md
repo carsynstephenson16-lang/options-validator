@@ -70,6 +70,7 @@ uv run python analysis/feasibility.py                       # sizing vs the slee
 uv run python tools/score_backtest.py --symbols MSFT,AMZN --json   # in-sample scoreboard
 uv run python -m options_researcher.attractiveness            # which options look attractive today
 uv run python -m options_researcher.entry_watch                # WAIT/FIRE vs the frozen entry triggers
+uv run python -m options_researcher.h7_source_health           # earnings provenance alive? (exit 1 on any unhealthy name)
 uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard    # interactive at-expiration scenario view (writes .tmp/dashboard/attractiveness.html)
@@ -195,7 +196,12 @@ verdict-capable evidence (amendment v1.3, 2026-07-11): historical earnings
 provenance cannot be causally reconstructed. The point-in-time forward
 paper window is H7's sole verdict-bearing path** (roadmap:
 `docs/superpowers/plans/2026-07-11-h7-forward-roadmap.md`, activation gated
-on independent review). Audit receipts v1/v2/v3 under `reports/h7_audit/`
+on independent review). Roadmap Stage 1 is built (2026-07-11):
+`options_researcher.h7_source_health` reports per-name earnings-provenance
+health over the v3 gating store, and `tools/h7_refresh_earnings.py` is the
+owner-in-the-loop append-only refresher (append-raw + promote under the
+7b-2R.2 citation contract). Stages 2–8 are not implemented; Stage 8
+(activation) stays with owner + independent review. Audit receipts v1/v2/v3 under `reports/h7_audit/`
 are preserved historical BLOCK artifacts; a frozen retirement gate
 (`config.H7_HISTORICAL_WITHDRAWAL_HASH`) makes every historical-diagnostic
 entry point refuse before reading market data.

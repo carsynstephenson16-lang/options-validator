@@ -32,6 +32,7 @@ uv run python options_researcher/profile_tradability.py
 uv run python analysis/feasibility.py
 uv run python -m options_researcher.attractiveness
 uv run python -m options_researcher.entry_watch  # WAIT/FIRE vs frozen entry triggers
+uv run python -m options_researcher.h7_source_health  # earnings provenance health; exit 1 = refresh needed
 uv run python -m options_researcher.portfolio    # mark the H5 paper book
 uv run python -m options_researcher.dashboard    # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard  # writes .tmp/dashboard/attractiveness.html

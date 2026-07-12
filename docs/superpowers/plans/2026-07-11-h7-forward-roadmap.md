@@ -1,9 +1,11 @@
 # H7 forward-paper roadmap (dependency-ordered) — DOCUMENTATION ONLY
 
-**Status: PROPOSED, NOT IMPLEMENTED, NOT ACTIVATED (7b-2R.2 deliverable;
-replaces the retired 7b-F0 proposal). Nothing below exists in code beyond
-what already ships. Stage 8 — the activation gate — belongs to the next
-independent review, not to any implementation session.**
+**Status: Stage 1 BUILT 2026-07-11 (owner authorized "continue with the
+plan" post-merge; see the Stage 1 heading). Stages 2–7 remain PROPOSED,
+NOT IMPLEMENTED, NOT ACTIVATED; each is a separately authorized arc.
+Stage 8 — the activation gate — belongs to the next independent review,
+not to any implementation session. (Original 7b-2R.2 deliverable replacing
+the retired 7b-F0 proposal.)**
 
 Context: H7's 2018–2026 historical diagnostic is permanently withdrawn
 (amendment v1.3, `6faa4945…`); the point-in-time forward paper window is
@@ -11,7 +13,12 @@ the sole verdict-bearing path. Each stage below depends on every stage
 above it; none may be built out of order, and building any of them is a
 separately authorized arc.
 
-## Stage 1 — Source health (earnings provenance stays alive)
+## Stage 1 — Source health (earnings provenance stays alive) — BUILT 2026-07-11
+
+*(Implemented as `options_researcher/h7_source_health.py` +
+`tools/h7_refresh_earnings.py`; plan
+`2026-07-11-h7-stage1-source-health.md`. The original spec paragraph
+below is unchanged.)*
 
 Per-symbol source-health reporting over the v3 gating store: newest gating
 assertion, event class/status/source type, days to expected report, STALE
