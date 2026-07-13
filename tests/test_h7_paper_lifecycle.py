@@ -179,6 +179,7 @@ class LifecycleCase(unittest.TestCase):
             data_gate_id="dg:T1",
             chain_identity="sha256:fill-chain",
             closes_identity="sha256:fill-closes",
+            underlying_close=100.0,
             clock=clock("2026-07-14T01:00:00+00:00"),
         )
 
@@ -389,6 +390,7 @@ class TestEntryFill(LifecycleCase):
             data_gate_id="dg:T1",
             chain_identity="sha256:fill-chain",
             closes_identity="sha256:fill-closes",
+            underlying_close=100.0,
             clock=clock("2026-07-14T01:00:00+00:00"),
         )
         self.assertEqual(result.event_type, "paper_fill")
@@ -397,9 +399,35 @@ class TestEntryFill(LifecycleCase):
         self.assertEqual(leg["raw_ask"], 5.0)
         self.assertEqual(leg["fill_price"], adverse_buy(5.0))
         self.assertEqual(fill.payload["commission"], config.COMMISSION_PER_CONTRACT)
+        self.assertEqual(fill.payload["underlying_close"], 100.0)
+        self.assertEqual(fill.payload["underlying_close_session"], FILL)
+        self.assertEqual(
+            fill.payload["underlying_close_identity"], "sha256:fill-closes"
+        )
         positions = life.replay_positions(base_dir=self.base)
         self.assertEqual(len(positions), 1)
         self.assertEqual(positions[0].state, "open")
+
+    def test_successful_entry_requires_exact_session_adjusted_close(self):
+        self.intent()
+        self.approve()
+        self.fill_upstream()
+        count = ledger.verify(self.base).count
+        with self.assertRaisesRegex(
+            life.LifecycleValidationError, "exact-session adjusted close"
+        ):
+            life.process_entry_fill(
+                base_dir=self.base,
+                entry_intent_id=life.entry_intent_id(DECISION, "NVDA", "a"),
+                fill_session=FILL,
+                chain=chain(),
+                source_health_id="sh:T1",
+                data_gate_id="dg:T1",
+                chain_identity="sha256:fill-chain",
+                closes_identity="sha256:fill-closes",
+                clock=clock("2026-07-14T01:00:00+00:00"),
+            )
+        self.assertEqual(ledger.verify(self.base).count, count)
 
     def test_stage5_actual_risk_breach_records_terminal_capacity_skip(self):
         self.append(event(
@@ -408,6 +436,12 @@ class TestEntryFill(LifecycleCase):
                 "position_id": "old-intent",
                 "planned_fill_session": "2026-07-09",
                 "decision_at_risk": 5480.0,
+                "action": long_action(),
+                "legs": [{
+                    "name": "long", "expiration": EXPIRATION,
+                    "strike": 100.0, "right": "C", "side": "buy",
+                    "quantity": config.H7_FORWARD_CONTRACTS,
+                }],
             },
         ))
         self.append(event(
@@ -417,9 +451,16 @@ class TestEntryFill(LifecycleCase):
                 "transition": "open",
                 "position_id": "old-intent",
                 "entry_intent_id": "old-intent",
+                "decision_session": "2026-07-08",
                 "fill_session": "2026-07-09",
                 "structure": "long_call",
                 "at_risk": 5480.0,
+                "action": long_action(),
+                "legs": [{
+                    "name": "long", "expiration": EXPIRATION,
+                    "strike": 100.0, "right": "C", "side": "buy",
+                    "quantity": config.H7_FORWARD_CONTRACTS,
+                }],
             },
         ))
         self.intent()
@@ -434,6 +475,7 @@ class TestEntryFill(LifecycleCase):
             data_gate_id="dg:T1",
             chain_identity="sha256:fill-chain",
             closes_identity="sha256:fill-closes",
+            underlying_close=100.0,
             clock=clock("2026-07-14T01:00:00+00:00"),
         )
         self.assertEqual(result.event_type, "skip")
@@ -520,6 +562,7 @@ class TestEntryFill(LifecycleCase):
             data_gate_id="dg:T1",
             chain_identity="sha256:fill-chain",
             closes_identity="sha256:fill-closes",
+            underlying_close=100.0,
         )
         first = life.process_entry_fill(
             **kwargs, clock=clock("2026-07-14T01:00:00+00:00"))
@@ -541,6 +584,7 @@ class TestEntryFill(LifecycleCase):
                 data_gate_id="dg:T1",
                 chain_identity="sha256:fill-chain",
                 closes_identity="sha256:fill-closes",
+                underlying_close=100.0,
                 clock=clock("2026-08-01T01:00:00+00:00"),
             )
 
@@ -574,6 +618,7 @@ class TestEntryFill(LifecycleCase):
             data_gate_id="dg:T1",
             chain_identity="sha256:spread-fill",
             closes_identity="sha256:fill-closes",
+            underlying_close=100.0,
             clock=clock("2026-07-14T01:00:00+00:00"),
         )
         legs = {leg["name"]: leg for leg in filled.payload["legs"]}
@@ -759,6 +804,7 @@ class TestExitLifecycle(LifecycleCase):
             source_health_id="sh:T1", data_gate_id="dg:T1",
             chain_identity="sha256:c-fill-chain",
             closes_identity="sha256:c-fill-closes",
+            underlying_close=100.0,
             clock=clock("2026-07-14T01:00:00+00:00"),
         )
 
@@ -837,12 +883,18 @@ class TestExitLifecycle(LifecycleCase):
             data_gate_id="dg:fill2",
             chain_identity="sha256:valid-retry",
             closes_identity="sha256:fill2-closes",
+            underlying_close=90.0,
             clock=clock("2026-07-17T01:00:00+00:00"),
         )
         self.assertEqual(closed.event_type, "paper_fill")
         self.assertEqual(closed.payload["transition"], "close")
         self.assertEqual(closed.payload["legs"][0]["fill_price"],
                          life.adverse_sell(9.00))
+        self.assertEqual(closed.payload["underlying_close"], 90.0)
+        self.assertEqual(closed.payload["underlying_close_session"], "2026-07-16")
+        self.assertEqual(
+            closed.payload["underlying_close_identity"], "sha256:fill2-closes"
+        )
         self.assertEqual(life.replay_positions(base_dir=self.base)[0].state,
                          "closed")
 
@@ -925,6 +977,7 @@ class TestExitLifecycle(LifecycleCase):
             fill_session="2026-07-15", chain=chain(bid=9.00, ask=9.20),
             data_gate_id="dg:fill1", chain_identity="sha256:valid",
             closes_identity="sha256:fill1-closes",
+            underlying_close=90.0,
             clock=clock("2026-07-16T01:00:00+00:00"),
         )
         with self.assertRaises(life.LifecycleValidationError):
@@ -933,6 +986,7 @@ class TestExitLifecycle(LifecycleCase):
                 fill_session="2026-07-15", chain=chain(bid=8.00, ask=8.20),
                 data_gate_id="dg:fill1", chain_identity="sha256:valid",
                 closes_identity="sha256:fill1-closes",
+                underlying_close=90.0,
                 clock=clock("2026-08-01T01:00:00+00:00"),
             )
 

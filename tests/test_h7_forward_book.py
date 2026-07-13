@@ -37,6 +37,31 @@ def _event(event_id, event_type, session, *, symbol=None, lane=None,
     }
 
 
+def _contract(lane):
+    if lane == "c":
+        action = {
+            "lane": lane, "kind": "bull_put_spread",
+            "expiration": "2026-08-21", "short_strike": 100.0,
+            "long_strike": 95.0,
+        }
+        legs = [
+            {"name": "short", "expiration": "2026-08-21", "strike": 100.0,
+             "right": "P", "side": "sell", "quantity": 1},
+            {"name": "long", "expiration": "2026-08-21", "strike": 95.0,
+             "right": "P", "side": "buy", "quantity": 1},
+        ]
+    else:
+        action = {
+            "lane": lane, "kind": "long_call", "expiration": "2026-08-21",
+            "strike": 100.0,
+        }
+        legs = [
+            {"name": "long", "expiration": "2026-08-21", "strike": 100.0,
+             "right": "C", "side": "buy", "quantity": 1},
+        ]
+    return action, legs
+
+
 class BookCase(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -49,17 +74,26 @@ class BookCase(unittest.TestCase):
 
     def intent(self, event_id, session, symbol="NVDA", lane="a", risk=900.0,
                fill_session="2026-07-11"):
+        action, legs = _contract(lane)
         self.append(
             event_id, "entry_intent", session, symbol=symbol, lane=lane,
             payload={
                 "position_id": event_id,
                 "planned_fill_session": fill_session,
                 "decision_at_risk": risk,
+                "action": action,
+                "legs": legs,
             },
         )
 
     def open_fill(self, event_id, intent_id, session, *, symbol="NVDA",
                   lane="a", risk=900.0):
+        action, legs = _contract(lane)
+        decision_session = next(
+            event.evaluation_session
+            for event in ledger.read_events(self.base)
+            if event.event_id == intent_id
+        )
         self.append(
             event_id, "paper_fill", session, symbol=symbol, lane=lane,
             causes=[intent_id],
@@ -67,8 +101,11 @@ class BookCase(unittest.TestCase):
                 "transition": "open",
                 "position_id": intent_id,
                 "entry_intent_id": intent_id,
+                "decision_session": decision_session,
                 "fill_session": session,
                 "at_risk": risk,
+                "action": action,
+                "legs": legs,
             },
         )
 
@@ -261,8 +298,10 @@ class TestCapacity(BookCase):
                 "fill-i1", "paper_fill", "2026-07-10", symbol="NVDA", lane="a",
                 causes=["i1"], payload={
                     "transition": "open", "position_id": "i1",
-                    "entry_intent_id": "i1", "fill_session": "2026-07-10",
+                    "entry_intent_id": "i1", "decision_session": "2026-07-09",
+                    "fill_session": "2026-07-10",
                     "at_risk": 700.0,
+                    "action": _contract("a")[0], "legs": _contract("a")[1],
                 },
             ),
             base_dir=self.base, expected_head=one.expected_head, clock=_clock(),
@@ -273,8 +312,10 @@ class TestCapacity(BookCase):
                     "fill-i2", "paper_fill", "2026-07-10", symbol="SMCI", lane="a",
                     causes=["i2"], payload={
                         "transition": "open", "position_id": "i2",
-                        "entry_intent_id": "i2", "fill_session": "2026-07-10",
+                        "entry_intent_id": "i2", "decision_session": "2026-07-09",
+                        "fill_session": "2026-07-10",
                         "at_risk": 700.0,
+                        "action": _contract("a")[0], "legs": _contract("a")[1],
                     },
                 ),
                 base_dir=self.base, expected_head=two.expected_head, clock=_clock(),

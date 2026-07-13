@@ -212,6 +212,7 @@ def derive_book(
         raise BookValidationError("risk_month must be canonical YYYY-MM") from exc
     events = ledger.read_events(base)
     intents: dict[str, Reservation] = {}
+    intent_events: dict[str, ledger.StoredEvent] = {}
     rows: dict[str, BookRow] = {}
     exit_intents: dict[str, ledger.StoredEvent] = {}
     stage5_boards: set[str] = set()
@@ -328,6 +329,7 @@ def derive_book(
                     else None
                 ),
             )
+            intent_events[event.event_id] = event
             continue
 
         if (
@@ -413,9 +415,41 @@ def derive_book(
                 )
             if event.symbol != reservation.symbol or event.lane != reservation.lane:
                 raise BookValidationError("opening fill changes reserved symbol or lane")
+            intent_event = intent_events.get(position_id)
+            intent_action = (
+                intent_event.payload.get("action") if intent_event is not None else None
+            )
+            opening_action = event.payload.get("action")
+            intent_legs = (
+                intent_event.payload.get("legs") if intent_event is not None else None
+            )
+            opening_legs = event.payload.get("legs")
+            identity_keys = ("name", "expiration", "strike", "right", "side", "quantity")
+            if (
+                not isinstance(intent_action, dict)
+                or not isinstance(opening_action, dict)
+                or canonical_json(opening_action) != canonical_json(intent_action)
+                or not isinstance(intent_legs, list)
+                or not isinstance(opening_legs, list)
+                or len(opening_legs) != len(intent_legs)
+                or any(
+                    not isinstance(frozen, dict)
+                    or not isinstance(filled, dict)
+                    or any(filled.get(key) != frozen.get(key) for key in identity_keys)
+                    for frozen, filled in zip(intent_legs, opening_legs, strict=True)
+                )
+            ):
+                raise BookValidationError(
+                    "opening fill changes its entry-intent action or contracts"
+                )
             opened = _session(event.evaluation_session, "opening fill session")
             payload_session = event.payload.get("fill_session")
-            if payload_session != opened or opened != reservation.planned_fill_session:
+            if (
+                payload_session != opened
+                or opened != reservation.planned_fill_session
+                or event.payload.get("decision_session")
+                != reservation.decision_session
+            ):
                 raise BookValidationError("opening fill does not match planned session")
             if position_id in rows:
                 raise BookValidationError(f"position {position_id!r} opens twice")

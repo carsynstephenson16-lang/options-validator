@@ -666,6 +666,7 @@ def process_entry_fill(
     data_gate_id: str,
     chain_identity: str,
     closes_identity: str,
+    underlying_close=None,
     clock=None,
 ) -> TransitionResult:
     """Resolve an approved intent exactly once at its T+1 EOD quotes."""
@@ -686,6 +687,13 @@ def process_entry_fill(
         raise LifecycleValidationError("fill chain_identity is required")
     if not isinstance(closes_identity, str) or not closes_identity:
         raise LifecycleValidationError("fill closes_identity is required")
+    if underlying_close is not None and (
+        isinstance(underlying_close, bool)
+        or not isinstance(underlying_close, (int, float))
+        or not math.isfinite(float(underlying_close))
+        or float(underlying_close) <= 0
+    ):
+        raise LifecycleValidationError("fill underlying_close must be finite and positive")
     source = _require_event(events, source_health_id, "source_health", session=fill_session)
     gate = _require_event(events, data_gate_id, "data_gate", session=fill_session)
     approval = _validated_approval(events, intent)
@@ -826,6 +834,11 @@ def process_entry_fill(
         )
     quantity = config.H7_FORWARD_CONTRACTS
     commission = len(legs) * quantity * config.COMMISSION_PER_CONTRACT
+    if underlying_close is None:
+        raise LifecycleValidationError(
+            "a successful entry fill requires the exact-session adjusted close"
+        )
+    benchmark_close = float(underlying_close)
     expected_head = _EXPECTED_HEAD_UNSET
     if existing_fill is None:
         from options_researcher.h7_forward_book import assess_entry_fill
@@ -896,6 +909,9 @@ def process_entry_fill(
         "closes_identity": closes_identity,
         "decision_chain_identity": intent.payload["chain_identity"],
         "decision_closes_identity": intent.payload["closes_identity"],
+        "underlying_close": benchmark_close,
+        "underlying_close_session": fill_session,
+        "underlying_close_identity": closes_identity,
         **capacity_payload,
     }
     return _transition(
@@ -1168,6 +1184,7 @@ def process_exit_fill(
     data_gate_id: str,
     chain_identity: str,
     closes_identity: str,
+    underlying_close=None,
     clock=None,
 ) -> TransitionResult:
     """Fill a queued exit, retrying only after a visible prior data gap."""
@@ -1209,6 +1226,15 @@ def process_exit_fill(
         raise LifecycleValidationError("exit-fill chain_identity is required")
     if not isinstance(closes_identity, str) or not closes_identity:
         raise LifecycleValidationError("exit-fill closes_identity is required")
+    if underlying_close is not None and (
+        isinstance(underlying_close, bool)
+        or not isinstance(underlying_close, (int, float))
+        or not math.isfinite(float(underlying_close))
+        or float(underlying_close) <= 0
+    ):
+        raise LifecycleValidationError(
+            "exit-fill underlying_close must be finite and positive"
+        )
     expiration = date.fromisoformat(str(position.entry_payload["action"]["expiration"]))
     if date.fromisoformat(fill_session) >= expiration:
         raise LifecycleValidationError(
@@ -1259,6 +1285,11 @@ def process_exit_fill(
     priced_legs, net_close_credit = _close_prices(legs, rows)
     quantity = config.H7_FORWARD_CONTRACTS
     commission = len(legs) * quantity * config.COMMISSION_PER_CONTRACT
+    if underlying_close is None:
+        raise LifecycleValidationError(
+            "a successful exit fill requires the exact-session adjusted close"
+        )
+    benchmark_close = float(underlying_close)
     payload = {
         "transition": "close",
         "position_id": position.position_id,
@@ -1275,6 +1306,9 @@ def process_exit_fill(
         "slippage_haircut": config.SLIPPAGE_HAIRCUT,
         "chain_identity": chain_identity,
         "closes_identity": closes_identity,
+        "underlying_close": benchmark_close,
+        "underlying_close_session": fill_session,
+        "underlying_close_identity": closes_identity,
     }
     return _transition(
         base,
