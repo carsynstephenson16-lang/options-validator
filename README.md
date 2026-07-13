@@ -187,10 +187,21 @@ trial 6; H4 superseded at zero cycles) and **H6 post-earnings tactical long
 calls** (ledger trial 7, registered 2026-07-08; NVDA/PLTR/AMZN; ≤$2k
 premium/month; design + screen evidence in
 `docs/superpowers/2026-07-08-h6-monthly-income-candidate-memo-DRAFT.md`).
-H6 entry evaluation still needs: NVDA/PLTR earnings CSVs (sourced), NVDA
-split entries in the closes SPLITS registry, and feature builds for the
-IVR gate — until then the pre-earnings lane is blocked by design (unknown
-IV-rank never passes).
+H6 now has a dedicated read-only, forward-paper evaluator; it does not reuse
+the generic H4 tactical preview and has no live-order path. Build exact-session
+IV-rank artifacts from the audited local cache, then run the watch:
+
+```bash
+uv run python -m options_researcher.h6_features --as-of YYYY-MM-DD
+uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD --json
+```
+
+The watch reads point-in-time earnings assertions from `gating_v3.csv`, the
+exact-session cached chain, and the manually maintained
+`data/positions/h6_positions.csv`; missing/stale facts block rather than fall
+back. NVDA's 2021/2024 split entries are already in the closes registry. The
+book is currently empty, so H6 remains `INSUFFICIENT_SAMPLE`; no result or
+edge is claimed.
 **H7 swing options on volatile AI names** (ledger trial 8, registered
 2026-07-09, `f1887c9d` + amendments v1.1/v1.2/v1.3; owner scope override
 2026-07-09): three separately-judged lanes on CRWV/TEM/PLTR/NOW/SMCI/NVDA/

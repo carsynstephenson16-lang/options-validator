@@ -147,6 +147,19 @@ def _dependence_aware_ci(entry_dates, pnls, n_boot=None, lo=5, hi=95, seed=42):
     return _ci_from_cohorts(cohorts, len(pnls), n_boot, lo, hi, seed)
 
 
+def dependence_aware_expectancy_ci(
+    entry_dates, pnls, n_boot=None, lo=5, hi=95, seed=42
+):
+    """Public forward-experiment CI using the repo's dependence model.
+
+    H6 has its own minimum-completion rule, so it cannot call ``scoreboard``
+    (whose loss-count gate belongs to H1/H2). It must still use the same
+    weekly-cohort block/stationary envelope rather than silently falling back
+    to IID resampling.
+    """
+    return _dependence_aware_ci(entry_dates, pnls, n_boot, lo, hi, seed)
+
+
 def iid_expectancy_ci(pnls, n_boot=None, lo=5, hi=95, seed=42):
     """EXPLICIT, opt-in IID resample -- for the demo/illustration ONLY. NEVER
     called by scoreboard(): a silent IID fallback is the integrity hole this

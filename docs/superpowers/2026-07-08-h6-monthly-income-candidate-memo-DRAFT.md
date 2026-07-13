@@ -1,7 +1,10 @@
-# H6 candidate memo (DRAFT) — monthly income WITHOUT capping the LEAPS — 2026-07-08
+# H6 candidate memo (historical design record) — monthly income WITHOUT capping the LEAPS — 2026-07-08
 
-Status: **DRAFT — nothing here is registered, frozen, or runnable.** This memo
-exists because the owner (a) decided not to sell covered calls against held
+Status: **HISTORICAL DESIGN MEMO; H6 v1 was registered later on 2026-07-08 as
+ledger trial 7.** Sections 1–11 preserve the pre-registration decision trail
+and include proposals that the final chained record superseded. Section 12 is
+the current implementation map; the chained ledger remains authoritative.
+This memo exists because the owner (a) decided not to sell covered calls against held
 LEAPS (upside-cap aversion) and (b) asked for a "new monthly profit trade
 strategy" on an expanded name list. Per ledger discipline this is a NEW
 hypothesis (H6), not a tweak to H5; H5's forward window continues unchanged
@@ -52,8 +55,9 @@ Constraints that bind before any design:
 1. **Universe expansion is an owner scope decision** (the 4-name universe is
    an owner decision of 2026-07-03; a prior ticker expansion was rejected).
 2. **Data**: 6 of 8 names have no usable cached chains. Fetching them hits
-   the paid ThetaData subscription (live now, cancels ~2026-07-25 per
-   checklist) — owner sign-off required on the spend and the added
+   the paid ThetaData subscription (then expected to end ~2026-07-25; owner
+   later updated the end date to 2026-07-29) — owner sign-off required on the
+   spend and the added
    cache/audit work. Short-history names (CRWV, TEM) cannot support the
    2018/2020/2022 regime-spanning backtest design at all.
 3. **Capital**: liquid capital on record is ~$7k against a nominal $20k
@@ -90,7 +94,8 @@ is still wanted. C/D only with a genuinely new, pre-stated edge argument.
 (numbers are owner-entered per operating manual; Claude proposes, never freezes)
 
 1. Confirmed ticker list (resolve "hyln now").
-2. Decision: spend ThetaData fetches on new names before ~07-25? (y/n, and
+2. Decision: spend ThetaData fetches on new names before the then-estimated
+   ~07-25 end date? (Owner later updated the date to 2026-07-29.) (y/n, and
    which names — HYLN/NOW likely not worth the fetch, see table).
 3. Capital per position and true liquid sleeve (resolve the $7k vs $20k drift).
 4. Max acceptable loss per month, in dollars (the verdict gates on losses).
@@ -282,3 +287,39 @@ Honesty line (unchanged by the excitement): this is a directional bet
 that AI names drift up post-earnings. It has no demonstrated edge; the
 forward window exists to measure whether it has one. "No edge after
 costs" remains a successful outcome.
+
+---
+
+## 12. Registered record and forward-paper implementation (2026-07-13)
+
+The chained trial-7 record superseded proposal details in §11. In particular,
+the final registration uses **max three concurrent positions** and a
+**+100% premium take-profit** in addition to the 21-DTE time exit. The frozen
+implementation surface is `config.py` `H6_*`, transcribed from record
+`5d813b8f...`:
+
+- NVDA / PLTR / AMZN only; one contract per name; three concurrent maximum.
+- Nearest standard monthly 45–90 DTE; highest delta in [0.30, 0.50].
+- Raw ask ≤ $1,000 and the repo's frozen OI/spread gates must pass.
+- No entries in the five sessions before a causally known report. The first
+  five post-report sessions bypass only the IV-rank gate; otherwise IV-rank
+  must be finite and ≤ 0.5. Unknown/conflicting schedules fail closed.
+- Gross entry premium deployed in a calendar month, including entry
+  commission and conservative adverse fill, may not exceed $2,000.
+- Exit at conservative EOD proceeds when net proceeds reach 2x entry cost or
+  at/below 21 DTE, whichever is observed first. There is no stop-loss.
+- After eight completed positions, the repo's dependence-aware weekly-cohort
+  CI90 applies the registered upper/lower-bound rejection/extension rule.
+  Three consecutive calendar months each realizing the full $2,000 cap as
+  losses is an immediate hard rejection.
+
+Operator commands (offline, exact-session, no data fetch):
+
+```bash
+uv run python -m options_researcher.h6_features --as-of YYYY-MM-DD
+uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD --json
+```
+
+`options_researcher.h6_watch` is read-only and forward-paper-only. It never
+writes `data/positions/h6_positions.csv`, never fetches ThetaData, and cannot
+place an order. The empty book is `INSUFFICIENT_SAMPLE`, not evidence of edge.

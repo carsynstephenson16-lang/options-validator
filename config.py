@@ -227,6 +227,26 @@ H5_ENTRY_TRIGGERS = {"VST": 140.0, "AMZN": 220.0}
 H5_ENTRY_IVR_MAX = 0.5
 
 # ---------------------------------------------------------------------------
+# H6 -- post-earnings tactical long calls (REGISTERED 2026-07-08, ledger
+# trial_intent 5d813b8f...).  Forward-paper only; no live-order path.  These
+# values are a transcription of the chained registration, not a retune.
+# ---------------------------------------------------------------------------
+H6_NAMES = ("NVDA", "PLTR", "AMZN")
+H6_EARNINGS_BAN_SESSIONS = 5
+H6_POST_EARNINGS_SESSIONS = 5
+H6_IVR_MAX = 0.5
+H6_DTE_BAND = (45, 90)
+H6_DELTA_BAND = (0.30, 0.50)
+H6_MAX_ASK_DOLLARS = 1_000
+H6_MONTHLY_PREMIUM_AT_RISK = 2_000
+H6_MAX_CONTRACTS_PER_NAME = 1
+H6_MAX_CONCURRENT = 3
+H6_TAKE_PROFIT_PCT = 1.00
+H6_CLOSE_AT_DTE = 21
+H6_MIN_COMPLETED_POSITIONS = 8
+H6_HARD_KILL_FULL_LOSS_MONTHS = 3
+
+# ---------------------------------------------------------------------------
 # H7 -- swing options on volatile AI names (REGISTERED 2026-07-09, ledger
 # trial_intent f1887c9d...; amendment e266770f... adds SMCI to the backtest
 # set). Three lanes: H7a drawdown+stabilization long, H7b coil long, H7c
