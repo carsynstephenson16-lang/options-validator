@@ -1,7 +1,7 @@
 # H7 forward-paper roadmap (dependency-ordered) — DOCUMENTATION ONLY
 
-**Status: Stages 1–4 BUILT (Stage 1 hardened; Stages 2 and 4 build-only;
-Stage 3 inactive with zero real events). Stages 5–7 remain PROPOSED, NOT
+**Status: Stages 1–5 BUILT (Stage 1 hardened; Stages 2, 4, and 5 build-only;
+Stage 3 inactive with zero real events). Stages 6–7 remain PROPOSED, NOT
 IMPLEMENTED, NOT ACTIVATED; each is a separately authorized arc.
 Stage 8 — the activation gate — belongs to the next independent review,
 not to any implementation session. (Original 7b-2R.2 deliverable replacing
@@ -94,7 +94,15 @@ the frozen trigger interpretations and priority; every transition lands in
 the Stage-3 event ledger with its causal inputs (chain day, closes day,
 gate reason). One position per symbol/lane; cancel-never-chase.
 
-## Stage 5 — Global risk accounting
+## Stage 5 — Global risk accounting — BUILT 2026-07-13; INACTIVE
+
+*Pre-registered specification plus reservation-continuity amendment implemented
+as `options_researcher/h7_forward_book.py`, with optimistic ledger-head
+preconditions added to Stage 3 and fill/intent integration added to Stage 4.
+Commit `87a17f3`; independent review PASS after remediation; 32 focused Stage-5
+tests, 34 Stage-4 integration tests, and the complete 924-test suite passed
+with Ruff, Pyright, and focused pre-commit hooks. BUILD-ONLY, SYNTHETIC-ONLY,
+INACTIVE: the CSV mirror remains read-only and no real forward event exists.*
 
 Cross-symbol enforcement of the monthly sleeve (H7_MONTHLY_AT_RISK),
 H7C_MAX_CONCURRENT, and one-open-per-underlying at the BOOK level (the
