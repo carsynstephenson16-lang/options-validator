@@ -317,6 +317,7 @@ H7_DIAGNOSTIC_CONTRACTS = 1      # per-position sizing of the isolated-lane
 #                                  diagnostic (F3). NOTE: the decide-layer
 #                                  sleeve math prices ONE contract; changing
 #                                  this requires revisiting that math.
+H7_FORWARD_CONTRACTS = 1
 FEED_PUT_DELTA_BAND = (0.03, 0.65)   # offline-feed PUT inclusion band
 FEED_CALL_DELTA_BAND = (0.10, 0.90)  # offline-feed CALL inclusion band
 #   (plumbing, not tunables: strategies fail LOUD when a selected leg has no

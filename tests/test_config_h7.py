@@ -45,6 +45,7 @@ class TestH7Freeze(unittest.TestCase):
 
     def test_sizing_admission_and_verdict(self):
         self.assertEqual(config.H7_MONTHLY_AT_RISK, 6000)
+        self.assertEqual(config.H7_FORWARD_CONTRACTS, 1)
         self.assertEqual(config.H7_MAX_OPEN_PER_UNDERLYING, 1)
         self.assertEqual(config.H7_ADMIT_MIN_CONTRACTS, 5)
         self.assertEqual(config.H7_ADMIT_MAX_SPREAD_PCT, 0.05)
