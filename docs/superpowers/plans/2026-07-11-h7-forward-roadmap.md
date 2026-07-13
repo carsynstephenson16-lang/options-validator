@@ -1,8 +1,8 @@
 # H7 forward-paper roadmap (dependency-ordered) — DOCUMENTATION ONLY
 
-**Status: Stage 1 BUILT 2026-07-11 (owner authorized "continue with the
-plan" post-merge; see the Stage 1 heading). Stages 2–7 remain PROPOSED,
-NOT IMPLEMENTED, NOT ACTIVATED; each is a separately authorized arc.
+**Status: Stages 1–3 BUILT (Stage 1 hardened; Stage 2 build-only; Stage 3
+inactive with zero real events). Stages 4–7 remain PROPOSED, NOT IMPLEMENTED,
+NOT ACTIVATED; each is a separately authorized arc.
 Stage 8 — the activation gate — belongs to the next independent review,
 not to any implementation session. (Original 7b-2R.2 deliverable replacing
 the retired 7b-F0 proposal.)**
@@ -38,10 +38,13 @@ promotion contract). No crawler — recurring automation stays deferred.
 Arc B inventory evidence `f7ff478`). BUILD-ONLY owner authorization
 2026-07-12: the module exists and is tested, but operational GO, the forward
 window, paid data pulls, and activation remain separate owner decisions.
-Live result today is an honest whole-universe NO_GO (0/12, exit 1) — the
-cache lacks every name's 2026-07-10 EOD chain. Readiness/authorization
-boundary: `2026-07-12-h7-stage1-closeout-stage2-readiness.md`. The original
-spec paragraph below is unchanged.*
+The first whole-universe data result reached GO 12/12 for evaluation session
+2026-07-10 after the separately authorized chain/close top-up (`36c9e1a`;
+dated artifact `reports/h7_data_gate/2026-07-10.json`). This is data-readiness
+evidence only: source health and operational authorization still gate any
+watcher run. Readiness/authorization boundary:
+`2026-07-12-h7-stage1-closeout-stage2-readiness.md`. The original spec
+paragraph below is unchanged.*
 
 A daily go/no-go over the full H7 universe (8 watchlist + 4 core names):
 chains and closes both end exactly at the evaluation session, session

@@ -279,6 +279,42 @@ class TestCliContract(GateBase):
         self.assertFalse(self.reports.exists() and any(self.reports.iterdir())
                          if self.reports.exists() else False)
 
+    def test_boolean_chain_dtype_is_exit_2_no_artifact(self):
+        # pandas classifies bool as numeric, but True/False are not valid
+        # market prices. The store boundary must reject them explicitly.
+        df = _good_chain()
+        df["bid"] = True
+        _write_chain(self.chain_dir, "AMD", self.eval_iso, df)
+        with self.assertRaises(gate.GateStoreError):
+            self._eval()
+        self.assertEqual(self._run(), 2)
+        self.assertFalse(self.reports.exists() and any(self.reports.iterdir())
+                         if self.reports.exists() else False)
+
+    def test_invalid_chain_domain_field_is_exit_2_no_artifact(self):
+        for column, value in (("right", "X"),
+                              ("expiration", "not-a-date")):
+            with self.subTest(column=column):
+                df = _good_chain()
+                df[column] = value
+                _write_chain(self.chain_dir, "AMD", self.eval_iso, df)
+                with self.assertRaises(gate.GateStoreError):
+                    self._eval()
+                self.assertEqual(self._run(), 2)
+                self.assertFalse(
+                    self.reports.exists() and any(self.reports.iterdir())
+                    if self.reports.exists() else False)
+
+    def test_unhashable_right_value_is_exit_2_no_artifact(self):
+        df = _good_chain()
+        df.at[0, "right"] = ["P"]
+        _write_chain(self.chain_dir, "AMD", self.eval_iso, df)
+        with self.assertRaises(gate.GateStoreError):
+            self._eval()
+        self.assertEqual(self._run(), 2)
+        self.assertFalse(self.reports.exists() and any(self.reports.iterdir())
+                         if self.reports.exists() else False)
+
     def test_one_name_failure_forces_universe_no_go(self):
         (self.chain_dir / f"AMZN_{self.eval_iso}.parquet").unlink()
         res = self._eval()

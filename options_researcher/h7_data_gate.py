@@ -145,6 +145,40 @@ def _chain_days(symbol: str, chain_dir: Path) -> list[str]:
     return sorted(days)
 
 
+def _validate_chain_store_fields(df: pd.DataFrame, path: Path) -> None:
+    """Reject readable parquet whose stored dtypes/domain values cannot be
+    consumed safely. Missing columns remain a reason-coded NO_GO; malformed
+    columns that are present make the store unreadable (exit 2)."""
+    for col in NUMERIC_CHAIN_COLUMNS:
+        if col not in df.columns:
+            continue
+        dtype = df[col].dtype
+        if (pd.api.types.is_bool_dtype(dtype)
+                or pd.api.types.is_complex_dtype(dtype)
+                or not pd.api.types.is_numeric_dtype(dtype)):
+            raise GateStoreError(
+                f"chain store {path} column {col!r} is not a real numeric "
+                f"dtype ({dtype}); refusing")
+
+    if "right" in df.columns:
+        if any(not isinstance(value, str) or value not in {"P", "C"}
+               for value in df["right"].tolist()):
+            raise GateStoreError(
+                f"chain store {path} has invalid right values; refusing")
+
+    if "expiration" in df.columns:
+        try:
+            expirations = [date.fromisoformat(value) for value in
+                           df["expiration"].tolist()]
+        except (TypeError, ValueError) as exc:
+            raise GateStoreError(
+                f"chain store {path} has a non-ISO expiration; refusing") from exc
+        if any(value.isoformat() != raw for value, raw in
+               zip(expirations, df["expiration"].tolist())):
+            raise GateStoreError(
+                f"chain store {path} has a non-canonical expiration; refusing")
+
+
 def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
     expected = chain_dir / f"{symbol}_{eval_iso}.parquet"
     days = _chain_days(symbol, chain_dir)
@@ -179,15 +213,10 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
     if rec["row_count"] == 0:
         codes.append(CHAIN_EMPTY)
         return rec, codes
-    # Store-integrity guard, symmetric with the closes date/close guard: a
-    # numeric column stored with a non-numeric (object/string) dtype is a
-    # malformed store, not an honest data gap. Fail the invocation (exit 2)
-    # rather than crash on the raw `< 0` / `bid > ask` comparisons below.
-    for col in NUMERIC_CHAIN_COLUMNS:
-        if col in df.columns and not pd.api.types.is_numeric_dtype(df[col]):
-            raise GateStoreError(
-                f"chain store {expected} column {col!r} is non-numeric "
-                f"dtype {df[col].dtype}; refusing")
+    # Store-integrity guard, symmetric with the closes date/close guard.
+    # Fail the invocation (exit 2) rather than crash or let malformed domain
+    # values pass vacuous row-wise checks below.
+    _validate_chain_store_fields(df, expected)
 
     nulls, nonfinite = {}, {}
     for col in NUMERIC_CHAIN_COLUMNS:
