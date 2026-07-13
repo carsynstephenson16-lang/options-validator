@@ -194,14 +194,29 @@ IV-rank artifacts from the audited local cache, then run the watch:
 ```bash
 uv run python -m options_researcher.h6_features --as-of YYYY-MM-DD
 uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD --json
+uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD \
+  --write-receipt reports/h6_forward/YYYY-MM-DD.json --json
+uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD \
+  --verify-receipt reports/h6_forward/YYYY-MM-DD.json --json
 ```
 
 The watch reads point-in-time earnings assertions from `gating_v3.csv`, the
 exact-session cached chain, and the manually maintained
 `data/positions/h6_positions.csv`; missing/stale facts block rather than fall
-back. NVDA's 2021/2024 split entries are already in the closes registry. The
-book is currently empty, so H6 remains `INSUFFICIENT_SAMPLE`; no result or
-edge is claimed.
+back. A clean run can create one immutable receipt binding the output to the
+trial-7 registration, full book, raw/promoted earnings stores, all exact chain
+and feature artifacts, frozen H6/cost/bootstrap parameters, and relevant
+source files. Verification fully recomputes that receipt; any changed surface
+invalidates it. A receipt proves what the read-only watch saw, not that a paper
+entry was recorded prospectively. Every future book entry and close must cite
+its exact receipt SHA-256. One receipt may authorize only one manual book
+action; after recording that action, rerun the watch under a new filename
+before recording another. This makes portfolio risk cumulative rather than
+letting several same-snapshot candidates spend the cap independently. Keep
+action receipts under `reports/h6_forward/`, the default verification
+directory. NVDA's 2021/2024 split entries are already in the closes registry.
+The book is currently empty, so H6 remains
+`INSUFFICIENT_SAMPLE`; no result or edge is claimed.
 **H7 swing options on volatile AI names** (ledger trial 8, registered
 2026-07-09, `f1887c9d` + amendments v1.1/v1.2/v1.3; owner scope override
 2026-07-09): three separately-judged lanes on CRWV/TEM/PLTR/NOW/SMCI/NVDA/

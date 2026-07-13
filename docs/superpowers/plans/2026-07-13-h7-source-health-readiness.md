@@ -84,7 +84,10 @@ not infer that results occurred. After the release:
 2. Run the cancellation checklist's 12-name top-up only with explicit paid
    pull authorization.
 3. Build the immutable ThetaData exit receipt and verify it from disk.
-4. Run source health and the Stage-2 data gate on the same latest completed
+4. Build H6's terminal-session features, create its exact-session watch
+   receipt, and verify the receipt from disk. This proves offline
+   reconstructability only; it cannot create or backfill an H6 paper row.
+5. Run source health and the Stage-2 data gate on the same latest completed
    session; both must be 12/12.
-5. Keep Stage 8 closed. Subscription preservation and source remediation do
+6. Keep Stage 8 closed. Subscription preservation and source remediation do
    not fill the blank owner activation inputs.

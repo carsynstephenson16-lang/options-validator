@@ -66,12 +66,26 @@ The original default remains the four-name core scope, so omitting
    `VALID EMPTY`. Source health may still block activation; record its honest
    result rather than weakening it.
 6. Prove the frozen cache can reconstruct the registered H6 input surface on
-   the same terminal session:
+   the same terminal session, then write and independently recompute its
+   immutable exact-session receipt:
 
    ```bash
    uv run python -m options_researcher.h6_features --as-of 2026-07-28
-   uv run python -m options_researcher.h6_watch --as-of 2026-07-28 --json
+   uv run python -m options_researcher.h6_watch --as-of 2026-07-28 \
+     --write-receipt reports/h6_forward/2026-07-28.json --json
+   uv run python -m options_researcher.h6_watch --as-of 2026-07-28 \
+     --verify-receipt reports/h6_forward/2026-07-28.json --json
    ```
+
+   Require receipt action `WROTE`, then `VERIFIED`, with no blockers. The
+   receipt binds the trial-7 registration, full tracked book, raw/promoted
+   earnings stores, all three exact chains and feature artifacts, frozen H6
+   parameters/cost/bootstrap model, and the evaluator source. Preserve its
+   SHA-256 in the cancel fact. If a prospectively operated H6 process records
+   an entry or close, that CSV action must cite this hash; one receipt can
+   authorize only one action, so rerun under a new sequenced filename before
+   any second same-session action. The terminal cache-readiness receipt itself
+   authorizes no action.
 
    This is a cache-readiness check, not permission to backfill a paper entry.
    If the watch prints `ELIGIBLE`, record it only if H6 was already being run
@@ -79,7 +93,8 @@ The original default remains the four-name core scope, so omitting
    row after seeing the candidate and call it forward evidence.
 7. Append one `THETADATA_CANCEL` fact recording all 12 final chain dates, the
    exit-receipt hash, the Stage-2 artifact identity, and the source-health
-   result, plus the exact H6 feature/watch session and outcome.
+   result, plus the exact H6 feature/watch session, outcome, and verified H6
+   receipt hash.
 8. Cancel the subscription in the ThetaData account portal.
 
 ## After cancellation

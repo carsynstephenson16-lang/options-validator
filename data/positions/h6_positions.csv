@@ -1,1 +1,1 @@
-id,symbol,strike,expiration,contracts,entry_date,entry_cost,exit_date,exit_proceeds,exit_reason
+id,symbol,strike,expiration,contracts,entry_date,entry_cost,entry_receipt_hash,exit_date,exit_proceeds,exit_reason,exit_receipt_hash
