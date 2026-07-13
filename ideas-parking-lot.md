@@ -157,6 +157,32 @@ before 2024-07-15, add the SPLITS entry (first split-adjusted trade
 
 **Review date:** before any arc that consumes pre-2024 AVGO history.
 
+## TradingView plugin — read-only chart/alert layer (parked 2026-07-13)
+
+Idea: surface the H5/H6/H7 forward-paper watcher signals on TradingView
+charts (read-only visualization + alerts), not a new data or execution path.
+
+Triage: PARKED, weakly in-scope-adjacent at best.
+- Does it move a live hypothesis to its verdict? No. The repo already renders
+  this surface offline: `entry_watch`, `h7_watch`, `dashboard`, and
+  `attractiveness_dashboard`. A TradingView chart layer duplicates existing
+  output rather than advancing H5/H6/H7.
+- Boundary risk (the reason to keep it parked, not just deferred):
+  TradingView's differentiating features are webhook alerts and order
+  routing. The moment the integration is useful beyond a static chart it
+  points at the live-order boundary the repo's hook exists to forbid. A
+  strictly read-only build is possible but is the redundant, low-value half.
+- Standing rule: it is new tooling/account/spend before the Phase-0 verdict
+  exists, which the one standing rule forbids.
+
+If ever un-parked, constrain to: read-only pull FROM the repo's existing
+signal outputs INTO a chart annotation; no webhooks, no broker connection, no
+alert-to-execution path; and only after a live H5/H6 verdict frees the
+"nothing new" gate.
+
+**Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
+audit, whichever comes first.
+
 ## Explicitly rejected (not parked)
 
 From the 2026-07-06 deep-research report (and the 2026-07-07 10-point
