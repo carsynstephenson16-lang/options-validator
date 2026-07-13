@@ -214,19 +214,20 @@ evaluation session 2026-07-10 (12/12,
 `reports/h7_data_gate/2026-07-10.json`) after the authorized cache top-up;
 this is data-readiness evidence, not operational authorization.
 Operator order: **source health → data gate → watcher**; never run the
-watcher when either preceding command is non-zero. Stage 3 is **BUILT but
-INACTIVE** with zero real events; Stages 4–7 remain proposed, and Stage 8
-(activation) stays with owner + independent review. Audit receipts v1–v4
+watcher when either preceding command is non-zero. Stages 3–7 are **BUILT but
+INACTIVE** with zero real events; Stages 4–7 are BUILD-ONLY and
+SYNTHETIC-ONLY, and Stage 8 (activation) is explicitly NOT OPEN and stays
+with owner + independent review. Audit receipts v1–v4
 under `reports/h7_audit/` are preserved historical BLOCK artifacts; v4 was
 valid at its 7b-2R.2 source commit and is intentionally not regenerated after
 forward-roadmap source/config changes. A frozen retirement gate
 (`config.H7_HISTORICAL_WITHDRAWAL_HASH`) makes every historical-diagnostic
 entry point refuse before reading market data.
 Current recorded holdings: 39 VST shares and no options. Remaining for H7:
-finish Stage 1 operationally (12/12 healthy), operationally authorize Stage 2,
-build and prove Stages 4–7 as separately authorized arcs, then let owner +
-independent review decide Stage 8 activation. No tracked option by itself
-starts the H7 window.
+restore Stage 1 source health to 12/12, confirm paid daily EOD continuity,
+resolve Darwin ledger durability, supply the owner-frozen window inputs, bind
+a clean code/config identity, then let owner + independent review decide
+whether to open Stage 8. No tracked option by itself starts the H7 window.
 LEAPS entry triggers are pre-registered (owner-frozen 2026-07-07, ledger
 H5_ENTRY_TRIGGER_PREREG): evaluate only when close ≤ trigger (VST $140,
 AMZN $220) AND IV-rank ≤ 0.5 AND the LEAPS passes the liquidity gates —

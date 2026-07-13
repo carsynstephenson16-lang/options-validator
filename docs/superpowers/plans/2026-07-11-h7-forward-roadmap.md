@@ -1,11 +1,10 @@
 # H7 forward-paper roadmap (dependency-ordered) — DOCUMENTATION ONLY
 
-**Status: Stages 1–5 BUILT (Stage 1 hardened; Stages 2, 4, and 5 build-only;
-Stage 3 inactive with zero real events). Stages 6–7 remain PROPOSED, NOT
-IMPLEMENTED, NOT ACTIVATED; each is a separately authorized arc.
-Stage 8 — the activation gate — belongs to the next independent review,
-not to any implementation session. (Original 7b-2R.2 deliverable replacing
-the retired 7b-F0 proposal.)**
+**Status: Stages 1–7 BUILT (Stage 1 hardened; Stages 2 and 4–7 BUILD-ONLY;
+Stages 3–7 INACTIVE with zero real events; Stages 4–7 SYNTHETIC-ONLY).
+Stage 8 — the activation gate — is explicitly NOT OPEN and belongs to a future
+owner authorization plus independent review, not to this implementation arc.
+(Original 7b-2R.2 deliverable replacing the retired 7b-F0 proposal.)**
 
 Context: H7's 2018–2026 historical diagnostic is permanently withdrawn
 (amendment v1.3, `6faa4945…`); the point-in-time forward paper window is
