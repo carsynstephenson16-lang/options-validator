@@ -126,7 +126,18 @@ on MIN_LOSSES_FOR_VERDICT losses, per-lane cohorts, benchmark columns
 (underlying move alongside every trade). Vocabulary stays frozen:
 survived / rejected / inconclusive.
 
-## Stage 7 — Synthetic proof
+## Stage 7 — Synthetic proof — BUILT 2026-07-13; INACTIVE
+
+*Pre-registered disposable-fixture proof implemented as
+`options_researcher/h7_synthetic_proof.py` +
+`tests/test_h7_stage7_synthetic_proof.py` in commit `b632feb`. Independent
+review PASS: 13-event verified synthetic ledger; 12/12 source health and data
+gate; decision 2026-07-10 → T+1 entry 2026-07-13 → exit 2026-07-15; monthly
+risk retained after close; after-cost P&L reconstructed; all required refusal
+arcs passed. Stage-7 tests 4/4, focused H7 tests 474/474, full suite 948/948,
+Ruff, Pyright, and focused pre-commit passed. The default forward ledger
+remained `VALID EMPTY`. BUILD-ONLY, SYNTHETIC-ONLY, INACTIVE; the fixture dates
+do not register a window.*
 
 Before live-tick activation: a full synthetic dress rehearsal of stages
 1–6 on fixture data (the engine-test idiom) proving gate refusals, event
