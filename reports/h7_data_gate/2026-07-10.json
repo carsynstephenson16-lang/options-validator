@@ -3,7 +3,7 @@
  "evaluation_session": "2026-07-10",
  "go_count": 12,
  "no_go_count": 0,
- "requested_run_date": "2026-07-12",
+ "requested_run_date": "2026-07-13",
  "schema_version": 1,
  "symbols": {
   "AMD": {
@@ -76,7 +76,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "AMD",
    "verdict": "GO"
   },
@@ -150,7 +150,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "AMZN",
    "verdict": "GO"
   },
@@ -224,7 +224,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "AVGO",
    "verdict": "GO"
   },
@@ -298,7 +298,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "CEG",
    "verdict": "GO"
   },
@@ -372,7 +372,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "CRWV",
    "verdict": "GO"
   },
@@ -446,7 +446,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "MSFT",
    "verdict": "GO"
   },
@@ -520,7 +520,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "NOW",
    "verdict": "GO"
   },
@@ -594,7 +594,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "NVDA",
    "verdict": "GO"
   },
@@ -668,7 +668,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "PLTR",
    "verdict": "GO"
   },
@@ -742,7 +742,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "SMCI",
    "verdict": "GO"
   },
@@ -816,7 +816,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "TEM",
    "verdict": "GO"
   },
@@ -890,7 +890,7 @@
    "reason_codes": [
     "EXACT_SESSION_GO"
    ],
-   "requested_run_date": "2026-07-12",
+   "requested_run_date": "2026-07-13",
    "symbol": "VST",
    "verdict": "GO"
   }

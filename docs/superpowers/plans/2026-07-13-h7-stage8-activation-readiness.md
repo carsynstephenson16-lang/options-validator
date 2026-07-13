@@ -35,7 +35,7 @@ Read-only refresh for evaluation session 2026-07-10 on 2026-07-13:
 
 | gate | current result | activation consequence |
 |---|---:|---|
-| Source health | **4/12 healthy** | **BLOCKED**. CRWV, PLTR, SMCI, NVDA, AVGO, VST, CEG, and AMZN lack live future gating provenance. |
+| Source health | **4/12 at the causally pinned 2026-07-10 close**; a source-only replay at the 2026-07-13 close is **11/12**, with only CRWV `UNKNOWN` | **BLOCKED** until a new exact-session market-data gate and source-health run prove 12/12 together. Assertions learned after the July 10 close correctly cannot rewrite that historical result. |
 | Stage-2 data | **12/12 GO** | Ready for that completed session only; must be rerun immediately before registration/start. |
 | Real forward ledger | **VALID EMPTY** | Correct pre-activation state. |
 | Daily paid EOD chains | subscription ends 2026-07-29; continuity beyond that date is not owner-confirmed | **BLOCKED** before any chosen start. |
@@ -138,8 +138,10 @@ readiness packet.
 
 ## 7. Present decision
 
-**DO NOT OPEN STAGE 8.** Source health is 4/12, paid-data continuity is not
-confirmed, owner window inputs are blank, and the working tree cannot yet
-supply one immutable config/code identity.
+**DO NOT OPEN STAGE 8.** The latest chain-aligned source result remains 4/12;
+the later source store projects 11/12, not 12/12, because CRWV has no
+causally valid next-report assertion. Paid-data continuity is not confirmed,
+owner window inputs are blank, and the working tree cannot yet supply one
+immutable config/code identity.
 The next authorized action is owner remediation/parameter entry—not a real
 ledger append.
