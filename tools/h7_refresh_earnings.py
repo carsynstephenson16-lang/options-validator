@@ -100,11 +100,13 @@ def _validated_append(path: Path, row: dict, columns: tuple, loader, *,
     try:
         shutil.copy(path, tmp)
         with tmp.open("a", newline="") as f:
-            csv.writer(f).writerow([row[c] for c in columns])
+            csv.writer(f, lineterminator="\n").writerow(
+                [row[c] for c in columns])
         loader(tmp)   # raises on ANY store violation, including the new row
         if write:
             with path.open("a", newline="") as f:
-                csv.writer(f).writerow([row[c] for c in columns])
+                csv.writer(f, lineterminator="\n").writerow(
+                    [row[c] for c in columns])
                 f.flush()
                 os.fsync(f.fileno())
     finally:
