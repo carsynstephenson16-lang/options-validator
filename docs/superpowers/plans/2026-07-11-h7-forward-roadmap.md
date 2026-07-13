@@ -109,7 +109,16 @@ H7C_MAX_CONCURRENT, and one-open-per-underlying at the BOOK level (the
 live analogue of the board resolver), reconciled daily against
 `data/positions/h7_positions.csv` with `open_h7_book` semantics.
 
-## Stage 6 — Scoring
+## Stage 6 — Scoring — BUILT 2026-07-13; INACTIVE
+
+*Pre-registered scoring procedure implemented as
+`options_researcher/h7_forward_scoring.py` in commit `f032ba1`, with
+exact-session benchmark commitments added to Stage 4 and strict action,
+contract, quote, cost, risk, and cohort replay. Independent review PASS after
+three adversarial remediation rounds; 19 Stage-6 tests, 32 Stage-5 tests, 35
+Stage-4 tests, and the complete 944-test suite passed with Ruff, Pyright, and
+focused pre-commit hooks. BUILD-ONLY, SYNTHETIC-ONLY, INACTIVE: no window is
+registered and the real forward ledger remains `VALID EMPTY`.*
 
 The forward window's verdict machinery, pre-registered BEFORE the first
 entry: expectancy per trade after costs with bootstrap CI, verdict gating
