@@ -154,7 +154,7 @@ created.*
 
 A distinct owner + independent-review decision that: pre-registers the
 window (start, duration, decision procedure, verdict gate) in the ledger;
-confirms ThetaData renewal for daily EOD chains (the 2026-07-25 question
+confirms ThetaData renewal for daily EOD chains (the owner-updated 2026-07-29 deadline
 precedes any start date); and only then starts the clock. No stage below
 it authorizes activation.
 

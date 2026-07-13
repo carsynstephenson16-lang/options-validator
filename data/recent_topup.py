@@ -1,5 +1,4 @@
-"""data/recent_topup.py -- keep the four-name chain cache current for the H5
-forward paper window.
+"""data/recent_topup.py -- keep forward-paper chain caches current.
 
 The one-month paid-cache plan (data/cache_runner.py) filled history through
 config.BACKTEST_END. The H5 forward window then advances in real time, so new
@@ -19,8 +18,9 @@ controlling session after review, exactly like data/underlying_closes.
 fetch_underlying_eod. Tests cover only the pure day-selection and audit logic.
 
 Run from the repo root:
-    python data/recent_topup.py --dry-run   # list missing days, no network
-    python data/recent_topup.py             # pull + audit missing recent days
+    python data/recent_topup.py --dry-run               # H5 core, no network
+    python data/recent_topup.py --scope h7 --dry-run    # H7 12-name inventory
+    python data/recent_topup.py --scope h7 --refresh-closes  # owner-authorized
 """
 from __future__ import annotations
 
@@ -38,6 +38,44 @@ from data import thetadata_adapter  # noqa: E402
 # BLOCKs gate on it while everything else is a warning.
 SELECTABLE_ABS_DELTA = (0.15, 0.85)
 MAX_IV = 5.0  # 500%
+
+
+def scope_symbols(scope: str) -> list[str]:
+    """Return a canonical, owner-scoped top-up universe.
+
+    The default/core scope preserves the original four-name H5 behavior.
+    H7 is explicit because it is a larger paid-data operation and must never
+    happen merely because a caller omitted an argument.
+    """
+    if scope == "core":
+        return list(config.UNIVERSE)
+    if scope == "h7":
+        from options_researcher.h7_scope import watch_universe
+
+        return list(dict.fromkeys(watch_universe()))
+    raise ValueError(f"unknown top-up scope: {scope!r}")
+
+
+def refresh_closes(symbols, *, today: str, ledger_dir: str = "ledger", fetch_fn=None) -> dict:
+    """Refresh independent Yahoo closes for exactly the selected scope.
+
+    This is an explicit network path used by the owner-run cancellation
+    workflow. It never runs during ``--dry-run`` and is injectable so tests
+    remain offline.
+    """
+    if fetch_fn is None:
+        from data.underlying_closes import fetch_underlying_eod_yahoo
+
+        fetch_fn = fetch_underlying_eod_yahoo
+    result = {symbol: fetch_fn(symbol) for symbol in symbols}
+    from research import facts
+
+    facts.append_fact(
+        f"DATA_PULL {today}: Yahoo closes refresh for forward scope "
+        f"({'/'.join(symbols)}); same-day partial rows excluded by fetcher.",
+        base_dir=ledger_dir,
+    )
+    return result
 
 
 def topup_days(last_cached: str, today: str, *, trading_days_fn=None) -> list[str]:
@@ -166,6 +204,8 @@ def run_topup(symbols=None, *, today=None, ledger_dir: str = "ledger",
         blind_cache_chain(symbol, day, ledger_dir=ledger_dir)
 
     summary = _run_window(days, symbols, fetch_one, ledger_dir)
+    summary.update({"last_cached": last, "today": today, "days": days,
+                    "dry_run": False})
     print(f"pull: fetched={summary['fetched']} cached={summary['skipped_cached']} "
           f"gaps={summary['gaps']}")
 
@@ -202,13 +242,25 @@ def run_topup(symbols=None, *, today=None, ledger_dir: str = "ledger",
 def main(argv=None) -> int:
     import argparse
     p = argparse.ArgumentParser(description="Top up recent EOD chains for the "
-                                "four-name forward window (blind cache + audit).")
+                                "selected forward scope (blind cache + audit).")
+    p.add_argument("--scope", choices=("core", "h7"), default="core",
+                   help="core = existing four-name H5 scope (default); "
+                        "h7 = exact 12-name H7 forward scope")
     p.add_argument("--dry-run", action="store_true",
                    help="list missing recent days and exit (no network)")
     p.add_argument("--no-audit", action="store_true",
                    help="skip the post-pull offline audit")
+    p.add_argument("--refresh-closes", action="store_true",
+                   help="also refresh independent Yahoo closes for the exact "
+                        "selected scope (network; ignored during --dry-run)")
     args = p.parse_args(argv)
-    result = run_topup(dry_run=args.dry_run, do_audit=not args.no_audit)
+    symbols = scope_symbols(args.scope)
+    result = run_topup(symbols=symbols, dry_run=args.dry_run,
+                       do_audit=not args.no_audit)
+    if (args.refresh_closes and not args.dry_run
+            and result.get("audit_verdict") != "BLOCK"):
+        closes = refresh_closes(symbols, today=result["today"])
+        print(f"closes: refreshed {len(closes)}/{len(symbols)} symbols")
     return 2 if result.get("audit_verdict") == "BLOCK" else 0
 
 

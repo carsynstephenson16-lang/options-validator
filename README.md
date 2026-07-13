@@ -75,6 +75,8 @@ uv run python -m options_researcher.h7_source_health           # earnings proven
 uv run python -m options_researcher.h7_data_gate               # Stage 2 whole-universe daily data gate (read-only; BUILD-ONLY; live = NO_GO 0/12, exit 1)
 uv run python -m options_researcher.h7_event_ledger verify     # Stage 3 forward-event ledger verifier (BUILD-ONLY; default store absent -> VALID EMPTY, exit 0)
 uv run python tools/h7_refresh_earnings.py --help               # owner-run append-raw/promote refresher
+uv run python data/recent_topup.py --scope h7 --dry-run         # 12-name missing-session inventory; no network
+uv run python tools/thetadata_exit_audit.py --scope h7          # read-only forward-cache exit audit
 uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard    # interactive at-expiration scenario view (writes .tmp/dashboard/attractiveness.html)
@@ -232,7 +234,7 @@ LEAPS entry triggers are pre-registered (owner-frozen 2026-07-07, ledger
 H5_ENTRY_TRIGGER_PREREG): evaluate only when close ≤ trigger (VST $140,
 AMZN $220) AND IV-rank ≤ 0.5 AND the LEAPS passes the liquidity gates —
 `options_researcher.entry_watch` prints the live WAIT/FIRE status. The
-ThetaData subscription cancels ~2026-07-25 per
+ThetaData subscription ends 2026-07-29 (owner update 2026-07-13) per
 `docs/superpowers/2026-07-07-thetadata-cancel-checklist.md`.
 
 ## Known limitations

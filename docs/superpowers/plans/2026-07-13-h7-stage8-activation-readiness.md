@@ -38,9 +38,9 @@ Read-only refresh for evaluation session 2026-07-10 on 2026-07-13:
 | Source health | **4/12 healthy** | **BLOCKED**. CRWV, PLTR, SMCI, NVDA, AVGO, VST, CEG, and AMZN lack live future gating provenance. |
 | Stage-2 data | **12/12 GO** | Ready for that completed session only; must be rerun immediately before registration/start. |
 | Real forward ledger | **VALID EMPTY** | Correct pre-activation state. |
-| Daily paid EOD chains | not owner-confirmed beyond the ~2026-07-25 ThetaData cutoff | **BLOCKED** before any chosen start. |
+| Daily paid EOD chains | subscription ends 2026-07-29; continuity beyond that date is not owner-confirmed | **BLOCKED** before any chosen start. |
 | Darwin ledger durability | `fsync` ordering implemented; `F_FULLFSYNC` not implemented or explicitly accepted | **BLOCKED** pending owner choice or a reviewed hardening change. |
-| Code/config identity | unrelated local `config.py` and Stage-2 edits remain uncommitted | **BLOCKED**: registration cannot bind an ambiguous code/config snapshot. |
+| Code/config identity | the H7 config and Stage-2 corrections are committed; an unrelated parking-lot edit and untracked advisor-skill directories remain | **BLOCKED** until a future Stage-8 arc binds an intentionally clean activation snapshot. |
 
 A prior data-audit receipt is now invalid because its recorded inputs differ
 from the working tree. Do not refresh or bless that receipt as part of this

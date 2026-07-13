@@ -71,6 +71,44 @@ class LatestCachedDateTests(unittest.TestCase):
         self.assertIsNone(got)
 
 
+class ScopeTests(unittest.TestCase):
+    def test_core_scope_preserves_existing_four_name_default(self):
+        self.assertEqual(
+            recent_topup.scope_symbols("core"),
+            ["MSFT", "AMZN", "VST", "CEG"],
+        )
+
+    def test_h7_scope_is_the_exact_forward_watch_universe(self):
+        self.assertEqual(
+            recent_topup.scope_symbols("h7"),
+            [
+                "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA",
+                "AMD", "AVGO", "VST", "CEG", "MSFT", "AMZN",
+            ],
+        )
+
+    def test_unknown_scope_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "unknown top-up scope"):
+            recent_topup.scope_symbols("everything")
+
+
+class RefreshClosesTests(unittest.TestCase):
+    def test_refreshes_every_selected_symbol_and_logs_scope(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as ledger_dir:
+            result = recent_topup.refresh_closes(
+                ["MSFT", "AMZN"],
+                today="2026-07-29",
+                ledger_dir=ledger_dir,
+                fetch_fn=lambda symbol: calls.append(symbol) or f"{symbol}.parquet",
+            )
+            fact = (Path(ledger_dir) / "facts.log").read_text()
+        self.assertEqual(calls, ["MSFT", "AMZN"])
+        self.assertEqual(result, {"MSFT": "MSFT.parquet", "AMZN": "AMZN.parquet"})
+        self.assertIn("Yahoo closes refresh", fact)
+        self.assertIn("MSFT/AMZN", fact)
+
+
 class AuditChainTests(unittest.TestCase):
     def test_clean_selectable_chain_passes(self):
         df = pd.DataFrame([

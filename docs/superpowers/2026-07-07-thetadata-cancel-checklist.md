@@ -1,35 +1,86 @@
-# ThetaData cancellation checklist (target: on/before 2026-07-25)
+# ThetaData cancellation checklist (subscription ends 2026-07-29)
 
-Plan pre-declared 2026-07-07 (ledger THETADATA_EXIT_PLAN). History is
-complete and cached locally; nothing needs bulk-pulling. Each cached day
-holds the FULL chain (every strike, every expiration), so the parked
-enrichment ideas' raw material (IV term structure, event windows) is
-derivable offline from the existing cache. The only ongoing need was daily
-forward-window top-ups, which end at cancellation.
+Owner update 2026-07-13: July 29 supersedes the earlier approximate July 25
+date in `THETADATA_EXIT_PLAN`. The four-name historical cache remains frozen;
+H7's historical diagnostic remains permanently retired. The only paid-data
+work required before cancellation is the exact 12-name H7 forward-cache
+top-up through the last completed session available before expiry. This is
+data preservation only: it does **not** open Stage 8, register a window, or
+authorize a real forward event.
 
-## On cancel day (run locally, in order)
+## Before cancel day (read-only)
 
-1. `uv run python data/recent_topup.py` — one run catches ALL missing days
-   since the last top-up (it blind-caches by explicit date; holidays and
-   unfinalized days become logged CACHE_GAPs, never substituted data).
-2. Confirm the tool prints `audit overall: PASS` or `PASS WITH WARNINGS`
-   (the known-benign warning is deep-ITM |delta|=1 rows with IV<=0 — see
-   ledger DATA_AUDIT 2026-07-06). Any other verdict: STOP, investigate
-   before canceling.
-3. Append a `THETADATA_CANCEL` line to `ledger/facts.log` recording the
-   final cached day per symbol (MSFT/AMZN/VST/CEG).
-4. Cancel the subscription in the ThetaData account portal.
+Run this as often as useful; it never touches the network:
+
+```bash
+uv run python data/recent_topup.py --scope h7 --dry-run
+```
+
+It must name the exact 12-name H7 scope and list every session still missing.
+The original default remains the four-name core scope, so omitting
+`--scope h7` is insufficient for cancellation readiness.
+
+## On July 29 (run locally, in order)
+
+1. Re-run the dry-run command above. The tool excludes July 29 itself because
+   that EOD report is not final before the subscription ends; the expected
+   terminal session is July 28.
+2. With explicit owner execution authorization, run:
+
+   ```bash
+   uv run python data/recent_topup.py --scope h7 --refresh-closes
+   ```
+
+   This blind-caches every missing 12-name ThetaData EOD chain, skips and logs
+   genuine gaps without substitution, audits each new chain, and refreshes
+   the independent Yahoo close stores for the same exact scope. Any `BLOCK`
+   verdict stops the checklist.
+3. Run the complete forward-cache audit and write its content-addressed
+   receipt:
+
+   ```bash
+   uv run python tools/thetadata_exit_audit.py \
+     --scope h7 --as-of 2026-07-29 --write
+   ```
+
+   Require `PASS` or `PASS WITH WARNINGS`. Every warning remains in the
+   receipt; known examples are deep-ITM IV solver artifacts and genuine
+   low-liquidity lane admissions. Do not silently filter them.
+4. Recompute the receipt against the current cache and source surface:
+
+   ```bash
+   uv run python tools/thetadata_exit_audit.py \
+     --verify reports/thetadata_exit/2026-07-28.json
+   ```
+
+   Require `receipt VALID`.
+5. Run the operational read-only gates for the same cutoff:
+
+   ```bash
+   uv run python -m options_researcher.h7_source_health --as-of 2026-07-29
+   uv run python -m options_researcher.h7_data_gate --as-of 2026-07-29
+   uv run python -m options_researcher.h7_event_ledger verify
+   ```
+
+   The data gate must be 12/12 GO and the real forward ledger must remain
+   `VALID EMPTY`. Source health may still block activation; record its honest
+   result rather than weakening it.
+6. Append one `THETADATA_CANCEL` fact recording all 12 final chain dates, the
+   exit-receipt hash, the Stage-2 artifact identity, and the source-health
+   result.
+7. Cancel the subscription in the ThetaData account portal.
 
 ## After cancellation
 
-- Trigger watching needs NO chain data: `uv run python -m
-  options_researcher.entry_watch` runs on free underlying closes
-  (AlphaVantage) + the frozen cache. The chain-staleness note in its output
-  is expected and honest.
-- The scanner CLIs keep working against the frozen cache (as-of dates shown
-  on every card).
-- When a trigger FIREs: re-subscribe for ONE month, run the top-up +
-  data-audit, evaluate the entry with fresh audited chains, then decide
-  whether ongoing chain data is worth paying for during the holding period
-  (actual short-call cadence is monthly; broker quotes are free at
-  execution time).
+- H7 Stage 8 remains **NOT OPEN**. A verdict-bearing H7 forward window needs
+  continuous daily EOD chains; it cannot start after the feed lapses unless
+  the owner restores ThetaData or authorizes a separately audited replacement.
+- H5 trigger watching still needs no live chain feed: `uv run python -m
+  options_researcher.entry_watch` uses free underlying closes plus the frozen
+  cache. A trigger `FIRE` requires fresh audited quotes before any entry
+  evaluation.
+- Scanner CLIs keep working against the frozen cache and must continue showing
+  their as-of dates.
+- Never regenerate `data/chain_cache_manifest.txt` to absorb forward files.
+  It is an immutable historical baseline. The dated exit receipt is the
+  forward-cache evidence.
