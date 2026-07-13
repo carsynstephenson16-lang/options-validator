@@ -36,6 +36,7 @@ uv run python -m options_researcher.entry_watch  # WAIT/FIRE vs frozen entry tri
 uv run python -m options_researcher.h7_watch  # session-aligned H7 watcher; alerts only
 uv run python -m options_researcher.h7_source_health  # earnings provenance health; exit 1 = refresh needed
 uv run python -m options_researcher.h7_data_gate  # Stage 2 whole-universe data gate (read-only, BUILD-ONLY); operator order: source health -> data gate -> watcher, never run the watcher when either is non-zero
+uv run python -m options_researcher.h7_event_ledger verify  # Stage 3 forward-event ledger verifier (BUILD-ONLY, INACTIVE); NEVER hand-edit ledger/h7_forward/{events.jsonl,HEAD} -- append only via the typed Python API; a hand edit breaks the hash chain and verify refuses
 uv run python tools/h7_refresh_earnings.py --help  # owner-run append-raw/promote refresher
 uv run python -m options_researcher.portfolio    # mark the H5 paper book
 uv run python -m options_researcher.dashboard    # writes .tmp/dashboard/index.html
