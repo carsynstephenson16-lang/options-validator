@@ -143,6 +143,20 @@ and are live in H6** (post-earnings tactical long calls).
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
 audit, whichever comes first.
 
+## AVGO entry for the closes SPLITS registry (parked 2026-07-12)
+
+`data/underlying_closes.SPLITS` has no AVGO entry, so the Yahoo-sourced
+closes store carries split-ADJUSTED pre-2024-07-15 closes for AVGO (10-for-1,
+Official-source: company 8-K) instead of raw ones aligned with raw strikes.
+Verified 2026-07-12 via a no-reveal discontinuity check; the store state is
+reproducible, not corrupted. Nothing live consumes pre-split AVGO closes —
+H7 is forward-only and the historical diagnostic is permanently retired — so
+this gates nothing today. If any future authorized work reads AVGO closes
+before 2024-07-15, add the SPLITS entry (first split-adjusted trade
+2024-07-15, ratio 10.0) test-first and re-pull before trusting that span.
+
+**Review date:** before any arc that consumes pre-2024 AVGO history.
+
 ## Explicitly rejected (not parked)
 
 From the 2026-07-06 deep-research report (and the 2026-07-07 10-point
