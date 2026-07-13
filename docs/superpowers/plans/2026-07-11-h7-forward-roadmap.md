@@ -78,6 +78,12 @@ forward window is reconstructed from memory or prose.
 
 ## Stage 4 — T+1 lifecycle (paper)
 
+*Corrected spec drafted and reviewed 2026-07-13:
+`2026-07-12-h7-stage4-t1-paper-lifecycle-SPEC.md`. Implementation remains
+closed pending owner sign-off, owner entry of the sole proposed new parameter
+(`H7_FORWARD_CONTRACTS=1`), and the spec-hash pre-registration fact. No real
+event or activation is authorized.*
+
 The watcher decides at session T; owner-approved entries execute T+1 at
 recorded quotes with the canonical adverse-price transform; exits follow
 the frozen trigger interpretations and priority; every transition lands in

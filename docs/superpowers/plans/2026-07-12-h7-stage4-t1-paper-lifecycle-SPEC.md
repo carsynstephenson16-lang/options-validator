@@ -3,7 +3,7 @@
 **Status: SPEC ONLY. Owner authorized "spec + pre-registration first"
 2026-07-12 (in-session answer). NOTHING in this document is implemented.
 Implementation is a separate arc gated on (1) owner sign-off of this spec,
-(2) the owner typing the proposed parameters into `config.py` themselves,
+(2) the owner typing the one proposed new parameter into `config.py`,
 (3) the pre-registration fact below. The first REAL forward event remains
 prohibited until Stage 8 activation regardless of this spec.**
 
@@ -28,7 +28,8 @@ sessions they read (the `evaluation_session` contract in `h7_watch`):
   change the price — but approving after T+1's close means approving
   *after seeing whether T+1 moved favorably*: approval-selection bias.
   A later approval expires the intent (a `skip` event, reason
-  `approval_late`).
+  `approval_late`). No approval by that cutoff expires it with reason
+  `approval_missing`.
 - **Day T+2 run** computes the **paper fill at session T+1's recorded EOD
   quotes** for approved intents. The entry decision used only ≤T data;
   the fill uses only T+1's cached EOD chain. No intraday rows anywhere.
@@ -36,59 +37,86 @@ sessions they read (the `evaluation_session` contract in `h7_watch`):
   the open book; a firing trigger emits `exit_intent` and the close fills
   at session T′+1 quotes, same mechanics. Exits are **mechanical — no
   owner approval** (a frozen trigger that waits for a human is no longer
-  frozen; discretion re-enters). Owner retains a manual-close path: an
-  owner-initiated `exit_intent` (reason `owner_close`) that fills T+1
-  like any other.
+  frozen; discretion re-enters). Stage 4 adds no discretionary manual-close
+  reason to the verdict path.
 
 ## 2. Fill mechanics (existing guardrails, bound not restated)
 
 - Quote source: the cached EOD chain parquet for the fill session
-  (ThetaData 17:15 ET report; the same file the audit passed).
-- Price: quote mid, then the canonical `adverse_buy`/`adverse_sell`
-  transform (ceil/floor to cent), then `SLIPPAGE_HAIRCUT`.
-- Costs: `COMMISSION_PER_CONTRACT` both legs each way + half-spread on
-  each leg.
-- Liquidity: `MIN_OPEN_INTEREST` and `MAX_SPREAD_PCT` re-checked on BOTH
-  legs **at the fill session**, not just at decision time. A leg failing
-  at fill → `skip` (reason `liquidity_at_fill`), intent dead.
-- Missing/invalid EOD at the fill session (quote not finite/two-sided/
-  uncrossed, or the whole day absent) → `data_gap` + `skip`; the intent
-  **expires** — cancel-never-chase means no re-pricing at T+2. A fresh
-  entry requires a fresh watcher decision.
+  (ThetaData 17:15 ET report; the exact-session file the Stage-2 gate passed).
+- Price: every buy uses `adverse_buy(ask)` and every sell uses
+  `adverse_sell(bid)`. Those canonical functions apply
+  `SLIPPAGE_HAIRCUT` once and round adversely to the cent. Starting from the
+  executable quote side already accounts for half-spread; do not add a second
+  half-spread charge and do not price any fill from midpoint.
+- Costs: `COMMISSION_PER_CONTRACT` per contract, per leg, on entry and exit.
+- Liquidity: `MIN_OPEN_INTEREST` and `MAX_SPREAD_PCT` re-checked on every leg
+  **at the fill session**, not just at decision time. A required leg failing
+  at entry fill → `skip` (reason `liquidity_at_fill`), intent dead.
+- Entry fill revalidation uses the frozen contract identity; it never selects
+  a substitute. The contract must still exist, remain inside its registered
+  DTE band, have a CLEAR earnings gate at the fill-session cutoff, have valid
+  quotes/liquidity on every leg, and still satisfy the registered per-trade
+  structure economics. Global sleeve/capacity checks remain Stage 5.
+- No paper fill occurs unless the fill session's whole-universe `data_gate`
+  is GO. On a session-wide NO_GO, an entry intent expires but an exit intent
+  remains pending; this is conservative and keeps the Stage-2 gate meaningful.
+- Missing/invalid EOD at an **entry** fill session (quote not finite,
+  two-sided and uncrossed, or the whole day absent) → `data_gap` + `skip`;
+  the entry intent **expires**. Cancel-never-chase means no re-pricing at
+  T+2; a fresh entry requires a fresh watcher decision.
+- Missing/invalid EOD at an **exit** fill session → `data_gap`, but the exit
+  intent remains pending and retries on the first later session with valid
+  quotes. It never silently reopens or expires; unresolved at expiration
+  fails loud. This preserves the frozen exit causality already implemented in
+  `strategies.h7_backtest`.
 
 ## 3. Lifecycle state machine → Stage 3 events
 
 | Transition | Event type | Required `causes[]` |
 |---|---|---|
-| Gate evaluated for the session | `data_gate` | — (first event of the session) |
 | Source health snapshot | `source_health` | — |
-| Board contention resolved | `board_resolution` | the session's `data_gate` |
+| Gate evaluated for the session | `data_gate` | — |
+| Board contention resolved | `board_resolution` | the session's `source_health`, `data_gate` |
 | Candidate loses board seat | `lane_displaced` | the `board_resolution` |
 | Watcher ENTRY-OK | `entry_intent` | `data_gate`, `board_resolution`, `source_health` |
 | Owner approves | `owner_approval` | the `entry_intent` |
-| Paper fill (entry or exit) | `paper_fill` | the intent + (`owner_approval` for entries) |
-| Intent expiry / gate-fail / liquidity-fail | `skip` | the intent (+ the failing `data_gate` if any) |
-| No-decision day | `data_gap` | — |
-| Trigger fires on open position | `exit_intent` | opening `paper_fill` + the session's `data_gate` |
+| Entry paper fill | `paper_fill` | `entry_intent`, `owner_approval`, fill-session `source_health`, `data_gate` |
+| Exit paper fill | `paper_fill` | `exit_intent`, fill-session `data_gate` |
+| Intent expiry / gate-fail / liquidity-fail | `skip` | the intent (+ the failing `data_gate` or `data_gap`) |
+| Missing/invalid required session data | `data_gap` | the session `data_gate` (payload names a session-wide or contract-local gap) |
+| Trigger fires on open position | `exit_intent` | opening `paper_fill`, trigger-session `data_gate` (+ `source_health` for an earnings close) |
 
 Every event's `evaluation_session` is the session whose data produced it;
 `payload` carries the numbers (strikes, deltas, marks, costs). The book
-state (open positions) is **derived by replaying the event ledger** — the
-existing `data/positions/h7_positions.csv` stays the owner-edited mirror
-the watcher reads (fail-closed), reconciled in Stage 5, but the ledger is
-the source of truth for the forward window.
+state (open positions) is **derived by replaying the event ledger**. A healthy
+session with no entry is represented by its green source-health/data-gate and
+an empty `board_resolution`; it is not a `data_gap`. The existing
+`data/positions/h7_positions.csv` remains an owner-edited legacy mirror until
+Stage 5 reconciliation, never a competing source of truth for Stage-4 state.
+For events without a new market-data observation, `owner_approval` copies the
+entry intent's decision session; `recorded_at_utc` remains the authoritative
+approval time. Entry/exit fills use the fill session, and skips/data gaps use
+the session that caused the refusal.
 
-## 4. Entry rules already frozen (pointers)
+## 4. Stage boundary and frozen entry rules
 
-One position per underlying (`H7_MAX_OPEN_PER_UNDERLYING=1`); one H7c
-basket-wide (`H7C_MAX_CONCURRENT=1`); board order = chronological, then
-`H7_LANE_PRIORITY` a>b>c, then `H7C_TIEBREAK` credit-to-width, then
-symbol (`resolve_board`, unchanged). Earnings: `H7_EARNINGS_BAN_SESSIONS=5`
-pre-report entry ban; unknown next report = no entry (fail closed).
-Structure selection, delta/DTE bands, admission gates: the registered
-`config.py` H7 block, `H7_DELTA_TOLERANCE=0.07` everywhere.
+Stage 4 enforces one open position per symbol/lane from ledger-derived state.
+The global one-position-per-underlying rule, basket-wide H7c concurrency, and
+monthly sleeve accounting are Stage 5 book-level responsibilities; Stage 4
+must not partially reimplement them. Board order remains chronological, then
+`H7_LANE_PRIORITY` a>b>c, then `H7C_TIEBREAK` credit-to-width, then symbol
+(`resolve_board`, unchanged). Earnings: `H7_EARNINGS_BAN_SESSIONS=5`
+pre-report entry ban; unknown next report = no entry (fail closed). Structure
+selection, delta/DTE bands, and admission gates remain the registered
+`config.py` H7 block with `H7_DELTA_TOLERANCE=0.07` everywhere.
 
-## 5. Exit triggers (frozen values; precedence PROPOSED below)
+The Stage-4 lifecycle starts from an already-resolved candidate and records
+its transitions; it does not change `resolve_board` or wire a new live watcher
+path. Until Stage 5 supplies ledger-derived book inputs to the board, every
+Stage-4 exercise uses synthetic upstream source-health/data-gate/board events.
+
+## 5. Exit triggers and precedence (already frozen)
 
 Long lanes (a/b): TP at `H7_LONG_TP_PCT=+100%` (single) /
 `H7_SPREAD_TP_FRAC_MAX=75%` of max value (spread); time exit
@@ -101,53 +129,86 @@ last session before any scheduled report, always.
 Positions close **in full** (contracts=1 proposal below makes partial
 exits moot), so when multiple triggers fire on the same session the only
 thing precedence decides is the **recorded reason** — which matters
-because Stage 6 scores per-reason cohorts. No precedence is frozen
-anywhere today (verified: absent from config, code, and all H7 docs).
+because Stage 6 scores per-reason cohorts. The owner already froze this order
+in `ledger/facts.log` (`H7_OWNER_DECISIONS_7B01`), and
+`strategies.h7_backtest.EXIT_PRIORITY` implements it:
 
-## 6. Proposed NEW parameters — owner types these; all LLM-proposed
+`pre_earnings > earnings_unknown > scheduled_dte > underlying_stop > credit_stop > profit_target`.
 
-Per the operating manual: these are proposals with reasoning, **not**
-values I may freeze. Every one is `LLM-asserted` until you type it into
-`config.py` in the implementation arc and the pre-reg fact records it.
+Stage 4 reuses that exact order. It does not propose or tune a replacement.
 
-| Proposed constant | Proposed value | Reasoning |
+## 6. Decision inventory — one proposed new parameter
+
+Most apparent “parameters” in the first draft are already ratified causal or
+execution rules. Only forward paper size needs a new config value.
+
+| Rule / constant | Value | Status |
 |---|---|---|
-| `H7_T1_INTENT_VALID_SESSIONS` | `1` | Execute at exactly T+1 or die. Any longer window is chasing a stale signal — the roadmap's cancel-never-chase phrase made into a number. |
-| `H7_T1_APPROVAL_CUTOFF` | T+1 XNYS session close | Blocks approval-selection bias (§1). An event timestamp, mechanically checkable at fill time. |
-| `H7_EXIT_APPROVAL` | none (mechanical exits) | Frozen triggers must not wait on discretion; owner keeps the manual `owner_close` path. |
-| `H7_EXIT_REASON_PRECEDENCE` | `earnings_close > stop > dte_close > take_profit` | Risk-driven reasons outrank profit-taking in cohort attribution: a trade that hit stop AND TP-mark on the same EOD is a stop for scoring honesty. |
-| `H7_FORWARD_CONTRACTS` | `1` per position | Minimal paper size; sleeve math (`H7_MONTHLY_AT_RISK=6000`) is enforced at Stage 5 — Stage 4 should not embed sizing logic it can't yet reconcile. |
+| Intent validity | exactly T+1 or expire | Already frozen by the roadmap's T+1 + cancel-never-chase contract; derive from the trading calendar, not a tunable. |
+| Approval cutoff | T+1 XNYS close | Causal-integrity rule; compare the ledger's system-written `recorded_at_utc` with `session_close_utc(T+1)`. Do not trust caller-supplied `occurred_at_utc` for the cutoff. |
+| Exit approval | none; exits mechanical | Structural invariant, not a config switch. Stage 4 adds no discretionary exit reason to the verdict path. |
+| Exit reason precedence | existing frozen order in §5 | Reused owner decision; implementation should expose one shared source without changing the order. |
+| `H7_FORWARD_CONTRACTS` | **proposed `1` per position** | The sole LLM-proposed new value. Minimal paper size; Stage 5 enforces `H7_MONTHLY_AT_RISK`. Owner must type/ratify it before implementation. |
 
-## 7. Activation guard (structural, not procedural)
+## 7. Idempotency and payload contract
 
-The lifecycle runner refuses to write to the real store
-(`ledger/h7_forward/`) unless a Stage 8 activation fact exists and is
-verified — the same default-absent pattern Stage 3 shipped with. Tests
-exercise everything on synthetic stores only. This guard is part of the
-spec, not an implementation nicety.
+- Event IDs are deterministic from the hypothesis, transition, decision/fill
+  session, symbol, lane, and parent intent/fill ID — never from wall-clock
+  time. Re-running a completed session must reproduce byte-identical logical
+  events and hit Stage 3's idempotent no-op; different content under the same
+  ID must fail closed.
+- For mechanical market-data events, `occurred_at_utc` is the deterministic
+  XNYS close of `evaluation_session`; `recorded_at_utc` records when the append
+  actually happened. Owner approval is the exception: its recorded time is
+  the anti-backdating cutoff evidence; the production approval path must use
+  the ledger's system clock, never a caller-supplied timestamp.
+- Every intent/fill payload records the exact contract legs (expiration,
+  strike, right, side, quantity), whether the fill opens or closes, relevant
+  decision/fill sessions, raw bid/ask per leg, adverse per-leg prices,
+  haircut, commissions, net debit/credit,
+  trigger/revalidation reasons, and upstream chain/closes identity. Stage 4
+  must not depend on prose or `facts.log` to reconstruct a position.
+- The lifecycle API verifies and replays the ledger before every transition.
+  Derived state is a projection of verified events, never a second mutable
+  book file.
 
-## 8. Pre-registration procedure (before any implementation)
+## 8. Activation guard (structural, not procedural)
 
-1. Owner reads this spec; edits/rejects any row of §6.
-2. Owner types the accepted values into `config.py` (implementation arc,
-   test-first).
+Stage 4 exposes no production CLI and accepts no implicit/default ledger path.
+Its build-only API requires an explicit injected synthetic store and refuses
+any path resolving to the real `ledger/h7_forward/` directory
+unconditionally. Stage 8 is the separately authorized change that may add a
+production entry point after defining and verifying the exact activation
+record. Stage 4 must not invent a vague “activation fact exists” check before
+that record's schema is frozen.
+
+## 9. Pre-registration procedure (before any implementation)
+
+1. Owner reads this corrected spec and accepts/rejects
+   `H7_FORWARD_CONTRACTS=1`.
+2. Owner types the accepted value into `config.py` (implementation arc,
+   test-first); the other §6 rows are invariant/reused rules, not new knobs.
 3. A fact is appended: `H7_STAGE4_SPEC_PREREG <date>: spec sha256=<hash
-   of this file at the signed-off commit>, parameters typed by owner:
-   <the five values>. Implementation authorized; activation still Stage 8.`
+   of this file at the signed-off commit>, parameter typed by owner:
+   H7_FORWARD_CONTRACTS=<value>; reused causal/exit rules acknowledged.
+   Implementation authorized; activation still Stage 8.`
 4. Only then does the implementation arc open, on its own branch, with
    independent review before merge.
 
-## 9. Acceptance criteria for the (future) implementation arc
+## 10. Acceptance criteria for the (future) implementation arc
 
 Tests must prove, on synthetic stores: T-decision/T+1-fill causality
 (fill never reads a session the decision already read); approval-cutoff
 enforcement (late approval → skip, never a fill); intent expiry after
-exactly `H7_T1_INTENT_VALID_SESSIONS`; adverse-transform + haircut +
-commission + half-spread arithmetic vs hand-computed fixtures; both-leg
-liquidity refusal at fill; earnings hard-close ordering vs the gating
-store; same-session multi-trigger reason precedence; every transition's
-event lands with the §3 causes; the real store stays untouched (guard
-test); `verify` green after every synthetic sequence.
+exactly T+1; ask/bid-side adverse transforms (haircut once) + commissions vs
+hand-computed fixtures; every-leg liquidity refusal at entry fill; missing
+entry quote expiry vs missing exit quote pending-retry; earnings hard-close
+ordering vs the gating store; same-session multi-trigger reason precedence;
+healthy no-entry vs true `data_gap`; every transition's event lands with the
+§3 causes; deterministic rerun no-op and conflicting rerun refusal; full
+position reconstruction from ledger events alone; the real store stays
+untouched through direct and symlinked-path guard tests; `verify` green after
+every synthetic sequence.
 
 ## Out of scope for Stage 4 (unchanged)
 
