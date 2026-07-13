@@ -72,6 +72,7 @@ uv run python -m options_researcher.attractiveness            # which options lo
 uv run python -m options_researcher.entry_watch                # WAIT/FIRE vs the frozen entry triggers
 uv run python -m options_researcher.h7_watch                    # session-aligned H7 watcher; alerts only
 uv run python -m options_researcher.h7_source_health           # earnings provenance alive? (exit 1 on any unhealthy name)
+uv run python -m options_researcher.h7_data_gate               # Stage 2 whole-universe daily data gate (read-only; BUILD-ONLY; live = NO_GO 0/12, exit 1)
 uv run python tools/h7_refresh_earnings.py --help               # owner-run append-raw/promote refresher
 uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
@@ -203,8 +204,16 @@ on independent review). Roadmap Stage 1 is built (2026-07-11):
 `options_researcher.h7_source_health` reports per-name earnings-provenance
 health over the v3 gating store, and `tools/h7_refresh_earnings.py` is the
 owner-in-the-loop append-only refresher (append-raw + promote under the
-7b-2R.2 citation contract). Stages 2–8 are not implemented; Stage 8
-(activation) stays with owner + independent review. Audit receipts v1–v4
+7b-2R.2 citation contract). Roadmap Stage 2 is **BUILT (2026-07-12,
+build-only) but NOT operationally authorized**: `options_researcher.h7_data_gate`
+is a read-only whole-universe daily data gate (GO only when all 12 names have
+an exact-evaluation-session adjusted close AND EOD chain; exit 0 GO / 1 NO_GO
+/ 2 invalid-or-unreadable). Its live result today is an honest whole-universe
+**NO_GO (0/12, exit 1)** — all 12 names lack the 2026-07-10 EOD chain and end
+closes 2026-07-09 (see `reports/2026-07-12-h7-stage2-data-inventory.md`).
+Operator order: **source health → data gate → watcher**; never run the
+watcher when either preceding command is non-zero. Stages 3–8 are not
+implemented; Stage 8 (activation) stays with owner + independent review. Audit receipts v1–v4
 under `reports/h7_audit/` are preserved historical BLOCK artifacts; v4 was
 valid at its 7b-2R.2 source commit and is intentionally not regenerated after
 forward-roadmap source/config changes. A frozen retirement gate

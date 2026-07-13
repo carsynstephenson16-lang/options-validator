@@ -31,10 +31,17 @@ first, company IR/PR second, aggregator estimates only as disclosed
 `estimated`); every promotion cites its raw evidence row (the 7b-2R.2
 promotion contract). No crawler — recurring automation stays deferred.
 
-## Stage 2 — 12-name daily data gate
+## Stage 2 — 12-name daily data gate — BUILT 2026-07-12; NOT OPERATIONALLY AUTHORIZED
 
-*Readiness/authorization boundary:*
-`2026-07-12-h7-stage1-closeout-stage2-readiness.md` *(PROPOSED only).*
+*Implemented as `options_researcher/h7_data_gate.py` +
+`tests/test_h7_data_gate.py` on `feature/h7-stage2-daily-data-gate` (base:
+Arc B inventory evidence `f7ff478`). BUILD-ONLY owner authorization
+2026-07-12: the module exists and is tested, but operational GO, the forward
+window, paid data pulls, and activation remain separate owner decisions.
+Live result today is an honest whole-universe NO_GO (0/12, exit 1) — the
+cache lacks every name's 2026-07-10 EOD chain. Readiness/authorization
+boundary: `2026-07-12-h7-stage1-closeout-stage2-readiness.md`. The original
+spec paragraph below is unchanged.*
 
 A daily go/no-go over the full H7 universe (8 watchlist + 4 core names):
 chains and closes both end exactly at the evaluation session, session

@@ -1,8 +1,26 @@
 # H7 Stage 1 operational closeout → Stage 2 readiness
 
-**Status: PROPOSED 2026-07-12 — NOT AUTHORIZED, NOT IMPLEMENTED.** This plan
-does not open Stage 2 or the forward paper window. It scopes the smallest safe
-path from a built Stage 1 to a separately authorized Stage 2 arc.
+**Status: PROPOSED 2026-07-12 — Stage 2 is now BUILD-ONLY authorized.** This
+plan does not open the forward paper window or operational GO. It scopes the
+smallest safe path from a built Stage 1 to a separately authorized Stage 2 arc.
+
+**Update 2026-07-12 (deadline-driven, build-only authorization):** The owner
+authorized (a) the Arc B read-only inventory — DONE, evidence commit
+`f7ff478`, whole-universe NO_GO 0/12; and (b) a **BUILD-ONLY** Stage 2
+engineering arc — DONE on `feature/h7-stage2-daily-data-gate`
+(`options_researcher/h7_data_gate.py`), live NO_GO 0/12 exit 1. **Neither
+authorization opens operational GO, the forward window, paid data pulls,
+cache refreshes, activation, or Stages 3–8.** Remaining decision gates before
+Stage 2 could ever be operationally authorized, all still open:
+1. **CRWV** official earnings advisory → source health 12/12 (currently 11/12,
+   exit 1; no aggregator substitute permitted).
+2. **ThetaData** subscription decision (~2026-07-25): a forward Stage 2 gate
+   needs a *daily* 12-name EOD chain pull; today the cache is 0/12 on recency
+   alone. This is the binding data blocker for any GO.
+3. Land the Stage 1 operational-closeout branch (`5324426`) and this Stage 2
+   build branch under owner + independent review.
+Source health independently blocks Stage 2 authorization regardless of the
+build being complete.
 
 ## Bottom line
 
