@@ -105,3 +105,37 @@ append CLI in Stage 3.
 Never edit `events.jsonl` or `HEAD` by hand, and never add records by any
 means other than `append_event()`. Any manual edit breaks the hash chain and
 `verify` will refuse.
+
+## Stage-8 activation prerequisites (review findings 2026-07-13)
+
+An adversarial review confirmed the hash chain, canonical-JSON round-trip, and
+fail-closed validation are sound. The following are **real but bite only once
+the store goes live** (concurrent processes, a real crash), so they are parked
+here as prerequisites to resolve **before Stage 8 activation** — not fixed
+while the ledger is INACTIVE:
+
+- **Lock-free readers (Warning).** `verify`/`read_events` take no lock, but
+  `append_event` has a window between the `events.jsonl` fsync and the atomic
+  `HEAD` replace. A concurrent reader in that window sees N+1 records vs a
+  HEAD at N and raises a *spurious* `LedgerCorruptionError` on a healthy chain.
+  Fix at activation: take a shared `flock` (LOCK_SH) around `_load_verified`
+  in the read path, or forbid concurrent verify/append operationally.
+- **macOS durability (Warning).** The crash-safety claim relies on `fsync`,
+  but on darwin (the dev/run platform) true media durability needs
+  `F_FULLFSYNC` (Apple `fsync(2)`, Official-source). Ordering is correct; the
+  strength is not. Fix: `fcntl(fd, F_FULLFSYNC)` on darwin, `os.fsync`
+  elsewhere; soften the crash-safety wording to name the platform caveat.
+- **`occurred_at_utc` accepts non-UTC offsets (Info).** Validation requires
+  tz-awareness only, so `+05:00` passes despite the `_utc` name. Require
+  `utcoffset() == timedelta(0)` for both `_utc` fields.
+- **Line-229 guard untested (Info).** The non-canonical-JSON round-trip check
+  has no test; a regression dropping it would pass the whole suite. Add a test
+  that stores a hash-consistent record serialized with `sort_keys=False` and
+  asserts `verify` refuses.
+- **No orphan-tail recovery tool (Info, by-design).** A crash mid-append
+  permanently bricks the store (intended "no auto-repair"). If ever needed, a
+  guarded, lock-held truncate-orphan-tail tool is a separately authorized
+  change (already noted under Crash model).
+
+Advisory-`flock`/NFS and the O(n²)-per-append re-verify were also noted; both
+are acceptable for a single-machine, low-volume forward-event ledger.
