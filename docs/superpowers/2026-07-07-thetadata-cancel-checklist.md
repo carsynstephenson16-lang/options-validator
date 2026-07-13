@@ -65,10 +65,22 @@ The original default remains the four-name core scope, so omitting
    The data gate must be 12/12 GO and the real forward ledger must remain
    `VALID EMPTY`. Source health may still block activation; record its honest
    result rather than weakening it.
-6. Append one `THETADATA_CANCEL` fact recording all 12 final chain dates, the
+6. Prove the frozen cache can reconstruct the registered H6 input surface on
+   the same terminal session:
+
+   ```bash
+   uv run python -m options_researcher.h6_features --as-of 2026-07-28
+   uv run python -m options_researcher.h6_watch --as-of 2026-07-28 --json
+   ```
+
+   This is a cache-readiness check, not permission to backfill a paper entry.
+   If the watch prints `ELIGIBLE`, record it only if H6 was already being run
+   prospectively under its tracked-book process. Never create a cancel-day
+   row after seeing the candidate and call it forward evidence.
+7. Append one `THETADATA_CANCEL` fact recording all 12 final chain dates, the
    exit-receipt hash, the Stage-2 artifact identity, and the source-health
-   result.
-7. Cancel the subscription in the ThetaData account portal.
+   result, plus the exact H6 feature/watch session and outcome.
+8. Cancel the subscription in the ThetaData account portal.
 
 ## After cancellation
 
@@ -79,6 +91,10 @@ The original default remains the four-name core scope, so omitting
   options_researcher.entry_watch` uses free underlying closes plus the frozen
   cache. A trigger `FIRE` requires fresh audited quotes before any entry
   evaluation.
+- H6 can reconstruct features and watch output through the terminal cached
+  session. It cannot accrue new prospective forward-paper evidence after the
+  daily chain feed stops; frozen-cache replays are diagnostic only and must
+  never be counted toward its eight completed positions.
 - Scanner CLIs keep working against the frozen cache and must continue showing
   their as-of dates.
 - Never regenerate `data/chain_cache_manifest.txt` to absorb forward files.
