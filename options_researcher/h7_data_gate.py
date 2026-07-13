@@ -55,6 +55,7 @@ CLOSE_NONFINITE = "CLOSE_NONFINITE"
 CLOSE_DUPLICATE_DATE = "CLOSE_DUPLICATE_DATE"
 CHAIN_SESSION_MISSING = "CHAIN_SESSION_MISSING"
 CHAIN_STALE = "CHAIN_STALE"
+CHAIN_EMPTY = "CHAIN_EMPTY"
 CHAIN_SCHEMA_MISSING = "CHAIN_SCHEMA_MISSING"
 CHAIN_NONFINITE = "CHAIN_NONFINITE"
 CHAIN_DUPLICATE_CONTRACT = "CHAIN_DUPLICATE_CONTRACT"
@@ -172,6 +173,21 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
     rec["missing_required_columns"] = missing
     if missing:
         codes.append(CHAIN_SCHEMA_MISSING)
+    # A zero-row chain is not a chain: it has no contract to select, so it must
+    # never audit-PASS into a spurious GO. Fail closed on the absent chain and
+    # skip the row-wise checks below (all vacuous on 0 rows).
+    if rec["row_count"] == 0:
+        codes.append(CHAIN_EMPTY)
+        return rec, codes
+    # Store-integrity guard, symmetric with the closes date/close guard: a
+    # numeric column stored with a non-numeric (object/string) dtype is a
+    # malformed store, not an honest data gap. Fail the invocation (exit 2)
+    # rather than crash on the raw `< 0` / `bid > ask` comparisons below.
+    for col in NUMERIC_CHAIN_COLUMNS:
+        if col in df.columns and not pd.api.types.is_numeric_dtype(df[col]):
+            raise GateStoreError(
+                f"chain store {expected} column {col!r} is non-numeric "
+                f"dtype {df[col].dtype}; refusing")
 
     nulls, nonfinite = {}, {}
     for col in NUMERIC_CHAIN_COLUMNS:

@@ -223,6 +223,17 @@ class TestChainFailures(GateBase):
                          "BLOCK")
         self.assertEqual(res["symbols"]["AMD"]["verdict"], "NO_GO")
 
+    def test_empty_chain_is_no_go(self):
+        # a schema-correct but ZERO-ROW chain is not a chain -- it must not
+        # audit-PASS into a spurious GO (fail-closed on an absent chain).
+        _write_chain(self.chain_dir, "AMD", self.eval_iso,
+                     _good_chain().iloc[0:0])
+        res = self._eval()
+        self.assertIn("CHAIN_EMPTY", res["symbols"]["AMD"]["reason_codes"])
+        self.assertEqual(res["symbols"]["AMD"]["chain"]["row_count"], 0)
+        self.assertEqual(res["symbols"]["AMD"]["verdict"], "NO_GO")
+        self.assertEqual(self._run(), 1)
+
 
 class TestCliContract(GateBase):
     def test_malformed_as_of_is_exit_2_no_traceback(self):
@@ -247,6 +258,20 @@ class TestCliContract(GateBase):
         # access -- symmetric with the corrupt-parquet path.
         pd.DataFrame({"wrong": [1, 2]}).to_parquet(
             self.close_dir / "AMD.parquet", index=False)
+        with self.assertRaises(gate.GateStoreError):
+            self._eval()
+        rc = self._run()
+        self.assertEqual(rc, 2)
+        self.assertFalse(self.reports.exists() and any(self.reports.iterdir())
+                         if self.reports.exists() else False)
+
+    def test_malformed_chain_dtype_is_exit_2_no_artifact(self):
+        # a readable chain whose numeric column is stored as object/string is
+        # a store-integrity failure, not an honest data gap: exit 2 (symmetric
+        # with the closes-schema guard), never a traceback + exit 1.
+        df = _good_chain()
+        df["bid"] = df["bid"].astype(str)   # numeric col with object dtype
+        _write_chain(self.chain_dir, "AMD", self.eval_iso, df)
         with self.assertRaises(gate.GateStoreError):
             self._eval()
         rc = self._run()
