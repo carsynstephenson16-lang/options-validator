@@ -16,7 +16,7 @@ shared lock so readers wait through the JSONL-fsync -> HEAD-replace window.
 Both occurred_at_utc and recorded_at_utc require a zero UTC offset.
 
 Public seams (the only supported surface):
-    append_event(event, *, base_dir, clock=None) -> AppendResult
+    append_event(event, *, base_dir, clock=None, expected_head=...) -> AppendResult
     read_events(base_dir) -> list[StoredEvent]     (verifies first)
     verify(base_dir) -> VerifyResult               (raises on corruption)
     CLI:  python -m options_researcher.h7_event_ledger verify [--base-dir P]
@@ -73,6 +73,10 @@ class EventValidationError(LedgerError):
 
 class EventConflictError(LedgerError):
     """An event_id already exists with different logical content."""
+
+
+class LedgerHeadConflictError(LedgerError):
+    """The verified chain tip changed after a caller derived its decision."""
 
 
 class LedgerCorruptionError(LedgerError):
@@ -330,13 +334,20 @@ def _atomic_write_head(head_path: Path, value: str) -> None:
     os.replace(tmp, head_path)
 
 
-def append_event(event, *, base_dir, clock=None) -> AppendResult:
+_EXPECTED_HEAD_UNSET = object()
+
+
+def append_event(
+    event, *, base_dir, clock=None, expected_head=_EXPECTED_HEAD_UNSET
+) -> AppendResult:
     """Append exactly one forward event, or return the existing record if the
     same event_id + identical logical content already exists (idempotent).
     A same event_id with different content raises EventConflictError. The
     whole read-verify-dedup-seq-append-fsync-HEAD critical section runs under
     an exclusive directory lock so concurrent writers cannot fork the chain
-    or reuse a seq.
+    or reuse a seq. When ``expected_head`` is supplied (including explicit
+    ``None`` for an empty ledger), a changed verified tip refuses before
+    deduplication or write so a decision derived from stale state cannot land.
 
     Logical field/shape validation happens BEFORE any filesystem touch (an
     invalid event creates nothing). Causal backward-reference validation
@@ -344,6 +355,15 @@ def append_event(event, *, base_dir, clock=None) -> AppendResult:
     directory exists; a causal refusal never creates events.jsonl or HEAD
     (an empty ledger dir verifies as VALID EMPTY)."""
     logical = _validate_logical(event)
+    if expected_head is not _EXPECTED_HEAD_UNSET and not (
+        expected_head is None
+        or (
+            isinstance(expected_head, str)
+            and len(expected_head) == 64
+            and all(ch in "0123456789abcdef" for ch in expected_head)
+        )
+    ):
+        raise EventValidationError("expected_head must be None or a lowercase sha256")
     base = Path(base_dir)
     base.mkdir(parents=True, exist_ok=True)
     events_path, head_path = _paths(base)
@@ -351,6 +371,15 @@ def append_event(event, *, base_dir, clock=None) -> AppendResult:
     try:
         fcntl.flock(dir_fd, fcntl.LOCK_EX)
         existing = _load_verified(events_path, head_path)  # fail closed first
+        current_head = existing[-1].record_hash if existing else None
+        if (
+            expected_head is not _EXPECTED_HEAD_UNSET
+            and expected_head != current_head
+        ):
+            raise LedgerHeadConflictError(
+                f"ledger HEAD changed (expected {expected_head!r}, "
+                f"found {current_head!r})"
+            )
         logical_hash = sha256_hex(canonical_json(logical))
         by_id = {e.event_id: e for e in existing}
         prior = by_id.get(logical["event_id"])

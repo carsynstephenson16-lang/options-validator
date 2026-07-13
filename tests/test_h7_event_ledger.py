@@ -132,6 +132,38 @@ class TestIdempotency(LedgerBase):
         self.assertEqual(self.head.read_bytes(), head_before)
 
 
+class TestExpectedHead(LedgerBase):
+    def test_matching_expected_head_appends(self):
+        first = el.append_event(_ev(event_id="e1"), base_dir=self.base,
+                                clock=self._clock())
+        second = el.append_event(
+            _ev(event_id="e2", causes=["e1"]), base_dir=self.base,
+            expected_head=first.record_hash, clock=self._clock())
+        self.assertTrue(second.appended)
+
+    def test_stale_expected_head_refuses_without_writing(self):
+        first = el.append_event(_ev(event_id="e1"), base_dir=self.base,
+                                clock=self._clock())
+        el.append_event(_ev(event_id="e2", causes=["e1"]),
+                        base_dir=self.base, clock=self._clock())
+        before = self.events.read_bytes(), self.head.read_bytes()
+        with self.assertRaises(el.LedgerHeadConflictError):
+            el.append_event(
+                _ev(event_id="e3", causes=["e2"]), base_dir=self.base,
+                expected_head=first.record_hash, clock=self._clock())
+        self.assertEqual((self.events.read_bytes(), self.head.read_bytes()), before)
+
+    def test_none_expected_head_means_verified_empty(self):
+        el.append_event(_ev(), base_dir=self.base, expected_head=None,
+                        clock=self._clock())
+        before = self.events.read_bytes(), self.head.read_bytes()
+        with self.assertRaises(el.LedgerHeadConflictError):
+            el.append_event(_ev(event_id="e2", causes=["e1"]),
+                            base_dir=self.base, expected_head=None,
+                            clock=self._clock())
+        self.assertEqual((self.events.read_bytes(), self.head.read_bytes()), before)
+
+
 class TestCausalRules(LedgerBase):
     def test_backward_cause_passes(self):
         el.append_event(_ev(event_id="a1"), base_dir=self.base,

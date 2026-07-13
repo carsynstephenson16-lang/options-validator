@@ -233,6 +233,91 @@ class TestIntentAndApproval(LifecycleCase):
         )
         self.assertEqual(stored.payload["decision_cash_kind"], "debit")
 
+    def test_stage5_board_reservation_is_replaced_by_exact_intent_risk(self):
+        from options_researcher.h7_forward_book import (
+            derive_book,
+            record_board_resolution,
+        )
+
+        universe = sorted(set(config.H7_WATCHLIST) | set(config.H7_BACKTEST_SYMBOLS))
+        self.append(event(
+            "sh:T", "source_health", DECISION,
+            payload={"healthy_symbols": universe},
+        ))
+        self.append(event(
+            "dg:T", "data_gate", DECISION, causes=["sh:T"],
+            payload={"whole_universe_verdict": "GO"},
+        ))
+        board = record_board_resolution(
+            base_dir=self.base,
+            evaluation_session=DECISION,
+            candidates=[{
+                "symbol": "NVDA", "lane": "a", "session": DECISION,
+                "action": long_action(),
+            }],
+            source_health_id="sh:T",
+            data_gate_id="dg:T",
+            clock=clock("2026-07-11T00:00:00+00:00"),
+        )
+        intent = life.record_entry_intent(
+            base_dir=self.base,
+            symbol="NVDA",
+            action=long_action(),
+            decision_chain=chain(),
+            decision_session=DECISION,
+            source_health_id="sh:T",
+            data_gate_id="dg:T",
+            board_resolution_id=board.event_id,
+            chain_identity="sha256:decision-chain",
+            closes_identity="sha256:decision-closes",
+            clock=clock("2026-07-11T01:00:00+00:00"),
+        )
+        snapshot = derive_book(base_dir=self.base, evaluation_session=DECISION)
+        self.assertEqual(len(snapshot.reservations), 1)
+        self.assertEqual(snapshot.reservations[0].reservation_id, intent.event_id)
+        self.assertEqual(snapshot.month_reserved_risk, 506.30)
+
+    def test_stage5_board_risk_mismatch_refuses_intent_without_append(self):
+        from options_researcher.h7_forward_book import record_board_resolution
+
+        action = {**long_action(), "cost": 400.0}
+        universe = sorted(set(config.H7_WATCHLIST) | set(config.H7_BACKTEST_SYMBOLS))
+        self.append(event(
+            "sh:T", "source_health", DECISION,
+            payload={"healthy_symbols": universe},
+        ))
+        self.append(event(
+            "dg:T", "data_gate", DECISION, causes=["sh:T"],
+            payload={"whole_universe_verdict": "GO"},
+        ))
+        board = record_board_resolution(
+            base_dir=self.base,
+            evaluation_session=DECISION,
+            candidates=[{
+                "symbol": "NVDA", "lane": "a", "session": DECISION,
+                "action": action,
+            }],
+            source_health_id="sh:T",
+            data_gate_id="dg:T",
+            clock=clock("2026-07-11T00:00:00+00:00"),
+        )
+        before = ledger.verify(self.base).count
+        with self.assertRaises(life.LifecycleValidationError):
+            life.record_entry_intent(
+                base_dir=self.base,
+                symbol="NVDA",
+                action=action,
+                decision_chain=chain(),
+                decision_session=DECISION,
+                source_health_id="sh:T",
+                data_gate_id="dg:T",
+                board_resolution_id=board.event_id,
+                chain_identity="sha256:decision-chain",
+                closes_identity="sha256:decision-closes",
+                clock=clock("2026-07-11T01:00:00+00:00"),
+            )
+        self.assertEqual(ledger.verify(self.base).count, before)
+
     def test_on_time_approval_uses_system_recorded_time(self):
         self.intent()
         result = self.approve()
@@ -315,6 +400,56 @@ class TestEntryFill(LifecycleCase):
         positions = life.replay_positions(base_dir=self.base)
         self.assertEqual(len(positions), 1)
         self.assertEqual(positions[0].state, "open")
+
+    def test_stage5_actual_risk_breach_records_terminal_capacity_skip(self):
+        self.append(event(
+            "old-intent", "entry_intent", "2026-07-08", symbol="PLTR", lane="a",
+            payload={
+                "position_id": "old-intent",
+                "planned_fill_session": "2026-07-09",
+                "decision_at_risk": 5480.0,
+            },
+        ))
+        self.append(event(
+            "old-fill", "paper_fill", "2026-07-09", symbol="PLTR", lane="a",
+            causes=["old-intent"],
+            payload={
+                "transition": "open",
+                "position_id": "old-intent",
+                "entry_intent_id": "old-intent",
+                "fill_session": "2026-07-09",
+                "structure": "long_call",
+                "at_risk": 5480.0,
+            },
+        ))
+        self.intent()
+        self.approve()
+        self.fill_upstream()
+        result = life.process_entry_fill(
+            base_dir=self.base,
+            entry_intent_id=life.entry_intent_id(DECISION, "NVDA", "a"),
+            fill_session=FILL,
+            chain=chain(bid=5.00, ask=5.20),
+            source_health_id="sh:T1",
+            data_gate_id="dg:T1",
+            chain_identity="sha256:fill-chain",
+            closes_identity="sha256:fill-closes",
+            clock=clock("2026-07-14T01:00:00+00:00"),
+        )
+        self.assertEqual(result.event_type, "skip")
+        self.assertEqual(result.payload["reason"], "book_capacity_at_fill")
+        self.assertEqual(result.payload["failed_constraints"], ["monthly_sleeve"])
+        self.assertGreater(result.payload["projected_month_risk"], 6000.0)
+        capacity = result.payload["capacity_snapshot"]
+        self.assertEqual(capacity["month_actual_risk"], 5480.0)
+        self.assertEqual(
+            [item["position_id"] for item in capacity["open_positions"]],
+            ["old-intent"],
+        )
+        self.assertEqual(
+            capacity["replaced_reservation"]["reservation_id"],
+            life.entry_intent_id(DECISION, "NVDA", "a"),
+        )
 
     def test_missing_approval_expires_without_reading_quotes(self):
         self.intent()

@@ -63,6 +63,13 @@ Canonical JSON = sorted keys, compact separators, UTF-8, LF endings,
 - same `event_id` + different logical content → **`EventConflictError`**, no
   write.
 
+Capacity-sensitive callers may also supply `expected_head` to `append_event`.
+The value is checked under the exclusive writer lock against the verified
+current tip (`None` means verified empty); a mismatch raises
+`LedgerHeadConflictError` before deduplication or mutation. Stage 5 uses this
+optimistic precondition so a book decision cannot append from a stale capacity
+snapshot.
+
 ## Concurrency & locking
 
 The whole read-verify → duplicate-check → seq-allocate → append → fsync →

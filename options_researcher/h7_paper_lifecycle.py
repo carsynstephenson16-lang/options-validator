@@ -160,12 +160,24 @@ def _require_event(
     return found
 
 
-def _transition(base: Path, event: dict, *, clock=None) -> TransitionResult:
+_EXPECTED_HEAD_UNSET = object()
+
+
+def _transition(
+    base: Path, event: dict, *, clock=None, expected_head=_EXPECTED_HEAD_UNSET
+) -> TransitionResult:
     try:
-        result = event_ledger.append_event(event, base_dir=base, clock=clock)
+        kwargs = {"base_dir": base, "clock": clock}
+        if expected_head is not _EXPECTED_HEAD_UNSET:
+            kwargs["expected_head"] = expected_head
+        result = event_ledger.append_event(event, **kwargs)
     except event_ledger.EventConflictError as exc:
         raise LifecycleValidationError(
             f"conflicting rerun for {event['event_id']!r}"
+        ) from exc
+    except event_ledger.LedgerHeadConflictError as exc:
+        raise LifecycleValidationError(
+            "forward ledger changed during lifecycle capacity evaluation; rerun"
         ) from exc
     stored = _by_id(event_ledger.read_events(base))[event["event_id"]]
     return TransitionResult(
@@ -339,6 +351,36 @@ def record_entry_intent(
     decision_cash_kind, decision_at_risk = _entry_economics(
         action, decision_net_debit, len(legs)
     )
+    expected_head = _EXPECTED_HEAD_UNSET
+    if isinstance(board.payload.get("book_snapshot_hash"), str):
+        planned_fill_session = _next_session(decision_session)
+        if board.payload.get("planned_fill_session") != planned_fill_session:
+            raise LifecycleValidationError(
+                "Stage-5 board reservation has the wrong planned fill session"
+            )
+        reserved_at_risk = action.get("max_loss", action.get("cost"))
+        if (
+            isinstance(reserved_at_risk, bool)
+            or not isinstance(reserved_at_risk, (int, float))
+            or not math.isfinite(float(reserved_at_risk))
+            or float(reserved_at_risk) != decision_at_risk
+        ):
+            raise LifecycleValidationError(
+                "entry intent risk does not match its Stage-5 board reservation"
+            )
+        from options_researcher.h7_forward_book import derive_book
+
+        book = derive_book(
+            base_dir=base,
+            evaluation_session=planned_fill_session,
+        )
+        reservation_ids = {item.reservation_id for item in book.reservations}
+        board_reservation_id = f"{board_resolution_id}:{symbol}:{lane}"
+        if event_id not in reservation_ids and board_reservation_id not in reservation_ids:
+            raise LifecycleValidationError(
+                "Stage-5 board reservation is absent or already expired"
+            )
+        expected_head = events[-1].record_hash
     decision_commission = (
         len(legs) * config.H7_FORWARD_CONTRACTS * config.COMMISSION_PER_CONTRACT
     )
@@ -371,6 +413,7 @@ def record_entry_intent(
             payload=payload,
         ),
         clock=write_clock,
+        expected_head=expected_head,
     )
 
 
@@ -590,7 +633,12 @@ def _skip(
     reason: str,
     causes: list[str],
     clock=None,
+    details: dict | None = None,
+    expected_head=_EXPECTED_HEAD_UNSET,
 ) -> TransitionResult:
+    payload = {"entry_intent_id": intent.event_id, "reason": reason}
+    if details:
+        payload.update(details)
     return _transition(
         base,
         _event(
@@ -601,9 +649,10 @@ def _skip(
             symbol=intent.symbol,
             lane=intent.lane,
             causes=causes,
-            payload={"entry_intent_id": intent.event_id, "reason": reason},
+            payload=payload,
         ),
         clock=clock,
+        expected_head=expected_head,
     )
 
 
@@ -777,6 +826,57 @@ def process_entry_fill(
         )
     quantity = config.H7_FORWARD_CONTRACTS
     commission = len(legs) * quantity * config.COMMISSION_PER_CONTRACT
+    expected_head = _EXPECTED_HEAD_UNSET
+    if existing_fill is None:
+        from options_researcher.h7_forward_book import assess_entry_fill
+
+        assessment = assess_entry_fill(
+            base_dir=base,
+            entry_intent_id=entry_intent_id,
+            fill_session=fill_session,
+            actual_at_risk=at_risk,
+        )
+        capacity_payload = {
+            "book_snapshot_hash": assessment.snapshot_hash,
+            "capacity_snapshot": assessment.capacity_snapshot,
+            "projected_month_risk": assessment.projected_month_risk,
+            "projected_open_h7c": assessment.projected_open_h7c,
+            "projected_underlying_occupancy": (
+                assessment.projected_underlying_occupancy
+            ),
+            "failed_constraints": list(assessment.failed_constraints),
+            "limits": {
+                "monthly_at_risk": config.H7_MONTHLY_AT_RISK,
+                "h7c_max_concurrent": config.H7C_MAX_CONCURRENT,
+                "max_open_per_underlying": config.H7_MAX_OPEN_PER_UNDERLYING,
+            },
+        }
+        if not assessment.allowed:
+            return _skip(
+                base,
+                intent,
+                session=fill_session,
+                reason="book_capacity_at_fill",
+                causes=[entry_intent_id, data_gate_id],
+                clock=write_clock,
+                details=capacity_payload,
+                expected_head=assessment.expected_head,
+            )
+        expected_head = assessment.expected_head
+    else:
+        capacity_payload = {
+            key: existing_fill.payload[key]
+            for key in (
+                "book_snapshot_hash",
+                "capacity_snapshot",
+                "projected_month_risk",
+                "projected_open_h7c",
+                "projected_underlying_occupancy",
+                "failed_constraints",
+                "limits",
+            )
+            if key in existing_fill.payload
+        }
     payload = {
         "transition": "open",
         "position_id": intent.payload["position_id"],
@@ -796,6 +896,7 @@ def process_entry_fill(
         "closes_identity": closes_identity,
         "decision_chain_identity": intent.payload["chain_identity"],
         "decision_closes_identity": intent.payload["closes_identity"],
+        **capacity_payload,
     }
     return _transition(
         base,
@@ -810,6 +911,7 @@ def process_entry_fill(
             payload=payload,
         ),
         clock=write_clock,
+        expected_head=expected_head,
     )
 
 
