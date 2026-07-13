@@ -148,14 +148,14 @@ the results pasted into facts.log as dated evidence.
 *Readiness packet prepared 2026-07-13 at
 `2026-07-13-h7-stage8-activation-readiness.md`; the gate remains explicitly
 NOT OPEN. Current blockers include 4/12 source health, unconfirmed paid-data
-continuity, unresolved Darwin durability strength, blank owner window inputs,
-and an uncommitted code/config identity. No registration or real event was
+continuity, blank owner window inputs, and an activation snapshot that is not
+yet bound to a clean code/config identity. No registration or real event was
 created.*
 
 A distinct owner + independent-review decision that: pre-registers the
 window (start, duration, decision procedure, verdict gate) in the ledger;
-confirms ThetaData renewal for daily EOD chains (the owner-updated 2026-07-29 deadline
-precedes any start date); and only then starts the clock. No stage below
+confirms ThetaData renewal for daily EOD chains (the owner-updated 2026-07-29
+deadline precedes any start date); and only then starts the clock. No stage below
 it authorizes activation.
 
 ## Explicitly out of scope, permanently or until re-registered

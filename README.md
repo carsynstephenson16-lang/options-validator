@@ -227,8 +227,8 @@ forward-roadmap source/config changes. A frozen retirement gate
 entry point refuse before reading market data.
 Current recorded holdings: 39 VST shares and no options. Remaining for H7:
 restore Stage 1 source health to 12/12, confirm paid daily EOD continuity,
-resolve Darwin ledger durability, supply the owner-frozen window inputs, bind
-a clean code/config identity, then let owner + independent review decide
+supply the owner-frozen window inputs, bind a clean code/config identity, then
+let owner + independent review decide
 whether to open Stage 8. No tracked option by itself starts the H7 window.
 LEAPS entry triggers are pre-registered (owner-frozen 2026-07-07, ledger
 H5_ENTRY_TRIGGER_PREREG): evaluate only when close ≤ trigger (VST $140,

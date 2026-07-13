@@ -39,8 +39,8 @@ Read-only refresh for evaluation session 2026-07-10 on 2026-07-13:
 | Stage-2 data | **12/12 GO** | Ready for that completed session only; must be rerun immediately before registration/start. |
 | Real forward ledger | **VALID EMPTY** | Correct pre-activation state. |
 | Daily paid EOD chains | subscription ends 2026-07-29; continuity beyond that date is not owner-confirmed | **BLOCKED** before any chosen start. |
-| Darwin ledger durability | `fsync` ordering implemented; `F_FULLFSYNC` not implemented or explicitly accepted | **BLOCKED** pending owner choice or a reviewed hardening change. |
-| Code/config identity | the H7 config and Stage-2 corrections are committed; an unrelated parking-lot edit and untracked advisor-skill directories remain | **BLOCKED** until a future Stage-8 arc binds an intentionally clean activation snapshot. |
+| Darwin ledger durability | `fsync` + `F_FULLFSYNC` implemented for regular-file content; directory `fsync` retained; failure injection passes | **READY** at the build layer. |
+| Code/config identity | all H7 build changes through Darwin durability are committed; an unrelated parking-lot edit and untracked advisor-skill directories remain | **BLOCKED** until a future Stage-8 arc binds an intentionally clean activation snapshot. |
 
 A prior data-audit receipt is now invalid because its recorded inputs differ
 from the working tree. Do not refresh or bless that receipt as part of this
@@ -59,7 +59,6 @@ WINDOW_END_RULE_ACKNOWLEDGED =
 WINDOW_MINIMUM_THREE_CALENDAR_MONTHS_PER_LANE_ACKNOWLEDGED =
 THETADATA_DAILY_EOD_COVERAGE_CONFIRMED_THROUGH =
 THETADATA_CONFIRMATION_EVIDENCE =
-DARWIN_DURABILITY_DECISION =            # IMPLEMENT_F_FULLFSYNC or ACCEPT_LIMITATION
 ```
 
 The end rule must be stated as an integer number of XNYS **decision sessions**
@@ -91,7 +90,8 @@ spec. Its first authorized forward-ledger event must be a new typed
 - the rule that `SURVIVED` is not live-trading approval or a profitability
   claim;
 - current 12/12 source-health and 12/12 data-gate evidence identities;
-- paid-data coverage evidence and the Darwin durability decision; and
+- paid-data coverage evidence and the verified Darwin durability
+  implementation; and
 - the verified pre-append state `VALID EMPTY`.
 
 The event type and schema do not exist yet. Adding them, the guarded production
@@ -105,8 +105,8 @@ readiness packet.
 2. Restore source health to 12/12 with owner-reviewed provenance records.
 3. Confirm paid daily EOD coverage through the full window plus lifecycle exit
    buffer.
-4. Implement `F_FULLFSYNC` on Darwin or record the owner's explicit acceptance
-   of the weaker durability guarantee.
+4. Re-run the Darwin `F_FULLFSYNC` success/failure tests in the activation
+   verification bundle.
 5. Owner fills every §3 value, including the minimum-three-months-per-lane
    acknowledgement, and explicitly authorizes opening Stage 8.
 6. Write and hash the exact Stage-8 activation spec; independently review it.
@@ -139,7 +139,7 @@ readiness packet.
 ## 7. Present decision
 
 **DO NOT OPEN STAGE 8.** Source health is 4/12, paid-data continuity is not
-confirmed, Darwin durability is unresolved, owner window inputs are blank,
-and the working tree cannot yet supply one immutable config/code identity.
+confirmed, owner window inputs are blank, and the working tree cannot yet
+supply one immutable config/code identity.
 The next authorized action is owner remediation/parameter entry—not a real
 ledger append.

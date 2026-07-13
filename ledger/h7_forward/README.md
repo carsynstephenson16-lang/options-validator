@@ -127,14 +127,15 @@ The Stage-7 integrity prerequisites from the 2026-07-13 review are resolved:
 - The canonical-JSON round-trip guard has a direct hash-perfect,
   non-canonical serialization regression.
 
-The ledger remains INACTIVE. Before Stage 8 activation, resolve or explicitly
-accept the remaining platform durability limitation:
+The ledger remains INACTIVE. The macOS durability blocker was resolved
+2026-07-13: regular-file writes call portable `fsync` and then Darwin
+`F_FULLFSYNC` before success; the directory `fsync` still persists the HEAD
+rename. Full-sync failures propagate and leave a detectably incomplete store,
+covered by deterministic failure injection. No weaker fallback is reported as
+success.
 
-- **macOS durability (Warning).** The crash-safety claim relies on `fsync`,
-  but on darwin (the dev/run platform) true media durability needs
-  `F_FULLFSYNC` (Apple `fsync(2)`, Official-source). Ordering is correct; the
-  strength is not. Fix: `fcntl(fd, F_FULLFSYNC)` on darwin, `os.fsync`
-  elsewhere; soften the crash-safety wording to name the platform caveat.
+Remaining crash-model note:
+
 - **No orphan-tail recovery tool (Info, by-design).** A crash mid-append
   permanently bricks the store (intended "no auto-repair"). If ever needed, a
   guarded, lock-held truncate-orphan-tail tool is a separately authorized

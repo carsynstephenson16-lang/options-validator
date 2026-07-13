@@ -556,6 +556,38 @@ class TestConcurrency(LedgerBase):
 
 
 class TestCrashInjection(LedgerBase):
+    def test_darwin_durable_sync_uses_f_fullfsync(self):
+        from unittest import mock
+
+        with mock.patch.object(el.sys, "platform", "darwin"), \
+             mock.patch.object(el.os, "fsync") as fsync, \
+             mock.patch.object(el.fcntl, "fcntl") as fcntl_call:
+            el._durable_sync(123)
+        fsync.assert_called_once_with(123)
+        fcntl_call.assert_called_once_with(123, el.fcntl.F_FULLFSYNC)
+
+    def test_non_darwin_durable_sync_uses_fsync_only(self):
+        from unittest import mock
+
+        with mock.patch.object(el.sys, "platform", "linux"), \
+             mock.patch.object(el.os, "fsync") as fsync, \
+             mock.patch.object(el.fcntl, "fcntl") as fcntl_call:
+            el._durable_sync(123)
+        fsync.assert_called_once_with(123)
+        fcntl_call.assert_not_called()
+
+    def test_darwin_fullsync_failure_never_writes_head(self):
+        from unittest import mock
+
+        with mock.patch.object(el.sys, "platform", "darwin"), \
+             mock.patch.object(el.fcntl, "fcntl", side_effect=OSError("fullsync boom")):
+            with self.assertRaisesRegex(OSError, "fullsync boom"):
+                el.append_event(_ev(), base_dir=self.base, clock=self._clock())
+        self.assertTrue(self.events.exists())
+        self.assertFalse(self.head.exists())
+        with self.assertRaises(el.LedgerCorruptionError):
+            el.verify(self.base)
+
     def test_os_replace_failure_leaves_detected_stale_head(self):
         from unittest import mock
         el.append_event(_ev(event_id="a1"), base_dir=self.base,

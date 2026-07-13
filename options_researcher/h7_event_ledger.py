@@ -33,6 +33,7 @@ import fcntl
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -323,12 +324,25 @@ def _write_all(fd: int, data: bytes) -> None:
         view = view[os.write(fd, view):]
 
 
+def _durable_sync(fd: int) -> None:
+    """Flush a regular file through the strongest local platform primitive.
+
+    ``fsync`` establishes the portable ordering baseline. Darwin additionally
+    requires ``F_FULLFSYNC`` to ask the storage device to commit volatile
+    write caches before append success is reported. Any failure propagates;
+    the ledger never returns success with weaker-than-declared durability.
+    """
+    os.fsync(fd)
+    if sys.platform == "darwin":
+        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+
+
 def _atomic_write_head(head_path: Path, value: str) -> None:
     tmp = head_path.with_name(head_path.name + ".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
     try:
         _write_all(fd, (value + "\n").encode("utf-8"))
-        os.fsync(fd)
+        _durable_sync(fd)
     finally:
         os.close(fd)
     os.replace(tmp, head_path)
@@ -411,7 +425,7 @@ def append_event(
         fd = os.open(events_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
         try:
             _write_all(fd, line.encode("utf-8"))
-            os.fsync(fd)
+            _durable_sync(fd)
         finally:
             os.close(fd)
         _atomic_write_head(head_path, record_hash)
