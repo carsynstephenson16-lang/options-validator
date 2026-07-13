@@ -317,7 +317,12 @@ H7_DIAGNOSTIC_CONTRACTS = 1      # per-position sizing of the isolated-lane
 #                                  diagnostic (F3). NOTE: the decide-layer
 #                                  sleeve math prices ONE contract; changing
 #                                  this requires revisiting that math.
-H7_FORWARD_CONTRACTS = 1
+H7_FORWARD_CONTRACTS = 1         # Stage 4 T+1 paper-lifecycle per-position size.
+#                                  Owner-typed per ledger H7_STAGE4_SPEC_PREREG
+#                                  (2026-07-13; spec sha256 f3f7ab31...). Stage 4
+#                                  stays BUILD-ONLY / SYNTHETIC-ONLY / INACTIVE;
+#                                  activation is a separate Stage 8 decision and
+#                                  Stage 5 enforces H7_MONTHLY_AT_RISK.
 FEED_PUT_DELTA_BAND = (0.03, 0.65)   # offline-feed PUT inclusion band
 FEED_CALL_DELTA_BAND = (0.10, 0.90)  # offline-feed CALL inclusion band
 #   (plumbing, not tunables: strategies fail LOUD when a selected leg has no
