@@ -207,16 +207,19 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
     rec["missing_required_columns"] = missing
     if missing:
         codes.append(CHAIN_SCHEMA_MISSING)
+    # Store-integrity guard, symmetric with the closes date/close guard: a
+    # present column with a malformed stored dtype/domain is an integrity
+    # failure (exit 2) regardless of row count. Run it BEFORE the empty-chain
+    # short-circuit so a zero-row store with bad dtypes still fails closed,
+    # never into a spurious CHAIN_EMPTY NO_GO (exit 1). A valid empty store has
+    # clean dtypes and passes here, then falls through to CHAIN_EMPTY below.
+    _validate_chain_store_fields(df, expected)
     # A zero-row chain is not a chain: it has no contract to select, so it must
     # never audit-PASS into a spurious GO. Fail closed on the absent chain and
     # skip the row-wise checks below (all vacuous on 0 rows).
     if rec["row_count"] == 0:
         codes.append(CHAIN_EMPTY)
         return rec, codes
-    # Store-integrity guard, symmetric with the closes date/close guard.
-    # Fail the invocation (exit 2) rather than crash or let malformed domain
-    # values pass vacuous row-wise checks below.
-    _validate_chain_store_fields(df, expected)
 
     nulls, nonfinite = {}, {}
     for col in NUMERIC_CHAIN_COLUMNS:

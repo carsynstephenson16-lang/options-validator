@@ -291,6 +291,20 @@ class TestCliContract(GateBase):
         self.assertFalse(self.reports.exists() and any(self.reports.iterdir())
                          if self.reports.exists() else False)
 
+    def test_empty_chain_with_malformed_dtype_is_exit_2(self):
+        # a ZERO-ROW store with a malformed stored dtype is a store-integrity
+        # failure (exit 2), not a spurious CHAIN_EMPTY NO_GO: the dtype guard
+        # runs BEFORE the empty short-circuit. (A valid empty store -- clean
+        # dtypes -- still yields CHAIN_EMPTY; see test_empty_chain_is_no_go.)
+        df = _good_chain().iloc[0:0].copy()
+        df["bid"] = df["bid"].astype(bool)   # 0 rows, but bool is not a price
+        _write_chain(self.chain_dir, "AMD", self.eval_iso, df)
+        with self.assertRaises(gate.GateStoreError):
+            self._eval()
+        self.assertEqual(self._run(), 2)
+        self.assertFalse(self.reports.exists() and any(self.reports.iterdir())
+                         if self.reports.exists() else False)
+
     def test_invalid_chain_domain_field_is_exit_2_no_artifact(self):
         for column, value in (("right", "X"),
                               ("expiration", "not-a-date")):
