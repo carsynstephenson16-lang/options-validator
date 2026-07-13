@@ -11,6 +11,10 @@ prohibited until Stage 8 activation):
 
 Importing or verifying an absent/empty store creates nothing.
 
+Concurrency: appends hold an exclusive directory lock; verify/read hold a
+shared lock so readers wait through the JSONL-fsync -> HEAD-replace window.
+Both occurred_at_utc and recorded_at_utc require a zero UTC offset.
+
 Public seams (the only supported surface):
     append_event(event, *, base_dir, clock=None) -> AppendResult
     read_events(base_dir) -> list[StoredEvent]     (verifies first)
@@ -30,7 +34,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from research.hashing import canonical_json, sha256_hex
@@ -116,6 +120,19 @@ def _reject_const(token):
     raise EventValidationError(f"non-finite JSON literal {token!r} not allowed")
 
 
+def _parse_utc_timestamp(value, field: str) -> datetime:
+    if not isinstance(value, str):
+        raise EventValidationError(f"{field} must be a string")
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise EventValidationError(f"{field} invalid: {exc}") from exc
+    if (dt.tzinfo is None or dt.utcoffset() is None
+            or dt.utcoffset() != timedelta(0)):
+        raise EventValidationError(f"{field} must be UTC")
+    return dt
+
+
 def _validate_logical(event) -> dict:
     """Validate a caller-supplied logical event and return it as an ordered
     clean dict. Raises EventValidationError before any filesystem touch.
@@ -139,15 +156,7 @@ def _validate_logical(event) -> dict:
     if event["event_type"] not in EVENT_TYPES:
         raise EventValidationError(
             f"event_type must be one of {EVENT_TYPES}")
-    occurred = event["occurred_at_utc"]
-    if not isinstance(occurred, str):
-        raise EventValidationError("occurred_at_utc must be a string")
-    try:
-        dt = datetime.fromisoformat(occurred)
-    except ValueError as exc:
-        raise EventValidationError(f"occurred_at_utc invalid: {exc}") from exc
-    if dt.tzinfo is None or dt.utcoffset() is None:
-        raise EventValidationError("occurred_at_utc must be timezone-aware")
+    _parse_utc_timestamp(event["occurred_at_utc"], "occurred_at_utc")
     session = event["evaluation_session"]
     if not isinstance(session, str) or not _SESSION_RE.fullmatch(session):
         raise EventValidationError("evaluation_session must be YYYY-MM-DD")
@@ -236,6 +245,7 @@ def _load_verified(events_path: Path, head_path: Path) -> list[StoredEvent]:
         logical = {k: obj[k] for k in LOGICAL_FIELDS}
         try:
             _validate_logical(logical)
+            _parse_utc_timestamp(obj["recorded_at_utc"], "recorded_at_utc")
         except EventValidationError as exc:
             raise LedgerCorruptionError(
                 f"invalid stored event at seq {i}: {exc}") from exc
@@ -259,11 +269,30 @@ def _load_verified(events_path: Path, head_path: Path) -> list[StoredEvent]:
     return records
 
 
+def _load_with_shared_lock(base_dir) -> list[StoredEvent]:
+    """Verify/read under a shared directory lock so a reader cannot observe
+    the intentional writer gap between events.jsonl fsync and HEAD replace.
+    An absent base remains VALID EMPTY and is never created."""
+    base = Path(base_dir)
+    events_path, head_path = _paths(base)
+    if not base.exists():
+        # Linearize this read before any concurrent first append. Do not call
+        # back into the filesystem after observing absence: a writer could
+        # create the directory and enter its two-file commit gap in between.
+        return []
+    dir_fd = os.open(base, os.O_RDONLY)
+    try:
+        fcntl.flock(dir_fd, fcntl.LOCK_SH)
+        return _load_verified(events_path, head_path)
+    finally:
+        fcntl.flock(dir_fd, fcntl.LOCK_UN)
+        os.close(dir_fd)
+
+
 def verify(base_dir) -> VerifyResult:
     """Verify the whole chain + HEAD. Both files absent -> VALID EMPTY,
     creating nothing. Any corruption raises LedgerCorruptionError."""
-    events_path, head_path = _paths(base_dir)
-    records = _load_verified(events_path, head_path)
+    records = _load_with_shared_lock(base_dir)
     if not records:
         return VerifyResult(valid=True, empty=True, count=0, head=None)
     return VerifyResult(valid=True, empty=False, count=len(records),
@@ -272,14 +301,14 @@ def verify(base_dir) -> VerifyResult:
 
 def read_events(base_dir) -> list[StoredEvent]:
     """Return typed records ONLY after full verification (never partial)."""
-    events_path, head_path = _paths(base_dir)
-    return _load_verified(events_path, head_path)
+    return _load_with_shared_lock(base_dir)
 
 
 def _clock_iso(clock) -> str:
     dt = clock() if clock is not None else datetime.now(timezone.utc)
-    if not isinstance(dt, datetime) or dt.tzinfo is None or dt.utcoffset() is None:
-        raise EventValidationError("clock must return a tz-aware datetime")
+    if (not isinstance(dt, datetime) or dt.tzinfo is None
+            or dt.utcoffset() is None or dt.utcoffset() != timedelta(0)):
+        raise EventValidationError("clock must return a UTC datetime")
     return dt.isoformat()
 
 

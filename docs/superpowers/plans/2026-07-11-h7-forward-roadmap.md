@@ -67,7 +67,9 @@ enforced backward, concurrent writers serialized by an exclusive lock,
 crash-DETECTING (a crash between events.jsonl fsync and HEAD replace leaves a
 stale-HEAD mismatch the next verify refuses — no auto-repair). The default
 store is ABSENT and the first real event is prohibited until Stage 8
-activation; the default verifier prints VALID EMPTY (exit 0). The original
+activation; the default verifier prints VALID EMPTY (exit 0). Stage-7 review
+prerequisites landed 2026-07-13: shared reader locks, strict UTC fields, and a
+direct canonical-JSON regression. The original
 spec paragraph below is unchanged.*
 
 An append-only, hash-chained event log (the experiments-ledger pattern)

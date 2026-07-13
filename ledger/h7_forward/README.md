@@ -30,7 +30,7 @@ Caller-supplied **logical** fields (committed by `logical_hash`):
 | `schema_version` | `1` |
 | `event_id` | caller-supplied canonical non-empty unique id |
 | `event_type` | one of the allowed types below |
-| `occurred_at_utc` | timezone-aware ISO timestamp |
+| `occurred_at_utc` | UTC ISO timestamp (offset must be zero) |
 | `evaluation_session` | `YYYY-MM-DD` |
 | `symbol` | canonical uppercase ticker, or `null` (whole-universe) |
 | `lane` | `a`, `b`, `c`, or `null` |
@@ -42,7 +42,7 @@ Chain fields added by `append_event()`:
 | field | meaning |
 |---|---|
 | `seq` | 0-based, increases by exactly 1 |
-| `recorded_at_utc` | append time (tz-aware) |
+| `recorded_at_utc` | append time in UTC (offset must be zero) |
 | `logical_hash` | `sha256(canonical_json(logical fields))` — the idempotency identity |
 | `prev_hash` | prior record's `record_hash` (64 zeroes for `seq` 0) |
 | `record_hash` | `sha256(canonical_json(record without record_hash))` |
@@ -69,7 +69,10 @@ The whole read-verify → duplicate-check → seq-allocate → append → fsync 
 HEAD-replace critical section runs under an exclusive `flock` on the ledger
 directory. Concurrent writers can never allocate the same `seq` or fork the
 chain: distinct events serialize into one valid chain; identical events
-produce exactly one record and one idempotent result.
+produce exactly one record and one idempotent result. `verify` and
+`read_events` take a shared directory lock, so a reader waits through the
+writer's JSONL-fsync → HEAD-replace window and never reports false corruption
+on a healthy in-progress append.
 
 ## Crash detection (honest, not two-file-atomic)
 
@@ -108,31 +111,23 @@ means other than `append_event()`. Any manual edit breaks the hash chain and
 
 ## Stage-7/8 prerequisites (review findings 2026-07-13)
 
-An adversarial review confirmed the hash chain and fail-closed validation are
-sound. Resolve the reader-locking, UTC-validation, and regression-test items
-before Stage 7 can claim an end-to-end proof of ledger integrity. Resolve the
-macOS durability item before Stage 8 activation. The ledger remains INACTIVE:
+The Stage-7 integrity prerequisites from the 2026-07-13 review are resolved:
 
-- **Lock-free readers (Warning).** `verify`/`read_events` take no lock, but
-  `append_event` has a window between the `events.jsonl` fsync and the atomic
-  `HEAD` replace. A concurrent reader in that window sees N+1 records vs a
-  HEAD at N and raises a *spurious* `LedgerCorruptionError` on a healthy chain.
-  Fix before Stage 7: take a shared `flock` (LOCK_SH) around
-  `_load_verified` in the read path, or forbid concurrent verify/append
-  operationally.
+- `verify`/`read_events` now take a shared `flock`; a deterministic
+  writer-gap regression proves a reader waits until HEAD commits.
+- `occurred_at_utc` and `recorded_at_utc` both require a zero UTC offset on
+  append and stored-chain verification, including hash-perfect forgeries.
+- The canonical-JSON round-trip guard has a direct hash-perfect,
+  non-canonical serialization regression.
+
+The ledger remains INACTIVE. Before Stage 8 activation, resolve or explicitly
+accept the remaining platform durability limitation:
+
 - **macOS durability (Warning).** The crash-safety claim relies on `fsync`,
   but on darwin (the dev/run platform) true media durability needs
   `F_FULLFSYNC` (Apple `fsync(2)`, Official-source). Ordering is correct; the
   strength is not. Fix: `fcntl(fd, F_FULLFSYNC)` on darwin, `os.fsync`
   elsewhere; soften the crash-safety wording to name the platform caveat.
-- **`occurred_at_utc` accepts non-UTC offsets (Info).** Validation requires
-  tz-awareness only, so `+05:00` passes despite the `_utc` name. Require
-  `utcoffset() == timedelta(0)` for both `_utc` fields.
-- **Canonical-JSON guard untested (Info).** The non-canonical-JSON round-trip
-  check in `_load_verified` has no direct test; a regression dropping it would
-  pass the whole suite. Add a test that stores a hash-consistent record
-  serialized with `sort_keys=False` and asserts `verify` refuses before
-  Stage 7.
 - **No orphan-tail recovery tool (Info, by-design).** A crash mid-append
   permanently bricks the store (intended "no auto-repair"). If ever needed, a
   guarded, lock-held truncate-orphan-tail tool is a separately authorized

@@ -5,6 +5,7 @@ boundaries (clock, os.replace, fsync, concurrency) are mocked. No real
 forward event is ever written to the default store."""
 
 import io
+import threading
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime
@@ -184,6 +185,18 @@ class TestFieldValidation(LedgerBase):
 
     def test_naive_timestamp_refuses(self):
         self._refuse(occurred_at_utc="2026-07-10T20:00:00")
+
+    def test_non_utc_timestamp_refuses(self):
+        self._refuse(occurred_at_utc="2026-07-11T01:00:00+05:00")
+
+    def test_non_utc_recording_clock_refuses(self):
+        with self.assertRaises(el.EventValidationError):
+            el.append_event(
+                _ev(), base_dir=self.base,
+                clock=self._clock("2026-07-11T01:00:00+05:00"),
+            )
+        self.assertFalse(self.events.exists())
+        self.assertFalse(self.head.exists())
 
     def test_bad_session_date_refuses(self):
         self._refuse(evaluation_session="2026-7-10")
@@ -370,6 +383,47 @@ class TestHashPerfectForgery(LedgerBase):
         with self.assertRaises(el.LedgerCorruptionError):
             el.verify(self.base)
 
+    def test_hash_perfect_noncanonical_json_refuses(self):
+        import json as _json
+
+        logical = _ev(event_id="a1")
+        record = dict(logical)
+        record.update(
+            seq=0,
+            recorded_at_utc="2026-07-11T00:00:00+00:00",
+            logical_hash=self._h(self._cj(logical)),
+            prev_hash="0" * 64,
+        )
+        record["record_hash"] = self._h(self._cj(record))
+        noncanonical = _json.dumps(
+            record, sort_keys=False, separators=(",", ":"),
+            ensure_ascii=True, allow_nan=False,
+        )
+        self.assertNotEqual(noncanonical, self._cj(record))
+        self.base.mkdir(parents=True, exist_ok=True)
+        self.events.write_text(noncanonical + "\n")
+        self.head.write_text(record["record_hash"] + "\n")
+        with self.assertRaisesRegex(el.LedgerCorruptionError,
+                                    "non-canonical JSON"):
+            el.verify(self.base)
+
+    def test_hash_perfect_non_utc_recording_time_refuses(self):
+        logical = _ev(event_id="a1")
+        record = dict(logical)
+        record.update(
+            seq=0,
+            recorded_at_utc="2026-07-11T05:00:00+05:00",
+            logical_hash=self._h(self._cj(logical)),
+            prev_hash="0" * 64,
+        )
+        record["record_hash"] = self._h(self._cj(record))
+        self.base.mkdir(parents=True, exist_ok=True)
+        self.events.write_text(self._cj(record) + "\n")
+        self.head.write_text(record["record_hash"] + "\n")
+        with self.assertRaisesRegex(el.LedgerCorruptionError,
+                                    "recorded_at_utc must be UTC"):
+            el.verify(self.base)
+
 
 class TestConcurrency(LedgerBase):
     def _spawn(self, events):
@@ -413,6 +467,60 @@ class TestConcurrency(LedgerBase):
         self.assertEqual(sorted(appended), [False, True])   # one wrote, one no-op
         self.assertEqual({r.record_hash for r in results.values()},
                          {chain[0].record_hash})
+
+    def test_reader_waits_for_writer_head_commit(self):
+        from unittest import mock
+
+        el.append_event(_ev(event_id="a1"), base_dir=self.base,
+                        clock=self._clock())
+        writer_in_gap = threading.Event()
+        release_writer = threading.Event()
+        reader_started = threading.Event()
+        reader_finished = threading.Event()
+        errors = []
+        original = el._atomic_write_head
+
+        def blocked_head_write(path, value):
+            writer_in_gap.set()
+            if not release_writer.wait(timeout=3):
+                raise TimeoutError("test did not release writer")
+            original(path, value)
+
+        def writer():
+            try:
+                el.append_event(_ev(event_id="b2", causes=["a1"]),
+                                base_dir=self.base, clock=self._clock())
+            except Exception as exc:  # noqa: BLE001 -- test records outcome
+                errors.append(exc)
+
+        def reader():
+            reader_started.set()
+            try:
+                result = el.verify(self.base)
+                if result.count != 2:
+                    errors.append(AssertionError(
+                        f"reader saw {result.count} records, expected 2"))
+            except Exception as exc:  # noqa: BLE001 -- test records outcome
+                errors.append(exc)
+            finally:
+                reader_finished.set()
+
+        with mock.patch.object(el, "_atomic_write_head",
+                               side_effect=blocked_head_write):
+            writer_thread = threading.Thread(target=writer)
+            writer_thread.start()
+            self.assertTrue(writer_in_gap.wait(timeout=3))
+            reader_thread = threading.Thread(target=reader)
+            reader_thread.start()
+            self.assertTrue(reader_started.wait(timeout=3))
+            self.assertFalse(reader_finished.wait(timeout=0.1))
+            release_writer.set()
+            writer_thread.join(timeout=3)
+            reader_thread.join(timeout=3)
+
+        self.assertFalse(writer_thread.is_alive())
+        self.assertFalse(reader_thread.is_alive())
+        self.assertEqual(errors, [])
 
 
 class TestCrashInjection(LedgerBase):
