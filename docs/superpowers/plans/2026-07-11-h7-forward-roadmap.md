@@ -1,8 +1,8 @@
 # H7 forward-paper roadmap (dependency-ordered) — DOCUMENTATION ONLY
 
-**Status: Stages 1–3 BUILT (Stage 1 hardened; Stage 2 build-only; Stage 3
-inactive with zero real events). Stages 4–7 remain PROPOSED, NOT IMPLEMENTED,
-NOT ACTIVATED; each is a separately authorized arc.
+**Status: Stages 1–4 BUILT (Stage 1 hardened; Stages 2 and 4 build-only;
+Stage 3 inactive with zero real events). Stages 5–7 remain PROPOSED, NOT
+IMPLEMENTED, NOT ACTIVATED; each is a separately authorized arc.
 Stage 8 — the activation gate — belongs to the next independent review,
 not to any implementation session. (Original 7b-2R.2 deliverable replacing
 the retired 7b-F0 proposal.)**
@@ -78,13 +78,15 @@ lanes, entry/exit intents, owner approvals, fills, skips, data-gap days.
 Write-once, verified like `ledger/experiments.jsonl`; nothing about the
 forward window is reconstructed from memory or prose.
 
-## Stage 4 — T+1 lifecycle (paper)
+## Stage 4 — T+1 lifecycle (paper) — BUILT 2026-07-13; INACTIVE
 
-*Corrected spec drafted and reviewed 2026-07-13:
-`2026-07-12-h7-stage4-t1-paper-lifecycle-SPEC.md`. Implementation remains
-closed pending owner sign-off, owner entry of the sole proposed new parameter
-(`H7_FORWARD_CONTRACTS=1`), and the spec-hash pre-registration fact. No real
-event or activation is authorized.*
+*Corrected spec, owner parameter (`H7_FORWARD_CONTRACTS=1`), and spec-hash
+pre-registration completed before implementation. Implemented as
+`options_researcher/h7_paper_lifecycle.py` +
+`tests/test_h7_paper_lifecycle.py` in commit `03d3922`. Independent review
+passed after remediation; 31 focused tests and the complete 886-test suite
+passed with Ruff, Pyright, and focused pre-commit hooks. BUILD-ONLY,
+SYNTHETIC-ONLY, INACTIVE: no real forward event or activation is authorized.*
 
 The watcher decides at session T; owner-approved entries execute T+1 at
 recorded quotes with the canonical adverse-price transform; exits follow

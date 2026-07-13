@@ -1,11 +1,11 @@
 # H7 Stage 4 — T+1 paper lifecycle: SPEC + pre-registration proposal
 
-**Status: SPEC ONLY. Owner authorized "spec + pre-registration first"
-2026-07-12 (in-session answer). NOTHING in this document is implemented.
-Implementation is a separate arc gated on (1) owner sign-off of this spec,
-(2) the owner typing the one proposed new parameter into `config.py`,
-(3) the pre-registration fact below. The first REAL forward event remains
-prohibited until Stage 8 activation regardless of this spec.**
+**Status: SPEC PRE-REGISTERED; IMPLEMENTATION BUILT 2026-07-13. Owner sign-off,
+the owner-entered `H7_FORWARD_CONTRACTS=1`, and the spec-hash fact all preceded
+implementation. The lifecycle landed in commit `03d3922` after independent
+review and complete verification. It remains BUILD-ONLY, SYNTHETIC-ONLY, and
+INACTIVE. The first REAL forward event remains prohibited until Stage 8
+activation regardless of this implementation.**
 
 Ratified roadmap contract (`2026-07-11-h7-forward-roadmap.md`, Stage 4):
 
