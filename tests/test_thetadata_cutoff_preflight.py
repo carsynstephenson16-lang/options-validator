@@ -1,0 +1,172 @@
+import tempfile
+import unittest
+from datetime import date, datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
+from data.recent_topup import scope_symbols
+from research.hashing import sha256_file
+from tools import thetadata_cutoff_preflight as preflight
+
+SESSIONS = ("2026-07-01", "2026-07-02")
+CUTOFF = date(2026, 7, 3)
+
+
+def calendar(start: str, end: str) -> list[str]:
+    return [day for day in SESSIONS if start <= day <= end]
+
+
+def clean_identity() -> dict:
+    return {"commit": "test", "dirty": False, "dirty_paths": []}
+
+
+def pass_audit(**kwargs) -> dict:
+    sessions = kwargs["sessions"]
+    return {
+        "verdict": "PASS WITH WARNINGS",
+        "counts": {
+            "symbols": len(kwargs["symbols"]),
+            "sessions": len(sessions),
+            "expected_symbol_sessions": len(kwargs["symbols"]) * len(sessions),
+            "blocks": 0,
+            "warnings": 1,
+        },
+        "window": {"start": kwargs["start"], "end": kwargs["end"]},
+    }
+
+
+def h6_ready(*args, **kwargs) -> dict:
+    return {"ready": True, "symbols": {}}
+
+
+def pass_data_gate(requested: date, **kwargs) -> dict:
+    prior = max(day for day in SESSIONS if day < requested.isoformat())
+    return {
+        "evaluation_session": prior,
+        "whole_universe_verdict": "GO",
+        "go_count": 12,
+        "no_go_count": 0,
+    }
+
+
+def source_health(as_of: str) -> dict:
+    return {
+        "evaluation_session": as_of,
+        "healthy_count": 11,
+        "unhealthy_count": 1,
+        "unhealthy_symbols": ["CRWV"],
+        "activation_ready": False,
+    }
+
+
+def blocked_data_gate(requested: date, **kwargs) -> dict:
+    result = pass_data_gate(requested, **kwargs)
+    result.update(
+        {"whole_universe_verdict": "NO_GO", "go_count": 11, "no_go_count": 1}
+    )
+    return result
+
+
+class CutoffPreflightTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.chains = self.root / "chains"
+        self.closes = self.root / "closes"
+        self.chains.mkdir()
+        self.closes.mkdir()
+        self.symbols = scope_symbols("h7")
+        self.facts: dict[tuple[str, str], dict] = {}
+
+    def seed(self, sessions: tuple[str, ...]) -> None:
+        for session in sessions:
+            for symbol in self.symbols:
+                path = self.chains / f"{symbol}_{session}.parquet"
+                path.write_bytes(f"{symbol}-{session}".encode())
+                self.facts[(symbol, session)] = {
+                    "fetched": datetime(2026, 7, 2, tzinfo=timezone.utc),
+                    "sha256": sha256_file(path),
+                }
+
+    def preflight_report(self, today: date, **overrides) -> dict:
+        kwargs = {
+            "cutoff": CUTOFF,
+            "today": today,
+            "chain_dir": self.chains,
+            "close_dir": self.closes,
+            "facts": self.facts,
+            "trading_days_fn": calendar,
+            "audit_fn": pass_audit,
+            "audit_identity_fn": clean_identity,
+            "data_gate_fn": pass_data_gate,
+            "source_health_fn": source_health,
+            "source_identity_fn": clean_identity,
+            "ledger_verify_fn": lambda **_: SimpleNamespace(
+                valid=True, empty=True, count=0, head=None
+            ),
+            "h6_readiness_fn": h6_ready,
+        }
+        kwargs.update(overrides)
+        return preflight.build_preflight(**kwargs)
+
+    def test_before_cutoff_waits_and_derives_terminal_session(self):
+        self.seed((SESSIONS[0],))
+        report = self.preflight_report(date(2026, 7, 2))
+        self.assertEqual(report["terminal_session"], "2026-07-02")
+        self.assertEqual(report["status"], "WAITING_FOR_CUTOFF")
+        self.assertEqual(len(report["scope"]), 12)
+        self.assertFalse(report["paid_pull_authorized"])
+        self.assertEqual(report["cache"]["future_sessions"], ["2026-07-02"])
+
+    def test_cutoff_day_requires_explicit_pull_when_terminal_data_missing(self):
+        self.seed((SESSIONS[0],))
+        report = self.preflight_report(CUTOFF)
+        self.assertEqual(report["status"], "OWNER_AUTHORIZED_PULL_REQUIRED")
+        self.assertEqual(
+            report["cache"]["actionable_missing_by_session"],
+            {"2026-07-02": self.symbols},
+        )
+
+    def test_complete_terminal_cache_is_ready_for_receipts(self):
+        self.seed(SESSIONS)
+        report = self.preflight_report(CUTOFF)
+        self.assertEqual(report["status"], "READY_FOR_RECEIPTS")
+        self.assertTrue(report["cache"]["terminal_complete"])
+        self.assertEqual(report["current_exit_audit"]["verdict"], "PASS WITH WARNINGS")
+        self.assertFalse(report["current_source_health"]["activation_ready"])
+        self.assertIn("2026-07-02", report["commands"]["write_h6_receipt"])
+
+    def test_present_chain_provenance_mismatch_blocks(self):
+        self.seed(SESSIONS)
+        self.facts[(self.symbols[0], SESSIONS[0])]["sha256"] = "0" * 64
+        report = self.preflight_report(CUTOFF)
+        self.assertEqual(report["status"], "BLOCK")
+        self.assertEqual(len(report["provenance"]["mismatches"]), 1)
+
+    def test_nonempty_real_ledger_blocks(self):
+        self.seed(SESSIONS)
+        report = self.preflight_report(
+            CUTOFF,
+            ledger_verify_fn=lambda **_: SimpleNamespace(
+                valid=True, empty=False, count=1, head="a" * 64
+            ),
+        )
+        self.assertEqual(report["status"], "BLOCK")
+        self.assertIn("real H7 forward ledger", " ".join(report["blockers"]))
+
+    def test_current_or_future_session_file_blocks_as_not_final(self):
+        self.seed(SESSIONS)
+        report = self.preflight_report(date(2026, 7, 2))
+        self.assertEqual(report["status"], "BLOCK")
+        self.assertEqual(len(report["provenance"]["premature_present"]), 12)
+
+    def test_current_data_gate_must_be_exact_session_twelve_of_twelve(self):
+        self.seed(SESSIONS)
+        report = self.preflight_report(CUTOFF, data_gate_fn=blocked_data_gate)
+        self.assertEqual(report["status"], "BLOCK")
+        self.assertIn("Stage-2 data gate", " ".join(report["blockers"]))
+
+
+if __name__ == "__main__":
+    unittest.main()

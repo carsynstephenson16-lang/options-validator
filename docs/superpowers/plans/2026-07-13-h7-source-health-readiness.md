@@ -79,15 +79,31 @@ not infer that results occurred. After the release:
 
 ## July 29 sequence
 
-1. Refresh CRWV/NOW source evidence under owner review before any market-data
+1. Run the read-only cutoff preflight:
+
+   ```bash
+   uv run python tools/thetadata_cutoff_preflight.py \
+     --cutoff 2026-07-29 --json
+   ```
+
+   It must derive terminal session 2026-07-28, exact scope 12, preserve
+   `paid_pull_authorized=false` and `stage8_open=false`, and report no
+   integrity `BLOCK`. `OWNER_AUTHORIZED_PULL_REQUIRED` is the expected
+   pre-pull status on July 29; it is a statement of missing terminal cache,
+   never authorization.
+2. Refresh CRWV/NOW source evidence under owner review before any market-data
    decision.
-2. Run the cancellation checklist's 12-name top-up only with explicit paid
+3. Run the cancellation checklist's 12-name top-up only with explicit paid
    pull authorization.
-3. Build the immutable ThetaData exit receipt and verify it from disk.
-4. Build H6's terminal-session features, create its exact-session watch
+4. Rerun the preflight and require `READY_FOR_RECEIPTS`; source health may
+   remain below 12/12 and must remain honestly reported as an activation gate.
+5. Build the immutable ThetaData exit receipt and verify it from disk.
+6. Build H6's terminal-session features, create its exact-session watch
    receipt, and verify the receipt from disk. This proves offline
    reconstructability only; it cannot create or backfill an H6 paper row.
-5. Run source health and the Stage-2 data gate on the same latest completed
-   session; both must be 12/12.
-6. Keep Stage 8 closed. Subscription preservation and source remediation do
+7. Run source health and the Stage-2 data gate on the same latest completed
+   session. The data gate must be 12/12. Record source health honestly; below
+   12/12 keeps Stage 8 blocked but does not invalidate preservation of the
+   terminal paid cache or its cancellation receipts.
+8. Keep Stage 8 closed. Subscription preservation and source remediation do
    not fill the blank owner activation inputs.

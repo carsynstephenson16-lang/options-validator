@@ -13,18 +13,33 @@ authorize a real forward event.
 Run this as often as useful; it never touches the network:
 
 ```bash
+uv run python tools/thetadata_cutoff_preflight.py \
+  --cutoff 2026-07-29 --json
 uv run python data/recent_topup.py --scope h7 --dry-run
 ```
 
-It must name the exact 12-name H7 scope and list every session still missing.
-The original default remains the four-name core scope, so omitting
-`--scope h7` is insufficient for cancellation readiness.
+The preflight derives July 28 as the terminal completed session and proves the
+exact 12-name scope, complete required-session inventory, content-bound cache
+provenance, current exit audit, 12/12 Stage-2 gate, H6 feature-input history,
+source-health status, clean tool identity, and real `VALID EMPTY` ledger. It is
+read-only, prints the exact future commands, and always reports paid-pull
+authorization as `false`. Before cutoff, require `WAITING_FOR_CUTOFF` (or
+`OWNER_AUTHORIZED_TOPUP_AVAILABLE` if completed sessions are missing); on July
+29 before the pull, expect `OWNER_AUTHORIZED_PULL_REQUIRED`; only after the
+authorized pull may it report `READY_FOR_RECEIPTS`. Any `BLOCK` must be
+remediated rather than bypassed. Source health below 12/12 remains an H7
+activation blocker but does not prevent preservation of the paid cache.
+
+The separate dry run must name the exact 12-name H7 scope and list every
+session still missing. The original default remains the four-name core scope,
+so omitting `--scope h7` is insufficient for cancellation readiness.
 
 ## On July 29 (run locally, in order)
 
 1. Re-run the dry-run command above. The tool excludes July 29 itself because
    that EOD report is not final before the subscription ends; the expected
-   terminal session is July 28.
+   terminal session is July 28. Also run the cutoff preflight and retain its
+   honest `OWNER_AUTHORIZED_PULL_REQUIRED` or `READY_FOR_RECEIPTS` result.
 2. With explicit owner execution authorization, run:
 
    ```bash

@@ -247,6 +247,13 @@ an exact-evaluation-session adjusted close AND EOD chain; exit 0 GO / 1 NO_GO
 evaluation session 2026-07-10 (12/12,
 `reports/h7_data_gate/2026-07-10.json`) after the authorized cache top-up;
 this is data-readiness evidence, not operational authorization.
+The network-free cutoff preflight
+`uv run python tools/thetadata_cutoff_preflight.py --cutoff 2026-07-29`
+derives the July 28 terminal session and combines the 12-name inventory,
+cache provenance, exit audit, Stage-2 gate, source health, H6 input history,
+clean source identity, and real-ledger verification. It never fetches, writes,
+opens Stage 8, or authorizes the paid pull; follow its status contract in the
+ThetaData cancellation checklist.
 Operator order: **source health → data gate → watcher**; never run the
 watcher when either preceding command is non-zero. Stages 3–7 are **BUILT but
 INACTIVE** with zero real events; Stages 4–7 are BUILD-ONLY and
