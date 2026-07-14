@@ -17,7 +17,6 @@ import argparse
 import json
 import math
 import os
-import re
 import subprocess
 import sys
 from datetime import date, datetime, time, timedelta
@@ -30,6 +29,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
+from data.cache_provenance import load_blind_cache_facts  # noqa: E402
 from data.cache_runner import trading_days  # noqa: E402
 from data.recent_topup import audit_chain, scope_symbols  # noqa: E402
 from data.thetadata_adapter import validate_chain_schema  # noqa: E402
@@ -49,11 +49,9 @@ EOD_REPORT_READY_ET = time(17, 15)
 PARITY_WARN_DRIFT = 0.005
 PARITY_BLOCK_DRIFT = 0.01
 QUALITY_WIDE_SPREAD = 0.20
-_BLIND_RE = re.compile(
-    r"^(\S+)\tBLIND_CACHE symbol=(\S+) date=(\S+) rows=\S+ sha256=(\S+)"
-)
 SOURCE_PATHS = (
     "config.py",
+    "data/cache_provenance.py",
     "data/cache_runner.py",
     "data/recent_topup.py",
     "data/thetadata_adapter.py",
@@ -68,18 +66,7 @@ SOURCE_PATHS = (
 
 def fetch_facts(path: Path = DEFAULT_FACTS_PATH) -> dict[tuple[str, str], dict]:
     """Return the latest content-bound BLIND_CACHE fact per symbol/session."""
-    out: dict[tuple[str, str], dict] = {}
-    if not path.exists():
-        return out
-    with path.open() as handle:
-        for line in handle:
-            match = _BLIND_RE.match(line)
-            if match:
-                out[(match.group(2), match.group(3))] = {
-                    "fetched": datetime.fromisoformat(match.group(1)),
-                    "sha256": match.group(4),
-                }
-    return out
+    return load_blind_cache_facts(path)
 
 
 def source_identity() -> dict:

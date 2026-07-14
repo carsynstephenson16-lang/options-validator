@@ -78,14 +78,20 @@ The original default remains the four-name core scope, so omitting
    ```
 
    Require receipt action `WROTE`, then `VERIFIED`, with no blockers. The
-   receipt binds the trial-7 registration, full tracked book, raw/promoted
-   earnings stores, all three exact chains and feature artifacts, frozen H6
-   parameters/cost/bootstrap model, and the evaluator source. Preserve its
-   SHA-256 in the cancel fact. If a prospectively operated H6 process records
-   an entry or close, that CSV action must cite this hash; one receipt can
-   authorize only one action, so rerun under a new sequenced filename before
-   any second same-session action. The terminal cache-readiness receipt itself
-   authorizes no action.
+   feature command must first create three adjacent
+   `*_features.manifest.json` files. The watch independently verifies that
+   every manifest still matches all contributing chains, the close store,
+   exact feature bytes, feature parameters, runtime, source, and every
+   timestamped content-matching `BLIND_CACHE` acquisition fact. Any missing or
+   mismatched fact blocks the build/watch. The receipt then binds those
+   manifests plus the trial-7 registration, full tracked book, raw/promoted
+   earnings stores, three exact-session chains, frozen H6
+   parameters/cost/bootstrap model, and evaluator source. Preserve its SHA-256
+   in the cancel fact. If a prospectively operated H6 process records an entry
+   or close, that CSV action must cite this hash; one receipt can authorize
+   only one action, so rerun under a new sequenced filename before any second
+   same-session action. The terminal cache-readiness receipt itself authorizes
+   no action.
 
    This is a cache-readiness check, not permission to backfill a paper entry.
    If the watch prints `ELIGIBLE`, record it only if H6 was already being run

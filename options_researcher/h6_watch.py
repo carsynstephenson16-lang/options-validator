@@ -29,6 +29,10 @@ from data.cache_runner import session_close_utc, trading_days
 from data.pandas_feed import adverse_buy, adverse_sell, quote_valid
 from data.thetadata_adapter import passes_liquidity
 from options_researcher.chains import is_monthly
+from options_researcher.h6_features import (
+    feature_manifest_path,
+    verify_feature_manifest,
+)
 from options_researcher.h7_earnings import (
     ASSERTIONS_PATH,
     GATING_EVENT_CLASS,
@@ -62,6 +66,7 @@ H6_TRIAL_INTENT_HASH = (
 )
 H6_SOURCE_PATHS = (
     "config.py",
+    "data/cache_provenance.py",
     "metrics.py",
     "data/cache_runner.py",
     "data/pandas_feed.py",
@@ -788,12 +793,17 @@ def score_book(
     )
 
 
-def _feature_iv_rank(symbol: str, on: date, feature_dir: Path) -> float:
+def _feature_iv_rank(
+    symbol: str, on: date, feature_dir: Path, chain_dir: Path
+) -> float:
     path = feature_dir / f"{symbol}_features.parquet"
     if not path.exists():
         raise FileNotFoundError(
             f"{path} missing; run options_researcher.h6_features first"
         )
+    verify_feature_manifest(
+        symbol, on, feature_dir=feature_dir, chain_dir=chain_dir
+    )
     frame = pd.read_parquet(path)
     keys = pd.Index(frame.index).astype(str)
     hits = frame.loc[keys == on.isoformat()]
@@ -879,14 +889,16 @@ def build_snapshot(
     for symbol in config.H6_NAMES:
         chain_path = chain_dir / f"{symbol}_{iso}.parquet"
         feature_path = feature_dir / f"{symbol}_features.parquet"
+        manifest_path = feature_manifest_path(symbol, feature_dir)
         inputs[f"chain:{symbol}"] = chain_path
         inputs[f"feature:{symbol}"] = feature_path
+        inputs[f"feature_manifest:{symbol}"] = manifest_path
         try:
             if not chain_path.exists():
                 raise FileNotFoundError(f"exact chain missing: {chain_path}")
             chain = pd.read_parquet(chain_path)
             chains[symbol] = chain
-            iv_rank = _feature_iv_rank(symbol, on, feature_dir)
+            iv_rank = _feature_iv_rank(symbol, on, feature_dir, chain_dir)
             entries.append(
                 evaluate_entry(
                     symbol,

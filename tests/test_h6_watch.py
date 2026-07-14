@@ -540,6 +540,9 @@ class ReceiptTests(unittest.TestCase):
             pd.DataFrame(
                 {"iv_rank": [0.2]}, index=pd.Index([AS_OF.isoformat()])
             ).to_parquet(feature_dir / f"{symbol}_features.parquet")
+            (feature_dir / f"{symbol}_features.manifest.json").write_text(
+                "synthetic manifest fixture\n"
+            )
         gating_path = root / "gating.csv"
         raw_path = root / "raw.csv"
         gating_path.write_text("synthetic gating fixture\n")
@@ -548,11 +551,16 @@ class ReceiptTests(unittest.TestCase):
             assertion(symbol, "2026-08-26", status="estimated")
             for symbol in config.H6_NAMES
         ]
-        with mock.patch(
-            "options_researcher.h6_watch.load_assertions",
-            return_value=assertions,
+        with (
+            mock.patch(
+                "options_researcher.h6_watch.load_assertions",
+                return_value=assertions,
+            ),
+            mock.patch(
+                "options_researcher.h6_watch.verify_feature_manifest"
+            ) as verify_manifest,
         ):
-            return build_snapshot(
+            result = build_snapshot(
                 AS_OF,
                 book_path=book_path,
                 chain_dir=chain_dir,
@@ -560,6 +568,8 @@ class ReceiptTests(unittest.TestCase):
                 assertions_path=gating_path,
                 raw_assertions_path=raw_path,
             )
+        self.assertEqual(verify_manifest.call_count, len(config.H6_NAMES))
+        return result
 
     def test_snapshot_and_receipt_bind_all_exact_session_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -570,6 +580,16 @@ class ReceiptTests(unittest.TestCase):
             receipt = build_receipt(snapshot, inputs)
             self.assertEqual(receipt["hypothesis_id"], "H6")
             self.assertEqual(set(receipt["input_files"]), set(inputs))
+            self.assertEqual(
+                len(
+                    [
+                        label
+                        for label in inputs
+                        if label.startswith("feature_manifest:")
+                    ]
+                ),
+                len(config.H6_NAMES),
+            )
             self.assertEqual(verify_receipt(receipt, receipt), [])
 
             changed = next(path for label, path in inputs.items() if label.startswith("chain:"))

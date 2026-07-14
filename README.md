@@ -203,10 +203,16 @@ uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD \
 The watch reads point-in-time earnings assertions from `gating_v3.csv`, the
 exact-session cached chain, and the manually maintained
 `data/positions/h6_positions.csv`; missing/stale facts block rather than fall
-back. A clean run can create one immutable receipt binding the output to the
-trial-7 registration, full book, raw/promoted earnings stores, all exact chain
-and feature artifacts, frozen H6/cost/bootstrap parameters, and relevant
-source files. Verification fully recomputes that receipt; any changed surface
+back. The feature builder atomically writes one self-hashed manifest beside
+each parquet artifact. Each manifest binds every contributing chain, the raw
+close store, the exact output bytes, feature constants, runtime versions, and
+builder source. Every chain must also match its timestamped, content-bound
+`BLIND_CACHE` acquisition fact; a missing/malformed fact or SHA mismatch stops
+the build/watch. The watch refuses missing, stale, or mutated manifests. A
+clean watch can then create one immutable receipt binding those manifests and
+outputs to the trial-7 registration, full book, raw/promoted earnings stores,
+exact-session chains, frozen H6/cost/bootstrap parameters, and evaluator
+source. Verification fully recomputes that receipt; any changed surface
 invalidates it. A receipt proves what the read-only watch saw, not that a paper
 entry was recorded prospectively. Every future book entry and close must cite
 its exact receipt SHA-256. One receipt may authorize only one manual book

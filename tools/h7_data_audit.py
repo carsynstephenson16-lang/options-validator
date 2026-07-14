@@ -88,10 +88,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import json
-import re
 import subprocess
 from datetime import date as Date
-from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -103,6 +101,7 @@ from data.audit_exceptions import (
     H7_AUDIT_EXCEPTIONS,
     unratified_coverage_entries,
 )
+from data.cache_provenance import load_blind_cache_facts
 from data.h7_manifest import classify_cache, eligible_manifest
 from research.hashing import (
     DIAGNOSTIC_SOURCE_HASH_VERSION,
@@ -136,8 +135,6 @@ REJECTED_COVERAGE_PATH = Path("data/earnings/coverage.json")
 CHAIN_COLUMNS = ["expiration", "strike", "right", "bid", "ask",
                  "open_interest", "iv", "delta", "gamma", "theta", "vega"]
 NY = ZoneInfo("America/New_York")
-_BLIND_RE = re.compile(
-    r"^(\S+)\tBLIND_CACHE symbol=(\S+) date=(\S+) rows=\S+ sha256=(\S+)")
 ADAPTER_ENDPOINT = "option_history_greeks_eod"
 
 LEGACY_PROVENANCE_ASSUMPTION = (
@@ -174,18 +171,7 @@ def expected_manifest(symbols=None, start=None, end=None, sessions=None,
 def fetch_facts_from_ledger(facts_path: Path = FACTS_PATH) -> dict:
     """{(symbol, day): {"fetched": datetime, "sha256": str}} from
     BLIND_CACHE fact lines (timestamp AND content hash)."""
-    facts: dict = {}
-    if not facts_path.exists():
-        return facts
-    with facts_path.open() as f:
-        for line in f:
-            m = _BLIND_RE.match(line)
-            if m:
-                facts[(m.group(2), m.group(3))] = {
-                    "fetched": datetime.fromisoformat(m.group(1)),
-                    "sha256": m.group(4),
-                }
-    return facts
+    return load_blind_cache_facts(facts_path)
 
 
 def load_tracked_manifest(path: Path = TRACKED_MANIFEST_PATH) -> dict:
