@@ -1,0 +1,913 @@
+{
+ "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+ "evaluation_session": "2026-07-13",
+ "go_count": 12,
+ "no_go_count": 0,
+ "requested_run_date": "2026-07-14",
+ "schema_version": 1,
+ "symbols": {
+  "AMD": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 6970,
+     "selectable": 1042,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 246 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/AMD_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 6970
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/AMD.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "AMD",
+   "verdict": "GO"
+  },
+  "AMZN": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 2372,
+     "selectable": 750,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 83 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/AMZN_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 2372
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/AMZN.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "AMZN",
+   "verdict": "GO"
+  },
+  "AVGO": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 3630,
+     "selectable": 578,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 148 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/AVGO_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 3630
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/AVGO.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "AVGO",
+   "verdict": "GO"
+  },
+  "CEG": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 1658,
+     "selectable": 126,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 43 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/CEG_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 1658
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/CEG.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "CEG",
+   "verdict": "GO"
+  },
+  "CRWV": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 1971,
+     "selectable": 609,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 19 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/CRWV_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 1971
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/CRWV.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "CRWV",
+   "verdict": "GO"
+  },
+  "MSFT": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 3674,
+     "selectable": 902,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 76 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/MSFT_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 3674
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/MSFT.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "MSFT",
+   "verdict": "GO"
+  },
+  "NOW": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 2028,
+     "selectable": 463,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 36 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/NOW_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 2028
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/NOW.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "NOW",
+   "verdict": "GO"
+  },
+  "NVDA": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 3876,
+     "selectable": 1046,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 147 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/NVDA_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 3876
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/NVDA.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "NVDA",
+   "verdict": "GO"
+  },
+  "PLTR": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 2464,
+     "selectable": 771,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 66 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/PLTR_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 2464
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/PLTR.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "PLTR",
+   "verdict": "GO"
+  },
+  "SMCI": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 1644,
+     "selectable": 485,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 64 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/SMCI_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 1644
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/SMCI.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "SMCI",
+   "verdict": "GO"
+  },
+  "TEM": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 890,
+     "selectable": 49,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 35 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/TEM_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 890
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/TEM.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "TEM",
+   "verdict": "GO"
+  },
+  "VST": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 1352,
+     "selectable": 132,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 106 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/VST_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 1352
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/VST.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "VST",
+   "verdict": "GO"
+  }
+ },
+ "universe": [
+  "AMD",
+  "AMZN",
+  "AVGO",
+  "CEG",
+  "CRWV",
+  "MSFT",
+  "NOW",
+  "NVDA",
+  "PLTR",
+  "SMCI",
+  "TEM",
+  "VST"
+ ],
+ "whole_universe_verdict": "GO"
+}
