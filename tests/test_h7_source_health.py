@@ -140,11 +140,11 @@ class TestSymbolHealth(unittest.TestCase):
 class TestUniverseAndSessions(unittest.TestCase):
     def test_watch_universe_is_the_watcher_universe(self):
         names = watch_universe()
-        self.assertEqual(len(names), 12)
+        self.assertEqual(len(names), 13)
         self.assertNotIn("HYLN", names)
-        # IREN staged (H7_EXCLUDED) pending base chain cache -- see
-        # H7_AMENDMENT_V1_5_ADDENDUM.
-        self.assertNotIn("IREN", names)
+        # IREN ACTIVATED 2026-07-15 (base chain cache built) -- now in the
+        # watch universe. See IREN_ACTIVATION in facts.log.
+        self.assertIn("IREN", names)
         for sym in ("CRWV", "NVDA", "VST", "AMZN"):
             self.assertIn(sym, names)
 

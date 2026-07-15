@@ -1,6 +1,6 @@
 """Stage 2 whole-universe daily data gate (BUILD-ONLY). The gate is
 read-only w.r.t. every market-data store: it reads fixture parquet caches
-and never fetches. GO requires all 12 names to have an adjusted close AND an
+and never fetches. GO requires all 13 names to have an adjusted close AND an
 EOD chain for the EXACT evaluation session; anything else is a fail-closed
 NO_GO. These tests inject tiny fixture caches via close_dir/chain_dir and
 prove no fetch path is ever touched and no input byte changes."""
@@ -75,7 +75,7 @@ class TestWholeUniverseGo(GateBase):
         res = self._eval()
         self.assertEqual(res["evaluation_session"], self.eval_iso)
         self.assertEqual(res["whole_universe_verdict"], "GO")
-        self.assertEqual(res["go_count"], 12)
+        self.assertEqual(res["go_count"], 13)
         self.assertEqual(res["no_go_count"], 0)
         for sym in watch_universe():
             self.assertEqual(res["symbols"][sym]["verdict"], "GO")
@@ -333,7 +333,7 @@ class TestCliContract(GateBase):
         (self.chain_dir / f"AMZN_{self.eval_iso}.parquet").unlink()
         res = self._eval()
         self.assertEqual(sum(1 for s in res["symbols"].values()
-                             if s["verdict"] == "GO"), 11)
+                             if s["verdict"] == "GO"), 12)
         self.assertEqual(res["whole_universe_verdict"], "NO_GO")
         self.assertEqual(self._run(), 1)
 

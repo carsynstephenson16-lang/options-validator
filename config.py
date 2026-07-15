@@ -261,13 +261,13 @@ H7_WATCHLIST = ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
                 "IREN"]  # IREN added H7_AMENDMENT_V1_5 2026-07-14 (owner-typed,
                          # AI-infrastructure story name; ledger/facts.log)
 H7_CORE_LONG_ONLY = ["VST", "CEG", "MSFT", "AMZN"]  # H7a/b eligible; H7c stays H5's book
-H7_EXCLUDED = ["HYLN", "IREN"]  # HYLN: dead chain (~128 rows/day). IREN: STAGED,
-# not dead -- zero cached options chains yet; paid ThetaData base chain
-# backfill is an owner-sign-off decision not yet taken. Excluding IREN keeps
-# the active universe at the pre-IREN 12 names for recent_topup/h7_data_gate/
-# h7_watch/qm_watch. Activation = remove IREN from this list once its base
-# chain cache exists (data/cache_runner.py). See facts H7_AMENDMENT_V1_5 +
-# H7_AMENDMENT_V1_5_ADDENDUM in ledger/facts.log.
+H7_EXCLUDED = ["HYLN"]  # HYLN: dead chain (~128 rows/day). IREN ACTIVATED
+# 2026-07-15 (owner-authorized): base option-chain cache built, 1,054 files
+# spanning 2022-04-29..2026-07-14 (IREN options first listed 2022-04-29; the
+# 112 earlier days are pre-options-listing gaps, skip-and-logged). IREN now
+# enters the H7 forward-watch universe (recent_topup/h7_data_gate/h7_watch/
+# qm_watch). See facts H7_AMENDMENT_V1_5 + H7_AMENDMENT_V1_5_ADDENDUM +
+# IREN_ACTIVATION + DATA_PULL_BACKFILL in ledger/facts.log.
 
 H7A_DRAWDOWN_MIN = 0.25         # drawdown from 52wk high to arm lane a
 H7A_RECLAIM_LOOKBACK_D = 20     # stabilization = first close > prior 20d high

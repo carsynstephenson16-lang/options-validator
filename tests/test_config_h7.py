@@ -17,8 +17,9 @@ class TestH7Freeze(unittest.TestCase):
             ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO", "IREN"],
         )
         self.assertEqual(config.H7_CORE_LONG_ONLY, ["VST", "CEG", "MSFT", "AMZN"])
-        # IREN staged pending base chain cache -- see H7_AMENDMENT_V1_5_ADDENDUM.
-        self.assertEqual(config.H7_EXCLUDED, ["HYLN", "IREN"])
+        # IREN ACTIVATED 2026-07-15: base option-chain cache built, so only
+        # HYLN (dead chain) stays excluded -- see IREN_ACTIVATION in facts.log.
+        self.assertEqual(config.H7_EXCLUDED, ["HYLN"])
 
     def test_entry_thresholds(self):
         self.assertEqual(config.H7A_DRAWDOWN_MIN, 0.25)

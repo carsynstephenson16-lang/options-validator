@@ -79,13 +79,13 @@ class ScopeTests(unittest.TestCase):
         )
 
     def test_h7_scope_is_the_exact_forward_watch_universe(self):
-        # IREN staged (H7_EXCLUDED) pending base chain cache -- see
-        # H7_AMENDMENT_V1_5_ADDENDUM. Excluded from the active scope.
+        # IREN ACTIVATED 2026-07-15 (base chain cache built) -- now in the
+        # active forward-watch scope. See IREN_ACTIVATION in facts.log.
         self.assertEqual(
             recent_topup.scope_symbols("h7"),
             [
                 "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA",
-                "AMD", "AVGO", "VST", "CEG", "MSFT", "AMZN",
+                "AMD", "AVGO", "IREN", "VST", "CEG", "MSFT", "AMZN",
             ],
         )
 
