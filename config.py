@@ -234,7 +234,10 @@ H5_ENTRY_IVR_MAX = 0.5
 H6_NAMES = ("NVDA", "PLTR", "AMZN")
 H6_EARNINGS_BAN_SESSIONS = 5
 H6_POST_EARNINGS_SESSIONS = 5
-H6_IVR_MAX = 0.5
+H6_IVR_MAX = 0.70  # owner-typed 2026-07-14 (H6_TRIAL7_AMENDMENT_1; was 0.50;
+                   # book/receipts empty at amendment -- forward-only; naked
+                   # long calls at IVR 0.50-0.70 carry higher vega-crush risk,
+                   # disclosed in the fact)
 H6_DTE_BAND = (45, 90)
 H6_DELTA_BAND = (0.30, 0.50)
 H6_MAX_ASK_DOLLARS = 1_000

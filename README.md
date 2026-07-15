@@ -254,8 +254,15 @@ cache provenance, exit audit, Stage-2 gate, source health, H6 input history,
 clean source identity, and real-ledger verification. It never fetches, writes,
 opens Stage 8, or authorizes the paid pull; follow its status contract in the
 ThetaData cancellation checklist.
-Operator order: **source health → data gate → watcher**; never run the
-watcher when either preceding command is non-zero. Stages 3–7 are **BUILT but
+Operator order (**amendment v1.4, owner decision 2026-07-14**): run and
+record **source health**, then the **data gate must be exit 0 (GO 12/12)**,
+then the **watcher** may run; names whose earnings provenance is unhealthy at
+the evaluation cutoff are entry-banned per-name by the watcher's registered
+fail-closed gate (`EARNINGS-UNKNOWN` → no entry) and reported with the run —
+they no longer block the whole board. A data-gate NO_GO still blocks the run
+entirely. Aggregator-estimated dates remain non-promotable
+(`docs/superpowers/plans/2026-07-14-h7-amendment-v1.4-per-name-source-health.md`).
+Stages 3–7 are **BUILT but
 INACTIVE** with zero real events; Stages 4–7 are BUILD-ONLY and
 SYNTHETIC-ONLY, and Stage 8 (activation) is explicitly NOT OPEN and stays
 with owner + independent review. Audit receipts v1–v4

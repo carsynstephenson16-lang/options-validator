@@ -172,11 +172,13 @@ class EntryDecisionTests(unittest.TestCase):
         return [assertion("NVDA", "2026-08-26", status="estimated")]
 
     def test_outside_post_window_requires_finite_low_ivr(self):
+        # Boundary tracks config.H6_IVR_MAX (0.70 since H6_TRIAL7_AMENDMENT_1,
+        # 2026-07-14; was 0.50) instead of a hardcoded literal.
         good = evaluate_entry(
             "NVDA",
             AS_OF,
             chain(),
-            iv_rank=0.50,
+            iv_rank=config.H6_IVR_MAX,
             assertions=self.future(),
             known_as_of=KNOWN,
             book=[],
@@ -186,7 +188,7 @@ class EntryDecisionTests(unittest.TestCase):
             "NVDA",
             AS_OF,
             chain(),
-            iv_rank=0.5001,
+            iv_rank=config.H6_IVR_MAX + 0.0001,
             assertions=self.future(),
             known_as_of=KNOWN,
             book=[],
