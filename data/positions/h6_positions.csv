@@ -1,1 +1,2 @@
 id,symbol,strike,expiration,contracts,entry_date,entry_cost,entry_receipt_hash,exit_date,exit_proceeds,exit_reason,exit_receipt_hash
+H6-0001,NVDA,220.0,2026-09-18,1,2026-07-13,920.65,cc8ccd80d8fdd4712d0e7fceada160c60dec21341f3bb02a823e9f29e2f2e8c0,,,,
