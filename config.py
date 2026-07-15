@@ -281,6 +281,16 @@ H7_EXCLUDED = ["HYLN"]  # HYLN: dead chain (~128 rows/day). USAR ACTIVATED
 # qm_watch). See facts H7_AMENDMENT_V1_5 + H7_AMENDMENT_V1_5_ADDENDUM +
 # IREN_ACTIVATION + DATA_PULL_BACKFILL in ledger/facts.log.
 
+# Per-name entity floor for SIGNAL closes (ledger H7_AMENDMENT_V1_7,
+# owner-delegated decision 2026-07-15): closes on a ticker that predate the
+# current operating company (SPAC-shell prints) are a different economic
+# entity and never feed trailing price signals (RV percentile, coil range,
+# drawdown). Floor = first option-listing date, repo-verified from the chain
+# cache -- a conservative post-merger anchor. Enforced in
+# data.underlying_closes.load_closes_adjusted only; raw strike/spot/chain
+# math is unaffected.
+H7_SIGNAL_CLOSES_START = {"USAR": "2025-04-07"}  # pre-2025 = IPXX SPAC shell
+
 H7A_DRAWDOWN_MIN = 0.25         # drawdown from 52wk high to arm lane a
 H7A_RECLAIM_LOOKBACK_D = 20     # stabilization = first close > prior 20d high
 H7B_RANGE_MAX = 0.15            # (60d high - low)/spot coil ceiling

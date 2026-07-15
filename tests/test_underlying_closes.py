@@ -161,3 +161,49 @@ class YahooFetchWindowTests(unittest.TestCase):
         self.assertEqual(
             underlying_closes.yahoo_fetch_end("2026-05-01", "2026-06-30"),
             "2026-06-30")
+
+
+class EntityFloorTests(unittest.TestCase):
+    """H7_SIGNAL_CLOSES_START (ledger H7_AMENDMENT_V1_7): pre-merger SPAC
+    shell prints on a ticker never reach trailing signals. The floor applies
+    to load_closes_adjusted (the signals contract) only -- raw load_closes is
+    untouched so strike/spot/chain math and audits can still read history."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        patcher = mock.patch.object(underlying_closes, "CACHE_DIR", self.tmp.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.tmp.cleanup)
+        frame = pd.DataFrame({
+            "date": ["2024-06-03", "2025-04-04", "2025-04-07", "2025-04-08"],
+            "close": [10.02, 10.05, 18.40, 19.10],
+        })
+        underlying_closes.store_closes("USAR", frame)
+        underlying_closes.store_closes("VST", synthetic_frame())
+
+    def test_adjusted_loader_floors_floored_symbol(self):
+        s = underlying_closes.load_closes_adjusted(
+            "USAR", "2024-01-01", "2025-12-31", allow_oos=True)
+        self.assertEqual(list(s.index), ["2025-04-07", "2025-04-08"])
+
+    def test_adjusted_loader_noop_when_start_already_past_floor(self):
+        s = underlying_closes.load_closes_adjusted(
+            "USAR", "2025-04-08", "2025-12-31", allow_oos=True)
+        self.assertEqual(list(s.index), ["2025-04-08"])
+
+    def test_raw_loader_still_reads_pre_floor_history(self):
+        s = underlying_closes.load_closes(
+            "USAR", "2024-01-01", "2025-12-31", allow_oos=True)
+        self.assertIn("2024-06-03", s.index)
+
+    def test_unfloored_symbol_unaffected(self):
+        s = underlying_closes.load_closes_adjusted(
+            "VST", "2022-12-01", config.IN_SAMPLE_END)
+        self.assertEqual(list(s.index),
+                         ["2022-12-28", "2022-12-29", "2022-12-30"])
+
+    def test_floor_covers_active_universe_spac_names(self):
+        self.assertIn("USAR", config.H7_SIGNAL_CLOSES_START)
+        floor = config.H7_SIGNAL_CLOSES_START["USAR"]
+        self.assertEqual(floor, "2025-04-07")

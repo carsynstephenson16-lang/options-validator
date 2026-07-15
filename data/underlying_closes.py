@@ -83,7 +83,15 @@ def adjusted_from_raw(raw: pd.Series, symbol: str) -> pd.Series:
 
 def load_closes_adjusted(symbol: str, start_iso: str, end_iso: str, *,
                          allow_oos: bool = False) -> pd.Series:
-    """Split-adjusted (continuous) closes for signal computation."""
+    """Split-adjusted (continuous) closes for signal computation.
+
+    Entity floor (config.H7_SIGNAL_CLOSES_START): closes that predate the
+    current operating company -- pre-SPAC-merger shell prints on the same
+    ticker -- never reach a trailing signal, whatever range the caller asks
+    for (ledger H7_AMENDMENT_V1_7)."""
+    floor = config.H7_SIGNAL_CLOSES_START.get(symbol)
+    if floor is not None and start_iso < floor:
+        start_iso = floor
     return adjusted_from_raw(
         load_closes(symbol, start_iso, end_iso, allow_oos=allow_oos), symbol
     )
