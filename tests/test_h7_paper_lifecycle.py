@@ -18,6 +18,7 @@ import config
 from data.pandas_feed import adverse_buy
 from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_paper_lifecycle as life
+from options_researcher import h7_scope as scope
 
 DECISION = "2026-07-10"
 FILL = "2026-07-13"
@@ -240,7 +241,9 @@ class TestIntentAndApproval(LifecycleCase):
             record_board_resolution,
         )
 
-        universe = sorted(set(config.H7_WATCHLIST) | set(config.H7_BACKTEST_SYMBOLS))
+        # Active/operational universe (H7_EXCLUDED names e.g. staged IREN are
+        # not part of it) -- matches record_board_resolution's expectation.
+        universe = sorted(set(scope.watch_universe()) | set(config.H7_BACKTEST_SYMBOLS))
         self.append(event(
             "sh:T", "source_health", DECISION,
             payload={"healthy_symbols": universe},
@@ -282,7 +285,9 @@ class TestIntentAndApproval(LifecycleCase):
         from options_researcher.h7_forward_book import record_board_resolution
 
         action = {**long_action(), "cost": 400.0}
-        universe = sorted(set(config.H7_WATCHLIST) | set(config.H7_BACKTEST_SYMBOLS))
+        # Active/operational universe (H7_EXCLUDED names e.g. staged IREN are
+        # not part of it) -- matches record_board_resolution's expectation.
+        universe = sorted(set(scope.watch_universe()) | set(config.H7_BACKTEST_SYMBOLS))
         self.append(event(
             "sh:T", "source_health", DECISION,
             payload={"healthy_symbols": universe},

@@ -257,9 +257,17 @@ H6_HARD_KILL_FULL_LOSS_MONTHS = 3
 # hypothesis version (see .claude/skills/ledger-discipline). Spec:
 # docs/superpowers/specs/2026-07-09-h7-swing-options-design.md (+v1.1).
 # ---------------------------------------------------------------------------
-H7_WATCHLIST = ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO"]
+H7_WATCHLIST = ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
+                "IREN"]  # IREN added H7_AMENDMENT_V1_5 2026-07-14 (owner-typed,
+                         # AI-infrastructure story name; ledger/facts.log)
 H7_CORE_LONG_ONLY = ["VST", "CEG", "MSFT", "AMZN"]  # H7a/b eligible; H7c stays H5's book
-H7_EXCLUDED = ["HYLN"]                              # dead chain (~128 rows/day)
+H7_EXCLUDED = ["HYLN", "IREN"]  # HYLN: dead chain (~128 rows/day). IREN: STAGED,
+# not dead -- zero cached options chains yet; paid ThetaData base chain
+# backfill is an owner-sign-off decision not yet taken. Excluding IREN keeps
+# the active universe at the pre-IREN 12 names for recent_topup/h7_data_gate/
+# h7_watch/qm_watch. Activation = remove IREN from this list once its base
+# chain cache exists (data/cache_runner.py). See facts H7_AMENDMENT_V1_5 +
+# H7_AMENDMENT_V1_5_ADDENDUM in ledger/facts.log.
 
 H7A_DRAWDOWN_MIN = 0.25         # drawdown from 52wk high to arm lane a
 H7A_RECLAIM_LOOKBACK_D = 20     # stabilization = first close > prior 20d high

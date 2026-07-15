@@ -10,11 +10,15 @@ import config
 class TestH7Freeze(unittest.TestCase):
     def test_universe_and_lanes(self):
         self.assertEqual(
+            # IREN added via H7_AMENDMENT_V1_5 2026-07-14 (owner-typed
+            # instruction, facts.log; not a hash-chained ledger amendment --
+            # same pattern as the operational-only V1_4).
             config.H7_WATCHLIST,
-            ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO"],
+            ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO", "IREN"],
         )
         self.assertEqual(config.H7_CORE_LONG_ONLY, ["VST", "CEG", "MSFT", "AMZN"])
-        self.assertEqual(config.H7_EXCLUDED, ["HYLN"])
+        # IREN staged pending base chain cache -- see H7_AMENDMENT_V1_5_ADDENDUM.
+        self.assertEqual(config.H7_EXCLUDED, ["HYLN", "IREN"])
 
     def test_entry_thresholds(self):
         self.assertEqual(config.H7A_DRAWDOWN_MIN, 0.25)

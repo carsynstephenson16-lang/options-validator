@@ -79,6 +79,8 @@ class ScopeTests(unittest.TestCase):
         )
 
     def test_h7_scope_is_the_exact_forward_watch_universe(self):
+        # IREN staged (H7_EXCLUDED) pending base chain cache -- see
+        # H7_AMENDMENT_V1_5_ADDENDUM. Excluded from the active scope.
         self.assertEqual(
             recent_topup.scope_symbols("h7"),
             [

@@ -4,7 +4,6 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from data.recent_topup import scope_symbols
 from research.hashing import sha256_file
 from tools import thetadata_cutoff_preflight as preflight
 
@@ -76,7 +75,9 @@ class CutoffPreflightTests(unittest.TestCase):
         self.closes = self.root / "closes"
         self.chains.mkdir()
         self.closes.mkdir()
-        self.symbols = scope_symbols("h7")
+        # Frozen cutoff-decision scope (12 names), decoupled from the mutable
+        # H7 watch universe -- see FROZEN_CUTOFF_SCOPE in the tool under test.
+        self.symbols = list(preflight.FROZEN_CUTOFF_SCOPE)
         self.facts: dict[tuple[str, str], dict] = {}
 
     def seed(self, sessions: tuple[str, ...]) -> None:
@@ -166,6 +167,24 @@ class CutoffPreflightTests(unittest.TestCase):
         report = self.preflight_report(CUTOFF, data_gate_fn=blocked_data_gate)
         self.assertEqual(report["status"], "BLOCK")
         self.assertIn("Stage-2 data gate", " ".join(report["blockers"]))
+
+    def test_frozen_cutoff_scope_is_the_exact_pre_iren_twelve(self):
+        # Locks the decoupling: the cutoff-decision scope is a hardcoded
+        # constant, not derived from the mutable H7 watchlist, so later
+        # watchlist growth (e.g. IREN, H7_AMENDMENT_V1_5) can never silently
+        # widen a decision that was registered before it existed.
+        self.assertEqual(len(preflight.FROZEN_CUTOFF_SCOPE), 12)
+        self.assertEqual(
+            len(preflight.FROZEN_CUTOFF_SCOPE), len(set(preflight.FROZEN_CUTOFF_SCOPE))
+        )
+        self.assertNotIn("IREN", preflight.FROZEN_CUTOFF_SCOPE)
+        self.assertEqual(
+            preflight.FROZEN_CUTOFF_SCOPE,
+            (
+                "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
+                "VST", "CEG", "MSFT", "AMZN",
+            ),
+        )
 
 
 if __name__ == "__main__":

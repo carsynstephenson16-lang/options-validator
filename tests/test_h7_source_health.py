@@ -142,6 +142,9 @@ class TestUniverseAndSessions(unittest.TestCase):
         names = watch_universe()
         self.assertEqual(len(names), 12)
         self.assertNotIn("HYLN", names)
+        # IREN staged (H7_EXCLUDED) pending base chain cache -- see
+        # H7_AMENDMENT_V1_5_ADDENDUM.
+        self.assertNotIn("IREN", names)
         for sym in ("CRWV", "NVDA", "VST", "AMZN"):
             self.assertIn(sym, names)
 

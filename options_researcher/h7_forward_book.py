@@ -20,6 +20,7 @@ from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
     ActivationBoundaryError,
 )
+from options_researcher.h7_scope import watch_universe
 from research.hashing import canonical_json, sha256_hex
 
 
@@ -742,7 +743,11 @@ def record_board_resolution(
         raise BookValidationError("data_gate cause is missing or wrong")
     if source.evaluation_session != session or gate.evaluation_session != session:
         raise BookValidationError("board causes must belong to its session")
-    expected_symbols = set(config.H7_WATCHLIST) | set(config.H7_BACKTEST_SYMBOLS)
+    # The canonical active/operational universe (H7_WATCHLIST + H7_CORE_LONG_ONLY,
+    # minus H7_EXCLUDED e.g. staged names like IREN -- see h7_scope.watch_universe),
+    # not the raw watchlist union, since source_health/data_gate only ever cover
+    # the active universe.
+    expected_symbols = set(watch_universe()) | set(config.H7_BACKTEST_SYMBOLS)
     healthy_symbols = source.payload.get("healthy_symbols")
     if (
         not isinstance(healthy_symbols, list)

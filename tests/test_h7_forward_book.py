@@ -16,6 +16,7 @@ from options_researcher.h7_forward_book import (
     record_board_resolution,
 )
 from options_researcher.h7_paper_lifecycle import ActivationBoundaryError
+from options_researcher.h7_scope import watch_universe
 
 
 def _clock():
@@ -330,7 +331,9 @@ class TestCapacity(BookCase):
 
 class TestBoard(BookCase):
     def upstream(self, session="2026-07-10"):
-        universe = sorted(set(config.H7_WATCHLIST) | set(config.H7_BACKTEST_SYMBOLS))
+        # Active/operational universe (H7_EXCLUDED names e.g. staged IREN are
+        # not part of it) -- matches record_board_resolution's expectation.
+        universe = sorted(set(watch_universe()) | set(config.H7_BACKTEST_SYMBOLS))
         self.append(
             "health", "source_health", session,
             payload={"healthy_symbols": universe},
@@ -464,7 +467,7 @@ class TestBoard(BookCase):
             "health-2", "source_health", "2026-07-13",
             payload={
                 "healthy_symbols": sorted(
-                    set(config.H7_WATCHLIST) | set(config.H7_BACKTEST_SYMBOLS)
+                    set(watch_universe()) | set(config.H7_BACKTEST_SYMBOLS)
                 )
             },
         )

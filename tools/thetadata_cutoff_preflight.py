@@ -38,6 +38,22 @@ DEFAULT_CHAIN_DIR = Path(".cache/chains")
 DEFAULT_CLOSE_DIR = Path(".cache/underlying")
 DEFAULT_FACTS_PATH = Path("ledger/facts.log")
 DEFAULT_LEDGER_DIR = Path("ledger/h7_forward")
+
+# FROZEN cutoff-decision scope for the 2026-07-25 ThetaData renewal gate.
+# This preflight audits a decision that was REGISTERED on exactly these 12
+# names before IREN existed anywhere in H7 scope. H7_AMENDMENT_V1_5
+# (2026-07-14, ledger/facts.log) added IREN to config.H7_WATCHLIST, growing
+# the *live* watch universe (recent_topup.scope_symbols("h7") /
+# options_researcher.h7_scope.watch_universe()) to 13 names. That growth
+# must never silently widen THIS frozen decision's scope, so the list below
+# is a hardcoded constant, deliberately decoupled from H7_WATCHLIST /
+# watch_universe() -- it does not read config.H7_WATCHLIST and must not be
+# derived from it. Revisiting the cutoff-decision scope itself (e.g. to add
+# IREN) is a new pre-registered decision, not a silent widen of this one.
+FROZEN_CUTOFF_SCOPE = (
+    "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
+    "VST", "CEG", "MSFT", "AMZN",
+)
 SOURCE_PATHS = (
     "config.py",
     "data/cache_provenance.py",
@@ -194,7 +210,7 @@ def _source_health_readiness(as_of: str) -> dict:
             known_as_of=known_as_of,
             warn_sessions=config.H7_SOURCE_HEALTH_WARN_SESSIONS,
         )
-        for symbol in recent_topup.scope_symbols("h7")
+        for symbol in FROZEN_CUTOFF_SCOPE
     ]
     unhealthy = [row["symbol"] for row in health if not row["healthy"]]
     return {
@@ -226,7 +242,7 @@ def build_preflight(
     h6_readiness_fn=_h6_input_readiness,
 ) -> dict:
     """Build a deterministic cutoff report without any write/network path."""
-    symbols = recent_topup.scope_symbols("h7")
+    symbols = list(FROZEN_CUTOFF_SCOPE)
     if len(symbols) != 12 or len(symbols) != len(set(symbols)):
         raise ValueError(f"H7 cutoff scope must be 12 unique names; got {symbols}")
     terminal = _terminal_session(cutoff, trading_days_fn)
