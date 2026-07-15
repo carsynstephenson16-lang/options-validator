@@ -7,6 +7,13 @@ review and complete verification. It remains BUILD-ONLY, SYNTHETIC-ONLY, and
 INACTIVE. The first REAL forward event remains prohibited until Stage 8
 activation regardless of this implementation.**
 
+**Amendment V1 (2026-07-15, `H7_STAGE4_SPEC_AMENDMENT_V1`): two reused-rule
+clarifications — a report-cutoff bound on pending-exit retries (§2, §3) and a
+deterministic per-session transition order with symbol/lane reservation
+(§1a) — plus five new §10 acceptance criteria. No new tunable parameter;
+`H7_FORWARD_CONTRACTS` unchanged. The enforcement implementation and its tests
+follow on this reviewed branch after the owner types the amendment fact.**
+
 Ratified roadmap contract (`2026-07-11-h7-forward-roadmap.md`, Stage 4):
 
 > The watcher decides at session T; owner-approved entries execute T+1 at
@@ -40,6 +47,27 @@ sessions they read (the `evaluation_session` contract in `h7_watch`):
   frozen; discretion re-enters). Stage 4 adds no discretionary manual-close
   reason to the verdict path.
 
+## 1a. Deterministic per-session order (amendment V1)
+
+Within a single run's processing of one evaluation context, transitions occur
+in a fixed order, reproduced byte-identically on rerun:
+
+1. **Settle** approved pending entry intents — compute each T+1 paper fill at
+   the **prior session's recorded EOD quotes**, emitting `paper_fill` / `skip`
+   / `data_gap`.
+2. **Evaluate** the watcher and exit triggers against the resulting open book.
+   A position settled in step 1 **is part of the open book here** and is
+   eligible for same-session exit evaluation.
+3. **Create** new `entry_intent`s from the current watcher ENTRY-OK output.
+
+**Reservation.** An approved pending entry intent reserves its symbol/lane
+from approval until it settles (`paper_fill`) or expires (`skip`/`data_gap`).
+While reserved, no competing `entry_intent` for the same symbol/lane may be
+created — enforcing one-position-per-symbol/lane against in-flight intents,
+not just open positions. Settlement converts the reservation to the open
+position; expiry (including `approval_late` / `approval_missing`) releases it
+**before step 3 of the same run**, freeing the symbol/lane for a fresh intent.
+
 ## 2. Fill mechanics (existing guardrails, bound not restated)
 
 - Quote source: the cached EOD chain parquet for the fill session
@@ -65,11 +93,23 @@ sessions they read (the `evaluation_session` contract in `h7_watch`):
   two-sided and uncrossed, or the whole day absent) → `data_gap` + `skip`;
   the entry intent **expires**. Cancel-never-chase means no re-pricing at
   T+2; a fresh entry requires a fresh watcher decision.
-- Missing/invalid EOD at an **exit** fill session → `data_gap`, but the exit
-  intent remains pending and retries on the first later session with valid
-  quotes. It never silently reopens or expires; unresolved at expiration
-  fails loud. This preserves the frozen exit causality already implemented in
-  `strategies.h7_backtest`.
+- Missing/invalid EOD at an **exit** fill session → `data_gap`. For a
+  **non-report-gated** (long-lane a/b) exit, the intent remains pending and
+  retries on the first later session with valid quotes; it never silently
+  reopens or expires; unresolved at expiration fails loud. This preserves the
+  frozen exit causality already implemented in `strategies.h7_backtest`.
+- For a **report-gated** position (`H7C_CLOSE_BEFORE_EARNINGS` — H7c short
+  premium), the pending-exit retry is **bounded by the report cutoff**: the
+  last completed session strictly before the position's next scheduled report.
+  If valid two-sided EOD quotes to fill the exit are unavailable at or before
+  that cutoff session, the exit intent does **not** retry into or past the
+  report — it terminates with a **terminal fail-loud `data_gap`** (reason
+  `exit_data_gap_at_earnings_cutoff`). **Invariant: no exit `paper_fill` may be
+  dated at a session on or after a report-gated position's scheduled report.**
+  A short-premium position that cannot be priced-and-closed before its report
+  has breached its frozen never-held-through-a-report rule (§5); the sim
+  records that breach loudly rather than papering it over with a post-report
+  fill at stale quotes. (Amended: `H7_STAGE4_SPEC_AMENDMENT_V1`.)
 
 ## 3. Lifecycle state machine → Stage 3 events
 
@@ -86,6 +126,7 @@ sessions they read (the `evaluation_session` contract in `h7_watch`):
 | Intent expiry / gate-fail / liquidity-fail | `skip` | the intent (+ the failing `data_gate` or `data_gap`) |
 | Missing/invalid required session data | `data_gap` | the session `data_gate` (payload names a session-wide or contract-local gap) |
 | Trigger fires on open position | `exit_intent` | opening `paper_fill`, trigger-session `data_gate` (+ `source_health` for an earnings close) |
+| Report-gated exit unfillable by cutoff (amendment V1) | `skip` (terminal, fail-loud; reason `exit_data_gap_at_earnings_cutoff`) | the `exit_intent`, the cutoff-session `data_gate`/`data_gap`, the governing `source_health` (next-report identity) |
 
 Every event's `evaluation_session` is the session whose data produced it;
 `payload` carries the numbers (strikes, deltas, marks, costs). The book
@@ -209,6 +250,18 @@ healthy no-entry vs true `data_gap`; every transition's event lands with the
 position reconstruction from ledger events alone; the real store stays
 untouched through direct and symlinked-path guard tests; `verify` green after
 every synthetic sequence.
+
+Added by `H7_STAGE4_SPEC_AMENDMENT_V1`, tests must also prove: **replay
+ordering** — settlement (step 1) precedes watcher/exit evaluation (step 2)
+precedes new-intent creation (step 3), deterministic and reproduced on rerun;
+**reservation / duplicate prevention** — a reserved symbol/lane rejects a
+competing new entry intent while reserved; **same-session exit** — a position
+settled in step 1 can fire an exit in step 2 of the same run; **reservation
+release on approval expiry** — an expired approval frees the symbol/lane for a
+new intent in the same run; **post-report-fill impossibility** — no H7c exit
+`paper_fill` is ever dated at or after the scheduled report, and a `data_gap`
+at the earnings cutoff yields the terminal fail-loud
+`exit_data_gap_at_earnings_cutoff`, never a later fill.
 
 ## Out of scope for Stage 4 (unchanged)
 
