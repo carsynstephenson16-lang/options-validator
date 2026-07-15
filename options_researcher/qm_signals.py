@@ -52,6 +52,31 @@ def qm_params() -> dict[str, Any]:
     return {n: getattr(config, n) for n in QM_PARAM_NAMES}
 
 
+QM_REQUIRED_FACTS = ("QM_SCOPE_OVERRIDE", "QM_STUDY_PREREG")
+
+
+def qm_prereg_gate(base_dir: str = "ledger") -> str | None:
+    """The one gate qm_study and qm_watch call before ANY output.
+
+    Returns a refusal reason (spec §7: owner-typed values plus both
+    pre-registration facts) or None when the arc is cleared to run.
+    """
+    try:
+        qm_params()
+    except RuntimeError as exc:
+        return str(exc)
+    from research.facts import read_facts
+
+    lines = read_facts(base_dir=base_dir)
+    for tag in QM_REQUIRED_FACTS:
+        if not any(tag in line for line in lines):
+            return (
+                f"QM pre-registration incomplete: no {tag} fact in "
+                "ledger/facts.log (spec §7); refusing to run"
+            )
+    return None
+
+
 def _position(frame: pd.DataFrame, t: str) -> int:
     try:
         return int(frame.index.get_loc(t))

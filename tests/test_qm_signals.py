@@ -92,6 +92,53 @@ class QmParamsTests(unittest.TestCase):
         self.assertEqual(set(params), set(qm_signals.QM_PARAM_NAMES))
 
 
+class PreregGateTests(unittest.TestCase):
+    def _typed_params(self):
+        return [
+            mock.patch.object(config, name, PARAMS[name])
+            for name in qm_signals.QM_PARAM_NAMES
+        ]
+
+    def test_refuses_on_untyped_params_first(self):
+        reason = qm_signals.qm_prereg_gate()
+        self.assertIsNotNone(reason)
+        assert reason is not None
+        self.assertIn("owner", reason.lower())
+
+    def test_refuses_when_facts_missing(self):
+        import tempfile
+
+        patchers = self._typed_params()
+        for p in patchers:
+            p.start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                reason = qm_signals.qm_prereg_gate(base_dir=tmp)
+        finally:
+            for p in patchers:
+                p.stop()
+        self.assertIsNotNone(reason)
+        assert reason is not None
+        self.assertIn("QM_SCOPE_OVERRIDE", reason)
+
+    def test_clears_with_typed_params_and_both_facts(self):
+        import tempfile
+
+        from research.facts import append_fact
+
+        patchers = self._typed_params()
+        for p in patchers:
+            p.start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                append_fact("QM_SCOPE_OVERRIDE 2026-07-14: test fixture", base_dir=tmp)
+                append_fact("QM_STUDY_PREREG 2026-07-14: test fixture", base_dir=tmp)
+                self.assertIsNone(qm_signals.qm_prereg_gate(base_dir=tmp))
+        finally:
+            for p in patchers:
+                p.stop()
+
+
 class BreakoutTests(unittest.TestCase):
     def test_fires_on_run_base_newhigh_fixture(self):
         frame = breakout_fixture()
