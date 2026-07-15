@@ -37,6 +37,7 @@ QM_PARAM_NAMES = (
     "QM_PARA_SMA",
     "QM_HORIZONS",
     "QM_TRADABILITY_DTE",
+    "QM_NTM_BAND",
 )
 
 

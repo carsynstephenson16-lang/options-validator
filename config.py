@@ -401,3 +401,8 @@ QM_PARA_EXT_PCT = None    # proposed 0.50; research 2026-07-14: a 1.5x-SMA close
 QM_PARA_SMA = None        # proposed 20
 QM_HORIZONS = None        # proposed (5, 10, 20) sessions: pre-declared forward windows
 QM_TRADABILITY_DTE = None  # proposed (30, 60): monthly-expiry DTE band for cards
+QM_NTM_BAND = None        # proposed 0.10: "near-ATM" = strikes within +/-10% of raw
+#                           close. Spec SS4/SS5 gap found at build time: the spec says
+#                           "near-ATM" with no number; definition mirrors H7_NTM_BAND
+#                           but is frozen independently so QM never couples to H7's
+#                           registered surface. Owner types the value like the rest.

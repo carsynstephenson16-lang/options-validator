@@ -27,6 +27,7 @@ PARAMS = {
     "QM_PARA_SMA": 20,
     "QM_HORIZONS": (5, 10, 20),
     "QM_TRADABILITY_DTE": (30, 60),
+    "QM_NTM_BAND": 0.10,
 }
 
 
