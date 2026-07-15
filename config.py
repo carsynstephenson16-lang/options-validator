@@ -371,3 +371,33 @@ H7_HISTORICAL_WITHDRAWAL_HASH = (
 # LLM-proposed 2026-07-11 (one trading week of runway to refresh a schedule
 # by hand before grace lapses into UNKNOWN); owner may retype.
 H7_SOURCE_HEALTH_WARN_SESSIONS = 5
+
+# ---------------------------------------------------------------------------
+# --- QM SIGNAL RESEARCH (Breakout / Parabolic descriptive signals) ---
+# Spec: docs/superpowers/specs/2026-07-14-qm-signal-research-design.md
+# (commit 5bf97f2). Scope: signals + read-only daily watch + one-shot event
+# study ONLY -- no hypothesis, no book, no verdict, no live-order path.
+# EVERY value below is None ON PURPOSE (spec SS7.1): the pre-registration
+# procedure requires the OWNER to type each number herself. The proposals in
+# comments are LLM-asserted (spec SS6) and carry no authority. qm_signals,
+# qm_study and qm_watch refuse to run while any value is None or while the
+# QM_SCOPE_OVERRIDE / QM_STUDY_PREREG facts are absent from ledger/facts.log.
+QM_RUN_LOOKBACK = None    # proposed 60: "30-100% move in ~3 months" ~= 60 sessions
+QM_RUN_MIN_PCT = None     # proposed 0.30: lower bound of the described prior run
+QM_BASE_MIN_DAYS = None   # proposed 10: "2-8 week consolidation" lower edge
+QM_BASE_MAX_DAYS = None   # proposed 40: upper edge
+QM_BASE_MAX_DEPTH = None  # proposed 0.25: "tight" base ceiling
+QM_BASE_SMA = None        # proposed 20 ("surfing the 10/20-day SMA"; owner may type 10)
+QM_VOL_DRYUP_RATIO = None  # proposed 0.65: "volume drying up during the base"
+QM_PARA_LOOKBACK = None   # proposed 40: "100%+ in a short time" ~= 2 months
+QM_PARA_MIN_PCT = None    # proposed 1.00; research 2026-07-14: his stated LARGE-CAP
+#                           magnitude is 0.50-1.00+ over days-to-weeks -- 0.50 is
+#                           the faithful large-cap alternate; owner's call
+QM_PARA_GREEN_DAYS = None  # proposed 3: "3-5+ consecutive green days" lower edge
+QM_PARA_EXT_PCT = None    # proposed 0.50; research 2026-07-14: a 1.5x-SMA close is
+#                           small-cap scale and may fire ~never on mega caps
+#                           (~0.10-0.15 alternate) -- owner's call; the counts-only
+#                           study stage exists to catch a vacuous choice
+QM_PARA_SMA = None        # proposed 20
+QM_HORIZONS = None        # proposed (5, 10, 20) sessions: pre-declared forward windows
+QM_TRADABILITY_DTE = None  # proposed (30, 60): monthly-expiry DTE band for cards
