@@ -76,6 +76,77 @@ class MainTests(unittest.TestCase):
             self.assertIn("browser", buf.getvalue().lower())
 
 
+class DataAsOfBannerTests(unittest.TestCase):
+    def test_default_data_as_of_uses_cached_series_index_not_wallclock(self):
+        from unittest import mock
+
+        import pandas as pd
+
+        import config
+        from options_researcher import dashboard as d
+
+        series = pd.Series([1.0, 2.0], index=["2026-01-02", "2026-01-05"])
+        with mock.patch.object(config, "UNIVERSE", ["FAKE"]), \
+                mock.patch("data.underlying_closes.load_closes",
+                          return_value=series):
+            self.assertEqual(d._default_data_as_of(), "2026-01-05")
+
+    def test_default_data_as_of_reports_earliest_symbol_when_stale(self):
+        # A stale name must not hide behind a fresher one: the page-level
+        # as-of date is the EARLIEST last-cached-close date, not the latest.
+        from unittest import mock
+
+        import pandas as pd
+
+        import config
+        from options_researcher import dashboard as d
+
+        fresh = pd.Series([1.0], index=["2026-02-01"])
+        stale = pd.Series([1.0], index=["2026-01-10"])
+
+        def fake_load(sym, *_a, **_k):
+            return {"FRESH": fresh, "STALE": stale}[sym]
+
+        with mock.patch.object(config, "UNIVERSE", ["FRESH", "STALE"]), \
+                mock.patch("data.underlying_closes.load_closes",
+                          side_effect=fake_load):
+            self.assertEqual(d._default_data_as_of(), "2026-01-10")
+
+    def test_default_data_as_of_skips_missing_series_and_falls_back(self):
+        from unittest import mock
+
+        import config
+        from options_researcher import dashboard as d
+
+        with mock.patch.object(config, "UNIVERSE", ["MISSING"]), \
+                mock.patch("data.underlying_closes.load_closes",
+                          side_effect=OSError("no such file")):
+            self.assertEqual(d._default_data_as_of(), "unknown")
+
+    def test_render_shows_prominent_data_as_of_banner(self):
+        from options_researcher.dashboard import assemble, render
+
+        data = assemble(book={"marks": [], "bucket_issues": []}, facts=[],
+                        reports=[], closes={}, data_as_of="2026-07-10")
+        html = render(data)
+        self.assertIn("DATA AS-OF 2026-07-10 CLOSE", html)
+        self.assertIn("Research only", html)
+        self.assertIn("verify live quotes in your broker", html)
+        self.assertIn("data-asof-banner", html)
+        # Prominent: the banner appears before the first content panel
+        # (the <title> tag also contains "MISSION CONTROL", so anchor on
+        # the <h1> heading instead).
+        self.assertLess(html.index("DATA AS-OF"), html.index("<h1>MISSION CONTROL"))
+
+    def test_render_falls_back_when_data_as_of_missing(self):
+        from options_researcher.dashboard import assemble, render
+
+        data = assemble(book={"marks": [], "bucket_issues": []}, facts=[],
+                        reports=[], closes={}, data_as_of=None)
+        html = render(data)
+        self.assertIn("DATA AS-OF", html)
+
+
 class TriggerPillTests(unittest.TestCase):
     def test_render_shows_trigger_pills(self):
         from options_researcher import dashboard as d

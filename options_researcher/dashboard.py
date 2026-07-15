@@ -120,10 +120,34 @@ def _default_closes() -> dict[str, list[float]]:
     return out
 
 
+def _default_data_as_of() -> str:
+    """The page's honest "data as-of" date: the EARLIEST last-cached-close
+    date across config.UNIVERSE (never today's wall clock). Taking the
+    earliest, not the freshest, symbol's last date means a stale name can
+    never be hidden behind a fresher one -- the banner must say the stale
+    date. A symbol with no cached series at all is skipped, not treated as
+    "no data" for the whole page; "unknown" only fires when every symbol is
+    unreadable."""
+    import config
+    from data.underlying_closes import load_closes
+
+    dates: list[str] = []
+    for sym in config.UNIVERSE:
+        try:
+            series = load_closes(sym, config.BACKTEST_START, config.BACKTEST_END,
+                                 allow_oos=True)
+        except OSError:
+            continue
+        if len(series):
+            dates.append(str(series.index[-1]))
+    return min(dates) if dates else "unknown"
+
+
 def assemble(*, book: dict | None = None, facts: list[str] | None = None,
             reports: list[str] | None = None,
             closes: dict[str, list[float]] | None = None,
-            triggers: dict[str, str] | None = None) -> dict:
+            triggers: dict[str, str] | None = None,
+            data_as_of: str | None = None) -> dict:
     """Gather book, achievements, reports, and sparkline data into one dict.
 
     Every argument defaults to loading the real project state; pass any of
@@ -138,6 +162,8 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         reports = _default_reports()
     if closes is None:
         closes = _default_closes()
+    if data_as_of is None:
+        data_as_of = _default_data_as_of()
     if triggers is None:
         try:
             from options_researcher.entry_watch import _gather
@@ -164,6 +190,7 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         "reports": list(reports),
         "sparklines": dict(closes),
         "triggers": dict(triggers),
+        "data_as_of": data_as_of,
     }
 
 
@@ -366,6 +393,7 @@ def render(data: dict) -> str:
     reports = data.get("reports", [])
     sparklines = data.get("sparklines", {})
     triggers = data.get("triggers", {})
+    data_as_of = data.get("data_as_of") or "unknown"
 
     as_of = _datetime.now(timezone.utc).date().isoformat()
     party_cards = "".join(
@@ -388,11 +416,27 @@ def render(data: dict) -> str:
     color: #e6e9f2;
     font-family: ui-monospace, Menlo, monospace;
     margin: 0;
-    padding: 24px;
+    padding: 0;
   }}
   h1, h2 {{
     font-family: ui-monospace, Menlo, monospace;
     letter-spacing: 0.08em;
+  }}
+  .data-asof-banner {{
+    background: #ffce00;
+    color: #1a1300;
+    font-weight: 900;
+    text-align: center;
+    padding: 12px 16px;
+    font-size: 1.05em;
+    letter-spacing: 0.01em;
+    border-bottom: 4px solid #ff5470;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }}
+  .page-body {{
+    padding: 24px;
   }}
   .panel {{
     background: #141a2a;
@@ -533,6 +577,10 @@ def render(data: dict) -> str:
 </head>
 <body>
 
+<div class="data-asof-banner">DATA AS-OF {_esc(data_as_of)} CLOSE &mdash; quotes move intraday; verify live quotes in your broker before acting. Research only &mdash; not investment advice.</div>
+
+<div class="page-body">
+
 <div class="panel">
   <h1>MISSION CONTROL</h1>
   <div class="header-sub">SCANNER MODE &mdash; as of {_esc(as_of)}</div>
@@ -573,6 +621,8 @@ def render(data: dict) -> str:
 <div class="panel">
   <h2>REPORTS</h2>
   {_reports_list(reports)}
+</div>
+
 </div>
 
 </body>

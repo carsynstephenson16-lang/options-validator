@@ -279,6 +279,47 @@ class RenderTests(unittest.TestCase):
         self.assertIn("roll reminder", html)             # leaps countdown branch
 
 
+class DataAsOfBannerTests(unittest.TestCase):
+    def test_page_data_as_of_single_date(self):
+        sections = [{"as_of": "2026-06-30"}, {"as_of": "2026-06-30"}]
+        self.assertEqual(ad._page_data_as_of(sections), "2026-06-30")
+
+    def test_page_data_as_of_picks_earliest_when_mixed(self):
+        # A stale name's chain cache must not hide behind a fresher one.
+        sections = [{"as_of": "2026-06-30"}, {"as_of": "2026-06-01"}]
+        self.assertEqual(ad._page_data_as_of(sections), "2026-06-01")
+
+    def test_page_data_as_of_falls_back_when_no_sections(self):
+        self.assertEqual(ad._page_data_as_of([]), "no cached data")
+
+    def test_assemble_attaches_page_data_as_of(self):
+        section = {"symbol": "MSFT", "as_of": "2026-06-15", "close": 373.02,
+                   "iv_rank": 0.5,
+                   "groups": [{"kind": "put", "title": "SELL A PUT?",
+                               "cards": [], "empty": "none this cycle"}]}
+        d = ad.assemble(symbol_sections=[section], rv21_by_symbol={"MSFT": 1.1})
+        self.assertEqual(d["data_as_of"], "2026-06-15")
+
+    def test_render_shows_prominent_data_as_of_banner(self):
+        section = {"symbol": "MSFT", "as_of": "2026-06-15", "close": 373.02,
+                   "iv_rank": 0.5,
+                   "groups": [{"kind": "put", "title": "SELL A PUT?",
+                               "cards": [], "empty": "none this cycle"}]}
+        d = ad.assemble(symbol_sections=[section], rv21_by_symbol={"MSFT": 1.1})
+        html = ad.render(d)
+        self.assertIn("DATA AS-OF 2026-06-15 CLOSE", html)
+        self.assertIn("Research only", html)
+        self.assertIn("verify live quotes in your broker", html)
+        self.assertIn("data-asof-banner", html)
+        self.assertLess(html.index("DATA AS-OF"),
+                        html.index("WHICH OPTIONS LOOK ATTRACTIVE TODAY?"))
+
+    def test_render_falls_back_banner_text_when_no_data(self):
+        d = {"symbols": [], "data_as_of": None}
+        html = ad.render(d)
+        self.assertIn("DATA AS-OF no cached data CLOSE", html)
+
+
 class MainTests(unittest.TestCase):
     def test_main_writes_file_and_prints_path(self):
         import io

@@ -145,6 +145,15 @@ def _countdown(card: dict) -> str:
             f"{roll} days left")
 
 
+def _page_data_as_of(sections: list[dict]) -> str:
+    """Honest page-level "data as-of" date: the EARLIEST per-symbol as_of
+    date across the assembled sections (never today's wall clock). Taking
+    the earliest, not the freshest, name means a stale chain cache can never
+    hide behind a fresher one -- the banner must say the stale date."""
+    dates = sorted({sec["as_of"] for sec in sections if sec.get("as_of")})
+    return dates[0] if dates else "no cached data"
+
+
 def assemble(*, symbol_sections: list[dict] | None = None,
              rv21_by_symbol: dict[str, float] | None = None) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
@@ -186,7 +195,7 @@ def assemble(*, symbol_sections: list[dict] | None = None,
         out_symbols.append({"symbol": sym, "close": float(sec["close"]),
                             "iv_rank": float(sec["iv_rank"]),
                             "as_of": sec["as_of"], "groups": out_groups})
-    return {"symbols": out_symbols}
+    return {"symbols": out_symbols, "data_as_of": _page_data_as_of(out_symbols)}
 
 
 def _gather_all() -> tuple[list[dict], dict[str, float]]:
@@ -362,11 +371,27 @@ _STYLE = """
     color: #e6e9f2;
     font-family: ui-monospace, Menlo, monospace;
     margin: 0;
-    padding: 24px;
+    padding: 0;
   }
   h1, h2 {
     font-family: ui-monospace, Menlo, monospace;
     letter-spacing: 0.08em;
+  }
+  .data-asof-banner {
+    background: #ffce00;
+    color: #1a1300;
+    font-weight: 900;
+    text-align: center;
+    padding: 12px 16px;
+    font-size: 1.05em;
+    letter-spacing: 0.01em;
+    border-bottom: 4px solid #ff5470;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .page-body {
+    padding: 24px;
   }
   .panel {
     background: #141a2a;
@@ -584,14 +609,22 @@ def render(data: dict) -> str:
             f'<div class="panel"><h2>{_esc(sec["symbol"])} '
             f'&mdash; close ${sec["close"]:,.2f} &mdash; '
             f'IV-rank {sec["iv_rank"]:.2f}</h2>{groups}</div>')
+    data_as_of = data.get("data_as_of") or "no cached data"
+    banner = (
+        '<div class="data-asof-banner">'
+        f'DATA AS-OF {_esc(data_as_of)} CLOSE &mdash; quotes move intraday; '
+        'verify live quotes in your broker before acting. Research only '
+        '&mdash; not investment advice.</div>')
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<title>WHICH OPTIONS LOOK ATTRACTIVE?</title>'
         f'<style>{_STYLE}</style></head><body>'
+        f'{banner}'
+        '<div class="page-body">'
         '<div class="panel"><h1>WHICH OPTIONS LOOK ATTRACTIVE TODAY?</h1>'
         '<div class="header-sub">at-expiration payoff &mdash; not a '
         'prediction</div></div>'
-        f'{symbols_html}</body></html>')
+        f'{symbols_html}</div></body></html>')
 
 
 def main(**assemble_kwargs) -> str:
