@@ -14,6 +14,7 @@ from data.underlying_closes import SPLITS, unsplit
 class TestSplitRegistry(unittest.TestCase):
     def test_registry_contains_all_known_splits(self):
         self.assertEqual(SPLITS["AMZN"], [("2022-06-06", 20.0)])
+        self.assertEqual(SPLITS["AVGO"], [("2024-07-15", 10.0)])
         self.assertEqual(SPLITS["NVDA"], [("2021-07-20", 4.0), ("2024-06-10", 10.0)])
         self.assertEqual(SPLITS["NOW"], [("2025-12-18", 5.0)])
         self.assertEqual(SPLITS["SMCI"], [("2024-10-01", 10.0)])

@@ -200,6 +200,7 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 # in the local chain cache (ledger facts REPORT_ADJUDICATION 2026-07-09).
 SPLITS = {
     "AMZN": [("2022-06-06", 20.0)],
+    "AVGO": [("2024-07-15", 10.0)],  # Broadcom 10:1; first split-adjusted day
     "NVDA": [("2021-07-20", 4.0), ("2024-06-10", 10.0)],
     "NOW": [("2025-12-18", 5.0)],
     "SMCI": [("2024-10-01", 10.0)],
