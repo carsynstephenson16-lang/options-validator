@@ -69,7 +69,7 @@ def qm_prereg_gate(base_dir: str = "ledger") -> str | None:
 
     lines = read_facts(base_dir=base_dir)
     for tag in QM_REQUIRED_FACTS:
-        if not any(tag in line for line in lines):
+        if not any(line.split("\t", 1)[-1].startswith(tag) for line in lines):
             return (
                 f"QM pre-registration incomplete: no {tag} fact in "
                 "ledger/facts.log (spec §7); refusing to run"

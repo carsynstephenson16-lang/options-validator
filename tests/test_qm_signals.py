@@ -125,6 +125,34 @@ class PreregGateTests(unittest.TestCase):
         assert reason is not None
         self.assertIn("QM_SCOPE_OVERRIDE", reason)
 
+    def test_refuses_on_mid_sentence_tag_mention_not_a_real_fact(self):
+        # A different fact whose TEXT happens to mention "QM_STUDY_PREREG"
+        # mid-sentence (mirrors the real QM_SCOPE_OVERRIDE fact, which says
+        # "...appends QM_STUDY_PREREG.") must NOT satisfy the gate. Only a
+        # fact whose text actually STARTS WITH the tag counts.
+        import tempfile
+
+        from research.facts import append_fact
+
+        patchers = self._typed_params()
+        for p in patchers:
+            p.start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                append_fact(
+                    "QM_SCOPE_OVERRIDE 2026-07-14: owner decision -- study "
+                    "remains code-gated until owner types QM_* values and "
+                    "appends QM_STUDY_PREREG. Handoff: docs/handoff.md.",
+                    base_dir=tmp,
+                )
+                reason = qm_signals.qm_prereg_gate(base_dir=tmp)
+        finally:
+            for p in patchers:
+                p.stop()
+        self.assertIsNotNone(reason)
+        assert reason is not None
+        self.assertIn("QM_STUDY_PREREG", reason)
+
     def test_clears_with_typed_params_and_both_facts(self):
         import tempfile
 

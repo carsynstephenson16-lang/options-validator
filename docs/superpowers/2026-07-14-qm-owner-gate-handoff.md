@@ -1,10 +1,35 @@
 # QM signal research — owner gate handoff (2026-07-14)
 
-**Status: implementation arc BUILT on `feature/qm-signal-research`; RUN-GATED.**
-`qm_study` and `qm_watch` refuse (exit 2) until every `QM_*` value in
+**Status: implementation arc BUILT on `feature/qm-signal-research`; owner gate
+PASSED 2026-07-14 -- the one-shot study has RUN. See "Outcome (2026-07-14)"
+below.** `qm_study` and `qm_watch` refuse (exit 2) until every `QM_*` value in
 `config.py` is owner-typed and both `QM_SCOPE_OVERRIDE` and `QM_STUDY_PREREG`
-facts exist in `ledger/facts.log`. Nothing in this document is a result; no
-study has run. Every number below is **LLM-asserted** until the owner types it.
+facts exist in `ledger/facts.log`; that gate cleared 2026-07-14. Every number
+in sections 1-6 below is **LLM-asserted** proposal material predating the run
+(kept for the independent pre-merge review); the run's actual result is in
+the Outcome section, not this document's original body.
+
+## Outcome (2026-07-14)
+
+Owner typed all 15 `QM_*` values into `config.py` and both `QM_SCOPE_OVERRIDE`
+and `QM_STUDY_PREREG` facts were appended to `ledger/facts.log`. Per the
+pre-registered run order: `--counts-only` ran first (breakout 11 deduped
+fires -- the 10-19 band, descriptive only, no H8 decision possible; parabolic
+35 deduped fires -- the >=20 band, H8 rules apply), then the ONE full
+`qm_study` run (data vintage 2026-07-14, `QM_STUDY_RESULT` fact in
+`ledger/facts.log`, report `reports/2026-07-14-qm-base-rates.md`).
+
+Pooled per-fire forward excess return vs. each name's unconditional baseline
+was positive at all three horizons for parabolic (+5d/+10d/+20d), including
+the 5-session horizon that the pre-registered fade reading required to be
+negative. Per the pre-registered decision rule, the parabolic fade reading is
+**REJECTED** -- consistent with fires preceding better-than-baseline
+continuation, not a snapback, in this hindsight-selected sample. Breakout
+stayed in the descriptive-only counts band (11 fires, below the 20-fire H8
+floor) so no H8 decision was possible for it either way. **No H8 arc exists
+for either setup.** Small, correlated samples (11 and 35 fires, one dominant
+regime) -- this is a descriptive screen result, not a validated edge, and
+implies no execution, sizing, or live-order action.
 
 Spec: `docs/superpowers/specs/2026-07-14-qm-signal-research-design.md`
 (signed-off commit `5bf97f2`, sha256
