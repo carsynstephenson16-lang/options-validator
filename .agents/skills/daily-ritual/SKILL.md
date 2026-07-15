@@ -52,11 +52,13 @@ uv run python -m options_researcher.h7_watch
 Read-only alerts against frozen triggers. An ENTRY-OK line is information for
 the owner, never an instruction to act.
 
-**Step 4 — H6 leg:**
+**Step 4 — H6 leg** (both commands **require** `--as-of`; pass the same
+evaluation-session date `YYYY-MM-DD` used above — they are exact-session, not
+"default to today"):
 
 ```bash
-uv run python -m options_researcher.h6_features   # rebuild if closes/config changed
-uv run python -m options_researcher.h6_watch
+uv run python -m options_researcher.h6_features --as-of YYYY-MM-DD  # rebuild if closes/config changed
+uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD
 ```
 
 ## Hard rules
