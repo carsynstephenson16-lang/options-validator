@@ -179,8 +179,8 @@ Triage: PARKED, weakly in-scope-adjacent at best.
 
 If ever un-parked, constrain to: read-only pull FROM the repo's existing
 signal outputs INTO a chart annotation; no webhooks, no broker connection, no
-alert-to-execution path; and only after a live H5/H6 verdict frees the
-"nothing new" gate.
+alert-to-execution path; and only after the Phase-0 verdict (the first H5/H6
+verdict) frees the "nothing new" gate — the same milestone named above.
 
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
 audit, whichever comes first.
