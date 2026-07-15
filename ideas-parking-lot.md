@@ -172,8 +172,10 @@ Triage: PARKED, weakly in-scope-adjacent at best.
   routing. The moment the integration is useful beyond a static chart it
   points at the live-order boundary the repo's hook exists to forbid. A
   strictly read-only build is possible but is the redundant, low-value half.
-- Standing rule: it is new tooling/account/spend before the Phase-0 verdict
-  exists, which the one standing rule forbids.
+- Standing rule: it is new tooling/account/spend before the first H5/H6 verdict
+  exists — the same milestone the operating manual calls the "Phase-0 verdict"
+  — which the one standing rule forbids. (Un-parking uses that identical
+  milestone below, so it cannot license spend any earlier.)
 
 If ever un-parked, constrain to: read-only pull FROM the repo's existing
 signal outputs INTO a chart annotation; no webhooks, no broker connection, no
@@ -182,6 +184,56 @@ alert-to-execution path; and only after a live H5/H6 verdict frees the
 
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
 audit, whichever comes first.
+
+## Qullamaggie momentum swing strategy (EP / Breakout / Parabolic short) (parked 2026-07-13)
+
+Context: owner proposal 2026-07-13 — port Kristjan "Qullamaggie" Qullamägi's
+momentum swing method: three setups (Episodic Pivot = gap-up >10% on news with
+first-15-min volume, buy the opening-range high; Breakout = 2–8wk base surfing
+the 10/20-day SMA, buy the breakout to new highs; Parabolic Short = fade a
+100%+ vertical move after 3–5 green days), ADR-based stops, partial exits at
+2R–3R + trail on the 10/20-day MA, universe from an external screener
+(Finviz/TC2000/Deepvue: vol>500k, price>$5, 30–100% move / 3mo), backtested
+"candle-by-candle, be brutally honest," paper-traded 3–6mo before capital.
+
+Triage: PARKED, and blocked on two independent gates.
+- **Standing rule:** it is new strategy/tooling/spend before the first H5/H6
+  verdict — the Phase-0 milestone the operating manual forbids building past.
+  Scope-guard answer: does it move H5/H6/H7 to a verdict? No.
+- **Hard data mismatch (blocks it even under an override):**
+  - EP entry is *intraday* (opening-range high, first-15-min volume). Repo is
+    **EOD-only** (README known-limitation, Repo-verified). Untestable as
+    specified without an intraday equity feed = new spend.
+  - ADR stops need daily high/low; the repo stores daily *closes*, not OHLCV
+    for arbitrary tickers (Inference — verify before building).
+  - Open screener universe vs the fixed 12 names (`config.UNIVERSE` +
+    `H7_WATCHLIST`) = new tickers, new data.
+  - Parabolic **short** is out-of-mandate: repo is long-lanes-only,
+    defined-risk options; the live-order boundary is hook-enforced.
+  - "Candle-by-candle, be brutally honest" manual backtesting is precisely the
+    look-ahead-prone, non-reproducible method the pre-registration + hash-chained
+    ledger exist to replace. Any port must be mechanical and frozen-first.
+- Relation to the 2026-07-09 drawdown-reversal park: that idea is
+  mean-reversion (catch the bottom); this is momentum-continuation (ride the
+  breakout) — opposite direction, identical gate (verdict-first + mechanical
+  EOD signals + pre-registration).
+
+Salvageable core if ever un-parked: the **Breakout** base/SMA/breakout signal
+and the **Parabolic** consecutive-green-days signal are EOD-computable *if*
+daily OHLCV is added; entries would be EOD approximations (next-day open/close),
+never the intraday opening range. EP and ADR-intraday stops are unreachable on
+EOD data.
+
+Gate before building: first H5/H6 verdict lands (or an explicit owner scope
+override logged in the ledger, as H7 was on 2026-07-09) + a verified daily
+OHLCV data source for the chosen universe + **pre-registration** with a
+mechanical universe rule, frozen setup thresholds (gap %, base length, ADR
+multiple, R-multiple exits, MA trail), earnings handling, and the numeric
+result that rejects it — owner types the frozen numbers herself (any threshold
+an LLM proposes is LLM-asserted until tested).
+
+**Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly audit,
+whichever comes first.
 
 ## Explicitly rejected (not parked)
 
