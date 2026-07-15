@@ -1,86 +1,74 @@
 #!/usr/bin/env python3
-"""PreToolUse guard: block hand-edits to append-only / hash-chained ledger files.
+"""PreToolUse hook: blocks hand-edits to the append-only ledger chain files.
 
-RECONSTRUCTED 2026-07-15 by Claude. The original was registered in
-.claude/settings.local.json but the script file was missing, which made the
-hook fail closed on every Bash/Write/Edit call (python3 exits 2 on a missing
-file). Rules below are reconstructed from the repo's documented policy
-(CLAUDE.md, ledger/README.md): owner should review and adjust.
+Protected files may ONLY be written through their typed Python APIs
+(research/ledger.py, research/facts.py, options_researcher/h7_event_ledger.py).
+A hand edit breaks the hash chain and `verify` refuses; the H7 forward files
+must not even be created before Stage 8 activation.
 
-Policy enforced:
-  - Hash-chained files (ledger/experiments.jsonl, ledger/HEAD,
-    ledger/h7_forward/events.jsonl, ledger/h7_forward/HEAD): NEVER hand-edit,
-    never mutate via shell. Append only via the typed Python API
-    (research/ledger.py / the h7_event_ledger API).
-  - ledger/facts.log: append-only. Shell '>>' appends are allowed; overwrite,
-    in-place edit, delete, or whole-file Write/Edit are blocked.
-
-Conventions match .claude/hooks/block_live_trading.py: JSON on stdin,
-exit 2 + stderr message to block, exit 0 to allow, FAIL-CLOSED on parse error.
+Exit 2 = block the tool call; stderr is fed back to the agent as the reason.
+FAIL-CLOSED: if input can't be parsed, block rather than guess.
+Reads (cat/grep/git diff) and the typed-API CLI invocations are allowed.
 """
 import json
+import posixpath
 import re
 import sys
 
-HOOK = "block_ledger_edits"
-
-CHAINED = (
-    "ledger/experiments.jsonl",
-    "ledger/HEAD",
-    "ledger/h7_forward/events.jsonl",
-    "ledger/h7_forward/HEAD",
-)
-FACTS = "ledger/facts.log"
-
-
-def block(msg: str) -> None:
-    print(f"BLOCKED by {HOOK} hook: {msg}", file=sys.stderr)
-    sys.exit(2)
-
-
 try:
     d = json.load(sys.stdin)
-except Exception:
-    # FAIL-CLOSED: if input can't be parsed, block rather than guess.
-    block("could not parse tool input JSON (fail-closed)")
+    ti = d.get("tool_input", {}) or {}
+except Exception as e:  # noqa: BLE001 - safety hook fails closed on anything
+    print(
+        f"BLOCKED by block_ledger_edits hook: could not parse tool input ({e}). "
+        f"Failing closed: the ledger is append-only via typed APIs.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
-tool = d.get("tool_name", "")
-tool_input = d.get("tool_input", {}) or {}
+PROTECTED = (
+    r"ledger/(?:HEAD\b|facts\.log|experiments\.jsonl"
+    r"|h7_forward/(?:events\.jsonl|HEAD\b))"
+)
+PROTECTED_RE = re.compile(PROTECTED)
 
-if tool in ("Write", "Edit", "NotebookEdit"):
-    path = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
-    for p in CHAINED:
-        if p in path:
-            block(
-                f"direct {tool} of hash-chained ledger file '{p}'. "
-                "Append only via the typed Python API; a hand edit breaks the "
-                "hash chain and verify will refuse."
-            )
-    if FACTS in path:
-        block(
-            f"whole-file {tool} of append-only {FACTS}. "
-            "Append new lines via shell '>>' or the facts API; never rewrite."
+REASON = (
+    "This file is part of the append-only ledger and may only be written "
+    "through its typed Python API (research/ledger.py, research/facts.py, or "
+    "options_researcher/h7_event_ledger.append_event). A hand edit breaks the "
+    "hash chain and `verify` will refuse. ledger/h7_forward/{events.jsonl,HEAD} "
+    "must not be created at all before Stage 8 activation."
+)
+
+# --- File tools: any direct Edit/Write/NotebookEdit on a protected path ---
+for key in ("file_path", "notebook_path"):
+    path = str(ti.get(key, ""))
+    if path and PROTECTED_RE.search(posixpath.normpath(path.replace("\\", "/"))):
+        print(
+            f"BLOCKED by block_ledger_edits hook ({key}='{path}'). {REASON}",
+            file=sys.stderr,
         )
-elif tool == "Bash":
-    cmd = str(tool_input.get("command") or "")
-    chained_hits = [p for p in CHAINED if p in cmd]
-    if chained_hits and re.search(
-        r"(>>?|\bsed\s+-i|\btee\b|\brm\b|\bmv\b|\bcp\b|\btruncate\b|\bperl\s+-i)", cmd
-    ):
-        block(
-            f"shell mutation touching hash-chained ledger file(s) {chained_hits}. "
-            "Append only via the typed Python API. (Reads without redirects are allowed; "
-            "if this is a false positive, read the file with the Read tool instead.)"
+        sys.exit(2)
+
+# --- Bash: block write operations that name a protected path; allow reads ---
+# A segment boundary [^|;&]* keeps the write verb and the target in the same
+# pipeline segment, so `cat ledger/facts.log | grep x` stays allowed.
+BASH_WRITE_RE = re.compile(
+    r"(?:>>?\s*\S*" + PROTECTED + r")"  # > or >> redirect into the file
+    r"|(?:\btee\b[^|;&]*" + PROTECTED + r")"  # tee / tee -a
+    r"|(?:\bsed\b[^|;&]*\s-i[^|;&]*" + PROTECTED + r")"  # in-place sed
+    r"|(?:\b(?:rm|mv|cp|touch|truncate|shred|unlink|ln)\b[^|;&]*" + PROTECTED + r")"
+    r"|(?:\bdd\b[^|;&]*\bof=\S*" + PROTECTED + r")"
+)
+
+command = str(ti.get("command", ""))
+if command:
+    m = BASH_WRITE_RE.search(command)
+    if m:
+        print(
+            f"BLOCKED by block_ledger_edits hook (matched: '{m.group(0)}'). {REASON}",
+            file=sys.stderr,
         )
-    if FACTS in cmd and re.search(
-        r"((?<!>)>\s*\S*ledger/facts\.log|\bsed\s+-i|\btruncate\b"
-        r"|\brm\b[^|;&]*ledger/facts\.log|\bmv\b[^|;&]*ledger/facts\.log"
-        r"|\bcp\b[^|;&]*\sledger/facts\.log)",
-        cmd,
-    ):
-        block(
-            f"overwrite/in-place-edit/delete of append-only {FACTS} "
-            "('>>' append is allowed)."
-        )
+        sys.exit(2)
 
 sys.exit(0)
