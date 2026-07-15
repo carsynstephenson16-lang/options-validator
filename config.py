@@ -377,32 +377,30 @@ H7_SOURCE_HEALTH_WARN_SESSIONS = 5
 # Spec: docs/superpowers/specs/2026-07-14-qm-signal-research-design.md
 # (commit 5bf97f2). Scope: signals + read-only daily watch + one-shot event
 # study ONLY -- no hypothesis, no book, no verdict, no live-order path.
-# EVERY value below is None ON PURPOSE (spec SS7.1): the pre-registration
-# procedure requires the OWNER to type each number herself. The proposals in
-# comments are LLM-asserted (spec SS6) and carry no authority. qm_signals,
-# qm_study and qm_watch refuse to run while any value is None or while the
-# QM_SCOPE_OVERRIDE / QM_STUDY_PREREG facts are absent from ledger/facts.log.
-QM_RUN_LOOKBACK = None    # proposed 60: "30-100% move in ~3 months" ~= 60 sessions
-QM_RUN_MIN_PCT = None     # proposed 0.30: lower bound of the described prior run
-QM_BASE_MIN_DAYS = None   # proposed 10: "2-8 week consolidation" lower edge
-QM_BASE_MAX_DAYS = None   # proposed 40: upper edge
-QM_BASE_MAX_DEPTH = None  # proposed 0.25: "tight" base ceiling
-QM_BASE_SMA = None        # proposed 20 ("surfing the 10/20-day SMA"; owner may type 10)
-QM_VOL_DRYUP_RATIO = None  # proposed 0.65: "volume drying up during the base"
-QM_PARA_LOOKBACK = None   # proposed 40: "100%+ in a short time" ~= 2 months
-QM_PARA_MIN_PCT = None    # proposed 1.00; research 2026-07-14: his stated LARGE-CAP
-#                           magnitude is 0.50-1.00+ over days-to-weeks -- 0.50 is
-#                           the faithful large-cap alternate; owner's call
-QM_PARA_GREEN_DAYS = None  # proposed 3: "3-5+ consecutive green days" lower edge
-QM_PARA_EXT_PCT = None    # proposed 0.50; research 2026-07-14: a 1.5x-SMA close is
-#                           small-cap scale and may fire ~never on mega caps
-#                           (~0.10-0.15 alternate) -- owner's call; the counts-only
-#                           study stage exists to catch a vacuous choice
-QM_PARA_SMA = None        # proposed 20
-QM_HORIZONS = None        # proposed (5, 10, 20) sessions: pre-declared forward windows
-QM_TRADABILITY_DTE = None  # proposed (30, 60): monthly-expiry DTE band for cards
-QM_NTM_BAND = None        # proposed 0.10: "near-ATM" = strikes within +/-10% of raw
-#                           close. Spec SS4/SS5 gap found at build time: the spec says
-#                           "near-ATM" with no number; definition mirrors H7_NTM_BAND
-#                           but is frozen independently so QM never couples to H7's
-#                           registered surface. Owner types the value like the rest.
+# Owner gate PASSED 2026-07-14: every value below was typed by the owner in
+# the 2026-07-14 session message and entered at owner direction (fact
+# QM_STUDY_PREREG 2026-07-14 records the full set + decision rules).
+# Frozen: no edit without a logged QM_STUDY_PREREG_V2, and never after
+# viewing returns. qm_signals, qm_study and qm_watch still refuse to run if
+# any value reverts to None or either QM fact is absent from ledger/facts.log.
+QM_RUN_LOOKBACK = 60      # "30-100% move in ~1-3 months" ~= 60 sessions
+QM_RUN_MIN_PCT = 0.30     # lower bound of the described prior run
+QM_BASE_MIN_DAYS = 10     # "2 wk-2 mo consolidation" lower edge
+QM_BASE_MAX_DAYS = 40     # upper edge
+QM_BASE_MAX_DEPTH = 0.20  # tighter alternate: partial proxy for the missing
+#                           higher-lows/tightening tests (disclosed superset)
+QM_BASE_SMA = 20          # base-length-appropriate line (he surfs the 10 and 20)
+QM_VOL_DRYUP_RATIO = 0.65  # "volume drying up during the base" (unanchored in source)
+QM_PARA_LOOKBACK = 20     # large-cap window is "days to weeks" -- faster than 40
+QM_PARA_MIN_PCT = 0.50    # his stated LARGE-CAP magnitude floor
+QM_PARA_GREEN_DAYS = 3    # "3-5+ consecutive green days" lower edge
+QM_PARA_EXT_PCT = 0.15    # stretched vs 20d SMA; 1.5x-SMA is small-cap scale and
+#                           would be near-vacuous on mega caps. Counts-only fallback
+#                           (pre-declared, needs QM_STUDY_PREREG_V2): 0.15 -> 0.10
+QM_PARA_SMA = 20          # extension reference only (his MAs are the snapback target)
+QM_HORIZONS = (5, 10, 20)  # pre-declared forward windows, frozen
+QM_TRADABILITY_DTE = (30, 60)  # monthly-expiry DTE band for cards
+QM_NTM_BAND = 0.10        # "near-ATM" = strikes within +/-10% of raw close
+#                           (spec SS4/SS5 gap closed at build time; mirrors
+#                           H7_NTM_BAND but frozen independently so QM never
+#                           couples to H7's registered surface)

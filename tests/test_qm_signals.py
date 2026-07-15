@@ -71,8 +71,11 @@ def breakout_fixture(base_vol=500_000.0, trigger_close=146.0, base_days=15):
 
 class QmParamsTests(unittest.TestCase):
     def test_refuses_while_any_config_value_is_none(self):
-        with self.assertRaises(RuntimeError) as ctx:
-            qm_signals.qm_params()
+        # Owner typed the real values 2026-07-14; simulate the pre-gate
+        # scaffold explicitly so the refusal path stays covered.
+        with mock.patch.object(config, "QM_RUN_LOOKBACK", None):
+            with self.assertRaises(RuntimeError) as ctx:
+                qm_signals.qm_params()
         self.assertIn("QM_RUN_LOOKBACK", str(ctx.exception))
         self.assertIn("owner", str(ctx.exception).lower())
 
@@ -100,7 +103,8 @@ class PreregGateTests(unittest.TestCase):
         ]
 
     def test_refuses_on_untyped_params_first(self):
-        reason = qm_signals.qm_prereg_gate()
+        with mock.patch.object(config, "QM_RUN_LOOKBACK", None):
+            reason = qm_signals.qm_prereg_gate()
         self.assertIsNotNone(reason)
         assert reason is not None
         self.assertIn("owner", reason.lower())
