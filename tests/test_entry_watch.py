@@ -20,7 +20,8 @@ class TriggerStatusTests(unittest.TestCase):
         self.assertEqual(s["unmet"], [])
 
     def test_price_above_trigger_waits(self):
-        s = ew.trigger_status("VST", close=158.63, iv_rank=0.40,
+        above = config.H5_ENTRY_TRIGGERS["VST"] + 5.0
+        s = ew.trigger_status("VST", close=above, iv_rank=0.40,
                               leaps_row=_leaps_row())
         self.assertEqual(s["verdict"], "WAIT")
         self.assertTrue(any("trigger" in u for u in s["unmet"]))

@@ -223,7 +223,11 @@ ASSIGNMENT_WATCH_PCT = 0.02
 # the GREEN 0.3) because a pullback that hits the price level typically
 # RAISES IV-rank; demanding bottom-tercile IV simultaneously risks a trigger
 # that can never fire.
-H5_ENTRY_TRIGGERS = {"VST": 140.0, "AMZN": 220.0}
+# VST 140->160 owner-directed 2026-07-15 (ledger H5_ENTRY_TRIGGER_AMENDMENT_V2):
+# a DISCRETIONARY LOOSENING toward the market (close 158.43 already < 160, so
+# the price leg is instantly satisfied); any entry graded under it is trigger
+# v2, not the original 2026-07-07 pre-registration firing.
+H5_ENTRY_TRIGGERS = {"VST": 160.0, "AMZN": 220.0}
 H5_ENTRY_IVR_MAX = 0.5
 
 # ---------------------------------------------------------------------------
