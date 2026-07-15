@@ -258,10 +258,22 @@ H6_HARD_KILL_FULL_LOSS_MONTHS = 3
 # docs/superpowers/specs/2026-07-09-h7-swing-options-design.md (+v1.1).
 # ---------------------------------------------------------------------------
 H7_WATCHLIST = ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
-                "IREN"]  # IREN added H7_AMENDMENT_V1_5 2026-07-14 (owner-typed,
-                         # AI-infrastructure story name; ledger/facts.log)
+                "IREN", "USAR"]  # IREN added H7_AMENDMENT_V1_5 2026-07-14;
+                         # USAR added H7_AMENDMENT_V1_6 2026-07-15 (both
+                         # owner-typed story names; ledger/facts.log). USAR =
+                         # USA Rare Earth, rare-earth/magnet AI-supply-chain
+                         # name; STAGED in H7_EXCLUDED until its base option-
+                         # chain backfill completes.
 H7_CORE_LONG_ONLY = ["VST", "CEG", "MSFT", "AMZN"]  # H7a/b eligible; H7c stays H5's book
-H7_EXCLUDED = ["HYLN"]  # HYLN: dead chain (~128 rows/day). IREN ACTIVATED
+H7_EXCLUDED = ["HYLN"]  # HYLN: dead chain (~128 rows/day). USAR ACTIVATED
+# 2026-07-15 (owner-authorized): base chain cache 318 files spanning 2025-04-07
+# ..2026-07-14 (USAR options first listed 2025-04-07; 566 pre-listing sessions
+# are skip-and-logged CACHE_GAPs) + Yahoo closes/OHLCV; whole-universe
+# h7_data_gate GO as-of 2026-07-14. See H7_AMENDMENT_V1_6 (+ADDENDUM),
+# DATA_PULL_BACKFILL, DATA_PULL, USAR_ACTIVATION in ledger/facts.log. Data
+# caveat: USAR closes begin 2023-07 = pre-merger SPAC (IPXX) history on the
+# ticker; the flat pre-2025 SPAC series can distort H7b RV/coil math.
+# IREN ACTIVATED
 # 2026-07-15 (owner-authorized): base option-chain cache built, 1,054 files
 # spanning 2022-04-29..2026-07-14 (IREN options first listed 2022-04-29; the
 # 112 earlier days are pre-options-listing gaps, skip-and-logged). IREN now

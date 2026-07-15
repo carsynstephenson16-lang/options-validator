@@ -1,7 +1,7 @@
 {
  "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
  "evaluation_session": "2026-07-13",
- "go_count": 12,
+ "go_count": 14,
  "no_go_count": 0,
  "requested_run_date": "2026-07-14",
  "schema_version": 1,
@@ -374,6 +374,80 @@
    ],
    "requested_run_date": "2026-07-14",
    "symbol": "CRWV",
+   "verdict": "GO"
+  },
+  "IREN": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 1558,
+     "selectable": 229,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 31 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/IREN_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 1558
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/IREN.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "IREN",
    "verdict": "GO"
   },
   "MSFT": {
@@ -820,6 +894,80 @@
    "symbol": "TEM",
    "verdict": "GO"
   },
+  "USAR": {
+   "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
+   "chain": {
+    "audit": {
+     "block": [],
+     "rows": 760,
+     "selectable": 99,
+     "verdict": "PASS WITH WARNINGS",
+     "warn": [
+      "IV<=0/>500%/NaN on 19 non-selectable rows (deep-ITM/far-OTM)"
+     ]
+    },
+    "columns": [
+     "expiration",
+     "strike",
+     "right",
+     "bid",
+     "ask",
+     "open_interest",
+     "iv",
+     "delta",
+     "gamma",
+     "theta",
+     "vega"
+    ],
+    "crossed_market_count": 0,
+    "duplicate_contract_count": 0,
+    "expected_path": ".cache/chains/USAR_2026-07-13.parquet",
+    "file_exists": true,
+    "missing_required_columns": [],
+    "negative_ask_count": 0,
+    "negative_bid_count": 0,
+    "negative_open_interest_count": 0,
+    "newest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "null_by_numeric_column": {
+     "ask": 0,
+     "bid": 0,
+     "delta": 0,
+     "gamma": 0,
+     "iv": 0,
+     "open_interest": 0,
+     "strike": 0,
+     "theta": 0,
+     "vega": 0
+    },
+    "row_count": 760
+   },
+   "close": {
+    "duplicate_date_count": 0,
+    "file_exists": true,
+    "latest_date_at_or_before_session": "2026-07-13",
+    "nonfinite_count": 0,
+    "path": ".cache/underlying/USAR.parquet",
+    "session_row_exists": true
+   },
+   "evaluation_session": "2026-07-13",
+   "reason_codes": [
+    "EXACT_SESSION_GO"
+   ],
+   "requested_run_date": "2026-07-14",
+   "symbol": "USAR",
+   "verdict": "GO"
+  },
   "VST": {
    "causal_cutoff_utc": "2026-07-13T20:00:00+00:00",
    "chain": {
@@ -901,12 +1049,14 @@
   "AVGO",
   "CEG",
   "CRWV",
+  "IREN",
   "MSFT",
   "NOW",
   "NVDA",
   "PLTR",
   "SMCI",
   "TEM",
+  "USAR",
   "VST"
  ],
  "whole_universe_verdict": "GO"

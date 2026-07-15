@@ -21,9 +21,9 @@ class TestStage7SyntheticProof(unittest.TestCase):
 
         self.assertEqual(receipt["boundary"], "BUILD-ONLY; SYNTHETIC-ONLY; INACTIVE")
         self.assertEqual(receipt["fixture_id"], "h7-stage7-v1")
-        self.assertEqual(receipt["source_health"]["healthy"], 13)
+        self.assertEqual(receipt["source_health"]["healthy"], 14)
         self.assertEqual(receipt["data_gate"]["verdict"], "GO")
-        self.assertEqual(receipt["data_gate"]["go_count"], 13)
+        self.assertEqual(receipt["data_gate"]["go_count"], 14)
         self.assertTrue(receipt["ledger"]["valid"])
         self.assertGreater(receipt["ledger"]["event_count"], 8)
         self.assertEqual(receipt["lifecycle"]["decision_session"], "2026-07-10")

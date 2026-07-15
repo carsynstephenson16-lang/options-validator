@@ -13015,3 +13015,892 @@
 2026-07-15T13:24:52.091192+00:00	DATA_PULL_BACKFILL 2026-07-15: IREN base option-chain backfill (H7_AMENDMENT_V1_5 activation, owner-authorized). listing=2021-11-17..2026-07-15 (today excluded). in-sample: fetched=170 gaps=112; blind: fetched=883 gaps=0. Integrity split mirrors cache_runner: get_eod_chain <= IN_SAMPLE_END, blind_cache_chain after; config boundaries unchanged.
 2026-07-15T13:54:56.549618+00:00	BLIND_CACHE symbol=USAR date=2026-07-13 rows=760 sha256=100c79f4fe399d834cb3c0630e336c6b9a64199d0a1c1f9d65c053a72ed3dd4e already_cached=false path=.cache/chains/USAR_2026-07-13.parquet
 2026-07-15T13:55:52.829257+00:00	IREN_ACTIVATION 2026-07-15 (owner-authorized): IREN removed from H7_EXCLUDED and activated into the 13-name H7 forward-watch universe (recent_topup --scope h7 / h7_data_gate / h7_watch / qm_watch). Precondition met -- base option-chain cache built this session: 1,054 files spanning 2022-04-29..2026-07-14 (IREN listed options first appear 2022-04-29; the 112 earlier days are pre-options-listing gaps, skip-and-logged; see DATA_PULL_BACKFILL 2026-07-15). chain_cache_manifest.txt regenerated (22,760 entries; +1,054 IREN, 0 non-IREN drift). Full offline suite green (1077) after scope tests updated 12->13. CAVEAT: IREN source health = UNHEALTHY (no earnings gating assertions yet) -> watcher per-name fail-closed gate entry-bans IREN until earnings data is added (same posture as CRWV); it is watched but cannot fire an entry. Config boundaries unchanged; OOS seal untouched.
+2026-07-15T14:40:14.273919+00:00	H7_AMENDMENT_V1_6 2026-07-15: owner-typed instruction (2026-07-15 session, verbatim 'add usar and cache its data') adds USAR (USA Rare Earth, Inc., NASDAQ) to H7_WATCHLIST as its 14th name -- config.py H7_WATCHLIST now ['CRWV','TEM','PLTR','NOW','SMCI','NVDA','AMD','AVGO','IREN','USAR']. The addition is an OWNER DECISION (owner owns watchlist membership); rationale = rare-earth-magnet / AI-power-defense supply-chain story name, labeled Inference by the agent, not owner-verified. Pre-add viability probe (BLIND_CACHE symbol=USAR date=2026-07-13): 760-row chain, audit_chain verdict=PASS WITH WARNINGS (only benign deep-ITM/far-OTM IV artifacts), spot~$18, 119 contracts pass the general liquidity gate (OI>=100 & spread<=10%), 6 contracts pass the strict H7 admission gate (NTM +/-10%, OI>=100, spread<=5%) vs >=5 required -- VIABLE but MARGINAL admission breadth (VST/CEG-grade, not NVDA-grade). USAR is NOT part of the frozen 2026-07-25 ThetaData cutoff-decision scope (H7_CUTOFF_SCOPE_FREEZE unchanged; same posture as IREN). The 2026-07-14 QM study vintage (QM_STUDY_PREREG) PREDATES this addition and is NOT re-run -- one-run contract already spent, USAR was not in scope when that study ran. No backtest is run or reopened by this addition (H7 historical diagnostic permanently withdrawn per H7_HISTORICAL_WITHDRAWAL_HASH; forward Stage 4+ INACTIVE).
+2026-07-15T14:40:14.274805+00:00	H7_AMENDMENT_V1_6_ADDENDUM 2026-07-15: USAR STAGED, not active -- added to H7_EXCLUDED pending its base option-chain backfill; staging is agent-proposed on operational-integrity grounds (owner-typed addition itself stands), mirroring the IREN V1_5 addendum: an active name lacking a full cache would break the daily ritual (recent_topup latest_cached_date) and force a whole-universe h7_data_gate NO_GO. Because USA Rare Earth listed in 2025 (entirely AFTER IN_SAMPLE_END=2022-12-31), 100% of USAR history is OOS holdout and the backfill uses blind_cache_chain EXCLUSIVELY (no get_eod_chain, no in-sample look). Activation path = ThetaData base backfill (cache_runner blind path) through 2026-07-14 (today excluded), then whole-universe h7_data_gate GO, then remove USAR from H7_EXCLUDED (IREN_ACTIVATION-style fact) + scope tests 13->14 + offline suite green. CAVEAT: USAR has no earnings-provenance yet -> h7_source_health reads UNHEALTHY and the watcher per-name fail-closed gate entry-bans USAR (same posture as IREN/CRWV) -- watched but cannot fire an entry until earnings data is added. ThetaData subscription runs to ~2026-07-29, so the backfill is time-sensitive. Config boundaries (BACKTEST_START/END, IN_SAMPLE_END) unchanged; OOS seal untouched.
+2026-07-15T14:40:47.882544+00:00	CACHE_GAP symbol=USAR date=2023-01-03 reason=empty_fetch
+2026-07-15T14:40:48.174576+00:00	CACHE_GAP symbol=USAR date=2023-01-04 reason=empty_fetch
+2026-07-15T14:40:48.251941+00:00	CACHE_GAP symbol=USAR date=2023-01-05 reason=empty_fetch
+2026-07-15T14:40:48.318226+00:00	CACHE_GAP symbol=USAR date=2023-01-06 reason=empty_fetch
+2026-07-15T14:40:48.505422+00:00	CACHE_GAP symbol=USAR date=2023-01-09 reason=empty_fetch
+2026-07-15T14:40:48.573381+00:00	CACHE_GAP symbol=USAR date=2023-01-10 reason=empty_fetch
+2026-07-15T14:40:48.701311+00:00	CACHE_GAP symbol=USAR date=2023-01-11 reason=empty_fetch
+2026-07-15T14:40:48.794775+00:00	CACHE_GAP symbol=USAR date=2023-01-12 reason=empty_fetch
+2026-07-15T14:40:48.877137+00:00	CACHE_GAP symbol=USAR date=2023-01-13 reason=empty_fetch
+2026-07-15T14:40:48.956387+00:00	CACHE_GAP symbol=USAR date=2023-01-17 reason=empty_fetch
+2026-07-15T14:40:49.031057+00:00	CACHE_GAP symbol=USAR date=2023-01-18 reason=empty_fetch
+2026-07-15T14:40:49.104859+00:00	CACHE_GAP symbol=USAR date=2023-01-19 reason=empty_fetch
+2026-07-15T14:40:49.230307+00:00	CACHE_GAP symbol=USAR date=2023-01-20 reason=empty_fetch
+2026-07-15T14:40:49.304874+00:00	CACHE_GAP symbol=USAR date=2023-01-23 reason=empty_fetch
+2026-07-15T14:40:49.702001+00:00	CACHE_GAP symbol=USAR date=2023-01-24 reason=empty_fetch
+2026-07-15T14:40:49.794999+00:00	CACHE_GAP symbol=USAR date=2023-01-25 reason=empty_fetch
+2026-07-15T14:40:49.934929+00:00	CACHE_GAP symbol=USAR date=2023-01-26 reason=empty_fetch
+2026-07-15T14:40:50.155290+00:00	CACHE_GAP symbol=USAR date=2023-01-27 reason=empty_fetch
+2026-07-15T14:40:50.222080+00:00	CACHE_GAP symbol=USAR date=2023-01-30 reason=empty_fetch
+2026-07-15T14:40:50.283774+00:00	CACHE_GAP symbol=USAR date=2023-01-31 reason=empty_fetch
+2026-07-15T14:40:50.355123+00:00	CACHE_GAP symbol=USAR date=2023-02-01 reason=empty_fetch
+2026-07-15T14:40:50.416815+00:00	CACHE_GAP symbol=USAR date=2023-02-02 reason=empty_fetch
+2026-07-15T14:40:50.491816+00:00	CACHE_GAP symbol=USAR date=2023-02-03 reason=empty_fetch
+2026-07-15T14:40:50.587587+00:00	CACHE_GAP symbol=USAR date=2023-02-06 reason=empty_fetch
+2026-07-15T14:40:50.706876+00:00	CACHE_GAP symbol=USAR date=2023-02-07 reason=empty_fetch
+2026-07-15T14:40:50.810424+00:00	CACHE_GAP symbol=USAR date=2023-02-08 reason=empty_fetch
+2026-07-15T14:40:51.026840+00:00	CACHE_GAP symbol=USAR date=2023-02-09 reason=empty_fetch
+2026-07-15T14:40:51.155774+00:00	CACHE_GAP symbol=USAR date=2023-02-10 reason=empty_fetch
+2026-07-15T14:40:51.357838+00:00	CACHE_GAP symbol=USAR date=2023-02-13 reason=empty_fetch
+2026-07-15T14:40:51.702062+00:00	CACHE_GAP symbol=USAR date=2023-02-14 reason=empty_fetch
+2026-07-15T14:40:51.824086+00:00	CACHE_GAP symbol=USAR date=2023-02-15 reason=empty_fetch
+2026-07-15T14:40:52.151345+00:00	CACHE_GAP symbol=USAR date=2023-02-16 reason=empty_fetch
+2026-07-15T14:40:52.220618+00:00	CACHE_GAP symbol=USAR date=2023-02-17 reason=empty_fetch
+2026-07-15T14:40:52.337460+00:00	CACHE_GAP symbol=USAR date=2023-02-21 reason=empty_fetch
+2026-07-15T14:40:52.439886+00:00	CACHE_GAP symbol=USAR date=2023-02-22 reason=empty_fetch
+2026-07-15T14:40:52.544906+00:00	CACHE_GAP symbol=USAR date=2023-02-23 reason=empty_fetch
+2026-07-15T14:40:52.628847+00:00	CACHE_GAP symbol=USAR date=2023-02-24 reason=empty_fetch
+2026-07-15T14:40:52.767320+00:00	CACHE_GAP symbol=USAR date=2023-02-27 reason=empty_fetch
+2026-07-15T14:40:52.908666+00:00	CACHE_GAP symbol=USAR date=2023-02-28 reason=empty_fetch
+2026-07-15T14:40:52.981822+00:00	CACHE_GAP symbol=USAR date=2023-03-01 reason=empty_fetch
+2026-07-15T14:40:53.079283+00:00	CACHE_GAP symbol=USAR date=2023-03-02 reason=empty_fetch
+2026-07-15T14:40:53.195214+00:00	CACHE_GAP symbol=USAR date=2023-03-03 reason=empty_fetch
+2026-07-15T14:40:53.267870+00:00	CACHE_GAP symbol=USAR date=2023-03-06 reason=empty_fetch
+2026-07-15T14:40:53.336090+00:00	CACHE_GAP symbol=USAR date=2023-03-07 reason=empty_fetch
+2026-07-15T14:40:53.492648+00:00	CACHE_GAP symbol=USAR date=2023-03-08 reason=empty_fetch
+2026-07-15T14:40:53.557825+00:00	CACHE_GAP symbol=USAR date=2023-03-09 reason=empty_fetch
+2026-07-15T14:40:53.649108+00:00	CACHE_GAP symbol=USAR date=2023-03-10 reason=empty_fetch
+2026-07-15T14:40:53.756698+00:00	CACHE_GAP symbol=USAR date=2023-03-13 reason=empty_fetch
+2026-07-15T14:40:53.820870+00:00	CACHE_GAP symbol=USAR date=2023-03-14 reason=empty_fetch
+2026-07-15T14:40:53.906147+00:00	CACHE_GAP symbol=USAR date=2023-03-15 reason=empty_fetch
+2026-07-15T14:40:54.010978+00:00	CACHE_GAP symbol=USAR date=2023-03-16 reason=empty_fetch
+2026-07-15T14:40:54.078322+00:00	CACHE_GAP symbol=USAR date=2023-03-17 reason=empty_fetch
+2026-07-15T14:40:54.174992+00:00	CACHE_GAP symbol=USAR date=2023-03-20 reason=empty_fetch
+2026-07-15T14:40:54.265526+00:00	CACHE_GAP symbol=USAR date=2023-03-21 reason=empty_fetch
+2026-07-15T14:40:54.337956+00:00	CACHE_GAP symbol=USAR date=2023-03-22 reason=empty_fetch
+2026-07-15T14:40:54.434983+00:00	CACHE_GAP symbol=USAR date=2023-03-23 reason=empty_fetch
+2026-07-15T14:40:54.512279+00:00	CACHE_GAP symbol=USAR date=2023-03-24 reason=empty_fetch
+2026-07-15T14:40:54.584003+00:00	CACHE_GAP symbol=USAR date=2023-03-27 reason=empty_fetch
+2026-07-15T14:40:54.754469+00:00	CACHE_GAP symbol=USAR date=2023-03-28 reason=empty_fetch
+2026-07-15T14:40:54.981609+00:00	CACHE_GAP symbol=USAR date=2023-03-29 reason=empty_fetch
+2026-07-15T14:40:55.066736+00:00	CACHE_GAP symbol=USAR date=2023-03-30 reason=empty_fetch
+2026-07-15T14:40:55.142158+00:00	CACHE_GAP symbol=USAR date=2023-03-31 reason=empty_fetch
+2026-07-15T14:40:55.249219+00:00	CACHE_GAP symbol=USAR date=2023-04-03 reason=empty_fetch
+2026-07-15T14:40:55.324545+00:00	CACHE_GAP symbol=USAR date=2023-04-04 reason=empty_fetch
+2026-07-15T14:40:55.387362+00:00	CACHE_GAP symbol=USAR date=2023-04-05 reason=empty_fetch
+2026-07-15T14:40:55.459555+00:00	CACHE_GAP symbol=USAR date=2023-04-06 reason=empty_fetch
+2026-07-15T14:40:55.530408+00:00	CACHE_GAP symbol=USAR date=2023-04-10 reason=empty_fetch
+2026-07-15T14:40:55.825046+00:00	CACHE_GAP symbol=USAR date=2023-04-11 reason=empty_fetch
+2026-07-15T14:40:55.972173+00:00	CACHE_GAP symbol=USAR date=2023-04-12 reason=empty_fetch
+2026-07-15T14:40:56.251485+00:00	CACHE_GAP symbol=USAR date=2023-04-13 reason=empty_fetch
+2026-07-15T14:40:56.352079+00:00	CACHE_GAP symbol=USAR date=2023-04-14 reason=empty_fetch
+2026-07-15T14:40:56.482736+00:00	CACHE_GAP symbol=USAR date=2023-04-17 reason=empty_fetch
+2026-07-15T14:40:56.810372+00:00	CACHE_GAP symbol=USAR date=2023-04-18 reason=empty_fetch
+2026-07-15T14:40:56.948951+00:00	CACHE_GAP symbol=USAR date=2023-04-19 reason=empty_fetch
+2026-07-15T14:40:57.300050+00:00	CACHE_GAP symbol=USAR date=2023-04-20 reason=empty_fetch
+2026-07-15T14:40:57.409496+00:00	CACHE_GAP symbol=USAR date=2023-04-21 reason=empty_fetch
+2026-07-15T14:40:57.497290+00:00	CACHE_GAP symbol=USAR date=2023-04-24 reason=empty_fetch
+2026-07-15T14:40:57.614968+00:00	CACHE_GAP symbol=USAR date=2023-04-25 reason=empty_fetch
+2026-07-15T14:40:57.738550+00:00	CACHE_GAP symbol=USAR date=2023-04-26 reason=empty_fetch
+2026-07-15T14:40:57.839905+00:00	CACHE_GAP symbol=USAR date=2023-04-27 reason=empty_fetch
+2026-07-15T14:40:58.120919+00:00	CACHE_GAP symbol=USAR date=2023-04-28 reason=empty_fetch
+2026-07-15T14:40:58.180634+00:00	CACHE_GAP symbol=USAR date=2023-05-01 reason=empty_fetch
+2026-07-15T14:40:58.460563+00:00	CACHE_GAP symbol=USAR date=2023-05-02 reason=empty_fetch
+2026-07-15T14:40:58.553172+00:00	CACHE_GAP symbol=USAR date=2023-05-03 reason=empty_fetch
+2026-07-15T14:40:58.628045+00:00	CACHE_GAP symbol=USAR date=2023-05-04 reason=empty_fetch
+2026-07-15T14:40:58.716455+00:00	CACHE_GAP symbol=USAR date=2023-05-05 reason=empty_fetch
+2026-07-15T14:40:58.959658+00:00	CACHE_GAP symbol=USAR date=2023-05-08 reason=empty_fetch
+2026-07-15T14:40:59.024419+00:00	CACHE_GAP symbol=USAR date=2023-05-09 reason=empty_fetch
+2026-07-15T14:40:59.087484+00:00	CACHE_GAP symbol=USAR date=2023-05-10 reason=empty_fetch
+2026-07-15T14:40:59.147944+00:00	CACHE_GAP symbol=USAR date=2023-05-11 reason=empty_fetch
+2026-07-15T14:40:59.256903+00:00	CACHE_GAP symbol=USAR date=2023-05-12 reason=empty_fetch
+2026-07-15T14:40:59.324052+00:00	CACHE_GAP symbol=USAR date=2023-05-15 reason=empty_fetch
+2026-07-15T14:40:59.391654+00:00	CACHE_GAP symbol=USAR date=2023-05-16 reason=empty_fetch
+2026-07-15T14:40:59.464369+00:00	CACHE_GAP symbol=USAR date=2023-05-17 reason=empty_fetch
+2026-07-15T14:40:59.656797+00:00	CACHE_GAP symbol=USAR date=2023-05-18 reason=empty_fetch
+2026-07-15T14:40:59.763490+00:00	CACHE_GAP symbol=USAR date=2023-05-19 reason=empty_fetch
+2026-07-15T14:40:59.857346+00:00	CACHE_GAP symbol=USAR date=2023-05-22 reason=empty_fetch
+2026-07-15T14:40:59.952993+00:00	CACHE_GAP symbol=USAR date=2023-05-23 reason=empty_fetch
+2026-07-15T14:41:00.051552+00:00	CACHE_GAP symbol=USAR date=2023-05-24 reason=empty_fetch
+2026-07-15T14:41:00.137264+00:00	CACHE_GAP symbol=USAR date=2023-05-25 reason=empty_fetch
+2026-07-15T14:41:00.241323+00:00	CACHE_GAP symbol=USAR date=2023-05-26 reason=empty_fetch
+2026-07-15T14:41:00.337149+00:00	CACHE_GAP symbol=USAR date=2023-05-30 reason=empty_fetch
+2026-07-15T14:41:00.418457+00:00	CACHE_GAP symbol=USAR date=2023-05-31 reason=empty_fetch
+2026-07-15T14:41:00.505621+00:00	CACHE_GAP symbol=USAR date=2023-06-01 reason=empty_fetch
+2026-07-15T14:41:00.586071+00:00	CACHE_GAP symbol=USAR date=2023-06-02 reason=empty_fetch
+2026-07-15T14:41:00.658333+00:00	CACHE_GAP symbol=USAR date=2023-06-05 reason=empty_fetch
+2026-07-15T14:41:00.737458+00:00	CACHE_GAP symbol=USAR date=2023-06-06 reason=empty_fetch
+2026-07-15T14:41:00.906303+00:00	CACHE_GAP symbol=USAR date=2023-06-07 reason=empty_fetch
+2026-07-15T14:41:01.025968+00:00	CACHE_GAP symbol=USAR date=2023-06-08 reason=empty_fetch
+2026-07-15T14:41:01.237986+00:00	CACHE_GAP symbol=USAR date=2023-06-09 reason=empty_fetch
+2026-07-15T14:41:01.310541+00:00	CACHE_GAP symbol=USAR date=2023-06-12 reason=empty_fetch
+2026-07-15T14:41:01.388478+00:00	CACHE_GAP symbol=USAR date=2023-06-13 reason=empty_fetch
+2026-07-15T14:41:01.466219+00:00	CACHE_GAP symbol=USAR date=2023-06-14 reason=empty_fetch
+2026-07-15T14:41:01.674718+00:00	CACHE_GAP symbol=USAR date=2023-06-15 reason=empty_fetch
+2026-07-15T14:41:01.760386+00:00	CACHE_GAP symbol=USAR date=2023-06-16 reason=empty_fetch
+2026-07-15T14:41:01.827987+00:00	CACHE_GAP symbol=USAR date=2023-06-20 reason=empty_fetch
+2026-07-15T14:41:01.889990+00:00	CACHE_GAP symbol=USAR date=2023-06-21 reason=empty_fetch
+2026-07-15T14:41:01.981769+00:00	CACHE_GAP symbol=USAR date=2023-06-22 reason=empty_fetch
+2026-07-15T14:41:02.070349+00:00	CACHE_GAP symbol=USAR date=2023-06-23 reason=empty_fetch
+2026-07-15T14:41:02.134204+00:00	CACHE_GAP symbol=USAR date=2023-06-26 reason=empty_fetch
+2026-07-15T14:41:02.258846+00:00	CACHE_GAP symbol=USAR date=2023-06-27 reason=empty_fetch
+2026-07-15T14:41:02.605487+00:00	CACHE_GAP symbol=USAR date=2023-06-28 reason=empty_fetch
+2026-07-15T14:41:02.771407+00:00	CACHE_GAP symbol=USAR date=2023-06-29 reason=empty_fetch
+2026-07-15T14:41:02.839011+00:00	CACHE_GAP symbol=USAR date=2023-06-30 reason=empty_fetch
+2026-07-15T14:41:02.912776+00:00	CACHE_GAP symbol=USAR date=2023-07-03 reason=empty_fetch
+2026-07-15T14:41:02.975215+00:00	CACHE_GAP symbol=USAR date=2023-07-05 reason=empty_fetch
+2026-07-15T14:41:03.034749+00:00	CACHE_GAP symbol=USAR date=2023-07-06 reason=empty_fetch
+2026-07-15T14:41:03.089274+00:00	CACHE_GAP symbol=USAR date=2023-07-07 reason=empty_fetch
+2026-07-15T14:41:03.176084+00:00	CACHE_GAP symbol=USAR date=2023-07-10 reason=empty_fetch
+2026-07-15T14:41:03.249177+00:00	CACHE_GAP symbol=USAR date=2023-07-11 reason=empty_fetch
+2026-07-15T14:41:03.313278+00:00	CACHE_GAP symbol=USAR date=2023-07-12 reason=empty_fetch
+2026-07-15T14:41:03.371094+00:00	CACHE_GAP symbol=USAR date=2023-07-13 reason=empty_fetch
+2026-07-15T14:41:03.435366+00:00	CACHE_GAP symbol=USAR date=2023-07-14 reason=empty_fetch
+2026-07-15T14:41:03.492422+00:00	CACHE_GAP symbol=USAR date=2023-07-17 reason=empty_fetch
+2026-07-15T14:41:03.560148+00:00	CACHE_GAP symbol=USAR date=2023-07-18 reason=empty_fetch
+2026-07-15T14:41:03.617088+00:00	CACHE_GAP symbol=USAR date=2023-07-19 reason=empty_fetch
+2026-07-15T14:41:03.679320+00:00	CACHE_GAP symbol=USAR date=2023-07-20 reason=empty_fetch
+2026-07-15T14:41:03.737112+00:00	CACHE_GAP symbol=USAR date=2023-07-21 reason=empty_fetch
+2026-07-15T14:41:03.833906+00:00	CACHE_GAP symbol=USAR date=2023-07-24 reason=empty_fetch
+2026-07-15T14:41:03.928871+00:00	CACHE_GAP symbol=USAR date=2023-07-25 reason=empty_fetch
+2026-07-15T14:41:04.011353+00:00	CACHE_GAP symbol=USAR date=2023-07-26 reason=empty_fetch
+2026-07-15T14:41:04.115976+00:00	CACHE_GAP symbol=USAR date=2023-07-27 reason=empty_fetch
+2026-07-15T14:41:04.192873+00:00	CACHE_GAP symbol=USAR date=2023-07-28 reason=empty_fetch
+2026-07-15T14:41:04.282084+00:00	CACHE_GAP symbol=USAR date=2023-07-31 reason=empty_fetch
+2026-07-15T14:41:04.398594+00:00	CACHE_GAP symbol=USAR date=2023-08-01 reason=empty_fetch
+2026-07-15T14:41:04.479365+00:00	CACHE_GAP symbol=USAR date=2023-08-02 reason=empty_fetch
+2026-07-15T14:41:04.542405+00:00	CACHE_GAP symbol=USAR date=2023-08-03 reason=empty_fetch
+2026-07-15T14:41:04.665362+00:00	CACHE_GAP symbol=USAR date=2023-08-04 reason=empty_fetch
+2026-07-15T14:41:04.728778+00:00	CACHE_GAP symbol=USAR date=2023-08-07 reason=empty_fetch
+2026-07-15T14:41:04.964497+00:00	CACHE_GAP symbol=USAR date=2023-08-08 reason=empty_fetch
+2026-07-15T14:41:05.047836+00:00	CACHE_GAP symbol=USAR date=2023-08-09 reason=empty_fetch
+2026-07-15T14:41:05.114358+00:00	CACHE_GAP symbol=USAR date=2023-08-10 reason=empty_fetch
+2026-07-15T14:41:05.185598+00:00	CACHE_GAP symbol=USAR date=2023-08-11 reason=empty_fetch
+2026-07-15T14:41:05.252479+00:00	CACHE_GAP symbol=USAR date=2023-08-14 reason=empty_fetch
+2026-07-15T14:41:05.317669+00:00	CACHE_GAP symbol=USAR date=2023-08-15 reason=empty_fetch
+2026-07-15T14:41:05.390086+00:00	CACHE_GAP symbol=USAR date=2023-08-16 reason=empty_fetch
+2026-07-15T14:41:05.468059+00:00	CACHE_GAP symbol=USAR date=2023-08-17 reason=empty_fetch
+2026-07-15T14:41:05.549971+00:00	CACHE_GAP symbol=USAR date=2023-08-18 reason=empty_fetch
+2026-07-15T14:41:05.774522+00:00	CACHE_GAP symbol=USAR date=2023-08-21 reason=empty_fetch
+2026-07-15T14:41:05.857856+00:00	CACHE_GAP symbol=USAR date=2023-08-22 reason=empty_fetch
+2026-07-15T14:41:05.959261+00:00	CACHE_GAP symbol=USAR date=2023-08-23 reason=empty_fetch
+2026-07-15T14:41:06.043366+00:00	CACHE_GAP symbol=USAR date=2023-08-24 reason=empty_fetch
+2026-07-15T14:41:06.136532+00:00	CACHE_GAP symbol=USAR date=2023-08-25 reason=empty_fetch
+2026-07-15T14:41:06.222408+00:00	CACHE_GAP symbol=USAR date=2023-08-28 reason=empty_fetch
+2026-07-15T14:41:06.307699+00:00	CACHE_GAP symbol=USAR date=2023-08-29 reason=empty_fetch
+2026-07-15T14:41:06.393417+00:00	CACHE_GAP symbol=USAR date=2023-08-30 reason=empty_fetch
+2026-07-15T14:41:06.464371+00:00	CACHE_GAP symbol=USAR date=2023-08-31 reason=empty_fetch
+2026-07-15T14:41:06.539309+00:00	CACHE_GAP symbol=USAR date=2023-09-01 reason=empty_fetch
+2026-07-15T14:41:06.603602+00:00	CACHE_GAP symbol=USAR date=2023-09-05 reason=empty_fetch
+2026-07-15T14:41:06.839067+00:00	CACHE_GAP symbol=USAR date=2023-09-06 reason=empty_fetch
+2026-07-15T14:41:06.971337+00:00	CACHE_GAP symbol=USAR date=2023-09-07 reason=empty_fetch
+2026-07-15T14:41:07.066138+00:00	CACHE_GAP symbol=USAR date=2023-09-08 reason=empty_fetch
+2026-07-15T14:41:07.153634+00:00	CACHE_GAP symbol=USAR date=2023-09-11 reason=empty_fetch
+2026-07-15T14:41:07.318191+00:00	CACHE_GAP symbol=USAR date=2023-09-12 reason=empty_fetch
+2026-07-15T14:41:07.505434+00:00	CACHE_GAP symbol=USAR date=2023-09-13 reason=empty_fetch
+2026-07-15T14:41:07.747403+00:00	CACHE_GAP symbol=USAR date=2023-09-14 reason=empty_fetch
+2026-07-15T14:41:07.908146+00:00	CACHE_GAP symbol=USAR date=2023-09-15 reason=empty_fetch
+2026-07-15T14:41:07.982926+00:00	CACHE_GAP symbol=USAR date=2023-09-18 reason=empty_fetch
+2026-07-15T14:41:08.049353+00:00	CACHE_GAP symbol=USAR date=2023-09-19 reason=empty_fetch
+2026-07-15T14:41:08.147917+00:00	CACHE_GAP symbol=USAR date=2023-09-20 reason=empty_fetch
+2026-07-15T14:41:08.207350+00:00	CACHE_GAP symbol=USAR date=2023-09-21 reason=empty_fetch
+2026-07-15T14:41:08.284767+00:00	CACHE_GAP symbol=USAR date=2023-09-22 reason=empty_fetch
+2026-07-15T14:41:08.356500+00:00	CACHE_GAP symbol=USAR date=2023-09-25 reason=empty_fetch
+2026-07-15T14:41:08.430627+00:00	CACHE_GAP symbol=USAR date=2023-09-26 reason=empty_fetch
+2026-07-15T14:41:08.501451+00:00	CACHE_GAP symbol=USAR date=2023-09-27 reason=empty_fetch
+2026-07-15T14:41:08.578677+00:00	CACHE_GAP symbol=USAR date=2023-09-28 reason=empty_fetch
+2026-07-15T14:41:08.638930+00:00	CACHE_GAP symbol=USAR date=2023-09-29 reason=empty_fetch
+2026-07-15T14:41:08.708280+00:00	CACHE_GAP symbol=USAR date=2023-10-02 reason=empty_fetch
+2026-07-15T14:41:08.796062+00:00	CACHE_GAP symbol=USAR date=2023-10-03 reason=empty_fetch
+2026-07-15T14:41:09.014188+00:00	CACHE_GAP symbol=USAR date=2023-10-04 reason=empty_fetch
+2026-07-15T14:41:09.139165+00:00	CACHE_GAP symbol=USAR date=2023-10-05 reason=empty_fetch
+2026-07-15T14:41:09.258729+00:00	CACHE_GAP symbol=USAR date=2023-10-06 reason=empty_fetch
+2026-07-15T14:41:09.371683+00:00	CACHE_GAP symbol=USAR date=2023-10-09 reason=empty_fetch
+2026-07-15T14:41:09.435364+00:00	CACHE_GAP symbol=USAR date=2023-10-10 reason=empty_fetch
+2026-07-15T14:41:09.555196+00:00	CACHE_GAP symbol=USAR date=2023-10-11 reason=empty_fetch
+2026-07-15T14:41:09.683910+00:00	CACHE_GAP symbol=USAR date=2023-10-12 reason=empty_fetch
+2026-07-15T14:41:09.759692+00:00	CACHE_GAP symbol=USAR date=2023-10-13 reason=empty_fetch
+2026-07-15T14:41:09.829328+00:00	CACHE_GAP symbol=USAR date=2023-10-16 reason=empty_fetch
+2026-07-15T14:41:09.926126+00:00	CACHE_GAP symbol=USAR date=2023-10-17 reason=empty_fetch
+2026-07-15T14:41:10.034706+00:00	CACHE_GAP symbol=USAR date=2023-10-18 reason=empty_fetch
+2026-07-15T14:41:10.186987+00:00	CACHE_GAP symbol=USAR date=2023-10-19 reason=empty_fetch
+2026-07-15T14:41:10.250486+00:00	CACHE_GAP symbol=USAR date=2023-10-20 reason=empty_fetch
+2026-07-15T14:41:10.318798+00:00	CACHE_GAP symbol=USAR date=2023-10-23 reason=empty_fetch
+2026-07-15T14:41:10.399413+00:00	CACHE_GAP symbol=USAR date=2023-10-24 reason=empty_fetch
+2026-07-15T14:41:10.461134+00:00	CACHE_GAP symbol=USAR date=2023-10-25 reason=empty_fetch
+2026-07-15T14:41:10.635624+00:00	CACHE_GAP symbol=USAR date=2023-10-26 reason=empty_fetch
+2026-07-15T14:41:10.733001+00:00	CACHE_GAP symbol=USAR date=2023-10-27 reason=empty_fetch
+2026-07-15T14:41:10.800319+00:00	CACHE_GAP symbol=USAR date=2023-10-30 reason=empty_fetch
+2026-07-15T14:41:11.080411+00:00	CACHE_GAP symbol=USAR date=2023-10-31 reason=empty_fetch
+2026-07-15T14:41:11.152228+00:00	CACHE_GAP symbol=USAR date=2023-11-01 reason=empty_fetch
+2026-07-15T14:41:11.224454+00:00	CACHE_GAP symbol=USAR date=2023-11-02 reason=empty_fetch
+2026-07-15T14:41:11.321970+00:00	CACHE_GAP symbol=USAR date=2023-11-03 reason=empty_fetch
+2026-07-15T14:41:11.398797+00:00	CACHE_GAP symbol=USAR date=2023-11-06 reason=empty_fetch
+2026-07-15T14:41:11.472356+00:00	CACHE_GAP symbol=USAR date=2023-11-07 reason=empty_fetch
+2026-07-15T14:41:11.718130+00:00	CACHE_GAP symbol=USAR date=2023-11-08 reason=empty_fetch
+2026-07-15T14:41:11.792625+00:00	CACHE_GAP symbol=USAR date=2023-11-09 reason=empty_fetch
+2026-07-15T14:41:11.864074+00:00	CACHE_GAP symbol=USAR date=2023-11-10 reason=empty_fetch
+2026-07-15T14:41:11.935646+00:00	CACHE_GAP symbol=USAR date=2023-11-13 reason=empty_fetch
+2026-07-15T14:41:12.041442+00:00	CACHE_GAP symbol=USAR date=2023-11-14 reason=empty_fetch
+2026-07-15T14:41:12.126123+00:00	CACHE_GAP symbol=USAR date=2023-11-15 reason=empty_fetch
+2026-07-15T14:41:12.277836+00:00	CACHE_GAP symbol=USAR date=2023-11-16 reason=empty_fetch
+2026-07-15T14:41:12.400608+00:00	CACHE_GAP symbol=USAR date=2023-11-17 reason=empty_fetch
+2026-07-15T14:41:12.527508+00:00	CACHE_GAP symbol=USAR date=2023-11-20 reason=empty_fetch
+2026-07-15T14:41:12.729053+00:00	CACHE_GAP symbol=USAR date=2023-11-21 reason=empty_fetch
+2026-07-15T14:41:12.828521+00:00	CACHE_GAP symbol=USAR date=2023-11-22 reason=empty_fetch
+2026-07-15T14:41:13.070385+00:00	CACHE_GAP symbol=USAR date=2023-11-24 reason=empty_fetch
+2026-07-15T14:41:13.241771+00:00	CACHE_GAP symbol=USAR date=2023-11-27 reason=empty_fetch
+2026-07-15T14:41:13.446303+00:00	CACHE_GAP symbol=USAR date=2023-11-28 reason=empty_fetch
+2026-07-15T14:41:13.555237+00:00	CACHE_GAP symbol=USAR date=2023-11-29 reason=empty_fetch
+2026-07-15T14:41:13.682540+00:00	CACHE_GAP symbol=USAR date=2023-11-30 reason=empty_fetch
+2026-07-15T14:41:13.760425+00:00	CACHE_GAP symbol=USAR date=2023-12-01 reason=empty_fetch
+2026-07-15T14:41:13.980508+00:00	CACHE_GAP symbol=USAR date=2023-12-04 reason=empty_fetch
+2026-07-15T14:41:14.141800+00:00	CACHE_GAP symbol=USAR date=2023-12-05 reason=empty_fetch
+2026-07-15T14:41:14.268666+00:00	CACHE_GAP symbol=USAR date=2023-12-06 reason=empty_fetch
+2026-07-15T14:41:14.350441+00:00	CACHE_GAP symbol=USAR date=2023-12-07 reason=empty_fetch
+2026-07-15T14:41:14.458938+00:00	CACHE_GAP symbol=USAR date=2023-12-08 reason=empty_fetch
+2026-07-15T14:41:14.653810+00:00	CACHE_GAP symbol=USAR date=2023-12-11 reason=empty_fetch
+2026-07-15T14:41:14.780994+00:00	CACHE_GAP symbol=USAR date=2023-12-12 reason=empty_fetch
+2026-07-15T14:41:14.844659+00:00	CACHE_GAP symbol=USAR date=2023-12-13 reason=empty_fetch
+2026-07-15T14:41:14.926721+00:00	CACHE_GAP symbol=USAR date=2023-12-14 reason=empty_fetch
+2026-07-15T14:41:15.014146+00:00	CACHE_GAP symbol=USAR date=2023-12-15 reason=empty_fetch
+2026-07-15T14:41:15.200490+00:00	CACHE_GAP symbol=USAR date=2023-12-18 reason=empty_fetch
+2026-07-15T14:41:15.317974+00:00	CACHE_GAP symbol=USAR date=2023-12-19 reason=empty_fetch
+2026-07-15T14:41:15.391226+00:00	CACHE_GAP symbol=USAR date=2023-12-20 reason=empty_fetch
+2026-07-15T14:41:15.671156+00:00	CACHE_GAP symbol=USAR date=2023-12-21 reason=empty_fetch
+2026-07-15T14:41:15.728998+00:00	CACHE_GAP symbol=USAR date=2023-12-22 reason=empty_fetch
+2026-07-15T14:41:15.821113+00:00	CACHE_GAP symbol=USAR date=2023-12-26 reason=empty_fetch
+2026-07-15T14:41:15.919121+00:00	CACHE_GAP symbol=USAR date=2023-12-27 reason=empty_fetch
+2026-07-15T14:41:16.038883+00:00	CACHE_GAP symbol=USAR date=2023-12-28 reason=empty_fetch
+2026-07-15T14:41:16.531062+00:00	CACHE_GAP symbol=USAR date=2023-12-29 reason=empty_fetch
+2026-07-15T14:41:16.839951+00:00	CACHE_GAP symbol=USAR date=2024-01-02 reason=empty_fetch
+2026-07-15T14:41:16.940792+00:00	CACHE_GAP symbol=USAR date=2024-01-03 reason=empty_fetch
+2026-07-15T14:41:17.234538+00:00	CACHE_GAP symbol=USAR date=2024-01-04 reason=empty_fetch
+2026-07-15T14:41:17.310608+00:00	CACHE_GAP symbol=USAR date=2024-01-05 reason=empty_fetch
+2026-07-15T14:41:17.407241+00:00	CACHE_GAP symbol=USAR date=2024-01-08 reason=empty_fetch
+2026-07-15T14:41:17.517842+00:00	CACHE_GAP symbol=USAR date=2024-01-09 reason=empty_fetch
+2026-07-15T14:41:17.615147+00:00	CACHE_GAP symbol=USAR date=2024-01-10 reason=empty_fetch
+2026-07-15T14:41:17.672314+00:00	CACHE_GAP symbol=USAR date=2024-01-11 reason=empty_fetch
+2026-07-15T14:41:17.751857+00:00	CACHE_GAP symbol=USAR date=2024-01-12 reason=empty_fetch
+2026-07-15T14:41:17.857823+00:00	CACHE_GAP symbol=USAR date=2024-01-16 reason=empty_fetch
+2026-07-15T14:41:17.930441+00:00	CACHE_GAP symbol=USAR date=2024-01-17 reason=empty_fetch
+2026-07-15T14:41:17.993766+00:00	CACHE_GAP symbol=USAR date=2024-01-18 reason=empty_fetch
+2026-07-15T14:41:18.080276+00:00	CACHE_GAP symbol=USAR date=2024-01-19 reason=empty_fetch
+2026-07-15T14:41:18.147898+00:00	CACHE_GAP symbol=USAR date=2024-01-22 reason=empty_fetch
+2026-07-15T14:41:18.209096+00:00	CACHE_GAP symbol=USAR date=2024-01-23 reason=empty_fetch
+2026-07-15T14:41:18.277954+00:00	CACHE_GAP symbol=USAR date=2024-01-24 reason=empty_fetch
+2026-07-15T14:41:18.357837+00:00	CACHE_GAP symbol=USAR date=2024-01-25 reason=empty_fetch
+2026-07-15T14:41:18.425661+00:00	CACHE_GAP symbol=USAR date=2024-01-26 reason=empty_fetch
+2026-07-15T14:41:18.579821+00:00	CACHE_GAP symbol=USAR date=2024-01-29 reason=empty_fetch
+2026-07-15T14:41:18.833828+00:00	CACHE_GAP symbol=USAR date=2024-01-30 reason=empty_fetch
+2026-07-15T14:41:18.964532+00:00	CACHE_GAP symbol=USAR date=2024-01-31 reason=empty_fetch
+2026-07-15T14:41:19.137590+00:00	CACHE_GAP symbol=USAR date=2024-02-01 reason=empty_fetch
+2026-07-15T14:41:19.199985+00:00	CACHE_GAP symbol=USAR date=2024-02-02 reason=empty_fetch
+2026-07-15T14:41:19.603051+00:00	CACHE_GAP symbol=USAR date=2024-02-05 reason=empty_fetch
+2026-07-15T14:41:19.675008+00:00	CACHE_GAP symbol=USAR date=2024-02-06 reason=empty_fetch
+2026-07-15T14:41:19.768309+00:00	CACHE_GAP symbol=USAR date=2024-02-07 reason=empty_fetch
+2026-07-15T14:41:19.842386+00:00	CACHE_GAP symbol=USAR date=2024-02-08 reason=empty_fetch
+2026-07-15T14:41:20.011071+00:00	CACHE_GAP symbol=USAR date=2024-02-09 reason=empty_fetch
+2026-07-15T14:41:20.079145+00:00	CACHE_GAP symbol=USAR date=2024-02-12 reason=empty_fetch
+2026-07-15T14:41:20.152311+00:00	CACHE_GAP symbol=USAR date=2024-02-13 reason=empty_fetch
+2026-07-15T14:41:20.411829+00:00	CACHE_GAP symbol=USAR date=2024-02-14 reason=empty_fetch
+2026-07-15T14:41:20.530208+00:00	CACHE_GAP symbol=USAR date=2024-02-15 reason=empty_fetch
+2026-07-15T14:41:20.628924+00:00	CACHE_GAP symbol=USAR date=2024-02-16 reason=empty_fetch
+2026-07-15T14:41:20.707572+00:00	CACHE_GAP symbol=USAR date=2024-02-20 reason=empty_fetch
+2026-07-15T14:41:20.819936+00:00	CACHE_GAP symbol=USAR date=2024-02-21 reason=empty_fetch
+2026-07-15T14:41:20.889499+00:00	CACHE_GAP symbol=USAR date=2024-02-22 reason=empty_fetch
+2026-07-15T14:41:20.951499+00:00	CACHE_GAP symbol=USAR date=2024-02-23 reason=empty_fetch
+2026-07-15T14:41:21.014875+00:00	CACHE_GAP symbol=USAR date=2024-02-26 reason=empty_fetch
+2026-07-15T14:41:21.104158+00:00	CACHE_GAP symbol=USAR date=2024-02-27 reason=empty_fetch
+2026-07-15T14:41:21.369121+00:00	CACHE_GAP symbol=USAR date=2024-02-28 reason=empty_fetch
+2026-07-15T14:41:21.432705+00:00	CACHE_GAP symbol=USAR date=2024-02-29 reason=empty_fetch
+2026-07-15T14:41:21.571609+00:00	CACHE_GAP symbol=USAR date=2024-03-01 reason=empty_fetch
+2026-07-15T14:41:21.644553+00:00	CACHE_GAP symbol=USAR date=2024-03-04 reason=empty_fetch
+2026-07-15T14:41:21.724273+00:00	CACHE_GAP symbol=USAR date=2024-03-05 reason=empty_fetch
+2026-07-15T14:41:21.841183+00:00	CACHE_GAP symbol=USAR date=2024-03-06 reason=empty_fetch
+2026-07-15T14:41:22.087124+00:00	CACHE_GAP symbol=USAR date=2024-03-07 reason=empty_fetch
+2026-07-15T14:41:22.173883+00:00	CACHE_GAP symbol=USAR date=2024-03-08 reason=empty_fetch
+2026-07-15T14:41:22.255630+00:00	CACHE_GAP symbol=USAR date=2024-03-11 reason=empty_fetch
+2026-07-15T14:41:22.369033+00:00	CACHE_GAP symbol=USAR date=2024-03-12 reason=empty_fetch
+2026-07-15T14:41:22.460346+00:00	CACHE_GAP symbol=USAR date=2024-03-13 reason=empty_fetch
+2026-07-15T14:41:22.537005+00:00	CACHE_GAP symbol=USAR date=2024-03-14 reason=empty_fetch
+2026-07-15T14:41:22.642414+00:00	CACHE_GAP symbol=USAR date=2024-03-15 reason=empty_fetch
+2026-07-15T14:41:22.813636+00:00	CACHE_GAP symbol=USAR date=2024-03-18 reason=empty_fetch
+2026-07-15T14:41:22.875171+00:00	CACHE_GAP symbol=USAR date=2024-03-19 reason=empty_fetch
+2026-07-15T14:41:22.937067+00:00	CACHE_GAP symbol=USAR date=2024-03-20 reason=empty_fetch
+2026-07-15T14:41:23.044816+00:00	CACHE_GAP symbol=USAR date=2024-03-21 reason=empty_fetch
+2026-07-15T14:41:23.312007+00:00	CACHE_GAP symbol=USAR date=2024-03-22 reason=empty_fetch
+2026-07-15T14:41:23.518505+00:00	CACHE_GAP symbol=USAR date=2024-03-25 reason=empty_fetch
+2026-07-15T14:41:23.601887+00:00	CACHE_GAP symbol=USAR date=2024-03-26 reason=empty_fetch
+2026-07-15T14:41:23.677260+00:00	CACHE_GAP symbol=USAR date=2024-03-27 reason=empty_fetch
+2026-07-15T14:41:23.743868+00:00	CACHE_GAP symbol=USAR date=2024-03-28 reason=empty_fetch
+2026-07-15T14:41:23.804505+00:00	CACHE_GAP symbol=USAR date=2024-04-01 reason=empty_fetch
+2026-07-15T14:41:23.911127+00:00	CACHE_GAP symbol=USAR date=2024-04-02 reason=empty_fetch
+2026-07-15T14:41:24.122759+00:00	CACHE_GAP symbol=USAR date=2024-04-03 reason=empty_fetch
+2026-07-15T14:41:24.190061+00:00	CACHE_GAP symbol=USAR date=2024-04-04 reason=empty_fetch
+2026-07-15T14:41:24.249929+00:00	CACHE_GAP symbol=USAR date=2024-04-05 reason=empty_fetch
+2026-07-15T14:41:24.356506+00:00	CACHE_GAP symbol=USAR date=2024-04-08 reason=empty_fetch
+2026-07-15T14:41:24.430429+00:00	CACHE_GAP symbol=USAR date=2024-04-09 reason=empty_fetch
+2026-07-15T14:41:24.499755+00:00	CACHE_GAP symbol=USAR date=2024-04-10 reason=empty_fetch
+2026-07-15T14:41:24.567000+00:00	CACHE_GAP symbol=USAR date=2024-04-11 reason=empty_fetch
+2026-07-15T14:41:24.676436+00:00	CACHE_GAP symbol=USAR date=2024-04-12 reason=empty_fetch
+2026-07-15T14:41:24.735652+00:00	CACHE_GAP symbol=USAR date=2024-04-15 reason=empty_fetch
+2026-07-15T14:41:24.803340+00:00	CACHE_GAP symbol=USAR date=2024-04-16 reason=empty_fetch
+2026-07-15T14:41:24.879496+00:00	CACHE_GAP symbol=USAR date=2024-04-17 reason=empty_fetch
+2026-07-15T14:41:24.952875+00:00	CACHE_GAP symbol=USAR date=2024-04-18 reason=empty_fetch
+2026-07-15T14:41:25.014455+00:00	CACHE_GAP symbol=USAR date=2024-04-19 reason=empty_fetch
+2026-07-15T14:41:25.078290+00:00	CACHE_GAP symbol=USAR date=2024-04-22 reason=empty_fetch
+2026-07-15T14:41:25.155960+00:00	CACHE_GAP symbol=USAR date=2024-04-23 reason=empty_fetch
+2026-07-15T14:41:25.281856+00:00	CACHE_GAP symbol=USAR date=2024-04-24 reason=empty_fetch
+2026-07-15T14:41:25.367620+00:00	CACHE_GAP symbol=USAR date=2024-04-25 reason=empty_fetch
+2026-07-15T14:41:25.649302+00:00	CACHE_GAP symbol=USAR date=2024-04-26 reason=empty_fetch
+2026-07-15T14:41:25.729976+00:00	CACHE_GAP symbol=USAR date=2024-04-29 reason=empty_fetch
+2026-07-15T14:41:25.871019+00:00	CACHE_GAP symbol=USAR date=2024-04-30 reason=empty_fetch
+2026-07-15T14:41:25.941311+00:00	CACHE_GAP symbol=USAR date=2024-05-01 reason=empty_fetch
+2026-07-15T14:41:26.018089+00:00	CACHE_GAP symbol=USAR date=2024-05-02 reason=empty_fetch
+2026-07-15T14:41:26.086594+00:00	CACHE_GAP symbol=USAR date=2024-05-03 reason=empty_fetch
+2026-07-15T14:41:26.150887+00:00	CACHE_GAP symbol=USAR date=2024-05-06 reason=empty_fetch
+2026-07-15T14:41:26.215723+00:00	CACHE_GAP symbol=USAR date=2024-05-07 reason=empty_fetch
+2026-07-15T14:41:26.289834+00:00	CACHE_GAP symbol=USAR date=2024-05-08 reason=empty_fetch
+2026-07-15T14:41:26.379988+00:00	CACHE_GAP symbol=USAR date=2024-05-09 reason=empty_fetch
+2026-07-15T14:41:26.461356+00:00	CACHE_GAP symbol=USAR date=2024-05-10 reason=empty_fetch
+2026-07-15T14:41:26.543062+00:00	CACHE_GAP symbol=USAR date=2024-05-13 reason=empty_fetch
+2026-07-15T14:41:26.627562+00:00	CACHE_GAP symbol=USAR date=2024-05-14 reason=empty_fetch
+2026-07-15T14:41:26.703714+00:00	CACHE_GAP symbol=USAR date=2024-05-15 reason=empty_fetch
+2026-07-15T14:41:26.763755+00:00	CACHE_GAP symbol=USAR date=2024-05-16 reason=empty_fetch
+2026-07-15T14:41:26.831883+00:00	CACHE_GAP symbol=USAR date=2024-05-17 reason=empty_fetch
+2026-07-15T14:41:26.926147+00:00	CACHE_GAP symbol=USAR date=2024-05-20 reason=empty_fetch
+2026-07-15T14:41:26.987030+00:00	CACHE_GAP symbol=USAR date=2024-05-21 reason=empty_fetch
+2026-07-15T14:41:27.077210+00:00	CACHE_GAP symbol=USAR date=2024-05-22 reason=empty_fetch
+2026-07-15T14:41:27.134928+00:00	CACHE_GAP symbol=USAR date=2024-05-23 reason=empty_fetch
+2026-07-15T14:41:27.207320+00:00	CACHE_GAP symbol=USAR date=2024-05-24 reason=empty_fetch
+2026-07-15T14:41:27.780115+00:00	CACHE_GAP symbol=USAR date=2024-05-28 reason=empty_fetch
+2026-07-15T14:41:28.165556+00:00	CACHE_GAP symbol=USAR date=2024-05-29 reason=empty_fetch
+2026-07-15T14:41:28.229090+00:00	CACHE_GAP symbol=USAR date=2024-05-30 reason=empty_fetch
+2026-07-15T14:41:28.283871+00:00	CACHE_GAP symbol=USAR date=2024-05-31 reason=empty_fetch
+2026-07-15T14:41:28.342686+00:00	CACHE_GAP symbol=USAR date=2024-06-03 reason=empty_fetch
+2026-07-15T14:41:28.419547+00:00	CACHE_GAP symbol=USAR date=2024-06-04 reason=empty_fetch
+2026-07-15T14:41:28.493438+00:00	CACHE_GAP symbol=USAR date=2024-06-05 reason=empty_fetch
+2026-07-15T14:41:28.553871+00:00	CACHE_GAP symbol=USAR date=2024-06-06 reason=empty_fetch
+2026-07-15T14:41:28.623541+00:00	CACHE_GAP symbol=USAR date=2024-06-07 reason=empty_fetch
+2026-07-15T14:41:28.760600+00:00	CACHE_GAP symbol=USAR date=2024-06-10 reason=empty_fetch
+2026-07-15T14:41:28.853991+00:00	CACHE_GAP symbol=USAR date=2024-06-11 reason=empty_fetch
+2026-07-15T14:41:29.087638+00:00	CACHE_GAP symbol=USAR date=2024-06-12 reason=empty_fetch
+2026-07-15T14:41:29.183383+00:00	CACHE_GAP symbol=USAR date=2024-06-13 reason=empty_fetch
+2026-07-15T14:41:29.243100+00:00	CACHE_GAP symbol=USAR date=2024-06-14 reason=empty_fetch
+2026-07-15T14:41:29.324691+00:00	CACHE_GAP symbol=USAR date=2024-06-17 reason=empty_fetch
+2026-07-15T14:41:29.400492+00:00	CACHE_GAP symbol=USAR date=2024-06-18 reason=empty_fetch
+2026-07-15T14:41:29.573122+00:00	CACHE_GAP symbol=USAR date=2024-06-20 reason=empty_fetch
+2026-07-15T14:41:29.643876+00:00	CACHE_GAP symbol=USAR date=2024-06-21 reason=empty_fetch
+2026-07-15T14:41:29.739493+00:00	CACHE_GAP symbol=USAR date=2024-06-24 reason=empty_fetch
+2026-07-15T14:41:29.961449+00:00	CACHE_GAP symbol=USAR date=2024-06-25 reason=empty_fetch
+2026-07-15T14:41:30.036737+00:00	CACHE_GAP symbol=USAR date=2024-06-26 reason=empty_fetch
+2026-07-15T14:41:30.157569+00:00	CACHE_GAP symbol=USAR date=2024-06-27 reason=empty_fetch
+2026-07-15T14:41:30.270187+00:00	CACHE_GAP symbol=USAR date=2024-06-28 reason=empty_fetch
+2026-07-15T14:41:30.586506+00:00	CACHE_GAP symbol=USAR date=2024-07-01 reason=empty_fetch
+2026-07-15T14:41:30.833853+00:00	CACHE_GAP symbol=USAR date=2024-07-02 reason=empty_fetch
+2026-07-15T14:41:30.916435+00:00	CACHE_GAP symbol=USAR date=2024-07-03 reason=empty_fetch
+2026-07-15T14:41:31.045289+00:00	CACHE_GAP symbol=USAR date=2024-07-05 reason=empty_fetch
+2026-07-15T14:41:31.154212+00:00	CACHE_GAP symbol=USAR date=2024-07-08 reason=empty_fetch
+2026-07-15T14:41:31.458000+00:00	CACHE_GAP symbol=USAR date=2024-07-09 reason=empty_fetch
+2026-07-15T14:41:31.614043+00:00	CACHE_GAP symbol=USAR date=2024-07-10 reason=empty_fetch
+2026-07-15T14:41:31.718706+00:00	CACHE_GAP symbol=USAR date=2024-07-11 reason=empty_fetch
+2026-07-15T14:41:31.809197+00:00	CACHE_GAP symbol=USAR date=2024-07-12 reason=empty_fetch
+2026-07-15T14:41:31.906149+00:00	CACHE_GAP symbol=USAR date=2024-07-15 reason=empty_fetch
+2026-07-15T14:41:32.002997+00:00	CACHE_GAP symbol=USAR date=2024-07-16 reason=empty_fetch
+2026-07-15T14:41:32.092175+00:00	CACHE_GAP symbol=USAR date=2024-07-17 reason=empty_fetch
+2026-07-15T14:41:32.163921+00:00	CACHE_GAP symbol=USAR date=2024-07-18 reason=empty_fetch
+2026-07-15T14:41:32.237056+00:00	CACHE_GAP symbol=USAR date=2024-07-19 reason=empty_fetch
+2026-07-15T14:41:32.295305+00:00	CACHE_GAP symbol=USAR date=2024-07-22 reason=empty_fetch
+2026-07-15T14:41:32.366305+00:00	CACHE_GAP symbol=USAR date=2024-07-23 reason=empty_fetch
+2026-07-15T14:41:32.436264+00:00	CACHE_GAP symbol=USAR date=2024-07-24 reason=empty_fetch
+2026-07-15T14:41:32.528959+00:00	CACHE_GAP symbol=USAR date=2024-07-25 reason=empty_fetch
+2026-07-15T14:41:32.684089+00:00	CACHE_GAP symbol=USAR date=2024-07-26 reason=empty_fetch
+2026-07-15T14:41:32.758389+00:00	CACHE_GAP symbol=USAR date=2024-07-29 reason=empty_fetch
+2026-07-15T14:41:32.825891+00:00	CACHE_GAP symbol=USAR date=2024-07-30 reason=empty_fetch
+2026-07-15T14:41:32.894629+00:00	CACHE_GAP symbol=USAR date=2024-07-31 reason=empty_fetch
+2026-07-15T14:41:32.966121+00:00	CACHE_GAP symbol=USAR date=2024-08-01 reason=empty_fetch
+2026-07-15T14:41:33.024569+00:00	CACHE_GAP symbol=USAR date=2024-08-02 reason=empty_fetch
+2026-07-15T14:41:33.129100+00:00	CACHE_GAP symbol=USAR date=2024-08-05 reason=empty_fetch
+2026-07-15T14:41:33.300860+00:00	CACHE_GAP symbol=USAR date=2024-08-06 reason=empty_fetch
+2026-07-15T14:41:33.394525+00:00	CACHE_GAP symbol=USAR date=2024-08-07 reason=empty_fetch
+2026-07-15T14:41:33.491274+00:00	CACHE_GAP symbol=USAR date=2024-08-08 reason=empty_fetch
+2026-07-15T14:41:33.577685+00:00	CACHE_GAP symbol=USAR date=2024-08-09 reason=empty_fetch
+2026-07-15T14:41:33.655755+00:00	CACHE_GAP symbol=USAR date=2024-08-12 reason=empty_fetch
+2026-07-15T14:41:33.965529+00:00	CACHE_GAP symbol=USAR date=2024-08-13 reason=empty_fetch
+2026-07-15T14:41:34.029715+00:00	CACHE_GAP symbol=USAR date=2024-08-14 reason=empty_fetch
+2026-07-15T14:41:34.106516+00:00	CACHE_GAP symbol=USAR date=2024-08-15 reason=empty_fetch
+2026-07-15T14:41:34.165920+00:00	CACHE_GAP symbol=USAR date=2024-08-16 reason=empty_fetch
+2026-07-15T14:41:34.254943+00:00	CACHE_GAP symbol=USAR date=2024-08-19 reason=empty_fetch
+2026-07-15T14:41:34.372176+00:00	CACHE_GAP symbol=USAR date=2024-08-20 reason=empty_fetch
+2026-07-15T14:41:34.448938+00:00	CACHE_GAP symbol=USAR date=2024-08-21 reason=empty_fetch
+2026-07-15T14:41:34.535044+00:00	CACHE_GAP symbol=USAR date=2024-08-22 reason=empty_fetch
+2026-07-15T14:41:34.673024+00:00	CACHE_GAP symbol=USAR date=2024-08-23 reason=empty_fetch
+2026-07-15T14:41:34.773537+00:00	CACHE_GAP symbol=USAR date=2024-08-26 reason=empty_fetch
+2026-07-15T14:41:34.982830+00:00	CACHE_GAP symbol=USAR date=2024-08-27 reason=empty_fetch
+2026-07-15T14:41:35.095427+00:00	CACHE_GAP symbol=USAR date=2024-08-28 reason=empty_fetch
+2026-07-15T14:41:35.199226+00:00	CACHE_GAP symbol=USAR date=2024-08-29 reason=empty_fetch
+2026-07-15T14:41:35.805462+00:00	CACHE_GAP symbol=USAR date=2024-08-30 reason=empty_fetch
+2026-07-15T14:41:35.976323+00:00	CACHE_GAP symbol=USAR date=2024-09-03 reason=empty_fetch
+2026-07-15T14:41:36.078010+00:00	CACHE_GAP symbol=USAR date=2024-09-04 reason=empty_fetch
+2026-07-15T14:41:36.153654+00:00	CACHE_GAP symbol=USAR date=2024-09-05 reason=empty_fetch
+2026-07-15T14:41:36.226461+00:00	CACHE_GAP symbol=USAR date=2024-09-06 reason=empty_fetch
+2026-07-15T14:41:36.311280+00:00	CACHE_GAP symbol=USAR date=2024-09-09 reason=empty_fetch
+2026-07-15T14:41:36.447255+00:00	CACHE_GAP symbol=USAR date=2024-09-10 reason=empty_fetch
+2026-07-15T14:41:36.735502+00:00	CACHE_GAP symbol=USAR date=2024-09-11 reason=empty_fetch
+2026-07-15T14:41:36.854285+00:00	CACHE_GAP symbol=USAR date=2024-09-12 reason=empty_fetch
+2026-07-15T14:41:37.082374+00:00	CACHE_GAP symbol=USAR date=2024-09-13 reason=empty_fetch
+2026-07-15T14:41:37.165053+00:00	CACHE_GAP symbol=USAR date=2024-09-16 reason=empty_fetch
+2026-07-15T14:41:37.226741+00:00	CACHE_GAP symbol=USAR date=2024-09-17 reason=empty_fetch
+2026-07-15T14:41:37.326793+00:00	CACHE_GAP symbol=USAR date=2024-09-18 reason=empty_fetch
+2026-07-15T14:41:37.387169+00:00	CACHE_GAP symbol=USAR date=2024-09-19 reason=empty_fetch
+2026-07-15T14:41:37.512765+00:00	CACHE_GAP symbol=USAR date=2024-09-20 reason=empty_fetch
+2026-07-15T14:41:37.669012+00:00	CACHE_GAP symbol=USAR date=2024-09-23 reason=empty_fetch
+2026-07-15T14:41:37.812879+00:00	CACHE_GAP symbol=USAR date=2024-09-24 reason=empty_fetch
+2026-07-15T14:41:37.926290+00:00	CACHE_GAP symbol=USAR date=2024-09-25 reason=empty_fetch
+2026-07-15T14:41:37.990939+00:00	CACHE_GAP symbol=USAR date=2024-09-26 reason=empty_fetch
+2026-07-15T14:41:38.066739+00:00	CACHE_GAP symbol=USAR date=2024-09-27 reason=empty_fetch
+2026-07-15T14:41:38.127961+00:00	CACHE_GAP symbol=USAR date=2024-09-30 reason=empty_fetch
+2026-07-15T14:41:38.194541+00:00	CACHE_GAP symbol=USAR date=2024-10-01 reason=empty_fetch
+2026-07-15T14:41:38.274630+00:00	CACHE_GAP symbol=USAR date=2024-10-02 reason=empty_fetch
+2026-07-15T14:41:38.371120+00:00	CACHE_GAP symbol=USAR date=2024-10-03 reason=empty_fetch
+2026-07-15T14:41:38.452414+00:00	CACHE_GAP symbol=USAR date=2024-10-04 reason=empty_fetch
+2026-07-15T14:41:38.747723+00:00	CACHE_GAP symbol=USAR date=2024-10-07 reason=empty_fetch
+2026-07-15T14:41:38.883356+00:00	CACHE_GAP symbol=USAR date=2024-10-08 reason=empty_fetch
+2026-07-15T14:41:38.958464+00:00	CACHE_GAP symbol=USAR date=2024-10-09 reason=empty_fetch
+2026-07-15T14:41:39.021469+00:00	CACHE_GAP symbol=USAR date=2024-10-10 reason=empty_fetch
+2026-07-15T14:41:39.090151+00:00	CACHE_GAP symbol=USAR date=2024-10-11 reason=empty_fetch
+2026-07-15T14:41:39.157588+00:00	CACHE_GAP symbol=USAR date=2024-10-14 reason=empty_fetch
+2026-07-15T14:41:39.225441+00:00	CACHE_GAP symbol=USAR date=2024-10-15 reason=empty_fetch
+2026-07-15T14:41:39.323946+00:00	CACHE_GAP symbol=USAR date=2024-10-16 reason=empty_fetch
+2026-07-15T14:41:39.397317+00:00	CACHE_GAP symbol=USAR date=2024-10-17 reason=empty_fetch
+2026-07-15T14:41:39.478691+00:00	CACHE_GAP symbol=USAR date=2024-10-18 reason=empty_fetch
+2026-07-15T14:41:39.583853+00:00	CACHE_GAP symbol=USAR date=2024-10-21 reason=empty_fetch
+2026-07-15T14:41:39.870253+00:00	CACHE_GAP symbol=USAR date=2024-10-22 reason=empty_fetch
+2026-07-15T14:41:39.958568+00:00	CACHE_GAP symbol=USAR date=2024-10-23 reason=empty_fetch
+2026-07-15T14:41:40.092946+00:00	CACHE_GAP symbol=USAR date=2024-10-24 reason=empty_fetch
+2026-07-15T14:41:40.252525+00:00	CACHE_GAP symbol=USAR date=2024-10-25 reason=empty_fetch
+2026-07-15T14:41:40.313099+00:00	CACHE_GAP symbol=USAR date=2024-10-28 reason=empty_fetch
+2026-07-15T14:41:40.403436+00:00	CACHE_GAP symbol=USAR date=2024-10-29 reason=empty_fetch
+2026-07-15T14:41:40.510917+00:00	CACHE_GAP symbol=USAR date=2024-10-30 reason=empty_fetch
+2026-07-15T14:41:40.618802+00:00	CACHE_GAP symbol=USAR date=2024-10-31 reason=empty_fetch
+2026-07-15T14:41:40.688585+00:00	CACHE_GAP symbol=USAR date=2024-11-01 reason=empty_fetch
+2026-07-15T14:41:40.798114+00:00	CACHE_GAP symbol=USAR date=2024-11-04 reason=empty_fetch
+2026-07-15T14:41:40.892385+00:00	CACHE_GAP symbol=USAR date=2024-11-05 reason=empty_fetch
+2026-07-15T14:41:40.968282+00:00	CACHE_GAP symbol=USAR date=2024-11-06 reason=empty_fetch
+2026-07-15T14:41:41.029709+00:00	CACHE_GAP symbol=USAR date=2024-11-07 reason=empty_fetch
+2026-07-15T14:41:41.225403+00:00	CACHE_GAP symbol=USAR date=2024-11-08 reason=empty_fetch
+2026-07-15T14:41:41.340593+00:00	CACHE_GAP symbol=USAR date=2024-11-11 reason=empty_fetch
+2026-07-15T14:41:41.408525+00:00	CACHE_GAP symbol=USAR date=2024-11-12 reason=empty_fetch
+2026-07-15T14:41:41.563828+00:00	CACHE_GAP symbol=USAR date=2024-11-13 reason=empty_fetch
+2026-07-15T14:41:41.630785+00:00	CACHE_GAP symbol=USAR date=2024-11-14 reason=empty_fetch
+2026-07-15T14:41:41.699192+00:00	CACHE_GAP symbol=USAR date=2024-11-15 reason=empty_fetch
+2026-07-15T14:41:41.760588+00:00	CACHE_GAP symbol=USAR date=2024-11-18 reason=empty_fetch
+2026-07-15T14:41:41.829838+00:00	CACHE_GAP symbol=USAR date=2024-11-19 reason=empty_fetch
+2026-07-15T14:41:41.888606+00:00	CACHE_GAP symbol=USAR date=2024-11-20 reason=empty_fetch
+2026-07-15T14:41:42.236159+00:00	CACHE_GAP symbol=USAR date=2024-11-21 reason=empty_fetch
+2026-07-15T14:41:42.296319+00:00	CACHE_GAP symbol=USAR date=2024-11-22 reason=empty_fetch
+2026-07-15T14:41:42.356116+00:00	CACHE_GAP symbol=USAR date=2024-11-25 reason=empty_fetch
+2026-07-15T14:41:42.410775+00:00	CACHE_GAP symbol=USAR date=2024-11-26 reason=empty_fetch
+2026-07-15T14:41:42.472044+00:00	CACHE_GAP symbol=USAR date=2024-11-27 reason=empty_fetch
+2026-07-15T14:41:42.532336+00:00	CACHE_GAP symbol=USAR date=2024-11-29 reason=empty_fetch
+2026-07-15T14:41:42.593198+00:00	CACHE_GAP symbol=USAR date=2024-12-02 reason=empty_fetch
+2026-07-15T14:41:42.680003+00:00	CACHE_GAP symbol=USAR date=2024-12-03 reason=empty_fetch
+2026-07-15T14:41:42.748197+00:00	CACHE_GAP symbol=USAR date=2024-12-04 reason=empty_fetch
+2026-07-15T14:41:42.807409+00:00	CACHE_GAP symbol=USAR date=2024-12-05 reason=empty_fetch
+2026-07-15T14:41:42.889007+00:00	CACHE_GAP symbol=USAR date=2024-12-06 reason=empty_fetch
+2026-07-15T14:41:43.105467+00:00	CACHE_GAP symbol=USAR date=2024-12-09 reason=empty_fetch
+2026-07-15T14:41:43.214612+00:00	CACHE_GAP symbol=USAR date=2024-12-10 reason=empty_fetch
+2026-07-15T14:41:43.395043+00:00	CACHE_GAP symbol=USAR date=2024-12-11 reason=empty_fetch
+2026-07-15T14:41:43.495679+00:00	CACHE_GAP symbol=USAR date=2024-12-12 reason=empty_fetch
+2026-07-15T14:41:43.593746+00:00	CACHE_GAP symbol=USAR date=2024-12-13 reason=empty_fetch
+2026-07-15T14:41:43.666474+00:00	CACHE_GAP symbol=USAR date=2024-12-16 reason=empty_fetch
+2026-07-15T14:41:44.480965+00:00	CACHE_GAP symbol=USAR date=2024-12-17 reason=empty_fetch
+2026-07-15T14:41:44.542127+00:00	CACHE_GAP symbol=USAR date=2024-12-18 reason=empty_fetch
+2026-07-15T14:41:44.610310+00:00	CACHE_GAP symbol=USAR date=2024-12-19 reason=empty_fetch
+2026-07-15T14:41:44.693055+00:00	CACHE_GAP symbol=USAR date=2024-12-20 reason=empty_fetch
+2026-07-15T14:41:44.759119+00:00	CACHE_GAP symbol=USAR date=2024-12-23 reason=empty_fetch
+2026-07-15T14:41:44.849541+00:00	CACHE_GAP symbol=USAR date=2024-12-24 reason=empty_fetch
+2026-07-15T14:41:44.916782+00:00	CACHE_GAP symbol=USAR date=2024-12-26 reason=empty_fetch
+2026-07-15T14:41:44.981909+00:00	CACHE_GAP symbol=USAR date=2024-12-27 reason=empty_fetch
+2026-07-15T14:41:45.039611+00:00	CACHE_GAP symbol=USAR date=2024-12-30 reason=empty_fetch
+2026-07-15T14:41:45.212495+00:00	CACHE_GAP symbol=USAR date=2024-12-31 reason=empty_fetch
+2026-07-15T14:41:45.310464+00:00	CACHE_GAP symbol=USAR date=2025-01-02 reason=empty_fetch
+2026-07-15T14:41:45.419801+00:00	CACHE_GAP symbol=USAR date=2025-01-03 reason=empty_fetch
+2026-07-15T14:41:45.496547+00:00	CACHE_GAP symbol=USAR date=2025-01-06 reason=empty_fetch
+2026-07-15T14:41:45.583740+00:00	CACHE_GAP symbol=USAR date=2025-01-07 reason=empty_fetch
+2026-07-15T14:41:45.656006+00:00	CACHE_GAP symbol=USAR date=2025-01-08 reason=empty_fetch
+2026-07-15T14:41:45.737007+00:00	CACHE_GAP symbol=USAR date=2025-01-10 reason=empty_fetch
+2026-07-15T14:41:45.848172+00:00	CACHE_GAP symbol=USAR date=2025-01-13 reason=empty_fetch
+2026-07-15T14:41:45.926432+00:00	CACHE_GAP symbol=USAR date=2025-01-14 reason=empty_fetch
+2026-07-15T14:41:46.048103+00:00	CACHE_GAP symbol=USAR date=2025-01-15 reason=empty_fetch
+2026-07-15T14:41:46.139480+00:00	CACHE_GAP symbol=USAR date=2025-01-16 reason=empty_fetch
+2026-07-15T14:41:46.237120+00:00	CACHE_GAP symbol=USAR date=2025-01-17 reason=empty_fetch
+2026-07-15T14:41:46.300488+00:00	CACHE_GAP symbol=USAR date=2025-01-21 reason=empty_fetch
+2026-07-15T14:41:46.362189+00:00	CACHE_GAP symbol=USAR date=2025-01-22 reason=empty_fetch
+2026-07-15T14:41:46.421031+00:00	CACHE_GAP symbol=USAR date=2025-01-23 reason=empty_fetch
+2026-07-15T14:41:46.526258+00:00	CACHE_GAP symbol=USAR date=2025-01-24 reason=empty_fetch
+2026-07-15T14:41:46.609848+00:00	CACHE_GAP symbol=USAR date=2025-01-27 reason=empty_fetch
+2026-07-15T14:41:46.665677+00:00	CACHE_GAP symbol=USAR date=2025-01-28 reason=empty_fetch
+2026-07-15T14:41:46.731048+00:00	CACHE_GAP symbol=USAR date=2025-01-29 reason=empty_fetch
+2026-07-15T14:41:47.005709+00:00	CACHE_GAP symbol=USAR date=2025-01-30 reason=empty_fetch
+2026-07-15T14:41:47.087321+00:00	CACHE_GAP symbol=USAR date=2025-01-31 reason=empty_fetch
+2026-07-15T14:41:47.148087+00:00	CACHE_GAP symbol=USAR date=2025-02-03 reason=empty_fetch
+2026-07-15T14:41:47.235448+00:00	CACHE_GAP symbol=USAR date=2025-02-04 reason=empty_fetch
+2026-07-15T14:41:47.328750+00:00	CACHE_GAP symbol=USAR date=2025-02-05 reason=empty_fetch
+2026-07-15T14:41:47.386302+00:00	CACHE_GAP symbol=USAR date=2025-02-06 reason=empty_fetch
+2026-07-15T14:41:47.472910+00:00	CACHE_GAP symbol=USAR date=2025-02-07 reason=empty_fetch
+2026-07-15T14:41:47.577895+00:00	CACHE_GAP symbol=USAR date=2025-02-10 reason=empty_fetch
+2026-07-15T14:41:47.866541+00:00	CACHE_GAP symbol=USAR date=2025-02-11 reason=empty_fetch
+2026-07-15T14:41:47.972640+00:00	CACHE_GAP symbol=USAR date=2025-02-12 reason=empty_fetch
+2026-07-15T14:41:48.054684+00:00	CACHE_GAP symbol=USAR date=2025-02-13 reason=empty_fetch
+2026-07-15T14:41:48.710029+00:00	CACHE_GAP symbol=USAR date=2025-02-14 reason=empty_fetch
+2026-07-15T14:41:48.797693+00:00	CACHE_GAP symbol=USAR date=2025-02-18 reason=empty_fetch
+2026-07-15T14:41:48.884701+00:00	CACHE_GAP symbol=USAR date=2025-02-19 reason=empty_fetch
+2026-07-15T14:41:48.962484+00:00	CACHE_GAP symbol=USAR date=2025-02-20 reason=empty_fetch
+2026-07-15T14:41:49.046870+00:00	CACHE_GAP symbol=USAR date=2025-02-21 reason=empty_fetch
+2026-07-15T14:41:49.144137+00:00	CACHE_GAP symbol=USAR date=2025-02-24 reason=empty_fetch
+2026-07-15T14:41:49.346569+00:00	CACHE_GAP symbol=USAR date=2025-02-25 reason=empty_fetch
+2026-07-15T14:41:49.461052+00:00	CACHE_GAP symbol=USAR date=2025-02-26 reason=empty_fetch
+2026-07-15T14:41:49.544741+00:00	CACHE_GAP symbol=USAR date=2025-02-27 reason=empty_fetch
+2026-07-15T14:41:49.603232+00:00	CACHE_GAP symbol=USAR date=2025-02-28 reason=empty_fetch
+2026-07-15T14:41:49.693648+00:00	CACHE_GAP symbol=USAR date=2025-03-03 reason=empty_fetch
+2026-07-15T14:41:49.750653+00:00	CACHE_GAP symbol=USAR date=2025-03-04 reason=empty_fetch
+2026-07-15T14:41:49.850070+00:00	CACHE_GAP symbol=USAR date=2025-03-05 reason=empty_fetch
+2026-07-15T14:41:49.948204+00:00	CACHE_GAP symbol=USAR date=2025-03-06 reason=empty_fetch
+2026-07-15T14:41:50.031375+00:00	CACHE_GAP symbol=USAR date=2025-03-07 reason=empty_fetch
+2026-07-15T14:41:50.340570+00:00	CACHE_GAP symbol=USAR date=2025-03-10 reason=empty_fetch
+2026-07-15T14:41:50.662768+00:00	CACHE_GAP symbol=USAR date=2025-03-11 reason=empty_fetch
+2026-07-15T14:41:50.762652+00:00	CACHE_GAP symbol=USAR date=2025-03-12 reason=empty_fetch
+2026-07-15T14:41:50.836757+00:00	CACHE_GAP symbol=USAR date=2025-03-13 reason=empty_fetch
+2026-07-15T14:41:51.055619+00:00	CACHE_GAP symbol=USAR date=2025-03-14 reason=empty_fetch
+2026-07-15T14:41:52.054038+00:00	CACHE_GAP symbol=USAR date=2025-03-17 reason=empty_fetch
+2026-07-15T14:41:52.370309+00:00	CACHE_GAP symbol=USAR date=2025-03-18 reason=empty_fetch
+2026-07-15T14:41:52.472881+00:00	CACHE_GAP symbol=USAR date=2025-03-19 reason=empty_fetch
+2026-07-15T14:41:52.553624+00:00	CACHE_GAP symbol=USAR date=2025-03-20 reason=empty_fetch
+2026-07-15T14:41:52.721092+00:00	CACHE_GAP symbol=USAR date=2025-03-21 reason=empty_fetch
+2026-07-15T14:41:53.007424+00:00	CACHE_GAP symbol=USAR date=2025-03-24 reason=empty_fetch
+2026-07-15T14:41:53.228183+00:00	CACHE_GAP symbol=USAR date=2025-03-25 reason=empty_fetch
+2026-07-15T14:41:53.519360+00:00	CACHE_GAP symbol=USAR date=2025-03-26 reason=empty_fetch
+2026-07-15T14:41:53.686804+00:00	CACHE_GAP symbol=USAR date=2025-03-27 reason=empty_fetch
+2026-07-15T14:41:53.760893+00:00	CACHE_GAP symbol=USAR date=2025-03-28 reason=empty_fetch
+2026-07-15T14:41:54.214114+00:00	CACHE_GAP symbol=USAR date=2025-03-31 reason=empty_fetch
+2026-07-15T14:41:54.477645+00:00	CACHE_GAP symbol=USAR date=2025-04-01 reason=empty_fetch
+2026-07-15T14:41:54.733021+00:00	CACHE_GAP symbol=USAR date=2025-04-02 reason=empty_fetch
+2026-07-15T14:41:54.856866+00:00	CACHE_GAP symbol=USAR date=2025-04-03 reason=empty_fetch
+2026-07-15T14:41:55.161295+00:00	CACHE_GAP symbol=USAR date=2025-04-04 reason=empty_fetch
+2026-07-15T14:41:55.521656+00:00	BLIND_CACHE symbol=USAR date=2025-04-07 rows=80 sha256=1d461b0c32f31bf228cf0087af1922617611bbab1d4083c3ba8395ceab401b7e already_cached=false path=.cache/chains/USAR_2025-04-07.parquet
+2026-07-15T14:41:55.732828+00:00	BLIND_CACHE symbol=USAR date=2025-04-08 rows=144 sha256=96bedc6e4b248e1893b31429065dc18d0a8f8942ecbcabe7790248e3ddd45d46 already_cached=false path=.cache/chains/USAR_2025-04-08.parquet
+2026-07-15T14:41:56.002513+00:00	BLIND_CACHE symbol=USAR date=2025-04-09 rows=144 sha256=78a434c996022a7c877ce27f8584372e52d5144fcda4ed8d0e4e060607a986f3 already_cached=false path=.cache/chains/USAR_2025-04-09.parquet
+2026-07-15T14:41:56.268119+00:00	BLIND_CACHE symbol=USAR date=2025-04-10 rows=144 sha256=391a46b8a74e8141fab289a0dad80fcbfa81309069a4c087a7503d94d7c82491 already_cached=false path=.cache/chains/USAR_2025-04-10.parquet
+2026-07-15T14:41:56.816725+00:00	BLIND_CACHE symbol=USAR date=2025-04-11 rows=144 sha256=bc98588b6f33aeca017c7d1fa6678e38cbd2f9dd13a131643655262403045e6e already_cached=false path=.cache/chains/USAR_2025-04-11.parquet
+2026-07-15T14:41:57.501824+00:00	BLIND_CACHE symbol=USAR date=2025-04-14 rows=144 sha256=a2ce56a92a139cb349f0d8af13f0805741b31cecb3128e263929b67e21c50b2e already_cached=false path=.cache/chains/USAR_2025-04-14.parquet
+2026-07-15T14:41:58.094212+00:00	BLIND_CACHE symbol=USAR date=2025-04-15 rows=144 sha256=e943252181ed808f5a8cd84544d22eb2f08d3b724e990b8de722e1647efd00fe already_cached=false path=.cache/chains/USAR_2025-04-15.parquet
+2026-07-15T14:41:59.814395+00:00	BLIND_CACHE symbol=USAR date=2025-04-16 rows=288 sha256=b7bc9be7658145774a62af21a726f764fdeaaba21e3fb6d33d3e0d353dcc47d4 already_cached=false path=.cache/chains/USAR_2025-04-16.parquet
+2026-07-15T14:42:00.970247+00:00	BLIND_CACHE symbol=USAR date=2025-04-17 rows=288 sha256=9ec72d24e6f3fa0cb747df5cee51c96f355ab7c30566cf9d3134182a71e51561 already_cached=false path=.cache/chains/USAR_2025-04-17.parquet
+2026-07-15T14:42:01.498756+00:00	BLIND_CACHE symbol=USAR date=2025-04-21 rows=384 sha256=378d9d9603ff164931fdf73d407bcfab0cbf97504b0e9679b028f76503603091 already_cached=false path=.cache/chains/USAR_2025-04-21.parquet
+2026-07-15T14:42:01.997282+00:00	BLIND_CACHE symbol=USAR date=2025-04-22 rows=414 sha256=35272707eabb9bfa6be260cf241f9f9e06553a0c56464354f956623d47ebef9c already_cached=false path=.cache/chains/USAR_2025-04-22.parquet
+2026-07-15T14:42:02.565059+00:00	BLIND_CACHE symbol=USAR date=2025-04-23 rows=414 sha256=e695d5dc23977003903001f1140ac7b749507265f2895a8a37cd4a3705f04d51 already_cached=false path=.cache/chains/USAR_2025-04-23.parquet
+2026-07-15T14:42:02.921392+00:00	BLIND_CACHE symbol=USAR date=2025-04-24 rows=414 sha256=3189e6b4b45e8532a7ced0faa5e6f986f4b0b517b226a8f4b6b9f46034e5c434 already_cached=false path=.cache/chains/USAR_2025-04-24.parquet
+2026-07-15T14:42:03.196307+00:00	BLIND_CACHE symbol=USAR date=2025-04-25 rows=414 sha256=6808dc5b03a309c9a24bfc1f03dd586acbde6c1721229d58c156f4fd1713c9fb already_cached=false path=.cache/chains/USAR_2025-04-25.parquet
+2026-07-15T14:42:03.980209+00:00	BLIND_CACHE symbol=USAR date=2025-04-28 rows=414 sha256=742ae7dec06a26212b09db77caf3d7885727237566afa66a96a9f6bf308d40ab already_cached=false path=.cache/chains/USAR_2025-04-28.parquet
+2026-07-15T14:42:04.285678+00:00	BLIND_CACHE symbol=USAR date=2025-04-29 rows=414 sha256=d7a81a888c28099af8ba896bfddf508e60d0581e912255a1d9b93f8a873cc5a2 already_cached=false path=.cache/chains/USAR_2025-04-29.parquet
+2026-07-15T14:42:04.797593+00:00	BLIND_CACHE symbol=USAR date=2025-04-30 rows=414 sha256=7a21682acc199c55fb9965aa3fe31a61325ac6e2dcf3858304878d3ed3408be7 already_cached=false path=.cache/chains/USAR_2025-04-30.parquet
+2026-07-15T14:42:05.226425+00:00	BLIND_CACHE symbol=USAR date=2025-05-01 rows=414 sha256=066d1d342b13bf7b59bdc7002440f80e458c7d7d2d666ef37ccf4138fd816d3e already_cached=false path=.cache/chains/USAR_2025-05-01.parquet
+2026-07-15T14:42:05.834409+00:00	BLIND_CACHE symbol=USAR date=2025-05-02 rows=414 sha256=c3207c582efdc732d58bcc90572ecdee0d4bc90bb2f4eca2c44f3ba231381d5a already_cached=false path=.cache/chains/USAR_2025-05-02.parquet
+2026-07-15T14:42:06.132551+00:00	BLIND_CACHE symbol=USAR date=2025-05-05 rows=414 sha256=58df76f3da95d3a589468d6cdec831857d0c55466aaea15950a7c12ab3dac0c5 already_cached=false path=.cache/chains/USAR_2025-05-05.parquet
+2026-07-15T14:42:06.553045+00:00	BLIND_CACHE symbol=USAR date=2025-05-06 rows=414 sha256=bc02f0ebad9d59202461dcf78b85401eb066d861c445ec7e8b79d5719af84529 already_cached=false path=.cache/chains/USAR_2025-05-06.parquet
+2026-07-15T14:42:08.151459+00:00	BLIND_CACHE symbol=USAR date=2025-05-07 rows=414 sha256=8b2be0b10e667296d73331f591886ad55da05ba117994ad40d360709a2cac4d5 already_cached=false path=.cache/chains/USAR_2025-05-07.parquet
+2026-07-15T14:42:08.537470+00:00	BLIND_CACHE symbol=USAR date=2025-05-08 rows=414 sha256=91057c5c26e4300108a29cb289d6a21859ab131ee2d2a1efd9a5099355e37ab4 already_cached=false path=.cache/chains/USAR_2025-05-08.parquet
+2026-07-15T14:42:09.010043+00:00	BLIND_CACHE symbol=USAR date=2025-05-09 rows=414 sha256=83d6f4bdef2d209ece33c7108b24b4aa6a0f275bc1df33e203ca189b066b5583 already_cached=false path=.cache/chains/USAR_2025-05-09.parquet
+2026-07-15T14:42:09.557970+00:00	BLIND_CACHE symbol=USAR date=2025-05-12 rows=414 sha256=2c0caeb40852efd1b998a9836241b9dcb48ce5d57f05e9f233c2d3b8fcdb1b57 already_cached=false path=.cache/chains/USAR_2025-05-12.parquet
+2026-07-15T14:42:10.049297+00:00	BLIND_CACHE symbol=USAR date=2025-05-13 rows=414 sha256=1c88df2ad1f95e6381616bbb73a2e70f9fa714aebf8c0d79fe03ab7547ae0624 already_cached=false path=.cache/chains/USAR_2025-05-13.parquet
+2026-07-15T14:42:10.405210+00:00	BLIND_CACHE symbol=USAR date=2025-05-14 rows=414 sha256=d0aa7fda33912fab36a64daa53648ce1a54a4fe2f55765d8875d358ad17838c5 already_cached=false path=.cache/chains/USAR_2025-05-14.parquet
+2026-07-15T14:42:10.948820+00:00	BLIND_CACHE symbol=USAR date=2025-05-15 rows=414 sha256=b26610b76b3f3cd7593fba19aaedfa4b00b76b8371c7613245f59e1d93c88637 already_cached=false path=.cache/chains/USAR_2025-05-15.parquet
+2026-07-15T14:42:11.309947+00:00	BLIND_CACHE symbol=USAR date=2025-05-16 rows=414 sha256=52809d3922b8b1cad19bc40f45ecacd8b73e60fabbc49a3172d8fae8265a4d5d already_cached=false path=.cache/chains/USAR_2025-05-16.parquet
+2026-07-15T14:42:11.847580+00:00	BLIND_CACHE symbol=USAR date=2025-05-19 rows=340 sha256=b33ee4e636d459a166420f4c3f21103f4712a90cf9f1683ec1ae600ec3cce0d4 already_cached=false path=.cache/chains/USAR_2025-05-19.parquet
+2026-07-15T14:42:12.308606+00:00	BLIND_CACHE symbol=USAR date=2025-05-20 rows=340 sha256=eb94ed2f73a42730051f8857f3d2b0ea0490dce90598c0a624383f69e1c059ae already_cached=false path=.cache/chains/USAR_2025-05-20.parquet
+2026-07-15T14:42:12.752464+00:00	BLIND_CACHE symbol=USAR date=2025-05-21 rows=340 sha256=8faae26c3a1deb74b46cf7656b12fa1f616f201561e5aef51f40ef4d34a940a3 already_cached=false path=.cache/chains/USAR_2025-05-21.parquet
+2026-07-15T14:42:13.070888+00:00	BLIND_CACHE symbol=USAR date=2025-05-22 rows=340 sha256=d86caeecf1acd310de1bb8f9847f94b748bc9b72cc351ac747fbf492f06e8a79 already_cached=false path=.cache/chains/USAR_2025-05-22.parquet
+2026-07-15T14:42:13.418535+00:00	BLIND_CACHE symbol=USAR date=2025-05-23 rows=528 sha256=01976827c236ba06ae72a04d0a7da77f0c156bbb03ea1caa595a3ac985b3b72b already_cached=false path=.cache/chains/USAR_2025-05-23.parquet
+2026-07-15T14:42:13.878950+00:00	BLIND_CACHE symbol=USAR date=2025-05-27 rows=528 sha256=d153aea341d6e5f0896c09fc8247b1f3699cb5215ae174ee1c5f65c31c8e7a57 already_cached=false path=.cache/chains/USAR_2025-05-27.parquet
+2026-07-15T14:42:14.315400+00:00	BLIND_CACHE symbol=USAR date=2025-05-28 rows=528 sha256=5b5e849bc44dbabfb62d9ff238b0a3ba32329fe0066de0edb969fbf8e47f518a already_cached=false path=.cache/chains/USAR_2025-05-28.parquet
+2026-07-15T14:42:15.416783+00:00	BLIND_CACHE symbol=USAR date=2025-05-29 rows=528 sha256=e7236f1d5735e2de0344a7a579aa8204a6d9908484df434903b95cc55a148721 already_cached=false path=.cache/chains/USAR_2025-05-29.parquet
+2026-07-15T14:42:16.224669+00:00	BLIND_CACHE symbol=USAR date=2025-05-30 rows=572 sha256=3cf6efd56ba20a3abe9bce8a993e4492460a9274cf0da6a0b6aeed5999550b8c already_cached=false path=.cache/chains/USAR_2025-05-30.parquet
+2026-07-15T14:42:17.860141+00:00	BLIND_CACHE symbol=USAR date=2025-06-02 rows=542 sha256=6e59f30a04c60a7743ffb720a9aca56ad9f5f4a6294f89d3a6c88b00a234323a already_cached=false path=.cache/chains/USAR_2025-06-02.parquet
+2026-07-15T14:42:18.422613+00:00	BLIND_CACHE symbol=USAR date=2025-06-03 rows=542 sha256=a86ae505d296b98be93948d447c9e9b4023dbece703125ed552c1114a72703b3 already_cached=false path=.cache/chains/USAR_2025-06-03.parquet
+2026-07-15T14:42:18.992490+00:00	BLIND_CACHE symbol=USAR date=2025-06-04 rows=542 sha256=e2c5c7a5f9ae992737fb5fcfd3cb445f34d899c91b4d75dad282a298fc428755 already_cached=false path=.cache/chains/USAR_2025-06-04.parquet
+2026-07-15T14:42:19.551316+00:00	BLIND_CACHE symbol=USAR date=2025-06-05 rows=542 sha256=ca704a8185c94ca156264c95efd71f613c2d5e0f4d448ad4f7af8beacc2635e7 already_cached=false path=.cache/chains/USAR_2025-06-05.parquet
+2026-07-15T14:42:19.923157+00:00	BLIND_CACHE symbol=USAR date=2025-06-06 rows=684 sha256=d6d8135f46a26e8a85123b38eb0580432ee35d10e4d8f6e0e46ccb41dd9dd6e8 already_cached=false path=.cache/chains/USAR_2025-06-06.parquet
+2026-07-15T14:42:20.348446+00:00	BLIND_CACHE symbol=USAR date=2025-06-09 rows=646 sha256=c0184b05a7aae6f76f82abb49bf8ba0f353fc2e892ac2df773b14ac5cd0d83c1 already_cached=false path=.cache/chains/USAR_2025-06-09.parquet
+2026-07-15T14:42:20.812662+00:00	BLIND_CACHE symbol=USAR date=2025-06-10 rows=646 sha256=98131043971d37d9fa4293731f58456f292ced0778c4becc1ae5490db4e74c56 already_cached=false path=.cache/chains/USAR_2025-06-10.parquet
+2026-07-15T14:42:21.661625+00:00	BLIND_CACHE symbol=USAR date=2025-06-11 rows=752 sha256=864d3c604d41efcea537d917f267bc0605ee56fd48e72ad1d1fc70933d4a5672 already_cached=false path=.cache/chains/USAR_2025-06-11.parquet
+2026-07-15T14:42:22.390642+00:00	BLIND_CACHE symbol=USAR date=2025-06-12 rows=852 sha256=2d926752dff5f295b1c5905ab80f958f1003218f4259fdd36493193cea9029d6 already_cached=false path=.cache/chains/USAR_2025-06-12.parquet
+2026-07-15T14:42:23.285693+00:00	BLIND_CACHE symbol=USAR date=2025-06-13 rows=894 sha256=ed9b81984f2458587be8cb96a9ab34ea7e727cd111652f8d03fb1a7b1bd086af already_cached=false path=.cache/chains/USAR_2025-06-13.parquet
+2026-07-15T14:42:23.727773+00:00	BLIND_CACHE symbol=USAR date=2025-06-16 rows=848 sha256=0d56954df98566094c548f9c97433511292461d70ce7511dcdb339ca3a489813 already_cached=false path=.cache/chains/USAR_2025-06-16.parquet
+2026-07-15T14:42:24.198869+00:00	BLIND_CACHE symbol=USAR date=2025-06-17 rows=852 sha256=96624b000deeb996e5050b75986fe4bbc98f23a2cc78cdec09c127a4d623b01f already_cached=false path=.cache/chains/USAR_2025-06-17.parquet
+2026-07-15T14:42:24.740634+00:00	BLIND_CACHE symbol=USAR date=2025-06-18 rows=852 sha256=46dc8fdb9e75d63de18ba4fee08569a49ae19b4cc7834dfdb4c0a4e6c079df44 already_cached=false path=.cache/chains/USAR_2025-06-18.parquet
+2026-07-15T14:42:25.230913+00:00	BLIND_CACHE symbol=USAR date=2025-06-20 rows=852 sha256=feadf1817dc7246b8c40ee0ea29ffa1460a3dca41980d22429d320f1439dc4d3 already_cached=false path=.cache/chains/USAR_2025-06-20.parquet
+2026-07-15T14:42:25.837165+00:00	BLIND_CACHE symbol=USAR date=2025-06-23 rows=760 sha256=d36a5f716778bf58193883a02f49f2a09e9d89a63cf3b585de2e8b5ba9395ea7 already_cached=false path=.cache/chains/USAR_2025-06-23.parquet
+2026-07-15T14:42:26.499088+00:00	BLIND_CACHE symbol=USAR date=2025-06-24 rows=788 sha256=7a31802d5bceb9b87b2c2ff4147c71c758cc462f3aff57b88c12328b36393841 already_cached=false path=.cache/chains/USAR_2025-06-24.parquet
+2026-07-15T14:42:27.492538+00:00	BLIND_CACHE symbol=USAR date=2025-06-25 rows=798 sha256=0c4638dc337734b2d588cbea528889e8b6b6cee725ec8adc0a6bfea51bb65451 already_cached=false path=.cache/chains/USAR_2025-06-25.parquet
+2026-07-15T14:42:28.057482+00:00	BLIND_CACHE symbol=USAR date=2025-06-26 rows=798 sha256=7e2c3bfe97135a1c5304ceefd0486e1b2e8b89b86674ecaf6ddf096acf255224 already_cached=false path=.cache/chains/USAR_2025-06-26.parquet
+2026-07-15T14:42:28.642971+00:00	BLIND_CACHE symbol=USAR date=2025-06-27 rows=840 sha256=52755e5f37449e6068b6336d3cb8a347014b9675ff043f642ff98f68498419ee already_cached=false path=.cache/chains/USAR_2025-06-27.parquet
+2026-07-15T14:42:29.425460+00:00	BLIND_CACHE symbol=USAR date=2025-06-30 rows=766 sha256=3910a5deb37088ebee8139db352a90149c6ca5708c2a826066d473d4bc1d1048 already_cached=false path=.cache/chains/USAR_2025-06-30.parquet
+2026-07-15T14:42:30.343113+00:00	BLIND_CACHE symbol=USAR date=2025-07-01 rows=766 sha256=57f66f5c1660c8fee0d6c866a71cf28ef764861dabfbdabfbc0fb33c025bc672 already_cached=false path=.cache/chains/USAR_2025-07-01.parquet
+2026-07-15T14:42:31.020533+00:00	BLIND_CACHE symbol=USAR date=2025-07-02 rows=766 sha256=a60025a04cd5ee9ff894dc4b8c90a42b0f826c74e18dc900dbe716984070c106 already_cached=false path=.cache/chains/USAR_2025-07-02.parquet
+2026-07-15T14:42:31.426770+00:00	BLIND_CACHE symbol=USAR date=2025-07-03 rows=766 sha256=3dcb46ff57756f115b85dc2cae1a2547feb9841c7ef7ce4c1a51468c85a08dfd already_cached=false path=.cache/chains/USAR_2025-07-03.parquet
+2026-07-15T14:42:32.153309+00:00	BLIND_CACHE symbol=USAR date=2025-07-07 rows=720 sha256=2792d60acc5bf3c5cb4609942d658489ee3929db8c0f7f2fb495681e16975cf6 already_cached=false path=.cache/chains/USAR_2025-07-07.parquet
+2026-07-15T14:42:32.682915+00:00	BLIND_CACHE symbol=USAR date=2025-07-08 rows=720 sha256=0258e7678d51ddf7ba091730529fd5ebe36ec306eb08f2969eff93dd89d7e248 already_cached=false path=.cache/chains/USAR_2025-07-08.parquet
+2026-07-15T14:42:33.054396+00:00	BLIND_CACHE symbol=USAR date=2025-07-09 rows=726 sha256=681612f0dc7097e13d29662e9335f1a5154c411482e8ee7e96a2a9617dc3589d already_cached=false path=.cache/chains/USAR_2025-07-09.parquet
+2026-07-15T14:42:33.541195+00:00	BLIND_CACHE symbol=USAR date=2025-07-10 rows=736 sha256=bfd4a5b2f4520f2564674e10fa5318cefa8cb724830ccf1ccbee43a9d1dad6ec already_cached=false path=.cache/chains/USAR_2025-07-10.parquet
+2026-07-15T14:42:34.076557+00:00	BLIND_CACHE symbol=USAR date=2025-07-11 rows=770 sha256=988b72cb954e2816586236876adb0ac9517ab7f2cd0ba6f32499c5853df90154 already_cached=false path=.cache/chains/USAR_2025-07-11.parquet
+2026-07-15T14:42:34.720382+00:00	BLIND_CACHE symbol=USAR date=2025-07-14 rows=726 sha256=4487b621a1ab02995b216afa11af7ac2f825f23ec25d0b57588dea9f8b28d351 already_cached=false path=.cache/chains/USAR_2025-07-14.parquet
+2026-07-15T14:42:35.239817+00:00	BLIND_CACHE symbol=USAR date=2025-07-15 rows=732 sha256=2b98124a1c2dbaaa38892d17510d49d76b59fdefdb5203ec3c269542e2d99bf3 already_cached=false path=.cache/chains/USAR_2025-07-15.parquet
+2026-07-15T14:42:35.975924+00:00	BLIND_CACHE symbol=USAR date=2025-07-16 rows=732 sha256=623e8c954201470e65209cdc24b1d0d42fd7527606dcdb8043d5b518a4c97516 already_cached=false path=.cache/chains/USAR_2025-07-16.parquet
+2026-07-15T14:42:36.352937+00:00	BLIND_CACHE symbol=USAR date=2025-07-17 rows=824 sha256=29f30eb4481f5869ea49f079e69cac2c6ae9432b08a12900f84efb0a4fe91677 already_cached=false path=.cache/chains/USAR_2025-07-17.parquet
+2026-07-15T14:42:37.591096+00:00	BLIND_CACHE symbol=USAR date=2025-07-18 rows=858 sha256=3a425c2dea7eb1c621854c76211fa86e60f569ec62b87406d9453924c4befeac already_cached=false path=.cache/chains/USAR_2025-07-18.parquet
+2026-07-15T14:42:38.208025+00:00	BLIND_CACHE symbol=USAR date=2025-07-21 rows=758 sha256=ee7cd35fee3bba8a7df7e227ef6684fa36c9b6d044711ba4444b28296817eba3 already_cached=false path=.cache/chains/USAR_2025-07-21.parquet
+2026-07-15T14:42:38.880710+00:00	BLIND_CACHE symbol=USAR date=2025-07-22 rows=830 sha256=24ef6852d84fe12ddf0f82c57d53151854e5195fd1ac32e62603f86288ee574c already_cached=false path=.cache/chains/USAR_2025-07-22.parquet
+2026-07-15T14:42:39.324830+00:00	BLIND_CACHE symbol=USAR date=2025-07-23 rows=830 sha256=965049540f974ca7b050be461270355c0b6cc94e06e0e7d5277255ec6ecd4fa8 already_cached=false path=.cache/chains/USAR_2025-07-23.parquet
+2026-07-15T14:42:39.680578+00:00	BLIND_CACHE symbol=USAR date=2025-07-24 rows=830 sha256=3acf51e100fc6736e3a0b630d523ca3dfacde1e35c0a784340231994fe1da7c1 already_cached=false path=.cache/chains/USAR_2025-07-24.parquet
+2026-07-15T14:42:40.093509+00:00	BLIND_CACHE symbol=USAR date=2025-07-25 rows=872 sha256=9234b3c13c8a09010b41538d3de48a10b884668d57e5e2a7971261e9df252b08 already_cached=false path=.cache/chains/USAR_2025-07-25.parquet
+2026-07-15T14:42:40.523515+00:00	BLIND_CACHE symbol=USAR date=2025-07-28 rows=788 sha256=0eec37d8481319f8ea64c4c2e53c19b251e9958caa0b8918e557d810e2197581 already_cached=false path=.cache/chains/USAR_2025-07-28.parquet
+2026-07-15T14:42:41.097530+00:00	BLIND_CACHE symbol=USAR date=2025-07-29 rows=800 sha256=2c3c2c116af38b6ac72d1397f25fb81bb59825e1ce67c2a38d26859f5242e222 already_cached=false path=.cache/chains/USAR_2025-07-29.parquet
+2026-07-15T14:42:41.641124+00:00	BLIND_CACHE symbol=USAR date=2025-07-30 rows=800 sha256=3ed5f0b3c0525233a82c28b9582ce9027264f2685972b4fb74fddb3a90fa97c2 already_cached=false path=.cache/chains/USAR_2025-07-30.parquet
+2026-07-15T14:42:42.016268+00:00	BLIND_CACHE symbol=USAR date=2025-07-31 rows=802 sha256=8aa6115e61235608147eb0f72a5be14f66d8bd162939d3e53765f94e8ce52bac already_cached=false path=.cache/chains/USAR_2025-07-31.parquet
+2026-07-15T14:42:43.291795+00:00	BLIND_CACHE symbol=USAR date=2025-08-01 rows=844 sha256=234c19770f10b44b0d04ed2e48b8c150de3aecbc06f1e4a4c60ce0584dbd2813 already_cached=false path=.cache/chains/USAR_2025-08-01.parquet
+2026-07-15T14:42:43.709281+00:00	BLIND_CACHE symbol=USAR date=2025-08-04 rows=772 sha256=9688188f920142c3c2e2a7d87554faf2cd09a3c5815047e4c73fb650bef9a069 already_cached=false path=.cache/chains/USAR_2025-08-04.parquet
+2026-07-15T14:42:44.076695+00:00	BLIND_CACHE symbol=USAR date=2025-08-05 rows=782 sha256=f8b692bbaa6e4307f8922db926a106e3febe1230c8455d5a99e0ca115c4d71d2 already_cached=false path=.cache/chains/USAR_2025-08-05.parquet
+2026-07-15T14:42:44.757803+00:00	BLIND_CACHE symbol=USAR date=2025-08-06 rows=782 sha256=c6e738fa8291747e22db1c3a6dd28b99f4082cb39cf1c442fe4fe0dc668cb392 already_cached=false path=.cache/chains/USAR_2025-08-06.parquet
+2026-07-15T14:42:45.240628+00:00	BLIND_CACHE symbol=USAR date=2025-08-07 rows=802 sha256=8db0edc5d3a2132aa639f8e2fb967af022a3e64279604b2649c0c2777fd4427f already_cached=false path=.cache/chains/USAR_2025-08-07.parquet
+2026-07-15T14:42:45.780405+00:00	BLIND_CACHE symbol=USAR date=2025-08-08 rows=844 sha256=5d5ffb1cb861a9d371e2da89af0f1edb02d00978859c84fc7356e615c7b9c482 already_cached=false path=.cache/chains/USAR_2025-08-08.parquet
+2026-07-15T14:42:46.610260+00:00	BLIND_CACHE symbol=USAR date=2025-08-11 rows=800 sha256=f111236a4cb755264f1db38a829f3c19f5a8e04388f5b176ab074b6847c12001 already_cached=false path=.cache/chains/USAR_2025-08-11.parquet
+2026-07-15T14:42:47.003038+00:00	BLIND_CACHE symbol=USAR date=2025-08-12 rows=804 sha256=70bfc0c17b1ab9d88f017b8cd5da1da4302b3ecda87bb4055fb8dd0dfa5792be already_cached=false path=.cache/chains/USAR_2025-08-12.parquet
+2026-07-15T14:42:47.688682+00:00	BLIND_CACHE symbol=USAR date=2025-08-13 rows=838 sha256=d209dd7d728a68b3cd20d17a05d8e703ff41857120b3c18b6a86181771a581c6 already_cached=false path=.cache/chains/USAR_2025-08-13.parquet
+2026-07-15T14:42:48.313542+00:00	BLIND_CACHE symbol=USAR date=2025-08-14 rows=994 sha256=d55918fc17cad9e446f7236b7ce73b158b90823d0facd66ad1797659b8a5e498 already_cached=false path=.cache/chains/USAR_2025-08-14.parquet
+2026-07-15T14:42:48.972803+00:00	BLIND_CACHE symbol=USAR date=2025-08-15 rows=994 sha256=52872d8e6129a1e3908167f742236a5416b81468c8cdd6186fd27a41313ecf7a already_cached=false path=.cache/chains/USAR_2025-08-15.parquet
+2026-07-15T14:42:49.771361+00:00	BLIND_CACHE symbol=USAR date=2025-08-18 rows=892 sha256=e51f33ccb2cf45dba4661e6dff492283922715ecbe42bf571cfff8ce51722880 already_cached=false path=.cache/chains/USAR_2025-08-18.parquet
+2026-07-15T14:42:50.375777+00:00	BLIND_CACHE symbol=USAR date=2025-08-19 rows=914 sha256=936e39934270c03494c1c499fd7ed6fb861cefcc55fdef68e85d3d40f1981da0 already_cached=false path=.cache/chains/USAR_2025-08-19.parquet
+2026-07-15T14:42:51.064341+00:00	BLIND_CACHE symbol=USAR date=2025-08-20 rows=938 sha256=19162517636e221abbfa020c90d5c3872f97057899c7931e5205bc229c1a1668 already_cached=false path=.cache/chains/USAR_2025-08-20.parquet
+2026-07-15T14:42:51.563147+00:00	BLIND_CACHE symbol=USAR date=2025-08-21 rows=938 sha256=6217d692f75c306d609eae3e1eb6aa54ff085ef913dacc39c8c625c379fe2d16 already_cached=false path=.cache/chains/USAR_2025-08-21.parquet
+2026-07-15T14:42:52.010289+00:00	BLIND_CACHE symbol=USAR date=2025-08-22 rows=980 sha256=b416b0abe35a64dbf4fd1a696ecacba59660428549790581f87be27c227b2058 already_cached=false path=.cache/chains/USAR_2025-08-22.parquet
+2026-07-15T14:42:52.562105+00:00	BLIND_CACHE symbol=USAR date=2025-08-25 rows=884 sha256=998657f783e7195019a31f9f5e75ec4d4d64d98719b1bea3d8f6b94d0b71cb3e already_cached=false path=.cache/chains/USAR_2025-08-25.parquet
+2026-07-15T14:42:53.275474+00:00	BLIND_CACHE symbol=USAR date=2025-08-26 rows=886 sha256=06db7382d7b5309215f6a1c6772b7df17b6e76a2843a21e679f7d90404c86030 already_cached=false path=.cache/chains/USAR_2025-08-26.parquet
+2026-07-15T14:42:53.925690+00:00	BLIND_CACHE symbol=USAR date=2025-08-27 rows=916 sha256=5905d861b43e59eae9bde9edf6f2c02206d0f11e9402dd4abdb160d45f6c7954 already_cached=false path=.cache/chains/USAR_2025-08-27.parquet
+2026-07-15T14:42:54.444357+00:00	BLIND_CACHE symbol=USAR date=2025-08-28 rows=916 sha256=5e4c9e5c0bc40d8738c44cc50eef3e0eec1ece127112967a9be29a1286910009 already_cached=false path=.cache/chains/USAR_2025-08-28.parquet
+2026-07-15T14:42:55.044429+00:00	BLIND_CACHE symbol=USAR date=2025-08-29 rows=958 sha256=e8bd5efcb39f052de732172e62e56d0cec02593d4fb8b05762c242b8a7ad661d already_cached=false path=.cache/chains/USAR_2025-08-29.parquet
+2026-07-15T14:42:55.549931+00:00	BLIND_CACHE symbol=USAR date=2025-09-02 rows=834 sha256=248e83b6cfff6be1aa83a9e353507eac7b57c0c24ee507d251d0dde9b94d88f6 already_cached=false path=.cache/chains/USAR_2025-09-02.parquet
+2026-07-15T14:42:56.123386+00:00	BLIND_CACHE symbol=USAR date=2025-09-03 rows=834 sha256=0806f71600f457cb9ac3fa1300cfe215e9503fbc7e6d770526c549abef635b35 already_cached=false path=.cache/chains/USAR_2025-09-03.parquet
+2026-07-15T14:42:56.542197+00:00	BLIND_CACHE symbol=USAR date=2025-09-04 rows=834 sha256=fc37d88148391eeb1da3e13d513df36fc18ba7e461248b427cf022e2dfd43c95 already_cached=false path=.cache/chains/USAR_2025-09-04.parquet
+2026-07-15T14:42:57.248066+00:00	BLIND_CACHE symbol=USAR date=2025-09-05 rows=880 sha256=3404e81a5a7c08b88edfe6741b3dac007559b0c4b68f055cbf6ebbb4e459ff9d already_cached=false path=.cache/chains/USAR_2025-09-05.parquet
+2026-07-15T14:42:58.062276+00:00	BLIND_CACHE symbol=USAR date=2025-09-08 rows=802 sha256=505dd7155559aef0a75b8b1210f61660485e45a050eec6be6c30e11da8818833 already_cached=false path=.cache/chains/USAR_2025-09-08.parquet
+2026-07-15T14:42:58.682426+00:00	BLIND_CACHE symbol=USAR date=2025-09-09 rows=814 sha256=db2bcbb8d3c5b6a39e228479943482a7151a47c01309aa0f192ee1ab0dd4ec35 already_cached=false path=.cache/chains/USAR_2025-09-09.parquet
+2026-07-15T14:42:59.234369+00:00	BLIND_CACHE symbol=USAR date=2025-09-10 rows=814 sha256=42bff9c423c61527769ccb2f1d60447d623cf8f089bebc44bdc685d4865dc80d already_cached=false path=.cache/chains/USAR_2025-09-10.parquet
+2026-07-15T14:42:59.687257+00:00	BLIND_CACHE symbol=USAR date=2025-09-11 rows=828 sha256=3b19cbd3046186088a2c5be6c103f46b014f58ab0b0f6c719a32c3857d2f46a5 already_cached=false path=.cache/chains/USAR_2025-09-11.parquet
+2026-07-15T14:43:00.442306+00:00	BLIND_CACHE symbol=USAR date=2025-09-12 rows=870 sha256=64c80526536f19f689fef6ec21e23b41275642add3ae3b26d6e79ca7260c4b67 already_cached=false path=.cache/chains/USAR_2025-09-12.parquet
+2026-07-15T14:43:01.248825+00:00	BLIND_CACHE symbol=USAR date=2025-09-15 rows=778 sha256=735396d9408d21ca76c51e628962e21f0534fd758a1916d5fded3a6ffa077470 already_cached=false path=.cache/chains/USAR_2025-09-15.parquet
+2026-07-15T14:43:01.648443+00:00	BLIND_CACHE symbol=USAR date=2025-09-16 rows=820 sha256=1ca765604c17501d943d7df15f05e31a2e6ad431455dd85fe4a331ca9ffc868b already_cached=false path=.cache/chains/USAR_2025-09-16.parquet
+2026-07-15T14:43:02.412500+00:00	BLIND_CACHE symbol=USAR date=2025-09-17 rows=820 sha256=f9cfe9e3d22d96443c9d2583c0872d171537dab4985341e3ad5bbd453a717ff3 already_cached=false path=.cache/chains/USAR_2025-09-17.parquet
+2026-07-15T14:43:02.992774+00:00	BLIND_CACHE symbol=USAR date=2025-09-18 rows=820 sha256=ab04db0f6f5c35d7c48a0e81bb58c52490de1574c0cf578a1cec31ccbfd242c8 already_cached=false path=.cache/chains/USAR_2025-09-18.parquet
+2026-07-15T14:43:03.620020+00:00	BLIND_CACHE symbol=USAR date=2025-09-19 rows=820 sha256=b74dba0072d10dbb0c4daf0cf4e4bc319c2c7aee452482feb1091bcb0cdcabc7 already_cached=false path=.cache/chains/USAR_2025-09-19.parquet
+2026-07-15T14:43:04.043771+00:00	BLIND_CACHE symbol=USAR date=2025-09-22 rows=716 sha256=426837046d610e67a808a90f368ebc11265ca7b326bdf630094ec917cd391200 already_cached=false path=.cache/chains/USAR_2025-09-22.parquet
+2026-07-15T14:43:05.722215+00:00	BLIND_CACHE symbol=USAR date=2025-09-23 rows=738 sha256=6ffcd328340a5582694c0396e22f6d6bf47032830846440f4a474d105ce01728 already_cached=false path=.cache/chains/USAR_2025-09-23.parquet
+2026-07-15T14:43:06.599270+00:00	BLIND_CACHE symbol=USAR date=2025-09-24 rows=738 sha256=898ce01b1386a98ee0c839797f27674777f2f71c14ec965d3ad0aced0679f96e already_cached=false path=.cache/chains/USAR_2025-09-24.parquet
+2026-07-15T14:43:08.123568+00:00	BLIND_CACHE symbol=USAR date=2025-09-25 rows=914 sha256=9dfffa5a55c0e4d63451e870e4b8499bca2009b6d1302e1ab265efe94859d088 already_cached=false path=.cache/chains/USAR_2025-09-25.parquet
+2026-07-15T14:43:08.655449+00:00	BLIND_CACHE symbol=USAR date=2025-09-26 rows=956 sha256=12ba36c5d7691ed3dca4e734b5b8e42a7315cd198ffefee625a93e5d981a7d0f already_cached=false path=.cache/chains/USAR_2025-09-26.parquet
+2026-07-15T14:43:09.211260+00:00	BLIND_CACHE symbol=USAR date=2025-09-29 rows=856 sha256=f1aeb055c4240ae39097c31672fa7897b976071016ab5c40a850e94dfa5e4966 already_cached=false path=.cache/chains/USAR_2025-09-29.parquet
+2026-07-15T14:43:09.953219+00:00	BLIND_CACHE symbol=USAR date=2025-09-30 rows=856 sha256=2e403d6d34a1b27eb17b7702e99466ad9a6cb264ff490dadb213a4108d575292 already_cached=false path=.cache/chains/USAR_2025-09-30.parquet
+2026-07-15T14:43:10.629161+00:00	BLIND_CACHE symbol=USAR date=2025-10-01 rows=882 sha256=0cc467eece89f52ef5a742c4fbe780864893746c3966b2dd97e4f18a8f940b18 already_cached=false path=.cache/chains/USAR_2025-10-01.parquet
+2026-07-15T14:43:11.442740+00:00	BLIND_CACHE symbol=USAR date=2025-10-02 rows=882 sha256=ea53bc7031773d30b48448e92ef93e841738bd9c67e28ac3e42e9d1613e0044a already_cached=false path=.cache/chains/USAR_2025-10-02.parquet
+2026-07-15T14:43:12.358901+00:00	BLIND_CACHE symbol=USAR date=2025-10-03 rows=924 sha256=c65c52ff3c3ea5211619ce3d2b0e61d4b9df8935010836534aa2b2c1254c4dda already_cached=false path=.cache/chains/USAR_2025-10-03.parquet
+2026-07-15T14:43:12.833415+00:00	BLIND_CACHE symbol=USAR date=2025-10-06 rows=848 sha256=122ca129434c43e93bc71ca2e3908cd49e5f9d3cd0fce5931c0d63a4d28a1cce already_cached=false path=.cache/chains/USAR_2025-10-06.parquet
+2026-07-15T14:43:13.552516+00:00	BLIND_CACHE symbol=USAR date=2025-10-07 rows=1034 sha256=126bf076ebce77134569c826890ae116004f4e03ad54dd734d9dedb6de5fb99e already_cached=false path=.cache/chains/USAR_2025-10-07.parquet
+2026-07-15T14:43:14.107548+00:00	BLIND_CACHE symbol=USAR date=2025-10-08 rows=1034 sha256=4395373968e5e297e62a796667592ec7f6de65c02a14d86512753ea7b090a243 already_cached=false path=.cache/chains/USAR_2025-10-08.parquet
+2026-07-15T14:43:14.865966+00:00	BLIND_CACHE symbol=USAR date=2025-10-09 rows=1116 sha256=c272fb2adabcf2440e977d3f780e8d7f6be7fece307a3fab3d2a6d171d1fd4a7 already_cached=false path=.cache/chains/USAR_2025-10-09.parquet
+2026-07-15T14:43:15.702338+00:00	BLIND_CACHE symbol=USAR date=2025-10-10 rows=1158 sha256=d49347d4fdef49e935789be425e2eaa7cc890e3c51bd851481a82551619c5098 already_cached=false path=.cache/chains/USAR_2025-10-10.parquet
+2026-07-15T14:43:16.323949+00:00	BLIND_CACHE symbol=USAR date=2025-10-13 rows=1050 sha256=24ff04e620d7453a9b4a1b5dda3e5b8535bf708cd61042b6d46999947474e303 already_cached=false path=.cache/chains/USAR_2025-10-13.parquet
+2026-07-15T14:43:17.134161+00:00	BLIND_CACHE symbol=USAR date=2025-10-14 rows=1220 sha256=c208b948126fb0b8daff8a89f7b3c23676556513877dc8a702d39ddb00fceb5a already_cached=false path=.cache/chains/USAR_2025-10-14.parquet
+2026-07-15T14:43:17.851101+00:00	BLIND_CACHE symbol=USAR date=2025-10-15 rows=1220 sha256=e593eb414cbb7eaf517d1680f5fd4a8cb5040eb8ddf02c69d9f38f6167e0ae72 already_cached=false path=.cache/chains/USAR_2025-10-15.parquet
+2026-07-15T14:43:18.745891+00:00	BLIND_CACHE symbol=USAR date=2025-10-16 rows=1254 sha256=d7cff84d4b063d716a68a9dd0880e657a749b706f565f57aee26f444614b673a already_cached=false path=.cache/chains/USAR_2025-10-16.parquet
+2026-07-15T14:43:19.529768+00:00	BLIND_CACHE symbol=USAR date=2025-10-17 rows=1288 sha256=8e4a10d0ed990593c904871a62ad3606da734d5f7c748f4e956e255232cbce1e already_cached=false path=.cache/chains/USAR_2025-10-17.parquet
+2026-07-15T14:43:20.053018+00:00	BLIND_CACHE symbol=USAR date=2025-10-20 rows=1156 sha256=7f91af4f9d464be43698ea129822b96c4824580daff8650cfc59bdda546ebf80 already_cached=false path=.cache/chains/USAR_2025-10-20.parquet
+2026-07-15T14:43:20.577839+00:00	BLIND_CACHE symbol=USAR date=2025-10-21 rows=1188 sha256=7f57c6e900285fb2bc949ae52e20d0403a1da91753777c93d030a0dfe2e8d5c5 already_cached=false path=.cache/chains/USAR_2025-10-21.parquet
+2026-07-15T14:43:20.970334+00:00	BLIND_CACHE symbol=USAR date=2025-10-22 rows=1188 sha256=79950be9ba5eba6d83c4b5046137c8ed4157e7318a4437961b9037f3e55b28ad already_cached=false path=.cache/chains/USAR_2025-10-22.parquet
+2026-07-15T14:43:21.728819+00:00	BLIND_CACHE symbol=USAR date=2025-10-23 rows=1200 sha256=a2a1c23df1db29720039125d6eab97fa928b9e9d7ad3328f13b67c95aa87f44b already_cached=false path=.cache/chains/USAR_2025-10-23.parquet
+2026-07-15T14:43:22.537388+00:00	BLIND_CACHE symbol=USAR date=2025-10-24 rows=1260 sha256=6d70ef0363e0343a44f28a295e6582cc34475bce47706a5e7647eb4cee983dd8 already_cached=false path=.cache/chains/USAR_2025-10-24.parquet
+2026-07-15T14:43:23.238183+00:00	BLIND_CACHE symbol=USAR date=2025-10-27 rows=1118 sha256=4fa3f417f5594074f4eeaaa6b0c0ab057b6ebde53926ab4af27ee3ff80288dd0 already_cached=false path=.cache/chains/USAR_2025-10-27.parquet
+2026-07-15T14:43:24.396119+00:00	BLIND_CACHE symbol=USAR date=2025-10-28 rows=1120 sha256=41b7e084709cee772b4bfcfe5dce7b957135b71a2e1954908583255c3e1c82a2 already_cached=false path=.cache/chains/USAR_2025-10-28.parquet
+2026-07-15T14:43:25.080206+00:00	BLIND_CACHE symbol=USAR date=2025-10-29 rows=1120 sha256=866166abe1115c586d5af1d4939eb259ffef478a7835faf99d0c5161144dda04 already_cached=false path=.cache/chains/USAR_2025-10-29.parquet
+2026-07-15T14:43:26.390441+00:00	BLIND_CACHE symbol=USAR date=2025-10-30 rows=1120 sha256=f81e02d3bd702ee0c28b3b1b5b99c3a7cefdd0ca9231947050db7c4dc84b5927 already_cached=false path=.cache/chains/USAR_2025-10-30.parquet
+2026-07-15T14:43:27.149020+00:00	BLIND_CACHE symbol=USAR date=2025-10-31 rows=1162 sha256=a85046979728d53c51e4c8856aad540a8c27f5b093663d9487345c75f21794b5 already_cached=false path=.cache/chains/USAR_2025-10-31.parquet
+2026-07-15T14:43:27.894168+00:00	BLIND_CACHE symbol=USAR date=2025-11-03 rows=1008 sha256=d1d51e78a8806280206017ad53e7d00ae861dca6da3bff968752e23ff691624b already_cached=false path=.cache/chains/USAR_2025-11-03.parquet
+2026-07-15T14:43:29.818740+00:00	BLIND_CACHE symbol=USAR date=2025-11-04 rows=1008 sha256=c53419e922cc22af7c80128f8b7e9ea9990e481503baf74e9e1061930053e2d9 already_cached=false path=.cache/chains/USAR_2025-11-04.parquet
+2026-07-15T14:43:30.666994+00:00	BLIND_CACHE symbol=USAR date=2025-11-05 rows=1094 sha256=eca0880e38e5a1417f69a06fe3c59601d105a1058991f2ef60ac5930a99b7e65 already_cached=false path=.cache/chains/USAR_2025-11-05.parquet
+2026-07-15T14:43:31.392504+00:00	BLIND_CACHE symbol=USAR date=2025-11-06 rows=1094 sha256=54f735bbdff3735e2a904aa223573775257c8679a32b69432403a70d898d670a already_cached=false path=.cache/chains/USAR_2025-11-06.parquet
+2026-07-15T14:43:32.095412+00:00	BLIND_CACHE symbol=USAR date=2025-11-07 rows=1204 sha256=b480bd32f457abe5fe51a78668fc845bb5f621a17372ffe14bcf48773baf018f already_cached=false path=.cache/chains/USAR_2025-11-07.parquet
+2026-07-15T14:43:32.753210+00:00	BLIND_CACHE symbol=USAR date=2025-11-10 rows=1102 sha256=873017eff81a16de6bf74294c3635ea3145ac150e1acf40ef2c83bafc4181866 already_cached=false path=.cache/chains/USAR_2025-11-10.parquet
+2026-07-15T14:43:33.581664+00:00	BLIND_CACHE symbol=USAR date=2025-11-11 rows=1140 sha256=83659663b8636dca02a6f281222630810243343115750a479921acc7968af1ba already_cached=false path=.cache/chains/USAR_2025-11-11.parquet
+2026-07-15T14:43:34.088302+00:00	BLIND_CACHE symbol=USAR date=2025-11-12 rows=1144 sha256=4d98ca69d3b064d60c2399cf47771225bcbbe3ea94bcaab64ffeb2a998c0c845 already_cached=false path=.cache/chains/USAR_2025-11-12.parquet
+2026-07-15T14:43:34.732919+00:00	BLIND_CACHE symbol=USAR date=2025-11-13 rows=1144 sha256=41fe502c39fe18c290fb4459ed6c777c078690c1783af6f57461897d21b86ab5 already_cached=false path=.cache/chains/USAR_2025-11-13.parquet
+2026-07-15T14:43:35.479594+00:00	BLIND_CACHE symbol=USAR date=2025-11-14 rows=1186 sha256=5bb6714d095157b9229d37ccae2ea4a79dc66a112c795a7aa593903e32704ac3 already_cached=false path=.cache/chains/USAR_2025-11-14.parquet
+2026-07-15T14:43:36.341024+00:00	BLIND_CACHE symbol=USAR date=2025-11-17 rows=1060 sha256=c196b1500d4f0fc6b31ad830def8a7d99f20759bec5760dc9b69c60951f49aac already_cached=false path=.cache/chains/USAR_2025-11-17.parquet
+2026-07-15T14:43:36.886535+00:00	BLIND_CACHE symbol=USAR date=2025-11-18 rows=1102 sha256=4657636546ecc0e1cf90715704819d371ad9172ee58ffbacb9f6f7dc91f9070c already_cached=false path=.cache/chains/USAR_2025-11-18.parquet
+2026-07-15T14:43:37.789086+00:00	BLIND_CACHE symbol=USAR date=2025-11-19 rows=1102 sha256=7629622cccbab003b141b653bc59a3b5e8237e0aa90110aa1a94d16c47288b34 already_cached=false path=.cache/chains/USAR_2025-11-19.parquet
+2026-07-15T14:43:38.261276+00:00	BLIND_CACHE symbol=USAR date=2025-11-20 rows=1102 sha256=ceb29b1529cc805f409897671a06bf5fb1030e9222f230aa521812cae96bf853 already_cached=false path=.cache/chains/USAR_2025-11-20.parquet
+2026-07-15T14:43:38.725443+00:00	BLIND_CACHE symbol=USAR date=2025-11-21 rows=1102 sha256=8882300e65b7e0e517aae7b7e11e25444eb945ab4dff91d5c672c1c18a8c63c5 already_cached=false path=.cache/chains/USAR_2025-11-21.parquet
+2026-07-15T14:43:39.211563+00:00	BLIND_CACHE symbol=USAR date=2025-11-24 rows=950 sha256=420df399b624113b138d68e9ba08f126368444736cdaf6b2cc534a0366202dbe already_cached=false path=.cache/chains/USAR_2025-11-24.parquet
+2026-07-15T14:43:39.829853+00:00	BLIND_CACHE symbol=USAR date=2025-11-25 rows=980 sha256=50ef33a4fdd36e49e7ecac4b52b6a51086187416f422f0052f091e071e4e0be0 already_cached=false path=.cache/chains/USAR_2025-11-25.parquet
+2026-07-15T14:43:40.302427+00:00	BLIND_CACHE symbol=USAR date=2025-11-26 rows=980 sha256=92f9e92a42f3cd95f42ec48cb3916884782118ab7efdfb082fdd256a3f656ec2 already_cached=false path=.cache/chains/USAR_2025-11-26.parquet
+2026-07-15T14:43:40.764726+00:00	BLIND_CACHE symbol=USAR date=2025-11-28 rows=1022 sha256=e0d4350ed7120a65c0fc25702e2014f9de9c80929567634cf59713cc36dac7b0 already_cached=false path=.cache/chains/USAR_2025-11-28.parquet
+2026-07-15T14:43:41.307671+00:00	BLIND_CACHE symbol=USAR date=2025-12-01 rows=878 sha256=b18e3865c3f2b3a7fdcecc6607e25b945f9c8b61b959907daf4d86bd1898f289 already_cached=false path=.cache/chains/USAR_2025-12-01.parquet
+2026-07-15T14:43:41.728387+00:00	BLIND_CACHE symbol=USAR date=2025-12-02 rows=878 sha256=af8a2219be60b37a893eb07d589193fdb691de13d4ff7ce3a817e4e86c1a944b already_cached=false path=.cache/chains/USAR_2025-12-02.parquet
+2026-07-15T14:43:42.849419+00:00	BLIND_CACHE symbol=USAR date=2025-12-03 rows=878 sha256=609f29cfc326e54cc0ae7618c750772142f1f079f020e0609c7dbee8bc5cca4a already_cached=false path=.cache/chains/USAR_2025-12-03.parquet
+2026-07-15T14:43:43.326171+00:00	BLIND_CACHE symbol=USAR date=2025-12-04 rows=878 sha256=621b2687898cc627ed530f698304706d2c4749b4e2ec47794d90816afdc35063 already_cached=false path=.cache/chains/USAR_2025-12-04.parquet
+2026-07-15T14:43:43.953459+00:00	BLIND_CACHE symbol=USAR date=2025-12-05 rows=920 sha256=3cfed237b2d969cc59c71543650b26a845c22d2aecafc2e148fcb44fbaa27785 already_cached=false path=.cache/chains/USAR_2025-12-05.parquet
+2026-07-15T14:43:44.315335+00:00	BLIND_CACHE symbol=USAR date=2025-12-08 rows=874 sha256=524eed95ecf6ababd5ad1e9e4ff6d200bbc417de7f93acc37b02eafa03cf5eeb already_cached=false path=.cache/chains/USAR_2025-12-08.parquet
+2026-07-15T14:43:44.779028+00:00	BLIND_CACHE symbol=USAR date=2025-12-09 rows=888 sha256=6dfa9b0f9d5415666b599eb97c7df793c78122a3b5166e0298ff7eb19f7aed8b already_cached=false path=.cache/chains/USAR_2025-12-09.parquet
+2026-07-15T14:43:45.347753+00:00	BLIND_CACHE symbol=USAR date=2025-12-10 rows=888 sha256=c5097230326a28464e49eb572b07305e278285ff6ff112681d088049d0d9768b already_cached=false path=.cache/chains/USAR_2025-12-10.parquet
+2026-07-15T14:43:45.851495+00:00	BLIND_CACHE symbol=USAR date=2025-12-11 rows=888 sha256=9641673c090f1f71b899045d0c9f51dca72aee3ffe634b6e2cd4c3e492dfc7d5 already_cached=false path=.cache/chains/USAR_2025-12-11.parquet
+2026-07-15T14:43:46.267876+00:00	BLIND_CACHE symbol=USAR date=2025-12-12 rows=930 sha256=4fd6fa77d9c8dfb82ae875fa1c58f36065ef7aeb0b7ecd40923045e33de386c1 already_cached=false path=.cache/chains/USAR_2025-12-12.parquet
+2026-07-15T14:43:46.786493+00:00	BLIND_CACHE symbol=USAR date=2025-12-15 rows=868 sha256=d424efe6297cf17ccad899486d6178331f5cf46adbeef81223e489bce4ede6ee already_cached=false path=.cache/chains/USAR_2025-12-15.parquet
+2026-07-15T14:43:47.420353+00:00	BLIND_CACHE symbol=USAR date=2025-12-16 rows=870 sha256=d9c1cf831d2350821cde436b53c25f4d69d7304103cf7a50fa02e7539767f85a already_cached=false path=.cache/chains/USAR_2025-12-16.parquet
+2026-07-15T14:43:48.138790+00:00	BLIND_CACHE symbol=USAR date=2025-12-17 rows=870 sha256=1042ea8eeab047016494f1b063a08830273069b68f3c33299cccafd8e7950860 already_cached=false path=.cache/chains/USAR_2025-12-17.parquet
+2026-07-15T14:43:48.637163+00:00	BLIND_CACHE symbol=USAR date=2025-12-18 rows=870 sha256=6f191414ce01222049118a30ba6310041a2f609f091f988f38f207e8ee34e9da already_cached=false path=.cache/chains/USAR_2025-12-18.parquet
+2026-07-15T14:43:49.203028+00:00	BLIND_CACHE symbol=USAR date=2025-12-19 rows=904 sha256=566c7bee17f625ec128347c0a620b58c4a275c4dce815f444b547357b36b631e already_cached=false path=.cache/chains/USAR_2025-12-19.parquet
+2026-07-15T14:43:49.843638+00:00	BLIND_CACHE symbol=USAR date=2025-12-22 rows=784 sha256=6df92f424ec88eb0613ddb901f5dbf8f3bd19e753a9e55b9c6cd5a1e0d8db4cc already_cached=false path=.cache/chains/USAR_2025-12-22.parquet
+2026-07-15T14:43:50.253264+00:00	BLIND_CACHE symbol=USAR date=2025-12-23 rows=806 sha256=fdef553b0741c7286f0cc053cc2ded277d3e454f52af7d5636994bf2fd5e269f already_cached=false path=.cache/chains/USAR_2025-12-23.parquet
+2026-07-15T14:43:50.887916+00:00	BLIND_CACHE symbol=USAR date=2025-12-24 rows=806 sha256=6696ae9189eec885524c5b1237d9db020ede56e085a98eb93076ca4db9977c1b already_cached=false path=.cache/chains/USAR_2025-12-24.parquet
+2026-07-15T14:43:51.430978+00:00	BLIND_CACHE symbol=USAR date=2025-12-26 rows=848 sha256=4139fdba366abcaaf6d68d1e527bcb81a11e7011fb2aee173d28856ac87449f4 already_cached=false path=.cache/chains/USAR_2025-12-26.parquet
+2026-07-15T14:43:51.730714+00:00	BLIND_CACHE symbol=USAR date=2025-12-29 rows=774 sha256=8cf857896645a7c9e1962e6edf1b39fb381ecda7aae99bbe02315a9d69a6f6fd already_cached=false path=.cache/chains/USAR_2025-12-29.parquet
+2026-07-15T14:43:52.108699+00:00	BLIND_CACHE symbol=USAR date=2025-12-30 rows=774 sha256=c7f55393575b153c1154a075b97c4e13dcda2adfeb72796fce8e6d36bfd5d603 already_cached=false path=.cache/chains/USAR_2025-12-30.parquet
+2026-07-15T14:43:52.654384+00:00	BLIND_CACHE symbol=USAR date=2025-12-31 rows=774 sha256=63e36ec8b72ce8439030884e64946de2ec20463c235063a432830c2bc4f48661 already_cached=false path=.cache/chains/USAR_2025-12-31.parquet
+2026-07-15T14:43:53.026092+00:00	BLIND_CACHE symbol=USAR date=2026-01-02 rows=816 sha256=77886cf3d72bdab9bcc595e988eb87fe7d8291c67d3793ced44f89ad489a7686 already_cached=false path=.cache/chains/USAR_2026-01-02.parquet
+2026-07-15T14:43:53.378692+00:00	BLIND_CACHE symbol=USAR date=2026-01-05 rows=752 sha256=ef6feb2a396dd331290c0618ada7e126e4314990076adfcecd85498dab38baee already_cached=false path=.cache/chains/USAR_2026-01-05.parquet
+2026-07-15T14:43:53.764693+00:00	BLIND_CACHE symbol=USAR date=2026-01-06 rows=790 sha256=af721ace51add15fe7fef45eb464b80a2f88e060d5119b2eac285051154c6033 already_cached=false path=.cache/chains/USAR_2026-01-06.parquet
+2026-07-15T14:43:54.442261+00:00	BLIND_CACHE symbol=USAR date=2026-01-07 rows=854 sha256=3c9043a0c3ec2c76e0a84bd2eb144618f5d2fae80ea91a15c8bff3956549d6d1 already_cached=false path=.cache/chains/USAR_2026-01-07.parquet
+2026-07-15T14:43:55.223060+00:00	BLIND_CACHE symbol=USAR date=2026-01-08 rows=926 sha256=8c6c99cf8b2b7e68ce1909390fa46be4264e75637ca2db65c4615c323e2412bf already_cached=false path=.cache/chains/USAR_2026-01-08.parquet
+2026-07-15T14:43:56.233262+00:00	BLIND_CACHE symbol=USAR date=2026-01-09 rows=968 sha256=e46f3f0355c6663852874d8786614d6a7c7edf45970a812d8ba52550f1c4cf59 already_cached=false path=.cache/chains/USAR_2026-01-09.parquet
+2026-07-15T14:43:57.823510+00:00	BLIND_CACHE symbol=USAR date=2026-01-12 rows=900 sha256=59fc230517cfab52c9827362f2bd7dff8cdefc0fad2a6fd446d95fcc214c0221 already_cached=false path=.cache/chains/USAR_2026-01-12.parquet
+2026-07-15T14:43:58.399181+00:00	BLIND_CACHE symbol=USAR date=2026-01-13 rows=928 sha256=f70e6a2bb9c20d4f3ef2f7d15e05c435f69f5bb558f4a7576e54432325be4231 already_cached=false path=.cache/chains/USAR_2026-01-13.parquet
+2026-07-15T14:43:59.109511+00:00	BLIND_CACHE symbol=USAR date=2026-01-14 rows=928 sha256=8bd946f5d6f9b3f77c58d23fed92a0ecea6a2ec7589aa1540a520c70678d3a55 already_cached=false path=.cache/chains/USAR_2026-01-14.parquet
+2026-07-15T14:43:59.724752+00:00	BLIND_CACHE symbol=USAR date=2026-01-15 rows=928 sha256=b0b27d15311bb5efbe0dd6f50be0a76d31fc750a7a8d35a4e15576cb5c95fec1 already_cached=false path=.cache/chains/USAR_2026-01-15.parquet
+2026-07-15T14:44:00.150546+00:00	BLIND_CACHE symbol=USAR date=2026-01-16 rows=962 sha256=dc77e51f83a924ddae5a984426d6b37bb19a8eacdf1883195e99a74f61a4a61b already_cached=false path=.cache/chains/USAR_2026-01-16.parquet
+2026-07-15T14:44:01.033701+00:00	BLIND_CACHE symbol=USAR date=2026-01-20 rows=864 sha256=ad215a432f8c40a9e090a4fd60989bf7f22a1d0124a1a6a2519f9ae6104acad9 already_cached=false path=.cache/chains/USAR_2026-01-20.parquet
+2026-07-15T14:44:01.505306+00:00	BLIND_CACHE symbol=USAR date=2026-01-21 rows=896 sha256=557281cc77de2a32bc1127110f7fb708021d894772b20332e9af10802bf790b0 already_cached=false path=.cache/chains/USAR_2026-01-21.parquet
+2026-07-15T14:44:02.027288+00:00	BLIND_CACHE symbol=USAR date=2026-01-22 rows=896 sha256=d25b76440bae69d2ed026f7b70a0a546df36f7b03c44d5d71631a655ab7faccf already_cached=false path=.cache/chains/USAR_2026-01-22.parquet
+2026-07-15T14:44:02.753771+00:00	BLIND_CACHE symbol=USAR date=2026-01-23 rows=962 sha256=df590c7fcab8a9a803ea45233dd8c7fdf27a2f6885d67ef4c3cb659071c9b4cc already_cached=false path=.cache/chains/USAR_2026-01-23.parquet
+2026-07-15T14:44:03.365768+00:00	BLIND_CACHE symbol=USAR date=2026-01-26 rows=888 sha256=999e1e247ae7f9184c2a6b90ec8984639f6b96ec0ba36c5aeee180bd25d840af already_cached=false path=.cache/chains/USAR_2026-01-26.parquet
+2026-07-15T14:44:05.036160+00:00	BLIND_CACHE symbol=USAR date=2026-01-27 rows=1124 sha256=66293dcc66d28eadff8c9241e54c8b1bbf3c4bda4ca955f3795aadb62e0e2aa1 already_cached=false path=.cache/chains/USAR_2026-01-27.parquet
+2026-07-15T14:44:05.984108+00:00	BLIND_CACHE symbol=USAR date=2026-01-28 rows=1208 sha256=e79f4204ce315289e8eac0c9073cb5043fd53cf9aa19813e78f67d13a52de7c3 already_cached=false path=.cache/chains/USAR_2026-01-28.parquet
+2026-07-15T14:44:06.838442+00:00	BLIND_CACHE symbol=USAR date=2026-01-29 rows=1224 sha256=4159da824ffb1e7eb8df67073d219d4da5ab477b9d38a133cfceeb7dc09ac146 already_cached=false path=.cache/chains/USAR_2026-01-29.parquet
+2026-07-15T14:44:07.608681+00:00	BLIND_CACHE symbol=USAR date=2026-01-30 rows=1266 sha256=eb88417b07fc270c0374e9e412783260ec47942d3c087ec5b9526dcca9d3579c already_cached=false path=.cache/chains/USAR_2026-01-30.parquet
+2026-07-15T14:44:08.608515+00:00	BLIND_CACHE symbol=USAR date=2026-02-02 rows=1166 sha256=cdca913ecdfce70820855539f473861827a2999558e4a4b4258ac60b9b7f1c45 already_cached=false path=.cache/chains/USAR_2026-02-02.parquet
+2026-07-15T14:44:09.778726+00:00	BLIND_CACHE symbol=USAR date=2026-02-03 rows=1166 sha256=88ca344258c50608bb94e6d61d959ac595b7999ddf67335342a8b35915b9286d already_cached=false path=.cache/chains/USAR_2026-02-03.parquet
+2026-07-15T14:44:11.012583+00:00	BLIND_CACHE symbol=USAR date=2026-02-04 rows=1174 sha256=705e561dbb937ecb7918e4fd1c3903bd503e9586ff71a0e8647f5ce420b6208e already_cached=false path=.cache/chains/USAR_2026-02-04.parquet
+2026-07-15T14:44:12.359746+00:00	BLIND_CACHE symbol=USAR date=2026-02-05 rows=1188 sha256=bb21bc07bd69e2c096559a5916bf40691a9a71db838c0d8418a5e4c8b34a8512 already_cached=false path=.cache/chains/USAR_2026-02-05.parquet
+2026-07-15T14:44:13.205362+00:00	BLIND_CACHE symbol=USAR date=2026-02-06 rows=1230 sha256=46175dd60b7c6195b5ed63a374c3281bc6ed0fc1c7aa019608d9325066798059 already_cached=false path=.cache/chains/USAR_2026-02-06.parquet
+2026-07-15T14:44:14.136892+00:00	BLIND_CACHE symbol=USAR date=2026-02-09 rows=1110 sha256=1ecf78ce52806720bdee6080993303470311c10b0f2f0ebec62894ecdb7c6d52 already_cached=false path=.cache/chains/USAR_2026-02-09.parquet
+2026-07-15T14:44:14.976639+00:00	BLIND_CACHE symbol=USAR date=2026-02-10 rows=1126 sha256=16986cf0ff14bd5cd53cc2d6ecc2f5089c5a786d7ad6624e4716db7f5017a2fb already_cached=false path=.cache/chains/USAR_2026-02-10.parquet
+2026-07-15T14:44:15.970039+00:00	BLIND_CACHE symbol=USAR date=2026-02-11 rows=1126 sha256=a4244db25a49cf95c0a98f4fa3bfa59e972b53234794125eea72a3e450394030 already_cached=false path=.cache/chains/USAR_2026-02-11.parquet
+2026-07-15T14:44:17.230552+00:00	BLIND_CACHE symbol=USAR date=2026-02-12 rows=1126 sha256=3cc8d638f304f7b9df60241060bc7823d80b6ff25e35df3903c5844ae3605a1b already_cached=false path=.cache/chains/USAR_2026-02-12.parquet
+2026-07-15T14:44:18.346617+00:00	BLIND_CACHE symbol=USAR date=2026-02-13 rows=1168 sha256=14de7bb96c65ee688a73acaeeb2a6336a624ee1609aef8c2e5384bfb6886f666 already_cached=false path=.cache/chains/USAR_2026-02-13.parquet
+2026-07-15T14:44:19.370394+00:00	BLIND_CACHE symbol=USAR date=2026-02-17 rows=1188 sha256=55ae0f6a48d212a6a185c04d9322b31bbf6d91fcecd0bf6b0b589bda73ee2f79 already_cached=false path=.cache/chains/USAR_2026-02-17.parquet
+2026-07-15T14:44:20.502851+00:00	BLIND_CACHE symbol=USAR date=2026-02-18 rows=1192 sha256=e2d62de599206ecc06ac455d4693ee7e3f507524e84afbbd58d507699ae38b9d already_cached=false path=.cache/chains/USAR_2026-02-18.parquet
+2026-07-15T14:44:21.333851+00:00	BLIND_CACHE symbol=USAR date=2026-02-19 rows=1192 sha256=6cd29ce81f92d32a4dcac05c7fbf053ef62a61b16aba460ddae4d2ad17c74cd3 already_cached=false path=.cache/chains/USAR_2026-02-19.parquet
+2026-07-15T14:44:22.570435+00:00	BLIND_CACHE symbol=USAR date=2026-02-20 rows=1192 sha256=cb198cfe34c52b568edfceb869937428d81e8d2da952bf26ac9fa2e45857f86f already_cached=false path=.cache/chains/USAR_2026-02-20.parquet
+2026-07-15T14:44:23.334727+00:00	BLIND_CACHE symbol=USAR date=2026-02-23 rows=1086 sha256=80bc787604bb38d2a450f25dbcba6c2987e53e8d25453ca6cf2266db44ec6dae already_cached=false path=.cache/chains/USAR_2026-02-23.parquet
+2026-07-15T14:44:24.435584+00:00	BLIND_CACHE symbol=USAR date=2026-02-24 rows=1116 sha256=5b72c26b30cb986b4be1fae6f79d95febebfbc9731a71eb4d5c8875db46116c4 already_cached=false path=.cache/chains/USAR_2026-02-24.parquet
+2026-07-15T14:44:24.944947+00:00	BLIND_CACHE symbol=USAR date=2026-02-25 rows=1116 sha256=73b4cf59a66f0f51107863e89ef3026b0bab6a3049b24813dbdbc819aa757dd2 already_cached=false path=.cache/chains/USAR_2026-02-25.parquet
+2026-07-15T14:44:25.880629+00:00	BLIND_CACHE symbol=USAR date=2026-02-26 rows=1116 sha256=f2e1a6b61d9fdc56200d4e608e9d4387f50b5889fcebeab611ab4f86683c109b already_cached=false path=.cache/chains/USAR_2026-02-26.parquet
+2026-07-15T14:44:26.764164+00:00	BLIND_CACHE symbol=USAR date=2026-02-27 rows=1158 sha256=80345f218b3f453185abc2804f3801e8e84c00a1f3c87c2e0d9f924e147c41fa already_cached=false path=.cache/chains/USAR_2026-02-27.parquet
+2026-07-15T14:44:27.866610+00:00	BLIND_CACHE symbol=USAR date=2026-03-02 rows=1062 sha256=0635e5d353e9a9bc1e396da548e816afb494e218fb35f0fcab37cb7c3d80aae2 already_cached=false path=.cache/chains/USAR_2026-03-02.parquet
+2026-07-15T14:44:28.707772+00:00	BLIND_CACHE symbol=USAR date=2026-03-03 rows=1062 sha256=fcd1e7dc5f3f3ccdcf5ebf430431c9503bd4a2d6b3fdb761af29eea5ab078359 already_cached=false path=.cache/chains/USAR_2026-03-03.parquet
+2026-07-15T14:44:29.365857+00:00	BLIND_CACHE symbol=USAR date=2026-03-04 rows=1062 sha256=68ac3db9efccc1c8ed3bd2d2542bc227472bd6c4b6ae46e95c7abb74865c23d9 already_cached=false path=.cache/chains/USAR_2026-03-04.parquet
+2026-07-15T14:44:30.092734+00:00	BLIND_CACHE symbol=USAR date=2026-03-05 rows=1062 sha256=536243c20ad6fee2adac3156608f4c1c2fe9a7b595b123f5a1045d4fb9c9cd1c already_cached=false path=.cache/chains/USAR_2026-03-05.parquet
+2026-07-15T14:44:30.600850+00:00	BLIND_CACHE symbol=USAR date=2026-03-06 rows=1104 sha256=a860048a8605525ffaff20aeb107b7f381c1b1e4a4daaad8461ef600bfe0ed5a already_cached=false path=.cache/chains/USAR_2026-03-06.parquet
+2026-07-15T14:44:31.197488+00:00	BLIND_CACHE symbol=USAR date=2026-03-09 rows=1006 sha256=f4408b7db5ee91befedf8f4b545c99b915228600c856b5496dd42e4a70531927 already_cached=false path=.cache/chains/USAR_2026-03-09.parquet
+2026-07-15T14:44:31.662969+00:00	BLIND_CACHE symbol=USAR date=2026-03-10 rows=1014 sha256=eda962d840e5b6caec345d2d866ff9ebc232fa4bea4cbae9c764229c8cb236ec already_cached=false path=.cache/chains/USAR_2026-03-10.parquet
+2026-07-15T14:44:32.255638+00:00	BLIND_CACHE symbol=USAR date=2026-03-11 rows=1014 sha256=7f4199fad9a2db85107f12a89c3da1d11297363c80f544915411b01318d1ef56 already_cached=false path=.cache/chains/USAR_2026-03-11.parquet
+2026-07-15T14:44:32.800273+00:00	BLIND_CACHE symbol=USAR date=2026-03-12 rows=1014 sha256=19201b36d3f734895b67ec8f5cb832f683c1d7c9b61ef4ff148d5c8caf4cbc9b already_cached=false path=.cache/chains/USAR_2026-03-12.parquet
+2026-07-15T14:44:34.880896+00:00	BLIND_CACHE symbol=USAR date=2026-03-13 rows=1056 sha256=0f2dc49174c7a5ba5721dc7625aae68f90dad6ae201e3c9f9d061ceee3172881 already_cached=false path=.cache/chains/USAR_2026-03-13.parquet
+2026-07-15T14:44:35.553981+00:00	BLIND_CACHE symbol=USAR date=2026-03-16 rows=976 sha256=ee27f3cdc46fe6d63dc17d068d85dfdefd64436051a02f2de3e60e8c1ee229c8 already_cached=false path=.cache/chains/USAR_2026-03-16.parquet
+2026-07-15T14:44:36.165308+00:00	BLIND_CACHE symbol=USAR date=2026-03-17 rows=980 sha256=b2cd3c476ef3721e78ed75541a805d1715552263924cccab9bf65afd9dd19970 already_cached=false path=.cache/chains/USAR_2026-03-17.parquet
+2026-07-15T14:44:37.101455+00:00	BLIND_CACHE symbol=USAR date=2026-03-18 rows=980 sha256=7c853e631fa8634e9415ad9a4efcd466f0b60aec53e99e4255225c60c7461637 already_cached=false path=.cache/chains/USAR_2026-03-18.parquet
+2026-07-15T14:44:38.440507+00:00	BLIND_CACHE symbol=USAR date=2026-03-19 rows=980 sha256=1a79ef572145e54548d953b22a37b51754ea7b4393d44735659f3d46c0a0a01c already_cached=false path=.cache/chains/USAR_2026-03-19.parquet
+2026-07-15T14:44:38.928171+00:00	BLIND_CACHE symbol=USAR date=2026-03-20 rows=980 sha256=66d13b011a20a671ac1d3d916cd738fe5f29fb608a6e950d09ff6c25c21a6597 already_cached=false path=.cache/chains/USAR_2026-03-20.parquet
+2026-07-15T14:44:39.401021+00:00	BLIND_CACHE symbol=USAR date=2026-03-23 rows=850 sha256=c3a763fa18a785ba1614355c8972e538726142ad04a5f6742410b8eeaed77bba already_cached=false path=.cache/chains/USAR_2026-03-23.parquet
+2026-07-15T14:44:39.875739+00:00	BLIND_CACHE symbol=USAR date=2026-03-24 rows=884 sha256=8a698ee1f4e49670920acf5c9ed90ca908158ecb3fb4cddb4dfa55a83d8fe2d1 already_cached=false path=.cache/chains/USAR_2026-03-24.parquet
+2026-07-15T14:44:40.604473+00:00	BLIND_CACHE symbol=USAR date=2026-03-25 rows=884 sha256=0a8c3cce8459f30856877122c444561bef583e718bf05299b40feb7f0ab4570b already_cached=false path=.cache/chains/USAR_2026-03-25.parquet
+2026-07-15T14:44:41.467866+00:00	BLIND_CACHE symbol=USAR date=2026-03-26 rows=884 sha256=67af6f671f7dafc71556add741a00342ab121ec9a01b382e57760d73550ddf2f already_cached=false path=.cache/chains/USAR_2026-03-26.parquet
+2026-07-15T14:44:42.476338+00:00	BLIND_CACHE symbol=USAR date=2026-03-27 rows=926 sha256=2e676a30298e1b7dcae1a953763e79072383d7282a6686b3fd2a5bb2f66b5ba3 already_cached=false path=.cache/chains/USAR_2026-03-27.parquet
+2026-07-15T14:44:42.874243+00:00	BLIND_CACHE symbol=USAR date=2026-03-30 rows=856 sha256=de974e2fdd2c0c923c201e2dc4698f3f2c89262d4d9a79ec94a135f044cdac02 already_cached=false path=.cache/chains/USAR_2026-03-30.parquet
+2026-07-15T14:44:43.576473+00:00	BLIND_CACHE symbol=USAR date=2026-03-31 rows=866 sha256=15df2964a64c402ca61bdd1827966181e925ffae2ef7bbf680b848bac558edf9 already_cached=false path=.cache/chains/USAR_2026-03-31.parquet
+2026-07-15T14:44:44.134469+00:00	BLIND_CACHE symbol=USAR date=2026-04-01 rows=866 sha256=90772810a39d848b46ef24ef5a433061c78ed16f9ca6948710f5157b36f2b23e already_cached=false path=.cache/chains/USAR_2026-04-01.parquet
+2026-07-15T14:44:44.793135+00:00	BLIND_CACHE symbol=USAR date=2026-04-02 rows=866 sha256=653522942a4334b20b36a9384c43d3facdced16345ad183c07ec7d3c3834cef8 already_cached=false path=.cache/chains/USAR_2026-04-02.parquet
+2026-07-15T14:44:45.609822+00:00	BLIND_CACHE symbol=USAR date=2026-04-06 rows=820 sha256=b8412f5963de693132bf3a8bd31eb9345e45e2b6b58e7f02d25634ab114f4b3a already_cached=false path=.cache/chains/USAR_2026-04-06.parquet
+2026-07-15T14:44:46.854006+00:00	BLIND_CACHE symbol=USAR date=2026-04-07 rows=856 sha256=13c9d76aae92af09063512d619937bd44ec5c8efb6204400ff301e509c7aa29e already_cached=false path=.cache/chains/USAR_2026-04-07.parquet
+2026-07-15T14:44:47.687035+00:00	BLIND_CACHE symbol=USAR date=2026-04-08 rows=856 sha256=0d24719cb075336e922b465d756272580549a388089dbc1832bd69a47e6ca677 already_cached=false path=.cache/chains/USAR_2026-04-08.parquet
+2026-07-15T14:44:48.283128+00:00	BLIND_CACHE symbol=USAR date=2026-04-09 rows=856 sha256=7df6f245df4b6a394df5e2a4bbcd24aff190869636576ddbfa2b02ee50c561b8 already_cached=false path=.cache/chains/USAR_2026-04-09.parquet
+2026-07-15T14:44:48.909825+00:00	BLIND_CACHE symbol=USAR date=2026-04-10 rows=898 sha256=c248efcc8f381ce99668397e732ce5954f61efd829326ebe3ed7d48c93cb88ab already_cached=false path=.cache/chains/USAR_2026-04-10.parquet
+2026-07-15T14:44:49.448186+00:00	BLIND_CACHE symbol=USAR date=2026-04-13 rows=840 sha256=a652635667aa7638d66842f3fafb7cb88c72eff5e758c821f88937488dbae217 already_cached=false path=.cache/chains/USAR_2026-04-13.parquet
+2026-07-15T14:44:50.369777+00:00	BLIND_CACHE symbol=USAR date=2026-04-14 rows=854 sha256=cbc6af060e11f3feffefc63de11a3418b07cf57cde6f95d8fa7f295bd6c71b31 already_cached=false path=.cache/chains/USAR_2026-04-14.parquet
+2026-07-15T14:44:51.112725+00:00	BLIND_CACHE symbol=USAR date=2026-04-15 rows=854 sha256=c7a6ec4afafa8d9e8b756db4cb3cef53283c780792c90288a337ac111f843afd already_cached=false path=.cache/chains/USAR_2026-04-15.parquet
+2026-07-15T14:44:52.512661+00:00	BLIND_CACHE symbol=USAR date=2026-04-16 rows=854 sha256=e8e1834028a751ecba608ce17791a53f2433e6d7aaaec31ea0443de4b5a82aa0 already_cached=false path=.cache/chains/USAR_2026-04-16.parquet
+2026-07-15T14:44:52.927985+00:00	BLIND_CACHE symbol=USAR date=2026-04-17 rows=888 sha256=a0a85f1030cbd50226fc2380e2251713f8536b21e2eaf1b0405cce269ad63bc3 already_cached=false path=.cache/chains/USAR_2026-04-17.parquet
+2026-07-15T14:44:53.284130+00:00	BLIND_CACHE symbol=USAR date=2026-04-20 rows=776 sha256=c5fa86f02f49ad110b0cd50cc33b6d711203258b7dd1f5e1a073fd79143d6484 already_cached=false path=.cache/chains/USAR_2026-04-20.parquet
+2026-07-15T14:44:54.191350+00:00	BLIND_CACHE symbol=USAR date=2026-04-21 rows=816 sha256=4aca217029e04ef8152f83b260acfe6d61a894aefae091021f7a1cd08ff04a7a already_cached=false path=.cache/chains/USAR_2026-04-21.parquet
+2026-07-15T14:44:54.743496+00:00	BLIND_CACHE symbol=USAR date=2026-04-22 rows=816 sha256=774c92c6c569b3bf06325aca253bcc5a48810794dd06689eeed93eef7893d4d3 already_cached=false path=.cache/chains/USAR_2026-04-22.parquet
+2026-07-15T14:44:55.354569+00:00	BLIND_CACHE symbol=USAR date=2026-04-23 rows=816 sha256=b7162ec48a219439c0bf2c501096976a89ae394f8f71354b548ade48adeaf0fc already_cached=false path=.cache/chains/USAR_2026-04-23.parquet
+2026-07-15T14:44:56.332777+00:00	BLIND_CACHE symbol=USAR date=2026-04-24 rows=960 sha256=62f1fe1ea55204534c537f8ec611cefee7322afa0289c33b49bd4f2fc67efc04 already_cached=false path=.cache/chains/USAR_2026-04-24.parquet
+2026-07-15T14:44:57.008352+00:00	BLIND_CACHE symbol=USAR date=2026-04-27 rows=966 sha256=1cf25f34655977757e05db7c502ee099a3bf7ba1b59abee55aaebe24684b2d4e already_cached=false path=.cache/chains/USAR_2026-04-27.parquet
+2026-07-15T14:44:57.738360+00:00	BLIND_CACHE symbol=USAR date=2026-04-28 rows=966 sha256=3a3564810d9de083b9a85da4d0080780e660387414ad06e0e1e47f1778913e71 already_cached=false path=.cache/chains/USAR_2026-04-28.parquet
+2026-07-15T14:44:58.519950+00:00	BLIND_CACHE symbol=USAR date=2026-04-29 rows=966 sha256=98ab7323739f27e267b6a16c3bc8a876062003f2b633bc947c5cb4d5d738a9d2 already_cached=false path=.cache/chains/USAR_2026-04-29.parquet
+2026-07-15T14:44:59.096565+00:00	BLIND_CACHE symbol=USAR date=2026-04-30 rows=966 sha256=b79f484d8cef53dc0ac60dd0e0795eeb530f2b73a641c8eae0cb503291566f21 already_cached=false path=.cache/chains/USAR_2026-04-30.parquet
+2026-07-15T14:44:59.569134+00:00	BLIND_CACHE symbol=USAR date=2026-05-01 rows=1008 sha256=bf8824d9fb35f5c08b19e1d0829a17bcaa32c3a9e3229f583a5811f884619680 already_cached=false path=.cache/chains/USAR_2026-05-01.parquet
+2026-07-15T14:45:00.585596+00:00	BLIND_CACHE symbol=USAR date=2026-05-04 rows=942 sha256=4bdae85b3297c8e7ac2cc17acb18d6f8ee7b14efc73eb1200f9800e937182e99 already_cached=false path=.cache/chains/USAR_2026-05-04.parquet
+2026-07-15T14:45:01.141660+00:00	BLIND_CACHE symbol=USAR date=2026-05-05 rows=962 sha256=62aa7dda9d87798f96770c5de368d0673270593fc0c20776d908153860897861 already_cached=false path=.cache/chains/USAR_2026-05-05.parquet
+2026-07-15T14:45:01.669534+00:00	BLIND_CACHE symbol=USAR date=2026-05-06 rows=962 sha256=2cb3e6a7c0297e0b03859b689e9f84457284d5e28f6f3bec15dd76963b2e94e3 already_cached=false path=.cache/chains/USAR_2026-05-06.parquet
+2026-07-15T14:45:02.132602+00:00	BLIND_CACHE symbol=USAR date=2026-05-07 rows=962 sha256=5bed0b6ec6b349c188e71d64cfa5d85825e9b7e22567f9a15bfdfa3219db9e96 already_cached=false path=.cache/chains/USAR_2026-05-07.parquet
+2026-07-15T14:45:02.642973+00:00	BLIND_CACHE symbol=USAR date=2026-05-08 rows=1004 sha256=7d1be27b0f2dc369aee4c83b13714990f113de6aa18d1c34f53b6cf5713543cc already_cached=false path=.cache/chains/USAR_2026-05-08.parquet
+2026-07-15T14:45:03.111785+00:00	BLIND_CACHE symbol=USAR date=2026-05-11 rows=926 sha256=8ba0fee7b3092a9b2a0caa516f5588df2c4e4bd25fae414a34d840878d65a00f already_cached=false path=.cache/chains/USAR_2026-05-11.parquet
+2026-07-15T14:45:03.773951+00:00	BLIND_CACHE symbol=USAR date=2026-05-12 rows=952 sha256=e96c8123b0a8758dd2ef25bb198c8df0a7b9e41a354c20f9259d4dd1a4a44ae7 already_cached=false path=.cache/chains/USAR_2026-05-12.parquet
+2026-07-15T14:45:04.308014+00:00	BLIND_CACHE symbol=USAR date=2026-05-13 rows=960 sha256=83316692191d82e7238a1f987458368d82711fc61e7db8956fdfc632ac5915ad already_cached=false path=.cache/chains/USAR_2026-05-13.parquet
+2026-07-15T14:45:04.755298+00:00	BLIND_CACHE symbol=USAR date=2026-05-14 rows=960 sha256=ddc352b16adaff3680221cf9ce819b2529201c150ebaf2cb7810fb769d3b58fb already_cached=false path=.cache/chains/USAR_2026-05-14.parquet
+2026-07-15T14:45:05.646036+00:00	BLIND_CACHE symbol=USAR date=2026-05-15 rows=996 sha256=545e4e80b7ae141052b90356fe7201407f007a50ee983cfa8af70454e0c2c51c already_cached=false path=.cache/chains/USAR_2026-05-15.parquet
+2026-07-15T14:45:08.316994+00:00	BLIND_CACHE symbol=USAR date=2026-05-18 rows=874 sha256=c2d640b50f770dec2402b9d7fd1320887e38adf594dc144d8c29596f7f8ab990 already_cached=false path=.cache/chains/USAR_2026-05-18.parquet
+2026-07-15T14:45:08.824971+00:00	BLIND_CACHE symbol=USAR date=2026-05-19 rows=900 sha256=120e9fffbbc6a710b8242abe649c66fa055c2001c8e950f5e28b54a313442951 already_cached=false path=.cache/chains/USAR_2026-05-19.parquet
+2026-07-15T14:45:09.805560+00:00	BLIND_CACHE symbol=USAR date=2026-05-20 rows=926 sha256=693d26fb0765fd576b8a2c3e642c8968b3fa37e923c2a2bdc080f15692798fa3 already_cached=false path=.cache/chains/USAR_2026-05-20.parquet
+2026-07-15T14:45:10.624717+00:00	BLIND_CACHE symbol=USAR date=2026-05-21 rows=926 sha256=f5a25db68fe3af58c31ccd3dbebba6f0667799f49f6c162dd014c68452248c55 already_cached=false path=.cache/chains/USAR_2026-05-21.parquet
+2026-07-15T14:45:11.509892+00:00	BLIND_CACHE symbol=USAR date=2026-05-22 rows=968 sha256=12a00af29901a7f20f92c6f01a9f31886a3328808d25bb2fcbf384b04880fdca already_cached=false path=.cache/chains/USAR_2026-05-22.parquet
+2026-07-15T14:45:12.389761+00:00	BLIND_CACHE symbol=USAR date=2026-05-26 rows=876 sha256=2cd84fb26d9bad8bfc94cd25a83a64bfb4225b6db92e7b8f421da6cc5af79522 already_cached=false path=.cache/chains/USAR_2026-05-26.parquet
+2026-07-15T14:45:12.967853+00:00	BLIND_CACHE symbol=USAR date=2026-05-27 rows=878 sha256=f59e7bc1f4bcb0f4875eac267f3790a30a6baa6d3ceb12e102938e892e2e1361 already_cached=false path=.cache/chains/USAR_2026-05-27.parquet
+2026-07-15T14:45:13.662467+00:00	BLIND_CACHE symbol=USAR date=2026-05-28 rows=950 sha256=cadc6e29bb10c23e862c398e2d439dad393046ec8aac2aa092dfd0dbd039affa already_cached=false path=.cache/chains/USAR_2026-05-28.parquet
+2026-07-15T14:45:14.206989+00:00	BLIND_CACHE symbol=USAR date=2026-05-29 rows=992 sha256=c8fcd96e4a25fc073822897955b2ed47fa89157a6af63d21a9c7b6d53e3b8baf already_cached=false path=.cache/chains/USAR_2026-05-29.parquet
+2026-07-15T14:45:14.758586+00:00	BLIND_CACHE symbol=USAR date=2026-06-01 rows=910 sha256=8af30dc21b9f2f9cb07585a91773dd0c24482e70640334b9122bb60842112e9b already_cached=false path=.cache/chains/USAR_2026-06-01.parquet
+2026-07-15T14:45:15.850313+00:00	BLIND_CACHE symbol=USAR date=2026-06-02 rows=910 sha256=725d94e62252af4c39910c91cc08d6ebdff207de1fe43dd7812bf5f163b43d88 already_cached=false path=.cache/chains/USAR_2026-06-02.parquet
+2026-07-15T14:45:16.572019+00:00	BLIND_CACHE symbol=USAR date=2026-06-03 rows=910 sha256=a7e601fff4046f6628c9471eb79897409254a53beadf62c295729b954489d1a3 already_cached=false path=.cache/chains/USAR_2026-06-03.parquet
+2026-07-15T14:45:17.337995+00:00	BLIND_CACHE symbol=USAR date=2026-06-04 rows=928 sha256=43596ba20cc936fb3dcd8635a98b449263c30fc863f9c531aa48a522aec9b372 already_cached=false path=.cache/chains/USAR_2026-06-04.parquet
+2026-07-15T14:45:18.005510+00:00	BLIND_CACHE symbol=USAR date=2026-06-05 rows=970 sha256=c56b74f1dabf02d3b6f54e239a64b3a5931d9c39086d678e017cd39a72de6346 already_cached=false path=.cache/chains/USAR_2026-06-05.parquet
+2026-07-15T14:45:18.711313+00:00	BLIND_CACHE symbol=USAR date=2026-06-08 rows=872 sha256=e61fad743d108fcf74c110ebf5197b95ea9da4dbfae74ebda5f53201f1250681 already_cached=false path=.cache/chains/USAR_2026-06-08.parquet
+2026-07-15T14:45:19.586979+00:00	BLIND_CACHE symbol=USAR date=2026-06-09 rows=900 sha256=4ce2d61175238211891724ec523b976b00e2cd5e158559cc65908828a0fe1883 already_cached=false path=.cache/chains/USAR_2026-06-09.parquet
+2026-07-15T14:45:20.237800+00:00	BLIND_CACHE symbol=USAR date=2026-06-10 rows=900 sha256=eb4407178715f2c503d0204eeb37128663c56acfc852c36ffef7ce36d1d45009 already_cached=false path=.cache/chains/USAR_2026-06-10.parquet
+2026-07-15T14:45:20.684397+00:00	BLIND_CACHE symbol=USAR date=2026-06-11 rows=908 sha256=6924c69d3041dcc28863ac384b3950319b72e73618e066ab8311f43120340fac already_cached=false path=.cache/chains/USAR_2026-06-11.parquet
+2026-07-15T14:45:22.264844+00:00	BLIND_CACHE symbol=USAR date=2026-06-12 rows=950 sha256=768c299f1c8702b985233ec660d5538b980271af18e80c3d7b2edb2c39cfdb2b already_cached=false path=.cache/chains/USAR_2026-06-12.parquet
+2026-07-15T14:45:22.853810+00:00	BLIND_CACHE symbol=USAR date=2026-06-15 rows=870 sha256=75409f880f72c6c0cfc9228a55a30394eccd1123382aa4a19af0694d28db93f6 already_cached=false path=.cache/chains/USAR_2026-06-15.parquet
+2026-07-15T14:45:24.707244+00:00	BLIND_CACHE symbol=USAR date=2026-06-16 rows=870 sha256=2632722736ed9021683a9138c82c9564ed06a5423345db11d09f2cf2752e1b91 already_cached=false path=.cache/chains/USAR_2026-06-16.parquet
+2026-07-15T14:45:25.363696+00:00	BLIND_CACHE symbol=USAR date=2026-06-17 rows=870 sha256=705f4a658d47e63ede4c6cb23432380f1a37331a22d1140386d48c401e0a53d8 already_cached=false path=.cache/chains/USAR_2026-06-17.parquet
+2026-07-15T14:45:25.723037+00:00	BLIND_CACHE symbol=USAR date=2026-06-18 rows=870 sha256=ad93181040becde276c162f3b902a55aa013e656654d3a9aceabd439f770dd3a already_cached=false path=.cache/chains/USAR_2026-06-18.parquet
+2026-07-15T14:45:26.456579+00:00	BLIND_CACHE symbol=USAR date=2026-06-22 rows=780 sha256=34f7f849a7c5f1d88ee498b4cbc071dd7e68e0c9a88ae507b8132b4e8b00fb68 already_cached=false path=.cache/chains/USAR_2026-06-22.parquet
+2026-07-15T14:45:26.962173+00:00	BLIND_CACHE symbol=USAR date=2026-06-23 rows=824 sha256=aa2e504baf9685e7c29dd15bd7cb5488dc94630f83e544915bdf553c36585db6 already_cached=false path=.cache/chains/USAR_2026-06-23.parquet
+2026-07-15T14:45:27.563212+00:00	BLIND_CACHE symbol=USAR date=2026-06-24 rows=824 sha256=e50f603c4226ded290f2ad8467e0023bf28c7d45ce46166c40b686580f1b9f20 already_cached=false path=.cache/chains/USAR_2026-06-24.parquet
+2026-07-15T14:45:27.941255+00:00	BLIND_CACHE symbol=USAR date=2026-06-25 rows=824 sha256=4465c3115ee186fb2499916a3610b099db4066bc20eb08500b26426c778b560f already_cached=false path=.cache/chains/USAR_2026-06-25.parquet
+2026-07-15T14:45:28.370909+00:00	BLIND_CACHE symbol=USAR date=2026-06-26 rows=866 sha256=cdeb71c4b4e0ca108975086eab5cb112c1ec4c00d6e0066d408db5410697d3c6 already_cached=false path=.cache/chains/USAR_2026-06-26.parquet
+2026-07-15T14:45:28.851838+00:00	BLIND_CACHE symbol=USAR date=2026-06-29 rows=784 sha256=a6a74fb7c4c190b5d571987439a723c0b47edb559b4b37ddb760c8f91b1367c7 already_cached=false path=.cache/chains/USAR_2026-06-29.parquet
+2026-07-15T14:45:29.219336+00:00	BLIND_CACHE symbol=USAR date=2026-06-30 rows=786 sha256=5f6ca6806713d73c5a5b7cac628cde1f22c697ec4248e324af5c719265bcc508 already_cached=false path=.cache/chains/USAR_2026-06-30.parquet
+2026-07-15T14:45:32.066227+00:00	BLIND_CACHE symbol=USAR date=2026-07-01 rows=786 sha256=178cae8e78a9e30d44d31c0dfaf9aa11aba40399aa2db746da35b57043379cd9 already_cached=false path=.cache/chains/USAR_2026-07-01.parquet
+2026-07-15T14:45:32.992453+00:00	BLIND_CACHE symbol=USAR date=2026-07-02 rows=786 sha256=c18b0fecef33f03db96367a6586b7a42cd2bd2e8e03a6dd77b6566fbdb50d5d3 already_cached=false path=.cache/chains/USAR_2026-07-02.parquet
+2026-07-15T14:45:33.355883+00:00	BLIND_CACHE symbol=USAR date=2026-07-06 rows=736 sha256=dcf8e88471fe5a3ba40ea13a71f4652a231a049ec3a2ff7e31405eccc9840403 already_cached=false path=.cache/chains/USAR_2026-07-06.parquet
+2026-07-15T14:45:33.960869+00:00	BLIND_CACHE symbol=USAR date=2026-07-07 rows=766 sha256=defbf333aaf3d023b7e01cae7fde248e10a698349770343889706a1b7732aebd already_cached=false path=.cache/chains/USAR_2026-07-07.parquet
+2026-07-15T14:45:34.499273+00:00	BLIND_CACHE symbol=USAR date=2026-07-08 rows=774 sha256=595a5500fc3c11aa9ef7a1fe3fa3e1bbb968c24c3d7d2fb7c87d1f884a05550f already_cached=false path=.cache/chains/USAR_2026-07-08.parquet
+2026-07-15T14:45:34.976765+00:00	BLIND_CACHE symbol=USAR date=2026-07-09 rows=778 sha256=c0649cb6f9ff5e77e420396e46e9df0eb869a2ab8432f2f0920b70c592ee38dc already_cached=false path=.cache/chains/USAR_2026-07-09.parquet
+2026-07-15T14:45:35.417970+00:00	BLIND_CACHE symbol=USAR date=2026-07-10 rows=820 sha256=0d80df37bc677ad18ea421d9a5b08c4d840b0d2e6aa811840842eaebccfb77a5 already_cached=false path=.cache/chains/USAR_2026-07-10.parquet
+2026-07-15T14:45:37.163555+00:00	BLIND_CACHE symbol=USAR date=2026-07-14 rows=766 sha256=9d7bfdeff7596abc7b8eed94ff4112cbbf7ae34426ff26447c449497b40f2c59 already_cached=false path=.cache/chains/USAR_2026-07-14.parquet
+2026-07-15T14:45:37.164613+00:00	DATA_PULL_BACKFILL 2026-07-15: USAR base option-chain backfill (H7_AMENDMENT_V1_6 activation, owner-authorized). window=2023-01-03..2026-07-14 (today 2026-07-15 excluded). USA Rare Earth listed 2025 -> ENTIRELY OOS (> IN_SAMPLE_END 2022-12-31): all 884 sessions fetched via blind_cache_chain, NO get_eod_chain, no in-sample look. fetched=317 gaps=566 skipped_cached=1 (pre-listing 2023-24 days are skip-and-logged CACHE_GAPs). Config boundaries unchanged; OOS seal untouched.
+2026-07-15T14:48:37.244538+00:00	DATA_PULL_OHLCV 2026-07-15: Yahoo OHLCV refresh USAR rows=751 path=.cache/underlying_ohlcv/USAR.parquet
+2026-07-15T14:48:37.307746+00:00	DATA_PULL 2026-07-15: USAR underlying closes + OHLCV daily bars via free keyless Yahoo v8 chart API (provider decision 2026-07-04; ThetaData stock history + AlphaVantage full history are paid tiers; Stooq blocks scripts). Blind pull, no prices surfaced. closes=751 rows 2023-07-17..2026-07-14; ohlcv=751 rows 2023-07-17..2026-07-14. USA Rare Earth options+equity history begins 2025 (SPAC merger); pre-listing sessions absent by construction. Split registry no-op for USAR (no known splits). Supports the H7_AMENDMENT_V1_6 activation (drawdown/RV/coil signal math + data-gate close check).
+2026-07-15T14:52:09.533292+00:00	USAR_ACTIVATION 2026-07-15 (owner-authorized): USAR removed from H7_EXCLUDED and activated into the 14-name H7 forward-watch universe (recent_topup --scope h7 / h7_data_gate / h7_watch / qm_watch). Precondition met -- base option-chain cache built this session: 318 files spanning 2025-04-07..2026-07-14 (USAR options first listed 2025-04-07; 566 earlier sessions 2023-01..2025-04 are pre-options-listing gaps, skip-and-logged as CACHE_GAPs; see DATA_PULL_BACKFILL 2026-07-15) + Yahoo underlying closes/OHLCV 751 rows 2023-07-17..2026-07-14 (see DATA_PULL 2026-07-15). Whole-universe h7_data_gate GO as-of 2026-07-14 (eval session 2026-07-13): 14/14 GO [EXACT_SESSION_GO], artifact reports/h7_data_gate/2026-07-13.json. chain_cache_manifest.txt regenerated (+318 USAR). Scope tests updated 13->14 (test_config_h7, test_h7_source_health, test_h7_data_gate, test_recent_topup). CAVEATS: (1) USAR H7-admission breadth is MARGINAL (6-of-5 NTM contracts on the probe session) -> VST/CEG-grade fills, some days may under-admit; (2) USAR source health = UNHEALTHY (no earnings gating assertion yet) -> watcher per-name fail-closed gate entry-bans USAR until earnings data added (same posture as IREN/CRWV) -- watched but cannot fire an entry; (3) USAR closes begin 2023-07 = pre-merger SPAC (IPXX) history on the ticker; the flat pre-2025 SPAC series can distort H7b RV/coil percentile math. Config boundaries unchanged; OOS seal untouched; USAR NOT in the frozen 2026-07-25 cutoff scope.
