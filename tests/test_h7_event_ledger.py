@@ -559,12 +559,16 @@ class TestCrashInjection(LedgerBase):
     def test_darwin_durable_sync_uses_f_fullfsync(self):
         from unittest import mock
 
+        # create=True: F_FULLFSYNC is a Darwin-only constant (value 51);
+        # patching it in keeps this Darwin-simulation test runnable on the
+        # Linux CI runners, where the fcntl module does not define it.
         with mock.patch.object(el.sys, "platform", "darwin"), \
+             mock.patch.object(el.fcntl, "F_FULLFSYNC", 51, create=True), \
              mock.patch.object(el.os, "fsync") as fsync, \
              mock.patch.object(el.fcntl, "fcntl") as fcntl_call:
             el._durable_sync(123)
         fsync.assert_called_once_with(123)
-        fcntl_call.assert_called_once_with(123, el.fcntl.F_FULLFSYNC)
+        fcntl_call.assert_called_once_with(123, 51)
 
     def test_non_darwin_durable_sync_uses_fsync_only(self):
         from unittest import mock
@@ -579,7 +583,11 @@ class TestCrashInjection(LedgerBase):
     def test_darwin_fullsync_failure_never_writes_head(self):
         from unittest import mock
 
+        # create=True keeps the Darwin constant resolvable on Linux CI (the
+        # code evaluates fcntl.F_FULLFSYNC as an argument before the mocked
+        # fcntl call raises).
         with mock.patch.object(el.sys, "platform", "darwin"), \
+             mock.patch.object(el.fcntl, "F_FULLFSYNC", 51, create=True), \
              mock.patch.object(el.fcntl, "fcntl", side_effect=OSError("fullsync boom")):
             with self.assertRaisesRegex(OSError, "fullsync boom"):
                 el.append_event(_ev(), base_dir=self.base, clock=self._clock())
