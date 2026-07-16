@@ -22,12 +22,25 @@ note() { SUMMARY="${SUMMARY}$1\n"; echo ">>> $1"; }
 
 echo "=== daily ritual ${STAMP} ==="
 
-# Step 0 — recent-day top-up (skippable iff ThetaData sub inactive; the
-# terminal is auto-launched by the data layer when reachable).
-if "$UV" run python data/recent_topup.py --scope h7 --refresh-closes; then
+# Preflight — ThetaData auth. PATH C (data/thetadata_adapter.py) uses a direct
+# API key over HTTP against the remote MDDS: NO local ThetaTerminal process,
+# no port to start. The only unattended dependency is THETADATA_API_KEY
+# resolving from .env — which load_dotenv() reads relative to this working
+# directory (set above by `cd $REPO`). Surface a missing key LOUDLY rather
+# than letting the top-up fail into a silently stale board.
+if "$UV" run python -c 'from data.thetadata_adapter import _resolve_api_key; _resolve_api_key()' 2>/dev/null; then
+  KEY_OK=1
+else
+  KEY_OK=0
+  note "ThetaData API key: NOT RESOLVED from .env — top-up cannot fetch; board will be STALE"
+fi
+
+# Step 0 — recent-day top-up (fetches yesterday's finalized EOD via the keyed
+# HTTP adapter; skips cleanly if the key is absent or the subscription lapsed).
+if [ "$KEY_OK" -eq 1 ] && "$UV" run python data/recent_topup.py --scope h7 --refresh-closes; then
   note "topup: OK (closes refreshed)"
 else
-  note "topup: FAILED/SKIPPED (sub inactive or terminal down) — running on cached data"
+  note "topup: FAILED/SKIPPED (no key or subscription lapsed) — running on cached data"
 fi
 
 # Step 1 — source health (run AND record; per-name ban, never blocks board).
