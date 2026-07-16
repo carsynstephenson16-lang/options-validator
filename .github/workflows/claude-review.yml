@@ -9,17 +9,27 @@ name: Claude PR Review
 #      in to your Max account):   claude setup-token
 #   3. Store it as a repo secret named CLAUDE_CODE_OAUTH_TOKEN:
 #      Settings -> Secrets and variables -> Actions -> New repository secret.
-# Until the secret exists the job fails fast (harmless). Usage counts against
-# your Max plan limits, not dollars. The token is long-lived but expires
-# eventually — re-run `claude setup-token` and update the secret if reviews stop.
+# Until the secret exists the job fails fast (harmless). The review's MODEL
+# compute counts against your Max plan (not dollars) — but GitHub Actions RUNNER
+# MINUTES are a SEPARATE GitHub quota that private repos draw down. If ALL
+# workflows stop firing (0 check-runs on a push), you are out of Actions minutes:
+# github.com/settings/billing -> Actions.
+#
+# Minute discipline: auto-review only when a PR is OPENED/REOPENED and touches
+# code (path filter below) — NOT on every push. Re-review on demand by commenting
+# "@claude" on the PR. This trades per-push reviews for far fewer runs/month.
 #
 # Alternative (zero-token): the managed Code Review service at
-# https://claude.ai/admin-settings/claude-code -> Code Review -> Setup, which
-# auto-reviews per-repo. If you enable that, delete this workflow.
+# https://claude.ai/admin-settings/claude-code -> Code Review -> Setup.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, reopened]
+    paths:
+      - '**/*.py'
+      - '**/*.plist'
+      - '.github/workflows/**'
+      - 'requirements.txt'
   issue_comment:
     types: [created]
 
