@@ -43,7 +43,7 @@ def load_occurred(symbol: str) -> list[tuple[str, str]]:
 
 
 def sane(chain: pd.DataFrame) -> pd.DataFrame:
-    return chain[(chain["bid"] > 0) & (chain["ask"] >= chain["bid"])].copy()
+    return chain.loc[(chain["bid"] > 0) & (chain["ask"] >= chain["bid"])].copy()
 
 
 def exp_dates(chain: pd.DataFrame) -> pd.Series:
@@ -63,11 +63,12 @@ def pick_bucket_exp(chain: pd.DataFrame, today: date, bucket) -> date | None:
 def atm_iv(chain: pd.DataFrame, expiration: date, spot: float) -> float:
     """Mean of C and P iv at the strike nearest spot (iv>0 rows only)."""
     s = sane(chain)
-    s = s[(exp_dates(s) == expiration) & (s["iv"] > 0)]
+    s = s.loc[(exp_dates(s) == expiration) & (s["iv"] > 0)]
     if s.empty:
         return float("nan")
-    kstar = s.iloc[(s["strike"] - spot).abs().argmin()]["strike"]
-    at = s[s["strike"] == kstar]
+    pos = int((s["strike"] - spot).abs().argmin())
+    kstar = s.iloc[pos]["strike"]
+    at = s.loc[s["strike"] == kstar]
     ivs = at["iv"].tolist()
     return float(np.mean(ivs)) if ivs else float("nan")
 
@@ -75,12 +76,13 @@ def atm_iv(chain: pd.DataFrame, expiration: date, spot: float) -> float:
 def atm_straddle_move(chain: pd.DataFrame, expiration: date, spot: float):
     """(straddle_mid/spot) at strike nearest spot; needs a C and a P."""
     s = sane(chain)
-    s = s[exp_dates(s) == expiration]
+    s = s.loc[exp_dates(s) == expiration]
     if s.empty:
         return float("nan")
-    kstar = s.iloc[(s["strike"] - spot).abs().argmin()]["strike"]
-    c = s[(s["strike"] == kstar) & (s["right"] == "C")]
-    p = s[(s["strike"] == kstar) & (s["right"] == "P")]
+    pos = int((s["strike"] - spot).abs().argmin())
+    kstar = s.iloc[pos]["strike"]
+    c = s.loc[(s["strike"] == kstar) & (s["right"] == "C")]
+    p = s.loc[(s["strike"] == kstar) & (s["right"] == "P")]
     if c.empty or p.empty:
         return float("nan")
     cmid = float((c["bid"].iloc[0] + c["ask"].iloc[0]) / 2)
@@ -96,7 +98,7 @@ def first_exp_after(chain: pd.DataFrame, d: date) -> date | None:
 def call_atm_row(chain: pd.DataFrame, expiration: date, spot: float):
     """Call on expiration with |delta| nearest 0.50 (for cost/IV proxy)."""
     s = sane(chain)
-    s = s[(exp_dates(s) == expiration) & (s["right"] == "C") & (s["iv"] > 0)]
+    s = s.loc[(exp_dates(s) == expiration) & (s["right"] == "C") & (s["iv"] > 0)]
     if s.empty:
         return None
     return s.loc[(s["delta"].abs() - 0.50).abs().idxmin()]
@@ -107,25 +109,25 @@ def h6_call_pick(chain: pd.DataFrame, today: date, bucket):
     ask<=1000, OI>=100, spread<=10%. Returns row or None."""
     lo, hi, _ = bucket
     s = sane(chain)
-    s = s[s["right"] == "C"].copy()
+    s = s.loc[s["right"] == "C"].copy()
     if s.empty:
         return None
     s["ed"] = exp_dates(s)
     s["dte"] = s["ed"].map(lambda e: (e - today).days)
-    s = s[(s["dte"] >= lo) & (s["dte"] <= hi)]
+    s = s.loc[(s["dte"] >= lo) & (s["dte"] <= hi)]
     # nearest monthly first (H6 uses monthlies); fall back to any if none
     monthlies = sorted(set(e for e in s["ed"] if is_monthly(e)))
     if monthlies:
-        s = s[s["ed"] == monthlies[0]]
+        s = s.loc[s["ed"] == monthlies[0]]
     else:
         eds = sorted(set(s["ed"]))
         if not eds:
             return None
-        s = s[s["ed"] == eds[0]]
-    s = s[(s["delta"] >= DELTA_LO) & (s["delta"] <= DELTA_HI)
-          & (s["ask"] <= MAX_ASK) & (s["open_interest"] >= MIN_OI)]
+        s = s.loc[s["ed"] == eds[0]]
+    s = s.loc[(s["delta"] >= DELTA_LO) & (s["delta"] <= DELTA_HI)
+              & (s["ask"] <= MAX_ASK) & (s["open_interest"] >= MIN_OI)]
     mid = (s["bid"] + s["ask"]) / 2
-    s = s[((s["ask"] - s["bid"]) / mid) <= MAX_SPREAD]
+    s = s.loc[((s["ask"] - s["bid"]) / mid) <= MAX_SPREAD]
     if s.empty:
         return None
     return s.loc[s["delta"].idxmax()]  # highest delta in band
@@ -133,8 +135,8 @@ def h6_call_pick(chain: pd.DataFrame, today: date, bucket):
 
 def mid_of(chain: pd.DataFrame, expiration: date, strike: float, right: str):
     s = sane(chain)
-    r = s[(exp_dates(s) == expiration) & (s["strike"] == strike)
-          & (s["right"] == right)]
+    r = s.loc[(exp_dates(s) == expiration) & (s["strike"] == strike)
+              & (s["right"] == right)]
     if r.empty:
         return None
     return float((r["bid"].iloc[0] + r["ask"].iloc[0]) / 2)
@@ -142,8 +144,8 @@ def mid_of(chain: pd.DataFrame, expiration: date, strike: float, right: str):
 
 def halfspread_pct_of(chain, expiration, strike, right):
     s = sane(chain)
-    r = s[(exp_dates(s) == expiration) & (s["strike"] == strike)
-          & (s["right"] == right)]
+    r = s.loc[(exp_dates(s) == expiration) & (s["strike"] == strike)
+              & (s["right"] == right)]
     if r.empty:
         return None
     b, a = float(r["bid"].iloc[0]), float(r["ask"].iloc[0])
@@ -155,7 +157,7 @@ def main():
     results = {}
     for sym in NAMES:
         closes = load_closes(sym, "2017-01-01", "2026-07-14", allow_oos=True)
-        sessions = list(closes.index)  # ISO strings, sorted
+        sessions: list[str] = list(closes.index)  # ISO strings, sorted
         spos = {d: i for i, d in enumerate(sessions)}
         chains = load_range(sym, "2018-01-01", "2026-07-14", allow_oos=True)
         events = load_occurred(sym)
@@ -248,7 +250,7 @@ def main():
             d15 = sess_off(-15)
             ch15 = chains[d15]
             today15 = date.fromisoformat(d15)
-            trace_ev = dict(event=ediso, timing=timing,
+            trace_ev: dict[str, object] = dict(event=ediso, timing=timing,
                             pre2023=(ediso <= "2022-12-31"))
             for label, bk in (("long", LONG_BUCKET), ("short", SHORT_BUCKET)):
                 pick = h6_call_pick(ch15, today15, bk)
