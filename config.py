@@ -496,6 +496,16 @@ PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's dir
 # ~1 quarter (91d) + reporting slack. LLM-asserted, presentation layer.
 EARNINGS_COVERAGE_DAYS = 98
 
+# Attractiveness-dashboard display universe (presentation layer ONLY —
+# owner-directed expansion 2026-07-16). DERIVED from the already-authorized
+# H7 forward scope, never a new list of its own: adding a ticker here
+# requires adding it to the H7 scope first (owner amendment). Must equal
+# options_researcher.h7_scope.watch_universe() exactly — a unittest pins the
+# equality. UNIVERSE above is untouched and still owns every backtest path.
+ATTRACTIVENESS_UNIVERSE = [
+    _s for _s in H7_WATCHLIST + H7_CORE_LONG_ONLY if _s not in H7_EXCLUDED
+]
+
 # ---------------------------------------------------------------------------
 # --- LIVE MISSION-CONTROL DASHBOARD (presentation/plumbing layer ONLY) ---
 # Spec: docs/superpowers/specs/2026-07-16-live-dashboard-design.md.
