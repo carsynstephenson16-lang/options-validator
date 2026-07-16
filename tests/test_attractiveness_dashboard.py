@@ -320,6 +320,411 @@ class DataAsOfBannerTests(unittest.TestCase):
         self.assertIn("DATA AS-OF no cached data CLOSE", html)
 
 
+class BbbRowsTests(unittest.TestCase):
+    # rv21 = sqrt(12) * 0.10 -> monthly_move = 0.10 exactly.
+    RV = math.sqrt(12) * 0.10
+
+    def test_put_bbb_math_k1(self):
+        card = {"strike": 95.0, "credit": 200.0, "dte": 30}
+        rows = ad.bbb_rows(card, "put", close=100.0, rv21=self.RV)
+        self.assertEqual([r["scenario"] for r in rows],
+                         ["bear", "base", "bull"])
+        by = {r["scenario"]: r for r in rows}
+        # dte=30 -> k=1 -> bear 90, base 100, bull 110
+        self.assertAlmostEqual(by["bear"]["price"], 90.0, 2)
+        self.assertAlmostEqual(by["base"]["price"], 100.0, 2)
+        self.assertAlmostEqual(by["bull"]["price"], 110.0, 2)
+        self.assertAlmostEqual(by["bear"]["pnl"], 200.0 - 500.0, 2)
+        self.assertAlmostEqual(by["base"]["pnl"], 200.0, 2)
+        self.assertAlmostEqual(by["bull"]["pnl"], 200.0, 2)
+
+    def test_k_scales_with_dte_and_caps_at_two(self):
+        card = {"strike": 95.0, "credit": 200.0, "dte": 120}
+        by = {r["scenario"]: r for r in
+              ad.bbb_rows(card, "put", close=100.0, rv21=self.RV)}
+        self.assertAlmostEqual(by["bear"]["price"], 80.0, 2)  # k=2
+        self.assertAlmostEqual(by["bull"]["price"], 120.0, 2)
+        card = {"strike": 95.0, "credit": 200.0, "dte": 300}  # sqrt(10)>2
+        by = {r["scenario"]: r for r in
+              ad.bbb_rows(card, "put", close=100.0, rv21=self.RV)}
+        self.assertAlmostEqual(by["bear"]["price"], 80.0, 2)  # still capped
+
+    def test_cc_bbb_math(self):
+        card = {"strike": 105.0, "credit": 150.0, "dte": 30}
+        by = {r["scenario"]: r for r in
+              ad.bbb_rows(card, "cc", close=100.0, rv21=self.RV)}
+        self.assertAlmostEqual(by["bear"]["pnl"], 150.0 - 1000.0, 2)
+        self.assertAlmostEqual(by["base"]["pnl"], 150.0, 2)
+        self.assertAlmostEqual(by["bull"]["pnl"], 150.0 + 500.0, 2)
+
+    def test_pmcc_bbb_math_and_note(self):
+        card = {"strike": 105.0, "credit": 100.0, "dte": 30,
+                "leaps_strike": 80.0, "leaps_cost": 2500.0}
+        by = {r["scenario"]: r for r in
+              ad.bbb_rows(card, "pmcc", close=100.0, rv21=self.RV)}
+        self.assertAlmostEqual(by["bull"]["pnl"],
+                               (105.0 - 80.0) * 100 - 2500.0 + 100.0, 2)
+        self.assertAlmostEqual(by["bear"]["pnl"], 100.0, 2)
+        self.assertIn("LEAPS value not counted", by["bear"]["note"])
+
+    def test_leaps_and_long_call_bbb_math(self):
+        card = {"strike": 90.0, "cost": 1500.0, "dte": 30}
+        for structure in ("leaps", "long_call"):
+            by = {r["scenario"]: r for r in
+                  ad.bbb_rows(card, structure, close=100.0, rv21=self.RV)}
+            self.assertAlmostEqual(by["bull"]["pnl"], 2000.0 - 1500.0, 2)
+            self.assertAlmostEqual(by["base"]["pnl"], 1000.0 - 1500.0, 2)
+            self.assertAlmostEqual(by["bear"]["pnl"], -1500.0, 2)
+
+    def test_bad_rv21_returns_empty_never_invents(self):
+        card = {"strike": 95.0, "credit": 200.0, "dte": 30}
+        for rv in (float("nan"), 0.0, -0.3):
+            self.assertEqual(ad.bbb_rows(card, "put", close=100.0, rv21=rv),
+                             [])
+
+    def test_unknown_structure_raises(self):
+        with self.assertRaises(ValueError):
+            ad.bbb_rows({"strike": 1.0, "dte": 30}, "bogus",
+                        close=1.0, rv21=self.RV)
+
+
+def _pick_card(strike, expiry, *, dte=45, lane_fields=None, grades=None,
+               rank_leader=False):
+    card = {"strike": strike, "expiry": expiry, "dte": dte,
+            "rank_leader": rank_leader, "grades": grades or {}}
+    card.update(lane_fields or {})
+    return card
+
+
+class SelectTopPicksTests(unittest.TestCase):
+    def _data(self):
+        tech_up = {"trend": "up", "breakout_20d": False,
+                   "ma_posture": "above_all"}
+        return {"symbols": [
+            {"symbol": "AAA", "close": 100.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01", "technicals": tech_up,
+             "groups": [
+                 {"kind": "put", "title": "P", "empty": None, "cards": [
+                     _pick_card(95.0, "2026-08-21", rank_leader=True,
+                                grades={"yield": "GREEN",
+                                        "liquidity": "GREEN"},
+                                lane_fields={"credit": 200.0,
+                                             "annualized_yield": 0.30}),
+                     _pick_card(90.0, "2026-09-18", dte=73,
+                                grades={"yield": "GREEN",
+                                        "liquidity": "GREEN"},
+                                lane_fields={"credit": 300.0,
+                                             "annualized_yield": 0.50}),
+                 ]},
+                 {"kind": "long_call", "title": "LC", "empty": None,
+                  "cards": [
+                      _pick_card(105.0, "2026-08-21",
+                                 grades={"fits_cap": "GREEN",
+                                         "liquidity": "GREEN"},
+                                 lane_fields={"cost": 500.0,
+                                              "breakeven": 110.0,
+                                              "breakeven_move": 0.10}),
+                  ]},
+             ]},
+            {"symbol": "BBB", "close": 50.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [
+                 {"kind": "put", "title": "P", "empty": None, "cards": [
+                     _pick_card(45.0, "2026-08-21",
+                                grades={"yield": "GREEN", "cushion": "GREEN",
+                                        "vrp_for_seller": "GREEN",
+                                        "liquidity": "RED"},
+                                rank_leader=True,
+                                lane_fields={"credit": 100.0,
+                                             "annualized_yield": 0.90}),
+                     _pick_card(44.0, "2026-08-21",
+                                grades={"yield": "GREEN",
+                                        "liquidity": "GREEN"},
+                                lane_fields={"credit": 80.0,
+                                             "annualized_yield": 0.20}),
+                 ]},
+             ]},
+        ]}
+
+    def test_liquidity_red_is_a_hard_veto(self):
+        picks = ad.select_top_picks(self._data())
+        vetoed = [p for p in picks
+                  if p["symbol"] == "BBB" and p["strike"] == 45.0]
+        self.assertEqual(vetoed, [])
+
+    def test_scoring_greens_leader_and_tech_bonus(self):
+        import config
+        picks = ad.select_top_picks(self._data())
+        by_key = {(p["symbol"], p["lane"], p["strike"]): p for p in picks}
+        # AAA put leader: 2 GREEN + leader bonus + sell-side tech bonus
+        leader = by_key[("AAA", "put", 95.0)]
+        self.assertEqual(leader["score"],
+                         2 * config.PICK_GREEN_POINT
+                         + config.PICK_RANK_LEADER_BONUS
+                         + config.PICK_TECH_BONUS)
+        # AAA long_call: 2 GREEN + buy-side tech bonus (trend up), no leader
+        lc = by_key[("AAA", "long_call", 105.0)]
+        self.assertEqual(lc["score"],
+                         2 * config.PICK_GREEN_POINT + config.PICK_TECH_BONUS)
+        # BBB has NO technicals snapshot -> no tech bonus for its put
+        bbb = by_key[("BBB", "put", 44.0)]
+        self.assertEqual(bbb["score"], 2 * config.PICK_GREEN_POINT)
+
+    def test_one_pick_per_symbol_lane(self):
+        picks = ad.select_top_picks(self._data(), n=10)
+        keys = [(p["symbol"], p["lane"]) for p in picks]
+        self.assertEqual(len(keys), len(set(keys)))
+        # only ONE AAA put survives even though two candidates score equally
+        self.assertEqual(sum(1 for k in keys if k == ("AAA", "put")), 1)
+
+    def test_sell_lane_tiebreak_prefers_higher_annualized_yield(self):
+        data = {"symbols": [
+            {"symbol": "AAA", "close": 100.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [{"kind": "put", "title": "P", "empty": None,
+                         "cards": [
+                             _pick_card(95.0, "2026-08-21",
+                                        grades={"yield": "GREEN"},
+                                        lane_fields={
+                                            "credit": 200.0,
+                                            "annualized_yield": 0.30}),
+                         ]}]},
+            {"symbol": "BBB", "close": 100.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [{"kind": "put", "title": "P", "empty": None,
+                         "cards": [
+                             _pick_card(95.0, "2026-08-21",
+                                        grades={"yield": "GREEN"},
+                                        lane_fields={
+                                            "credit": 200.0,
+                                            "annualized_yield": 0.60}),
+                         ]}]},
+        ]}
+        picks = ad.select_top_picks(data, n=2)
+        self.assertEqual(picks[0]["symbol"], "BBB")  # higher yield first
+
+    def test_buy_lane_tiebreak_prefers_smaller_breakeven_move(self):
+        def lc(sym, move):
+            return {"symbol": sym, "close": 100.0, "iv_rank": 0.5,
+                    "as_of": "2026-07-01",
+                    "groups": [{"kind": "long_call", "title": "LC",
+                                "empty": None,
+                                "cards": [_pick_card(
+                                    105.0, "2026-08-21",
+                                    grades={"fits_cap": "GREEN"},
+                                    lane_fields={"cost": 500.0,
+                                                 "breakeven": 110.0,
+                                                 "breakeven_move": move})]}]}
+        data = {"symbols": [lc("AAA", 0.12), lc("BBB", 0.04)]}
+        picks = ad.select_top_picks(data, n=2)
+        self.assertEqual(picks[0]["symbol"], "BBB")  # smaller move first
+
+    def test_skipped_cards_never_enter_the_pool(self):
+        data = {"symbols": [
+            {"symbol": "AAA", "close": 100.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [{"kind": "cc", "title": "C", "empty": None,
+                         "cards": [{"strike": 95.0,
+                                    "skipped": "below cost basis"}]}]}]}
+        self.assertEqual(ad.select_top_picks(data), [])
+
+    def test_pick_carries_card_ref_and_fields(self):
+        picks = ad.select_top_picks(self._data())
+        p = picks[0]
+        for key in ("symbol", "lane", "strike", "expiry", "dte", "score",
+                    "card"):
+            self.assertIn(key, p)
+        self.assertIsInstance(p["card"], dict)
+
+
+class LoadContextTests(unittest.TestCase):
+    def _write(self, tmp, name, payload):
+        import os
+        path = os.path.join(tmp, name)
+        with open(path, "w") as f:
+            f.write(payload)
+        return path
+
+    def test_exact_match_no_warning(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "2026-07-15.json",
+                        '{"as_of": "2026-07-15", "provenance": "LLM-asserted"}')
+            ctx, warn = ad.load_context("2026-07-15", base_dir=tmp)
+            self.assertEqual(ctx["as_of"], "2026-07-15")
+            self.assertIsNone(warn)
+
+    def test_stale_fallback_newest_not_after_as_of(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "2026-07-01.json", '{"as_of": "2026-07-01"}')
+            self._write(tmp, "2026-07-10.json", '{"as_of": "2026-07-10"}')
+            self._write(tmp, "2026-07-20.json", '{"as_of": "2026-07-20"}')
+            ctx, warn = ad.load_context("2026-07-15", base_dir=tmp)
+            self.assertEqual(ctx["as_of"], "2026-07-10")  # newest <= as-of
+            self.assertEqual(warn, "research context is from 2026-07-10 "
+                                   "(stale vs data as-of 2026-07-15)")
+
+    def test_missing_returns_none_none(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(ad.load_context("2026-07-15", base_dir=tmp),
+                             (None, None))
+            # only files dated AFTER the as-of -> still nothing usable
+            self._write(tmp, "2026-07-20.json", '{"as_of": "2026-07-20"}')
+            self.assertEqual(ad.load_context("2026-07-15", base_dir=tmp),
+                             (None, None))
+            # nonexistent dir is also honest
+            gone = os.path.join(tmp, "nope")
+            self.assertEqual(ad.load_context("2026-07-15", base_dir=gone),
+                             (None, None))
+
+    def test_malformed_json_warns_never_fabricates(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "2026-07-15.json", "{not json")
+            ctx, warn = ad.load_context("2026-07-15", base_dir=tmp)
+            self.assertIsNone(ctx)
+            self.assertIn("unreadable", warn)
+
+    def test_non_date_as_of_returns_none_none(self):
+        self.assertEqual(ad.load_context("no cached data"), (None, None))
+
+
+def _v2_section():
+    return {
+        "symbol": "MSFT", "as_of": "2026-06-30", "close": 373.02,
+        "iv_rank": 0.88,
+        "technicals": {"trend": "up", "breakout_20d": True,
+                       "ma_posture": "above_all", "mom_1m": 0.042},
+        "technicals_line": "above all MAs · 20d breakout · +4.2% 1M",
+        "groups": [
+            {"kind": "put", "title": "SELL A PUT?",
+             "cards": [{"strike": 350.0, "expiry": "2026-07-17", "dte": 17,
+                        "credit": 250.0, "annualized_yield": 0.15,
+                        "rank_leader": True,
+                        "grades": {"yield": "GREEN", "liquidity": "GREEN"},
+                        "verdict": "promise to buy lower"}],
+             "empty": None},
+        ],
+    }
+
+
+def _v2_context(strike=350.0):
+    return {
+        "as_of": "2026-06-30",
+        "provenance": "LLM-asserted (test fixture, web research 2026-06-30)",
+        "market": {"summary": "megacaps steady into month end",
+                   "regime": "mixed", "notes": ["breadth still narrow"]},
+        "symbols": {"MSFT": {"news_summary": "Azure demand headlines",
+                             "sentiment": "bull",
+                             "catalysts": [{"date": "2026-07-22",
+                                            "what": "earnings report",
+                                            "source": "example"}]}},
+        "top_picks": [{"symbol": "MSFT", "lane": "put", "strike": strike,
+                       "expiry": "2026-07-17",
+                       "why_now": "IV elevated vs realized",
+                       "hypothesis": "premium overpays the move",
+                       "thesis": "stays above 350",
+                       "bull": "expires worthless, keep credit",
+                       "base": "expires worthless",
+                       "bear": "assigned at 350",
+                       "logic": "cushion exceeds monthly move"}],
+    }
+
+
+class V2RenderTests(unittest.TestCase):
+    def _assembled(self):
+        return ad.assemble(symbol_sections=[_v2_section()],
+                           rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11})
+
+    def test_hero_with_matched_context_pick(self):
+        html = ad.render(self._assembled(), context=_v2_context())
+        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertIn("IV elevated vs realized", html)          # why_now
+        self.assertIn("cushion exceeds monthly move", html)     # logic
+        self.assertIn("Sell the MSFT $350 put", html)           # matched card
+        self.assertNotIn("unmatched to current candidates", html)
+        # matched pick == python shortlist -> no disagreement note
+        self.assertNotIn("Python quantitative shortlist differs", html)
+
+    def test_hero_unmatched_pick_warns_and_discloses_disagreement(self):
+        html = ad.render(self._assembled(), context=_v2_context(strike=999.0))
+        self.assertIn("unmatched to current candidates", html)
+        self.assertIn("Python quantitative shortlist differs", html)
+
+    def test_provenance_label_on_every_narrative_surface(self):
+        html = ad.render(self._assembled(), context=_v2_context())
+        prov = "LLM-asserted (test fixture, web research 2026-06-30)"
+        # hero narrative, market strip, and symbol news all carry the tag
+        self.assertGreaterEqual(html.count(ad._esc(prov)), 3)
+        self.assertIn('class="prov"', html)
+
+    def test_missing_context_renders_honest_quant_shortlist(self):
+        html = ad.render(self._assembled())
+        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertIn("no research narratives for this date", html)
+        self.assertIn("quantitative shortlist only", html)
+        self.assertIn("pick score", html)
+        # honesty: no narrative vocabulary invented
+        self.assertNotIn("why now", html)
+
+    def test_market_strip_present_with_context_absent_without(self):
+        with_ctx = ad.render(self._assembled(), context=_v2_context())
+        self.assertIn("MARKET CONTEXT", with_ctx)
+        self.assertIn("megacaps steady into month end", with_ctx)
+        self.assertIn("regime: mixed", with_ctx)
+        without = ad.render(self._assembled())
+        self.assertNotIn("MARKET CONTEXT", without)
+
+    def test_symbol_panel_shows_technicals_line_and_news(self):
+        html = ad.render(self._assembled(), context=_v2_context())
+        self.assertIn("above all MAs", html)                  # technicals line
+        self.assertIn("Azure demand headlines", html)         # news blurb
+        self.assertIn("earnings report", html)                # catalyst
+
+    def test_render_survives_sections_without_technicals(self):
+        section = _v2_section()
+        del section["technicals"]
+        del section["technicals_line"]
+        d = ad.assemble(symbol_sections=[section],
+                        rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11})
+        html = ad.render(d)
+        self.assertIn("Sell the MSFT $350 put", html)
+        self.assertNotIn('<div class="tech-line">', html)
+
+    def test_cards_render_in_grid_with_collapsed_ladder_and_bbb(self):
+        html = ad.render(self._assembled())
+        self.assertIn('class="card-grid"', html)
+        self.assertIn("<details><summary>payoff ladder</summary>", html)
+        self.assertIn("scenario framing from realized vol", html)
+        for tag in ("bear", "base", "bull"):
+            self.assertIn(f"<td>{tag}</td>", html)
+
+    def test_context_warning_banner_rendered(self):
+        warn = ("research context is from 2026-06-25 "
+                "(stale vs data as-of 2026-06-30)")
+        html = ad.render(self._assembled(), context=_v2_context(),
+                         context_warning=warn)
+        self.assertIn("stale vs data as-of 2026-06-30", html)
+
+    def test_assemble_attaches_bbb_and_empty_on_bad_rv(self):
+        d = self._assembled()
+        card = d["symbols"][0]["groups"][0]["cards"][0]
+        self.assertEqual(len(card["bbb"]), 3)
+        d2 = ad.assemble(symbol_sections=[_v2_section()],
+                         rv21_by_symbol={})  # rv21 -> NaN
+        card2 = d2["symbols"][0]["groups"][0]["cards"][0]
+        self.assertEqual(card2["bbb"], [])
+
+    def test_sections_json_carries_technicals(self):
+        import json
+        payload = json.loads(ad.sections_json([_v2_section()]))
+        self.assertEqual(payload["sections"][0]["technicals"]["trend"], "up")
+        self.assertIn("technicals_line", payload["sections"][0])
+
+
 class MainTests(unittest.TestCase):
     def test_main_writes_file_and_prints_path(self):
         import io

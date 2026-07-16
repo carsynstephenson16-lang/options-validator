@@ -481,3 +481,11 @@ TECH_BREAKOUT_LOOKBACK = 20        # prior-high window for breakout_20d
 TECH_MOM_1M = 21                   # ~1 month of sessions for mom_1m
 TECH_MOM_3M = 63                   # ~3 months of sessions for mom_3m
 TECH_52W_LOOKBACK = 252            # ~52 weeks of sessions for high_52w
+
+# LLM-asserted presentation-layer ordering weights — dashboard display only,
+# NOT strategy gates; frozen H5/H6/H7 numbers untouched. They order the
+# dashboard's Top-3 shortlist (select_top_picks) and nothing else: they gate
+# nothing, size nothing, and never touch entry/exit logic.
+PICK_GREEN_POINT = 1        # points per GREEN badge on a card
+PICK_RANK_LEADER_BONUS = 2  # bonus when the card is its lane's rank leader
+PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's direction
