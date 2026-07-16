@@ -482,6 +482,63 @@ cleared by 5-8 contracts; that margin can vanish). ThetaData lapses ~2026-07-29
 **Review date:** at the first H5/H6 verdict, the ThetaData renewal decision
 (2026-07-25), or the 2026-10-06 quarterly audit, whichever comes first.
 
+## `config.UNIVERSE` is misleadingly named (parked 2026-07-16 — future cleanup)
+
+Context: on 2026-07-16 the owner asked to "add all the tickers above to
+universe" (IBEX/UNH/CRWD/ZS/NBIS). The request was declined on the evidence
+(see `reports/2026-07-16-h7-amendment-v1_7-proposal.md`), but it surfaced a
+real defect worth fixing later: **the name `UNIVERSE` invites exactly the wrong
+mental model, and it sits on top of the risk math.**
+
+The trap, precisely:
+- `UNIVERSE` reads as "the names I am allowed to trade." **It is not.** Proof:
+  H6 trades NVDA/PLTR/AMZN and *neither NVDA nor PLTR is in `UNIVERSE`*. The
+  registered hypotheses freeze their own name-sets in the ledger (H6's record
+  reads `Names NVDA/PLTR/AMZN`); `config.py:56` says so explicitly. Adding a
+  ticker to `UNIVERSE` makes **nothing** tradable.
+- What it actually is: (1) the research/display set — dashboard rows, H5's live
+  evaluator (`options_researcher/attractiveness.py:425` iterates it), tradability
+  profiling; (2) **a denominator in the risk math** — `config.py:36-38` sizes
+  simultaneous exposure as `MAX_LOSS_PER_TRADE x len(UNIVERSE)`.
+- Consequence of the confusion, in dollars: adding 5 tickers would have moved
+  simultaneous at-risk from **$2,400 (17.1% of the $14,000 sleeve) to $5,400
+  (38.6%)** with **no risk setting touched and no warning** — and because the
+  added names were all one AI factor, the $5,400 would be closer to one bet
+  than nine. The risk math would report diversification; the book would have
+  concentrated. `config.py:38` already flags that the current four "are
+  emphatically not 4 independent bets."
+- Second-order: `UNIVERSE` edits also silently widen **H5's** live evaluator
+  scope (H5 alone reads the list at runtime; H6/H7 do not). NOTE 2026-07-16: a
+  concurrent session has uncommitted `options_researcher/live_quotes.py` +
+  `live_dashboard.py` in the tree that ALSO iterate `config.UNIVERSE` to request
+  paid quotes — if that work lands, `UNIVERSE` gains a spend-per-run consumer
+  and this defect gets worse, not better. Re-grep the call sites before any
+  refactor; the list below was taken 2026-07-16 and will drift.
+
+Candidate fix (NOT today's work): rename to something that cannot be misread as
+permission — e.g. `RESEARCH_DISPLAY_NAMES` — and **separate the risk
+denominator from the display list** so a display change can never move
+exposure. The two responsibilities are conflated today; that conflation is the
+actual bug, and renaming alone would only hide it.
+
+Why parked, not built: pure refactor, touches `config.py` plus ~10 call sites
+as of 2026-07-16 (`metrics.py`, `analysis/feasibility.py`,
+`analysis/power_check.py`, `options_researcher/{features,attractiveness,
+dashboard,refresh,profile_monthlies,profile_tradability}.py`) — plus whatever
+the in-flight `live_*.py` work adds — and the tests that assert the universe
+count. Moves no live hypothesis toward its verdict — the scope-guard
+answer is no. It is also exactly the kind of wide mechanical change that should
+not land while H5/H6/H7 forward windows are running and a concurrent session is
+active in the same checkout.
+
+Gate before building: first H5/H6 verdict (the Phase-0 milestone) + a
+test-first refactor that proves `len()`-based risk math is unchanged (or
+deliberately re-derived with owner-typed numbers) BEFORE any rename lands. If
+the risk denominator is split out, the new value is owner-typed, not inherited.
+
+**Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly audit,
+whichever comes first.
+
 ## Explicitly rejected (not parked)
 
 From the 2026-07-06 deep-research report (and the 2026-07-07 10-point
