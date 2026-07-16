@@ -276,8 +276,10 @@ restore Stage 1 source health to 12/12, confirm paid daily EOD continuity,
 supply the owner-frozen window inputs, bind a clean code/config identity, then
 let owner + independent review decide
 whether to open Stage 8. No tracked option by itself starts the H7 window.
-LEAPS entry triggers are pre-registered (owner-frozen 2026-07-07, ledger
-H5_ENTRY_TRIGGER_PREREG): evaluate only when close ≤ trigger (VST $140,
+LEAPS entry triggers are pre-registered (2026-07-07 ledger
+H5_ENTRY_TRIGGER_PREREG, VST superseded by the owner-directed forward-only
+H5_ENTRY_TRIGGER_AMENDMENT_V2 of 2026-07-15): evaluate only when close ≤
+trigger (VST $160 v2 — pre-amendment signal history under $140 is stale,
 AMZN $220) AND IV-rank ≤ 0.5 AND the LEAPS passes the liquidity gates —
 `options_researcher.entry_watch` prints the live WAIT/FIRE status. The
 ThetaData subscription ends 2026-07-29 (owner update 2026-07-13) per
