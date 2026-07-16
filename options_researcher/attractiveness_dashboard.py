@@ -85,6 +85,20 @@ def _pmcc_pnl(price: float, short_strike: float, leaps_strike: float,
     return (credit, _PMCC_NOTE)
 
 
+_PMCC_PREVIEW_NOTE = "full two-leg P&L (LEAPS at expiration intrinsic)"
+
+
+def _pmcc_full_pnl(price: float, short_strike: float, leaps_strike: float,
+                   leaps_cost: float, credit: float) -> tuple[float, str]:
+    """FULL two-leg PMCC P&L at expiration (LEAPS intrinsic minus its cost,
+    plus the short-call leg). Used for PREVIEW structures, where the LEAPS is
+    not actually held: showing credit-only there would hide the dominant risk
+    -- the long leg you would first have to buy."""
+    leaps_leg = max(0.0, price - leaps_strike) * 100.0 - leaps_cost
+    short_leg = credit - max(0.0, price - short_strike) * 100.0
+    return (leaps_leg + short_leg, _PMCC_PREVIEW_NOTE)
+
+
 def _leaps_pnl(price: float, strike: float, cost: float) -> float:
     return max(0.0, price - strike) * 100.0 - cost
 
@@ -112,11 +126,14 @@ def scenario_rows(card: dict, structure: str, *, close: float,
     if structure == "pmcc":
         credit = float(card["credit"])
         lk, lc = float(card["leaps_strike"]), float(card["leaps_cost"])
+        pnl_fn = _pmcc_full_pnl if card.get("preview") else _pmcc_pnl
+        breakeven = (lk + (lc - credit) / 100.0 if card.get("preview")
+                     else None)
         ladder = _price_ladder(close=close, rv21=rv21, strike=strike,
-                               breakeven=None)
+                               breakeven=breakeven)
         out = []
         for row in ladder:
-            pnl, note = _pmcc_pnl(row["price"], strike, lk, lc, credit)
+            pnl, note = pnl_fn(row["price"], strike, lk, lc, credit)
             out.append({**row, "pnl": _round_cents(pnl), "note": note})
         return out
     if structure in ("leaps", "long_call"):
@@ -162,9 +179,10 @@ def bbb_rows(card: dict, structure: str, *, close: float,
         elif structure == "cc":
             pnl = _cc_pnl(price, strike, float(card["credit"]), close)
         elif structure == "pmcc":
-            pnl, note = _pmcc_pnl(price, strike, float(card["leaps_strike"]),
-                                  float(card["leaps_cost"]),
-                                  float(card["credit"]))
+            pnl_fn = _pmcc_full_pnl if card.get("preview") else _pmcc_pnl
+            pnl, note = pnl_fn(price, strike, float(card["leaps_strike"]),
+                               float(card["leaps_cost"]),
+                               float(card["credit"]))
         elif structure in ("leaps", "long_call"):
             pnl = _leaps_pnl(price, strike, float(card["cost"]))
         else:
@@ -174,12 +192,63 @@ def bbb_rows(card: dict, structure: str, *, close: float,
     return out
 
 
-def select_top_picks(data: dict, n: int = 3) -> list[dict]:
+def risk_economics(card: dict, structure: str, *, close: float) -> dict:
+    """Worst-case economics AT EXPIRATION for one candidate, in plain dollars.
+
+    Returns {"capital_required", "max_loss", "breakeven"} (plus "max_profit"
+    for pmcc, whose profit is capped by construction). In plain English: a
+    short put is a paid promise to buy 100 shares at the strike -- its
+    worst case is the stock at zero (strike*100 minus the credit), and the
+    capital that must sit behind it is the full purchase price. These numbers
+    exist so the page can be reconciled against config.RISK_SLEEVE and
+    config.MAX_LOSS_PER_TRADE instead of showing credit-only optimism."""
+    if structure == "put":
+        strike = float(card["strike"])
+        credit = float(card["credit"])
+        return {"capital_required": strike * 100.0,
+                "max_loss": _round_cents(strike * 100.0 - credit),
+                "breakeven": _round_cents(strike - credit / 100.0)}
+    if structure == "cc":
+        credit = float(card["credit"])
+        # against shares already held: the option leg adds no capital, but
+        # the covered position's worst case is the shares to zero less the
+        # credit -- hiding the share leg would be credit-only optimism.
+        return {"capital_required": 0.0,
+                "max_loss": _round_cents(close * 100.0 - credit),
+                "breakeven": _round_cents(close - credit / 100.0)}
+    if structure == "pmcc":
+        credit = float(card["credit"])
+        lk, lc = float(card["leaps_strike"]), float(card["leaps_cost"])
+        short_k = float(card["strike"])
+        return {"capital_required": _round_cents(lc),
+                "max_loss": _round_cents(lc - credit),
+                "breakeven": _round_cents(lk + (lc - credit) / 100.0),
+                "max_profit": _round_cents(
+                    (short_k - lk) * 100.0 - lc + credit)}
+    if structure in ("leaps", "long_call"):
+        cost = float(card["cost"])
+        return {"capital_required": _round_cents(cost),
+                "max_loss": _round_cents(cost),
+                "breakeven": _round_cents(float(card["breakeven"]))}
+    raise ValueError(f"unknown structure {structure!r}")
+
+
+def select_top_picks(data: dict, n: int = 3, *,
+                     policy_veto: bool | None = None) -> list[dict]:
     """Transparent quantitative shortlist over EVERY non-skipped card across
     all symbols/lanes in an assemble() dict. Display ordering only (weights =
     config.PICK_*, presentation layer, never strategy gates).
 
-    Hard veto: any card whose grades include liquidity RED is excluded.
+    Hard vetoes (each an honesty gate, not a strategy gate):
+      - liquidity RED;
+      - PICK_EXCLUDE_STRUCTURAL_PREVIEWS: PMCC preview groups (the LEAPS is
+        not actually held) never compete;
+      - PICK_VETO_STALE_FEATURES: sections whose IV features are older than
+        their chain date never compete;
+      - policy_veto (default config.PICK_POLICY_VETO): cards whose economic
+        max loss exceeds config.MAX_LOSS_PER_TRADE never compete. Cards
+        without a "risk" dict (injected fixtures) are not vetoed -- the veto
+        never guesses.
     Score = GREEN-badge count * PICK_GREEN_POINT
             + PICK_RANK_LEADER_BONUS if the card leads its lane ladder
             + PICK_TECH_BONUS on technical confluence (buy lanes: trend up or
@@ -190,16 +259,29 @@ def select_top_picks(data: dict, n: int = 3) -> list[dict]:
     per (symbol, lane)."""
     import config
 
+    if policy_veto is None:
+        policy_veto = config.PICK_POLICY_VETO
+
     pool: list[tuple[tuple, dict]] = []
     for sec in data.get("symbols", []):
+        if config.PICK_VETO_STALE_FEATURES and sec.get("features_stale"):
+            continue
         tech = sec.get("technicals") or {}
         for grp in sec.get("groups", []):
             kind = grp["kind"]
+            if (config.PICK_EXCLUDE_STRUCTURAL_PREVIEWS
+                    and kind == "pmcc" and grp.get("preview")):
+                continue
             for card in grp.get("cards", []):
                 if "skipped" in card:
                     continue
                 grades = card.get("grades") or {}
                 if grades.get("liquidity") == "RED":
+                    continue
+                max_loss = (card.get("risk") or {}).get("max_loss")
+                if (policy_veto and isinstance(max_loss, (int, float))
+                        and max_loss == max_loss
+                        and max_loss > config.MAX_LOSS_PER_TRADE):
                     continue
                 greens = sum(1 for v in grades.values() if v == "GREEN")
                 score = greens * config.PICK_GREEN_POINT
@@ -337,6 +419,8 @@ def assemble(*, symbol_sections: list[dict] | None = None,
         symbol_sections, rv21_by_symbol = _gather_all()
     rv21_by_symbol = rv21_by_symbol or {}
 
+    import config
+
     out_symbols = []
     for sec in symbol_sections:
         sym = sec["symbol"]
@@ -350,12 +434,21 @@ def assemble(*, symbol_sections: list[dict] | None = None,
                     cards.append({**card, "scenarios": [], "bbb": [],
                                   "headline": "", "countdown": ""})
                     continue
-                # shallow copy: nested dicts (e.g. grades) are shared, not
-                # duplicated -- fine because nothing here mutates them in place.
+                # shallow copy; grades get their own copy because the
+                # fits_policy badge is added here.
                 enriched = dict(card)
                 if kind == "pmcc":
                     enriched["leaps_strike"] = float(grp["leaps_strike"])
                     enriched["leaps_cost"] = float(grp["leaps_premium"]) * 100.0
+                    if grp.get("preview"):
+                        enriched["preview"] = True
+                enriched["risk"] = risk_economics(
+                    enriched, kind, close=float(sec["close"]))
+                fits = (enriched["risk"]["max_loss"]
+                        <= config.MAX_LOSS_PER_TRADE)
+                enriched["grades"] = {**(enriched.get("grades") or {}),
+                                      "fits_policy": "GREEN" if fits
+                                      else "RED"}
                 enriched["scenarios"] = scenario_rows(
                     enriched, kind, close=float(sec["close"]), rv21=rv21)
                 enriched["bbb"] = bbb_rows(
@@ -365,11 +458,17 @@ def assemble(*, symbol_sections: list[dict] | None = None,
                                          if kind in ("leaps", "long_call")
                                          else "")
                 cards.append(enriched)
-            out_groups.append({"kind": kind, "title": grp["title"],
-                               "cards": cards, "empty": grp.get("empty")})
+            out_grp = {"kind": kind, "title": grp["title"],
+                       "cards": cards, "empty": grp.get("empty")}
+            if "preview" in grp:
+                out_grp["preview"] = grp["preview"]
+            out_groups.append(out_grp)
         out_sec = {"symbol": sym, "close": float(sec["close"]),
                    "iv_rank": float(sec["iv_rank"]),
                    "as_of": sec["as_of"], "groups": out_groups}
+        if "features_as_of" in sec:
+            out_sec["features_as_of"] = sec["features_as_of"]
+            out_sec["features_stale"] = bool(sec.get("features_stale"))
         # injected test sections may omit technicals; render handles absence
         if "technicals" in sec:
             out_sec["technicals"] = sec["technicals"]
@@ -427,7 +526,18 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
             continue
         day = os.path.basename(files[-1]).split("_")[1].replace(".parquet", "")
         chain = pd.read_parquet(files[-1])
-        row = load_features(symbol).iloc[-1]
+        # DATE-ALIGNED feature row: the row FOR the chain day when it exists,
+        # else the newest row at-or-before it (never a future row -- that
+        # would be look-ahead). A mismatch is recorded as features_as_of so
+        # the page can say the IV badges are stale instead of hiding it.
+        feats = load_features(symbol)
+        at_or_before = feats.loc[feats.index.astype(str) <= day]
+        if at_or_before.empty:
+            row = feats.iloc[0]
+            features_as_of = str(feats.index[0])
+        else:
+            row = at_or_before.iloc[-1]
+            features_as_of = str(at_or_before.index[-1])
         closes = load_closes(symbol, "2018-01-01", day, allow_oos=True)
         close = float(closes.iloc[-1])
         technicals = technical_snapshot(closes)
@@ -530,6 +640,8 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
 
         sections.append({"symbol": symbol, "as_of": day, "close": close,
                          "iv_rank": iv_rank, "groups": groups,
+                         "features_as_of": features_as_of,
+                         "features_stale": features_as_of != day,
                          "technicals": technicals,
                          "technicals_line": technical_summary_line(technicals)})
     return sections, rv21_by_symbol
@@ -548,7 +660,8 @@ def sections_json(sections: list[dict] | None = None) -> str:
                       indent=2, sort_keys=False)
 
 
-_GRADE_COLORS = {"GREEN": "#2fd27d", "AMBER": "#caa53d", "RED": "#ff5470"}
+_GRADE_COLORS = {"GREEN": "#2fd27d", "AMBER": "#caa53d", "RED": "#ff5470",
+                 "UNKNOWN": "#6b7280"}
 
 _STYLE = """
   :root {
@@ -851,6 +964,39 @@ def _card_tech_line(kind: str, tech: dict | None) -> str:
     return f"sell-side context: {posture}" if posture else ""
 
 
+def _risk_line(card: dict) -> str:
+    """Plain-dollar worst-case line reconciling the card against the repo
+    risk policy (config.RISK_SLEEVE / config.MAX_LOSS_PER_TRADE). Empty when
+    the card carries no risk dict (injected fixtures) -- never invented."""
+    import config
+
+    risk = card.get("risk")
+    if not isinstance(risk, dict) or "max_loss" not in risk:
+        return ""
+    bits = [f"worst case -${risk['max_loss']:,.0f} at expiration"]
+    cap_req = risk.get("capital_required")
+    if isinstance(cap_req, (int, float)) and cap_req > 0:
+        bits.append(f"capital required ${cap_req:,.0f}"
+                    + (f" vs ${config.RISK_SLEEVE:,.0f} sleeve"
+                       if cap_req > config.RISK_SLEEVE else ""))
+    if isinstance(risk.get("max_profit"), (int, float)):
+        bits.append(f"max profit ${risk['max_profit']:,.0f}")
+    if isinstance(risk.get("breakeven"), (int, float)):
+        bits.append(f"breakeven ${risk['breakeven']:,.2f}")
+    fits = risk["max_loss"] <= config.MAX_LOSS_PER_TRADE
+    policy = (f"within the ${config.MAX_LOSS_PER_TRADE:,.0f}/trade cap"
+              if fits else
+              f"EXCEEDS the ${config.MAX_LOSS_PER_TRADE:,.0f}/trade hard cap "
+              "— research display only, does not fit the repo risk policy")
+    cls = "label" if fits else "warn"
+    return f'<div class="{cls}">{_esc(" · ".join(bits) + " · " + policy)}</div>'
+
+
+_PREVIEW_WARNING = ("two-leg preview — the LEAPS is NOT held; this requires "
+                    "buying the LEAPS first, and the P&L shown includes that "
+                    "long leg's full risk")
+
+
 def _card_html(card: dict, *, tech_note: str = "") -> str:
     if "skipped" in card:
         return (f'<div class="panel"><div class="label">'
@@ -858,6 +1004,9 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
     parts = ['<div class="panel">',
              f'<div class="party-name">{_esc(card["headline"])}</div>',
              _badges(card.get("grades", {}))]
+    if card.get("preview"):
+        parts.append(f'<div class="warn">{_esc(_PREVIEW_WARNING)}</div>')
+    parts.append(_risk_line(card))
     if tech_note:
         parts.append(f'<div class="tech-line">{_esc(tech_note)}</div>')
     parts.append(_bbb_table(card.get("bbb", [])))
@@ -929,8 +1078,12 @@ def _hero_pick_html(pick: dict, data: dict, context: dict | None) -> str:
     prov = _prov_tag(context)
     card = _find_pick_card(data, pick)
     if card is not None:
+        preview_warn = (f'<div class="warn">{_esc(_PREVIEW_WARNING)}</div>'
+                        if card.get("preview") else "")
         head = (f'<div class="party-name">{_esc(card["headline"])}</div>'
                 + _badges(card.get("grades", {}))
+                + preview_warn
+                + _risk_line(card)
                 + _bbb_table(card.get("bbb", [])))
     else:
         ident = (f'{pick.get("symbol", "?")} {pick.get("lane", "?")} '
@@ -951,9 +1104,40 @@ def _hero_pick_html(pick: dict, data: dict, context: dict | None) -> str:
 def _hero_html(data: dict, context: dict | None) -> str:
     """TOP 3 PICKS TODAY: research-context narratives when the JSON has
     top_picks; otherwise the quantitative select_top_picks shortlist with an
-    honest no-narratives line. Membership disagreements are disclosed."""
+    honest no-narratives line. Membership disagreements are disclosed.
+
+    Policy fallback: when every candidate is vetoed by the risk-policy gate,
+    the unvetoed ranking is shown WITH a loud banner -- an empty hero would
+    hide the finding that nothing on the board fits the policy."""
+    import config
+
+    policy_note = ""
     py_picks = select_top_picks(data)
+    n_target = 3
+    if not py_picks:
+        unvetoed = select_top_picks(data, policy_veto=False)
+        if unvetoed:
+            py_picks = unvetoed
+            policy_note = (
+                '<div class="warn">NO candidate on the board fits the repo '
+                f"risk policy (economic max loss &le; "
+                f"${config.MAX_LOSS_PER_TRADE:,.0f}/trade) — showing the "
+                "best available as research display only.</div>")
+    elif len(py_picks) < n_target and len(
+            select_top_picks(data, policy_veto=False)) > len(py_picks):
+        policy_note = (
+            f'<div class="warn">only {len(py_picks)} candidate(s) fit the '
+            f"repo risk policy (economic max loss &le; "
+            f"${config.MAX_LOSS_PER_TRADE:,.0f}/trade) — the rest of the "
+            "board is excluded from the shortlist, not hidden: see the "
+            "symbol panels below.</div>")
     json_picks = (context or {}).get("top_picks") or []
+    researched = (context or {}).get("researched_on")
+    research_line = (
+        f'<div class="label">research gathered {_esc(researched)} &middot; '
+        f'data as-of {_esc(data.get("data_as_of") or "?")} close — research '
+        "may reference intraday moves newer than the priced data</div>"
+        if researched else "")
     if json_picks:
         body = "".join(_hero_pick_html(p, data, context) for p in json_picks)
 
@@ -978,10 +1162,14 @@ def _hero_html(data: dict, context: dict | None) -> str:
         cards = []
         for p in py_picks:
             c = p["card"]
+            preview_warn = (f'<div class="warn">{_esc(_PREVIEW_WARNING)}</div>'
+                            if c.get("preview") else "")
             cards.append(
                 '<div class="hero-card">'
                 f'<div class="party-name">{_esc(c.get("headline", ""))}</div>'
                 + _badges(c.get("grades", {}))
+                + preview_warn
+                + _risk_line(c)
                 + _bbb_table(c.get("bbb", []))
                 + f'<div class="label">pick score {p["score"]} &middot; '
                   f'{_esc(p["symbol"])} {_esc(p["lane"])}</div></div>')
@@ -991,7 +1179,8 @@ def _hero_html(data: dict, context: dict | None) -> str:
     else:
         body = ('<div class="empty">no non-vetoed candidates to shortlist '
                 "this cycle</div>")
-    return f'<div class="panel hero"><h2>TOP 3 PICKS TODAY</h2>{body}</div>'
+    return (f'<div class="panel hero"><h2>TOP 3 PICKS TODAY</h2>'
+            f"{research_line}{policy_note}{body}</div>")
 
 
 def _market_html(context: dict | None) -> str:
@@ -1012,9 +1201,25 @@ def _market_html(context: dict | None) -> str:
     return "".join(parts)
 
 
+def _sources_html(urls: list | None) -> str:
+    """Collapsed list of research source links. http(s) URLs only; anything
+    else renders as plain text. Empty string when there are none."""
+    items = []
+    for u in urls or []:
+        u = str(u)
+        if u.startswith("http://") or u.startswith("https://"):
+            items.append(f'<li><a href="{_esc(u)}">{_esc(u)}</a></li>')
+        else:
+            items.append(f"<li>{_esc(u)}</li>")
+    if not items:
+        return ""
+    return (f"<details><summary>sources ({len(items)})</summary>"
+            f'<ul class="label">{"".join(items)}</ul></details>')
+
+
 def _symbol_context_html(symbol: str, context: dict | None) -> str:
-    """Per-symbol news/catalysts from the context JSON, provenance-labeled;
-    empty string (omitted) when absent."""
+    """Per-symbol news/catalysts from the context JSON, provenance-labeled
+    and source-linked; empty string (omitted) when absent."""
     sym_ctx = ((context or {}).get("symbols") or {}).get(symbol)
     if not isinstance(sym_ctx, dict):
         return ""
@@ -1026,8 +1231,11 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
     for cat in sym_ctx.get("catalysts") or []:
         if isinstance(cat, dict) and cat.get("what"):
             when = cat.get("date") or "date unknown"
-            parts.append(f'<div class="label">catalyst {_esc(when)}: '
-                         f'{_esc(cat["what"])} {prov}</div>')
+            confirmed = ("" if cat.get("confirmed", True)
+                         else " [UNCONFIRMED/estimated]")
+            parts.append(f'<div class="label">catalyst {_esc(when)}'
+                         f"{_esc(confirmed)}: {_esc(cat['what'])} {prov}</div>")
+    parts.append(_sources_html(sym_ctx.get("sources")))
     return "".join(parts)
 
 
@@ -1045,10 +1253,18 @@ def render(data: dict, *, context: dict | None = None,
         tech_line = sec.get("technicals_line")
         tech_html = (f'<div class="tech-line">{_esc(tech_line)}</div>'
                      if tech_line else "")
+        stale_html = ""
+        if sec.get("features_stale"):
+            stale_html = (
+                '<div class="warn">IV features are from '
+                f'{_esc(sec.get("features_as_of", "?"))}, older than the '
+                f'chain date ({_esc(sec.get("as_of", "?"))}) — IV-rank/VRP '
+                "badges are STALE and this symbol is excluded from the "
+                "Top-3 shortlist</div>")
         symbols_html += (
             f'<div class="panel"><h2>{_esc(sec["symbol"])} '
             f'&mdash; close ${sec["close"]:,.2f} &mdash; '
-            f'IV-rank {sec["iv_rank"]:.2f}</h2>{tech_html}'
+            f'IV-rank {sec["iv_rank"]:.2f}</h2>{stale_html}{tech_html}'
             f'{_symbol_context_html(sec["symbol"], context)}{groups}</div>')
     data_as_of = data.get("data_as_of") or "no cached data"
     banner = (

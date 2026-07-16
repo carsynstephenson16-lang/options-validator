@@ -489,3 +489,19 @@ TECH_52W_LOOKBACK = 252            # ~52 weeks of sessions for high_52w
 PICK_GREEN_POINT = 1        # points per GREEN badge on a card
 PICK_RANK_LEADER_BONUS = 2  # bonus when the card is its lane's rank leader
 PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's direction
+
+# LLM-asserted presentation-layer honesty gates for the Top-3 shortlist
+# (proposed 2026-07-16 after release-blocker review). Display layer only —
+# they decide what may be FEATURED as a top pick, never what may be traded.
+PICK_POLICY_VETO = True     # exclude cards whose economic max loss exceeds
+#                             MAX_LOSS_PER_TRADE from the Top-3 hero (with an
+#                             honest labeled fallback when nothing passes)
+PICK_EXCLUDE_STRUCTURAL_PREVIEWS = True  # PMCC previews (LEAPS not actually
+#                             held) never compete for Top-3
+PICK_VETO_STALE_FEATURES = True  # cards priced off IV features older than
+#                             their chain date never compete for Top-3
+# Earnings-calendar coverage horizon: a curated calendar whose last entry is
+# older than this many days before an option's expiry cannot certify the
+# cycle "clear of earnings" — the badge must read UNKNOWN, never GREEN.
+# ~1 quarter (91d) + reporting slack. LLM-asserted, presentation layer.
+EARNINGS_COVERAGE_DAYS = 98

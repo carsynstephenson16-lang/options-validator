@@ -83,15 +83,28 @@ def ladder_cards(builder, symbol: str, chain: pd.DataFrame, day: str, *,
     recomputed PER BUCKET against each bucket's own expiration (a long-dated
     card must not inherit the nearest monthly's earnings/FOMC window) and
     injected as `earnings_in_cycle` / `fomc_in_cycle` into the builder call.
+
+    EARNINGS COVERAGE: a curated calendar can only certify a cycle "clear"
+    while it credibly covers the window. If no known date falls in the cycle
+    AND the expiry lies beyond the last calendar entry +
+    EARNINGS_COVERAGE_DAYS, the builder gets `earnings_unknown=True` so the
+    badge reads UNKNOWN instead of a falsely reassuring GREEN.
     """
+    from datetime import timedelta
+
     from options_researcher.chains import ladder_expirations
     day_date = date.fromisoformat(day)
     picked: list[dict] = []
     for _target, exp in ladder_expirations(chain, day_date):
         call_kwargs = dict(kwargs)
         if earnings_dates is not None:
-            call_kwargs["earnings_in_cycle"] = any(
-                day_date < e <= exp for e in earnings_dates)
+            in_cycle = any(day_date < e <= exp for e in earnings_dates)
+            horizon = (max(earnings_dates)
+                       + timedelta(days=config.EARNINGS_COVERAGE_DAYS)
+                       if earnings_dates else None)
+            call_kwargs["earnings_in_cycle"] = in_cycle
+            call_kwargs["earnings_unknown"] = (
+                not in_cycle and (horizon is None or exp > horizon))
         if fomc_dates is not None:
             call_kwargs["fomc_in_cycle"] = any(
                 day_date < m <= exp for m in fomc_dates)
@@ -131,6 +144,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                   iv_minus_rv: float,
                   earnings_in_cycle: bool,
                   fomc_in_cycle: bool,
+                  earnings_unknown: bool = False,
                   exp: date | None = None) -> list[dict]:
     """SELL-A-PUT candidates near the H5 income delta."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
@@ -155,7 +169,8 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
-            "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "earnings": ("AMBER" if earnings_in_cycle
+                         else "UNKNOWN" if earnings_unknown else "GREEN"),
             "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
@@ -180,6 +195,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                  iv_minus_rv: float,
                  earnings_in_cycle: bool,
                  fomc_in_cycle: bool,
+                 earnings_unknown: bool = False,
                  exp: date | None = None) -> list[dict]:
     """SELL-A-COVERED-CALL candidates (against a declared 100-share lot)."""
     h, comm = config.SLIPPAGE_HAIRCUT, config.COMMISSION_PER_CONTRACT
@@ -209,7 +225,8 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
-            "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "earnings": ("AMBER" if earnings_in_cycle
+                         else "UNKNOWN" if earnings_unknown else "GREEN"),
             "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
@@ -235,6 +252,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    iv_rank: float, iv_minus_rv: float,
                    earnings_in_cycle: bool,
                    fomc_in_cycle: bool,
+                   earnings_unknown: bool = False,
                    exp: date | None = None) -> list[dict]:
     """SELL-A-CALL-AGAINST-YOUR-LEAPS (poor man's covered call) candidates.
 
@@ -266,7 +284,8 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
                               else "AMBER"),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
-            "earnings": "AMBER" if earnings_in_cycle else "GREEN",
+            "earnings": ("AMBER" if earnings_in_cycle
+                         else "UNKNOWN" if earnings_unknown else "GREEN"),
             "fomc": "AMBER" if fomc_in_cycle else "GREEN",
             "liquidity": ("GREEN" if passes_liquidity(
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
