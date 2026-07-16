@@ -75,6 +75,32 @@ class FeatureFrameTests(unittest.TestCase):
         self.assertNotIn(isos[30], f.index)  # day simply absent (fail closed)
 
 
+class StoreSeparationTests(unittest.TestCase):
+    """Regression: 2026-07-16 a features.build_all() run overwrote the
+    H6-manifested AMZN artifact (manifest sha 0c14de... vs file fb847e...),
+    because both builders wrote .tmp/research/{symbol}_features.parquet.
+    The attractiveness store must never share a file path with the
+    manifest-bound H6 store."""
+
+    def test_stores_are_different_directories(self):
+        from options_researcher import h6_features
+        att = os.path.abspath(features.FEATURES_DIR)
+        h6 = os.path.abspath(str(h6_features.FEATURE_DIR))
+        self.assertNotEqual(att, h6)
+
+    def test_save_features_cannot_clobber_h6_artifact(self):
+        import config
+        from options_researcher import h6_features
+        shared = set(config.UNIVERSE) & set(config.H6_NAMES)
+        self.assertTrue(shared, "fixture assumption: universes overlap")
+        for symbol in shared:
+            att_path = os.path.abspath(os.path.join(
+                features.FEATURES_DIR, f"{symbol}_features.parquet"))
+            h6_path = os.path.abspath(str(
+                h6_features.FEATURE_DIR / f"{symbol}_features.parquet"))
+            self.assertNotEqual(att_path, h6_path, symbol)
+
+
 class CacheRoundTripTests(unittest.TestCase):
     def test_save_and_load_roundtrip(self):
         isos, closes, chains = fixture(60)

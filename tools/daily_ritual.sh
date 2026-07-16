@@ -81,6 +81,18 @@ if [ "$GATE_GO" -eq 1 ]; then
   fi
 fi
 
+# Attractiveness feature store — separate from the H6 manifested store
+# (.tmp/research/attractiveness vs .tmp/research; a shared path corrupted the
+# H6 AMZN manifest 2026-07-16). Rebuild to the evaluation session so the
+# dashboard's IV-ranks are never silently stale at BACKTEST_END.
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -c "from options_researcher.features import build_all; build_all('$AS_OF')" \
+    && note "attractiveness features: rebuilt to $AS_OF" \
+    || note "attractiveness features: FAILED — dashboard will flag stale/missing features"
+else
+  note "attractiveness features: SKIPPED (no evaluation session)"
+fi
+
 # Dashboards rebuild regardless of gate state — they display cached truth
 # and carry their own honest data-as-of banner.
 "$UV" run python -m options_researcher.dashboard && note "dashboard: rebuilt" || note "dashboard: FAILED"

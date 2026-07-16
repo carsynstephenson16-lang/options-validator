@@ -83,7 +83,12 @@ def build_daily_features(symbol: str, start_iso: str, end_iso: str, *,
     return f
 
 
-FEATURES_DIR = os.path.join(".tmp", "research")
+# Attractiveness/presentation feature store. Deliberately NOT the same
+# directory as h6_features.FEATURE_DIR (".tmp/research"): the H6 store is
+# manifest-bound (hash-verified provenance), and a build_all() run on
+# 2026-07-16 overwrote the manifested AMZN artifact when both builders
+# shared one path. Keep these stores separate.
+FEATURES_DIR = os.path.join(".tmp", "research", "attractiveness")
 
 
 def save_features(symbol: str, frame: pd.DataFrame) -> str:
