@@ -140,6 +140,10 @@ and are live in H6** (post-earnings tactical long calls).
   microcap options scanner has no tradable output under this repo's cost
   model. Microcap *equity* ideas belong in the equity-research book; the
   cross-book review covers the portfolio view.
+- **Measured a second time 2026-07-16 (IBEX, 72 contracts, median OI 0, median
+  spread 114.1%, 0/72 pass the gate — worse than HYLN).** Two of two microcaps
+  measured return unusable chains; this is no longer an inference from one
+  name. See the IBEX section below.
 
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
 audit, whichever comes first.
@@ -284,14 +288,82 @@ equity-research's §6F method table as an Independent-confirmation anchor;
 P(beat SPY, 180d) and score both at T+180, testing whether the verdict engine
 beats the options market, not just the 0.25 coin-flip baseline;
 (3) sharing the Phase E1 event-vol tables as descriptive context. Micro-cap
-options are ruled out by measured liquidity (HYLN ~128 rows/day, gates fail);
-micro-caps stay equity-side in the existing kill-screen. Prerequisite for
+options are ruled out by measured liquidity (HYLN ~128 rows/day, gates fail;
+IBEX 0/72 pass the gate as of 2026-07-15 — see the IBEX section below, which
+scopes this proposal to the ~10 liquid overlap names); micro-caps stay
+equity-side in the existing kill-screen. Prerequisite for
 (1)+(2) is the still-parked market-implied probability readout (owner nod +
 one-page spec). The reverse flow — narratives into options gates — is
 explicitly declined as discretionary contamination.
 
 **Review date:** first H5/H6 verdict, ThetaData renewal decision (2026-07-25),
 or 2026-10-06 quarterly audit, whichever comes first.
+
+## IBEX options expression of the equity-research LONG (REJECTED on measured data 2026-07-16)
+
+Context: owner asked 2026-07-16 whether the equity-research book's IBEX pick
+could be expressed through options. Owner authorized one paid ThetaData pull to
+settle it. This is the first *measured* test of the microcap-options claim that
+the two sections above (Microcaps / combining projects; the bridge proposal)
+had been asserting from HYLN alone.
+
+**Measured, IBEX EOD chain @ 2026-07-15** (one ThetaData call; cached at
+`.cache/chains/IBEX_2026-07-15.parquet`; `allow_oos=True` disclosed look — IBEX
+sits in no hypothesis and no sealed holdout, so no OOS reveal budget was spent):
+
+| Symbol | Contracts | Expirations | Median OI | Median spread | Pass `passes_liquidity` |
+|---|---|---|---|---|---|
+| **IBEX** | **72** | **4** | **0** | **114.1%** | **0 (0%)** |
+| HYLN (already H7_EXCLUDED, "dead chain") | 128 | 4 | 115.5 | 35.8% | 2 (1.6%) |
+| PLTR | 2,383 | 19 | 307 | 4.88% | 1,054 (44%) |
+| NVDA | 3,847 | 25 | 554 | 4.82% | 1,755 (46%) |
+| AMZN | 2,384 | 23 | 293.5 | 4.55% | 1,132 (47%) |
+
+IBEX is materially **worse than the name this repo already excludes as dead**:
+half HYLN's contract count, median OI of zero, spreads ~3x HYLN's and ~23x the
+live names'. Exactly one contract in the whole chain clears
+`MIN_OPEN_INTEREST` (Sep $45C, OI 419) and it has a **zero bid**. 29 of 72
+contracts are zero-bid. Zero contracts clear `MAX_SPREAD_PCT` (10%) — or even
+43%. (Reference rows for HYLN/PLTR/NVDA/AMZN computed offline from the existing
+cache, dates 2026-07-15 except HYLN 2026-07-07.)
+
+Two independent reasons this is rejected, either sufficient on its own:
+- **The chain does not reach the thesis horizon.** Longest IBEX expiration is
+  2026-12-18 (~5 months). The equity-research thesis is a *12-month* re-rating
+  to $45.61 base. No instrument survives to the horizon being traded.
+- **The spread exceeds the thesis.** Best available expression (Dec $35C,
+  bid 3.10 / ask 6.70, OI 12) fills at ~37% above mid, breakeven $41.70 by Dec
+  = **+19.7% required in 5 months** against a 12-month base-case target, with
+  the $20.88 bear case a **-100%** option outcome. Round-tripping the Sep $35C
+  (buy 3.80 / sell 1.80) loses **53% to the spread alone** on a correct thesis
+  with no stock move.
+
+Note the shape of the finding: **the thesis was never the blocker.** A
+P(beat SPY, 180d) = 0.58 view with a slow, catalyst-free 12-month horizon and
+no scored calibration record yet (first T+180 outcomes resolve ~2026-11-05) is
+the kind of thesis options carry worst — and this chain would fail for a thesis
+we liked far more. The illiquidity that forced equity-research to cut IBEX from
+Kelly-implied 8.0% to a final 1.5% *propagates into the derivative*; it does not
+disappear there. The honest expression of an IBEX view is shares, at the size
+the other book already set.
+
+**Generalization (this is the reusable part):** any microcap graduating from
+equity-research's EDGAR kill-screen (~$20M-$500M) should be expected to fail
+this repo's liquidity gate the same way. Two of two microcaps measured (HYLN,
+IBEX) return unusable chains. The bridge proposal above should therefore scope
+itself to the ~10 liquid overlap names (VST, CEG, AVGO, NVDA, TEM, CRWV, IREN,
+NOW) and treat kill-screen microcaps as equity-side only — which is what its
+own §"Micro-cap options are ruled out" already says, now on measured rather
+than inferred grounds.
+
+Un-parking gate (should not be needed): a re-measured IBEX chain clearing
+`MIN_OPEN_INTEREST` and `MAX_SPREAD_PCT` on both legs at a tenor that reaches
+the thesis horizon. Absent that, do not re-ask this question per-ticker — the
+gate is mechanical, run it before any analysis. Note the ThetaData subscription
+lapses ~2026-07-29; per-pull owner approval required.
+
+**Review date:** do not review per-ticker. Revisit only if the bridge proposal
+is un-parked, or at the 2026-10-06 quarterly audit.
 
 ## Explicitly rejected (not parked)
 
