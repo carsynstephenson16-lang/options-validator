@@ -86,6 +86,30 @@ def _next_session(session: str) -> str:
     return sessions[0]
 
 
+def _last_session_before(day: date) -> str:
+    start = day - timedelta(days=21)
+    end = day - timedelta(days=1)
+    sessions = trading_days(start.isoformat(), end.isoformat())
+    if not sessions:
+        raise LifecycleValidationError(
+            f"no XNYS session strictly precedes {day.isoformat()}"
+        )
+    return sessions[-1]
+
+
+def _report_gated_h7c_exit(
+    position: PaperPosition,
+    intent: event_ledger.StoredEvent,
+) -> tuple[bool, date | None, str | None]:
+    if position.lane != "c" or not config.H7C_CLOSE_BEFORE_EARNINGS:
+        return False, None, None
+    next_report = intent.payload.get("next_report")
+    if next_report is None:
+        return False, None, None
+    report_date = date.fromisoformat(str(next_report))
+    return True, report_date, _last_session_before(report_date)
+
+
 def _clock_utc(clock) -> datetime:
     now = clock() if clock is not None else datetime.now(timezone.utc)
     if (
@@ -428,6 +452,26 @@ def _terminal_for_intent(
     return None
 
 
+def _terminal_for_exit_intent(
+    events: list[event_ledger.StoredEvent], exit_intent_id: str
+) -> event_ledger.StoredEvent | None:
+    for ev in events:
+        if ev.event_type == "skip" and ev.payload.get("exit_intent_id") == exit_intent_id:
+            return ev
+    return None
+
+
+def _source_health_cause(
+    events: list[event_ledger.StoredEvent], intent: event_ledger.StoredEvent
+) -> str | None:
+    by_id = _by_id(events)
+    for cause_id in intent.causes:
+        found = by_id.get(cause_id)
+        if found is not None and found.event_type == "source_health":
+            return cause_id
+    return None
+
+
 def _as_result(event: event_ledger.StoredEvent) -> TransitionResult:
     return TransitionResult(
         event_id=event.event_id,
@@ -653,6 +697,40 @@ def _skip(
         ),
         clock=clock,
         expected_head=expected_head,
+    )
+
+
+def _exit_terminal_skip(
+    base: Path,
+    intent: event_ledger.StoredEvent,
+    position: PaperPosition,
+    *,
+    session: str,
+    reason: str,
+    causes: list[str],
+    clock=None,
+    details: dict | None = None,
+) -> TransitionResult:
+    payload = {
+        "exit_intent_id": intent.event_id,
+        "position_id": position.position_id,
+        "reason": reason,
+    }
+    if details:
+        payload.update(details)
+    return _transition(
+        base,
+        _event(
+            event_id=_skip_id(intent.event_id, session, reason),
+            event_type="skip",
+            occurred_at_utc=session_close_utc(session).isoformat(),
+            evaluation_session=session,
+            symbol=position.symbol,
+            lane=position.lane,
+            causes=causes,
+            payload=payload,
+        ),
+        clock=clock,
     )
 
 
@@ -1193,6 +1271,22 @@ def process_exit_fill(
     intent = _require_event(events, exit_intent_id, "exit_intent")
     position_id = str(intent.payload["position_id"])
     position = _position(base, position_id)
+    terminal = _terminal_for_exit_intent(events, exit_intent_id)
+    if terminal is not None:
+        return _as_result(terminal)
+    report_gated, report_date, cutoff_session = _report_gated_h7c_exit(position, intent)
+    if report_gated and report_date is not None:
+        if date.fromisoformat(fill_session) >= report_date:
+            raise LifecycleValidationError(
+                "report-gated H7c exit fill cannot occur on or after the scheduled report"
+            )
+        if (
+            cutoff_session is not None
+            and date.fromisoformat(fill_session) > date.fromisoformat(cutoff_session)
+        ):
+            raise LifecycleValidationError(
+                "report-gated H7c exit cannot retry past the earnings report cutoff"
+            )
     existing = next(
         (
             ev
@@ -1241,11 +1335,45 @@ def process_exit_fill(
             f"exit unresolved at expiration {expiration}; failing loud"
         )
     gate = _require_event(events, data_gate_id, "data_gate", session=fill_session)
+
+    def _maybe_terminal_at_earnings_cutoff(
+        gap_reason: str,
+    ) -> TransitionResult | None:
+        if not report_gated or cutoff_session is None:
+            return None
+        if date.fromisoformat(fill_session) < date.fromisoformat(cutoff_session):
+            return None
+        if existing is not None:
+            raise LifecycleValidationError(
+                "conflicting rerun no longer reproduces the recorded exit fill"
+            )
+        causes = [exit_intent_id, data_gate_id]
+        source_health_id = _source_health_cause(events, intent)
+        if source_health_id is not None:
+            causes.append(source_health_id)
+        return _exit_terminal_skip(
+            base,
+            intent,
+            position,
+            session=fill_session,
+            reason="exit_data_gap_at_earnings_cutoff",
+            causes=causes,
+            clock=write_clock,
+            details={
+                "gap_reason": gap_reason,
+                "next_report": intent.payload.get("next_report"),
+                "report_cutoff_session": cutoff_session,
+            },
+        )
+
     if gate.payload.get("whole_universe_verdict") != "GO":
         if existing is not None:
             raise LifecycleValidationError(
                 "conflicting rerun no longer reproduces the recorded exit fill"
             )
+        terminal_skip = _maybe_terminal_at_earnings_cutoff("exit_data_gate_no_go")
+        if terminal_skip is not None:
+            return terminal_skip
         return _gap_transition(
             base,
             parent_id=exit_intent_id,
@@ -1269,6 +1397,11 @@ def process_exit_fill(
             raise LifecycleValidationError(
                 "conflicting rerun no longer reproduces the recorded exit fill"
             )
+        terminal_skip = _maybe_terminal_at_earnings_cutoff(
+            gap_reason or "exit_liquidity_at_fill"
+        )
+        if terminal_skip is not None:
+            return terminal_skip
         return _gap_transition(
             base,
             parent_id=exit_intent_id,
@@ -1332,6 +1465,26 @@ def replay_positions(*, base_dir) -> list[PaperPosition]:
     events = event_ledger.read_events(base)
     positions: dict[str, PaperPosition] = {}
     for ev in events:
+        if ev.event_type == "skip":
+            exit_intent_id = ev.payload.get("exit_intent_id")
+            if isinstance(exit_intent_id, str):
+                position_id = ev.payload.get("position_id")
+                if not isinstance(position_id, str):
+                    raise LifecycleValidationError(
+                        "terminal exit skip is missing position_id"
+                    )
+                opened = positions.get(position_id)
+                if opened is None or opened.state != "pending_exit":
+                    raise LifecycleValidationError(
+                        f"position {position_id!r} has terminal exit skip without pending exit"
+                    )
+                positions[position_id] = replace(
+                    opened,
+                    state="exit_failed",
+                    exit_intent_id=exit_intent_id,
+                    exit_event_id=ev.event_id,
+                )
+            continue
         if ev.event_type == "exit_intent":
             position_id = ev.payload.get("position_id")
             if not isinstance(position_id, str):
