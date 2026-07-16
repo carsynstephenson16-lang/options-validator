@@ -96,7 +96,10 @@ Holidays and half-days are handled by that calendar, never assumed.
      and its losses), and exists to keep each trade a single-event estimand.
   2. **DTE close:** close when remaining DTE ≤ `H6_CLOSE_AT_DTE` (21).
   3. **Take-profit:** close at the first session close where the position
-     marks ≥ `H6_TAKE_PROFIT_PCT` (+100%) over entry cost.
+     marks ≥ `H6_TAKE_PROFIT_PCT` (+100%) over entry cost. The mark
+     convention must be identical to `h6_watch`'s registered sell-side
+     valuation — the implementation imports or mirrors it exactly; a new
+     mark convention is a spec violation.
   All exits are evaluated at session closes only and fill at the **next**
   session's close (same T→T+1 rule as entries). A missing exit-session
   chain follows Stage-4 doctrine: append the visible gap and exit at the
@@ -206,8 +209,10 @@ Exactly **one** run. The run artifact binds, content-addressed:
 - the manifest (path + sha256) of every cache file read;
 - the exact assertion-store rows (by id) that defined the events.
 
-Ledger flow: `H9_REGISTERED` (spec sha, trial 11→12) → `H9_CENSUS` →
-`H9_RESULT` (verdict + receipt hash). Any deviation, crash, or input change
+Ledger flow, strictly ordered: owner types §5 → owner's external review
+returns PASS on the typed spec → frozen spec committed + `H9_REGISTERED`
+(spec sha, trial 11→12) → `H9_CENSUS` → `H9_RESULT` (verdict + receipt
+hash). Registration never precedes the external review. Any deviation, crash, or input change
 mid-run voids the run; a voided run is recorded honestly and does NOT refund
 the one-run contract without a new owner decision.
 
