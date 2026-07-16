@@ -1,0 +1,276 @@
+{
+  "as_of": "2026-07-15",
+  "provenance": "LLM-asserted (Claude subagents, web research 2026-07-16)",
+  "market": {
+    "summary": "US equities are near record highs but churning under the surface. As of the July 15, 2026 close the S&P 500 was at 7,572.40 (+0.38%) and the Nasdaq at 26,269.23 (+0.62%), roughly half a percent below record closes, with the S&P up about 10.7% YTD and 24 all-time highs so far in 2026. Today (July 16) the tape turned mixed-to-soft: S&P -0.4% and Nasdaq -0.8% intraday as chips sold off after TSMC beat earnings but fell 4%+ on capex/margin concerns, while the Dow held up. The dominant internal story is a large rotation out of semiconductors (SOX reported down ~15% from its highs) into megacap hyperscalers (Apple at a record, MSFT/AMZN/GOOGL up ~3% on July 15). Macro crosscurrents: June CPI (July 14) and a -0.3% m/m June PPI (July 15) eased what had been Fed rate-HIKE bets, but PPI is still +5.5% y/y, June retail sales missed (+0.2% vs +0.3% consensus), and US strikes on Iran are keeping oil near recent highs. Net: index-level risk-on with low realized stress, but rotation, sticky y/y inflation, and geopolitics make it a mixed regime rather than a clean melt-up.",
+    "regime": "mixed",
+    "notes": [
+      "VIX closed at 15.67 on 2026-07-15 (down ~5% on the day) and traded roughly 15.9-16.6 on July 16 \u2014 verified via Yahoo Finance/Investing.com quotes, not directly from Cboe (Cboe/FRED pages blocked direct fetch). Mid-15s-16 is below the long-run ~19-20 average: option premium is cheap, which is thin compensation for systematic sellers and relatively favorable for buyers of defined-risk long optionality \u2014 consistent with this repo's long-premium H6/H7/H8 lanes.",
+      "The AI-infrastructure trade is bifurcating, not breaking. Semis are in a real correction \u2014 SOX reported ~15% off its highs, Micron -8% on July 15, memory names (WDC, SNDK) down ~8% on July 16, and TSMC fell 4%+ despite a 77% earnings gain on margin/capex worries \u2014 with a reported $3.2T rotation out of chips into the Magnificent 7. Hyperscalers are the strong leg (Apple record high on China AI approval; MSFT/AMZN/GOOGL up ~3% July 15), and the power leg remains structurally bid: VST was named preferred power provider for the KKR/Nvidia-backed Helix venture (>$10B commitments) with Q1 revenue +43% y/y, and CEG has its 20-yr Microsoft Three Mile Island PPA plus a 10GW+ datacenter PPA pipeline, against reported ~$750B 2026 hyperscaler AI capex. For this repo's book: the capex thesis is intact but leadership has shifted within the trade \u2014 MSFT/AMZN/VST/CEG are on the favored side of the rotation while chip-adjacent story names face momentum headwinds.",
+      "2026-07-16: Retail sales, June 2026 (released; +0.2% m/m vs +0.3% consensus)",
+      "2026-07-28: FOMC meeting begins (two-day meeting July 28-29)",
+      "2026-07-29: FOMC rate decision and statement",
+      "2026-08-07: Employment Situation (July 2026 jobs report), 8:30 a.m. ET",
+      "FOMC dates verified on federalreserve.gov; PPI release date verified via BLS archive URL (ppi_07152026); BLS schedule and Cboe/FRED pages returned 403 to direct fetch, so VIX and some dates rest on Yahoo/Investing/CNBC secondary quotes.",
+      "Next week (July 20-24) looks macro-light ahead of the July 28-29 FOMC; the Fed communications blackout precedes the meeting (Inference from standard blackout rules, not separately verified).",
+      "Unusual regime detail: markets had been pricing possible Fed rate HIKES before the soft June CPI/PPI prints eased those bets; PPI still +5.5% y/y, so the inflation tail is not closed ahead of FOMC.",
+      "Geopolitical overhang: reports of continued US strikes on Iran with crude near recent highs and Treasury yields rising on July 16.",
+      "Retail sales miss (+0.2% vs +0.3%) is a mild growth-side soft spot; single data point, not a trend."
+    ]
+  },
+  "symbols": {
+    "MSFT": {
+      "news_summary": "MSFT closed July 15, 2026 at $398.70, down roughly 20% YTD and far off its 52-week high of $555.45, after two bruising weeks for enterprise software: IBM's surprise Q2 warning on July 14 (stock -25%, its worst day on record, citing customers redirecting budgets from conventional software/IT toward AI infrastructure hardware) dragged the whole software complex down, and MSFT briefly traded near $385 before recovering. Company-specific news includes a July 2 announcement of a $2.5B investment in 'Microsoft Frontier Co.', a new enterprise AI-implementation unit (shares +1.6% that day), and press reports (Fox Business, unconfirmed by Microsoft) of another layoff round of up to ~5,000-5,700 jobs across Xbox, sales, and consulting. Ahead of the July 29 FY26 Q4 report, at least three firms trimmed targets while keeping bullish ratings: Citi $620->$570 (Buy), Mizuho $515->$490 (Outperform), Argus $620->$510 (Buy), largely on anxiety over Microsoft's ~$190B calendar-2026 capex plan (~$35B above prior consensus). The FTC's broad antitrust probe into Microsoft's AI, cloud, licensing, and OpenAI relationship remains open with no announced resolution date.",
+      "sentiment": "neutral",
+      "catalysts": [
+        {
+          "date": "2026-07-29",
+          "what": "FY2026 Q4 earnings, after market close; call webcast 2:30pm PT (Nadella/Hood). Key items: Azure growth, Q4 capex guided to >$40B, ~$80B power-constrained Azure backlog, FY27 capex framing.",
+          "confirmed": true,
+          "source": "https://news.microsoft.com/source/2026/07/08/microsoft-announces-quarterly-earnings-release-date-68/"
+        },
+        {
+          "date": "2026-07-22",
+          "what": "IBM formal Q2 earnings release \u2014 direct read-through for enterprise software/AI-budget-reallocation narrative that hit MSFT on July 14; a second shoe or a walk-back moves the sector.",
+          "confirmed": true,
+          "source": "https://www.cnbc.com/2026/07/14/ibm-warns-second-quarter-earnings-fell-short-of-expectations.html"
+        },
+        {
+          "date": null,
+          "what": "Reported (unconfirmed by Microsoft) layoff round of up to ~5,700 jobs across Xbox/sales/consulting, said to land mid-to-late July \u2014 speculative until announced.",
+          "confirmed": false,
+          "source": "https://www.foxbusiness.com/economy/microsoft-eyes-another-wave-layoffs-hit-5000-workers-next-week"
+        },
+        {
+          "date": "2026-07-02",
+          "what": "Announced $2.5B investment in Microsoft Frontier Co., new enterprise AI-implementation unit (already public; execution details may come on the earnings call).",
+          "confirmed": true,
+          "source": "https://www.gurufocus.com/news/8940303/microsoft-msft-plans-job-cuts-affecting-thousands-amid-restructuring"
+        },
+        {
+          "date": null,
+          "what": "FTC antitrust probe (AI, cloud, licensing, OpenAI partnership) ongoing; no scheduled decision date \u2014 timing speculative.",
+          "confirmed": false,
+          "source": "https://www.nasdaq.com/articles/ftc-antitrust-probe-adds-pressure-amid-microsoft-openai-msft-tensions"
+        }
+      ],
+      "move_thesis": "The July 29 FY26 Q4 print is the dominant near-term catalyst and lands inside 2 weeks; with the stock at ~$399, down 20% YTD, and press reports of options markets positioning for a 'big swing' (no reliable implied-move figure was obtainable \u2014 treat magnitude as estimated), a 5-8% post-earnings move in either direction is plausible given the IBM-triggered demand doubts colliding with still-bullish sell-side positioning (average target ~$589). Upside case: Azure growth holds, the $80B power-constrained backlog converts to revenue visibility, and capex commentary reassures \u2014 a relief move retraces the July software selloff toward the pre-selloff zone and the low-$430s (roughly the Mizuho-style de-rated targets discount ~23% upside from here). Downside case: any echo of IBM's 'AI cannibalizes software budgets' message or another capex raise pushes MSFT through the $376 support cited by technicians toward the 52-week low at $349.20 (-12%). Before July 29, IBM's July 22 report is the sector tape-setter and could move MSFT 2-4% sympathetically in either direction. Note: this is Inference from levels and event positioning, not a prediction; the implied-move figure specifically could not be verified from a primary source.",
+      "risks": "The IBM warning suggests enterprise customers are actively reallocating budgets away from traditional software toward AI hardware, which threatens Microsoft's non-Azure segments (Office/Dynamics/consulting-adjacent revenue) even if Azure stays strong, and MSFT's YTD underperformance versus other Mag-7 names shows the market is already penalizing the ~$190B capex plan whose returns remain unproven. A capex increase without matching Azure acceleration on July 29 risks a break of $376 support toward the $349 52-week low, and the open FTC antitrust probe into the OpenAI relationship is an unpriced tail risk with no resolution date.",
+      "sources": [
+        "https://news.microsoft.com/source/2026/07/08/microsoft-announces-quarterly-earnings-release-date-68/",
+        "https://www.microsoft.com/en-us/investor/events/fy-2026/earnings-fy-2026-q4",
+        "https://www.sec.gov/Archives/edgar/data/0000789019/000119312526191457/msft-ex99_1.htm",
+        "https://www.cnbc.com/2026/07/14/ibm-warns-second-quarter-earnings-fell-short-of-expectations.html",
+        "https://seekingalpha.com/news/4613509-ibms-warning-sends-panic-into-software-consulting-stocks",
+        "https://www.foxbusiness.com/economy/microsoft-eyes-another-wave-layoffs-hit-5000-workers-next-week",
+        "https://247wallst.com/investing/2026/07/15/why-two-major-analysts-are-pumping-the-brakes-on-microsoft-before-earnings/",
+        "https://finance.yahoo.com/markets/stocks/articles/msft-stock-gets-price-target-140950679.html",
+        "https://www.vantagemarkets.com/market-analysis/msft-stock-price-today-microsoft-analysis-15-july-2026/",
+        "https://www.globaldatacenterhub.com/p/microsoft-q3-fy2026-the-190b-capex",
+        "https://www.nasdaq.com/articles/ftc-antitrust-probe-adds-pressure-amid-microsoft-openai-msft-tensions",
+        "https://www.fool.com/investing/2026/07/16/prediction-microsoft-stock-going-soar-after-july/",
+        "https://stockanalysis.com/stocks/msft/forecast/"
+      ]
+    },
+    "AMZN": {
+      "news_summary": "AMZN trades near $255 (closed $255.18 on 2026-07-15, +3.25% that day) with the story dominated by AI-infrastructure spending: on July 7 Amazon launched a $25B eight-part senior unsecured bond sale to fund AI buildout (orders peaked near $62B; ~$54B of debt raised YTD), with 2026 capex tracking toward ~$200B and trailing-12-month free cash flow collapsing to ~$1.2B from ~$25.9B a year ago. AWS grew 28% YoY in Q1 2026 ($37.6B revenue, fastest in 15 quarters, ~37.7% operating margin), helped by large Trainium deals with OpenAI (~2GW) and Anthropic (up to 5GW). Prime Day moved earlier to June 23-26 and set records (~$26.4B US e-commerce spend, +9.3% YoY), pulling the event fully into Q2 results. Analyst posture into the July 30 print is constructive: consensus is Strong Buy with an average price target around $314; TD Cowen (July 8) trimmed its target to $340 from $350 but forecasts Q2 revenue ~2% and operating income ~10% above consensus. Separately, Amazon paid $2.25M on June 30 to settle FTC Fair Credit Reporting Act claims, and the main FTC monopolization trial is now set for February 2027.",
+      "sentiment": "bull",
+      "catalysts": [
+        {
+          "date": "2026-07-30",
+          "what": "Q2 FY2026 earnings after US market close (estimated - widely reported by earnings calendars and CNBC, but not verified against an Amazon IR press release; street: ~$196B revenue, ~$1.82 EPS; company guide $194-199B sales, $20-24B op income)",
+          "confirmed": false,
+          "source": "https://www.financecalendar.com/event/amzn-earnings-july-2026/"
+        },
+        {
+          "date": "2026-07-07",
+          "what": "$25B bond sale for AI infrastructure priced (completed; company indicated no further 2026 debt issuance)",
+          "confirmed": true,
+          "source": "https://www.cnbc.com/2026/07/07/amazon-bond-sale-ai-debt.html"
+        },
+        {
+          "date": "2026-07-30",
+          "what": "FCC deadline for Amazon Leo (ex-Kuiper) to deploy 1,600 satellites; only ~700 expected deployed, 24-month extension requested - regulatory decision pending",
+          "confirmed": true,
+          "source": "https://www.datacenterdynamics.com/en/news/amazon-leo-seeks-24-month-extension-from-fcc-for-satellite-rollout-due-to-launch-shortages/"
+        },
+        {
+          "date": "2027-02-09",
+          "what": "FTC v. Amazon monopolization bench trial start (amended scheduling order; outside the 2-month options window but a standing overhang)",
+          "confirmed": true,
+          "source": "https://www.mlex.com/mlex/articles/2349579/amazon-loses-bid-to-keep-october-2026-trial-date-for-us-ftc-antitrust-case"
+        },
+        {
+          "date": "2026-06-30",
+          "what": "FTC FCRA settlement, $2.25M civil penalty (closed item, minor)",
+          "confirmed": true,
+          "source": "https://www.ftc.gov/news-events/news/press-releases/2026/06/ftc-requires-amazon-pay-225-million-resolve-charges-it-knowingly-violated-fair-credit-reporting-act"
+        }
+      ],
+      "move_thesis": "The dominant near-term event is the July 30 Q2 report: options are pricing an earnings reaction of roughly +/-7.05% (~$17.37), implying a post-print range of about $238-$273 from the ~$255 spot (Options AI / OptionCharts, mid-July reading). The bull path runs through AWS re-acceleration (28% in Q1, TD Cowen modeling Q2 revenue ~2% and operating income ~10% above consensus) plus the record Prime Day landing entirely in Q2, which could push the stock toward the low-$270s and, over weeks, toward the ~$314 consensus target. The bear path is a repeat of the capex/FCF shock narrative: with TTM free cash flow at ~$1.2B and ~$200B capex, a Q3 capex guide-up or any AWS margin compression could dominate a headline beat and drive the stock toward the ~$238 implied-move floor or the upper-$220s. Between now and the print, the $25B bond deal is already digested and no comparable scheduled catalysts remain, so drift plus IV build into July 30 is the base case; the FCC Leo deadline on the same day is a minor secondary headline risk.",
+      "risks": "Free cash flow has collapsed to ~$1.2B TTM against ~$200B capex, and the debt-funded AI buildout (~$54B raised YTD, priced with extra yield concession per Fortune) makes the stock acutely sensitive to any wobble in AI-demand or AWS margin narrative on the call. Prime Day data showed softer per-household spend ($143.45 vs $156.37) and lower deal satisfaction, so the retail beat may be lower quality than the headline record implies. The FTC monopolization trial (Feb 2027) and the pending FCC Leo satellite-deadline decision are standing regulatory overhangs.",
+      "sources": [
+        "https://www.financecalendar.com/event/amzn-earnings-july-2026/",
+        "https://www.cnbc.com/2026/07/07/amazon-bond-sale-ai-debt.html",
+        "https://www.bloomberg.com/news/articles/2026-07-07/amazon-returns-to-us-bond-market-to-fund-ai-infrastructure-build",
+        "https://fortune.com/2026/07/08/amazons-25-billion-surprise-bond-sale-dangled-extra-yield-to-lure-in-buyers/",
+        "https://www.tradingkey.com/analysis/stocks/us-stocks/262026432-amazon-amzn-stock-forecast-july-2026-aws-28-percent-capex-q2-earnings-tradingkey",
+        "https://www.tradingkey.com/news/market-movers/262032644-market-movers-amzn-20260715",
+        "https://www.digitalcommerce360.com/article/amazon-prime-day-sales/",
+        "https://www.emarketer.com/content/beyond-record-sales--what-prime-day-2026-means-retailers",
+        "https://www.mlex.com/mlex/articles/2349579/amazon-loses-bid-to-keep-october-2026-trial-date-for-us-ftc-antitrust-case",
+        "https://www.ftc.gov/news-events/news/press-releases/2026/06/ftc-requires-amazon-pay-225-million-resolve-charges-it-knowingly-violated-fair-credit-reporting-act",
+        "https://www.datacenterdynamics.com/en/news/amazon-leo-seeks-24-month-extension-from-fcc-for-satellite-rollout-due-to-launch-shortages/",
+        "https://tools.optionsai.com/expected-move/AMZN",
+        "https://optioncharts.io/options/AMZN/expected-move",
+        "https://www.marketbeat.com/stocks/NASDAQ/AMZN/forecast/",
+        "https://aws.amazon.com/blogs/aws/top-announcements-of-the-aws-summit-in-new-york-2026/",
+        "https://www.aboutamazon.com/news/company-news/amazon-news-today-top-stories-company"
+      ]
+    },
+    "VST": {
+      "news_summary": "Vistra confirmed via a July 6, 2026 press release that it will report Q2 2026 results on Friday, Aug 7, 2026 (10 a.m. ET call). On July 14, 2026 it filed an 8-K disclosing PJM 2028/2029 Base Residual Auction results: ~10,924 MW cleared at a weighted average of $325.00/MW-day, with the RTO price again at the FERC-approved cap and PJM reporting its first-ever RTO-wide reliability shortfall (6,831 MW short, 138,318 MW procured). Shares rose ~4.1% on July 6 to $153.43 and were up roughly 12% over the prior month, trading near $158 into mid-July; on July 15 shares added ~1.1% after an analyst action, with Scotiabank reportedly raising its target to $298 (Sector Outperform). Backdrop remains the nuclear/datacenter PPA story: the Meta 20-year deals (Perry/Davis-Besse ~2,176 MW plus Beaver Valley uprates, announced January 2026, Perry delivery starting December 2026) and the September 2025 AWS 1,200 MW Comanche Peak PPA (delivery from Q4 2027).",
+      "sentiment": "bull",
+      "catalysts": [
+        {
+          "date": "2026-08-07",
+          "what": "Q2 2026 earnings + conference call 10 a.m. ET (company-confirmed; consensus EPS ~$2.43 per aggregators, labeled aggregator-estimated)",
+          "confirmed": true,
+          "source": "https://www.stocktitan.net/news/VST/vistra-to-report-second-quarter-results-on-aug-7-27cmv7htv7is.html"
+        },
+        {
+          "date": "2026-07-14",
+          "what": "PJM 2028/2029 capacity auction results (just occurred): Vistra cleared ~10,924 MW at $325.00/MW-day weighted average; RTO cleared at FERC cap, first-ever RTO-wide shortfall",
+          "confirmed": true,
+          "source": "https://www.stocktitan.net/sec-filings/VST/8-k-vistra-corp-reports-material-event-0d0a92e1903c.html"
+        },
+        {
+          "date": null,
+          "what": "Perry nuclear Meta PPA delivery begins December 2026 (part of 20-yr Meta deals announced Jan 2026: Perry/Davis-Besse 2,176 MW + Beaver Valley uprates)",
+          "confirmed": true,
+          "source": "https://www.world-nuclear-news.org/articles/ppas-support-extended-operations-at-vistra-plants"
+        },
+        {
+          "date": null,
+          "what": "AWS Comanche Peak 1,200 MW 20-yr nuclear PPA, initial delivery Q4 2027; company says up to ~3.2 GW additional capacity potentially available at Beaver Valley/Comanche Peak for future deals",
+          "confirmed": true,
+          "source": "https://www.world-nuclear-news.org/articles/ppas-support-extended-operations-at-vistra-plants"
+        },
+        {
+          "date": null,
+          "what": "SPECULATIVE: additional data-center/co-location PPA announcements (management has said it is engaged in co-location discussions; no date or counterparty confirmed)",
+          "confirmed": false,
+          "source": "https://www.power-eng.com/business/vistra-engaged-in-co-location-discussions-with-data-centers/"
+        }
+      ],
+      "move_thesis": "The dominant near-term vol event is Q2 earnings on Aug 7, 2026, ~3 weeks out and inside any 1-2 month option tenor; aggregators cite consensus EPS ~$2.43 with one preview flagging a ~140% YoY EPS jump, and VST has a history of large single-day earnings reactions (inference from its high-beta merchant-power profile, not a measured statistic). The July 14 PJM print ($325/MW-day at the cap, first-ever RTO shortfall) was absorbed as mildly positive (+1.1% on July 15 alongside a target raise) \u2014 it locks in 2028/29 capacity revenue visibility but was largely expected since this is the third consecutive cap-clearing auction and the price is actually -2.5% YoY, so it is unlikely to drive further large upside alone. With the stock near $158 vs. $153.43 on July 6, aggregator consensus targets in the low-to-mid $200s (TipRanks avg ~$225, low $181, 13 buys/0 holds/0 sells) and a fresh Scotiabank high target of $298 (both aggregator-reported, not independently verified), the sell-side skew is strongly bullish; a beat-and-raise or a new hyperscaler PPA headline plausibly supports a move toward the $170s-$180 (the lowest published target), i.e. high-single to low-double-digit percent upside over 1-2 months. Absent a new catalyst, drift risk is toward the $150-153 area where the pre-PJM/pre-earnings-announcement price sat.",
+      "risks": "Earnings is a two-sided event: merchant generators' quarterly results are hedge-book and weather sensitive, and a miss or soft commentary near all-time-high analyst expectations (zero holds/sells) leaves little cushion \u2014 a give-back toward $150 or below is plausible on a bad print. The PJM 2028/29 price came in -2.5% YoY and future auctions face political/regulatory pressure on the price cap, capping the capacity-revenue growth narrative. The datacenter-PPA premium embedded in the stock is vulnerable to any cooling in AI-power headlines or delays in Perry/Davis-Besse delivery milestones; note this name sits inside the owner's concentrated AI/semis/power factor.",
+      "sources": [
+        "https://www.stocktitan.net/news/VST/vistra-to-report-second-quarter-results-on-aug-7-27cmv7htv7is.html",
+        "https://www.stocktitan.net/sec-filings/VST/8-k-vistra-corp-reports-material-event-0d0a92e1903c.html",
+        "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/",
+        "https://www.world-nuclear-news.org/articles/ppas-support-extended-operations-at-vistra-plants",
+        "https://www.tipranks.com/news/company-announcements/vistra-secures-pjm-capacity-bolstering-future-revenue-visibility",
+        "https://www.tipranks.com/stocks/vst/forecast",
+        "https://www.gurufocus.com/news/8960529/vst-maintains-by-scotiabank-price-target-raised-to-298",
+        "https://www.gurufocus.com/news/8946183/vistra-corp-vst-shares-surge-41-what-gf-score-of-84-tells-investors",
+        "https://www.marketbeat.com/instant-alerts/vistra-nysevst-shares-up-11-after-analyst-upgrade-2026-07-15/",
+        "https://www.power-eng.com/business/vistra-engaged-in-co-location-discussions-with-data-centers/"
+      ]
+    },
+    "CEG": {
+      "news_summary": "CEG has had a volatile two weeks: on July 1, 2026 Citi cut its price target to $297 from $348 (Neutral) and the stock fell ~5% to a fresh 52-week low of $228.63. It then rebounded roughly 7% after PJM's 2028/29 Base Residual Auction results were released July 14: prices hit the $325/MW-day cap and Constellation disclosed via 8-K that it cleared 18,875 MW (15,700 MW nuclear, 3,175 MW fossil/other), worth an estimated ~$2.2B in capacity revenue for the 2028/29 delivery year. This follows the June 1 FERC waiver letting Constellation transfer 760 MW of Eddystone interconnection rights to the Crane Clean Energy Center (Three Mile Island-1), keeping the Microsoft-backed 835 MW restart on its 2027 timeline instead of ~2031. Calpine integration (deal closed Jan 7, 2026) continues, including the agreed PJM generation asset sale to LS Power required by the FERC/DOJ resolution. As of July 16, 10:25 AM ET the stock trades ~$252.45 (down ~2.2% on the day), about 39% below its 52-week high of $412.70 and down ~26% YTD.",
+      "sentiment": "neutral",
+      "catalysts": [
+        {
+          "date": "2026-08-06",
+          "what": "Q2 2026 earnings conference call, 10:00 AM ET (company IR, confirmed)",
+          "confirmed": true,
+          "source": "https://investors.constellationenergy.com/events/event-details/q2-2026-constellation-energy-corporation-earnings-conference-call"
+        },
+        {
+          "date": "2026-07-14",
+          "what": "PJM 2028/29 capacity auction results: CEG cleared 18,875 MW at the $325/MW-day price cap, ~$2.2B capacity revenue (already occurred; earnings-call quantification pending)",
+          "confirmed": true,
+          "source": "https://www.stocktitan.net/sec-filings/CEG/8-k-constellation-energy-corp-reports-material-event-a9825327a005.html"
+        },
+        {
+          "date": null,
+          "what": "Crane Clean Energy Center (TMI-1, 835 MW) restart targeted 2027; June 1, 2026 FERC waiver preserved the timeline; NRC milestones and restart-progress updates are ongoing catalysts",
+          "confirmed": true,
+          "source": "https://www.ans.org/news/2026-06-05/article-8097/ferc-approves-constellation-waiver-request-on-crane-restart/"
+        },
+        {
+          "date": null,
+          "what": "Additional data-center co-location/PPA announcements expected through 2026 (management-signaled, e.g. Calpine sites after the Feb 9 CyrusOne Freestone 380+380 MW deal) \u2014 speculative timing, no dates",
+          "confirmed": false,
+          "source": "https://www.constellationenergy.com/news/2026/02/constellation-and-cyrusone-announce-agreement-to-support-new-data-center-facility-at-freestone-energy-center-in-texas.html"
+        },
+        {
+          "date": null,
+          "what": "Closing of PJM generation asset sale to LS Power (required by FERC/DOJ Calpine resolution) \u2014 announced, closing timing unconfirmed",
+          "confirmed": false,
+          "source": "https://www.lspower.com/news/constellation-announces-agreement-to-sell-pjm-generation-assets-to-ls-power-as-part-of-ferc-u-s-doj-resolution-of-calpine-transaction/"
+        }
+      ],
+      "move_thesis": "The one scheduled near-term event is the confirmed Q2 earnings call on 2026-08-06 (inside 3 weeks and well inside the 2-month options window); CEG's recent single-day moves around news have been large (-5% on the July 1 Citi cut, ~+7% on the July 14 PJM auction print), so a 5-8% one-day move around earnings is plausible in either direction. Upside path: management quantifying the cap-priced PJM auction (~$2.2B for 2028/29) into guidance, plus any new hyperscaler co-location PPA, could carry the stock from ~$252 toward the $290-$300 area (Citi's reduced $297 target is the low end of the analyst range; consensus PT is ~$372 per TipRanks as of July 10). Downside path: a guidance disappointment or Calpine integration/cost surprise retests the $228.63 52-week low, ~9% below current levels. Unscheduled data-center deal announcements are the main asymmetric bull catalyst \u2014 prior comparable announcements moved the stock high-single-digits in a day \u2014 but their timing is speculative.",
+      "risks": "The stock is in a persistent 2026 downtrend (-26% YTD, 39% off highs) with a fresh Citi Neutral/$297 cut citing valuation, so positive news has recently been sold into strength. Calpine ($16.4B+ deal) integration risk, the mandated PJM asset divestiture to LS Power, and any Crane restart slippage (2027 target depends on remaining NRC/execution milestones) are concrete bear catalysts. PJM capacity revenue at the $325 cap is also politically sensitive \u2014 consumer-cost backlash in Pennsylvania and other PJM states raises regulatory-intervention risk to future auction pricing.",
+      "sources": [
+        "https://investors.constellationenergy.com/events/event-details/q2-2026-constellation-energy-corporation-earnings-conference-call",
+        "https://www.stocktitan.net/sec-filings/CEG/8-k-constellation-energy-corp-reports-material-event-a9825327a005.html",
+        "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/",
+        "https://www.utilitydive.com/news/pjm-capacity-auction-price-cap-reserve-shortfall/825282/",
+        "https://www.tipranks.com/news/company-announcements/constellation-energy-clears-pjm-capacity-auction-boosting-outlook",
+        "https://www.thestreet.com/investing/stocks/ceg-constellation-energy-downgrade-by-citi",
+        "https://www.tipranks.com/stocks/ceg/forecast",
+        "https://www.ans.org/news/2026-06-05/article-8097/ferc-approves-constellation-waiver-request-on-crane-restart/",
+        "https://www.utilitydive.com/news/constellation-three-mile-island-crane-nuclear-ferc-waiver/821836/",
+        "https://www.constellationenergy.com/news/2026/01/constellation-completes-calpine-transaction-powering-americas-clean-energy-future.html",
+        "https://www.lspower.com/news/constellation-announces-agreement-to-sell-pjm-generation-assets-to-ls-power-as-part-of-ferc-u-s-doj-resolution-of-calpine-transaction/",
+        "https://www.constellationenergy.com/news/2026/02/constellation-and-cyrusone-announce-agreement-to-support-new-data-center-facility-at-freestone-energy-center-in-texas.html",
+        "https://stockanalysis.com/stocks/ceg/"
+      ]
+    }
+  },
+  "top_picks": [
+    {
+      "symbol": "AMZN",
+      "lane": "put",
+      "strike": 225.0,
+      "expiry": "2026-09-18",
+      "why_now": "Highest composite score on the board (8): every gate except FOMC is GREEN. AMZN is the only core name above all three moving averages with a fresh 20-day breakout (+6.9% over the last month, 7.3% off its 52-week high), it sits on the favored side of the semis-to-hyperscaler rotation, and its IV-rank of 0.90 means its options pay near the top of their own 1-year range while implied vol still sits above trailing realized (VRP GREEN) \u2014 you are being paid unusually well for the promise, per the frozen H5 rubric.",
+      "hypothesis": "AMZN finishes above $225 on 2026-09-18, so the put expires worthless and the $494 credit is kept in full. The strike is 11.8% below spot \u2014 more than one typical monthly move (10.0%) of cushion, and below the ~$238 floor of the options-implied earnings move.",
+      "thesis": "Moving-average basis: price above SMA20/50/200 with a 20-day breakout \u2014 trend framing is constructive, and the strike sits ~1.2 monthly wiggles below spot. Event basis: the ~Jul 30 Q2 print (ESTIMATED date \u2014 see logic) is the dominant catalyst; options price a \u00b17% (~$17) reaction, i.e. a $238\u2013$273 range from $255 \u2014 the $225 strike is outside even the full downside implied move. AWS re-accelerated to 28% in Q1 and record Prime Day lands entirely in Q2; consensus target ~$314.",
+      "bull": "AWS beat / relief print sends the stock toward the low-$270s and consensus targets near $314 over the following weeks. The put expires worthless: keep $494 \u2014 that is the maximum outcome; a short put never participates in upside beyond its credit.",
+      "base": "Drift into the print, mixed reaction, stock chops between ~$238 and $273 but holds well above $225 into September: keep $494 (deterministic base scenario at flat $254.96 = +$494).",
+      "bear": "A capex/free-cash-flow shock (TTM FCF is ~$1.2B against ~$200B capex) breaks the stock more than 11.8% lower: below $225 you are assigned 100 shares for $22,500. The deterministic bear scenario (one 65-day-scaled move down, $217.61) shows \u2212$244; a full-throated 2026-style derating would cost more. Max risk is the strike, as with any cash-secured put.",
+      "logic": "Classic pre-event premium sale with the strike outside the implied move, in the one name whose price action (breakout, above all MAs) and market positioning (rotation beneficiary) both support it. TWO honest caveats: (1) the earnings badge shows GREEN only because Amazon has not yet confirmed its Q2 date \u2014 the ~2026-07-30 date is aggregator-estimated and sits INSIDE this option's life; treat this cycle as earnings-bearing. (2) FOMC Jul 28\u201329 is also inside the cycle (AMBER). LLM-asserted narrative; numbers from the frozen H5 card."
+    },
+    {
+      "symbol": "MSFT",
+      "lane": "pmcc",
+      "strike": 470.0,
+      "expiry": "2026-09-18",
+      "why_now": "Score 6. MSFT's IV-rank of 0.88 means call premium is near the top of its own 1-year range \u2014 the market is paying up for exactly the strikes this structure sells. The $470 short call is 18.8% above the $395.63 close, above even a strong earnings relief rally, and the structure's safety floor ($441.51 = LEAPS strike $360 + $81.51 premium) means assignment cannot lock in a loss. IMPORTANT: this is the PREVIEW lane \u2014 the paper book holds NO MSFT LEAPS today, so this is a two-leg plan: buy the $360 LEAPS (~$8,151) first, then sell the $470 call ($648 credit) against it.",
+      "hypothesis": "MSFT stays below $470 through 2026-09-18 (it would take a +18.8% rally through two event dates to breach), the call expires worthless, and the $648 credit is kept \u2014 7.95% in 65 days on the LEAPS capital (~45%/yr annualized).",
+      "thesis": "Moving-average basis: MSFT is mixed vs its MAs, +1.3% over a month, 27% off its 52-week high after the IBM-triggered software derating \u2014 a chop/repair regime, which is what a covered-call-style structure wants. Event basis: company-confirmed FY26-Q4 earnings on Jul 29 (now in the repo calendar; badge honestly AMBER) collides with the FOMC decision the same day; a 5\u20138% earnings move either way is plausible, and even the bullish sell-side de-rated targets cluster near $490\u2013$570 \u2014 the $470 strike only caps upside the LEAPS itself would be capturing on the way up.",
+      "bull": "Relief print (Azure holds, capex reassures) lifts the stock toward the low-$430s. The $470 call likely still expires worthless: keep the $648 AND the (uncounted) LEAPS appreciation. If the rally somehow carries through $470, assignment is the plan working: exercise value locks ~$3,500 total on the structure ($470\u2212$360 spread, less LEAPS cost, plus credit).",
+      "base": "Post-IBM chop continues, stock oscillates around ~$380\u2013420: keep the $648 credit (deterministic base at flat $395.63 = +$648, premium only).",
+      "bear": "IBM's Jul 22 print echoes and MSFT breaks the cited $376 support toward the $349 52-week low: the short call expires worthless (keep $648) but the LEAPS you bought loses real value \u2014 the card's honest note is 'just the premium; LEAPS value not counted.' A \u221212% move costs the $360 LEAPS meaningfully more than the credit collected. This pick's risk lives in the long leg, not the short one.",
+      "logic": "Sell rich implied vol (IVR 0.88) against a defined long structure rather than naked; the safety-floor rule makes assignment mechanically loss-free while the credit pays ~45%/yr on deployed capital. Two AMBER badges (earnings Jul 29 + FOMC Jul 29) say the cycle is event-heavy \u2014 this is an income structure worn THROUGH events, not a directional bet. LLM-asserted narrative; numbers from the frozen H5 card."
+    },
+    {
+      "symbol": "CEG",
+      "lane": "put",
+      "strike": 220.0,
+      "expiry": "2026-09-18",
+      "why_now": "Score 6. The $220 strike sits 14.8% below the $258.11 close \u2014 MORE than one monthly wiggle (12.9%) of cushion \u2014 and, decisively, BELOW the $228.63 52-week low printed on Jul 1. Implied vol still exceeds trailing realized (VRP GREEN), and the Jul 14 PJM capacity auction just locked in ~$2.2B of 2028/29 capacity revenue at the $325/MW-day cap, hardening the downside story. You are paid $613 (~16%/yr on the $22,000 reserved) to promise a purchase at a price the stock did not reach even at its worst 2026 moment.",
+      "hypothesis": "CEG stays above $220 through 2026-09-18. It would take a close below the existing 52-week low \u2014 through the PJM-windfall news \u2014 for this put to finish in the money.",
+      "thesis": "Moving-average basis: CEG is mixed vs MAs, +1.7% over a month, 36% off its 52-week high \u2014 beaten down, not extended; the entry is cushion-led, not momentum-led. Event basis: company-confirmed Q2 earnings Aug 6 (badge honestly AMBER) with recent single-day swings of \u22125% (Citi cut) and +7% (PJM print); the earnings call is where management quantifies the ~$2.2B capacity windfall into guidance, and unscheduled datacenter-PPA headlines remain the asymmetric bull catalyst.",
+      "bull": "Earnings quantifies the PJM windfall and/or a new hyperscaler PPA lands: stock re-rates toward the $290s (the LOW end of published targets). Put expires worthless: keep $613 \u2014 the maximum outcome.",
+      "base": "Stock chops in the $230\u2013$270 range it has occupied since the Citi cut: keep $613 (deterministic base at flat $258.11 = +$613).",
+      "bear": "A guidance miss or Calpine-integration surprise retests the $228.63 low (\u22129% away) \u2014 which STILL leaves the $220 strike out of the money. Assignment needs \u221214.8%+; the deterministic bear scenario ($208.97, a full 65-day-scaled move down) shows \u2212$490, and being put the stock at $220 means buying 39% off the highs. Regulatory backlash against $325-cap capacity pricing is the slower-burn bear case.",
+      "logic": "Cushion-led premium sale: the strike is below the 52-week low and beyond one monthly move, with a fresh fundamental floor (PJM revenue) under the story. The pay is only mid-range for CEG (IV-rank 0.35, AMBER) \u2014 this pick is about the margin of safety, not rich vol. Earnings Aug 6 and FOMC Jul 28\u201329 sit inside the cycle (both AMBER). LLM-asserted narrative; numbers from the frozen H5 card."
+    }
+  ]
+}
