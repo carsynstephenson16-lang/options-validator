@@ -128,7 +128,7 @@ attempt to work around the hook, and treat a hook block as correct by default.
 
 ## Scope guard (always on)
 
-The live scope gate is README.md "Scope status": H5, H6, and H7 are registered
+The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
 forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
 arc, with its historical diagnostic permanently retired. Before adding any new
 capability, ticker, strategy, or tool, answer in one sentence: "Does this move

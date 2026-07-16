@@ -61,7 +61,7 @@ optimizer unless explicitly added to the phase plan.
   with zero edge."
 
 ## Scope guard
-The live scope gate is README.md "Scope status": H5, H6, and H7 are registered
+The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
 forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
 arc, with its historical diagnostic permanently retired. Before adding a new
 capability, ticker, strategy, or tool, answer: "Does this move one of the live
