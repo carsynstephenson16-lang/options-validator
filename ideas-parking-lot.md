@@ -235,6 +235,39 @@ an LLM proposes is LLM-asserted until tested).
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly audit,
 whichever comes first.
 
+## Non-AI sector diversification watch-names (parked 2026-07-15)
+
+Context: owner request 2026-07-15 following the deep-research report (7)
+reconciliation (`reports/2026-07-15-deep-research-7-reconciliation.md` §3.4):
+the whole current book — core VST/CEG/MSFT/AMZN plus the H7 story watchlist —
+is ONE AI/semis/power factor, and adding more AI-adjacent names raises
+concentration rather than lowering it. Three research subagents screened
+healthcare, financials, and consumer/industrials/energy/materials lanes for
+names with (1) non-AI primary revenue drivers, (2) liquid monthly options,
+(3) low fundamental overlap with the AI cluster.
+
+Full memo: `reports/2026-07-15-non-ai-diversification-candidates.md`.
+Headline shortlist (fit-scored, all liquidity claims web-asserted and
+UNVERIFIED against real chain data): UNH, LMT, XOM, V, PGR (8/10); JPM, BAC,
+AXP, LLY, VRTX, COST, NEM (7/10). Equally important: the confirmed crossover
+traps that must NOT be treated as diversification — FCX, CAT, PWR,
+uranium/nuclear plays, ISRG, BX/APO/KKR, ICE, BLK (all now AI-capex stories
+in costume).
+
+Why parked and not built: adds tickers/scope; moves no live hypothesis (H5/H6/
+H7) toward its declared verdict. Ticker selection is an owner decision.
+
+Gate before un-parking: owner shortlist → liquidity vetting against real
+chain data at the H7 admission bar (near-the-money OI + spread at monthlies)
+→ measured return correlation vs the four-name core (free OHLCV suffices) →
+a NEW pre-registered hypothesis (or owner-logged scope override) with
+owner-typed frozen numbers. Note the ThetaData subscription lapses
+~2026-07-29; chain-liquidity vetting is cheap only before then, per-pull
+owner approval required.
+
+**Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
+audit, whichever comes first.
+
 ## Explicitly rejected (not parked)
 
 From the 2026-07-06 deep-research report (and the 2026-07-07 10-point
