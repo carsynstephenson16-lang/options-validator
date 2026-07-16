@@ -117,6 +117,32 @@ its pre-registered entry triggers reviewable intraday without altering the
 frozen rule, while conserving the lapsing ThetaData subscription (renewal
 gate 2026-07-25).
 
+## Probe findings addendum (2026-07-16, pre-implementation)
+
+- The live probe was attempted 2026-07-16 16:00:30 ET and **refused itself**
+  (30 s after the close) — the session guard working as specified. The
+  schema probe therefore runs next regular session via
+  `python -m options_researcher.live_quotes --probe`.
+- Installed-source finding (Repo-verified, `thetadata/client.py`
+  `_convert_response_stream`): response COLUMNS are server-defined DataTable
+  headers arriving with the data — they cannot be known offline. The
+  recorded probe is therefore a RUNTIME PRECONDITION: `probe_ok()` must
+  pass (matching installed client version, ≤ LIVE_PROBE_MAX_AGE_DAYS old,
+  required endpoints ok) or the live lane stays off with a visible reason.
+- Installed-source finding: `stock_snapshot_quote` requires a stocks
+  standard/pro (real-time) or value (15-min delayed) subscription; this
+  account's stock tier was FREE as of 2026-07-04 (facts.log, provider
+  rationale). Entitlement is classified by the probe. Fallback when denied:
+  live spot for the TRIGGER NAMES ONLY via put-call parity on the nearest
+  monthly (`parity_spot_from_chain`, documented <1% bias), labeled
+  "parity-derived"; MSFT/CEG then show official close only ("no live stock
+  feed on current tier"). This preserves the call-conservation goal.
+- Timestamps: `_convert_response_stream` converts timestamp fields to
+  tz-aware datetimes, so the quote-staleness check
+  (LIVE_QUOTE_MAX_AGE_SECONDS) is implementable when the probe records a
+  timestamp column; if none exists, the session window alone guards, and
+  the limitation is documented.
+
 ## Out of scope
 
 Attractiveness dashboard (owner chose mission control only), any change to

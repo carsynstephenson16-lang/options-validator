@@ -495,3 +495,17 @@ PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's dir
 # cycle "clear of earnings" — the badge must read UNKNOWN, never GREEN.
 # ~1 quarter (91d) + reporting slack. LLM-asserted, presentation layer.
 EARNINGS_COVERAGE_DAYS = 98
+
+# ---------------------------------------------------------------------------
+# --- LIVE MISSION-CONTROL DASHBOARD (presentation/plumbing layer ONLY) ---
+# Spec: docs/superpowers/specs/2026-07-16-live-dashboard-design.md.
+# LLM-asserted plumbing values (proposed 2026-07-16): throttling and
+# staleness bounds for the on-demand live-preview server. These gate
+# nothing, size nothing, and never touch entry/exit logic. The live lane
+# is PREVIEW ONLY -- FIRE remains owned by entry_watch on completed-session
+# closes (H5_ENTRY_TRIGGER_PREREG / amendment v2, unchanged).
+LIVE_DASH_PORT = 8642              # 127.0.0.1 only; --port overrides
+LIVE_POLL_SECONDS = 30             # browser polling interval
+LIVE_CACHE_TTL_SECONDS = 25        # server-side payload cache TTL
+LIVE_QUOTE_MAX_AGE_SECONDS = 120   # older quote timestamp => UNAVAILABLE
+LIVE_PROBE_MAX_AGE_DAYS = 7        # recorded schema probe older => live lane off
