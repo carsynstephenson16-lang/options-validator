@@ -254,6 +254,35 @@ H6_MIN_COMPLETED_POSITIONS = 8
 H6_HARD_KILL_FULL_LOSS_MONTHS = 3
 
 # ---------------------------------------------------------------------------
+# H8 -- pre-earnings tactical long calls (REGISTERED 2026-07-15, ledger
+# trial_intent 1eed4ae6...). Forward-paper only; no live-order path. These
+# values are a transcription of the chained registration, not a retune.
+# All numbers LLM-decided under the owner's explicit written in-session
+# delegation 2026-07-15 (disclosed in the registration). Design evidence:
+# reports/2026-07-15-event-vol-descriptive-study.md (descriptive only).
+# NVDA excluded: measured pre-event IV run-up ~0 across 36 events.
+# ---------------------------------------------------------------------------
+H8_NAMES = ("PLTR", "AMZN")
+H8_DTE_BAND = (45, 90)
+H8_DELTA_BAND = (0.30, 0.50)
+H8_MAX_ASK_DOLLARS = 1_000
+H8_ENTRY_WINDOW_SESSIONS = (15, 8)  # entries ONLY T-15..T-8 XNYS sessions
+                                    # before a CONFIRMED report; estimated
+                                    # dates = no entry (fail closed)
+H8_IVR_MAX = 0.50                   # NaN IVR = no entry
+H8_EXIT_SESSIONS_BEFORE_REPORT = 2  # hard close at T-2; date moving inside
+                                    # T-2 forces close at next session close
+H8_TAKE_PROFIT_PCT = 0.75
+H8_CAP_SHARED_WITH_H6 = True        # combined H6+H8 premium at risk shares
+                                    # H6_MONTHLY_PREMIUM_AT_RISK (USD 2k/mo);
+                                    # never H8 and H6 open on the same
+                                    # underlying simultaneously
+H8_MAX_CONTRACTS_PER_NAME = 1
+H8_MAX_CONCURRENT = 2
+H8_MIN_COMPLETED_POSITIONS = 8
+H8_HARD_KILL_FULL_LOSS_MONTHS = 3
+
+# ---------------------------------------------------------------------------
 # H7 -- swing options on volatile AI names (REGISTERED 2026-07-09, ledger
 # trial_intent f1887c9d...; amendment e266770f... adds SMCI to the backtest
 # set). Three lanes: H7a drawdown+stabilization long, H7b coil long, H7c
