@@ -257,11 +257,21 @@ names with (1) non-AI primary revenue drivers, (2) liquid monthly options,
 
 Full memo: `reports/2026-07-15-non-ai-diversification-candidates.md`.
 Headline shortlist (fit-scored, all liquidity claims web-asserted and
-UNVERIFIED against real chain data): UNH, LMT, XOM, V, PGR (8/10); JPM, BAC,
-AXP, LLY, VRTX, COST, NEM (7/10). Equally important: the confirmed crossover
+UNVERIFIED against real chain data **except UNH — measured 2026-07-16, see the
+UNH/CRWD/ZS/NBIS section below**): UNH, LMT, XOM, V, PGR (8/10); JPM, BAC,
+AXP, LLY, VRTX, COST, NEM (7/10). Equally important: the crossover
 traps that must NOT be treated as diversification — FCX, CAT, PWR,
 uranium/nuclear plays, ISRG, BX/APO/KKR, ICE, BLK (all now AI-capex stories
 in costume).
+
+**UNH measured 2026-07-16 (the shortlist's first real chain vetting):** deep
+book — 2,201 contracts, 18 expirations out to 2028-12-15, near-the-money OI
+1,000-6,700 — but only **1** contract clears the H7 admission bar (>=5 needed),
+because EOD-snapshot spreads run 6-10% vs the 5% bar. Read that as an EOD
+artifact pending intraday quotes, NOT as illiquidity. The wider lesson for this
+section: the remaining shortlist's liquidity claims are still web-asserted, and
+UNH shows the H7 admission bar can fail even a hyper-liquid mega-cap on EOD
+data — so vet each name against real chains before trusting any 8/10 fit score.
 
 Why parked and not built: adds tickers/scope; moves no live hypothesis (H5/H6/
 H7) toward its declared verdict. Ticker selection is an owner decision.
@@ -364,6 +374,113 @@ lapses ~2026-07-29; per-pull owner approval required.
 
 **Review date:** do not review per-ticker. Revisit only if the bridge proposal
 is un-parked, or at the 2026-10-06 quarterly audit.
+
+## UNH / CRWD / ZS / NBIS — measured chains + H7 story scan (parked 2026-07-16)
+
+Context: owner authorized 4 paid ThetaData pulls (UNH, CRWD, ZS, NBIS) on
+2026-07-16; IREN and the reference names came free from the existing cache.
+Two questions were asked of the data: (a) do these chains clear the H7
+admission bar, and (b) does the H7 story scan fire on any of them today.
+**Nothing was added to any universe; no config or ledger write.** OOS reveal
+budget untouched (0/3) — none of these names sits in a sealed holdout.
+
+**Measured @ 2026-07-15** (`allow_oos=True` disclosed look; chains cached in
+`.cache/chains/`). ADMIT column = the real H7 bar: `H7_ADMIT_MIN_CONTRACTS`
+(>=5) near-the-money (+/-10% spot) monthly contracts at 30-120 DTE with
+spread <= `H7_ADMIT_MAX_SPREAD_PCT` (5%) and OI >= `MIN_OPEN_INTEREST` (100):
+
+| Symbol | Contracts | Exps | Longest | Median OI | Median spread | Pass 10% gate | ADMIT (>=5 @5%) |
+|---|---|---|---|---|---|---|---|
+| NBIS | 2,232 | 19 | 2028-12-15 | 112 | 5.29% | 634 (28%) | **7 — admits** |
+| CRWD | 3,618 | 18 | 2028-12-15 | 97 | 10.50% | 797 (22%) | **8 — admits** |
+| IREN | 1,588 | 18 | 2028-09-15 | 176.5 | 15.11% | 258 (16%) | **5 — bare minimum** |
+| ZS | 1,662 | 17 | 2028-06-16 | 25 | 12.68% | 135 (8%) | **4 — fails by one** |
+| UNH | 2,201 | 18 | 2028-12-15 | 40 | 12.23% | 305 (14%) | **1 — fails\*** |
+| PLTR (ref) | 2,383 | 19 | — | 307 | 4.88% | 1,054 (44%) | 31 |
+| NVDA (ref) | 3,847 | 25 | — | 554 | 4.82% | 1,755 (46%) | 69 |
+| AMZN (ref) | 2,384 | 23 | — | 293.5 | 4.55% | 1,132 (47%) | 71 |
+| IBEX (ref) | 72 | 4 | 2026-12-18 | 0 | 114% | 0 (0%) | 0 |
+
+All five are real, deep chains with LEAPS to 2027-28 — categorically unlike
+IBEX above. But all sit *marginally* over the bar (5-8 admitted contracts) vs
+the incumbents' 31-71. Note **IREN — already a live H7 watchlist name — admits
+at exactly 5, one contract from failing.** That fragility is worth knowing.
+
+**\*The UNH failure is an EOD-snapshot artifact, not illiquidity — do not cite
+it as "UNH options are untradable."** UNH's near-the-money OI runs 1,000-6,700
+contracts (Aug $400C: OI 6,776); what fails is only the 5% *spread* bar, with
+NTM quotes at 6-10%. **Inference (unverified):** ThetaData EOD chains come from
+the 17:15 ET report and market makers widen at the close, so EOD spread%
+systematically overstates the true intraday tradable spread. This repo is
+EOD-only (README known limitation) and **cannot settle it** without an intraday
+feed = new spend. The caveat applies to every row but only changes the marginal
+calls (UNH, ZS); it cannot rescue IBEX (median OI 0, 114% spreads, 5-month max
+expiry are not snapshot artifacts). Relative ranking stays valid — one basis.
+
+**H7 story scan @ 2026-07-15 — all three route `none`. Nothing fires.**
+Computed via `options_researcher/h7_signals.py` (the single decision
+authority), registered measure: RV = `H7_RV_LOOKBACK_D` 21d annualized
+close-to-close on *adjusted* closes; IV = ATM call at expiration nearest 90 DTE
+(`H7_IV_TENOR_DTE_BAND` 72-108).
+
+| Symbol | Spot | RV21 | IV90 | IV/RV | Route | Why |
+|---|---|---|---|---|---|---|
+| CRWD | 206.77 | 57.3% | 66.1% | **1.1523** | `none` | misses lane_b by **0.0023** (`H7_IV_PAR_K`=1.15) |
+| NBIS | 199.51 | 110.9% | 130.2% | **1.1734** | `none` | dead zone between 1.15 and 1.25 |
+| ZS | 148.19 | 52.0% | — | — | `none` | **no expiry in the 72-108 DTE band** -> `atm_iv_90d`=0.0 |
+| IREN (ref) | 38.28 | 85.7% | 118.6% | 1.38 | `h7c` | |
+| PLTR (ref) | 133.76 | 57.5% | 58.8% | 1.02 | `spread` | |
+| NVDA (ref) | 212.50 | 39.4% | 43.0% | 1.09 | `spread` | |
+
+- **CRWD is a MISS at 1.152272, not a "basically par."** Recording the exact
+  figure precisely so it is never rounded into a pass later. A threshold that
+  gets rounded toward when inconvenient is not a threshold. Single-day
+  snapshot — the ratio moves daily and could route `spread` tomorrow; that is
+  an argument to watch, never to fudge.
+- **NBIS** at 1.17 is *too rich to buy premium, not rich enough to sell it* —
+  the 1.15-1.25 dead zone doing its job. Its 111% RV / 130% IV is the market
+  pricing NBIS as the same high-vol AI story IREN gets.
+- **ZS** is out twice: no IV at the registered tenor AND admission fails (4<5).
+
+**Factor overlap (checked per the standing correction that the book is ONE
+AI/semis/power factor):** 4 of these 5 deepen that factor — NBIS is an AI
+neocloud (the CRWV/IREN trade in costume), IREN is already H7, CRWD/ZS are
+high-beta growth tech that co-moves with it. **UNH is the only genuine non-AI
+diversifier** — and it is the one that fails the bar (artifactually). Owner
+clarified 2026-07-16 that NBIS/CRWD/ZS were scanned as **H7 story candidates,
+not as diversification**, so the overlap is context here rather than a defect —
+but it stands as a caution: adding NBIS would raise factor risk while feeling
+like progress.
+
+**Nothing here is actionable without a registration.** None of the three is in
+`H7_WATCHLIST`; admission requires an **owner-typed ledger amendment** (the
+`H7_AMENDMENT_V1_5` / `V1_6` pattern that admitted IREN and USAR). NBIS and ZS
+carry **no earnings data** in `data/earnings/calendar.csv`, so source health
+would read UNHEALTHY -> per-name entry ban under amendment v1.4 (the CRWV
+precedent). **CRWD is the only one of the three with earnings provenance on
+file**, which — with 8-contract admission and a ratio 0.0023 off a lane — makes
+it the only real candidate of the batch. It is also new scope before the
+Phase-0 verdict, which the standing rule forbids.
+
+Verified rather than assumed while doing this (both corrected a stale prior):
+- **IREN source health is CLEAR** (14/14 healthy, next report 2026-08-27) — an
+  earlier note that IREN was entry-banned on UNHEALTHY source health is stale.
+- **NBIS carries no Yandex/YNDX entity contamination.** Its free Yahoo history
+  starts 2024-10-21 at the re-listing, so **no `H7_SIGNAL_CLOSES_START` floor
+  is needed** (unlike USAR's pre-2025 IPXX SPAC shell). Checked because the
+  ticker was renamed from YNDX; the trap did not materialize.
+
+Side effect: free Yahoo closes for CRWD/ZS/NBIS now sit in `.cache/underlying`
+(gitignored, disposable, consumed by nothing — no config references them).
+
+Gate before un-parking: first H5/H6 verdict (or an owner-logged scope override,
+as H7 got 2026-07-09) + owner-typed `H7_AMENDMENT` naming the ticker + an
+earnings source for NBIS/ZS + a re-measured admission at entry time (these
+cleared by 5-8 contracts; that margin can vanish). ThetaData lapses ~2026-07-29
+— re-measurement is cheap only before then, per-pull owner approval required.
+
+**Review date:** at the first H5/H6 verdict, the ThetaData renewal decision
+(2026-07-25), or the 2026-10-06 quarterly audit, whichever comes first.
 
 ## Explicitly rejected (not parked)
 
