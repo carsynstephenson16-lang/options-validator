@@ -467,3 +467,17 @@ QM_NTM_BAND = 0.10        # "near-ATM" = strikes within +/-10% of raw close
 #                           (spec SS4/SS5 gap closed at build time; mirrors
 #                           H7_NTM_BAND but frozen independently so QM never
 #                           couples to H7's registered surface)
+
+# ---------------------------------------------------------------------------
+# --- ATTRACTIVENESS DASHBOARD v2 TECHNICALS (presentation layer ONLY) ---
+# Spec: docs/superpowers/specs/2026-07-16-attractiveness-v2-technicals-
+# context-design.md. LLM-asserted presentation-layer values (proposed
+# 2026-07-16): window lengths for the dashboard's MA/breakout/momentum
+# context strip. These are dashboard context only, NOT strategy gates --
+# they gate nothing, size nothing, and the frozen H5/H6/H7 numbers above
+# are untouched by anything in this block.
+TECH_SMA_WINDOWS = (20, 50, 200)   # short/mid/long simple moving averages
+TECH_BREAKOUT_LOOKBACK = 20        # prior-high window for breakout_20d
+TECH_MOM_1M = 21                   # ~1 month of sessions for mom_1m
+TECH_MOM_3M = 63                   # ~3 months of sessions for mom_3m
+TECH_52W_LOOKBACK = 252            # ~52 weeks of sessions for high_52w
