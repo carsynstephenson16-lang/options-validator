@@ -1,0 +1,64 @@
+name: Claude PR Review
+
+# Automated Claude code review on pull requests. Runs independently of any other
+# reviewer (e.g. Codex) — if Codex is uninstalled or out of credits, this is
+# unaffected. Authenticated with a Claude MAX/PRO SUBSCRIPTION (no API key /
+# no API credits) via an OAuth token. Setup (once):
+#   1. Install the Claude GitHub App on this repo: https://github.com/apps/claude
+#   2. Generate a subscription token locally (needs the Claude Code CLI, logged
+#      in to your Max account):   claude setup-token
+#   3. Store it as a repo secret named CLAUDE_CODE_OAUTH_TOKEN:
+#      Settings -> Secrets and variables -> Actions -> New repository secret.
+# Until the secret exists the job fails fast (harmless). Usage counts against
+# your Max plan limits, not dollars. The token is long-lived but expires
+# eventually — re-run `claude setup-token` and update the secret if reviews stop.
+#
+# Alternative (zero-token): the managed Code Review service at
+# https://claude.ai/admin-settings/claude-code -> Code Review -> Setup, which
+# auto-reviews per-repo. If you enable that, delete this workflow.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip drafts; on comments, only fire for an explicit "@claude" mention.
+    if: >
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Sonnet keeps token/usage cost down vs the default; the review is
+          # scoped and verify-gated by REVIEW.md, so the cheaper tier is enough.
+          claude_args: "--model sonnet"
+          prompt: >
+            Follow ./REVIEW.md exactly. Review pull request
+            ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}
+            using /code-review:code-review. Deploy focused, low-token sub-checks
+            per the charter, verify every finding against the diff before posting,
+            and report only confirmed high/medium-severity issues.
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
