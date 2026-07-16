@@ -21,15 +21,16 @@ valuable but bigger and easier to overfit, so they wait.
   Descriptive-only display could ship earlier, but must not order candidates
   until pre-registered.
 
-### Event-edge signal (implied move vs realized event move)
+### Event-edge signal (implied move vs realized event move) — **PROMOTED 2026-07-15**
 - **What:** compare the option-implied move into an earnings/event to the
   *historical realized* move over the last N like events.
-- **Why parked:** needs an event-move history dataset and a validation design;
-  highest overfit risk of the three (small event samples, look-ahead traps).
-- **Gate before building:** owner decision + **pre-register** the event window,
-  the "N like events" definition, the implied-move source, and the accept/reject
-  thresholds *before* it grades or ranks anything. This is a hypothesis, not a
-  display tweak.
+- **Status:** pulled from the lot by explicit owner decision 2026-07-15
+  (ledger fact EVENT_EDGE_UNPARKED; plan
+  `docs/superpowers/plans/2026-07-15-event-edge-phase-plan.md`). Phase E1 =
+  descriptive study only (grades nothing). The original gate still stands for
+  anything that grades or ranks: **pre-register** the event window, the
+  "N like events" definition, the implied-move source, and thresholds — all
+  owner-typed — before it influences any entry (that is Phase E2, not open).
 
 ## Cross-sectional richness signals (parked 2026-07-07)
 
@@ -143,7 +144,11 @@ and are live in H6** (post-earnings tactical long calls).
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
 audit, whichever comes first.
 
-## AVGO entry for the closes SPLITS registry (parked 2026-07-12)
+## AVGO entry for the closes SPLITS registry (parked 2026-07-12 — **DONE 2026-07-15**)
+
+Resolved: the SPLITS entry was registered and closes/OHLCV re-fetched raw on
+2026-07-15 (commit 7c9bab7; ledger fact SPLITS_REGISTRY_AVGO). Kept below as
+the historical record of why it was needed.
 
 `data/underlying_closes.SPLITS` has no AVGO entry, so the Yahoo-sourced
 closes store carries split-ADJUSTED pre-2024-07-15 closes for AVGO (10-for-1,
@@ -267,6 +272,26 @@ owner approval required.
 
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly
 audit, whichever comes first.
+
+## Options × equity-research bridge (parked 2026-07-15)
+
+Owner-requested investigation done; full proposal in
+`reports/2026-07-15-options-equity-research-bridge-proposal.md`. Three plugs,
+all flowing options → equity-research, file-based, no code coupling:
+(1) options-implied anchor row (implied forward / risk-neutral P(price≤X)) in
+equity-research's §6F method table as an Independent-confirmation anchor;
+(2) a Brier comparator — log market-implied P alongside the analyst's
+P(beat SPY, 180d) and score both at T+180, testing whether the verdict engine
+beats the options market, not just the 0.25 coin-flip baseline;
+(3) sharing the Phase E1 event-vol tables as descriptive context. Micro-cap
+options are ruled out by measured liquidity (HYLN ~128 rows/day, gates fail);
+micro-caps stay equity-side in the existing kill-screen. Prerequisite for
+(1)+(2) is the still-parked market-implied probability readout (owner nod +
+one-page spec). The reverse flow — narratives into options gates — is
+explicitly declined as discretionary contamination.
+
+**Review date:** first H5/H6 verdict, ThetaData renewal decision (2026-07-25),
+or 2026-10-06 quarterly audit, whichever comes first.
 
 ## Explicitly rejected (not parked)
 
