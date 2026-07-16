@@ -180,7 +180,7 @@ paper-trading window.
    `positions.csv`; covered-call rows only appear after a declared 100-share
    lot. Reuses the M7 CSS; no network/JS deps.
 
-**Scope status: three live hypotheses, forward paper windows.**
+**Scope status: four live hypotheses, forward paper windows.**
 **H5 Sector Income Core scanner/researcher**
 (`docs/superpowers/specs/2026-07-04-h5-sector-income-core-design.md`; ledger
 trial 6; H4 superseded at zero cycles) and **H6 post-earnings tactical long
@@ -221,12 +221,38 @@ before recording another. This makes portfolio risk cumulative rather than
 letting several same-snapshot candidates spend the cap independently. Keep
 action receipts under `reports/h6_forward/`, the default verification
 directory. NVDA's 2021/2024 split entries are already in the closes registry.
-The book is currently empty, so H6 remains
-`INSUFFICIENT_SAMPLE`; no result or edge is claimed.
+The book holds one open position (H6-0001: NVDA $220 call, exp 2026-09-18,
+1 contract, entered 2026-07-13 at $920.65 premium, receipt-bound in
+`data/positions/h6_positions.csv`) and zero completed positions, so H6
+remains `INSUFFICIENT_SAMPLE`; no result or edge is claimed.
+**H8 pre-earnings tactical long calls** (ledger trial intent `1eed4ae6`,
+registered 2026-07-15; companion to H6, forward-paper only; all frozen
+numbers were LLM-decided under explicit owner delegation, disclosed in the
+registration entry): PLTR and AMZN only — NVDA excluded because the E1
+descriptive study measured ~0 pre-event IV run-up there. Structure: single
+long call, nearest standard monthly 45–90 DTE, highest delta in 0.30–0.50,
+ask ≤ $1,000, both-leg liquidity gates. Entries are allowed ONLY T-15..T-8
+XNYS sessions before a company-CONFIRMED report date (estimated/aggregator
+dates fail closed) AND IV-rank ≤ 0.50 at entry; hard close at T-2 sessions
+before the report, take-profit +75%, no stop-loss. The monthly
+premium-at-risk cap is SHARED with H6 (combined ≤ $2k/month), max 1 contract
+per name, max 2 concurrent, and H8 never opens on the same underlying as an
+open H6 position. Read-only watcher (mirrors h6_watch; alerts only, never
+writes the book): `uv run python -m options_researcher.h8_watch`. The paper
+book `data/positions/h8_positions.csv` is header-only. First board
+(evaluation session 2026-07-14, fact H8_FIRST_BOARD): PLTR window OPEN but
+blocked by the IVR gate (0.81 > 0.50); AMZN blocked fail-closed
+(2026-07-30 still aggregator-estimated). Verdict gates on completed
+positions (bootstrap CI90 after 8 completed; hard kill on 3 consecutive
+full-cap loss months); with zero completed positions H8 is
+`INSUFFICIENT_SAMPLE`.
 **H7 swing options on volatile AI names** (ledger trial 8, registered
-2026-07-09, `f1887c9d` + amendments v1.1/v1.2/v1.3; owner scope override
+2026-07-09, `f1887c9d` + amendments v1.1–v1.7; owner scope override
 2026-07-09): three separately-judged lanes on CRWV/TEM/PLTR/NOW/SMCI/NVDA/
-AMD/AVGO (+ core names, long lanes only). Daily screen:
+AMD/AVGO/IREN/USAR (+ core names, long lanes only; IREN and USAR were added
+by owner-typed amendments v1.5/v1.6 and activated 2026-07-15 after their
+option-chain backfills — see `config.H7_WATCHLIST` and the ACTIVATION facts
+in `ledger/facts.log`). Daily screen:
 `uv run python -m options_researcher.h7_watch` (session-aligned, executes
 the registered decide functions, fails closed on unknown earnings or book
 errors). **Repo-verified finding:** the 2018–2026 historical diagnostic is
@@ -241,12 +267,15 @@ health over the v3 gating store, and `tools/h7_refresh_earnings.py` is the
 owner-in-the-loop append-only refresher (append-raw + promote under the
 7b-2R.2 citation contract). Roadmap Stage 2 is **BUILT (2026-07-12,
 build-only) but NOT operationally authorized**: `options_researcher.h7_data_gate`
-is a read-only whole-universe daily data gate (GO only when all 12 names have
-an exact-evaluation-session adjusted close AND EOD chain; exit 0 GO / 1 NO_GO
-/ 2 invalid-or-unreadable). Its first whole-universe GO is recorded for
-evaluation session 2026-07-10 (12/12,
-`reports/h7_data_gate/2026-07-10.json`) after the authorized cache top-up;
-this is data-readiness evidence, not operational authorization.
+is a read-only whole-universe daily data gate (GO only when every name in the
+live watch universe — 14 names since the IREN/USAR activations of
+2026-07-15 — has an exact-evaluation-session adjusted close AND EOD chain;
+exit 0 GO / 1 NO_GO / 2 invalid-or-unreadable). Its first whole-universe GO
+is recorded for evaluation session 2026-07-10 (12/12 on the then-12-name
+universe, `reports/h7_data_gate/2026-07-10.json`) after the authorized cache
+top-up; the latest is 14/14 GO for evaluation session 2026-07-15
+(`reports/h7_data_gate/2026-07-15.json`). This is data-readiness evidence,
+not operational authorization.
 The network-free cutoff preflight
 `uv run python tools/thetadata_cutoff_preflight.py --cutoff 2026-07-29`
 derives the July 28 terminal session and combines the 12-name inventory,
@@ -255,7 +284,8 @@ clean source identity, and real-ledger verification. It never fetches, writes,
 opens Stage 8, or authorizes the paid pull; follow its status contract in the
 ThetaData cancellation checklist.
 Operator order (**amendment v1.4, owner decision 2026-07-14**): run and
-record **source health**, then the **data gate must be exit 0 (GO 12/12)**,
+record **source health**, then the **data gate must be exit 0 (whole-universe
+GO — currently 14/14)**,
 then the **watcher** may run; names whose earnings provenance is unhealthy at
 the evaluation cutoff are entry-banned per-name by the watcher's registered
 fail-closed gate (`EARNINGS-UNKNOWN` → no entry) and reported with the run —
@@ -272,7 +302,8 @@ forward-roadmap source/config changes. A frozen retirement gate
 (`config.H7_HISTORICAL_WITHDRAWAL_HASH`) makes every historical-diagnostic
 entry point refuse before reading market data.
 Current recorded holdings: 39 VST shares and no options. Remaining for H7:
-restore Stage 1 source health to 12/12, confirm paid daily EOD continuity,
+restore Stage 1 source health across the full 14-name watch universe,
+confirm paid daily EOD continuity,
 supply the owner-frozen window inputs, bind a clean code/config identity, then
 let owner + independent review decide
 whether to open Stage 8. No tracked option by itself starts the H7 window.
