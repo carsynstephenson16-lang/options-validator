@@ -162,19 +162,20 @@ class PolicyVetoTests(unittest.TestCase):
                      risk={"capital_required": 9500.0, "max_loss": 9000.0,
                            "breakeven": 90.0}, **kw)
 
-    def test_policy_veto_excludes_over_cap_cards(self):
+    def test_universal_policy_veto_no_longer_excludes_cash_secured_puts(self):
         data = {"symbols": [_sec("AAA", [
             _grp("put", [self._big_card()]),
             _grp("long_call", [self._fit_card()])])]}
         picks = ad.select_top_picks(data)
         self.assertEqual([(p["lane"], p["strike"]) for p in picks],
-                         [("long_call", 105.0)])
+                         [("put", 95.0), ("long_call", 105.0)])
 
-    def test_policy_veto_off_includes_them(self):
+    def test_legacy_policy_veto_argument_is_a_noop(self):
         data = {"symbols": [_sec("AAA", [_grp("put", [self._big_card()])])]}
-        self.assertEqual(ad.select_top_picks(data), [])
-        picks = ad.select_top_picks(data, policy_veto=False)
+        picks = ad.select_top_picks(data)
+        with_legacy_argument = ad.select_top_picks(data, policy_veto=False)
         self.assertEqual(len(picks), 1)
+        self.assertEqual(picks, with_legacy_argument)
 
     def test_cards_without_risk_are_never_vetoed(self):
         data = {"symbols": [_sec("AAA", [_grp("put", [
@@ -184,6 +185,20 @@ class PolicyVetoTests(unittest.TestCase):
                                "annualized_yield": 0.30})])])]}
         self.assertEqual(len(ad.select_top_picks(data)), 1)
 
+    def test_paper_hero_can_show_only_assignment_capital_watch(self):
+        candidate = self._big_card()
+        candidate["top3_snapshot"] = {
+            "rank_eligible": False,
+            "selection_status": "WATCH",
+            "policy": {"reason_codes": [
+                "CSP_ASSIGNMENT_CAPITAL_UNCONFIRMED"]},
+        }
+        data = {"symbols": [_sec("AMZN", [_grp("put", [candidate])])]}
+        self.assertEqual(ad.select_top_picks(data), [])
+        picks = ad.select_top_picks(data, include_csp_watch=True)
+        self.assertEqual([(pick["lane"], pick["strike"]) for pick in picks],
+                         [("put", 95.0)])
+
     def test_structural_pmcc_preview_never_competes(self):
         pm = _card(120.0, "2026-08-21",
                    grades={"yield": "GREEN", "liquidity": "GREEN"},
@@ -191,16 +206,20 @@ class PolicyVetoTests(unittest.TestCase):
                    risk={"capital_required": 100.0, "max_loss": 100.0,
                          "breakeven": 101.0})
         data = {"symbols": [_sec("AAA", [_grp("pmcc", [pm], preview=True)])]}
+        pm["top3_snapshot"] = {"rank_eligible": False}
         self.assertEqual(ad.select_top_picks(data), [])
+        del pm["top3_snapshot"]
         data2 = {"symbols": [_sec("AAA", [_grp("pmcc", [pm], preview=False)])]}
         self.assertEqual(len(ad.select_top_picks(data2)), 1)
 
     def test_stale_features_section_never_competes(self):
         data = {"symbols": [
             _sec("AAA", [_grp("long_call", [self._fit_card()])], stale=True)]}
+        data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"] = {
+            "rank_eligible": False}
         self.assertEqual(ad.select_top_picks(data), [])
 
-    def test_assemble_adds_risk_and_fits_policy_badge(self):
+    def test_assemble_adds_risk_and_lane_specific_policy_badge(self):
         put = _card(95.0, "2026-08-21",
                     grades={"yield": "GREEN", "liquidity": "GREEN"},
                     lane_fields={"credit": 500.0, "annualized_yield": 0.30,
@@ -209,7 +228,9 @@ class PolicyVetoTests(unittest.TestCase):
             symbol_sections=[_sec("AAA", [_grp("put", [put])])],
             rv21_by_symbol={"AAA": 0.4})
         card = data["symbols"][0]["groups"][0]["cards"][0]
-        self.assertEqual(card["grades"]["fits_policy"], "RED")
+        self.assertEqual(card["grades"]["portfolio"], "RED")
+        self.assertEqual(card["top3_snapshot"]["policy"]["status"],
+                         "PLAN_ONLY")
         self.assertAlmostEqual(card["risk"]["max_loss"], 9000.0)
 
 
@@ -236,17 +257,60 @@ class RenderHonestyTests(unittest.TestCase):
 
     def test_only_n_fit_note_and_risk_lines(self):
         html = ad.render(self._data_one_fit_one_big())
-        self.assertIn("only 1 candidate(s) fit the repo risk policy", html)
-        self.assertIn("EXCEEDS the $600/trade hard cap", html)
+        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertNotIn("EXCEEDS the $600/trade hard cap", html)
         self.assertIn("worst case -$22,006 at expiration", html)
         self.assertIn("vs $14,000 sleeve", html)
 
     def test_no_candidate_fits_fallback_is_loud(self):
         data = self._data_one_fit_one_big()
         del data["symbols"][0]["groups"][1]          # only the big put remains
+        data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"] = {
+            "rank_eligible": False}
         html = ad.render(data)
-        self.assertIn("NO candidate on the board fits the repo risk policy",
-                      html)
+        self.assertIn("No qualifying contract", html)
+        self.assertIn("This is an intentional open slot", html)
+
+    def test_partial_top3_keeps_three_visible_slots(self):
+        html = ad.render(self._data_one_fit_one_big())
+        self.assertEqual(html.count('<div class="hero-card '), 3)
+        self.assertIn("Pick 3", html)
+        self.assertIn("No qualifying contract", html)
+        self.assertIn("not missing UI", html)
+
+    def test_open_slot_explains_actual_liquidity_and_policy_gates(self):
+        data = {"symbols": [
+            {"symbol": "VST", "groups": [{"kind": "long_call", "cards": [{
+                "strike": 165.0,
+                "grades": {"liquidity": "RED"},
+                "top3_snapshot": {
+                    "rank_eligible": True,
+                    "policy": {"status": "ELIGIBLE", "reason_codes": []},
+                },
+            }]}]},
+            {"symbol": "MSFT", "groups": [{"kind": "put", "cards": [{
+                "strike": 350.0,
+                "grades": {"liquidity": "GREEN"},
+                "top3_snapshot": {
+                    "rank_eligible": False,
+                    "policy": {"status": "PLAN_ONLY", "reason_codes": [
+                        "CSP_SYMBOL_OUTSIDE_ALLOWED_NAMES"]},
+                },
+            }]}]},
+        ]}
+        reasons = ad._top3_gap_reasons(data)
+        self.assertIn("VST $165 call passes portfolio policy but fails liquidity.",
+                      reasons)
+        self.assertIn("MSFT puts are plan-only outside the registered "
+                      "cash-secured-put names.", reasons)
+
+    def test_status_badges_pair_semantic_color_with_text_and_symbol(self):
+        html = ad._badges({"policy": "GREEN", "event": "AMBER",
+                           "liquidity": "RED", "source": "UNKNOWN"})
+        self.assertIn('class="status-badge good">✓ policy · GREEN', html)
+        self.assertIn('class="status-badge watch">! event · AMBER', html)
+        self.assertIn('class="status-badge bad">× liquidity · RED', html)
+        self.assertIn('class="status-badge unknown">? source · UNKNOWN', html)
 
     def test_stale_features_warning_rendered(self):
         data = self._data_one_fit_one_big()
@@ -281,7 +345,6 @@ class RenderHonestyTests(unittest.TestCase):
                                       "confirmed": False, "source": "x"}],
                        "sources": ["https://example.com/a", "not-a-url"]}}}
         html = ad.render(data, context=context)
-        self.assertIn("research gathered 2026-07-16", html)
         self.assertIn('href="https://example.com/a"', html)
         self.assertIn("sources (2)", html)
         self.assertIn("[UNCONFIRMED/estimated]", html)

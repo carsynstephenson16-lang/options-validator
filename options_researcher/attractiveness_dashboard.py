@@ -7,8 +7,8 @@ at-expiration payoff ladder, a deterministic bull/base/bear mini-table
 (bbb_rows -- scenario framing from realized vol, not a forecast), and a
 per-symbol technicals snapshot (options_researcher.technicals).
 
-render() turns that into one self-contained HTML string: sticky data-as-of
-banner, a "TOP 3 PICKS TODAY" hero (research-context narratives from
+render() turns that into one self-contained HTML string: a compact as-of
+metadata header, a "TOP 3 PICKS TODAY" hero (research-context narratives from
 reports/attractiveness_context/<as-of>.json when present via load_context();
 otherwise the honest quantitative select_top_picks() shortlist, never
 invented prose), a provenance-labeled market-context strip, and per-symbol
@@ -27,6 +27,7 @@ from __future__ import annotations
 import html as _html
 import math
 import os
+from collections.abc import Mapping
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
 
@@ -234,21 +235,27 @@ def risk_economics(card: dict, structure: str, *, close: float) -> dict:
 
 
 def select_top_picks(data: dict, n: int = 3, *,
-                     policy_veto: bool | None = None) -> list[dict]:
+                     policy_veto: bool | None = None,
+                     include_csp_watch: bool = False) -> list[dict]:
     """Transparent quantitative shortlist over EVERY non-skipped card across
     all symbols/lanes in an assemble() dict. Display ordering only (weights =
     config.PICK_*, presentation layer, never strategy gates).
 
-    Hard vetoes (each an honesty gate, not a strategy gate):
+    Hard vetoes:
       - liquidity RED;
-      - PICK_EXCLUDE_STRUCTURAL_PREVIEWS: PMCC preview groups (the LEAPS is
-        not actually held) never compete;
-      - PICK_VETO_STALE_FEATURES: sections whose IV features are older than
-        their chain date never compete;
-      - policy_veto (default config.PICK_POLICY_VETO): cards whose economic
-        max loss exceeds config.MAX_LOSS_PER_TRADE never compete. Cards
-        without a "risk" dict (injected fixtures) are not vetoed -- the veto
-        never guesses.
+      - an assembled card whose exact-session / lane-policy snapshot is not
+        rank eligible.  The snapshot applies the current policy by structure:
+        the defined-risk cap belongs to tactical long calls, while a
+        cash-secured put reports its equity-side assignment commitment.
+
+    ``policy_veto`` is retained as a no-op compatibility argument for callers
+    of the v2 dashboard.  The former universal max-loss veto was removed: it
+    incorrectly treated a cash-secured put as a tactical long call.
+
+    ``include_csp_watch`` is for the paper-only hero.  It admits a permitted
+    cash-secured put whose *only* missing fact is explicit assignment-capital
+    authorization, and leaves the card visibly marked WATCH.  It never admits
+    a plan-only, data-blocked, or otherwise unmodeled lane.
     Score = GREEN-badge count * PICK_GREEN_POINT
             + PICK_RANK_LEADER_BONUS if the card leads its lane ladder
             + PICK_TECH_BONUS on technical confluence (buy lanes: trend up or
@@ -259,30 +266,33 @@ def select_top_picks(data: dict, n: int = 3, *,
     per (symbol, lane)."""
     import config
 
-    if policy_veto is None:
-        policy_veto = config.PICK_POLICY_VETO
+    del policy_veto
 
     pool: list[tuple[tuple, dict]] = []
     for sec in data.get("symbols", []):
-        if config.PICK_VETO_STALE_FEATURES and sec.get("features_stale"):
-            continue
         tech = sec.get("technicals") or {}
         for grp in sec.get("groups", []):
             kind = grp["kind"]
-            if (config.PICK_EXCLUDE_STRUCTURAL_PREVIEWS
-                    and kind == "pmcc" and grp.get("preview")):
-                continue
             for card in grp.get("cards", []):
                 if "skipped" in card:
                     continue
                 grades = card.get("grades") or {}
                 if grades.get("liquidity") == "RED":
                     continue
-                max_loss = (card.get("risk") or {}).get("max_loss")
-                if (policy_veto and isinstance(max_loss, (int, float))
-                        and max_loss == max_loss
-                        and max_loss > config.MAX_LOSS_PER_TRADE):
-                    continue
+                snapshot = card.get("top3_snapshot")
+                if isinstance(snapshot, dict):
+                    eligible = snapshot.get("rank_eligible") is True
+                    policy = snapshot.get("policy")
+                    reasons = (policy.get("reason_codes")
+                               if isinstance(policy, Mapping) else ())
+                    csp_watch = (
+                        include_csp_watch
+                        and snapshot.get("selection_status") == "WATCH"
+                        and isinstance(reasons, list)
+                        and reasons == ["CSP_ASSIGNMENT_CAPITAL_UNCONFIRMED"]
+                    )
+                    if not eligible and not csp_watch:
+                        continue
                 greens = sum(1 for v in grades.values() if v == "GREEN")
                 score = greens * config.PICK_GREEN_POINT
                 if card.get("rank_leader"):
@@ -419,7 +429,7 @@ def assemble(*, symbol_sections: list[dict] | None = None,
         symbol_sections, rv21_by_symbol = _gather_all()
     rv21_by_symbol = rv21_by_symbol or {}
 
-    import config
+    from options_researcher.top3_snapshot import snapshot_candidate
 
     out_symbols = []
     for sec in symbol_sections:
@@ -434,8 +444,8 @@ def assemble(*, symbol_sections: list[dict] | None = None,
                     cards.append({**card, "scenarios": [], "bbb": [],
                                   "headline": "", "countdown": ""})
                     continue
-                # shallow copy; grades get their own copy because the
-                # fits_policy badge is added here.
+                # Shallow copy; grades get their own copy because the
+                # lane-specific policy badge is added below.
                 enriched = dict(card)
                 if kind == "pmcc":
                     enriched["leaps_strike"] = float(grp["leaps_strike"])
@@ -444,11 +454,23 @@ def assemble(*, symbol_sections: list[dict] | None = None,
                         enriched["preview"] = True
                 enriched["risk"] = risk_economics(
                     enriched, kind, close=float(sec["close"]))
-                fits = (enriched["risk"]["max_loss"]
-                        <= config.MAX_LOSS_PER_TRADE)
+                snapshot = snapshot_candidate(
+                    sec, grp, enriched,
+                    csp_open_count=sec.get("csp_open_count"),
+                    covered_shares=sec.get("covered_shares"),
+                    leaps_held=sec.get("leaps_held"),
+                )
+                enriched["top3_snapshot"] = snapshot
+                policy = snapshot.get("policy")
+                raw_policy_status = (policy.get("status")
+                                     if isinstance(policy, Mapping) else None)
+                policy_status = (raw_policy_status
+                                 if isinstance(raw_policy_status, str)
+                                 else "DATA_BLOCKED")
+                policy_grade = {"ELIGIBLE": "GREEN", "WATCH": "AMBER",
+                                "PLAN_ONLY": "RED"}.get(policy_status, "RED")
                 enriched["grades"] = {**(enriched.get("grades") or {}),
-                                      "fits_policy": "GREEN" if fits
-                                      else "RED"}
+                                      "portfolio": policy_grade}
                 enriched["scenarios"] = scenario_rows(
                     enriched, kind, close=float(sec["close"]), rv21=rv21)
                 enriched["bbb"] = bbb_rows(
@@ -486,7 +508,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
     import pandas as pd
 
     import config
-    from data.underlying_closes import load_closes
+    from data.underlying_closes import load_closes, load_closes_adjusted
     from options_researcher.attractiveness import (
         cc_card_rows,
         ladder_cards,
@@ -505,15 +527,19 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
     )
 
     holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
-                else pd.DataFrame(columns=["symbol", "shares", "cost_basis"]))
+                else pd.DataFrame({"symbol": pd.Series(dtype="str"),
+                                   "shares": pd.Series(dtype="int"),
+                                   "cost_basis": pd.Series(dtype="float")}))
     positions = load_positions()
+    csp_open_count = (int((positions["structure"] == "csp").sum())
+                      if not positions.empty else 0)
     thesis_used = 0.0
     held_leaps: dict[str, tuple[float, float]] = {}
     if not positions.empty:
         t = positions[positions["bucket"] == "thesis"]
         thesis_used = float((t["entry_price"] * 100 * t["contracts"]).sum())
         for _, lp in positions[positions["structure"] == "leaps_call"].iterrows():
-            held_leaps.setdefault(lp["symbol"],
+            held_leaps.setdefault(str(lp["symbol"]),
                                   (float(lp["strike"]), float(lp["entry_price"])))
     bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
 
@@ -538,9 +564,11 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
         else:
             row = at_or_before.iloc[-1]
             features_as_of = str(at_or_before.index[-1])
-        closes = load_closes(symbol, "2018-01-01", day, allow_oos=True)
-        close = float(closes.iloc[-1])
-        technicals = technical_snapshot(closes)
+        raw_closes = load_closes(symbol, "2018-01-01", day, allow_oos=True)
+        adjusted_closes = load_closes_adjusted(
+            symbol, "2018-01-01", day, allow_oos=True)
+        close = float(raw_closes.iloc[-1])
+        technicals = technical_snapshot(adjusted_closes)
         rv21 = float(row["rv21"])
         rv21_by_symbol[symbol] = rv21
         iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
@@ -561,7 +589,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
              "empty": None if put_cards
              else "no candidates near the target delta this cycle"}]
 
-        lot = holdings[holdings["symbol"] == symbol] if len(holdings) else []
+        lot = holdings.loc[holdings["symbol"] == symbol]
         held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
         if held_shares >= 100:
             groups.append({"kind": "cc",
@@ -640,6 +668,9 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
 
         sections.append({"symbol": symbol, "as_of": day, "close": close,
                          "iv_rank": iv_rank, "groups": groups,
+                         "csp_open_count": csp_open_count,
+                         "covered_shares": held_shares,
+                         "leaps_held": symbol in held_leaps,
                          "features_as_of": features_as_of,
                          "features_stale": features_as_of != day,
                          "technicals": technicals,
@@ -660,227 +691,462 @@ def sections_json(sections: list[dict] | None = None) -> str:
                       indent=2, sort_keys=False)
 
 
-_GRADE_COLORS = {"GREEN": "#2fd27d", "AMBER": "#caa53d", "RED": "#ff5470",
-                 "UNKNOWN": "#6b7280"}
+_GRADE_CLASSES = {"GREEN": "good", "AMBER": "watch", "RED": "bad",
+                  "UNKNOWN": "unknown"}
+_GRADE_SYMBOLS = {"GREEN": "✓", "AMBER": "!", "RED": "×", "UNKNOWN": "?"}
 
 _STYLE = """
   :root {
-    color-scheme: dark;
+    color-scheme: light;
+    --canvas: #f3f6f4;
+    --surface: #ffffff;
+    --surface-soft: #f7f9f8;
+    --ink: #17251f;
+    --muted: #53665c;
+    --line: #d9e3dd;
+    --line-strong: #c3d1c9;
+    --brand: #173f32;
+    --good: #116b45;
+    --good-bg: #e8f5ee;
+    --good-line: #a8d8bd;
+    --watch: #8a5700;
+    --watch-bg: #fff2cc;
+    --watch-line: #e8c66d;
+    --bad: #a42335;
+    --bad-bg: #fdecef;
+    --bad-line: #e7aeb7;
+    --unknown: #4f5d56;
+    --unknown-bg: #edf1ef;
+    --unknown-line: #cbd4cf;
+    --info: #235d7d;
+    --info-bg: #e8f3f8;
+    --shadow: 0 8px 24px rgba(23, 63, 50, 0.06);
   }
+  * { box-sizing: border-box; }
   body {
-    background: #0b0e17;
-    color: #e6e9f2;
-    font-family: ui-monospace, Menlo, monospace;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
     margin: 0;
     padding: 0;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
-  h1, h2 {
-    font-family: ui-monospace, Menlo, monospace;
-    letter-spacing: 0.08em;
-  }
-  .data-asof-banner {
-    background: #ffce00;
-    color: #1a1300;
-    font-weight: 900;
-    text-align: center;
-    padding: 12px 16px;
-    font-size: 1.05em;
-    letter-spacing: 0.01em;
-    border-bottom: 4px solid #ff5470;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .page-body {
-    padding: 24px;
-  }
-  .panel {
-    background: #141a2a;
-    border: 1px solid #2a3350;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 20px;
-  }
-  .header-sub {
-    color: #9aa4c0;
-    font-size: 0.9em;
-  }
-  .party-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-  }
-  .party-card {
-    background: #141a2a;
-    border: 1px solid #2a3350;
-    border-left: 3px solid;
-    border-radius: 12px;
-    padding: 12px;
-    min-width: 180px;
-    flex: 1;
-  }
-  .party-name {
-    font-weight: bold;
-    font-size: 1.2em;
-  }
-  .party-role {
-    color: #9aa4c0;
-    font-size: 0.85em;
+  h1, h2, h3, p { margin-top: 0; }
+  h1 {
+    font-size: clamp(1.65rem, 3vw, 2.45rem);
+    letter-spacing: -0.035em;
+    line-height: 1.08;
     margin-bottom: 8px;
   }
-  .sparkline {
-    display: block;
-    margin: 6px 0;
+  h2 {
+    font-size: 1.2rem;
+    letter-spacing: -0.015em;
+    margin-bottom: 8px;
   }
-  .party-badges {
-    margin-top: 6px;
+  h3 {
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
   }
-  .pnl-badge {
-    font-weight: bold;
-    margin-right: 6px;
+  a { color: #155f83; text-underline-offset: 2px; }
+  .app-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
   }
-  .pnl-none {
-    color: #6b7280;
-    font-size: 0.85em;
+  .app-header-inner {
+    align-items: flex-end;
+    display: flex;
+    gap: 24px;
+    justify-content: space-between;
+    margin: 0 auto;
+    max-width: 1480px;
+    padding: 28px 32px 24px;
+  }
+  .eyebrow {
+    color: var(--good);
+    font-size: 0.73rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    margin-bottom: 7px;
+    text-transform: uppercase;
+  }
+  .header-sub {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .meta-chip {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+  .meta-chip strong { color: var(--ink); }
+  .page-body {
+    margin: 0 auto;
+    max-width: 1480px;
+    padding: 24px 32px 40px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+    padding: 20px;
+  }
+  .party-name {
+    font-size: 1rem;
+    font-weight: 750;
+    line-height: 1.38;
+    margin-bottom: 10px;
   }
   table {
+    font-variant-numeric: tabular-nums;
     width: 100%;
     border-collapse: collapse;
   }
   th, td {
     text-align: left;
-    padding: 6px 8px;
-    border-bottom: 1px solid #2a3350;
-    font-size: 0.9em;
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.82rem;
   }
-  .pill {
-    display: inline-block;
-    color: #0b0e17;
-    border-radius: 999px;
-    padding: 2px 8px;
-    margin-right: 4px;
-    font-size: 0.75em;
-    font-weight: bold;
+  th {
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
-  .banner {
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin-bottom: 12px;
-  }
-  .banner-green {
-    background: #163d2c;
-    color: #2fd27d;
-    font-weight: bold;
-  }
-  .banner-red {
-    background: #3d1620;
-    color: #ff5470;
-    font-weight: bold;
-  }
-  .quest-log {
-    padding-left: 20px;
-  }
-  .quest-done {
-    color: #6b7280;
-  }
-  .quest-active {
-    color: #ffd23f;
-    font-weight: bold;
-  }
-  .quest-locked {
-    color: #4b5270;
-  }
-  .ach-grid {
+  tr:last-child td { border-bottom: 0; }
+  .party-badges {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 6px;
+    margin: 0 0 12px;
   }
-  .ach-tile {
-    background: #1b2338;
-    border: 1px solid #2a3350;
-    border-radius: 10px;
-    padding: 10px 14px;
-    min-width: 160px;
+  .status-badge, .policy-status {
+    align-items: center;
+    border: 1px solid;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 800;
+    gap: 4px;
+    letter-spacing: 0.035em;
+    line-height: 1;
+    padding: 5px 8px;
+    text-transform: uppercase;
   }
-  .ach-title {
-    font-weight: bold;
-    color: #ffd23f;
+  .status-badge.good, .policy-status.good {
+    background: var(--good-bg); border-color: var(--good-line); color: var(--good);
   }
-  .ach-flavor {
-    color: #9aa4c0;
-    font-size: 0.85em;
-    margin-top: 4px;
+  .status-badge.watch, .policy-status.watch {
+    background: var(--watch-bg); border-color: var(--watch-line); color: var(--watch);
   }
-  .graveyard {
-    margin-top: 16px;
-    color: #6b7280;
+  .status-badge.bad, .policy-status.bad {
+    background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad);
   }
-  .graveyard-title {
-    font-weight: bold;
-    color: #ff5470;
-    margin-bottom: 6px;
+  .status-badge.unknown, .policy-status.unknown {
+    background: var(--unknown-bg); border-color: var(--unknown-line); color: var(--unknown);
   }
   .empty {
-    color: #6b7280;
+    color: var(--muted);
     font-style: italic;
   }
   .label {
-    color: #9aa4c0;
-    font-size: 0.85em;
+    color: var(--muted);
+    font-size: 0.8rem;
   }
   .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: 12px;
   }
   .card-grid .panel {
+    border-radius: 12px;
+    box-shadow: none;
     margin-bottom: 0;
+    padding: 16px;
   }
   .hero {
-    border-color: #ffd23f;
+    border-color: var(--line-strong);
+    padding: 24px;
+  }
+  .section-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .section-header p { margin-bottom: 0; }
+  .hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .hero-stat {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    min-width: 84px;
+    padding: 7px 10px;
+    text-align: center;
+  }
+  .hero-stat strong {
+    display: block;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-stat span {
+    color: var(--muted);
+    font-size: 0.65rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .hero-stat.good strong { color: var(--good); }
+  .hero-stat.watch strong { color: var(--watch); }
+  .hero-stat.unknown strong { color: var(--unknown); }
+  .hero-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .hero-card {
-    background: #1b2338;
-    border: 1px solid #3a4670;
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 14px;
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    min-width: 0;
+    padding: 17px;
+  }
+  .hero-card.good { border-top: 4px solid var(--good); }
+  .hero-card.watch { border-top: 4px solid var(--watch); }
+  .hero-card.bad { border-top: 4px solid var(--bad); }
+  .hero-card.unknown { border-top: 4px solid var(--unknown); }
+  .slot-label {
+    align-items: center;
+    color: var(--muted);
+    display: flex;
+    font-size: 0.67rem;
+    font-weight: 800;
+    justify-content: space-between;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  .hero-card.empty-slot {
+    background: var(--unknown-bg);
+    border-style: dashed;
+  }
+  .empty-slot h3 {
+    color: var(--ink);
+    font-size: 1rem;
+    letter-spacing: 0;
+    margin: 0 0 8px;
+    text-transform: none;
+  }
+  .gate-list {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 12px 0 0;
+    padding-left: 18px;
+  }
+  .gate-list li + li { margin-top: 7px; }
+  .notice {
+    border: 1px solid;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin: 10px 0;
+    padding: 9px 11px;
+  }
+  .notice.watch {
+    background: var(--watch-bg); border-color: var(--watch-line); color: var(--watch);
+  }
+  .notice.bad {
+    background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad);
+  }
+  .notice.info {
+    background: var(--info-bg); border-color: #b9d7e6; color: var(--info);
+  }
+  .risk-block {
+    border-top: 1px solid var(--line);
+    margin: 12px 0;
+    padding-top: 10px;
+  }
+  .risk-metrics {
+    color: var(--muted);
+    font-size: 0.76rem;
+    margin-bottom: 7px;
+  }
+  .policy-line {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .policy-detail {
+    color: var(--muted);
+    flex: 1 1 180px;
+    font-size: 0.75rem;
   }
   .prov {
     display: inline-block;
-    background: #2a3350;
-    color: #9aa4c0;
-    border-radius: 6px;
-    padding: 1px 6px;
-    font-size: 0.72em;
+    background: var(--unknown-bg);
+    color: var(--unknown);
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 0.65rem;
     margin-left: 6px;
   }
   .tech-line {
-    color: #7fd4ff;
-    font-size: 0.9em;
-    margin: 4px 0 8px;
-  }
-  .warn {
-    color: #ffce00;
-    font-size: 0.9em;
-    margin: 6px 0;
+    background: var(--info-bg);
+    border-radius: 8px;
+    color: var(--info);
+    font-size: 0.78rem;
+    margin: 7px 0 12px;
+    padding: 8px 10px;
   }
   .narr {
-    margin: 6px 0;
-    font-size: 0.92em;
+    margin: 7px 0;
+    font-size: 0.84rem;
   }
   .narr-k {
-    color: #ffd23f;
+    color: var(--brand);
     font-weight: bold;
     margin-right: 6px;
+  }
+  .pnl-positive { color: var(--good); font-weight: 750; }
+  .pnl-negative { color: var(--bad); font-weight: 750; }
+  .pnl-flat { color: var(--unknown); font-weight: 750; }
+  .market-panel { padding: 20px 22px; }
+  .market-summary { font-size: 0.94rem; margin-bottom: 4px; }
+  .regime-label {
+    color: var(--info);
+    font-size: 0.75rem;
+    font-weight: 750;
+    text-transform: uppercase;
+  }
+  .symbol-panel { padding: 0; overflow: hidden; }
+  .symbol-header {
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 18px;
+    justify-content: space-between;
+    padding: 20px 22px;
+  }
+  .symbol-header h2 { font-size: 1.45rem; margin: 0; }
+  .symbol-stats { display: flex; gap: 10px; }
+  .symbol-stat {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    min-width: 105px;
+    padding: 7px 10px;
+  }
+  .symbol-stat span {
+    color: var(--muted);
+    display: block;
+    font-size: 0.63rem;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .symbol-stat strong {
+    font-size: 0.94rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .symbol-body { padding: 18px 22px 22px; }
+  .group-section + .group-section {
+    border-top: 1px solid var(--line);
+    margin-top: 22px;
+    padding-top: 20px;
+  }
+  .group-section > summary {
+    align-items: center;
+    color: var(--ink);
+    display: flex;
+    font-size: 0.8rem;
+    font-weight: 800;
+    gap: 12px;
+    justify-content: space-between;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+  }
+  .group-count {
+    background: var(--unknown-bg);
+    border: 1px solid var(--unknown-line);
+    border-radius: 999px;
+    color: var(--unknown);
+    font-size: 0.63rem;
+    letter-spacing: 0.02em;
+    padding: 3px 7px;
+    text-transform: none;
+  }
+  .context-details {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin: 10px 0 18px;
+    padding: 0 11px 9px;
   }
   details {
     margin-top: 8px;
   }
   details summary {
     cursor: pointer;
-    color: #9aa4c0;
-    font-size: 0.9em;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 8px 0;
+  }
+  .research-details {
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+  }
+  .research-details > summary { color: var(--good); }
+  .gate-details > summary { color: var(--info); }
+  .page-footer {
+    color: var(--muted);
+    font-size: 0.72rem;
+    padding: 2px 4px 24px;
+    text-align: center;
+  }
+  @media (max-width: 1120px) {
+    .hero-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .app-header-inner, .section-header, .symbol-header {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .app-header-inner { padding: 22px 18px 18px; }
+    .page-body { padding: 16px 12px 28px; }
+    .meta-row, .hero-stats { justify-content: flex-start; }
+    .panel, .hero { border-radius: 12px; padding: 16px; }
+    .symbol-panel { padding: 0; }
+    .symbol-header { padding: 16px; }
+    .symbol-body { padding: 15px; }
+    .symbol-stats { width: 100%; }
+    .symbol-stat { flex: 1; min-width: 0; }
+    th, td { padding: 6px 4px; }
   }
 """
 
@@ -894,10 +1160,24 @@ def _badges(grades: dict) -> str:
         return ""
     pills = []
     for k, v in grades.items():
-        color = _GRADE_COLORS.get(v, "#6b7280")
-        pills.append(f'<span class="pill" style="background:{color}">'
-                     f'{_esc(k)}:{_esc(v)}</span>')
+        status = str(v).upper()
+        cls = _GRADE_CLASSES.get(status, "unknown")
+        symbol = _GRADE_SYMBOLS.get(status, "?")
+        pills.append(f'<span class="status-badge {cls}">'
+                     f'{symbol} {_esc(k)} · {_esc(status)}</span>')
     return f'<div class="party-badges">{"".join(pills)}</div>'
+
+
+def _hero_badges(grades: dict) -> str:
+    """Keep the hero scan-friendly while preserving every grade on demand."""
+    if not grades:
+        return ""
+    key_order = ("liquidity", "earnings", "fomc")
+    primary = {key: grades[key] for key in key_order if key in grades}
+    visible = _badges(primary)
+    return (f'{visible}<details class="gate-details">'
+            f'<summary>All gate checks ({len(grades)})</summary>'
+            f'{_badges(grades)}</details>')
 
 
 def _pnl_cell(row: dict) -> str:
@@ -906,9 +1186,13 @@ def _pnl_cell(row: dict) -> str:
     # value that rounds to $0 (e.g. a breakeven row a few cents negative)
     # never shows as "-$0".
     rounded = round(pnl)
-    color = "#2fd27d" if rounded >= 0 else "#ff5470"
-    sign = "+" if rounded >= 0 else "-"
-    body = f'<span style="color:{color}">{sign}${abs(pnl):,.0f}</span>'
+    if rounded > 0:
+        cls, sign = "pnl-positive", "+"
+    elif rounded < 0:
+        cls, sign = "pnl-negative", "-"
+    else:
+        cls, sign = "pnl-flat", ""
+    body = f'<span class="{cls}">{sign}${abs(pnl):,.0f}</span>'
     if row["note"]:
         body += f' <span class="label">({_esc(row["note"])})</span>'
     return body
@@ -965,9 +1249,12 @@ def _card_tech_line(kind: str, tech: dict | None) -> str:
 
 
 def _risk_line(card: dict) -> str:
-    """Plain-dollar worst-case line reconciling the card against the repo
-    risk policy (config.RISK_SLEEVE / config.MAX_LOSS_PER_TRADE). Empty when
-    the card carries no risk dict (injected fixtures) -- never invented."""
+    """Plain-dollar economics plus the structure-specific policy status.
+
+    A short put's assignment capital is not compared to the tactical long-call
+    premium cap.  The policy snapshot says which existing rule applies and
+    exposes any unknown portfolio fact rather than inventing a green result.
+    """
     import config
 
     risk = card.get("risk")
@@ -983,29 +1270,63 @@ def _risk_line(card: dict) -> str:
         bits.append(f"max profit ${risk['max_profit']:,.0f}")
     if isinstance(risk.get("breakeven"), (int, float)):
         bits.append(f"breakeven ${risk['breakeven']:,.2f}")
-    fits = risk["max_loss"] <= config.MAX_LOSS_PER_TRADE
-    policy = (f"within the ${config.MAX_LOSS_PER_TRADE:,.0f}/trade cap"
-              if fits else
-              f"EXCEEDS the ${config.MAX_LOSS_PER_TRADE:,.0f}/trade hard cap "
-              "— research display only, does not fit the repo risk policy")
-    cls = "label" if fits else "warn"
-    return f'<div class="{cls}">{_esc(" · ".join(bits) + " · " + policy)}</div>'
+    snapshot = card.get("top3_snapshot")
+    policy_data = (snapshot.get("policy") if isinstance(snapshot, dict)
+                   else None)
+    if isinstance(policy_data, dict):
+        status = str(policy_data.get("status", "WATCH"))
+        reasons = policy_data.get("reason_codes") or []
+        detail = ", ".join(
+            _POLICY_REASON_LABELS.get(str(reason), str(reason))
+            for reason in reasons)
+        cls = {"ELIGIBLE": "good", "WATCH": "watch",
+               "PLAN_ONLY": "bad", "DATA_BLOCKED": "bad"}.get(
+                   status, "unknown")
+        symbol = {"ELIGIBLE": "✓", "WATCH": "!",
+                  "PLAN_ONLY": "×", "DATA_BLOCKED": "×"}.get(status, "?")
+    else:
+        status, detail, cls, symbol = "UNKNOWN", "policy status unavailable", \
+            "unknown", "?"
+    detail_html = (f'<span class="policy-detail">{_esc(detail)}</span>'
+                   if detail else "")
+    return (
+        '<div class="risk-block">'
+        f'<div class="risk-metrics">{_esc(" · ".join(bits))}</div>'
+        '<div class="policy-line">'
+        f'<span class="policy-status {cls}">{symbol} {_esc(status)}</span>'
+        f'{detail_html}</div></div>')
 
 
 _PREVIEW_WARNING = ("two-leg preview — the LEAPS is NOT held; this requires "
                     "buying the LEAPS first, and the P&L shown includes that "
                     "long leg's full risk")
 
+_POLICY_REASON_LABELS = {
+    "CSP_ASSIGNMENT_CAPITAL_UNCONFIRMED": (
+        "cash set aside for a possible 100-share purchase is not recorded"),
+    "CSP_ASSIGNMENT_CAPITAL_NOT_AUTHORIZED": (
+        "cash for a possible 100-share purchase is not authorized"),
+    "CSP_SYMBOL_OUTSIDE_ALLOWED_NAMES": "not an allowed cash-secured-put name",
+    "CSP_SLOT_FULL": "the one cash-secured-put slot is already used",
+    "CSP_OPEN_COUNT_UNKNOWN": "open cash-secured-put count is unknown",
+    "LONG_CALL_MAX_LOSS_EXCEEDS_CAP": (
+        "full premium exceeds the $600 defined-risk cap"),
+    "PMCC_PREVIEW_REQUIRES_LEAPS": "the long-dated call is not held",
+    "PMCC_LEAPS_NOT_HELD": "the required long-dated call is not held",
+    "COVERED_CALL_NOT_FULLY_COVERED": "fewer than 100 shares are recorded",
+}
+
 
 def _card_html(card: dict, *, tech_note: str = "") -> str:
     if "skipped" in card:
         return (f'<div class="panel"><div class="label">'
                 f'{_esc(card["skipped"])}</div></div>')
-    parts = ['<div class="panel">',
+    parts = ['<div class="panel candidate-card">',
              f'<div class="party-name">{_esc(card["headline"])}</div>',
              _badges(card.get("grades", {}))]
     if card.get("preview"):
-        parts.append(f'<div class="warn">{_esc(_PREVIEW_WARNING)}</div>')
+        parts.append(f'<div class="notice watch">! '
+                     f'{_esc(_PREVIEW_WARNING)}</div>')
     parts.append(_risk_line(card))
     if tech_note:
         parts.append(f'<div class="tech-line">{_esc(tech_note)}</div>')
@@ -1022,7 +1343,10 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
 
 
 def _group_html(grp: dict, *, tech: dict | None = None) -> str:
-    head = f'<h3>{_esc(grp["title"])}</h3>'
+    count = len(grp["cards"])
+    count_label = f"{count} contract" + ("" if count == 1 else "s")
+    head = (f'<summary><span>{_esc(grp["title"])}</span>'
+            f'<span class="group-count">{count_label}</span></summary>')
     if not grp["cards"]:
         empty = grp.get("empty") or "none this cycle"
         body = f'<div class="empty">{_esc(empty)}</div>'
@@ -1030,7 +1354,7 @@ def _group_html(grp: dict, *, tech: dict | None = None) -> str:
         note = _card_tech_line(grp["kind"], tech)
         cards = "".join(_card_html(c, tech_note=note) for c in grp["cards"])
         body = f'<div class="card-grid">{cards}</div>'
-    return head + body
+    return f'<details class="group-section">{head}{body}</details>'
 
 
 def _prov_tag(context: dict | None) -> str:
@@ -1040,147 +1364,228 @@ def _prov_tag(context: dict | None) -> str:
     return f'<span class="prov">{_esc(prov)}</span>'
 
 
-_NARRATIVE_FIELDS = (("why_now", "why now"), ("hypothesis", "hypothesis"),
-                     ("thesis", "thesis"), ("bull", "bull"), ("base", "base"),
-                     ("bear", "bear"), ("logic", "logic"))
+def _research_annotation_map(
+        picks: list[dict], context: dict | None
+        ) -> tuple[dict[str, Mapping[str, object]], str | None]:
+    """Validate advisory annotations against the deterministic hero IDs.
 
+    The context JSON may explain a current candidate, but it cannot add one or
+    change its ordering.  A malformed annotation set is ignored as research
+    evidence and returned as a visible warning rather than partly rendered.
+    """
+    from options_researcher.top3_context import (
+        AnnotationValidationError,
+        normalize_research_annotations,
+    )
 
-def _find_pick_card(data: dict, pick: dict) -> dict | None:
-    """Match a context-JSON top_pick to an assembled card.
-
-    Matching rule: same symbol (case-insensitive), lane == group kind,
-    expiry string equal, and float(strike) equal to the cent."""
-    sym = str(pick.get("symbol", "")).upper()
-    lane = pick.get("lane")
-    expiry = pick.get("expiry")
+    raw = (context or {}).get("annotations")
+    if raw is None:
+        return {}, None
+    if not isinstance(raw, dict):
+        return {}, "research annotations are not an object — ignoring them"
+    keys = [p["card"].get("top3_snapshot", {}).get("candidate_id")
+            for p in picks]
+    if any(not isinstance(key, str) for key in keys):
+        return {}, "candidate identities are invalid — research annotations ignored"
     try:
-        strike = float(pick.get("strike"))
-    except (TypeError, ValueError):
-        return None
-    for sec in data.get("symbols", []):
-        if str(sec["symbol"]).upper() != sym:
+        normalized = normalize_research_annotations(keys, raw)
+    except AnnotationValidationError as error:
+        return {}, f"research annotations invalid ({error.code}) — ignoring them"
+    return dict(normalized), None
+
+
+def _research_html(annotation: Mapping[str, object] | None, *,
+                   data_as_of: str) -> str:
+    """Render source-linked, advisory research for exactly one hero card."""
+    if annotation is None:
+        return ('<div class="notice watch">! Research evidence incomplete — '
+                "no source-validated annotation for this candidate.</div>")
+    market_as_of = annotation.get("market_as_of_date")
+    if market_as_of != data_as_of:
+        return ('<div class="notice watch">! Research evidence stale — annotation '
+                f'market date {_esc(market_as_of or "unknown")} does not '
+                f'match card date {_esc(data_as_of)}.</div>')
+    raw_claims = annotation.get("claims")
+    claims = raw_claims if isinstance(raw_claims, (list, tuple)) else ()
+    if not claims:
+        return ('<div class="notice watch">! Research evidence incomplete — '
+                "the validated annotation has no claims.</div>")
+    parts = ['<details class="research-details"><summary>'
+             '✓ Research evidence · complete</summary>']
+    for claim in claims:
+        if not isinstance(claim, Mapping):
             continue
-        for grp in sec["groups"]:
-            if grp["kind"] != lane:
-                continue
-            for card in grp["cards"]:
+        source = claim.get("source_url")
+        source_html = (f' <a href="{_esc(source)}">source</a>'
+                       if isinstance(source, str) and source else
+                       f' · source unknown: {_esc(claim.get("unknown_rationale", ""))}')
+        parts.append(
+            '<div class="narr"><span class="narr-k">'
+            f'{_esc(claim["classification"])} / '
+            f'{_esc(claim["date_certainty"])} / '
+            f'{_esc(claim["source_tier"])}</span>'
+            f'{_esc(claim["text"])}{source_html}<br>'
+            f'<span class="narr-k">counter-case</span>'
+            f'{_esc(claim["countercase"])}</div>')
+    parts.append('<div class="label">Advisory context only; it does not '
+                 'change membership or rank.</div></details>')
+    return "".join(parts)
+
+
+def _hero_pick_html(pick: dict, annotation: Mapping[str, object] | None, *,
+                    data_as_of: str, slot: int) -> str:
+    """Render one deterministic hero pick plus matching advisory evidence."""
+    card = pick["card"]
+    preview_warn = (f'<div class="notice watch">! '
+                    f'{_esc(_PREVIEW_WARNING)}</div>'
+                    if card.get("preview") else "")
+    snapshot = card.get("top3_snapshot") or {}
+    ident = snapshot.get("candidate_id", "candidate identity unavailable")
+    status = str(snapshot.get("selection_status", "UNKNOWN"))
+    status_cls = {"ELIGIBLE": "good", "WATCH": "watch",
+                  "PLAN_ONLY": "bad", "DATA_BLOCKED": "bad"}.get(
+                      status, "unknown")
+    symbol = {"ELIGIBLE": "✓", "WATCH": "!", "PLAN_ONLY": "×",
+              "DATA_BLOCKED": "×"}.get(status, "?")
+    head = (f'<div class="slot-label"><span>Pick {slot}</span>'
+            f'<span class="policy-status {status_cls}">{symbol} '
+            f'{_esc(status)}</span></div>'
+            f'<div class="party-name">{_esc(card["headline"])}</div>'
+            + _hero_badges(card.get("grades", {}))
+            + preview_warn
+            + _risk_line(card)
+            + _bbb_table(card.get("bbb", []))
+            + '<details><summary>Selection audit</summary>'
+            + f'<div class="label">Display score {pick["score"]} · '
+              f'{_esc(ident)}</div></details>')
+    return (f'<div class="hero-card {status_cls}">{head}'
+            f'{_research_html(annotation, data_as_of=data_as_of)}</div>')
+
+
+def _top3_gap_reasons(data: dict) -> list[str]:
+    """Explain an open Top-3 slot from the actual excluded card snapshots."""
+    liquid_failures: list[str] = []
+    outside_put_names: set[str] = set()
+    plan_only = 0
+    data_blocked = 0
+    lane_names = {"put": "put", "cc": "covered call", "pmcc": "PMCC",
+                  "leaps": "LEAPS", "long_call": "call"}
+    for sec in data.get("symbols", []):
+        symbol = str(sec.get("symbol", "?"))
+        for grp in sec.get("groups", []):
+            lane = str(grp.get("kind", "contract"))
+            for card in grp.get("cards", []):
                 if "skipped" in card:
                     continue
-                if (card.get("expiry") == expiry
-                        and abs(float(card["strike"]) - strike) < 0.005):
-                    return card
-    return None
+                snapshot = card.get("top3_snapshot")
+                if not isinstance(snapshot, dict):
+                    continue
+                policy = snapshot.get("policy")
+                policy = policy if isinstance(policy, Mapping) else {}
+                status = str(policy.get("status", "DATA_BLOCKED"))
+                reasons = policy.get("reason_codes") or []
+                liquidity = (card.get("grades") or {}).get("liquidity")
+                if status == "ELIGIBLE" and liquidity == "RED":
+                    strike = card.get("strike")
+                    strike_text = (f"${float(strike):g} "
+                                   if isinstance(strike, (int, float)) else "")
+                    liquid_failures.append(
+                        f"{symbol} {strike_text}{lane_names.get(lane, lane)} "
+                        "passes portfolio policy but fails liquidity")
+                if "CSP_SYMBOL_OUTSIDE_ALLOWED_NAMES" in reasons:
+                    outside_put_names.add(symbol)
+                if status == "PLAN_ONLY":
+                    plan_only += 1
+                elif status == "DATA_BLOCKED":
+                    data_blocked += 1
+
+    out = []
+    if liquid_failures:
+        out.append(liquid_failures[0] + ".")
+    if outside_put_names:
+        names = sorted(outside_put_names)
+        joined = (names[0] if len(names) == 1 else
+                  ", ".join(names[:-1]) + f" and {names[-1]}")
+        out.append(f"{joined} puts are plan-only outside the registered "
+                   "cash-secured-put names.")
+    elif plan_only:
+        out.append(f"{plan_only} remaining contract(s) are plan-only.")
+    if data_blocked:
+        out.append(f"{data_blocked} contract(s) are blocked by missing data.")
+    if not out:
+        out.append("No additional contract passed both policy and liquidity gates.")
+    out.append("A blocked or illiquid idea is never promoted just to fill the list.")
+    return out[:3]
 
 
-def _hero_pick_html(pick: dict, data: dict, context: dict | None) -> str:
-    """One hero card: matched scanner numbers (or an unmatched warning) plus
-    the JSON's narrative blocks, each provenance-labeled. Never invents."""
-    prov = _prov_tag(context)
-    card = _find_pick_card(data, pick)
-    if card is not None:
-        preview_warn = (f'<div class="warn">{_esc(_PREVIEW_WARNING)}</div>'
-                        if card.get("preview") else "")
-        head = (f'<div class="party-name">{_esc(card["headline"])}</div>'
-                + _badges(card.get("grades", {}))
-                + preview_warn
-                + _risk_line(card)
-                + _bbb_table(card.get("bbb", [])))
-    else:
-        ident = (f'{pick.get("symbol", "?")} {pick.get("lane", "?")} '
-                 f'${pick.get("strike", "?")} exp {pick.get("expiry", "?")}')
-        head = (f'<div class="party-name">{_esc(ident)}</div>'
-                '<div class="warn">unmatched to current candidates &mdash; '
-                "details below are from the research JSON, not the assembled "
-                "scanner</div>")
-    narrs = []
-    for key, label in _NARRATIVE_FIELDS:
-        val = pick.get(key)
-        if val:
-            narrs.append(f'<div class="narr"><span class="narr-k">'
-                         f"{_esc(label)}</span>{_esc(val)} {prov}</div>")
-    return f'<div class="hero-card">{head}{"".join(narrs)}</div>'
+def _empty_hero_slot_html(data: dict, slot: int) -> str:
+    reasons = "".join(f"<li>{_esc(reason)}</li>"
+                      for reason in _top3_gap_reasons(data))
+    return (
+        '<div class="hero-card unknown empty-slot">'
+        f'<div class="slot-label"><span>Pick {slot}</span>'
+        '<span class="policy-status unknown">? OPEN</span></div>'
+        '<h3>No qualifying contract</h3>'
+        '<div class="label">This is an intentional open slot, not missing UI.</div>'
+        f'<ul class="gate-list">{reasons}</ul></div>')
 
 
 def _hero_html(data: dict, context: dict | None) -> str:
-    """TOP 3 PICKS TODAY: research-context narratives when the JSON has
-    top_picks; otherwise the quantitative select_top_picks shortlist with an
-    honest no-narratives line. Membership disagreements are disclosed.
+    """Render deterministic Top-3 membership and advisory-only research.
 
-    Policy fallback: when every candidate is vetoed by the risk-policy gate,
-    the unvetoed ranking is shown WITH a loud banner -- an empty hero would
-    hide the finding that nothing on the board fits the policy."""
-    import config
+    Legacy agent-authored ``top_picks`` are deliberately not a membership
+    source.  The only hero candidates come from ``select_top_picks`` over the
+    assembled, point-in-time policy snapshots.
+    """
+    py_picks = select_top_picks(data, include_csp_watch=True)
+    qualified_picks = select_top_picks(data)
+    data_as_of = str(data.get("data_as_of") or "?")
+    annotations, annotation_warning = _research_annotation_map(py_picks, context)
+    notes = []
+    legacy_picks = ((context or {}).get("top_picks")
+                    or (context or {}).get("legacy_top_picks_unusable"))
+    if legacy_picks:
+        notes.append('<div class="notice info">Legacy agent-selected top_picks were '
+                     "ignored: only deterministic, policy-qualified cards "
+                     "may appear here.</div>")
+    if annotation_warning:
+        notes.append(f'<div class="notice watch">! '
+                     f'{_esc(annotation_warning)}</div>')
+    if qualified_picks and len(qualified_picks) < len(py_picks):
+        notes.append(
+            f'<div class="notice watch">! {len(qualified_picks)} card(s) are fully '
+            "policy-qualified; the remaining shown card(s) are WATCH only "
+            "because equity-side assignment capital is not explicitly authorized.</div>")
+    cards = []
+    for slot, pick in enumerate(py_picks, start=1):
+        snapshot = pick["card"].get("top3_snapshot")
+        ident = (snapshot.get("candidate_id")
+                 if isinstance(snapshot, dict) else None)
+        annotation = annotations.get(ident) if isinstance(ident, str) else None
+        cards.append(_hero_pick_html(
+            pick, annotation, data_as_of=data_as_of, slot=slot))
+    for slot in range(len(py_picks) + 1, 4):
+        cards.append(_empty_hero_slot_html(data, slot))
 
-    policy_note = ""
-    py_picks = select_top_picks(data)
-    n_target = 3
-    if not py_picks:
-        unvetoed = select_top_picks(data, policy_veto=False)
-        if unvetoed:
-            py_picks = unvetoed
-            policy_note = (
-                '<div class="warn">NO candidate on the board fits the repo '
-                f"risk policy (economic max loss &le; "
-                f"${config.MAX_LOSS_PER_TRADE:,.0f}/trade) — showing the "
-                "best available as research display only.</div>")
-    elif len(py_picks) < n_target and len(
-            select_top_picks(data, policy_veto=False)) > len(py_picks):
-        policy_note = (
-            f'<div class="warn">only {len(py_picks)} candidate(s) fit the '
-            f"repo risk policy (economic max loss &le; "
-            f"${config.MAX_LOSS_PER_TRADE:,.0f}/trade) — the rest of the "
-            "board is excluded from the shortlist, not hidden: see the "
-            "symbol panels below.</div>")
-    json_picks = (context or {}).get("top_picks") or []
-    researched = (context or {}).get("researched_on")
-    research_line = (
-        f'<div class="label">research gathered {_esc(researched)} &middot; '
-        f'data as-of {_esc(data.get("data_as_of") or "?")} close — research '
-        "may reference intraday moves newer than the priced data</div>"
-        if researched else "")
-    if json_picks:
-        body = "".join(_hero_pick_html(p, data, context) for p in json_picks)
-
-        def _jkey(p: dict) -> tuple:
-            try:
-                strike = float(p.get("strike"))
-            except (TypeError, ValueError):
-                strike = None
-            return (str(p.get("symbol", "")).upper(), p.get("lane"),
-                    strike, p.get("expiry"))
-
-        jset = {_jkey(p) for p in json_picks}
-        pset = {(p["symbol"].upper(), p["lane"], p["strike"], p["expiry"])
-                for p in py_picks}
-        if py_picks and jset != pset:
-            listing = "; ".join(
-                f"{p['symbol']} {p['lane']} ${p['strike']:g} {p['expiry']} "
-                f"(score {p['score']})" for p in py_picks)
-            body += ('<div class="label">Python quantitative shortlist '
-                     f"differs: {_esc(listing)}</div>")
-    elif py_picks:
-        cards = []
-        for p in py_picks:
-            c = p["card"]
-            preview_warn = (f'<div class="warn">{_esc(_PREVIEW_WARNING)}</div>'
-                            if c.get("preview") else "")
-            cards.append(
-                '<div class="hero-card">'
-                f'<div class="party-name">{_esc(c.get("headline", ""))}</div>'
-                + _badges(c.get("grades", {}))
-                + preview_warn
-                + _risk_line(c)
-                + _bbb_table(c.get("bbb", []))
-                + f'<div class="label">pick score {p["score"]} &middot; '
-                  f'{_esc(p["symbol"])} {_esc(p["lane"])}</div></div>')
-        body = ("".join(cards)
-                + '<div class="warn">no research narratives for this date '
-                  "&mdash; quantitative shortlist only</div>")
-    else:
-        body = ('<div class="empty">no non-vetoed candidates to shortlist '
-                "this cycle</div>")
-    return (f'<div class="panel hero"><h2>TOP 3 PICKS TODAY</h2>'
-            f"{research_line}{policy_note}{body}</div>")
+    qualified_count = len(qualified_picks)
+    watch_count = max(0, len(py_picks) - qualified_count)
+    open_count = max(0, 3 - len(py_picks))
+    qualified_cls = "good" if qualified_count else "unknown"
+    return (
+        '<section class="panel hero">'
+        '<div class="section-header"><div>'
+        '<div class="eyebrow">Daily shortlist</div>'
+        '<h2>TOP 3 PICKS TODAY</h2>'
+        '<p class="header-sub">Deterministic membership. Research can explain '
+        'a card, but cannot add or promote one.</p></div>'
+        '<div class="hero-stats">'
+        f'<div class="hero-stat {qualified_cls}"><strong>{qualified_count}</strong>'
+        '<span>Eligible</span></div>'
+        f'<div class="hero-stat watch"><strong>{watch_count}</strong>'
+        '<span>Watch</span></div>'
+        f'<div class="hero-stat unknown"><strong>{open_count}</strong>'
+        '<span>Open</span></div></div></div>'
+        f'{"".join(notes)}<div class="hero-grid">{"".join(cards)}</div></section>')
 
 
 def _market_html(context: dict | None) -> str:
@@ -1189,15 +1594,26 @@ def _market_html(context: dict | None) -> str:
     if not isinstance(market, dict) or not market:
         return ""
     prov = _prov_tag(context)
-    parts = ['<div class="panel">', f"<h2>MARKET CONTEXT {prov}</h2>"]
-    if market.get("summary"):
-        parts.append(f'<div class="narr">{_esc(market["summary"])}</div>')
+    parts = ['<section class="panel market-panel">',
+             '<div class="eyebrow">Backdrop</div>',
+             f"<h2>Market context {prov}</h2>"]
+    summary = str(market.get("summary") or "").strip()
+    if summary:
+        lead, separator, _tail = summary.partition(". ")
+        lead = lead + ("." if separator else "")
+        parts.append(f'<div class="market-summary">{_esc(lead)}</div>')
     if market.get("regime"):
-        parts.append(f'<div class="label">regime: '
+        parts.append(f'<div class="regime-label">Regime · '
                      f'{_esc(market["regime"])}</div>')
-    for note in market.get("notes") or []:
-        parts.append(f'<div class="label">&middot; {_esc(note)}</div>')
-    parts.append("</div>")
+    notes = market.get("notes") or []
+    if summary or notes:
+        parts.append('<details><summary>Full market narrative &amp; notes</summary>')
+        if summary:
+            parts.append(f'<div class="narr">{_esc(summary)}</div>')
+        for note in notes:
+            parts.append(f'<div class="label">&middot; {_esc(note)}</div>')
+        parts.append('</details>')
+    parts.append("</section>")
     return "".join(parts)
 
 
@@ -1224,7 +1640,8 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
     if not isinstance(sym_ctx, dict):
         return ""
     prov = _prov_tag(context)
-    parts = []
+    parts = ['<details class="context-details"><summary>'
+             'Company context, catalysts &amp; sources</summary>']
     if sym_ctx.get("news_summary"):
         parts.append(f'<div class="narr"><span class="narr-k">news</span>'
                      f'{_esc(sym_ctx["news_summary"])} {prov}</div>')
@@ -1236,6 +1653,7 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
             parts.append(f'<div class="label">catalyst {_esc(when)}'
                          f"{_esc(confirmed)}: {_esc(cat['what'])} {prov}</div>")
     parts.append(_sources_html(sym_ctx.get("sources")))
+    parts.append('</details>')
     return "".join(parts)
 
 
@@ -1244,7 +1662,7 @@ def render(data: dict, *, context: dict | None = None,
     """Render the assemble() dict (plus optional research context) into one
     self-contained HTML string. Pure string templating: no file I/O, no
     network, no external assets. Every value from `data` / `context` is
-    html.escape()'d before embedding. Page order: sticky as-of banner ->
+    html.escape()'d before embedding. Page order: compact metadata header ->
     Top-3 hero -> market strip -> per-symbol panels (card grid)."""
     symbols_html = ""
     for sec in data["symbols"]:
@@ -1256,37 +1674,53 @@ def render(data: dict, *, context: dict | None = None,
         stale_html = ""
         if sec.get("features_stale"):
             stale_html = (
-                '<div class="warn">IV features are from '
+                '<div class="notice watch">! IV features are from '
                 f'{_esc(sec.get("features_as_of", "?"))}, older than the '
                 f'chain date ({_esc(sec.get("as_of", "?"))}) — IV-rank/VRP '
                 "badges are STALE and this symbol is excluded from the "
-                "Top-3 shortlist</div>")
+                "Top-3 shortlist.</div>")
         symbols_html += (
-            f'<div class="panel"><h2>{_esc(sec["symbol"])} '
-            f'&mdash; close ${sec["close"]:,.2f} &mdash; '
-            f'IV-rank {sec["iv_rank"]:.2f}</h2>{stale_html}{tech_html}'
-            f'{_symbol_context_html(sec["symbol"], context)}{groups}</div>')
+            '<section class="panel symbol-panel">'
+            '<div class="symbol-header"><div>'
+            '<div class="eyebrow">Symbol review</div>'
+            f'<h2>{_esc(sec["symbol"])}</h2></div>'
+            '<div class="symbol-stats">'
+            f'<div class="symbol-stat"><span>Close</span><strong>'
+            f'${sec["close"]:,.2f}</strong></div>'
+            f'<div class="symbol-stat"><span>IV rank</span><strong>'
+            f'{sec["iv_rank"]:.2f}</strong></div></div></div>'
+            f'<div class="symbol-body">{stale_html}{tech_html}'
+            f'{_symbol_context_html(sec["symbol"], context)}{groups}</div>'
+            '</section>')
     data_as_of = data.get("data_as_of") or "no cached data"
-    banner = (
-        '<div class="data-asof-banner">'
-        f'DATA AS-OF {_esc(data_as_of)} CLOSE &mdash; quotes move intraday; '
-        'verify live quotes in your broker before acting. Research only '
-        '&mdash; not investment advice.</div>')
-    warn_html = (f'<div class="warn">{_esc(context_warning)}</div>'
+    researched_on = (context or {}).get("researched_on")
+    research_meta = (f'<span class="meta-chip"><strong>Research updated</strong> '
+                     f'{_esc(researched_on)}</span>' if researched_on else "")
+    warn_html = (f'<div class="notice watch">! '
+                 f'{_esc(context_warning)}</div>'
                  if context_warning else "")
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<title>WHICH OPTIONS LOOK ATTRACTIVE?</title>'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<title>Options Attractiveness</title>'
         f'<style>{_STYLE}</style></head><body>'
-        f'{banner}'
-        '<div class="page-body">'
-        '<div class="panel"><h1>WHICH OPTIONS LOOK ATTRACTIVE TODAY?</h1>'
-        '<div class="header-sub">at-expiration payoff &mdash; not a '
-        'prediction</div></div>'
+        '<header class="app-header"><div class="app-header-inner">'
+        '<div><div class="eyebrow">Options research · Attractiveness</div>'
+        '<h1>Which options look attractive today?</h1>'
+        '<p class="header-sub">Policy-gated candidates with at-expiration '
+        'scenario ranges.</p></div>'
+        '<div class="meta-row">'
+        f'<span class="meta-chip"><strong>Market close</strong> '
+        f'{_esc(data_as_of)}</span>{research_meta}'
+        '<span class="meta-chip">Paper research</span>'
+        '</div></div></header><main class="page-body">'
         f'{warn_html}'
         f'{_hero_html(data, context)}'
         f'{_market_html(context)}'
-        f'{symbols_html}</div></body></html>')
+        f'{symbols_html}'
+        '<footer class="page-footer">Payoffs are at-expiration scenarios, '
+        'not predictions. Quotes move intraday; verify the live broker quote '
+        'before making a decision.</footer></main></body></html>')
 
 
 def main(**assemble_kwargs) -> str:

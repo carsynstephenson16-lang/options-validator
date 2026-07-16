@@ -233,7 +233,61 @@
       ]
     }
   },
-  "top_picks": [
+  "annotations": {
+    "AMZN:put:2026-09-18:225.00": {
+      "research_as_of_utc": "2026-07-16T15:33:01Z",
+      "market_as_of_date": "2026-07-15",
+      "claims": [
+        {
+          "id": "aws-q1-actual",
+          "text": "Amazon reported Q1 AWS sales of $37.6 billion, up 28% year over year, and AWS operating income of $14.2 billion.",
+          "classification": "fact",
+          "source_url": "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-First-Quarter-Results/default.aspx",
+          "source_tier": "issuer_ir",
+          "fact_date": "2026-04-30",
+          "date_certainty": "confirmed",
+          "countercase": "A strong prior quarter does not establish the next earnings result or protect a short put from a broad AI-infrastructure selloff."
+        },
+        {
+          "id": "q2-date-unknown",
+          "text": "Amazon's investor-results hub did not provide a company-confirmed Q2 2026 release date in the July 16 review.",
+          "classification": "unknown",
+          "source_url": "https://ir.aboutamazon.com/quarterly-results/default.aspx",
+          "source_tier": "issuer_ir",
+          "fact_date": null,
+          "date_certainty": "unknown",
+          "countercase": "An estimated late-July date may still prove correct or Amazon may announce a different date; this option cycle must not be treated as earnings-free."
+        }
+      ]
+    },
+    "AMZN:long_call:2026-07-27:260.00": {
+      "research_as_of_utc": "2026-07-16T15:33:01Z",
+      "market_as_of_date": "2026-07-15",
+      "claims": [
+        {
+          "id": "aws-q1-actual",
+          "text": "Amazon reported Q1 AWS sales of $37.6 billion, up 28% year over year, and AWS operating income of $14.2 billion.",
+          "classification": "fact",
+          "source_url": "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-First-Quarter-Results/default.aspx",
+          "source_tier": "issuer_ir",
+          "fact_date": "2026-04-30",
+          "date_certainty": "confirmed",
+          "countercase": "This prior-quarter result is not a forecast; the call still loses its entire premium if the stock is below its break-even at expiration."
+        },
+        {
+          "id": "fomc-after-expiry",
+          "text": "The selected July 27 contract expires before the scheduled July 28-29 FOMC meeting.",
+          "classification": "derived_calculation",
+          "source_url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "source_tier": "regulator",
+          "fact_date": "2026-07-28",
+          "date_certainty": "confirmed",
+          "countercase": "The contract still has only 12 days from the July 15 snapshot, and other market or company-specific news can move the stock before expiry."
+        }
+      ]
+    }
+  },
+  "legacy_top_picks_unusable": [
     {
       "symbol": "AMZN",
       "lane": "long_call",

@@ -223,7 +223,8 @@ class RenderTests(unittest.TestCase):
 
     def test_render_shows_grade_badges(self):
         html = ad.render(self._assembled())
-        self.assertIn("yield:AMBER", html)
+        self.assertIn("yield · AMBER", html)
+        self.assertIn('class="status-badge watch"', html)
 
     def test_render_escapes_dynamic_text(self):
         assembled = self._assembled()
@@ -300,24 +301,23 @@ class DataAsOfBannerTests(unittest.TestCase):
         d = ad.assemble(symbol_sections=[section], rv21_by_symbol={"MSFT": 1.1})
         self.assertEqual(d["data_as_of"], "2026-06-15")
 
-    def test_render_shows_prominent_data_as_of_banner(self):
+    def test_render_shows_compact_data_as_of_metadata_without_ribbon(self):
         section = {"symbol": "MSFT", "as_of": "2026-06-15", "close": 373.02,
                    "iv_rank": 0.5,
                    "groups": [{"kind": "put", "title": "SELL A PUT?",
                                "cards": [], "empty": "none this cycle"}]}
         d = ad.assemble(symbol_sections=[section], rv21_by_symbol={"MSFT": 1.1})
         html = ad.render(d)
-        self.assertIn("DATA AS-OF 2026-06-15 CLOSE", html)
-        self.assertIn("Research only", html)
-        self.assertIn("verify live quotes in your broker", html)
-        self.assertIn("data-asof-banner", html)
-        self.assertLess(html.index("DATA AS-OF"),
-                        html.index("WHICH OPTIONS LOOK ATTRACTIVE TODAY?"))
+        self.assertIn("<strong>Market close</strong> 2026-06-15", html)
+        self.assertIn("Paper research", html)
+        self.assertIn("verify the live broker quote", html)
+        self.assertNotIn("data-asof-banner", html)
+        self.assertNotIn("Research only", html)
 
-    def test_render_falls_back_banner_text_when_no_data(self):
+    def test_render_falls_back_metadata_text_when_no_data(self):
         d = {"symbols": [], "data_as_of": None}
         html = ad.render(d)
-        self.assertIn("DATA AS-OF no cached data CLOSE", html)
+        self.assertIn("<strong>Market close</strong> no cached data", html)
 
 
 class BbbRowsTests(unittest.TestCase):
@@ -642,17 +642,16 @@ class V2RenderTests(unittest.TestCase):
     def test_hero_with_matched_context_pick(self):
         html = ad.render(self._assembled(), context=_v2_context())
         self.assertIn("TOP 3 PICKS TODAY", html)
-        self.assertIn("IV elevated vs realized", html)          # why_now
-        self.assertIn("cushion exceeds monthly move", html)     # logic
-        self.assertIn("Sell the MSFT $350 put", html)           # matched card
-        self.assertNotIn("unmatched to current candidates", html)
-        # matched pick == python shortlist -> no disagreement note
+        self.assertIn("Legacy agent-selected top_picks were ignored", html)
+        self.assertNotIn("IV elevated vs realized", html)
+        self.assertNotIn("cushion exceeds monthly move", html)
         self.assertNotIn("Python quantitative shortlist differs", html)
 
     def test_hero_unmatched_pick_warns_and_discloses_disagreement(self):
         html = ad.render(self._assembled(), context=_v2_context(strike=999.0))
-        self.assertIn("unmatched to current candidates", html)
-        self.assertIn("Python quantitative shortlist differs", html)
+        self.assertIn("Legacy agent-selected top_picks were ignored", html)
+        self.assertNotIn("unmatched to current candidates", html)
+        self.assertNotIn("Python quantitative shortlist differs", html)
 
     def test_provenance_label_on_every_narrative_surface(self):
         html = ad.render(self._assembled(), context=_v2_context())
@@ -664,19 +663,17 @@ class V2RenderTests(unittest.TestCase):
     def test_missing_context_renders_honest_quant_shortlist(self):
         html = ad.render(self._assembled())
         self.assertIn("TOP 3 PICKS TODAY", html)
-        self.assertIn("no research narratives for this date", html)
-        self.assertIn("quantitative shortlist only", html)
-        self.assertIn("pick score", html)
+        self.assertIn("No qualifying contract", html)
         # honesty: no narrative vocabulary invented
         self.assertNotIn("why now", html)
 
     def test_market_strip_present_with_context_absent_without(self):
         with_ctx = ad.render(self._assembled(), context=_v2_context())
-        self.assertIn("MARKET CONTEXT", with_ctx)
+        self.assertIn("Market context", with_ctx)
         self.assertIn("megacaps steady into month end", with_ctx)
-        self.assertIn("regime: mixed", with_ctx)
+        self.assertIn("Regime · mixed", with_ctx)
         without = ad.render(self._assembled())
-        self.assertNotIn("MARKET CONTEXT", without)
+        self.assertNotIn("Market context", without)
 
     def test_symbol_panel_shows_technicals_line_and_news(self):
         html = ad.render(self._assembled(), context=_v2_context())
