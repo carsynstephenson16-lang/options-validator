@@ -40,8 +40,18 @@ Explicitly NOT proposed here:
   touched, while the added names are all the same AI factor — concentration
   wearing the costume of diversification. It also silently widens H5's live
   evaluator scope (`options_researcher/attractiveness.py:425` iterates
-  `config.UNIVERSE`), and would spend paid ThetaData on every run via
-  `options_researcher/live_quotes.py`. It would make nothing tradable.
+  `config.UNIVERSE`). It would make nothing tradable.
+
+  **CORRECTION 2026-07-17 (owner-flagged):** this section originally added
+  "and would spend paid ThetaData on every run via
+  `options_researcher/live_quotes.py`." **That was wrong and is withdrawn.**
+  `live_quotes.py` makes ONE BATCHED `stock_snapshot_quote` call for the whole
+  list (docstring ~line 475), so cost is flat in `len(UNIVERSE)`; its other
+  call site is a one-shot manual `--probe`, and an entitlement denial falls
+  back to put-call-parity spot rather than failing. The claim was asserted
+  without reading the module. **The decline stands unchanged** — it never
+  rested on the spend claim, and the risk-denominator argument ($2,400 ->
+  $5,400 with no risk setting touched) is unaffected.
 - **IBEX and UNH.** See the evidence table; both fail on measured data.
 
 ## 2. Measured evidence per ticker (2026-07-15 chains)

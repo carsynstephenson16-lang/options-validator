@@ -508,12 +508,26 @@ The trap, precisely:
   concentrated. `config.py:38` already flags that the current four "are
   emphatically not 4 independent bets."
 - Second-order: `UNIVERSE` edits also silently widen **H5's** live evaluator
-  scope (H5 alone reads the list at runtime; H6/H7 do not). NOTE 2026-07-16: a
-  concurrent session has uncommitted `options_researcher/live_quotes.py` +
-  `live_dashboard.py` in the tree that ALSO iterate `config.UNIVERSE` to request
-  paid quotes — if that work lands, `UNIVERSE` gains a spend-per-run consumer
-  and this defect gets worse, not better. Re-grep the call sites before any
-  refactor; the list below was taken 2026-07-16 and will drift.
+  scope (H5 alone reads the list at runtime; H6/H7 do not). A concurrent
+  session's in-flight `options_researcher/{live_quotes,live_dashboard}.py` also
+  iterate `config.UNIVERSE`, adding a live-preview row per name — display
+  scope, nothing more.
+- **CORRECTION 2026-07-17 (owner-flagged):** an earlier draft of this note
+  claimed that path "requests paid quotes" and that adding names would give
+  `UNIVERSE` a spend-per-run consumer. **That is wrong — there is NO spend
+  argument attached to `UNIVERSE` size.** Read the code: `live_quotes.py` makes
+  **ONE BATCHED** `stock_snapshot_quote` call for the entire list (docstring at
+  ~line 475: *"from ONE batched stock_snapshot_quote call"*), so cost is flat in
+  `len(UNIVERSE)` — 4 names and 9 names cost the same one call. The other call
+  site is a **one-shot manual `--probe`** (`run_probe`, invoked via
+  `python -m options_researcher.live_quotes --probe`), not a per-run request;
+  and a stock-entitlement denial does not even fail that probe — it falls back
+  to a put-call-parity spot. The claim was asserted without reading the module.
+  **The dollar case against widening `UNIVERSE` rests entirely on the risk
+  denominator above ($2,400 -> $5,400), which is real and unaffected by this
+  correction.** Do not re-import a spend argument here.
+- Re-grep the call sites before any refactor; the list below was taken
+  2026-07-16 and will drift.
 
 Candidate fix (NOT today's work): rename to something that cannot be misread as
 permission — e.g. `RESEARCH_DISPLAY_NAMES` — and **separate the risk
