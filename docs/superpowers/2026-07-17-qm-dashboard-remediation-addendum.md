@@ -49,7 +49,7 @@ is ready.
    withheld underlying-breakeven/option-win-rate behavior for both long-call
    and non-long-call lanes.
 3. Add the two changed `options_researcher` modules to the Pyright include
-   set and run type checking against them, not only unrelated project
+   set and run `uv run pyright` against them, not only unrelated project
    directories. Open a separate package-wide typing cleanup before broadening
    the include to the entire package.
 4. Preserve append-only provenance. The H7 receipt remains frozen; its
