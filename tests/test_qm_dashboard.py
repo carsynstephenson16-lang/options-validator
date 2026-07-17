@@ -105,7 +105,9 @@ class StudySidecarTests(unittest.TestCase):
             self.assertEqual(visible["status"], "DATA_BLOCKED")
             self.assertIn("source hash mismatch", visible["reason"])
             html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=visible)
-            qm_section = html[html.index("QM + MOVING-AVERAGE TOP 3") :]
+            qm_section = html[
+                html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3") :
+            ]
             self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
 
     def test_load_rejects_ledger_fact_hash_mismatch(self):
@@ -250,9 +252,80 @@ class ContextBuildTests(unittest.TestCase):
         )
 
         html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=context)
-        start = html.index("QM + MOVING-AVERAGE TOP 3")
+        start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
         self.assertEqual(context["status"], "DATA_BLOCKED")
-        self.assertEqual(html[start:].count("QM ranking withheld"), 3)
+        self.assertEqual(html[start:].count("QM context withheld"), 3)
+
+    def test_symbol_missing_from_frozen_sidecar_blocks_qm_without_touching_its_cache(self):
+        frame = _frame()
+        touched: list[str] = []
+
+        def load(symbol: str, _as_of: str) -> pd.DataFrame:
+            touched.append(symbol)
+            return frame
+
+        context = qm_dashboard.build_qm_context(
+            ["AAA", "BBB"],
+            "2026-07-01",
+            study=_study("AAA"),
+            params={"QM_HORIZONS": (5, 10, 20)},
+            gate=lambda: None,
+            load_adjusted=load,
+        )
+
+        self.assertEqual(context["status"], "DATA_BLOCKED")
+        self.assertEqual(context["symbols"]["BBB"]["status"], "NOT_IN_FROZEN_STUDY")
+        self.assertIn("not in the frozen QM study", context["symbols"]["BBB"]["reason"])
+        self.assertEqual(touched, ["AAA"])
+
+    def test_explicitly_uncovered_symbol_blocks_all_qm_slots_without_touching_its_cache(self):
+        frame = _frame()
+        touched: list[str] = []
+        study = _study("AAA")
+        study["symbols"]["BBB"] = {
+            "breakout_fire_dates": [],
+            "parabolic_fire_dates": [],
+            "evidence_status": "NOT_IN_FROZEN_STUDY",
+        }
+
+        def load(symbol: str, _as_of: str) -> pd.DataFrame:
+            touched.append(symbol)
+            return frame
+
+        context = qm_dashboard.build_qm_context(
+            ["AAA", "BBB"],
+            "2026-07-01",
+            study=study,
+            params={"QM_HORIZONS": (5, 10, 20)},
+            gate=lambda: None,
+            load_adjusted=load,
+        )
+        html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=context)
+        qm_section = html[
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3") :
+        ]
+
+        self.assertEqual(context["status"], "DATA_BLOCKED")
+        self.assertEqual(context["symbols"]["BBB"]["status"], "NOT_IN_FROZEN_STUDY")
+        self.assertEqual(qm_section.count("QM context withheld"), 3)
+        self.assertEqual(touched, ["AAA"])
+
+    def test_unexpected_context_exception_is_visible_and_nonzero(self):
+        context = qm_dashboard.build_qm_context(
+            ["AAA"],
+            "2026-07-01",
+            study=_study(),
+            params={"QM_HORIZONS": (5, 10, 20)},
+            gate=lambda: None,
+            load_adjusted=lambda _symbol, _as_of: (_ for _ in ()).throw(
+                RuntimeError("signal implementation failure")
+            ),
+        )
+
+        self.assertEqual(context["status"], "DATA_BLOCKED")
+        self.assertEqual(context["symbols"]["AAA"]["status"], "UNEXPECTED_ERROR")
+        self.assertTrue(context["unexpected"])
+        self.assertEqual(ad._run_exit_code([], qm_context=context), 1)
 
 
 class RefreshTests(unittest.TestCase):
@@ -273,6 +346,7 @@ class RefreshTests(unittest.TestCase):
         result = qm_dashboard.refresh_qm_ohlcv(
             ["AAA", "BBB"],
             "2026-07-01",
+            study={"symbols": {"AAA": {}, "BBB": {}}},
             gate=lambda: None,
             load_adjusted=load,
             fetch=fetch,
@@ -286,6 +360,7 @@ class RefreshTests(unittest.TestCase):
         result = qm_dashboard.refresh_qm_ohlcv(
             ["AAA"],
             "2026-07-01",
+            study={"symbols": {"AAA": {}}},
             gate=lambda: None,
             load_adjusted=lambda _symbol, _as_of: stale,
             fetch=lambda _symbol: (_ for _ in ()).throw(RuntimeError("offline")),
@@ -293,6 +368,39 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(result["status"], "DATA_BLOCKED")
         self.assertEqual(result["symbols"]["AAA"]["status"], "STALE")
         self.assertIn("offline", result["symbols"]["AAA"]["reason"])
+
+    def test_refresh_never_loads_or_fetches_an_explicitly_uncovered_symbol(self):
+        current = _frame()
+        touched: list[str] = []
+        fetched: list[str] = []
+        study = _study("AAA")
+        study["symbols"]["BBB"] = {
+            "breakout_fire_dates": [],
+            "parabolic_fire_dates": [],
+            "evidence_status": "NOT_IN_FROZEN_STUDY",
+        }
+
+        def load(symbol: str, _as_of: str) -> pd.DataFrame:
+            touched.append(symbol)
+            return current
+
+        def fetch(symbol: str) -> str:
+            fetched.append(symbol)
+            return f"{symbol}.parquet"
+
+        result = qm_dashboard.refresh_qm_ohlcv(
+            ["AAA", "BBB"],
+            "2026-07-01",
+            study=study,
+            gate=lambda: None,
+            load_adjusted=load,
+            fetch=fetch,
+        )
+
+        self.assertEqual(result["status"], "DATA_BLOCKED")
+        self.assertEqual(result["symbols"]["BBB"]["status"], "NOT_IN_FROZEN_STUDY")
+        self.assertEqual(touched, ["AAA"])
+        self.assertEqual(fetched, [])
 
 
 class DailyRitualContractTests(unittest.TestCase):
