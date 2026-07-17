@@ -65,6 +65,18 @@ Holidays and half-days are handled by that calendar, never assumed.
 - If T_accept falls in a window with no next session inside the study window
   (e.g., report near 2026-06-30), the event is excluded with reason
   `window_edge`, counted in the census.
+- **Event classification (added pre-freeze 2026-07-17, final-review finding):**
+  raw Item 2.02 occurred rows are NOT all quarterly earnings (SMCI
+  delinquency-era business updates; NOW 2019-10-21 non-earnings filing).
+  Every event must carry a `quarterly_results` classification in
+  `data/earnings/h9_event_class_v1.csv` (append-only; one row per event;
+  SEC evidence URL required; classes: quarterly_results | business_update |
+  other_item_202). Missing or non-quarterly classification fails closed
+  (`unclassified_event` / `non_earnings_event` census exclusions). The
+  next-report exit and the near-report fail-loud geometry are computed on
+  the CLASSIFIED quarterly set only — with genuine quarterly spacing a
+  near-report abort indicates an invariant violation, so aborting the run
+  remains correct.
 
 ## 3. Trigger and lifecycle (owner rule 2 — the measurable condition)
 

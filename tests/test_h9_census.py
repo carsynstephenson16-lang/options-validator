@@ -116,3 +116,14 @@ class CensusTests(unittest.TestCase):
                 res = cz.run_census([event()], chain_dir=self.chain_dir)
         self.assertEqual(res.eligible_count, 1)
         self.assertGreater(res.exit_window_gap_days, 0)
+
+    def test_classification_exclusions_reason_coded(self):
+        from datetime import date, datetime, timezone
+
+        from options_researcher.h9_events import H9Event
+        e = H9Event(symbol="SMCI", occurred_date=date(2019, 6, 3),
+                    accepted_utc=datetime(2019, 6, 3, 20, 5, tzinfo=timezone.utc),
+                    exclusion="non_earnings_event")
+        res = cz.run_census([e], chain_dir=self.chain_dir)
+        self.assertEqual(res.reasons.get("non_earnings_event"), 1)
+        self.assertEqual(res.eligible_count, 0)

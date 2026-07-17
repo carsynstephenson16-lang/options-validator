@@ -26,7 +26,7 @@ from research.hashing import sha256_file
 
 REASONS = ("window_edge", "registry_excluded", "missing_closes",
            "missing_entry_chain", "no_contract_in_bands", "entry_liquidity_fail",
-           "no_acceptance_ts")
+           "no_acceptance_ts", "unclassified_event", "non_earnings_event")
 
 # Exceptions the loaders below are documented to raise on a genuine data
 # miss. Narrowed deliberately (not bare Exception) so a real bug elsewhere
@@ -117,6 +117,10 @@ def run_census(events: list[H9Event], *, chain_dir: Path,
     gap_days = 0
     for e in events:
         stats = per_symbol.setdefault(e.symbol, {"eligible": 0, "excluded": 0})
+        if e.exclusion in ("unclassified_event", "non_earnings_event"):
+            reasons[e.exclusion] += 1
+            stats["excluded"] += 1
+            continue
         if e.t_entry is None or e.t_dec is None or e.t_pre is None:
             reasons["window_edge"] += 1
             stats["excluded"] += 1

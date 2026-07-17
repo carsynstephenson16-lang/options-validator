@@ -46,8 +46,9 @@ def _code_sha() -> str:
 def _events():
     import config
     from options_researcher.h7_earnings import load_raw_assertions
-    from options_researcher.h9_events import derive_events
-    return derive_events(load_raw_assertions(), symbols=tuple(config.H9_NAMES))
+    from options_researcher.h9_events import derive_events, load_event_classes
+    return derive_events(load_raw_assertions(), symbols=tuple(config.H9_NAMES),
+                         event_classes=load_event_classes())
 
 
 def _run_census(chain_dir: Path) -> dict:
@@ -139,6 +140,13 @@ def main(argv=None) -> int:
     refusal = h9_prereg_gate(base_dir=args.ledger_dir)
     if refusal:
         print(refusal)
+        return 2
+    try:
+        from options_researcher.h9_events import load_event_classes
+        load_event_classes()
+    except FileNotFoundError:
+        print("no event-classification file (data/earnings/h9_event_class_v1.csv); "
+              "the SEC classification pass must complete before census. Refusing.")
         return 2
     if args.mode == "run":
         refusal = h9_one_run_gate(base_dir=args.ledger_dir)
