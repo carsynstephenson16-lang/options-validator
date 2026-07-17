@@ -21,6 +21,11 @@ Every payoff number is computed AT EXPIRATION from intrinsic value only --
 there is deliberately no Black-Scholes / time-value model anywhere here.
 The Top-3 ordering weights (PICK_* in config.py) are presentation-layer
 display ordering only, never strategy gates.
+
+Within each symbol panel, strategy sections are also ordered from the
+strongest current candidate to the weakest.  This reuses the same
+presentation-only score and leaves the source candidate data, strategy gates,
+and position state unchanged.
 """
 from __future__ import annotations
 
@@ -256,16 +261,16 @@ def select_top_picks(data: dict, n: int = 3, *,
     cash-secured put whose *only* missing fact is explicit assignment-capital
     authorization, and leaves the card visibly marked WATCH.  It never admits
     a plan-only, data-blocked, or otherwise unmodeled lane.
-    Score = GREEN-badge count * PICK_GREEN_POINT
-            + PICK_RANK_LEADER_BONUS if the card leads its lane ladder
-            + PICK_TECH_BONUS on technical confluence (buy lanes: trend up or
-              20d breakout; sell lanes: ma_posture != below_all); no bonus
-              when the section carries no technicals snapshot.
-    Ties break by annualized_yield desc (sell lanes) / breakeven_move asc
-    (buy lanes), then symbol/lane/strike for determinism. At most one pick
-    per (symbol, lane)."""
-    import config
 
+    Ordering is the lexicographic ``_display_quality_key`` (GREEN fraction,
+    then lane leadership, then technical confluence — fraction, not raw
+    count, because seller lanes carry 7 gradeable badges vs 3 on buyer
+    lanes). Ties break by annualized_yield desc (sell lanes) /
+    breakeven_move asc (buy lanes), then symbol/lane/strike for determinism.
+    At most ONE pick per symbol: the hero is a cross-name shortlist, and
+    each symbol surfaces only its best card. The legacy integer
+    ``pick_score`` (config.PICK_*) is kept on each pick for the audit line
+    but no longer orders the shortlist."""
     del policy_veto
 
     pool: list[tuple[tuple, dict]] = []
@@ -293,17 +298,8 @@ def select_top_picks(data: dict, n: int = 3, *,
                     )
                     if not eligible and not csp_watch:
                         continue
-                greens = sum(1 for v in grades.values() if v == "GREEN")
-                score = greens * config.PICK_GREEN_POINT
-                if card.get("rank_leader"):
-                    score += config.PICK_RANK_LEADER_BONUS
-                if tech:
-                    if kind in _BUY_LANES and (tech.get("trend") == "up"
-                                               or tech.get("breakout_20d")):
-                        score += config.PICK_TECH_BONUS
-                    elif kind in _SELL_LANES and (tech.get("ma_posture")
-                                                  != "below_all"):
-                        score += config.PICK_TECH_BONUS
+                quality = _display_quality_key(card, kind, tech)
+                score = _display_score(card, kind, tech)
                 if kind in _SELL_LANES:
                     ay = card.get("annualized_yield")
                     tie = (-float(ay) if isinstance(ay, (int, float))
@@ -316,21 +312,153 @@ def select_top_picks(data: dict, n: int = 3, *,
                         "strike": float(card["strike"]),
                         "expiry": card["expiry"], "dte": int(card["dte"]),
                         "score": score, "card": card}
-                pool.append(((-score, tie, pick["symbol"], pick["lane"],
+                pool.append(((*quality, tie, pick["symbol"], pick["lane"],
                               pick["strike"]), pick))
 
     pool.sort(key=lambda item: item[0])
     picks: list[dict] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[str] = set()
     for _key, pick in pool:
-        lane_key = (pick["symbol"], pick["lane"])
-        if lane_key in seen:
+        if pick["symbol"] in seen:
             continue
-        seen.add(lane_key)
+        seen.add(pick["symbol"])
         picks.append(pick)
         if len(picks) == n:
             break
     return picks
+
+
+_DISPLAY_POLICY_TIER = {
+    "ELIGIBLE": 0,
+    "WATCH": 1,
+    "PLAN_ONLY": 2,
+    "DATA_BLOCKED": 3,
+}
+
+
+def _display_score(card: dict, kind: str, tech: dict | None) -> int:
+    """Return the existing presentation score for one candidate card.
+
+    This is intentionally the same score used by ``select_top_picks``.  It is
+    only used to order the already-visible strategy sections; it does not
+    create a recommendation, alter a candidate's policy status, or affect a
+    trading rule.
+    """
+    import config
+
+    grades = card.get("grades") or {}
+    greens = sum(1 for value in grades.values() if value == "GREEN")
+    score = greens * config.PICK_GREEN_POINT
+    if card.get("rank_leader"):
+        score += config.PICK_RANK_LEADER_BONUS
+    if tech:
+        if kind in _BUY_LANES and (tech.get("trend") == "up"
+                                   or tech.get("breakout_20d")):
+            score += config.PICK_TECH_BONUS
+        elif kind in _SELL_LANES and tech.get("ma_posture") != "below_all":
+            score += config.PICK_TECH_BONUS
+    return score
+
+
+def _display_quality_key(card: dict, kind: str, tech: dict | None) -> tuple:
+    """Lexicographic, lane-size-neutral quality key; better sorts first.
+
+    Levels: GREEN fraction (not the raw count — seller lanes carry 7
+    gradeable badges vs 3 on buyer lanes, so counts are not comparable
+    across lanes), then lane leadership, then technical confluence. No
+    weights: the levels are strictly ordered, never summed.
+    """
+    grades = card.get("grades") or {}
+    greens = sum(1 for value in grades.values() if value == "GREEN")
+    frac = greens / len(grades) if grades else 0.0
+    leader = 1 if card.get("rank_leader") else 0
+    tech_conf = 0
+    if tech:
+        if kind in _BUY_LANES and (tech.get("trend") == "up"
+                                   or tech.get("breakout_20d")):
+            tech_conf = 1
+        elif kind in _SELL_LANES and tech.get("ma_posture") != "below_all":
+            tech_conf = 1
+    return (-frac, -leader, -tech_conf)
+
+
+def _display_policy_tier(card: dict) -> int:
+    """Place eligible, watch, and plan-only cards in honest display tiers.
+
+    ``selection_status`` is the authoritative merged status from
+    top3_snapshot (DATA_BLOCKED whenever integrity fails — e.g. stale
+    features — else the policy status). The lane policy alone is blind to
+    data staleness, so it is only a fallback, never the primary key. A card
+    with no snapshot carries no integrity evidence at all and must never
+    outrank evidenced cards.
+    """
+    snapshot = card.get("top3_snapshot")
+    if not isinstance(snapshot, Mapping):
+        return _DISPLAY_POLICY_TIER["DATA_BLOCKED"]
+    if snapshot.get("rank_eligible") is True:
+        return 0
+    selection_status = snapshot.get("selection_status")
+    policy = snapshot.get("policy")
+    policy_status = policy.get("status") if isinstance(policy, Mapping) else None
+    status = (selection_status if isinstance(selection_status, str)
+              else policy_status if isinstance(policy_status, str)
+              else "DATA_BLOCKED")
+    return _DISPLAY_POLICY_TIER.get(status, _DISPLAY_POLICY_TIER["DATA_BLOCKED"])
+
+
+def _finite_sort_value(value: object, *, default: float = float("inf")) -> float:
+    """Return a finite number for deterministic presentation-only sorting."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    number = float(value)
+    return number if math.isfinite(number) else default
+
+
+def _group_candidate_sort_key(card: dict, kind: str,
+                              tech: dict | None) -> tuple:
+    """Sort key for one card when ordering visible strategy sections.
+
+    Liquidity-RED cards sit below every liquid card, matching the Top-3 hard
+    veto.  Otherwise eligibility is shown first, followed by WATCH and then
+    PLAN_ONLY candidates.  Score and lane-specific tie breaks are identical
+    to the Top-3 display ordering.
+    """
+    grades = card.get("grades") or {}
+    if grades.get("liquidity") == "RED":
+        tier = 3
+    else:
+        tier = _display_policy_tier(card)
+    if kind in _SELL_LANES:
+        annualized_yield = _finite_sort_value(card.get("annualized_yield"))
+        tie = -annualized_yield if math.isfinite(annualized_yield) else annualized_yield
+    else:
+        tie = _finite_sort_value(card.get("breakeven_move"))
+    return (tier, *_display_quality_key(card, kind, tech), tie,
+            _finite_sort_value(card.get("dte")),
+            _finite_sort_value(card.get("strike")))
+
+
+def _rank_groups_for_display(groups: list[dict], *,
+                             tech: dict | None = None) -> list[dict]:
+    """Return groups best-to-worst by their strongest visible candidate.
+
+    Empty or skipped-only sections remain visible but sort after sections with
+    actionable cards.  The input list and group dictionaries are not mutated,
+    so JSON consumers retain the scanner's original lane order.
+    """
+    ranked: list[tuple[tuple, int, dict]] = []
+    empty_key = (4, 0.0, 0, 0, float("inf"), float("inf"), float("inf"))
+    for original_index, group in enumerate(groups):
+        kind = str(group.get("kind", ""))
+        card_keys = [
+            _group_candidate_sort_key(card, kind, tech)
+            for card in group.get("cards", [])
+            if "skipped" not in card
+        ]
+        ranked.append((min(card_keys) if card_keys else empty_key,
+                       original_index, group))
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return [group for _key, _original_index, group in ranked]
 
 
 def load_context(as_of: str, base_dir: str = "reports/attractiveness_context"
@@ -1090,6 +1218,30 @@ _STYLE = """
     letter-spacing: 0.055em;
     text-transform: uppercase;
   }
+  .group-heading {
+    align-items: center;
+    display: inline-flex;
+    gap: 9px;
+    min-width: 0;
+  }
+  .group-rank {
+    align-items: center;
+    background: var(--brand);
+    border-radius: 999px;
+    color: #fff;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+    height: 22px;
+    justify-content: center;
+    letter-spacing: 0;
+    width: 22px;
+  }
+  .strategy-rank-note {
+    color: var(--muted);
+    font-size: 0.72rem;
+    margin: 2px 0 14px;
+  }
   .group-count {
     background: var(--unknown-bg);
     border: 1px solid var(--unknown-line);
@@ -1342,10 +1494,12 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
     return "".join(parts)
 
 
-def _group_html(grp: dict, *, tech: dict | None = None) -> str:
+def _group_html(grp: dict, *, rank: int, tech: dict | None = None) -> str:
     count = len(grp["cards"])
     count_label = f"{count} contract" + ("" if count == 1 else "s")
-    head = (f'<summary><span>{_esc(grp["title"])}</span>'
+    head = (f'<summary><span class="group-heading">'
+            f'<span class="group-rank" aria-label="Rank {rank}">{rank}</span>'
+            f'<span>{_esc(grp["title"])}</span></span>'
             f'<span class="group-count">{count_label}</span></summary>')
     if not grp["cards"]:
         empty = grp.get("empty") or "none this cycle"
@@ -1456,10 +1610,22 @@ def _hero_pick_html(pick: dict, annotation: Mapping[str, object] | None, *,
             + _risk_line(card)
             + _bbb_table(card.get("bbb", []))
             + '<details><summary>Selection audit</summary>'
-            + f'<div class="label">Display score {pick["score"]} · '
+            + f'<div class="label">{_quality_audit(pick)} · '
+              f'legacy score {pick["score"]} · '
               f'{_esc(ident)}</div></details>')
     return (f'<div class="hero-card {status_cls}">{head}'
             f'{_research_html(annotation, data_as_of=data_as_of)}</div>')
+
+
+def _quality_audit(pick: dict) -> str:
+    """Human form of the ranking basis: GREEN fraction + ordered levels."""
+    card = pick.get("card") or {}
+    grades = card.get("grades") or {}
+    greens = sum(1 for value in grades.values() if value == "GREEN")
+    parts = [f"GREEN {greens}/{len(grades)}" if grades else "no grades"]
+    if card.get("rank_leader"):
+        parts.append("lane leader")
+    return " · ".join(parts)
 
 
 def _top3_gap_reasons(data: dict) -> list[str]:
@@ -1667,7 +1833,15 @@ def render(data: dict, *, context: dict | None = None,
     symbols_html = ""
     for sec in data["symbols"]:
         tech = sec.get("technicals")
-        groups = "".join(_group_html(g, tech=tech) for g in sec["groups"])
+        ranked_groups = _rank_groups_for_display(sec["groups"], tech=tech)
+        groups = "".join(
+            _group_html(group, rank=rank, tech=tech)
+            for rank, group in enumerate(ranked_groups, start=1)
+        )
+        rank_note = ('<div class="strategy-rank-note">'
+                     'Strategy rank: 1 is the strongest current fit; '
+                     'this display order does not change any policy or trade rule.'
+                     '</div>')
         tech_line = sec.get("technicals_line")
         tech_html = (f'<div class="tech-line">{_esc(tech_line)}</div>'
                      if tech_line else "")
@@ -1690,7 +1864,7 @@ def render(data: dict, *, context: dict | None = None,
             f'<div class="symbol-stat"><span>IV rank</span><strong>'
             f'{sec["iv_rank"]:.2f}</strong></div></div></div>'
             f'<div class="symbol-body">{stale_html}{tech_html}'
-            f'{_symbol_context_html(sec["symbol"], context)}{groups}</div>'
+            f'{_symbol_context_html(sec["symbol"], context)}{rank_note}{groups}</div>'
             '</section>')
     data_as_of = data.get("data_as_of") or "no cached data"
     researched_on = (context or {}).get("researched_on")

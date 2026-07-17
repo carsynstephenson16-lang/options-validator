@@ -453,29 +453,64 @@ class SelectTopPicksTests(unittest.TestCase):
         self.assertEqual(vetoed, [])
 
     def test_scoring_greens_leader_and_tech_bonus(self):
+        # The legacy display score stays on each pick for the audit line;
+        # one-per-symbol means each symbol surfaces only its best card, so
+        # score arithmetic is checked on single-symbol universes.
         import config
-        picks = ad.select_top_picks(self._data())
-        by_key = {(p["symbol"], p["lane"], p["strike"]): p for p in picks}
+        data = self._data()
+        aaa = {"symbols": [data["symbols"][0]]}
+        bbb = {"symbols": [data["symbols"][1]]}
         # AAA put leader: 2 GREEN + leader bonus + sell-side tech bonus
-        leader = by_key[("AAA", "put", 95.0)]
+        leader = ad.select_top_picks(aaa, n=1)[0]
+        self.assertEqual((leader["lane"], leader["strike"]), ("put", 95.0))
         self.assertEqual(leader["score"],
                          2 * config.PICK_GREEN_POINT
                          + config.PICK_RANK_LEADER_BONUS
                          + config.PICK_TECH_BONUS)
-        # AAA long_call: 2 GREEN + buy-side tech bonus (trend up), no leader
-        lc = by_key[("AAA", "long_call", 105.0)]
-        self.assertEqual(lc["score"],
-                         2 * config.PICK_GREEN_POINT + config.PICK_TECH_BONUS)
         # BBB has NO technicals snapshot -> no tech bonus for its put
-        bbb = by_key[("BBB", "put", 44.0)]
-        self.assertEqual(bbb["score"], 2 * config.PICK_GREEN_POINT)
+        bbb_pick = ad.select_top_picks(bbb, n=1)[0]
+        self.assertEqual(bbb_pick["strike"], 44.0)
+        self.assertEqual(bbb_pick["score"], 2 * config.PICK_GREEN_POINT)
 
-    def test_one_pick_per_symbol_lane(self):
+    def test_at_most_one_pick_per_symbol(self):
+        # AMZN once held 2 of 3 hero slots (put + call). The hero is a
+        # cross-name shortlist: each symbol surfaces only its best card.
         picks = ad.select_top_picks(self._data(), n=10)
-        keys = [(p["symbol"], p["lane"]) for p in picks]
-        self.assertEqual(len(keys), len(set(keys)))
-        # only ONE AAA put survives even though two candidates score equally
-        self.assertEqual(sum(1 for k in keys if k == ("AAA", "put")), 1)
+        symbols = [p["symbol"] for p in picks]
+        self.assertEqual(len(symbols), len(set(symbols)))
+        self.assertEqual(sum(1 for s in symbols if s == "AAA"), 1)
+
+    def test_green_fraction_not_raw_count_orders_cross_lane(self):
+        # Seller lanes carry 7 gradeable badges, buyer lanes 3: raw GREEN
+        # counts are not comparable across lanes. A 3/3 buyer card must
+        # outrank a 5/7 seller card.
+        data = {"symbols": [
+            {"symbol": "SELL", "close": 100.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [{"kind": "put", "title": "P", "empty": None,
+                         "cards": [_pick_card(
+                             95.0, "2026-08-21",
+                             grades={"yield": "GREEN", "cushion": "GREEN",
+                                     "iv_for_seller": "GREEN",
+                                     "vrp_for_seller": "GREEN",
+                                     "liquidity": "GREEN",
+                                     "earnings": "AMBER", "fomc": "AMBER"},
+                             lane_fields={"credit": 200.0,
+                                          "annualized_yield": 0.30})]}]},
+            {"symbol": "BUYY", "close": 100.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [{"kind": "long_call", "title": "LC", "empty": None,
+                         "cards": [_pick_card(
+                             105.0, "2026-08-21",
+                             grades={"fits_cap": "GREEN",
+                                     "iv_for_buyer": "GREEN",
+                                     "liquidity": "GREEN"},
+                             lane_fields={"cost": 500.0, "breakeven": 110.0,
+                                          "breakeven_move": 0.10})]}]},
+        ]}
+        picks = ad.select_top_picks(data, n=2)
+        self.assertEqual(picks[0]["symbol"], "BUYY")
+        self.assertEqual(picks[1]["symbol"], "SELL")
 
     def test_sell_lane_tiebreak_prefers_higher_annualized_yield(self):
         data = {"symbols": [
@@ -535,6 +570,123 @@ class SelectTopPicksTests(unittest.TestCase):
                     "card"):
             self.assertIn(key, p)
         self.assertIsInstance(p["card"], dict)
+
+
+class StrategySectionRankingTests(unittest.TestCase):
+    @staticmethod
+    def _group(title, kind, cards):
+        return {"title": title, "kind": kind, "cards": cards, "empty": None}
+
+    @staticmethod
+    def _card(*, grades, annualized_yield=0.20, rank_leader=False,
+              policy="ELIGIBLE"):
+        return {
+            "strike": 95.0,
+            "expiry": "2026-08-21",
+            "dte": 45,
+            "credit": 100.0,
+            "grades": grades,
+            "annualized_yield": annualized_yield,
+            "rank_leader": rank_leader,
+            "top3_snapshot": {
+                "rank_eligible": policy == "ELIGIBLE",
+                "policy": {"status": policy},
+                "selection_status": policy,
+            },
+        }
+
+    def test_sections_sort_by_best_card_then_policy_and_liquidity(self):
+        groups = [
+            self._group("plan", "pmcc", [self._card(
+                grades={"liquidity": "GREEN", "yield": "GREEN"},
+                policy="PLAN_ONLY")]),
+            self._group("low eligible", "put", [self._card(
+                grades={"liquidity": "GREEN"})]),
+            self._group("empty", "cc", []),
+            self._group("high eligible", "put", [self._card(
+                grades={"liquidity": "GREEN", "yield": "GREEN"},
+                rank_leader=True)]),
+            self._group("illiquid", "put", [self._card(
+                grades={"liquidity": "RED", "yield": "GREEN"},
+                rank_leader=True)]),
+            self._group("watch", "put", [self._card(
+                grades={"liquidity": "GREEN", "yield": "GREEN"},
+                rank_leader=True, policy="WATCH")]),
+        ]
+
+        ordered = ad._rank_groups_for_display(groups)
+
+        self.assertEqual(
+            [group["title"] for group in ordered],
+            ["high eligible", "low eligible", "watch", "plan", "illiquid",
+             "empty"],
+        )
+
+    def test_selection_status_outranks_policy_status(self):
+        # A card whose FEATURES are stale has selection_status=DATA_BLOCKED
+        # even when its portfolio policy passes; the merged selection_status
+        # is authoritative and the card must never sort as eligible.
+        stale = self._card(grades={"liquidity": "GREEN", "yield": "GREEN"})
+        stale["top3_snapshot"] = {
+            "rank_eligible": False,
+            "policy": {"status": "ELIGIBLE"},
+            "selection_status": "DATA_BLOCKED",
+        }
+        self.assertEqual(ad._display_policy_tier(stale), 3)
+        eligible = self._card(grades={"liquidity": "GREEN"})
+        self.assertLess(ad._display_policy_tier(eligible),
+                        ad._display_policy_tier(stale))
+
+    def test_missing_or_malformed_snapshot_never_best_tier(self):
+        no_snapshot = self._card(grades={"liquidity": "GREEN"})
+        del no_snapshot["top3_snapshot"]
+        self.assertEqual(ad._display_policy_tier(no_snapshot), 3)
+        malformed = self._card(grades={"liquidity": "GREEN"})
+        malformed["top3_snapshot"] = {"rank_eligible": False,
+                                      "policy": "not-a-mapping"}
+        self.assertEqual(ad._display_policy_tier(malformed), 3)
+
+    def test_watch_selection_status_is_watch_tier(self):
+        card = self._card(grades={"liquidity": "GREEN"}, policy="WATCH")
+        self.assertEqual(ad._display_policy_tier(card), 1)
+
+    def test_green_fraction_orders_lanes_within_symbol(self):
+        # Same cross-lane comparability rule as the hero: 3/3 GREEN buyer
+        # section outranks a 5/7 GREEN seller section.
+        seller = self._card(grades={"yield": "GREEN", "cushion": "GREEN",
+                                    "iv_for_seller": "GREEN",
+                                    "vrp_for_seller": "GREEN",
+                                    "liquidity": "GREEN",
+                                    "earnings": "AMBER", "fomc": "AMBER"})
+        buyer = self._card(grades={"fits_cap": "GREEN",
+                                   "iv_for_buyer": "GREEN",
+                                   "liquidity": "GREEN"})
+        groups = [self._group("seller", "put", [seller]),
+                  self._group("buyer", "long_call", [buyer])]
+        ordered = ad._rank_groups_for_display(groups)
+        self.assertEqual([g["title"] for g in ordered], ["buyer", "seller"])
+
+    def test_render_numbers_and_orders_strategy_sections(self):
+        section = {
+            "symbol": "AAA", "as_of": "2026-07-15", "close": 100.0,
+            "iv_rank": 0.5,
+            "groups": [
+                self._group("lower", "put", [self._card(
+                    grades={"liquidity": "GREEN"})]),
+                self._group("higher", "put", [self._card(
+                    grades={"liquidity": "GREEN", "yield": "GREEN"},
+                    rank_leader=True)]),
+            ],
+        }
+        assembled = ad.assemble(symbol_sections=[section],
+                                rv21_by_symbol={"AAA": 0.4})
+
+        html = ad.render(assembled)
+
+        self.assertLess(html.index("higher"), html.index("lower"))
+        self.assertIn('class="group-rank" aria-label="Rank 1">1</span>', html)
+        self.assertIn('class="group-rank" aria-label="Rank 2">2</span>', html)
+        self.assertIn("Strategy rank: 1 is the strongest current fit", html)
 
 
 class LoadContextTests(unittest.TestCase):

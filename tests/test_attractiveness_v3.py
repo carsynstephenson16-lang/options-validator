@@ -167,8 +167,11 @@ class PolicyVetoTests(unittest.TestCase):
             _grp("put", [self._big_card()]),
             _grp("long_call", [self._fit_card()])])]}
         picks = ad.select_top_picks(data)
+        # The big-assignment CSP is NOT vetoed by the long-call cap; it wins
+        # its symbol's slot outright (one pick per symbol keeps the second
+        # lane off the hero).
         self.assertEqual([(p["lane"], p["strike"]) for p in picks],
-                         [("put", 95.0), ("long_call", 105.0)])
+                         [("put", 95.0)])
 
     def test_legacy_policy_veto_argument_is_a_noop(self):
         data = {"symbols": [_sec("AAA", [_grp("put", [self._big_card()])])]}
