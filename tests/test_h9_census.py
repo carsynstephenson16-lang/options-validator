@@ -34,6 +34,15 @@ def event(symbol="MSFT", occurred="2026-04-29", t_pre="2026-04-29",
 GOOD_ROW = ("2026-06-19", 400.0, "C", 9.8, 10.0, 500, 0.40)  # monthly, in-band
 
 
+class HorizonTests(unittest.TestCase):
+    def test_max_exit_horizon_is_calendar_days_not_sessions(self):
+        from datetime import date as _date
+        h = cz._max_exit_horizon("2019-01-15")
+        span = (_date.fromisoformat(h) - _date.fromisoformat("2019-01-15")).days
+        self.assertLessEqual(span, 90)
+        self.assertGreater(span, 80)  # lands near the cap, not far short
+
+
 class CensusStructureTests(unittest.TestCase):
     def test_census_result_has_no_price_or_pnl_fields(self):
         fields = set(cz.CensusResult.__dataclass_fields__)
@@ -77,6 +86,19 @@ class CensusTests(unittest.TestCase):
         self.assertEqual(res.eligible_count, 1)
         self.assertEqual(res.per_symbol["MSFT"]["eligible"], 1)
         self.assertTrue(res.floor_met is False)  # 1 < H9_MIN_ELIGIBLE_EVENTS
+        self.assertEqual(len(res.manifest), 1)
+        path, digest = res.manifest[0]
+        self.assertTrue(path.endswith("MSFT_2026-05-01.parquet"))
+        self.assertEqual(len(digest), 64)
+
+    def test_corrupted_cache_fails_loud(self):
+        import pyarrow.lib
+        closes = pd.Series({"2026-04-29": 100.0, "2026-04-30": 103.0})
+        with mock.patch.object(cz, "_entry_chain",
+                               side_effect=pyarrow.lib.ArrowInvalid("truncated")):
+            with mock.patch.object(cz, "_closes", return_value=closes):
+                with self.assertRaises(pyarrow.lib.ArrowInvalid):
+                    cz.run_census([event()], chain_dir=self.chain_dir)
 
     def test_no_contract_in_bands_excluded(self):
         closes = pd.Series({"2026-04-29": 100.0, "2026-04-30": 103.0})

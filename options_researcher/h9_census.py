@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.lib
 
 import config
 from data.cache_runner import trading_days
@@ -78,9 +79,11 @@ def _has_admissible_contract(chain: pd.DataFrame, entry_iso: str) -> tuple[bool,
 
 
 def _max_exit_horizon(entry_iso: str) -> str:
-    days = trading_days(entry_iso, config.H9_WINDOW[1])
-    horizon = min(len(days) - 1, config.H6_DTE_BAND[1])
-    return days[horizon] if days else entry_iso
+    """Last session on/before entry + max-DTE calendar days, clamped to the window."""
+    cap = (date.fromisoformat(entry_iso)
+           + timedelta(days=config.H6_DTE_BAND[1])).isoformat()
+    days = trading_days(entry_iso, min(cap, config.H9_WINDOW[1]))
+    return days[-1] if days else entry_iso
 
 
 def run_census(events: list[H9Event], *, chain_dir: Path,
@@ -104,6 +107,8 @@ def run_census(events: list[H9Event], *, chain_dir: Path,
             continue
         try:
             closes = _closes(e.symbol, e.t_pre, e.t_dec)
+        except pyarrow.lib.ArrowInvalid:
+            raise  # cache corruption is systemic — never a per-event exclusion
         except _CLOSES_LOAD_ERRORS:
             closes = pd.Series(dtype=float)
         if e.t_pre not in closes.index or e.t_dec not in closes.index:
@@ -112,6 +117,8 @@ def run_census(events: list[H9Event], *, chain_dir: Path,
             continue
         try:
             chain = _entry_chain(e.symbol, e.t_entry)
+        except pyarrow.lib.ArrowInvalid:
+            raise  # cache corruption is systemic — never a per-event exclusion
         except _CHAIN_LOAD_ERRORS:
             reasons["missing_entry_chain"] += 1
             stats["excluded"] += 1
