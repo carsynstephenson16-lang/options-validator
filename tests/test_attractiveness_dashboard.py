@@ -1606,6 +1606,18 @@ class V2RenderTests(unittest.TestCase):
         self.assertEqual(html[qm_start:].count("DATA BLOCKED"), 3)
         self.assertIn("QM context missing or stale for: MSFT", html)
 
+    def test_qm_section_reports_dropped_research_annotation(self):
+        context = _v2_context()
+        context["annotations"] = {
+            "MSFT:put:2026-07-17:999.00": _valid_annotation(),
+        }
+
+        html = ad.render(self._assembled(), context=context, qm_context=self._qm_context())
+
+        qm_start = html.index("QM + MOVING-AVERAGE TOP 3")
+        qm_end = html.index("Quant-want background")
+        self.assertIn("research annotation(s) do not match any card", html[qm_start:qm_end])
+
     def test_page_order_puts_mechanical_list_before_descriptive_qm_comparison(self):
         html = ad.render(self._assembled(), context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
