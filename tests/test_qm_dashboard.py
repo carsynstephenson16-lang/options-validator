@@ -105,9 +105,7 @@ class StudySidecarTests(unittest.TestCase):
             self.assertEqual(visible["status"], "DATA_BLOCKED")
             self.assertIn("source hash mismatch", visible["reason"])
             html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=visible)
-            qm_section = html[
-                html.index("QM + MOVING-AVERAGE TOP 3") : html.index("ORIGINAL MECHANICAL TOP 3")
-            ]
+            qm_section = html[html.index("QM + MOVING-AVERAGE TOP 3") :]
             self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
 
     def test_load_rejects_ledger_fact_hash_mismatch(self):
@@ -222,6 +220,37 @@ class ContextBuildTests(unittest.TestCase):
         self.assertIn("not recomputed", evidence["label"].lower())
         self.assertIn("not an option win probability", evidence["warning"].lower())
         self.assertEqual(evidence["option_win_rate"], None)
+
+    def test_non_long_call_breakeven_comparison_is_withheld_as_inapplicable(self):
+        evidence = qm_dashboard.underlying_breakeven_frequency(
+            {"breakout_mfe_20d": [0.05, 0.12, 0.20]},
+            {"breakeven_move": 0.10},
+            "put",
+        )
+
+        self.assertFalse(evidence["available"])
+        self.assertEqual((evidence["hits"], evidence["sample"]), (None, 0))
+        self.assertIn("not applicable", evidence["label"].lower())
+        self.assertIn("not tested by qm", evidence["label"].lower())
+        self.assertIsNone(evidence["option_win_rate"])
+
+    def test_one_stale_symbol_blocks_all_three_qm_slots(self):
+        current = _frame()
+        stale = _frame(end="2026-06-30")
+        frames = {"AAA": current, "BBB": stale, "CCC": current}
+        context = qm_dashboard.build_qm_context(
+            ["AAA", "BBB", "CCC"],
+            "2026-07-01",
+            study=_study(),
+            params={"QM_HORIZONS": (5, 10, 20)},
+            gate=lambda: None,
+            load_adjusted=lambda symbol, _as_of: frames[symbol],
+        )
+
+        html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=context)
+        start = html.index("QM + MOVING-AVERAGE TOP 3")
+        self.assertEqual(context["status"], "DATA_BLOCKED")
+        self.assertEqual(html[start:].count("QM ranking withheld"), 3)
 
 
 class RefreshTests(unittest.TestCase):

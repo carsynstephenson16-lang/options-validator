@@ -1296,6 +1296,15 @@ _STYLE = """
     border-color: var(--line-strong);
     padding: 24px;
   }
+  .qm-comparison {
+    background: var(--surface-soft);
+    border-color: var(--line);
+    padding: 18px;
+  }
+  .qm-comparison .hero-card {
+    background: var(--surface);
+    box-shadow: none;
+  }
   .section-header {
     align-items: flex-start;
     display: flex;
@@ -2267,13 +2276,14 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
             cards.append(_empty_hero_slot_html(data, slot))
         selected_count, open_count = len(picks), max(0, 3 - len(picks))
     return (
-        '<section class="panel hero">'
+        '<section class="panel qm-comparison">'
         '<div class="section-header"><div>'
-        '<div class="eyebrow">Research-adjusted comparison</div>'
+        '<div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div>'
         "<h2>QM + MOVING-AVERAGE TOP 3</h2>"
-        '<p class="header-sub">Only exact-session QM data may change ordering. '
-        "Existing policy, snapshot-integrity, and liquidity rules still decide "
-        "which cards are allowed in.</p></div>"
+        '<p class="header-sub">A secondary research comparison shown after the '
+        "mechanical shortlist. It does not select a trade, and its frozen study "
+        "is descriptive only. Existing policy, snapshot-integrity, and liquidity "
+        "rules still decide which cards are allowed in.</p></div>"
         '<div class="hero-stats">'
         f'<div class="hero-stat good"><strong>{selected_count}</strong>'
         "<span>Shown</span></div>"
@@ -2286,7 +2296,7 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
 def _hero_html(
     data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None
 ) -> str:
-    return _qm_hero_html(data, context, qm_context) + _original_hero_html(data, context, qm_context)
+    return _original_hero_html(data, context, qm_context) + _qm_hero_html(data, context, qm_context)
 
 
 def _quant_want_html(qm_context: Mapping[str, object] | None) -> str:
