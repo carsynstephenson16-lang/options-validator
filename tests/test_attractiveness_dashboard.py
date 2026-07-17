@@ -1232,7 +1232,7 @@ class V2RenderTests(unittest.TestCase):
         )
         qm_start = html.index("QM + MOVING-AVERAGE TOP 3")
         original_start = html.index("ORIGINAL MECHANICAL TOP 3")
-        qm_section = html[qm_start:original_start]
+        qm_section = html[qm_start:]
         self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
         self.assertIn("Sell the MSFT $350 put", html[original_start:])
 
@@ -1241,20 +1241,20 @@ class V2RenderTests(unittest.TestCase):
         del context["symbols"]["MSFT"]
         html = ad.render(self._assembled(), qm_context=context)
         qm_start = html.index("QM + MOVING-AVERAGE TOP 3")
-        original_start = html.index("ORIGINAL MECHANICAL TOP 3")
-        self.assertEqual(html[qm_start:original_start].count("DATA BLOCKED"), 3)
+        self.assertEqual(html[qm_start:].count("DATA BLOCKED"), 3)
         self.assertIn("QM context missing or stale for: MSFT", html)
 
-    def test_page_order_puts_both_lists_before_market_and_symbol_panels(self):
+    def test_page_order_puts_mechanical_list_before_descriptive_qm_comparison(self):
         html = ad.render(self._assembled(), context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE TOP 3"), html.index("ORIGINAL MECHANICAL TOP 3")
+            html.index("ORIGINAL MECHANICAL TOP 3"), html.index("QM + MOVING-AVERAGE TOP 3")
         )
         self.assertLess(
-            html.index("ORIGINAL MECHANICAL TOP 3"), html.index("Quant-want background")
+            html.index("QM + MOVING-AVERAGE TOP 3"), html.index("Quant-want background")
         )
         self.assertLess(html.index("Quant-want background"), html.index("Market context"))
         self.assertLess(html.index("Market context"), html.index("Symbol review"))
+        self.assertIn("DESCRIPTIVE ONLY — NOT A TRADE RANKING", html)
 
 
 class MainTests(unittest.TestCase):
