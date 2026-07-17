@@ -170,3 +170,12 @@ class DeriveEventsWithClassesTests(unittest.TestCase):
         self.assertEqual(len(timed), 1)
         self.assertEqual(timed[0].occurred_date, date(2019, 10, 23))
         self.assertIsNotNone(timed[0].t_entry)
+
+
+class EventClassFileHygieneTests(unittest.TestCase):
+    def test_classification_file_is_lf_only_no_trailing_whitespace(self):
+        from options_researcher.h9_events import H9_EVENT_CLASS_PATH
+        raw = H9_EVENT_CLASS_PATH.read_bytes()
+        self.assertNotIn(b"\r", raw)
+        for i, line in enumerate(raw.split(b"\n")):
+            self.assertEqual(line, line.rstrip(), f"trailing whitespace on line {i+1}")
