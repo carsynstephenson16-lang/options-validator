@@ -97,6 +97,59 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(trade["exit_reason"], "pre_next_report")
 
 
+class WorthlessQuoteTests(unittest.TestCase):
+    def _provider(self, marks):
+        def get(symbol, iso):
+            if iso not in marks:
+                raise FileNotFoundError(iso)
+            b, a = marks[iso]
+            return chain([("2026-06-19", 430.0, "C", b, a, 500, 0.32)])
+        return get
+
+    def test_present_zero_bid_books_max_loss_not_gap(self):
+        marks = {"2026-05-01": (4.8, 5.0)}
+        # every later session through expiration shows a PRESENT row, bid 0
+        from data.cache_runner import trading_days
+        for s in trading_days("2026-05-01", "2026-06-30")[1:]:
+            marks[s] = (0.0, 0.05)
+        trade = st.simulate_trade(ev(), self._provider(marks), next_report_iso=None)
+        self.assertIsNotNone(trade["pnl"])
+        self.assertAlmostEqual(trade["pnl"], -trade["capital_at_risk"], places=2)
+        self.assertTrue(trade["worthless_quote_exit"])
+        self.assertNotEqual(trade["exit_reason"], "unresolved_data_gap")
+
+    def test_report_too_close_to_entry_fails_loud(self):
+        marks = {"2026-05-01": (4.8, 5.0), "2026-05-04": (5.0, 5.2)}
+        with self.assertRaises(ValueError):
+            st.simulate_trade(ev(), self._provider(marks),
+                              next_report_iso="2026-05-04")
+
+    def test_protective_exit_decides_on_calendar_despite_missing_chain(self):
+        # dte-21 session chain missing entirely; decision still fires there,
+        # fill lands on the next session with a valid quote
+        marks = {"2026-05-01": (4.8, 5.0)}
+        from data.cache_runner import trading_days
+        days = trading_days("2026-05-01", "2026-06-30")
+        dte21 = next(s for s in days[1:]
+                     if (date(2026, 6, 19) - date.fromisoformat(s)).days <= 21)
+        after = [s for s in days if s > dte21]
+        marks[after[0]] = (4.0, 4.2)
+        trade = st.simulate_trade(ev(), self._provider(marks), next_report_iso=None)
+        self.assertEqual(trade["exit_reason"], "dte_close")
+        self.assertEqual(trade["exit_fill_session"], after[0])
+
+
+class StrikeToleranceTests(unittest.TestCase):
+    def test_float_jitter_still_matches(self):
+        entry = chain([("2026-06-19", 430.0, "C", 4.8, 5.0, 500, 0.32)])
+        jitter = chain([("2026-06-19", 430.0000000001, "C", 11.0, 11.2, 500, 0.32)])
+        def get(symbol, iso):
+            return {"2026-05-01": entry}.get(iso, jitter)
+        trade = st.simulate_trade(ev(), get, next_report_iso=None)
+        self.assertEqual(trade["exit_reason"], "take_profit")
+        self.assertFalse(trade["worthless_quote_exit"])
+
+
 class AdjudicationTests(unittest.TestCase):
     def test_vocabulary_mapping(self):
         self.assertEqual(st.map_verdict({"verdict": "FAIL (CI90 upper < 0)"}),
