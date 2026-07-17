@@ -40,6 +40,8 @@ uv run python -m options_researcher.h7_event_ledger verify  # Stage 3 forward-ev
 uv run python tools/h7_refresh_earnings.py --help  # owner-run append-raw/promote refresher
 uv run python -m options_researcher.portfolio    # mark the H5 paper book
 uv run python -m options_researcher.dashboard    # writes .tmp/dashboard/index.html
+uv run python -m options_researcher.live_dashboard --serve  # 127.0.0.1 live-preview server (two lanes: OFFICIAL H5 vs LIVE PREVIEW; FIRE stays with entry_watch)
+uv run python -m options_researcher.live_quotes --probe  # one-shot live schema probe (regular session ONLY; required before the live lane turns on)
 uv run python -m options_researcher.attractiveness_dashboard  # writes .tmp/dashboard/attractiveness.html
 ```
 
@@ -69,6 +71,16 @@ the ThetaData terminal or subscription needs owner sign-off first.
   validation design, e.g. a forward paper-trading window.
 - Live hypothesis: H5 Sector Income Core (ledger trial 6), passive forward
   window — see README "Scope status".
+
+## Optional public-web research fetchers
+
+`uv sync --extra web-fetchers` installs Trafilatura for post-capture text
+extraction, Crawl4AI for a public JavaScript-rendered page, and Scrapling as a
+last-resort public-page fetcher. These are manual research utilities only:
+never call them from tests, strategy code, or a trigger path; never use them to
+bypass source terms, rate limits, logins, paywalls, or bot walls; and retain the
+source URL and capture time. They do not replace primary filings, canonical
+data providers, or the project cache, and cannot change a hypothesis verdict.
 
 ## Conventions and pitfalls
 

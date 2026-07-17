@@ -47,6 +47,17 @@ A "no edge after costs" finding is a SUCCESS, not a failure to fix.
 Validator only. No live order placement, no scanner/suggestor, no parameter
 optimizer unless explicitly added to the phase plan.
 
+## Optional public-web research fetchers
+`uv sync --extra web-fetchers` installs Trafilatura (text extraction from
+already-captured HTML), Crawl4AI (public JavaScript-rendered pages), and
+Scrapling (last-resort public-page fetcher). Manual research utilities ONLY:
+- NEVER call them from tests, strategy code, or a trigger path.
+- NEVER use them to bypass source terms, rate limits, logins, paywalls, or
+  bot walls.
+- They are not market-data sources and cannot change a registered hypothesis,
+  trigger, or trade verdict. Primary filings, canonical data providers, and
+  the project cache own research claims; retain source URL and capture time.
+
 ## Claim discipline
 - Label every important factual claim about options mechanics, broker behavior,
   margin, assignment, fees, or data as Repo-verified, Test-verified,
