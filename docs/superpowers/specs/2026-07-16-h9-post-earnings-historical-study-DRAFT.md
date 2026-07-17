@@ -144,18 +144,23 @@ Every field is one of: H7-frozen, H6-frozen, repo-frozen, owner-ruled,
 OWNER-TYPED, or OWNER DECISION. There is no "where applicable" anywhere in
 this spec.
 
-## 5. Owner-typed values (blank until typed; LLM proposals labeled)
+## 5. Owner-typed values (APPROVED 2026-07-16; entry mechanics disclosed)
 
-The proposals below are **LLM-asserted** reasoning aids. Per standing rule,
-the owner types the operative value; a blank field blocks registration.
+**ENTRY MECHANICS (disclosed):** the owner did not retype the five numerals.
+The owner approved the LLM-proposed values by reference in the 2026-07-16
+orchestration session (verbatim: "I approve the five H9 timing rules
+previously stated"); the agent transcribed them into the value column at
+owner direction, following the repo's established owner-directed
+transcription pattern (H7_STAGE4_SPEC_AMENDMENT_V1 precedent). Provenance of
+each value remains LLM-proposed, owner-adopted.
 
-| Parameter | Owner-typed value | LLM proposal | Proposal reasoning (Inference) |
+| Parameter | Owner-approved value | LLM proposal | Proposal reasoning (Inference) |
 |---|---|---|---|
-| `H9_REACTION_MIN` | ______ | 0.02 | must exceed ordinary daily noise so the sign is an earnings reaction, not drift; a lower value (even 0.0) reduces researcher degrees of freedom at the cost of noisier direction; a higher value shrinks the sample |
-| `H9_NEXT_REPORT_EXIT_SESSIONS` | ______ | 2 | matches `H8_EXIT_SESSIONS_BEFORE_REPORT`; one session of schedule-slip buffer before T-1 |
-| `H9_MIN_ELIGIBLE_EVENTS` | ______ | 60 | ~254 occurred events, minus exclusions/data attrition, then the reaction filter roughly halves triggered trades; below ~60 data-sufficient events the CI90 on expectancy is unlikely to be decision-grade, and `MIN_LOSSES_FOR_VERDICT`=10 becomes hard to reach |
-| Premium cap per trade (§4 row 17) | ______ ($600 or $1,000) | $600 | the global `MAX_LOSS_PER_TRADE` is the older, stricter promise; a long call's premium is its max loss, so $1,000 asks would breach it — but the owner owns this reconciliation |
-| Cohort cut ratification (§6) | ______ (yes/no) | yes | pre-declare the E1-uncontaminated secondary cut (NOW, MSFT, VST, CEG) as informational-only; verdict binds to the primary (all-8) cohort |
+| `H9_REACTION_MIN` | **0.02** | 0.02 | must exceed ordinary daily noise so the sign is an earnings reaction, not drift; a lower value (even 0.0) reduces researcher degrees of freedom at the cost of noisier direction; a higher value shrinks the sample |
+| `H9_NEXT_REPORT_EXIT_SESSIONS` | **2** | 2 | matches `H8_EXIT_SESSIONS_BEFORE_REPORT`; one session of schedule-slip buffer before T-1 |
+| `H9_MIN_ELIGIBLE_EVENTS` | **60** | 60 | ~254 occurred events, minus exclusions/data attrition, then the reaction filter roughly halves triggered trades; below ~60 data-sufficient events the CI90 on expectancy is unlikely to be decision-grade, and `MIN_LOSSES_FOR_VERDICT`=10 becomes hard to reach |
+| Premium cap per trade (§4 row 17) | **$600** | $600 | the global `MAX_LOSS_PER_TRADE` is the older, stricter promise; a long call's premium is its max loss, so $1,000 asks would breach it — but the owner owns this reconciliation |
+| Cohort cut ratification (§6) | **yes** | yes | pre-declare the E1-uncontaminated secondary cut (NOW, MSFT, VST, CEG) as informational-only; verdict binds to the primary (all-8) cohort |
 
 ## 6. Eligibility census — counts and data only, before the one run (owner rule 4)
 
