@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "source": {
+    "report_path": "reports/2026-07-14-qm-base-rates.md",
+    "report_sha256": "685afacac29c77c3113438f9b55f67e904959ade8afcb91e5f16c3ce5e247b74",
+    "ledger_path": "ledger/facts.log",
+    "ledger_fact_prefix": "QM_STUDY_RESULT 2026-07-14:",
+    "ledger_fact_sha256": "a59032d67f3e9406fbcabdde65d744306f25784bc3f5e32abbaca184723f4a73"
+  },
+  "study": {
+    "data_vintage": "2026-07-14",
+    "universe_size": 12,
+    "breakout": {
+      "fires": 11,
+      "evidence_status": "DESCRIPTIVE_ONLY",
+      "pooled_median_excess_return": {
+        "5_sessions": 0.0002,
+        "10_sessions": 0.0418,
+        "20_sessions": 0.0329
+      },
+      "tradability": {
+        "tradable": 4,
+        "eligible_denominator": 7,
+        "rate": 0.571
+      },
+      "decision": "No H8: only 11 correlated fires, so the result is descriptive."
+    },
+    "parabolic": {
+      "fires": 35,
+      "evidence_status": "FADE_REJECTED",
+      "pooled_median_excess_return": {
+        "5_sessions": 0.0268,
+        "10_sessions": 0.007,
+        "20_sessions": 0.0147
+      },
+      "tradability": {
+        "tradable": 18,
+        "eligible_denominator": 19,
+        "rate": 0.947
+      },
+      "decision": "The preregistered fade reading failed. A fire is shown as a warning and gets no ranking bonus."
+    }
+  },
+  "thesis": "A current Breakout can add context to a bullish call because the frozen study saw positive median stock returns versus each name's baseline at 10 and 20 sessions.",
+  "counter_case": "The study had only 11 correlated Breakout fires in a hindsight-selected AI-stock sample. It measured stock moves and same-day option tradability, not historical option profit or loss.",
+  "provenance": "Frozen 2026-07-14 QM report, hash-bound above; current signals and moving averages come from exact-session split-adjusted OHLCV.",
+  "symbols": {
+    "CRWV": {
+      "breakout_fire_dates": [],
+      "parabolic_fire_dates": ["2025-05-14", "2025-05-20", "2025-06-03", "2025-10-01", "2026-01-16", "2026-05-06"]
+    },
+    "TEM": {
+      "breakout_fire_dates": [],
+      "parabolic_fire_dates": ["2024-07-22", "2024-08-21", "2025-01-22", "2025-02-03", "2025-02-13"]
+    },
+    "PLTR": {
+      "breakout_fire_dates": ["2025-07-25"],
+      "parabolic_fire_dates": ["2020-11-17", "2020-11-25", "2023-05-30", "2025-02-14"]
+    },
+    "NOW": {
+      "breakout_fire_dates": ["2020-02-04"],
+      "parabolic_fire_dates": []
+    },
+    "SMCI": {
+      "breakout_fire_dates": ["2018-12-06", "2019-02-15", "2019-03-25", "2020-04-28"],
+      "parabolic_fire_dates": ["2022-05-04", "2022-08-12", "2023-05-18", "2023-05-26", "2023-06-07", "2024-01-23", "2024-01-31", "2024-02-07", "2024-03-04", "2025-02-14", "2026-05-28"]
+    },
+    "NVDA": {
+      "breakout_fire_dates": [],
+      "parabolic_fire_dates": []
+    },
+    "AMD": {
+      "breakout_fire_dates": ["2021-10-21"],
+      "parabolic_fire_dates": ["2018-09-12", "2020-08-05", "2025-10-27", "2026-04-24", "2026-05-01", "2026-05-26"]
+    },
+    "AVGO": {
+      "breakout_fire_dates": ["2020-06-02", "2025-05-28"],
+      "parabolic_fire_dates": []
+    },
+    "VST": {
+      "breakout_fire_dates": [],
+      "parabolic_fire_dates": ["2024-10-01"]
+    },
+    "CEG": {
+      "breakout_fire_dates": ["2025-12-11"],
+      "parabolic_fire_dates": ["2025-01-23", "2025-05-06"]
+    },
+    "MSFT": {
+      "breakout_fire_dates": [],
+      "parabolic_fire_dates": []
+    },
+    "AMZN": {
+      "breakout_fire_dates": ["2020-06-09"],
+      "parabolic_fire_dates": []
+    },
+    "IREN": {
+      "breakout_fire_dates": [],
+      "parabolic_fire_dates": [],
+      "evidence_status": "NOT_IN_FROZEN_STUDY"
+    },
+    "USAR": {
+      "breakout_fire_dates": [],
+      "parabolic_fire_dates": [],
+      "evidence_status": "NOT_IN_FROZEN_STUDY"
+    }
+  },
+  "quant_want": {
+    "source_repo": "/Users/carsynstephenson/Documents/quant want",
+    "source_commit": "3e1a470edefc082649ccee0a1d3d9499885d7e49",
+    "trend": {
+      "status": "MARKET_BACKGROUND_ONLY",
+      "plain_language": "The trend project can describe whether broad markets are generally above or below their own long-term direction. It does not rank these option contracts."
+    },
+    "momentum": {
+      "status": "DEFERRED",
+      "plain_language": "The individual-stock momentum sleeve is a Phase 2 registry stub and cannot affect this dashboard yet."
+    },
+    "low_max": {
+      "status": "DEFERRED",
+      "plain_language": "The low-MAX sleeve is a Phase 2 registry stub and cannot affect this dashboard yet."
+    }
+  }
+}
