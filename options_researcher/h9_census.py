@@ -16,6 +16,7 @@ import pandas as pd
 import pyarrow.lib
 
 import config
+from data.audit_exceptions import excluded as _registry_excluded
 from data.cache_runner import trading_days
 from data.thetadata_adapter import get_eod_chain, passes_liquidity
 from data.underlying_closes import load_closes_adjusted
@@ -86,6 +87,21 @@ def _max_exit_horizon(entry_iso: str) -> str:
     return days[-1] if days else entry_iso
 
 
+def in_registry_exclusion(event: H9Event) -> bool:
+    """True when any of the event's sessions fall inside a ratified
+    archive-availability exclusion window (data.audit_exceptions, the H7
+    reviewed exception registry -- H7_AMENDMENT_V1_3 ratifies the
+    data_coverage entries within it). Uses the same per-day `excluded()`
+    lookup as data/h7_manifest.py so H9 and H7 never enumerate exclusions
+    independently. Registry start/end are already ISO date strings
+    (YYYY-MM-DD), so the comparison inside `excluded()` is plain ISO-string
+    comparison -- no date-object normalization is needed here."""
+    for iso in (event.t_pre, event.t_dec, event.t_entry):
+        if iso and _registry_excluded(event.symbol, iso) is not None:
+            return True
+    return False
+
+
 def run_census(events: list[H9Event], *, chain_dir: Path,
                floor: int | None = None) -> CensusResult:
     """Counts-only eligibility pass over `events`. Reads the T_entry chain
@@ -103,6 +119,10 @@ def run_census(events: list[H9Event], *, chain_dir: Path,
         stats = per_symbol.setdefault(e.symbol, {"eligible": 0, "excluded": 0})
         if e.t_entry is None or e.t_dec is None or e.t_pre is None:
             reasons["window_edge"] += 1
+            stats["excluded"] += 1
+            continue
+        if in_registry_exclusion(e):
+            reasons["registry_excluded"] += 1
             stats["excluded"] += 1
             continue
         try:
