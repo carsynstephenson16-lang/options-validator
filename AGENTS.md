@@ -107,6 +107,27 @@ Keep raw data separate from cleaned data.
 Make transformations reproducible.
 Save important assumptions near the code that depends on them.
 
+## Catalyst-Calendar Rule (owner-directed 2026-07-16)
+
+For VST and CEG, every attractiveness-context refresh must carry the next
+PJM capacity-auction (Base Residual Auction) date as a catalyst entry —
+`confirmed: false` with a PJM source link until PJM publishes the schedule.
+Rationale: auction results have been the dominant scheduled vol event for
+these names, larger than their earnings prints
+(reports/2026-07-16-vst-ceg-earnings-footprints.md). Dropping the entry in a
+refresh is a regression, not a simplification.
+
+## Optional Public-Web Research Fetchers
+
+Install with `uv sync --extra web-fetchers` only for manual research support.
+Trafilatura extracts text from already-captured HTML; Crawl4AI may render a
+public JavaScript page; Scrapling is a last-resort public-page fetcher. They
+must not bypass source terms, rate limits, logins, paywalls, or bot walls.
+They are not market-data sources, must not be called from tests or strategy
+code, and cannot change a registered hypothesis, trigger, or trade verdict.
+Use primary filings, canonical data providers, and the project data cache for
+research claims; retain source URL and capture time for any permitted web use.
+
 ## Obsidian LLM Wiki
 
 This repo is also opened as an Obsidian vault. The LLM-maintained wiki layer

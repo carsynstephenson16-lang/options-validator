@@ -162,6 +162,12 @@
           "what": "SPECULATIVE: additional data-center/co-location PPA announcements (management has said it is engaged in co-location discussions; no date or counterparty confirmed)",
           "confirmed": false,
           "source": "https://www.power-eng.com/business/vistra-engaged-in-co-location-discussions-with-data-centers/"
+        },
+        {
+          "date": null,
+          "what": "PJM 2029/2030 Base Residual Auction (next scheduled capacity auction). Date UNCONFIRMED \u2014 recent BRAs ran in July windows (2024-07, 2025-07, 2026-07 results); watch PJM auction calendar. Owner-directed standing catalyst 2026-07-16: auction results have been the dominant scheduled vol event for this name, larger than earnings prints (per reports/2026-07-16-vst-ceg-earnings-footprints.md).",
+          "confirmed": false,
+          "source": "https://www.pjm.com/markets-and-operations/rpm"
         }
       ],
       "move_thesis": "The dominant near-term vol event is Q2 earnings on Aug 7, 2026, ~3 weeks out and inside any 1-2 month option tenor; aggregators cite consensus EPS ~$2.43 with one preview flagging a ~140% YoY EPS jump, and VST has a history of large single-day earnings reactions (inference from its high-beta merchant-power profile, not a measured statistic). The July 14 PJM print ($325/MW-day at the cap, first-ever RTO shortfall) was absorbed as mildly positive (+1.1% on July 15 alongside a target raise) \u2014 it locks in 2028/29 capacity revenue visibility but was largely expected since this is the third consecutive cap-clearing auction and the price is actually -2.5% YoY, so it is unlikely to drive further large upside alone. With the stock near $158 vs. $153.43 on July 6, aggregator consensus targets in the low-to-mid $200s (TipRanks avg ~$225, low $181, 13 buys/0 holds/0 sells) and a fresh Scotiabank high target of $298 (both aggregator-reported, not independently verified), the sell-side skew is strongly bullish; a beat-and-raise or a new hyperscaler PPA headline plausibly supports a move toward the $170s-$180 (the lowest published target), i.e. high-single to low-double-digit percent upside over 1-2 months. Absent a new catalyst, drift risk is toward the $150-153 area where the pre-PJM/pre-earnings-announcement price sat.",
@@ -212,6 +218,12 @@
           "what": "Closing of PJM generation asset sale to LS Power (required by FERC/DOJ Calpine resolution) \u2014 announced, closing timing unconfirmed",
           "confirmed": false,
           "source": "https://www.lspower.com/news/constellation-announces-agreement-to-sell-pjm-generation-assets-to-ls-power-as-part-of-ferc-u-s-doj-resolution-of-calpine-transaction/"
+        },
+        {
+          "date": null,
+          "what": "PJM 2029/2030 Base Residual Auction (next scheduled capacity auction). Date UNCONFIRMED \u2014 recent BRAs ran in July windows (2024-07, 2025-07, 2026-07 results); watch PJM auction calendar. Owner-directed standing catalyst 2026-07-16: auction results have been the dominant scheduled vol event for this name, larger than earnings prints (per reports/2026-07-16-vst-ceg-earnings-footprints.md).",
+          "confirmed": false,
+          "source": "https://www.pjm.com/markets-and-operations/rpm"
         }
       ],
       "move_thesis": "The one scheduled near-term event is the confirmed Q2 earnings call on 2026-08-06 (inside 3 weeks and well inside the 2-month options window); CEG's recent single-day moves around news have been large (-5% on the July 1 Citi cut, ~+7% on the July 14 PJM auction print), so a 5-8% one-day move around earnings is plausible in either direction. Upside path: management quantifying the cap-priced PJM auction (~$2.2B for 2028/29) into guidance, plus any new hyperscaler co-location PPA, could carry the stock from ~$252 toward the $290-$300 area (Citi's reduced $297 target is the low end of the analyst range; consensus PT is ~$372 per TipRanks as of July 10). Downside path: a guidance disappointment or Calpine integration/cost surprise retests the $228.63 52-week low, ~9% below current levels. Unscheduled data-center deal announcements are the main asymmetric bull catalyst \u2014 prior comparable announcements moved the stock high-single-digits in a day \u2014 but their timing is speculative.",

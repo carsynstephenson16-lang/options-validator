@@ -550,3 +550,18 @@ axis are rejected for the same reasons):
   that is a suggestor, out of scope per `.cursorrules`.
 - Ticker-specific narrative scores (regulatory/weather/segment) -- discretionary
   contamination; belongs in the equity-research repo, not a systematic screen.
+
+## Insider-cluster pre-earnings signal (parked 2026-07-16, owner decision)
+
+- **What:** blackout-aware opportunistic insider-cluster signal (Form 4,
+  T-45..T-15 window) from `reports/2026-07-16-pre-earnings-signal-research.md`
+  candidate 1 — the survey's best-evidenced signal (Cohen–Malloy–Pomorski).
+- **Why parked:** owner directive 2026-07-16: "Do not pursue insider clusters
+  ... now." The TSMC read-through and IV-direction studies were selected
+  instead (written tests only, no trade permission).
+- **Gate before building:** explicit owner un-park + its own pre-registration
+  with owner-typed cluster definition, window, and null. The rare-event
+  statistics constraint (years to significance on 14 names vs an
+  option-surface null) must be confronted in the registration, not after.
+- **Review date:** 2026-10-16 (or at the first quarterly cross-book review
+  after the H9 verdict lands).
