@@ -37,9 +37,17 @@ bear = close·(1 − k·move), base = close (flat), bull = close·(1 + k·move),
 k = sqrt(dte/30) capped at 2 monthly moves. Pure arithmetic; labeled
 "scenario framing, not a forecast."
 
-### 3. Agent research layer (per run, dated JSON, never baked into Python)
+### 3. Agent research layer (ON-DEMAND, dated JSON, never baked into Python)
 
-Each dashboard build, subagents (web search) write
+*Amended 2026-07-16 (14-name expansion session):* research is ON-DEMAND,
+not per-build. The daily 07:10 ritual rebuilds the deterministic board with
+no LLM in the loop; agent research runs only when the owner asks for it,
+covers only the symbols on the board (Top-3 + pinned), and its schema
+protects ranking membership — NOT factual truth. `top3_context` validation
+cannot verify that a URL labeled issuer_ir actually belongs to the issuer or
+that a claim is true; provenance labels stay mandatory for that reason.
+
+When research does run, subagents (web search) write
 `reports/attractiveness_context/YYYY-MM-DD.json`:
 
 ```json
