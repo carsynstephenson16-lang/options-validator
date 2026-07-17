@@ -859,6 +859,25 @@ def _v2_section():
     }
 
 
+def _valid_annotation():
+    """One schema-valid advisory annotation (top3_context contract)."""
+    return {
+        "research_as_of_utc": "2026-06-30T12:00:00Z",
+        "market_as_of_date": "2026-06-30",
+        "claims": [{
+            "id": "issuer-event",
+            "text": "Issuer event is scheduled.",
+            "classification": "fact",
+            "source_url": "https://example.com/issuer-event",
+            "unknown_rationale": None,
+            "source_tier": "issuer_ir",
+            "fact_date": "2026-06-30",
+            "date_certainty": "confirmed",
+            "countercase": "The event may not move the stock.",
+        }],
+    }
+
+
 def _v2_context(strike=350.0):
     return {
         "as_of": "2026-06-30",
@@ -900,6 +919,70 @@ class V2RenderTests(unittest.TestCase):
         self.assertIn("Legacy agent-selected top_picks were ignored", html)
         self.assertNotIn("unmatched to current candidates", html)
         self.assertNotIn("Python quantitative shortlist differs", html)
+
+    def test_stale_annotation_does_not_hide_matching_current_annotation(self):
+        candidate_id = "MSFT:put:2026-07-17:350.00"
+        annotation = _valid_annotation()
+        context = _v2_context()
+        context["annotations"] = {
+            candidate_id: annotation,
+            "MSFT:put:2026-07-17:999.00": annotation,
+        }
+
+        annotations, warning = ad._research_annotation_map(
+            [{"card": {"top3_snapshot": {"candidate_id": candidate_id}}}],
+            context,
+        )
+        html = ad._research_html(
+            annotations[candidate_id], data_as_of="2026-06-30"
+        )
+
+        # The rotated-off card no longer nukes the whole set...
+        self.assertIn("Research evidence · complete", html)
+        # ...but its key is still REPORTED, never silently swallowed.
+        self.assertIsNotNone(warning)
+        self.assertIn("MSFT:put:2026-07-17:999.00", warning)
+
+    def test_annotation_for_current_candidate_only_gives_no_notice(self):
+        candidate_id = "MSFT:put:2026-07-17:350.00"
+        context = _v2_context()
+        context["annotations"] = {candidate_id: _valid_annotation()}
+        annotations, warning = ad._research_annotation_map(
+            [{"card": {"top3_snapshot": {"candidate_id": candidate_id}}}],
+            context,
+        )
+        self.assertIn(candidate_id, annotations)
+        self.assertIsNone(warning)
+
+    def test_malformed_annotation_for_current_candidate_still_warns(self):
+        # The pre-filter must not swallow a genuinely malformed annotation
+        # that belongs to a card actually on the board.
+        candidate_id = "MSFT:put:2026-07-17:350.00"
+        bad = dict(_valid_annotation())
+        bad["claims"] = "not-a-list"
+        context = _v2_context()
+        context["annotations"] = {candidate_id: bad}
+        annotations, warning = ad._research_annotation_map(
+            [{"card": {"top3_snapshot": {"candidate_id": candidate_id}}}],
+            context,
+        )
+        self.assertEqual(annotations, {})
+        self.assertIsNotNone(warning)
+        self.assertIn("research annotations invalid", warning)
+
+    def test_mistyped_candidate_key_is_reported_not_silent(self):
+        # A near-miss key (wrong strike) intended for a current card would
+        # otherwise vanish with no signal at all.
+        candidate_id = "MSFT:put:2026-07-17:350.00"
+        context = _v2_context()
+        context["annotations"] = {"MSFT:put:2026-07-17:350.0": _valid_annotation()}
+        annotations, warning = ad._research_annotation_map(
+            [{"card": {"top3_snapshot": {"candidate_id": candidate_id}}}],
+            context,
+        )
+        self.assertEqual(annotations, {})
+        self.assertIsNotNone(warning)
+        self.assertIn("MSFT:put:2026-07-17:350.0", warning)
 
     def test_provenance_label_on_every_narrative_surface(self):
         html = ad.render(self._assembled(), context=_v2_context())

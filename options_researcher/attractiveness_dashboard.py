@@ -1637,8 +1637,17 @@ def _research_annotation_map(
     """Validate advisory annotations against the deterministic hero IDs.
 
     The context JSON may explain a current candidate, but it cannot add one or
-    change its ordering.  A malformed annotation set is ignored as research
-    evidence and returned as a visible warning rather than partly rendered.
+    change its ordering.  An annotation whose candidate is not on today's
+    board is dropped BEFORE validation, so one rotated-off card can no longer
+    invalidate the whole set (the board rotates whenever ranking or data
+    changes; that is normal, not a data error).  A malformed annotation for a
+    current candidate is still ignored as research evidence and returned as a
+    visible warning rather than partly rendered.
+
+    Dropped keys are REPORTED, never silently swallowed: a dropped key is
+    either stale research (the honest signal that the context JSON no longer
+    covers the picks) or a mis-keyed annotation meant for a current card.
+    Both are worth seeing, so the caller gets a visible notice either way.
     """
     from options_researcher.top3_context import (
         AnnotationValidationError,
@@ -1654,11 +1663,21 @@ def _research_annotation_map(
             for p in picks]
     if any(not isinstance(key, str) for key in keys):
         return {}, "candidate identities are invalid — research annotations ignored"
+    current_keys = frozenset(keys)
+    current_annotations = {key: value for key, value in raw.items()
+                           if key in current_keys}
+    dropped = sorted(str(key) for key in raw if key not in current_keys)
     try:
-        normalized = normalize_research_annotations(keys, raw)
+        normalized = normalize_research_annotations(keys, current_annotations)
     except AnnotationValidationError as error:
         return {}, f"research annotations invalid ({error.code}) — ignoring them"
-    return dict(normalized), None
+    notice = None
+    if dropped:
+        notice = (f"{len(dropped)} research annotation(s) do not match any "
+                  f"card on today's board and were not rendered "
+                  f"({', '.join(dropped)}) — the research context is stale "
+                  "relative to the current picks, or a key is mistyped")
+    return dict(normalized), notice
 
 
 def _research_html(annotation: Mapping[str, object] | None, *,
