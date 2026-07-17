@@ -379,11 +379,11 @@ def select_top_picks(
 def select_qm_top_picks(
     data: dict, qm_context: Mapping[str, object], n: int = 3, *, include_csp_watch: bool = False
 ) -> list[dict]:
-    """Rank admitted cards with current QM and moving-average context.
+    """Return the exact mechanical picks for the lower descriptive QM panel.
 
-    Fail closed unless the context is CURRENT for the dashboard's exact
-    market date.  Parabolic fires are deliberately absent from the ordering
-    key: the frozen study rejected the historical fade interpretation.
+    QM is not a selector or a ranking input.  A current context is required
+    only to render the lower, descriptive panel; the returned cards preserve
+    the mechanical shortlist's membership, order, lanes, and contracts.
     """
     if _qm_context_block_reason(data, qm_context) is not None:
         return []
@@ -392,55 +392,14 @@ def select_qm_top_picks(
     if not isinstance(symbols, Mapping):
         return []
 
-    ranked: list[tuple[tuple, dict]] = []
-    for base_key, original_pick in _admissible_pick_pool(data, include_csp_watch=include_csp_watch):
-        qm = symbols.get(original_pick["symbol"])
+    picks = select_top_picks(data, n=n, include_csp_watch=include_csp_watch)
+    contextual_picks: list[dict] = []
+    for pick in picks:
+        qm = symbols.get(pick["symbol"])
         if not isinstance(qm, Mapping) or qm.get("status") != "CURRENT":
-            continue
-
-        breakout = qm.get("breakout_fire") is True
-        ma_bullish = qm.get("ma_supports_bullish") is True
-        lane = original_pick["lane"]
-        if breakout and lane in {"long_call", "leaps"}:
-            tier = 0
-            reason = "Current QM Breakout supports this long-call structure."
-        elif breakout and lane == "put":
-            tier = 1
-            reason = (
-                "Current QM Breakout direction matches; this option structure was not tested by QM."
-            )
-        elif not breakout and ma_bullish and lane in {"long_call", "leaps", "put"}:
-            tier = 2
-            if lane == "put":
-                reason = (
-                    "No current Breakout; price and the 20/50/200-day moving "
-                    "averages support this bullish structure. This option "
-                    "structure was not tested by QM."
-                )
-            else:
-                reason = (
-                    "No current Breakout; price and the 20/50/200-day moving "
-                    "averages support this bullish structure."
-                )
-        else:
-            tier = 3
-            reason = "QM did not change this card's mechanical ordering."
-
-        pick = dict(original_pick)
-        pick["qm_rank_reason"] = reason
-        ranked.append(((tier, *base_key), pick))
-
-    ranked.sort(key=lambda item: item[0])
-    picks: list[dict] = []
-    seen: set[str] = set()
-    for _key, pick in ranked:
-        if pick["symbol"] in seen:
-            continue
-        seen.add(pick["symbol"])
-        picks.append(pick)
-        if len(picks) == n:
-            break
-    return picks
+            return []
+        contextual_picks.append(dict(pick))
+    return contextual_picks
 
 
 def _qm_candidate_key(pick: Mapping[str, object]) -> str:
@@ -1924,9 +1883,7 @@ def _research_html(annotation: Mapping[str, object] | None, *,
     return "".join(parts)
 
 
-def _qm_card_context_html(
-    pick: dict, symbol_context: Mapping[str, object] | None, *, ranking_mode: str
-) -> str:
+def _qm_card_context_html(pick: dict, symbol_context: Mapping[str, object] | None) -> str:
     """Render QM/MA evidence without converting stock evidence to option P&L."""
     if not isinstance(symbol_context, Mapping):
         return (
@@ -1950,18 +1907,17 @@ def _qm_card_context_html(
     parabolic_result = parabolic_study.get(
         "decision", "No frozen Parabolic conclusion is available."
     )
-    ranking_note = (
-        f'<div class="notice info"><strong>QM ordering reason:</strong> '
-        f"{_esc(pick.get('qm_rank_reason', 'No QM ordering reason.'))}</div>"
-        if ranking_mode == "qm"
-        else '<div class="notice info">QM shown for context; not used in this ranking.</div>'
+    context_note = (
+        '<div class="notice info">QM is descriptive context only; it cannot change this '
+        "mechanical card's membership, order, edge, or verdict.</div>"
     )
     parabolic = ""
     if symbol_context.get("parabolic_fire") is True:
         parabolic = (
             '<div class="notice watch">! PARABOLIC WARNING — the historical '
             "fade reading was rejected. This is displayed as research only and "
-            f"gets no ranking bonus. Result: {_esc(parabolic_result)}</div>"
+            f"does not change the mechanical selection, order, edge, or verdict. "
+            f"Result: {_esc(parabolic_result)}</div>"
         )
 
     def _price(value: object) -> str:
@@ -1996,7 +1952,7 @@ def _qm_card_context_html(
     )
     return (
         '<div class="qm-context">'
-        f"{ranking_note}{parabolic}"
+        f"{context_note}{parabolic}"
         '<div class="qm-row"><span class="narr-k">Current QM signal</span>'
         f"<strong>{_esc(signal)}</strong></div>"
         '<div class="qm-row"><span class="narr-k">Price vs moving averages</span>'
@@ -2035,9 +1991,8 @@ def _hero_pick_html(
     data_as_of: str,
     slot: int,
     symbol_qm_context: Mapping[str, object] | None = None,
-    ranking_mode: str = "original",
 ) -> str:
-    """Render one deterministic hero pick plus standard and QM evidence."""
+    """Render one deterministic hero pick plus optional lower-panel QM evidence."""
     card = pick["card"]
     preview_warn = (
         f'<div class="notice watch">! {_esc(_PREVIEW_WARNING)}</div>' if card.get("preview") else ""
@@ -2066,9 +2021,14 @@ def _hero_pick_html(
         f"legacy score {pick['score']} · "
         f"{_esc(ident)}</div></details>"
     )
+    qm_html = (
+        _qm_card_context_html(pick, symbol_qm_context)
+        if isinstance(symbol_qm_context, Mapping)
+        else ""
+    )
     return (
         f'<div class="hero-card {status_cls}">{head}'
-        f"{_qm_card_context_html(pick, symbol_qm_context, ranking_mode=ranking_mode)}"
+        f"{qm_html}"
         f"{_research_html(annotation, data_as_of=data_as_of)}</div>"
     )
 
@@ -2161,9 +2121,9 @@ def _blocked_qm_slot_html(
         '<div class="hero-card bad empty-slot">'
         f'<div class="slot-label"><span>Pick {slot}</span>'
         '<span class="policy-status bad">× DATA BLOCKED</span></div>'
-        "<h3>QM ranking withheld</h3>"
-        '<div class="label">Stale or missing QM data is never used to rank a '
-        "contract.</div>"
+        "<h3>QM context withheld</h3>"
+        '<div class="label">Stale or missing QM data leaves the mechanical '
+        "ranking unchanged and withholds this descriptive context.</div>"
         f'<div class="notice watch">! {_esc(reason or "QM context unavailable")}'
         "</div></div>"
     )
@@ -2205,16 +2165,12 @@ def _original_hero_html(
         snapshot = pick["card"].get("top3_snapshot")
         ident = snapshot.get("candidate_id") if isinstance(snapshot, dict) else None
         annotation = annotations.get(ident) if isinstance(ident, str) else None
-        qm_symbols = (qm_context or {}).get("symbols") if isinstance(qm_context, Mapping) else {}
-        symbol_qm = qm_symbols.get(pick["symbol"]) if isinstance(qm_symbols, Mapping) else None
         cards.append(
             _hero_pick_html(
                 pick,
                 annotation,
                 data_as_of=data_as_of,
                 slot=slot,
-                symbol_qm_context=symbol_qm,
-                ranking_mode="original",
             )
         )
     for slot in range(len(py_picks) + 1, 4):
@@ -2230,7 +2186,7 @@ def _original_hero_html(
         '<div class="eyebrow">Daily shortlist · TOP 3 PICKS TODAY</div>'
         "<h2>ORIGINAL MECHANICAL TOP 3</h2>"
         '<p class="header-sub">The existing membership and order are unchanged. '
-        "QM is shown only as background on these cards.</p></div>"
+        "QM context appears only in the separate descriptive section below.</p></div>"
         '<div class="hero-stats">'
         f'<div class="hero-stat {qualified_cls}"><strong>{qualified_count}</strong>'
         "<span>Eligible</span></div>"
@@ -2243,7 +2199,7 @@ def _original_hero_html(
 
 
 def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, object] | None) -> str:
-    """Render three QM-ranked slots, or three visible fail-closed slots."""
+    """Render lower QM context on mechanical slots, or three fail-closed slots."""
     data_as_of = str(data.get("data_as_of") or "?")
     block_reason = _qm_context_block_reason(data, qm_context)
     notes: list[str] = []
@@ -2272,7 +2228,6 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
                     data_as_of=data_as_of,
                     slot=slot,
                     symbol_qm_context=qm_symbols.get(pick["symbol"]),
-                    ranking_mode="qm",
                 )
             )
         for slot in range(len(cards) + 1, 4):
@@ -2282,11 +2237,11 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
         '<section class="panel qm-comparison">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div>'
-        "<h2>QM + MOVING-AVERAGE TOP 3</h2>"
-        '<p class="header-sub">A secondary research comparison shown after the '
-        "mechanical shortlist. It does not select a trade, and its frozen study "
-        "is descriptive only. Existing policy, snapshot-integrity, and liquidity "
-        "rules still decide which cards are allowed in.</p></div>"
+        "<h2>QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3</h2>"
+        '<p class="header-sub">A secondary research context shown after the mechanical '
+        "shortlist. These are the same mechanical cards in the same mechanical order. "
+        "QM does not select, rank, validate, or change the edge or verdict of any "
+        "option contract.</p></div>"
         '<div class="hero-stats">'
         f'<div class="hero-stat good"><strong>{selected_count}</strong>'
         "<span>Shown</span></div>"
@@ -2461,11 +2416,14 @@ def _blocked_html(blocked: list[dict]) -> str:
             f'<ul class="blocked-list">{rows}</ul></section>')
 
 
-def _run_exit_code(blocked: list[dict]) -> int:
+def _run_exit_code(
+    blocked: list[dict], *, qm_context: Mapping[str, object] | None = None
+) -> int:
     """0 for a clean or data-gapped run; 1 when any symbol failed on an
     UNEXPECTED error (programming failure) so cron/launchd never reports a
     clean rebuild over one."""
-    return 1 if any(rec.get("unexpected") for rec in blocked) else 0
+    qm_unexpected = isinstance(qm_context, Mapping) and qm_context.get("unexpected") is True
+    return 1 if any(rec.get("unexpected") for rec in blocked) or qm_unexpected else 0
 
 
 def render(
@@ -2583,7 +2541,7 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     for rec in blocked:
         print(f"BLOCKED {rec.get('symbol')}: {rec.get('reason_code')} ({rec.get('detail')})")
     print("open it in your browser to see the scenario tables")
-    return abs_path, _run_exit_code(blocked)
+    return abs_path, _run_exit_code(blocked, qm_context=qm_context)
 
 
 def main(**assemble_kwargs) -> str:

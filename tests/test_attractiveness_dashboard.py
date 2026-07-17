@@ -594,7 +594,7 @@ class SelectQmTopPicksTests(unittest.TestCase):
             },
         }
 
-    def test_qm_breakout_can_change_lane_without_changing_plain_selector(self):
+    def test_qm_context_uses_exact_mechanical_picks_without_changing_selector(self):
         import json
         from pathlib import Path
 
@@ -630,9 +630,9 @@ class SelectQmTopPicksTests(unittest.TestCase):
         self.assertEqual(plain_bytes_before, baseline)
         self.assertEqual(plain_bytes_after, plain_bytes_before)
         self.assertEqual(
-            (qm[0]["symbol"], qm[0]["lane"], qm[0]["strike"]), ("AAA", "long_call", 105.0)
+            [(p["symbol"], p["lane"], p["strike"], p["expiry"]) for p in qm],
+            plain_before,
         )
-        self.assertIn("Breakout", qm[0]["qm_rank_reason"])
 
     def test_stale_top_level_context_blocks_the_qm_list(self):
         data = SelectTopPicksTests()._data()
@@ -674,36 +674,33 @@ class SelectQmTopPicksTests(unittest.TestCase):
         self.assertIn("underlying_breakeven_frequency", evidence)
         self.assertFalse(evidence["underlying_breakeven_frequency"]["available"])
         self.assertIn(
-            "not recomputed from today's cache",
+            "not tested by QM",
             evidence["underlying_breakeven_frequency"]["label"],
         )
         self.assertIsNone(evidence["underlying_breakeven_frequency"]["option_win_rate"])
 
-    def test_ma_only_call_outranks_no_signal_and_remaining_stays_mechanical(self):
+    def test_qm_signals_cannot_reorder_the_mechanical_context_cards(self):
         data = SelectTopPicksTests()._data()
         data["data_as_of"] = "2026-07-01"
-        # QM state is per underlying. Keep only AAA's long call so the test
-        # isolates a MA-only call rather than its mechanically stronger put.
-        data["symbols"][0]["groups"] = [data["symbols"][0]["groups"][1]]
-        context = self._context(breakout=False)
-        picks = ad.select_qm_top_picks(data, context)
-        self.assertEqual((picks[0]["symbol"], picks[0]["lane"]), ("AAA", "long_call"))
-        self.assertIn("moving averages", picks[0]["qm_rank_reason"])
-        self.assertEqual((picks[1]["symbol"], picks[1]["lane"]), ("BBB", "put"))
+        signal_on = self._context(breakout=True)
+        signal_off = self._context(breakout=False)
+        signal_off["symbols"]["AAA"]["ma_supports_bullish"] = False
+        signal_off["symbols"]["BBB"]["ma_supports_bullish"] = True
 
-    def test_ma_only_short_put_gets_the_same_bullish_structure_tier(self):
-        data = SelectTopPicksTests()._data()
-        data["data_as_of"] = "2026-07-01"
-        context = self._context(breakout=False)
-        context["symbols"]["AAA"]["ma_supports_bullish"] = False
-        context["symbols"]["BBB"]["ma_supports_bullish"] = True
+        mechanical = [
+            (pick["symbol"], pick["lane"], pick["strike"], pick["expiry"])
+            for pick in ad.select_top_picks(data)
+        ]
+        for context in (signal_on, signal_off):
+            self.assertEqual(
+                [
+                    (pick["symbol"], pick["lane"], pick["strike"], pick["expiry"])
+                    for pick in ad.select_qm_top_picks(data, context)
+                ],
+                mechanical,
+            )
 
-        picks = ad.select_qm_top_picks(data, context)
-
-        self.assertEqual((picks[0]["symbol"], picks[0]["lane"]), ("BBB", "put"))
-        self.assertIn("structure was not tested by QM", picks[0]["qm_rank_reason"])
-
-    def test_parabolic_never_changes_rank_or_reason(self):
+    def test_parabolic_never_changes_mechanical_context_card_order(self):
         data = SelectTopPicksTests()._data()
         data["data_as_of"] = "2026-07-01"
         base = self._context(breakout=False, parabolic=False)
@@ -1265,14 +1262,20 @@ class V2RenderTests(unittest.TestCase):
         qm_context = self._qm_context()
         qm_context["symbols"]["AMZN"] = qm_context["symbols"].pop("MSFT")
         html = ad.render(data, qm_context=qm_context)
-        self.assertIn("QM + MOVING-AVERAGE TOP 3", html)
+        self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", html)
         self.assertIn("ORIGINAL MECHANICAL TOP 3", html)
         self.assertEqual(html.count('class="hero-card '), 6)
         self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 2)
-        self.assertIn("QM shown for context; not used in this ranking", html)
-        self.assertIn("direction matches; this option structure was not tested by QM", html)
+        original_start = html.index("ORIGINAL MECHANICAL TOP 3")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        self.assertNotIn("Current QM signal", html[original_start:qm_start])
+        self.assertIn(
+            "QM is descriptive context only; it cannot change this mechanical card's "
+            "membership, order, edge, or verdict.",
+            html[qm_start:],
+        )
         self.assertIn("PARABOLIC WARNING", html)
-        self.assertIn("gets no ranking bonus", html)
+        self.assertIn("does not change the mechanical selection, order, edge, or verdict", html)
         self.assertIn("Parabolic FADE_REJECTED", html)
         self.assertIn("The preregistered fade reading failed.", html)
 
@@ -1313,7 +1316,7 @@ class V2RenderTests(unittest.TestCase):
             self._assembled(),
             qm_context=self._qm_context(status="DATA_BLOCKED", as_of="2026-06-29"),
         )
-        qm_start = html.index("QM + MOVING-AVERAGE TOP 3")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
         original_start = html.index("ORIGINAL MECHANICAL TOP 3")
         qm_section = html[qm_start:]
         self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
@@ -1323,7 +1326,7 @@ class V2RenderTests(unittest.TestCase):
         context = self._qm_context()
         del context["symbols"]["MSFT"]
         html = ad.render(self._assembled(), qm_context=context)
-        qm_start = html.index("QM + MOVING-AVERAGE TOP 3")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
         self.assertEqual(html[qm_start:].count("DATA BLOCKED"), 3)
         self.assertIn("QM context missing or stale for: MSFT", html)
 
@@ -1335,17 +1338,19 @@ class V2RenderTests(unittest.TestCase):
 
         html = ad.render(self._assembled(), context=context, qm_context=self._qm_context())
 
-        qm_start = html.index("QM + MOVING-AVERAGE TOP 3")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
         qm_end = html.index("Quant-want background")
         self.assertIn("research annotation(s) do not match any card", html[qm_start:qm_end])
 
     def test_page_order_puts_mechanical_list_before_descriptive_qm_comparison(self):
         html = ad.render(self._assembled(), context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("ORIGINAL MECHANICAL TOP 3"), html.index("QM + MOVING-AVERAGE TOP 3")
+            html.index("ORIGINAL MECHANICAL TOP 3"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
         )
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE TOP 3"), html.index("Quant-want background")
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("Quant-want background"),
         )
         self.assertLess(html.index("Quant-want background"), html.index("Market context"))
         self.assertLess(html.index("Market context"), html.index("Symbol review"))
