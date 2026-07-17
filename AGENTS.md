@@ -128,6 +128,15 @@ code, and cannot change a registered hypothesis, trigger, or trade verdict.
 Use primary filings, canonical data providers, and the project data cache for
 research claims; retain source URL and capture time for any permitted web use.
 
+Measured 2026-07-17: SEC EDGAR returns HTTP 403 to a fetcher that sends no
+descriptive User-Agent (SEC fair-access policy), and Trafilatura's default UA
+is one of them — configure a real identifying UA via `use_config()` and it
+returns 200. Setting an honest identifying UA is compliant; spoofing a browser
+UA to evade a block is the bypass banned above. Trafilatura reads static HTML
+only; confirm content is genuinely JavaScript-rendered before paying Crawl4AI's
+browser-download and per-page cost. Neither tool can search — they retrieve a
+URL you already have.
+
 ## Obsidian LLM Wiki
 
 This repo is also opened as an Obsidian vault. The LLM-maintained wiki layer
