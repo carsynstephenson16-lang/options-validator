@@ -274,9 +274,11 @@ class RenderHonestyTests(unittest.TestCase):
         self.assertIn("No qualifying contract", html)
         self.assertIn("This is an intentional open slot", html)
 
-    def test_partial_top3_keeps_three_visible_slots(self):
+    def test_partial_top3_keeps_three_visible_slots_in_each_list(self):
         html = ad.render(self._data_one_fit_one_big())
-        self.assertEqual(html.count('<div class="hero-card '), 3)
+        self.assertEqual(html.count('<div class="hero-card '), 6)
+        self.assertIn("QM + MOVING-AVERAGE TOP 3", html)
+        self.assertIn("ORIGINAL MECHANICAL TOP 3", html)
         self.assertIn("Pick 3", html)
         self.assertIn("No qualifying contract", html)
         self.assertIn("not missing UI", html)
