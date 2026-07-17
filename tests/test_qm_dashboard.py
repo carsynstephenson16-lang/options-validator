@@ -221,18 +221,20 @@ class ContextBuildTests(unittest.TestCase):
         self.assertIn("not an option win probability", evidence["warning"].lower())
         self.assertEqual(evidence["option_win_rate"], None)
 
-    def test_non_long_call_breakeven_comparison_is_withheld_as_inapplicable(self):
-        evidence = qm_dashboard.underlying_breakeven_frequency(
-            {"breakout_mfe_20d": [0.05, 0.12, 0.20]},
-            {"breakeven_move": 0.10},
-            "put",
-        )
+    def test_every_non_long_call_lane_withholds_breakeven_comparison(self):
+        for lane in ("put", "cc", "pmcc"):
+            with self.subTest(lane=lane):
+                evidence = qm_dashboard.underlying_breakeven_frequency(
+                    {"breakout_mfe_20d": [0.05, 0.12, 0.20]},
+                    {"breakeven_move": 0.10},
+                    lane,
+                )
 
-        self.assertFalse(evidence["available"])
-        self.assertEqual((evidence["hits"], evidence["sample"]), (None, 0))
-        self.assertIn("not applicable", evidence["label"].lower())
-        self.assertIn("not tested by qm", evidence["label"].lower())
-        self.assertIsNone(evidence["option_win_rate"])
+                self.assertFalse(evidence["available"])
+                self.assertEqual((evidence["hits"], evidence["sample"]), (None, 0))
+                self.assertIn("not applicable", evidence["label"].lower())
+                self.assertIn("not tested by qm", evidence["label"].lower())
+                self.assertIsNone(evidence["option_win_rate"])
 
     def test_one_stale_symbol_blocks_all_three_qm_slots(self):
         current = _frame()

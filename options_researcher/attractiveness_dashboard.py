@@ -8,11 +8,11 @@ at-expiration payoff ladder, a deterministic bull/base/bear mini-table
 per-symbol technicals snapshot (options_researcher.technicals).
 
 render() turns that into one self-contained HTML string: a compact as-of
-metadata header, an exact-session QM/MA Top 3, the unchanged mechanical Top 3
-(research-context narratives from reports/attractiveness_context/<as-of>.json
-when present via load_context()), quant/market background, and per-symbol
-panels with a responsive side-by-side card grid. No network, no JS framework,
-no options-pricing model. main() writes
+metadata header, the unchanged mechanical Top 3 (research-context narratives
+from reports/attractiveness_context/<as-of>.json when present via
+load_context()), a secondary exact-session QM/MA comparison, quant/market
+background, and per-symbol panels with a responsive side-by-side card grid.
+No network, no JS framework, no options-pricing model. main() writes
 .tmp/dashboard/attractiveness.html; `--json` prints the sections (now
 including technicals).
 
@@ -2246,6 +2246,7 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
     """Render three QM-ranked slots, or three visible fail-closed slots."""
     data_as_of = str(data.get("data_as_of") or "?")
     block_reason = _qm_context_block_reason(data, qm_context)
+    notes: list[str] = []
     if block_reason is not None:
         cards = [
             _blocked_qm_slot_html(qm_context, slot, reason=block_reason) for slot in range(1, 4)
@@ -2254,7 +2255,9 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
     else:
         assert isinstance(qm_context, Mapping)
         picks = select_qm_top_picks(data, qm_context, include_csp_watch=True)
-        annotations, _warning = _research_annotation_map(picks, context)
+        annotations, annotation_warning = _research_annotation_map(picks, context)
+        if annotation_warning:
+            notes.append(f'<div class="notice watch">! {_esc(annotation_warning)}</div>')
         qm_symbols = qm_context.get("symbols")
         qm_symbols = qm_symbols if isinstance(qm_symbols, Mapping) else {}
         cards = []
@@ -2289,7 +2292,7 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
         "<span>Shown</span></div>"
         f'<div class="hero-stat unknown"><strong>{open_count}</strong>'
         "<span>Open/blocked</span></div></div></div>"
-        f'<div class="hero-grid">{"".join(cards)}</div></section>'
+        f'{"".join(notes)}<div class="hero-grid">{"".join(cards)}</div></section>'
     )
 
 
@@ -2476,7 +2479,7 @@ def render(
     self-contained HTML string. Pure string templating: no file I/O, no
     network, no external assets. Every value from `data` / `context` is
     html.escape()'d before embedding. Page order: compact metadata header ->
-    QM Top-3 -> original Top-3 -> quant/market background -> pinned names ->
+    original Top-3 -> descriptive QM comparison -> quant/market background -> pinned names ->
     per-symbol panels (card grid)."""
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
     symbols_html = ""
