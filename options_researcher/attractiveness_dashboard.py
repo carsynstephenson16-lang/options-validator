@@ -328,6 +328,27 @@ def select_top_picks(data: dict, n: int = 3, *,
     return picks
 
 
+def pinned_picks(data: dict) -> list[dict]:
+    """Owner-pinned visibility for config.PICK_PINNED_SYMBOLS.
+
+    Each pinned symbol surfaces its best ADMISSIBLE card under exactly the
+    hero's admission and ordering rules (select_top_picks on the symbol's
+    own section, CSP-watch admitted as on the hero). Never fabricated: a
+    pinned symbol with no admissible card yields {"symbol", "pick": None}
+    so the strip can render an honest gap. Separate from — and never
+    reordering — the deterministic Top-3."""
+    import config
+
+    out: list[dict] = []
+    for symbol in getattr(config, "PICK_PINNED_SYMBOLS", []):
+        sub = {"symbols": [s for s in data.get("symbols", [])
+                           if s.get("symbol") == symbol]}
+        picks = select_top_picks(sub, n=1, include_csp_watch=True)
+        out.append({"symbol": symbol,
+                    "pick": picks[0] if picks else None})
+    return out
+
+
 _DISPLAY_POLICY_TIER = {
     "ELIGIBLE": 0,
     "WATCH": 1,
@@ -548,14 +569,18 @@ def _page_data_as_of(sections: list[dict]) -> str:
 
 
 def assemble(*, symbol_sections: list[dict] | None = None,
-             rv21_by_symbol: dict[str, float] | None = None) -> dict:
+             rv21_by_symbol: dict[str, float] | None = None,
+             blocked: list[dict] | None = None) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
 
-    Both arguments default to the real project state (see _gather_all);
-    inject them to unit-test without touching disk or the network."""
+    The arguments default to the real project state (see _gather_all);
+    inject them to unit-test without touching disk or the network.
+    ``blocked`` carries the machine-readable per-symbol failure records
+    (fail-visible: they render on the page, never disappear)."""
     if symbol_sections is None:
-        symbol_sections, rv21_by_symbol = _gather_all()
+        symbol_sections, rv21_by_symbol, blocked = _gather_all()
     rv21_by_symbol = rv21_by_symbol or {}
+    blocked = blocked or []
 
     from options_researcher.top3_snapshot import snapshot_candidate
 
@@ -619,19 +644,32 @@ def assemble(*, symbol_sections: list[dict] | None = None,
         if "features_as_of" in sec:
             out_sec["features_as_of"] = sec["features_as_of"]
             out_sec["features_stale"] = bool(sec.get("features_stale"))
+        if "earnings_source" in sec:
+            out_sec["earnings_source"] = sec["earnings_source"]
         # injected test sections may omit technicals; render handles absence
         if "technicals" in sec:
             out_sec["technicals"] = sec["technicals"]
         if "technicals_line" in sec:
             out_sec["technicals_line"] = sec["technicals_line"]
         out_symbols.append(out_sec)
-    return {"symbols": out_symbols, "data_as_of": _page_data_as_of(out_symbols)}
+    return {"symbols": out_symbols, "blocked": blocked,
+            "data_as_of": _page_data_as_of(out_symbols)}
 
 
-def _gather_all() -> tuple[list[dict], dict[str, float]]:
-    """Load real per-symbol candidate sections + rv21, mirroring
-    attractiveness.main()'s data gathering (no printing)."""
+def _gather_all() -> tuple[list[dict], dict[str, float], list[dict]]:
+    """Load real per-symbol candidate sections + rv21 over the display
+    universe (config.ATTRACTIVENESS_UNIVERSE), mirroring
+    attractiveness.main()'s data gathering (no printing).
+
+    Per-symbol failures never take the page down: each failed symbol
+    becomes a machine-readable blocked record {symbol, reason_code,
+    detail, last_known_date, unexpected} rendered on the page. Expected
+    data gaps (no chains, missing features/closes) are unexpected=False;
+    anything else is unexpected=True and makes the CLI exit nonzero so
+    launchd never reports a clean rebuild over a programming failure."""
     import glob
+    from datetime import date as date_cls
+    from datetime import datetime, timezone
 
     import pandas as pd
 
@@ -646,8 +684,10 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
         put_card_rows,
     )
     from options_researcher.earnings import load_earnings
+    from options_researcher.earnings_cycle import apply_cycle_badges
     from options_researcher.features import load_features
     from options_researcher.fomc import load_fomc
+    from options_researcher.h7_earnings import load_assertions
     from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
     from options_researcher.technicals import (
         technical_snapshot,
@@ -671,139 +711,210 @@ def _gather_all() -> tuple[list[dict], dict[str, float]]:
                                   (float(lp["strike"]), float(lp["entry_price"])))
     bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
 
+    # One v3 evidence load for the whole page; a broken store degrades every
+    # v3-graded badge to UNKNOWN (visible), never crashes the build.
+    try:
+        v3_assertions = load_assertions()
+    except Exception:
+        v3_assertions = None
+    known_now = datetime.now(timezone.utc)
+
     sections: list[dict] = []
     rv21_by_symbol: dict[str, float] = {}
-    for symbol in config.UNIVERSE:
+    blocked: list[dict] = []
+
+    def _block(symbol: str, code: str, detail: str, day: str | None,
+               unexpected: bool = False) -> None:
+        blocked.append({"symbol": symbol, "reason_code": code,
+                        "detail": detail, "last_known_date": day,
+                        "unexpected": unexpected})
+
+    for symbol in config.ATTRACTIVENESS_UNIVERSE:
         files = sorted(glob.glob(os.path.join(".cache", "chains",
                                               f"{symbol}_*.parquet")))
         if not files:
+            _block(symbol, "NO_CACHED_CHAINS",
+                   "no chain parquet in .cache/chains", None)
             continue
         day = os.path.basename(files[-1]).split("_")[1].replace(".parquet", "")
-        chain = pd.read_parquet(files[-1])
-        # DATE-ALIGNED feature row: the row FOR the chain day when it exists,
-        # else the newest row at-or-before it (never a future row -- that
-        # would be look-ahead). A mismatch is recorded as features_as_of so
-        # the page can say the IV badges are stale instead of hiding it.
-        feats = load_features(symbol)
-        at_or_before = feats.loc[feats.index.astype(str) <= day]
-        if at_or_before.empty:
-            row = feats.iloc[0]
-            features_as_of = str(feats.index[0])
-        else:
-            row = at_or_before.iloc[-1]
-            features_as_of = str(at_or_before.index[-1])
-        raw_closes = load_closes(symbol, "2018-01-01", day, allow_oos=True)
-        adjusted_closes = load_closes_adjusted(
-            symbol, "2018-01-01", day, allow_oos=True)
-        close = float(raw_closes.iloc[-1])
-        technicals = technical_snapshot(adjusted_closes)
-        rv21 = float(row["rv21"])
+        try:
+            section, rv21 = _gather_symbol(
+                symbol, files[-1], day,
+                holdings=holdings, held_leaps=held_leaps,
+                csp_open_count=csp_open_count, bucket_room=bucket_room,
+                v3_assertions=v3_assertions, known_now=known_now,
+                load_closes=load_closes,
+                load_closes_adjusted=load_closes_adjusted,
+                load_earnings=load_earnings, load_features=load_features,
+                load_fomc=load_fomc, apply_cycle_badges=apply_cycle_badges,
+                technical_snapshot=technical_snapshot,
+                technical_summary_line=technical_summary_line,
+                ladder_cards=ladder_cards, put_card_rows=put_card_rows,
+                cc_card_rows=cc_card_rows, pmcc_card_rows=pmcc_card_rows,
+                leaps_card_rows=leaps_card_rows,
+                long_call_card_rows=long_call_card_rows,
+                date_cls=date_cls, pd=pd, config=config)
+        except FileNotFoundError as exc:
+            _block(symbol, "INPUT_MISSING", str(exc), day)
+            continue
+        except Exception as exc:  # fail-visible, never success-shaped
+            _block(symbol, "UNEXPECTED_ERROR",
+                   f"{type(exc).__name__}: {exc}", day, unexpected=True)
+            continue
+        sections.append(section)
         rv21_by_symbol[symbol] = rv21
-        iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
-        iv_minus_rv = (float(row["iv_minus_rv"])
-                       if pd.notna(row["iv_minus_rv"]) else 0.0)
+    return sections, rv21_by_symbol, blocked
+
+
+def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
+                   csp_open_count, bucket_room, v3_assertions, known_now,
+                   load_closes, load_closes_adjusted, load_earnings,
+                   load_features, load_fomc, apply_cycle_badges,
+                   technical_snapshot, technical_summary_line, ladder_cards,
+                   put_card_rows, cc_card_rows, pmcc_card_rows,
+                   leaps_card_rows, long_call_card_rows, date_cls, pd,
+                   config) -> tuple[dict, float]:
+    """Build one symbol's section (extracted so _gather_all can isolate
+    per-symbol failures). Dependencies are passed in to keep the lazy-import
+    pattern of the caller."""
+    chain = pd.read_parquet(chain_path)
+    # DATE-ALIGNED feature row: the row FOR the chain day when it exists,
+    # else the newest row at-or-before it (never a future row -- that
+    # would be look-ahead). A mismatch is recorded as features_as_of so
+    # the page can say the IV badges are stale instead of hiding it.
+    feats = load_features(symbol)
+    at_or_before = feats.loc[feats.index.astype(str) <= day]
+    if at_or_before.empty:
+        row = feats.iloc[0]
+        features_as_of = str(feats.index[0])
+    else:
+        row = at_or_before.iloc[-1]
+        features_as_of = str(at_or_before.index[-1])
+    raw_closes = load_closes(symbol, "2018-01-01", day, allow_oos=True)
+    adjusted_closes = load_closes_adjusted(
+        symbol, "2018-01-01", day, allow_oos=True)
+    close = float(raw_closes.iloc[-1])
+    technicals = technical_snapshot(adjusted_closes)
+    rv21 = float(row["rv21"])
+    iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
+    iv_minus_rv = (float(row["iv_minus_rv"])
+                   if pd.notna(row["iv_minus_rv"]) else 0.0)
+    # Core names keep the curated per-symbol CSV. Watchlist names have
+    # none: the ladder is built with an empty date list (every earnings
+    # badge UNKNOWN) and re-graded per card from the v3 point-in-time
+    # store below -- never a falsely reassuring GREEN.
+    try:
         earnings = load_earnings(symbol)
-        fomcs = load_fomc()
+        earnings_source = "curated_csv"
+    except FileNotFoundError:
+        earnings = []
+        earnings_source = "v3_store"
+    fomcs = load_fomc()
 
-        put_cards = ladder_cards(put_card_rows, symbol, chain, day,
-                                 rank_key="annualized_yield",
-                                 higher_is_better=True, close=close, rv21=rv21,
-                                 iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                                 earnings_dates=earnings,
-                                 fomc_dates=fomcs)
-        groups: list[dict] = [
-            {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
-             "cards": put_cards,
-             "empty": None if put_cards
-             else "no candidates near the target delta this cycle"}]
+    put_cards = ladder_cards(put_card_rows, symbol, chain, day,
+                             rank_key="annualized_yield",
+                             higher_is_better=True, close=close, rv21=rv21,
+                             iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                             earnings_dates=earnings,
+                             fomc_dates=fomcs)
+    groups: list[dict] = [
+        {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
+         "cards": put_cards,
+         "empty": None if put_cards
+         else "no candidates near the target delta this cycle"}]
 
-        lot = holdings.loc[holdings["symbol"] == symbol]
-        held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
-        if held_shares >= 100:
-            groups.append({"kind": "cc",
-                           "title": "SELL A COVERED CALL? (rent out your shares)",
-                           "cards": ladder_cards(
-                               cc_card_rows, symbol, chain, day,
-                               rank_key="annualized_yield",
-                               higher_is_better=True, close=close,
-                               cost_basis=float(lot.iloc[0]["cost_basis"]),
-                               iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                               earnings_dates=earnings,
-                               fomc_dates=fomcs),
-                           "empty": None})
-        elif held_shares > 0:
-            groups.append({"kind": "cc",
-                           "title": "SELL A COVERED CALL? (rent out your shares)",
-                           "cards": [],
-                           "empty": (f"you hold {held_shares} sh of {symbol} -- a "
-                                     "covered call needs 100 per contract. "
-                                     "Covered-call rows appear after a declared "
-                                     "100-share lot; PMCC rows appear only after "
-                                     "a real LEAPS is recorded.")})
-        if symbol in held_leaps:
-            lk, lp = held_leaps[symbol]
-            pmcc_cards = ladder_cards(
+    lot = holdings.loc[holdings["symbol"] == symbol]
+    held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
+    if held_shares >= 100:
+        groups.append({"kind": "cc",
+                       "title": "SELL A COVERED CALL? (rent out your shares)",
+                       "cards": ladder_cards(
+                           cc_card_rows, symbol, chain, day,
+                           rank_key="annualized_yield",
+                           higher_is_better=True, close=close,
+                           cost_basis=float(lot.iloc[0]["cost_basis"]),
+                           iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                           earnings_dates=earnings,
+                           fomc_dates=fomcs),
+                       "empty": None})
+    elif held_shares > 0:
+        groups.append({"kind": "cc",
+                       "title": "SELL A COVERED CALL? (rent out your shares)",
+                       "cards": [],
+                       "empty": (f"you hold {held_shares} sh of {symbol} -- a "
+                                 "covered call needs 100 per contract. "
+                                 "Covered-call rows appear after a declared "
+                                 "100-share lot; PMCC rows appear only after "
+                                 "a real LEAPS is recorded.")})
+    if symbol in held_leaps:
+        lk, lp = held_leaps[symbol]
+        pmcc_cards = ladder_cards(
+            pmcc_card_rows, symbol, chain, day,
+            rank_key="annualized_yield", higher_is_better=True,
+            leaps_strike=lk, leaps_premium=lp,
+            close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+            earnings_dates=earnings, fomc_dates=fomcs)
+        groups.append({"kind": "pmcc",
+                       "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
+                       "leaps_strike": lk, "leaps_premium": lp,
+                       "cards": pmcc_cards,
+                       "empty": None if pmcc_cards else
+                       (f"no SAFE strike this cycle: the rule needs a call "
+                        f"at ${lk + lp:.2f}+ and none is listed / all too "
+                        "far out to pay -- selling closer would risk locking "
+                        "a loss, so H5 shows nothing.")})
+    if symbol in config.H4_THESIS_NAMES:
+        leaps_cards = leaps_card_rows(symbol, chain, day, close=close,
+                                      iv_rank=iv_rank, bucket_room=bucket_room)
+        groups.append({"kind": "leaps",
+                       "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
+                       "preview": False, "cards": leaps_cards, "empty": None})
+        # PMCC PREVIEW: if no LEAPS is actually held, show what selling a
+        # safe call against the *previewed* LEAPS would look like.
+        if symbol not in held_leaps and leaps_cards:
+            lc = leaps_cards[0]
+            lk, lp = float(lc["strike"]), float(lc["cost"]) / 100.0
+            preview_pmcc = ladder_cards(
                 pmcc_card_rows, symbol, chain, day,
                 rank_key="annualized_yield", higher_is_better=True,
                 leaps_strike=lk, leaps_premium=lp,
                 close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                 earnings_dates=earnings, fomc_dates=fomcs)
-            groups.append({"kind": "pmcc",
-                           "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
-                           "leaps_strike": lk, "leaps_premium": lp,
-                           "cards": pmcc_cards,
-                           "empty": None if pmcc_cards else
-                           (f"no SAFE strike this cycle: the rule needs a call "
-                            f"at ${lk + lp:.2f}+ and none is listed / all too "
-                            "far out to pay -- selling closer would risk locking "
-                            "a loss, so H5 shows nothing.")})
-        if symbol in config.H4_THESIS_NAMES:
-            leaps_cards = leaps_card_rows(symbol, chain, day, close=close,
-                                          iv_rank=iv_rank, bucket_room=bucket_room)
-            groups.append({"kind": "leaps",
-                           "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
-                           "preview": False, "cards": leaps_cards, "empty": None})
-            # PMCC PREVIEW: if no LEAPS is actually held, show what selling a
-            # safe call against the *previewed* LEAPS would look like.
-            if symbol not in held_leaps and leaps_cards:
-                lc = leaps_cards[0]
-                lk, lp = float(lc["strike"]), float(lc["cost"]) / 100.0
-                preview_pmcc = ladder_cards(
-                    pmcc_card_rows, symbol, chain, day,
-                    rank_key="annualized_yield", higher_is_better=True,
-                    leaps_strike=lk, leaps_premium=lp,
-                    close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                    earnings_dates=earnings, fomc_dates=fomcs)
-                groups.append({
-                    "kind": "pmcc", "preview": True,
-                    "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
-                    "leaps_strike": lk, "leaps_premium": lp,
-                    "cards": preview_pmcc,
-                    "empty": None if preview_pmcc else
-                    (f"no SAFE strike this cycle: needs a call at "
-                     f"${lk + lp:.2f}+ that still pays; none listed.")})
+            groups.append({
+                "kind": "pmcc", "preview": True,
+                "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
+                "leaps_strike": lk, "leaps_premium": lp,
+                "cards": preview_pmcc,
+                "empty": None if preview_pmcc else
+                (f"no SAFE strike this cycle: needs a call at "
+                 f"${lk + lp:.2f}+ that still pays; none listed.")})
 
-        # TACTICAL long-call preview (descriptive; not an H5 income lane).
-        long_calls = ladder_cards(long_call_card_rows, symbol, chain, day,
-                                  rank_key="breakeven_move",
-                                  higher_is_better=False, close=close,
-                                  iv_rank=iv_rank)
-        groups.append({"kind": "long_call", "preview": True,
-                       "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
-                       "cards": long_calls,
-                       "empty": None if long_calls
-                       else "no call near the tactical delta this cycle"})
+    # TACTICAL long-call preview (descriptive; not an H5 income lane).
+    long_calls = ladder_cards(long_call_card_rows, symbol, chain, day,
+                              rank_key="breakeven_move",
+                              higher_is_better=False, close=close,
+                              iv_rank=iv_rank)
+    groups.append({"kind": "long_call", "preview": True,
+                   "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
+                   "cards": long_calls,
+                   "empty": None if long_calls
+                   else "no call near the tactical delta this cycle"})
 
-        sections.append({"symbol": symbol, "as_of": day, "close": close,
-                         "iv_rank": iv_rank, "groups": groups,
-                         "csp_open_count": csp_open_count,
-                         "covered_shares": held_shares,
-                         "leaps_held": symbol in held_leaps,
-                         "features_as_of": features_as_of,
-                         "features_stale": features_as_of != day,
-                         "technicals": technicals,
-                         "technicals_line": technical_summary_line(technicals)})
-    return sections, rv21_by_symbol
+    if earnings_source == "v3_store" and v3_assertions is not None:
+        apply_cycle_badges(groups, symbol, date_cls.fromisoformat(day),
+                           v3_assertions, known_as_of=known_now)
+
+    section = {"symbol": symbol, "as_of": day, "close": close,
+               "iv_rank": iv_rank, "groups": groups,
+               "csp_open_count": csp_open_count,
+               "covered_shares": held_shares,
+               "leaps_held": symbol in held_leaps,
+               "features_as_of": features_as_of,
+               "features_stale": features_as_of != day,
+               "earnings_source": earnings_source,
+               "technicals": technicals,
+               "technicals_line": technical_summary_line(technicals)}
+    return section, rv21
 
 
 def sections_json(sections: list[dict] | None = None) -> str:
@@ -811,11 +922,13 @@ def sections_json(sections: list[dict] | None = None) -> str:
     project state via _gather_all(); accepts an explicit list for testing."""
     import json
 
+    blocked: list[dict] = []
     if sections is None:
-        sections, _ = _gather_all()
+        sections, _, blocked = _gather_all()
     _dates = {s["as_of"] for s in sections} if sections else set()
     as_of = next(iter(_dates)) if len(_dates) == 1 else None
-    return json.dumps({"as_of": as_of, "sections": sections},
+    return json.dumps({"as_of": as_of, "sections": sections,
+                       "blocked": blocked},
                       indent=2, sort_keys=False)
 
 
@@ -1057,15 +1170,15 @@ _STYLE = """
     gap: 14px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .hero-card {
+  .hero-card, .pinned-card {
     background: var(--surface-soft);
     border: 1px solid var(--line);
     border-radius: 14px;
     min-width: 0;
     padding: 17px;
   }
-  .hero-card.good { border-top: 4px solid var(--good); }
-  .hero-card.watch { border-top: 4px solid var(--watch); }
+  .hero-card.good, .pinned-card.good { border-top: 4px solid var(--good); }
+  .hero-card.watch, .pinned-card.watch { border-top: 4px solid var(--watch); }
   .hero-card.bad { border-top: 4px solid var(--bad); }
   .hero-card.unknown { border-top: 4px solid var(--unknown); }
   .slot-label {
@@ -1823,6 +1936,73 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
     return "".join(parts)
 
 
+def _pinned_html(data: dict) -> str:
+    """Core-names strip: owner-pinned visibility, explicitly not ranked."""
+    pinned = pinned_picks(data)
+    if not pinned:
+        return ""
+    names = " / ".join(_esc(rec["symbol"]) for rec in pinned)
+    cards = ""
+    for rec in pinned:
+        symbol, pick = rec["symbol"], rec["pick"]
+        if pick is None:
+            cards += (f'<div class="pinned-card watch"><div class="slot-label">'
+                      f'<span>{_esc(symbol)}</span>'
+                      '<span class="policy-status watch">GAP</span></div>'
+                      '<div class="label">no eligible liquid card this run '
+                      '— pinning never fabricates a candidate; see the '
+                      'symbol panel below for why each card is out.</div>'
+                      '</div>')
+            continue
+        card = pick["card"]
+        snapshot = card.get("top3_snapshot")
+        status = (snapshot.get("selection_status")
+                  if isinstance(snapshot, Mapping) else None) or "?"
+        status_cls = {"ELIGIBLE": "good", "WATCH": "watch"}.get(
+            str(status), "watch")
+        cards += (f'<div class="pinned-card {status_cls}">'
+                  f'<div class="slot-label"><span>{_esc(symbol)}</span>'
+                  f'<span class="policy-status {status_cls}">'
+                  f'{_esc(str(status))}</span></div>'
+                  f'<div class="party-name">{_esc(card.get("headline", ""))}'
+                  '</div>'
+                  + _hero_badges(card.get("grades", {}))
+                  + _risk_line(card)
+                  + _bbb_table(card.get("bbb", [])) + '</div>')
+    return ('<section class="panel hero"><div class="section-header"><div>'
+            '<div class="eyebrow">CORE NAMES</div>'
+            f'<h2>{names} — ALWAYS SHOWN</h2>'
+            '<p>owner-pinned visibility — not ranked; these cards do not '
+            'compete with or reorder the Top-3 shortlist.</p></div></div>'
+            f'<div class="hero-grid">{cards}</div></section>')
+
+
+def _blocked_html(blocked: list[dict]) -> str:
+    """Fail-visible strip: every symbol that could not be analyzed, with its
+    machine-readable reason. A missing symbol must never just disappear."""
+    if not blocked:
+        return ""
+    rows = ""
+    for rec in blocked:
+        last = rec.get("last_known_date") or "never cached"
+        rows += (f'<li><strong>{_esc(str(rec.get("symbol", "?")))}</strong> · '
+                 f'{_esc(str(rec.get("reason_code", "?")))} · '
+                 f'{_esc(str(rec.get("detail", "")))} · '
+                 f'last known data: {_esc(str(last))}</li>')
+    return ('<section class="panel"><div class="eyebrow">DATA BLOCKED</div>'
+            '<div class="notice watch">! These symbols are in the display '
+            'universe but could not be analyzed this run — shown so a gap '
+            'is never mistaken for a clean board.</div>'
+            f'<ul class="blocked-list">{rows}</ul></section>')
+
+
+def _run_exit_code(blocked: list[dict]) -> int:
+    """0 for a clean or data-gapped run; 1 when any symbol failed on an
+    UNEXPECTED error (programming failure) so cron/launchd never reports a
+    clean rebuild over one."""
+    return 1 if any(rec.get("unexpected") for rec in blocked) else 0
+
+
 def render(data: dict, *, context: dict | None = None,
            context_warning: str | None = None) -> str:
     """Render the assemble() dict (plus optional research context) into one
@@ -1889,7 +2069,9 @@ def render(data: dict, *, context: dict | None = None,
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header><main class="page-body">'
         f'{warn_html}'
+        f'{_blocked_html(data.get("blocked") or [])}'
         f'{_hero_html(data, context)}'
+        f'{_pinned_html(data)}'
         f'{_market_html(context)}'
         f'{symbols_html}'
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
@@ -1897,10 +2079,10 @@ def render(data: dict, *, context: dict | None = None,
         'before making a decision.</footer></main></body></html>')
 
 
-def main(**assemble_kwargs) -> str:
-    """Assemble real (or injected) candidates, load the dated research
-    context (honest fallback when absent), render, write to OUTPUT_PATH.
-    Read-only over project data; the only write is the HTML file."""
+def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
+    """Assemble, render, write; return (abs_path, exit_code). The exit code
+    is nonzero when any symbol failed unexpectedly (see _run_exit_code) so
+    unattended runs never look clean over a programming failure."""
     data = assemble(**assemble_kwargs)
     context, warning = load_context(data.get("data_as_of") or "")
     out_html = render(data, context=context, context_warning=warning)
@@ -1909,13 +2091,26 @@ def main(**assemble_kwargs) -> str:
         f.write(out_html)
     abs_path = os.path.abspath(OUTPUT_PATH)
     print(f"wrote {abs_path}")
+    blocked = data.get("blocked") or []
+    for rec in blocked:
+        print(f"BLOCKED {rec.get('symbol')}: {rec.get('reason_code')} "
+              f"({rec.get('detail')})")
     print("open it in your browser to see the scenario tables")
+    return abs_path, _run_exit_code(blocked)
+
+
+def main(**assemble_kwargs) -> str:
+    """Assemble real (or injected) candidates, load the dated research
+    context (honest fallback when absent), render, write to OUTPUT_PATH.
+    Read-only over project data; the only write is the HTML file."""
+    abs_path, _exit_code = _build_and_write(**assemble_kwargs)
     return abs_path
 
 
 if __name__ == "__main__":
     import sys
+
     if "--json" in sys.argv:
         print(sections_json())
     else:
-        main()
+        raise SystemExit(_build_and_write()[1])

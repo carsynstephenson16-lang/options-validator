@@ -689,6 +689,102 @@ class StrategySectionRankingTests(unittest.TestCase):
         self.assertIn("Strategy rank: 1 is the strongest current fit", html)
 
 
+class PinnedPicksTests(unittest.TestCase):
+    def _data(self):
+        return {"symbols": [
+            {"symbol": "AAA", "close": 100.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [{"kind": "put", "title": "P", "empty": None,
+                         "cards": [_pick_card(
+                             95.0, "2026-08-21",
+                             grades={"yield": "GREEN", "liquidity": "GREEN"},
+                             lane_fields={"credit": 200.0,
+                                          "annualized_yield": 0.30})]}]},
+            {"symbol": "BBB", "close": 50.0, "iv_rank": 0.5,
+             "as_of": "2026-07-01",
+             "groups": [{"kind": "put", "title": "P", "empty": None,
+                         "cards": [_pick_card(
+                             45.0, "2026-08-21",
+                             grades={"yield": "GREEN", "liquidity": "RED"},
+                             lane_fields={"credit": 100.0,
+                                          "annualized_yield": 0.90})]}]},
+        ]}
+
+    def test_pinned_symbol_surfaces_best_admissible_card(self):
+        from unittest import mock
+
+        import config
+        with mock.patch.object(config, "PICK_PINNED_SYMBOLS",
+                               ["AAA"], create=True):
+            pinned = ad.pinned_picks(self._data())
+        self.assertEqual(len(pinned), 1)
+        self.assertEqual(pinned[0]["symbol"], "AAA")
+        self.assertEqual(pinned[0]["pick"]["strike"], 95.0)
+
+    def test_pinned_symbol_with_no_admissible_card_is_honest_gap(self):
+        from unittest import mock
+
+        import config
+        # BBB's only card is liquidity-RED (hard veto); ZZZ has no section.
+        with mock.patch.object(config, "PICK_PINNED_SYMBOLS",
+                               ["BBB", "ZZZ"], create=True):
+            pinned = ad.pinned_picks(self._data())
+        self.assertEqual([p["symbol"] for p in pinned], ["BBB", "ZZZ"])
+        self.assertIsNone(pinned[0]["pick"])
+        self.assertIsNone(pinned[1]["pick"])
+
+    def test_render_pinned_strip_labeled_not_ranked(self):
+        from unittest import mock
+
+        import config
+        data = ad.assemble(symbol_sections=self._data()["symbols"],
+                           rv21_by_symbol={"AAA": 0.4, "BBB": 0.4})
+        with mock.patch.object(config, "PICK_PINNED_SYMBOLS",
+                               ["AAA", "ZZZ"], create=True):
+            html = ad.render(data)
+        self.assertIn("owner-pinned visibility", html)
+        self.assertIn("not ranked", html)
+        self.assertIn("ZZZ", html)  # gap is shown, never fabricated
+        self.assertIn("no eligible liquid card", html)
+
+
+class BlockedSectionsTests(unittest.TestCase):
+    _BLOCKED = [
+        {"symbol": "CRWV", "reason_code": "FEATURES_MISSING",
+         "detail": "no feature frame", "last_known_date": "2026-07-15",
+         "unexpected": False},
+        {"symbol": "USAR", "reason_code": "UNEXPECTED_ERROR",
+         "detail": "KeyError: 'iv'", "last_known_date": None,
+         "unexpected": True},
+    ]
+
+    def test_assemble_carries_blocked_records(self):
+        data = ad.assemble(symbol_sections=[], rv21_by_symbol={},
+                           blocked=self._BLOCKED)
+        self.assertEqual(data["blocked"], self._BLOCKED)
+        default = ad.assemble(symbol_sections=[], rv21_by_symbol={})
+        self.assertEqual(default["blocked"], [])
+
+    def test_render_shows_blocked_strip(self):
+        data = ad.assemble(symbol_sections=[], rv21_by_symbol={},
+                           blocked=self._BLOCKED)
+        html = ad.render(data)
+        self.assertIn("CRWV", html)
+        self.assertIn("FEATURES_MISSING", html)
+        self.assertIn("2026-07-15", html)
+        self.assertIn("USAR", html)
+        self.assertIn("UNEXPECTED_ERROR", html)
+
+    def test_no_blocked_no_strip(self):
+        data = ad.assemble(symbol_sections=[], rv21_by_symbol={})
+        self.assertNotIn("DATA BLOCKED", ad.render(data))
+
+    def test_exit_code_nonzero_only_for_unexpected(self):
+        self.assertEqual(ad._run_exit_code([]), 0)
+        self.assertEqual(ad._run_exit_code([self._BLOCKED[0]]), 0)
+        self.assertEqual(ad._run_exit_code(self._BLOCKED), 1)
+
+
 class LoadContextTests(unittest.TestCase):
     def _write(self, tmp, name, payload):
         import os

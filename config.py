@@ -490,6 +490,13 @@ PICK_GREEN_POINT = 1        # points per GREEN badge on a card
 PICK_RANK_LEADER_BONUS = 2  # bonus when the card is its lane's rank leader
 PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's direction
 
+# Owner-pinned dashboard visibility (owner directive 2026-07-16: "for VST
+# and AMZN I always want to see their picks"). Display only: each pinned
+# symbol's best ADMISSIBLE card renders in its own strip, labeled
+# "owner-pinned visibility — not ranked". Pinning never fabricates a card
+# (an inadmissible symbol shows an honest gap) and never touches the Top-3.
+PICK_PINNED_SYMBOLS = ["VST", "AMZN"]
+
 # Earnings-calendar coverage horizon: a curated calendar whose last entry is
 # older than this many days before an option's expiry cannot certify the
 # cycle "clear of earnings" — the badge must read UNKNOWN, never GREEN.

@@ -68,3 +68,27 @@ def cycle_badge(symbol: str, chain_date: date, expiry: date,
         f"next known report {nxt.isoformat()} is more than "
         f"{config.EARNINGS_COVERAGE_DAYS}d out; an unrecorded earlier "
         "report could land inside the cycle")
+
+
+def apply_cycle_badges(groups: list[dict], symbol: str, chain_date: date,
+                       assertions: list[dict], *, known_as_of) -> None:
+    """Re-grade each card's ``earnings`` badge from the v3 store, in place.
+
+    For symbols with no curated per-symbol earnings CSV the card ladder is
+    built with an empty date list (every earnings badge UNKNOWN); this pass
+    re-answers the range question per card from the v3 point-in-time store
+    and records the reason on the card (``earnings_cycle_reason``). Cards
+    that are skipped or carry no earnings badge are left untouched.
+    """
+    for grp in groups:
+        for card in grp.get("cards", []):
+            if "skipped" in card:
+                continue
+            grades = card.get("grades")
+            if not isinstance(grades, dict) or "earnings" not in grades:
+                continue
+            expiry = date.fromisoformat(str(card["expiry"]))
+            state, reason = cycle_badge(symbol, chain_date, expiry,
+                                        assertions, known_as_of=known_as_of)
+            grades["earnings"] = state
+            card["earnings_cycle_reason"] = reason

@@ -15,6 +15,7 @@ from options_researcher.earnings_cycle import (
     CYCLE_AMBER,
     CYCLE_GREEN,
     CYCLE_UNKNOWN,
+    apply_cycle_badges,
     cycle_badge,
 )
 
@@ -122,6 +123,45 @@ class CycleBadgeTests(unittest.TestCase):
         state, _ = cycle_badge("X", CHAIN, date(2026, 9, 18), rows,
                                known_as_of=_now())
         self.assertEqual(state, CYCLE_AMBER)
+
+
+class ApplyCycleBadgesTests(unittest.TestCase):
+    def _groups(self):
+        return [{"kind": "put", "cards": [
+            {"expiry": "2026-08-21", "grades": {"earnings": "UNKNOWN",
+                                                "liquidity": "GREEN"}},
+            {"expiry": "2026-07-24", "grades": {"earnings": "UNKNOWN"}},
+            {"expiry": "2026-08-21", "skipped": "illiquid",
+             "grades": {"earnings": "UNKNOWN"}},
+            {"expiry": "2026-08-21", "grades": {"liquidity": "GREEN"}},
+        ]}]
+
+    def test_overrides_earnings_grade_in_place_with_reason(self):
+        rows = [A("MSFT", "2026-07-29")]
+        groups = self._groups()
+        apply_cycle_badges(groups, "MSFT", CHAIN, rows, known_as_of=_now())
+        cards = groups[0]["cards"]
+        # report 07-29 inside (07-15, 08-21] -> AMBER
+        self.assertEqual(cards[0]["grades"]["earnings"], CYCLE_AMBER)
+        self.assertIn("2026-07-29", cards[0]["earnings_cycle_reason"])
+        # report 07-29 after 07-24 expiry, within horizon -> GREEN
+        self.assertEqual(cards[1]["grades"]["earnings"], CYCLE_GREEN)
+        # other grades untouched
+        self.assertEqual(cards[0]["grades"]["liquidity"], "GREEN")
+
+    def test_skipped_and_gradeless_cards_left_alone(self):
+        groups = self._groups()
+        apply_cycle_badges(groups, "MSFT", CHAIN, [], known_as_of=_now())
+        cards = groups[0]["cards"]
+        self.assertNotIn("earnings_cycle_reason", cards[2])  # skipped
+        self.assertNotIn("earnings", cards[3]["grades"])     # no badge
+        self.assertNotIn("earnings_cycle_reason", cards[3])
+
+    def test_no_evidence_keeps_unknown(self):
+        groups = self._groups()
+        apply_cycle_badges(groups, "MSFT", CHAIN, [], known_as_of=_now())
+        self.assertEqual(groups[0]["cards"][0]["grades"]["earnings"],
+                         CYCLE_UNKNOWN)
 
 
 if __name__ == "__main__":

@@ -103,20 +103,28 @@ def load_features(symbol: str) -> pd.DataFrame:
         os.path.join(FEATURES_DIR, f"{symbol}_features.parquet"))
 
 
-def build_all(end_iso: str = None):
-    """Build + cache feature frames for the whole universe. Post-2022 reads
-    are explicit allow_oos=True (disclosed; facts.log PIVOT_4NAME_SCOPE)."""
+def build_all(end_iso: str = None, symbols: list[str] = None):
+    """Build + cache feature frames for the attractiveness display universe
+    (default config.ATTRACTIVENESS_UNIVERSE; pass ``symbols`` to override).
+    Post-2022 reads are explicit allow_oos=True (disclosed; facts.log
+    PIVOT_4NAME_SCOPE). Watchlist names have no curated per-symbol earnings
+    CSV; their earnings_week flags are built from an empty list (all False)
+    and the dashboard grades earnings from the v3 store instead."""
     import config
     from data.underlying_closes import load_closes
     from options_researcher.chains import load_range
     from options_researcher.earnings import load_earnings
 
     end_iso = end_iso or config.BACKTEST_END
-    for symbol in config.UNIVERSE:
+    for symbol in (symbols if symbols is not None
+                   else config.ATTRACTIVENESS_UNIVERSE):
         closes = load_closes(symbol, "2017-01-01", end_iso, allow_oos=True)
         chains = load_range(symbol, config.BACKTEST_START, end_iso,
                             allow_oos=True)
-        earn = load_earnings(symbol)
+        try:
+            earn = load_earnings(symbol)
+        except FileNotFoundError:
+            earn = []
         frame = build_daily_features(symbol, config.BACKTEST_START, end_iso,
                                      closes=closes, chains=chains,
                                      earnings=earn)

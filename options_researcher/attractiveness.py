@@ -420,35 +420,69 @@ def main():
                                   (float(lp["strike"]), float(lp["entry_price"])))
     bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
 
+    from datetime import date as date_cls
+    from datetime import datetime, timezone
+
+    from options_researcher.earnings_cycle import apply_cycle_badges
+    from options_researcher.h7_earnings import load_assertions
+
+    try:
+        v3_assertions = load_assertions()
+    except Exception:
+        v3_assertions = None
+    known_now = datetime.now(timezone.utc)
+
     print("WHICH OPTIONS LOOK ATTRACTIVE TODAY? (frozen H5 rubric; "
           "attractiveness = price vs cushion vs liquidity, NOT prediction)")
-    for symbol in config.UNIVERSE:
+    # Same display universe as the HTML dashboard (equality with the H7
+    # scope is test-pinned); the two surfaces must never silently diverge.
+    for symbol in config.ATTRACTIVENESS_UNIVERSE:
         files = sorted(glob.glob(os.path.join(".cache", "chains",
                                               f"{symbol}_*.parquet")))
         if not files:
-            print(f"\n{symbol}: no cached chains")
+            print(f"\n{symbol}: DATA BLOCKED -- no cached chains")
             continue
         day = os.path.basename(files[-1]).split("_")[1].replace(".parquet", "")
         chain = pd.read_parquet(files[-1])
-        feats = load_features(symbol)
-        row = feats.iloc[-1]
-        close = float(load_closes(symbol, "2018-01-01", day,
-                                  allow_oos=True).iloc[-1])
+        try:
+            feats = load_features(symbol)
+            row = feats.iloc[-1]
+            close = float(load_closes(symbol, "2018-01-01", day,
+                                      allow_oos=True).iloc[-1])
+        except FileNotFoundError as exc:
+            print(f"\n{symbol}: DATA BLOCKED -- missing input: {exc}")
+            continue
         rv21 = float(row["rv21"])
         iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
         iv_minus_rv = (float(row["iv_minus_rv"])
                        if pd.notna(row["iv_minus_rv"]) else 0.0)
-        earnings = load_earnings(symbol)
+        # Core names keep the curated CSV; watchlist names grade earnings
+        # from the v3 point-in-time store (UNKNOWN when it can't certify).
+        try:
+            earnings = load_earnings(symbol)
+
+            def v3fix(rows):
+                return rows
+        except FileNotFoundError:
+            earnings = []
+
+            def v3fix(rows, _symbol=symbol, _day=day):
+                if rows and v3_assertions is not None:
+                    apply_cycle_badges(
+                        [{"cards": rows}], _symbol,
+                        date_cls.fromisoformat(_day), v3_assertions,
+                        known_as_of=known_now)
+                return rows
         fomcs = load_fomc()
         print(f"\n=== {symbol} @ {day}  close ${close:,.2f}  "
               f"IV-rank {iv_rank:.2f} ===")
         print("-- SELL A PUT? (ladder; ranked by annualized income on capital)")
-        rows = ladder_cards(put_card_rows, symbol, chain, day,
+        rows = v3fix(ladder_cards(put_card_rows, symbol, chain, day,
                             rank_key="annualized_yield", higher_is_better=True,
                             close=close, rv21=rv21, iv_rank=iv_rank,
                             iv_minus_rv=iv_minus_rv,
                             earnings_dates=earnings,
-                            fomc_dates=fomcs)
+                            fomc_dates=fomcs))
         for c in rows or []:
             star = "★ " if c.get("rank_leader") else "  "
             badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
@@ -464,13 +498,13 @@ def main():
         held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
         if held_shares >= 100:
             print("-- SELL A COVERED CALL? (rent out shares you hold)")
-            rows = ladder_cards(cc_card_rows, symbol, chain, day,
+            rows = v3fix(ladder_cards(cc_card_rows, symbol, chain, day,
                                rank_key="annualized_yield",
                                higher_is_better=True, close=close,
                                cost_basis=float(lot.iloc[0]["cost_basis"]),
                                iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                                earnings_dates=earnings,
-                               fomc_dates=fomcs)
+                               fomc_dates=fomcs))
             for c in rows:
                 star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
@@ -489,13 +523,13 @@ def main():
             k_leaps, prem_leaps = held_leaps[symbol]
             print(f"-- SELL A CALL AGAINST YOUR LEAPS? (PMCC; LEAPS ${k_leaps:.0f} "
                   f"cost ${prem_leaps:.2f})")
-            pmcc = ladder_cards(pmcc_card_rows, symbol, chain, day,
+            pmcc = v3fix(ladder_cards(pmcc_card_rows, symbol, chain, day,
                                rank_key="annualized_yield",
                                higher_is_better=True, leaps_strike=k_leaps,
                                leaps_premium=prem_leaps, close=close,
                                iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                                earnings_dates=earnings,
-                               fomc_dates=fomcs)
+                               fomc_dates=fomcs))
             for c in pmcc:
                 star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
