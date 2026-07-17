@@ -104,6 +104,18 @@ Holidays and half-days are handled by that calendar, never assumed.
   session's close (same T→T+1 rule as entries). A missing exit-session
   chain follows Stage-4 doctrine: append the visible gap and exit at the
   first later valid session; the gap is recorded in the run artifact.
+  **Quote-state semantics on the fill path (added pre-freeze, 2026-07-17,
+  from adversarial review of the engine):** a chain row that is PRESENT
+  with bid ≤ 0 is not a data gap — it is the market pricing the call as
+  worthless, and the trade books a realized max loss (`pnl = −entry cost`,
+  flagged `worthless_quote_exit`) rather than dropping out of the scored
+  set. Routing present 0-bids to the gap bucket would disproportionately
+  exclude losers and bias the verdict away from REJECTED. A present but
+  crossed/malformed quote remains a data-artifact gap. The protective
+  exits (pre-next-report, DTE close) are pure calendar decisions and never
+  depend on quote presence; only the take-profit check reads quotes. A
+  next report closer to entry than `H9_NEXT_REPORT_EXIT_SESSIONS + 1`
+  sessions is contaminated geometry and fails loud (no trade simulated).
 - **No stop-loss** (H1 evidence: stops were the loss engine; inherited
   design decision, disclosed).
 - **Sizing:** fixed 1 contract per event; no compounding; no monthly or
