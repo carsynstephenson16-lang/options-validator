@@ -227,15 +227,16 @@ fi
 # truth regardless of gate state -- only their position moved.
 
 # QM dashboard context requires the exact completed session. Refresh only
-# missing/stale OHLCV names, then fail visibly if Yahoo cannot supply AS_OF.
-# The attractiveness dashboard still rebuilds: its QM list will show three
-# DATA BLOCKED slots while the unchanged mechanical list remains available.
+# missing/stale OHLCV for names covered by the frozen QM sidecar; an uncovered
+# name is rejected before cache read/write. The attractiveness dashboard still
+# rebuilds: its QM context will show three DATA BLOCKED slots while the
+# unchanged mechanical list remains available.
 if [ -n "$AS_OF" ]; then
   "$UV" run python -m options_researcher.qm_dashboard --refresh-ohlcv --as-of "$AS_OF" \
     && note "QM OHLCV: exact-session current to $AS_OF" \
-    || note "QM OHLCV: FAILED/STALE — QM Top 3 will show DATA BLOCKED"
+    || note "QM OHLCV: FAILED/STALE — QM context will show DATA BLOCKED"
 else
-  note "QM OHLCV: SKIPPED (no evaluation session) — QM Top 3 will show DATA BLOCKED"
+  note "QM OHLCV: SKIPPED (no evaluation session) — QM context will show DATA BLOCKED"
 fi
 
 # Attractiveness feature store — separate from the H6 manifested store
