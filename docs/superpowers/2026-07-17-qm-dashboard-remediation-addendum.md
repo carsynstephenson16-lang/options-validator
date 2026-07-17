@@ -19,7 +19,8 @@ dashboard and QM modules changed by this work. The project type-check scope
 now includes those two modules explicitly. A whole-package dry run currently
 surfaces 163 pre-existing errors in unrelated modules; clearing that debt is a
 separate package-wide effort and must not be hidden by claiming a project-wide
-Pyright pass.
+Pyright pass. Until then, every passing `uv run pyright` result in this track
+is explicitly a **scoped Pyright** result.
 
 ## Four separately gated merge tracks
 
@@ -49,9 +50,9 @@ is ready.
    withheld underlying-breakeven/option-win-rate behavior for both long-call
    and non-long-call lanes.
 3. Add the two changed `options_researcher` modules to the Pyright include
-   set and run `uv run pyright` against them, not only unrelated project
-   directories. Open a separate package-wide typing cleanup before broadening
-   the include to the entire package.
+   set and run the scoped `uv run pyright` check against them, not only
+   unrelated project directories. Open a separate package-wide typing cleanup
+   before broadening the include to the entire package.
 4. Preserve append-only provenance. The H7 receipt remains frozen; its
    staleness and the shared OHLCV cache coupling are recorded in `facts.log`.
    The hardcoded `quant want` path and pinned commit are likewise recorded as
