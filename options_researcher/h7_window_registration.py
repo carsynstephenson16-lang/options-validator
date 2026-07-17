@@ -7,7 +7,6 @@ any CLI (none exists here on purpose).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -67,20 +66,6 @@ class RegistrationInputError(ValueError):
 class WindowRuleError(ValueError):
     """The window arithmetic violates a registered rule (three-calendar-month
     minimum, or paid ThetaData coverage not reaching the window end)."""
-
-
-@dataclass(frozen=True)
-class RegistrationResult:
-    """Outcome of registering the window as the ledger's first event.
-
-    ``seq`` is the 1-based count of events now in the ledger (1 on success,
-    since window_registration must land as the very first event) -- distinct
-    from ``ledger.AppendResult.seq``, which is the 0-based record position of
-    the underlying stored event.
-    """
-    seq: int
-    appended: bool
-    record_hash: str
 
 
 def _require(mapping: dict, fields: tuple, label: str) -> None:
@@ -210,14 +195,14 @@ def _synthetic_base(base_dir) -> Path:
 
 
 def register_window(*, owner: dict, evidence: dict, base_dir,
-                    clock=None) -> RegistrationResult:
+                    clock=None) -> ledger.AppendResult:
     """Append the window_registration event as the ledger's FIRST event.
     Synthetic stores only -- refuses the real forward store and refuses a
     ledger that already has a verified tip (``expected_head=None`` demands
-    an empty chain)."""
+    an empty chain). Returns the ledger's own AppendResult unchanged:
+    ``seq`` is the ledger's 0-based record position (0 for the first event
+    -- one seq semantic in this codebase, not two)."""
     base = _synthetic_base(base_dir)
     event = build_window_registration_event(owner=owner, evidence=evidence)
-    result = ledger.append_event(event, base_dir=base, clock=clock,
-                                 expected_head=None)
-    return RegistrationResult(seq=result.seq + 1, appended=result.appended,
-                              record_hash=result.record_hash)
+    return ledger.append_event(event, base_dir=base, clock=clock,
+                               expected_head=None)

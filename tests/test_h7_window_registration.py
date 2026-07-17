@@ -155,7 +155,7 @@ class AppendTests(unittest.TestCase):
         base = Path(tmp.name) / "synthetic-forward"
         res = wr.register_window(owner=owner_inputs(), evidence=evidence(),
                                  base_dir=base)
-        self.assertEqual(res.seq, 1)
+        self.assertEqual(res.seq, 0)  # ledger seq is 0-indexed (first event)
         self.assertTrue(res.appended)
 
     def test_refuses_non_empty_ledger(self):
