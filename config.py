@@ -291,7 +291,7 @@ H8_HARD_KILL_FULL_LOSS_MONTHS = 3
 # docs/superpowers/specs/2026-07-09-h7-swing-options-design.md (+v1.1).
 # ---------------------------------------------------------------------------
 H7_WATCHLIST = ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
-                "IREN", "USAR"]  # IREN added H7_AMENDMENT_V1_5 2026-07-14;
+                "IREN", "USAR", "ET"]  # IREN added H7_AMENDMENT_V1_5 2026-07-14;
                          # USAR added H7_AMENDMENT_V1_6 2026-07-15 (both
                          # owner-typed story names; ledger/facts.log). USAR =
                          # USA Rare Earth, rare-earth/magnet AI-supply-chain
@@ -313,6 +313,19 @@ H7_EXCLUDED = ["HYLN"]  # HYLN: dead chain (~128 rows/day). USAR ACTIVATED
 # enters the H7 forward-watch universe (recent_topup/h7_data_gate/h7_watch/
 # qm_watch). See facts H7_AMENDMENT_V1_5 + H7_AMENDMENT_V1_5_ADDENDUM +
 # IREN_ACTIVATION + DATA_PULL_BACKFILL in ledger/facts.log.
+# ET ADDED + ACTIVATED 2026-07-17 (H7_AMENDMENT_V1_8, owner-typed "register it
+# anyway"; thesis = energy player in the AI buildout, owner-asserted, agent-
+# labeled Inference not owner-verified). Base option-chain cache already
+# complete (1,942 files 2018-10-22..2026-07-16; Jan-Oct 2018 pre-availability
+# gaps skip-and-logged) + Yahoo closes/OHLCV (2,145 rows 2018-01-02..2026-07-16),
+# so ET activates directly, not staged. TRADABILITY CAVEAT: ET (~$20 spot)
+# FAILS the H7 liquidity gates -- 2026-07-16 nearest-monthly ATM spread ~10.5%
+# > MAX_SPREAD_PCT 10% and 0 contracts pass the strict H7_ADMIT_MAX_SPREAD_PCT
+# 5% gate -- so ET is watched but structurally cannot fire an entry
+# (route=none), on top of the earnings entry-ban (no gating assertions yet,
+# same posture as CRWV/IREN). ET is NOT in the frozen 2026-07-25 cutoff scope
+# (H7_CUTOFF_SCOPE_FREEZE unchanged). See H7_AMENDMENT_V1_8 + ET_ACTIVATION in
+# ledger/facts.log.
 
 # Per-name entity floor for SIGNAL closes (ledger H7_AMENDMENT_V1_7,
 # owner-delegated decision 2026-07-15): closes on a ticker that predate the

@@ -11,11 +11,12 @@ class TestH7Freeze(unittest.TestCase):
     def test_universe_and_lanes(self):
         self.assertEqual(
             # IREN added via H7_AMENDMENT_V1_5 2026-07-14; USAR added via
-            # H7_AMENDMENT_V1_6 2026-07-15 (both owner-typed instructions,
-            # facts.log; operational-only pattern, same as V1_4).
+            # H7_AMENDMENT_V1_6 2026-07-15; ET added via H7_AMENDMENT_V1_8
+            # 2026-07-17 (all owner-typed instructions, facts.log;
+            # operational-only pattern, same as V1_4).
             config.H7_WATCHLIST,
             ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
-             "IREN", "USAR"],
+             "IREN", "USAR", "ET"],
         )
         self.assertEqual(config.H7_CORE_LONG_ONLY, ["VST", "CEG", "MSFT", "AMZN"])
         # IREN ACTIVATED 2026-07-15: base option-chain cache built, so only
