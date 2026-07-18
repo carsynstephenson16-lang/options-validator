@@ -565,3 +565,64 @@ axis are rejected for the same reasons):
   option-surface null) must be confronted in the registration, not after.
 - **Review date:** 2026-10-16 (or at the first quarterly cross-book review
   after the H9 verdict lands).
+
+## Black–Scholes descriptive-arc parked items (parked 2026-07-18)
+
+Context: owner directed a Black–Scholes + QM arc 2026-07-18. Scoped down to a
+descriptive/data-quality layer only (spec
+`docs/superpowers/specs/2026-07-17-black-scholes-attractiveness-design.md`;
+Phase-1 plan `docs/superpowers/plans/2026-07-18-bs-descriptive-infrastructure.md`).
+A skeptical research subagent's brief (the arc's §-notes) found every BS
+"mispricing" signal collapses to either the [[variance risk premium]] (short
+vol) or a normalization tool. The items below were cut from that arc's scope and
+parked here so the cut is on the record, not just in the spec.
+
+### BS "fair value vs market price" richness ranking — park-leaning-REJECT
+- **What:** rank contracts by (BS theoretical value − market price) using some
+  vol input, treat the largest residuals as "opportunities."
+- **Why parked (nearly rejected):** the research brief flagged this as the
+  **most self-deceiving** candidate — the residual is IV-minus-your-vol-input
+  restated, i.e. short vol dressed as a pricing error, which hides the risk
+  being taken. Same failure family as the rejected `TAOV` composite (see
+  "Explicitly rejected"). It is recorded here, not built.
+- **Gate before building:** would need an explicit owner override AND a
+  pre-registration proving the residual carries signal *beyond* the existing
+  `vrp_for_seller` / `H5_IVR_*` axes after costs — the same non-redundancy bar
+  the VIXEQ richness park failed. Default expectation: it does not.
+
+### Generic (non-earnings-conditioned) term/skew richness score
+- **What:** a bare IV term-structure slope or skew-richness ranking column with
+  no earnings tag.
+- **Why parked:** the research brief judged a term-structure feature defensible
+  *only* when earnings-conditioned (the E1/H8 template); stripped of the event
+  tag it degrades to VRP-in-disguise. The earnings-conditioned version IS in the
+  arc's scope (spec §6). This is the un-conditioned version, which is not.
+  Overlaps the "Term-structure signal (front vs back-month IV)" park above and
+  the "Cross-sectional richness signals" section — same gate: pre-register exact
+  tenors/threshold/grading before it orders anything.
+
+### QM study rerun / fresh QM historical recomputation
+- **What:** re-running `qm_study` on the current data vintage, or recomputing QM
+  signals over history, to get "fresh" numbers.
+- **Why parked:** the QM one-run-per-vintage study is **spent**; a rerun is
+  attempt-#2 p-hacking (ledger-discipline rule 8). The arc instead *publishes* a
+  labeled `retrospective_result` from the existing hash-bound readings — no
+  rerun. See [[QM]] study facts `QM_STUDY_PREREG` / `QM_STUDY_RESULT` (parabolic
+  fade REJECTED, no H8 from either setup).
+- **Gate before building:** a genuinely NEW data vintage (not the spent one) or
+  a new owner-typed pre-registration on unseen forward data — which is what the
+  H10a/H10b forward registrations in the arc are for.
+
+### P&L backtest of any strategy on the big 4 (sealed-holdout)
+- **What:** running a P&L backtest of a new BS/QM strategy on VST/CEG/MSFT/AMZN
+  over 2023+.
+- **Why parked (really a standing guardrail):** those four are outcome-selected
+  (picked knowing the AI boom; README "Scope status"), so 2023+ is not a
+  credible blind holdout; the sealed legacy holdout is SPY/QQQ index data
+  (reveal budget 0/3) and does not test a single-name signal. No honest
+  historical dataset exists — forward paper is the only verdict path.
+- **Gate before building:** does not un-park as a big-4 backtest at all; a real
+  test is a forward-paper pre-registration (H10 pattern).
+
+**Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly audit,
+whichever comes first.
