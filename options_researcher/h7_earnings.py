@@ -382,6 +382,21 @@ def assertions_view(assertions: list[dict], known_as_of) -> list[dict]:
     return list(latest.values())
 
 
+def h7_gating_view(assertions: list[dict], known_as_of) -> list[dict]:
+    """Point-in-time assertions permitted to influence the H7 gate.
+
+    Amendment v1.4 preserves the 7b-2R.2 prohibition on using aggregator
+    estimates as gating evidence.  Historical aggregator promotions remain
+    in the append-only store for auditability, but they are diagnostic-only
+    and must never make H7 source health or an entry gate look known.
+    """
+    return [
+        a for a in assertions_view(assertions, known_as_of)
+        if a.get("event_class") == GATING_EVENT_CLASS
+        and a.get("source_type") != "aggregator"
+    ]
+
+
 def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
                   known_as_of) -> tuple[str, str]:
     """(state, reason) with state CLEAR | BANNED | UNKNOWN.
@@ -399,9 +414,8 @@ def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
     # Preliminary results, business updates, other Item 2.02 events and
     # unclassified rows are invisible here -- they never start grace and
     # never erase the risk of a later scheduled quarterly report.
-    view = [a for a in assertions_view(assertions, known_as_of)
-            if a["symbol"] == sym
-            and a.get("event_class") == GATING_EVENT_CLASS]
+    view = [a for a in h7_gating_view(assertions, known_as_of)
+            if a["symbol"] == sym]
     if not view:
         return GATE_UNKNOWN, GATE_REASON_NO_ASSERTIONS
     live = [a for a in view if a["status"] in ("estimated", "confirmed")]
@@ -439,8 +453,7 @@ def next_report(symbol: str, on: date, assertions: list[dict], *,
     None when the information set names nothing on/after `on`."""
     sym = symbol.upper()
     upcoming = [report_date(a)
-                for a in assertions_view(assertions, known_as_of)
+                for a in h7_gating_view(assertions, known_as_of)
                 if a["symbol"] == sym
-                and a.get("event_class") == GATING_EVENT_CLASS
                 and report_date(a) >= on]
     return min(upcoming) if upcoming else None

@@ -64,6 +64,15 @@ class TestSymbolHealth(unittest.TestCase):
         self.assertEqual(h["days_to_report"], 72)
         self.assertIsNone(h["grace_end"])
 
+    def test_aggregator_schedule_is_diagnostic_only_and_unhealthy(self):
+        h = self._health([A("ZZZZ", "2026-09-18", status="estimated",
+                            source_type="aggregator")])
+        self.assertFalse(h["healthy"])
+        self.assertEqual(h["gate"], GATE_UNKNOWN)
+        self.assertEqual(h["coverage"], "none")
+        self.assertEqual(h["flags"], [FLAG_MISSING])
+        self.assertIsNone(h["next_report"])
+
     def test_grace_with_runway_is_missing_but_healthy(self):
         # occurred 20 days ago, nothing scheduled: normal post-report state
         h = self._health([A("ZZZZ", occurred="2026-06-18", status="occurred")])
