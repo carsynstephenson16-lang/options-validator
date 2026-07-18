@@ -17,6 +17,9 @@ ov/.claude/**/__pycache__/
 ov/.claude/**/*.pyc
 CLAUDE.local.md
 
+# Serena MCP local config + symbol cache (read/nav tooling; not project files)
+.serena/
+
 .cache/
 results/*
 !results/.gitkeep
