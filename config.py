@@ -86,6 +86,17 @@ SLIPPAGE_HAIRCUT     = 0.01           # extra adverse fraction applied beyond mi
 HALF_SPREAD_COST     = True           # assume crossing half the bid-ask per leg
 
 # ---------------------------------------------------------------------------
+# BLACK-SCHOLES DESCRIPTIVE DATA-QUALITY LAYER
+# ---------------------------------------------------------------------------
+# Frozen engineering conventions from the 2026-07-17 BS attractiveness spec
+# sections 5/15. These identify gross data errors; they are not study
+# thresholds and do not gate or size a trade.
+BS_DELTA_EPS = 0.02          # dimensionless delta out-of-range tolerance
+BS_NOARB_TOL = 0.02          # USD tolerance on American no-arbitrage bounds
+BS_IV_EXTREME_LOW = 0.02     # decimal IV; values <= this are suspicious
+BS_IV_EXTREME_HIGH = 5.0     # decimal IV; values >= this are suspicious
+
+# ---------------------------------------------------------------------------
 # LIQUIDITY FILTERS (apply to BOTH legs before trading)
 # ---------------------------------------------------------------------------
 MIN_OPEN_INTEREST    = 100
