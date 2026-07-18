@@ -76,11 +76,30 @@ H10a #3, H10b #4 — surfaced for results-red-team).
 
 ---
 
-## Two decisions that are genuinely yours (not just fill-in)
+## Two decisions — RESOLVED by owner 2026-07-18
 
-1. **Does H10 share the H6+H8 $2k/month cap, or get its own?** Sharing keeps
-   total sleeve exposure flat; its own cap adds up to $2k/month of new at-risk
-   premium (relevant given the whole book is one AI factor).
-2. **H10b's low fire rate:** are you OK registering a lane that may sit
-   `INSUFFICIENT_SAMPLE` for many months, or do you want to register only H10a
-   now and hold H10b? (Registering both still counts both as attempts.)
+1. **H10 gets its OWN monthly cap** (not shared with H6+H8). Consequence to keep
+   visible: this adds up to a full separate month of at-risk premium on top of
+   H6+H8, and because the whole book is one AI factor, that new premium
+   concentrates rather than diversifies. The cap **dollar amount is still
+   owner-typed** (proposed $2,000/mo).
+2. **Register BOTH H10a and H10b.** Both become separate `experiments.jsonl`
+   records and both count as attempts (cumulative QM: study #1, retrospective
+   #2, H10a #3, H10b #4). H10b is accepted knowing it may sit
+   `INSUFFICIENT_SAMPLE` for months given its low fire rate.
+
+## Still blocking registration (owner-typed numbers + build work)
+
+Registration cannot happen until BOTH:
+- **You type the verdict/risk-gating numbers** (the short set below), and
+- The **ledger path is built + tested**: the new `retrospective_result` record
+  type (§9) and the `research/ledger.py` registration API — not yet written, and
+  I will not fake it.
+
+Owner-typed numbers needed (proposals are defaults; adopting one = you own it):
+`STALENESS_LIMIT` (35d) · H10 own monthly cap $ (2,000) · contract delta (0.50) ·
+DTE (30–60) · reject threshold (CI upper ≤ 0 at ≥10 losses) · further-testing
+threshold (CI lower > 0 at ≥10 losses) · H10a forward-window end (2026-10-06) ·
+H10b forward-window end (2027-01-06). Cost model, liquidity gates,
+MIN_LOSSES_FOR_VERDICT (10), and structure (long call) inherit from `config.py`
+guardrails — not new numbers.
