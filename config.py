@@ -95,6 +95,22 @@ BS_DELTA_EPS = 0.02          # dimensionless delta out-of-range tolerance
 BS_NOARB_TOL = 0.02          # USD tolerance on American no-arbitrage bounds
 BS_IV_EXTREME_LOW = 0.02     # decimal IV; values <= this are suspicious
 BS_IV_EXTREME_HIGH = 5.0     # decimal IV; values >= this are suspicious
+BS_TREASURY_CURVE_PATH = "data/rates/treasury_cmt.csv"
+BS_DIVIDEND_INPUT_PATH = "data/rates/expected_dividends.csv"
+BS_TREASURY_SOURCE_URL = (
+    "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
+    "TextView?type=daily_treasury_yield_curve"
+)
+BS_TREASURY_UNITS = "decimal_annual_par_yield"
+BS_DIVIDEND_UNITS = "usd_per_share_per_year"
+BS_RATE_STALENESS_RULE = (
+    "latest curve version known by the 16:00 America/New_York valuation close "
+    "whose explicit valid_through covers the observation date"
+)
+BS_DIVIDEND_STALENESS_RULE = (
+    "latest issuer-sourced expectation known by the 16:00 America/New_York "
+    "valuation close whose explicit valid_through covers the observation date"
+)
 
 # ---------------------------------------------------------------------------
 # LIQUIDITY FILTERS (apply to BOTH legs before trading)
