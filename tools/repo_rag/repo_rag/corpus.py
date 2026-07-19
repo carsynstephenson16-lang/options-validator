@@ -44,11 +44,16 @@ def _denied(path: str, policy: CorpusPolicy) -> bool:
 
 
 def classify_source(path: str, policy: CorpusPolicy) -> str:
-    for name in sorted(policy.source_classes):
-        for prefix in policy.source_classes[name]:
-            if path == prefix or path.startswith(prefix):
-                return name
-    return "unclassified"
+    matches: list[tuple[int, str]] = []
+    for name, prefixes in policy.source_classes.items():
+        for prefix in prefixes:
+            normalized = prefix.rstrip("/")
+            if path == normalized or path.startswith(normalized + "/"):
+                matches.append((len(normalized), name))
+    if not matches:
+        return "unclassified"
+    matches.sort(key=lambda match: (-match[0], match[1]))
+    return matches[0][1]
 
 
 def discover_sources(
@@ -58,6 +63,7 @@ def discover_sources(
 ) -> tuple[SourceFile, ...]:
     if tracked_paths is None:
         tracked_paths = git_tracked_paths(repository_root)
+    root_resolved = repository_root.resolve()
     selected: list[SourceFile] = []
     for path in sorted(tracked_paths):
         if not _under_corpus_roots(path, policy):
@@ -67,9 +73,19 @@ def discover_sources(
         if not any(path.endswith(suffix) for suffix in policy.supported_suffixes):
             continue
         absolute = repository_root / path
+        if absolute.is_symlink():
+            continue
         if not absolute.is_file():
             continue
-        raw = absolute.read_bytes()
+        resolved = absolute.resolve()
+        if not resolved.is_relative_to(root_resolved):
+            continue
+        if _denied(resolved.relative_to(root_resolved).as_posix(), policy):
+            continue
+        try:
+            raw = absolute.read_bytes()
+        except OSError:
+            continue
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:

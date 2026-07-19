@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -89,6 +90,41 @@ class DiscoverSourcesTests(unittest.TestCase):
         second = self._paths()
         self.assertEqual(first, second)
         self.assertEqual(first, sorted(first))
+
+    def test_symlink_to_denied_target_excluded(self) -> None:
+        _write(self.root, ".env", "SECRET=1\n")
+        os.symlink(self.root / ".env", self.root / "docs" / "link.md")
+        tracked = self.tracked | {"docs/link.md"}
+        sources = discover_sources(self.root, _policy(), tracked_paths=tracked)
+        self.assertNotIn("docs/link.md", [source.path for source in sources])
+
+    def test_symlink_escaping_repo_root_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as outside_dir:
+            outside_root = Path(outside_dir)
+            _write(outside_root, "secret_outside.md", "outside content\n")
+            os.symlink(outside_root / "secret_outside.md", self.root / "docs" / "leak.md")
+            tracked = self.tracked | {"docs/leak.md"}
+            sources = discover_sources(self.root, _policy(), tracked_paths=tracked)
+            self.assertNotIn("docs/leak.md", [source.path for source in sources])
+
+    def test_overlapping_prefixes_longest_wins(self) -> None:
+        policy = CorpusPolicy(
+            application="t",
+            repository="t",
+            read_only=True,
+            tracked_files_only=True,
+            corpus_roots=("docs",),
+            denied_segments=(),
+            supported_suffixes=(".md",),
+            source_classes={"derived": ("docs/",), "external": ("docs/deep/",)},
+        )
+        _write(self.root, "docs/deep/x.md", "deep\n")
+        _write(self.root, "docs/other.md", "other\n")
+        tracked = frozenset({"docs/deep/x.md", "docs/other.md"})
+        sources = discover_sources(self.root, policy, tracked_paths=tracked)
+        by_path = {source.path: source for source in sources}
+        self.assertEqual(by_path["docs/deep/x.md"].source_class, "external")
+        self.assertEqual(by_path["docs/other.md"].source_class, "derived")
 
 
 if __name__ == "__main__":

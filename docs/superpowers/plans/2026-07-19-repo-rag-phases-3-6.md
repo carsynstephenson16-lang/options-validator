@@ -246,9 +246,11 @@ def discover_sources(
 
 Note `docs/img.png` is filtered by suffix, and `.png` bytes would also fail UTF-8 decode — both guards are intentional.
 
+**Post-review amendment (2026-07-19, applied in-task):** quality review found two Important issues in the code above; the committed implementation additionally must (a) refuse symlinks and any path whose resolved target escapes `repository_root` or lands in a denied path — re-check `_denied` on the resolved relative path; (b) resolve overlapping `source_classes` prefixes longest-prefix-first with boundary-aware matching (`path == prefix` or `path.startswith(prefix + "/")` after `rstrip("/")`), deterministic tie-break by class name; (c) skip-and-continue on `OSError` during file reads. Tests cover: symlink to a denied target, symlink escaping the repo root, longest-prefix-wins overlap.
+
 - [ ] **Step 4: Run tests**
 
-`python3 -m unittest tests.test_corpus -v` → all pass. Then full suite: `python3 -m unittest discover -s tests` → OK (13 tests).
+`python3 -m unittest tests.test_corpus -v` → all pass. Then full suite: `python3 -m unittest discover -s tests` → OK (13 tests before amendment tests; 16 after).
 
 - [ ] **Step 5: Add `.gitignore` and lint**
 
