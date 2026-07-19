@@ -6,9 +6,11 @@ gate is ABOUT to start failing closed), and unhealthy is gate-UNKNOWN or
 STALE. BANNED stays healthy (an informed pre-report ban)."""
 
 import io
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from datetime import date, datetime
+from pathlib import Path
 from unittest import mock
 
 import config
@@ -175,12 +177,20 @@ class TestMainCLI(unittest.TestCase):
         # with Friday's cutoff would incorrectly turn it UNKNOWN/MISSING.
         rows = [A("ZZZZ", "2026-07-10", known="2026-07-01T12:00:00+00:00")]
         buf = io.StringIO()
-        with mock.patch(
-                "options_researcher.h7_source_health.load_assertions",
-                return_value=rows), mock.patch(
-                "options_researcher.h7_source_health.watch_universe",
-                return_value=["ZZZZ"]), redirect_stdout(buf):
-            rc = main(["--as-of", "2026-07-11"])
+        # Isolate the receipt side-effect to a tempdir so this replay-semantics
+        # test never writes into (or collides with) the tracked reports/ tree.
+        # The default receipt path is source_hash-dependent, so a committed
+        # receipt would collide the moment any source file changes (the merge
+        # seam). Replay assertions below are unchanged.
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt = Path(tmp) / "source_health.json"
+            with mock.patch(
+                    "options_researcher.h7_source_health.load_assertions",
+                    return_value=rows), mock.patch(
+                    "options_researcher.h7_source_health.watch_universe",
+                    return_value=["ZZZZ"]), redirect_stdout(buf):
+                rc = main(["--as-of", "2026-07-11",
+                           "--write-receipt", str(receipt)])
         out = buf.getvalue()
         self.assertEqual(rc, 0)
         self.assertIn("on=2026-07-10 requested_as_of=2026-07-11", out)
