@@ -14,10 +14,12 @@ and volumes never leave the cache.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pandas as pd
 
 import config
+from data.atomic_io import atomic_parquet_write
 from data.thetadata_adapter import OOSDataTouchError
 from data.underlying_closes import (
     SPLITS,
@@ -54,7 +56,7 @@ def store_ohlcv(symbol: str, frame: pd.DataFrame) -> str:
                 .reset_index(drop=True))
     os.makedirs(CACHE_DIR, exist_ok=True)
     path = _path(symbol)
-    out.to_parquet(path, index=False)
+    atomic_parquet_write(out, Path(path))
     return path
 
 

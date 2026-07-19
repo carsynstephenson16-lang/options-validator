@@ -9,7 +9,8 @@ data/positions/h7_positions.csv). Run:
   stale-chain fallback, no wall-clock DTE math, no intraday rows.
 - ENTRY-OK is printed ONLY when strategies.h7_lanes.decide_lane_* returned an
   executable action from those same inputs; the watcher carries no lane
-  logic of its own. Armed-but-unexecutable prints NO-EXECUTABLE.
+  logic of its own. Armed-but-unexecutable prints NO-EXECUTABLE. Actionable
+  output requires a matching successful H7 data-gate receipt.
 - FAIL CLOSED: unreadable/malformed position book -> exit 2, no evaluation;
   a symbol whose next report date is unknown -> EARNINGS-UNKNOWN, no entry.
 
@@ -20,6 +21,7 @@ WATCH-ONLY / QUIET / BASKET-CAP / BUDGET-SPENT / NO-EXECUTABLE / ENTRY-OK.
 from __future__ import annotations
 
 import csv
+import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -37,10 +39,85 @@ from options_researcher.h7_earnings import (
     earnings_gate,
     load_assertions,
 )
-from options_researcher.h7_scope import watch_universe
+from options_researcher.h7_scope import scope_identity, watch_universe
+from research.hashing import canonical_json, config_hash, diagnostic_source_hash
+from research.receipts import (
+    changed_input_files,
+    input_file_record,
+    input_files,
+    load_receipt,
+    make_receipt,
+    write_immutable_receipt,
+)
 from strategies.h7_lanes import decide_lane_a, decide_lane_b, decide_lane_c
 
 H7_POSITIONS_PATH = Path("data/positions/h7_positions.csv")
+
+
+def validate_data_gate_receipt(path: Path, *, evaluation_session: str,
+                               names: list[str] | tuple[str, ...]) -> dict:
+    """Validate the pass file and re-hash every file it named."""
+    receipt = load_receipt(Path(path), expected_type="data_gate")
+    expected_scope = scope_identity(names)
+    if receipt.get("scope") != expected_scope:
+        raise ValueError("data-gate receipt scope is not the official current scope")
+    if receipt.get("evaluation_session") != evaluation_session:
+        raise ValueError("data-gate receipt session does not match watcher")
+    if receipt.get("whole_universe_verdict") != "GO":
+        raise ValueError("data-gate receipt is not a successful whole-universe pass")
+    if receipt.get("go_count") != len(names):
+        raise ValueError("data-gate receipt does not cover every current name")
+    if not receipt.get("source_health_receipt_hash"):
+        raise ValueError("data-gate receipt is not linked to source health")
+    source_path = receipt.get("source_health_receipt_path")
+    if not source_path:
+        raise ValueError("data-gate receipt has no source-health receipt path")
+    source = load_receipt(Path(source_path), expected_type="source_health")
+    if (source.get("receipt_hash") != receipt["source_health_receipt_hash"]
+            or source.get("evaluation_session") != evaluation_session
+            or source.get("scope") != expected_scope):
+        raise ValueError("linked source-health receipt is stale or mismatched")
+    changed_source = changed_input_files(source)
+    if changed_source:
+        raise ValueError(f"source-health inputs changed since pass: {changed_source}")
+    if receipt.get("config_hash") != config_hash():
+        raise ValueError("data-gate receipt config identity is stale")
+    if receipt.get("source_hash") != diagnostic_source_hash():
+        raise ValueError("data-gate receipt source identity is stale")
+    changed = []
+    for label, stored in sorted(receipt.get("input_files", {}).items()):
+        actual = input_file_record(Path(stored["path"]))
+        if canonical_json(actual) != canonical_json(stored):
+            changed.append(label)
+    if changed:
+        raise ValueError(f"data-gate inputs changed since pass: {changed}")
+    return receipt
+
+
+def _watcher_receipt(*, result_rows: list[dict], names: list[str],
+                     evaluation_session: str, run_date: date,
+                     data_gate_receipt: dict, errors: list[str]) -> dict:
+    paths = {"assertions": Path("data/earnings/gating_v3.csv"),
+             "position_book": H7_POSITIONS_PATH}
+    for symbol in names:
+        paths[f"close:{symbol}"] = Path(".cache/underlying") / f"{symbol}.parquet"
+        paths[f"chain:{symbol}"] = Path(".cache/chains") / \
+            f"{symbol}_{evaluation_session}.parquet"
+    return make_receipt("watcher_decision", {
+        "evaluation_session": evaluation_session,
+        "requested_run_date": run_date.isoformat(),
+        "scope": scope_identity(names),
+        "data_gate_receipt_hash": data_gate_receipt["receipt_hash"],
+        "source_health_receipt_hash": data_gate_receipt[
+            "source_health_receipt_hash"],
+        "input_files": input_files(paths),
+        "rows": result_rows,
+        "errors": errors,
+        "actionable_count": sum(
+            1 for row in result_rows if row.get("actionable")),
+        "config_hash": config_hash(),
+        "source_hash": diagnostic_source_hash(),
+    })
 
 
 def evaluation_session(run_date: date) -> date:
@@ -241,6 +318,10 @@ def main(argv: list[str] | None = None) -> int:
         help="evaluate the last completed session before this date "
              "(default: today, America/New_York); useful against a cache "
              "that has not been topped up today")
+    parser.add_argument("--data-gate-receipt", default=None,
+                        help="successful, matching H7 data-gate pass file")
+    parser.add_argument("--write-receipt", default=None,
+                        help="immutable watcher decision receipt path")
     args = parser.parse_args(argv)
 
     ny_today = datetime.now(ZoneInfo("America/New_York")).date()
@@ -250,6 +331,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     eval_date = evaluation_session(run_date)
     eval_iso = eval_date.isoformat()
+    names = watch_universe()
+    if not args.data_gate_receipt:
+        print("H7 WATCH REFUSED -- actionable output requires a matching "
+              "data-gate receipt (run source health, then data gate first).")
+        return 2
+    try:
+        data_gate_receipt = validate_data_gate_receipt(
+            Path(args.data_gate_receipt), evaluation_session=eval_iso,
+            names=names)
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+        print(f"H7 WATCH REFUSED -- invalid/stale data-gate receipt: "
+              f"{type(exc).__name__}: {exc}")
+        return 2
     # 252 trading sessions of signal history plus weekend/holiday slack
     start_iso = (eval_date - timedelta(days=560)).isoformat()
 
@@ -274,7 +368,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"H7 BOOK ERROR -- refusing to evaluate entries (fail closed): {e}")
         return 2
 
-    names = watch_universe()
     print(f"H7 WATCH session={eval_iso} run={run_date.isoformat()} "
           f"(registered f1887c9d + v1.2 f880b4d1 + v1.3 6faa4945: "
           f"historical diagnostic WITHDRAWN, forward paper is the sole "
@@ -286,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # pass 1: assemble every name's card (per-symbol gates + decide actions)
     cards: list[tuple[str, dict]] = []
+    watch_errors: list[str] = []
     for symbol in names:
         try:
             closes = load_closes_adjusted(symbol, start_iso, eval_iso,
@@ -294,12 +388,15 @@ def main(argv: list[str] | None = None) -> int:
                 raise RuntimeError("no cached underlying closes")  # R12
             chains_by_day = load_range(symbol, eval_iso, eval_iso, allow_oos=True)
             chain = chains_by_day.get(eval_iso)
+            if chain is None:
+                raise RuntimeError(f"chain snapshot missing for {eval_iso}")
             chain_day = eval_iso if chain is not None else None
             gap = check_alignment(closes, chain_day, eval_iso)
             if gap:
                 raise RuntimeError(gap)
         except Exception as e:  # a gap is a report line, not a crash
             print(f"{symbol}: DATA-GAP ({type(e).__name__}: {e}) -- skipped")
+            watch_errors.append(f"{symbol}: {type(e).__name__}: {e}")
             continue
         raw_spot = float(closes.iloc[-1]) * adjustment_factor(symbol, eval_iso)
         cards.append((symbol, assemble_name(
@@ -337,6 +434,33 @@ def main(argv: list[str] | None = None) -> int:
         for lane_key in ("lane_a", "lane_b", "lane_c"):
             if card[lane_key]["state"] == "ENTRY-OK":
                 print(f"    {lane_key} action: {card[lane_key]['action']}")
+    result_rows = []
+    for symbol, card in cards:
+        for lane_key in ("lane_a", "lane_b", "lane_c"):
+            lane = card[lane_key]
+            result_rows.append({
+                "symbol": symbol,
+                "lane": lane_key,
+                "state": lane["state"],
+                "actionable": lane["state"] == "ENTRY-OK",
+                "action": (json.dumps(lane["action"], sort_keys=True,
+                                       default=str)
+                           if lane["action"] is not None else None),
+            })
+    receipt = _watcher_receipt(
+        result_rows=result_rows, names=names, evaluation_session=eval_iso,
+        run_date=run_date, data_gate_receipt=data_gate_receipt,
+        errors=watch_errors)
+    receipt_path = (Path(args.write_receipt) if args.write_receipt else
+                    Path("reports/h7_receipts") / data_gate_receipt[
+                        "scope"]["scope_id"] / "watcher" / f"{eval_iso}.json")
+    try:
+        write_immutable_receipt(receipt, receipt_path)
+    except (OSError, ValueError, FileExistsError) as exc:
+        print(f"H7 WATCH ERROR -- cannot write decision receipt: "
+              f"{type(exc).__name__}: {exc}")
+        return 2
+    print(f"immutable decision receipt {receipt_path}")
     return 0
 
 

@@ -20,7 +20,7 @@ from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
     ActivationBoundaryError,
 )
-from options_researcher.h7_scope import watch_universe
+from options_researcher.h7_scope import scope_identity, watch_universe
 from research.hashing import canonical_json, sha256_hex
 
 
@@ -747,7 +747,16 @@ def record_board_resolution(
     # minus H7_EXCLUDED e.g. staged names like IREN -- see h7_scope.watch_universe),
     # not the raw watchlist union, since source_health/data_gate only ever cover
     # the active universe.
-    expected_symbols = set(watch_universe()) | set(config.H7_BACKTEST_SYMBOLS)
+    source_scope = source.payload.get("scope")
+    gate_scope = gate.payload.get("scope")
+    if source_scope is not None or gate_scope is not None:
+        if source_scope != gate_scope or source_scope != scope_identity():
+            raise BookValidationError("board causes have mismatched current scope")
+        expected_symbols = set(scope_identity()["symbols"])
+    else:
+        # Legacy synthetic rehearsals may predate the receipt contract. Keep
+        # them replayable; they can never satisfy the real activation packet.
+        expected_symbols = set(watch_universe()) | set(config.H7_BACKTEST_SYMBOLS)
     healthy_symbols = source.payload.get("healthy_symbols")
     if (
         not isinstance(healthy_symbols, list)
@@ -862,6 +871,7 @@ def record_board_resolution(
             "h7c_max_concurrent": config.H7C_MAX_CONCURRENT,
             "max_open_per_underlying": config.H7_MAX_OPEN_PER_UNDERLYING,
         },
+        "scope": scope_identity() if source_scope is not None else None,
     }
     result = ledger.append_event(
         {

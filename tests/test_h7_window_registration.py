@@ -115,6 +115,9 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(p["window"]["start_decision_session"], "2026-08-03")
         self.assertIn("config_hash", p["frozen"])
         self.assertIn("MIN_LOSSES_FOR_VERDICT", p["frozen"]["stage456_parameters"])
+        # H7_MAX_HOLD_BUFFER_D is part of the frozen Stage-4/5/6 surface for
+        # payload legibility (config_hash already covers integrity).
+        self.assertIn("H7_MAX_HOLD_BUFFER_D", p["frozen"]["stage456_parameters"])
         self.assertEqual(p["frozen"]["verdict_mapping"],
                          {"SURVIVED": "ci_above_zero", "REJECTED": "ci_below_zero",
                           "INCONCLUSIVE": "insufficient_or_no_edge"})
