@@ -1,6 +1,6 @@
 """H9 event derivation — verified occurred reports -> causal session timing.
 
-Spec: docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md §2.
+Spec: the H9 study spec (config.H9_SPEC_PATH), §2.
 The acceptance timestamp is the raw store's known_as_of_utc (8-K Item 2.02
 acceptanceDateTime). Strict inequalities everywhere: a filing accepted exactly
 at a session close belongs to the NEXT session's information set.

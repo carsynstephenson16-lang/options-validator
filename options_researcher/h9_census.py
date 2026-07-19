@@ -18,7 +18,7 @@ import pyarrow.lib
 import config
 from data.audit_exceptions import excluded as _registry_excluded
 from data.cache_runner import trading_days
-from data.thetadata_adapter import get_eod_chain, passes_liquidity
+from data.thetadata_adapter import load_cached_chain, passes_liquidity
 from data.underlying_closes import load_closes_adjusted
 from options_researcher.chains import is_monthly
 from options_researcher.h9_events import H9Event
@@ -48,7 +48,10 @@ class CensusResult:
 
 
 def _entry_chain(symbol: str, iso: str) -> pd.DataFrame:
-    return get_eod_chain(symbol, iso, allow_oos=True)
+    # Cache-ONLY (spec §1 zero new data spend): a missing chain raises
+    # FileNotFoundError, which the census loop codes as `missing_entry_chain`
+    # and excludes the event -- it is NEVER fetched from the paid client.
+    return load_cached_chain(symbol, iso, allow_oos=True)
 
 
 def _closes(symbol: str, start_iso: str, end_iso: str) -> pd.Series:

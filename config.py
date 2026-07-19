@@ -584,6 +584,17 @@ H9_NEXT_REPORT_EXIT_SESSIONS = 2        # owner-approved 2026-07-16
 H9_MIN_ELIGIBLE_EVENTS = 60             # owner-approved 2026-07-16 (census floor)
 H9_PREMIUM_CAP_DOLLARS = 600            # owner-approved: global MAX_LOSS_PER_TRADE binds
 H9_SECONDARY_COHORT = ("NOW", "MSFT", "VST", "CEG")  # E1-uncontaminated, informational only
+# Review C6: if the unresolved-data-gap trades (absent/crossed exit quotes that
+# drop from the CI) exceed this fraction of all triggered trades, the outcome is
+# forced to INSUFFICIENT_SAMPLE. Mass-dropping gaps biases toward NOT_REJECTED
+# (losers hit bad quotes more often), so a high gap rate is not adjudicable.
+H9_MAX_UNRESOLVED_GAP_FRACTION = 0.10   # disclosed gap-rate ceiling
+# Review B4/C5: the frozen spec path lives here (repo-relative string, so it
+# folds into config_hash provenance and JSON receipts), not hardcoded in the
+# CLI. The freeze commit renames the spec off "-DRAFT" and updates THIS line
+# atomically with the rename, so the sha256 recorded in H9_REGISTERED and the
+# on-disk file never diverge. The prereg gate binds the two (C5).
+H9_SPEC_PATH = "docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md"
 
 # ---------------------------------------------------------------------------
 # CARD 3 -- "near-the-bottom long call" EXPLORATORY IN-SAMPLE HISTORICAL STUDY

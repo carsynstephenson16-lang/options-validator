@@ -333,6 +333,34 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
     return chain
 
 
+def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.DataFrame:
+    """Cache-ONLY EOD chain read: return the validated parquet if it already
+    exists locally, else raise FileNotFoundError. NEVER constructs the
+    ThetaData client and NEVER fetches -- the H9 study's "zero new data spend"
+    hard property (spec §1: a missing input is excluded/halts, never fetched)
+    depends on this path never touching the network. On a cache miss the H9
+    census codes the event `missing_entry_chain` and the study treats the
+    session as a data gap; neither ever spends.
+
+    The IN_SAMPLE_END / allow_oos holdout guard still applies, since reading a
+    cached post-2022 chain outside the reveal gate is a holdout look.
+    """
+    symbol = _normalize_symbol(symbol)
+    date = _normalize_date(date)
+    if date > config.IN_SAMPLE_END and not allow_oos:
+        raise OOSDataTouchError(
+            f"{symbol} @ {date} is after IN_SAMPLE_END={config.IN_SAMPLE_END}; "
+            "post-2022 chains may only be opened through the OOS reveal gate."
+        )
+    cached = _cache_path(symbol, date)
+    if cached.exists():
+        return validate_chain_schema(pd.read_parquet(cached))
+    raise FileNotFoundError(
+        f"no cached chain for {symbol} @ {date}; this reader is cache-only and "
+        "never fetches (H9 zero-new-data-spend guarantee)."
+    )
+
+
 # --------------------------------------------------------------------------
 # Blind cache (pre-registration decision doc 2026-07-02, section 4)
 # --------------------------------------------------------------------------

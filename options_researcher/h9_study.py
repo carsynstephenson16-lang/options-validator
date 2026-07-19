@@ -204,9 +204,20 @@ def adjudicate(trades: list[dict]) -> dict:
     complete = [t for t in trades if t["pnl"] is not None]
     board = metrics.scoreboard(complete, label="H9")
     board["h9_outcome"] = map_verdict(board)
-    board["unresolved_data_gap_trades"] = len(trades) - len(complete)
+    n_gap = len(trades) - len(complete)
+    board["unresolved_data_gap_trades"] = n_gap
     board["worthless_quote_exits"] = sum(
         1 for t in trades if t.get("worthless_quote_exit"))
     board["unresolved_gap_capital"] = round(
         sum(t["capital_at_risk"] for t in trades if t["pnl"] is None), 2)
+    # C6: mass-dropping unresolved-gap trades biases the CI toward NOT_REJECTED
+    # (losers hit absent/crossed quotes more often). When the gap rate over all
+    # triggered trades exceeds the disclosed ceiling, the sample is not
+    # adjudicable -> force INSUFFICIENT_SAMPLE (never a REJECTED/NOT_REJECTED).
+    gap_fraction = n_gap / len(trades) if trades else 0.0
+    board["unresolved_gap_fraction"] = round(gap_fraction, 4)
+    board["gap_gate_forced_insufficient"] = bool(
+        trades and gap_fraction > config.H9_MAX_UNRESOLVED_GAP_FRACTION)
+    if board["gap_gate_forced_insufficient"]:
+        board["h9_outcome"] = "INSUFFICIENT_SAMPLE"
     return board
