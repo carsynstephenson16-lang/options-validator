@@ -61,15 +61,29 @@ and may not be blessed).
 ## 4. The append procedure (exactly once)
 
 `register_window_real(...)` is the only code allowed to touch the real
-store, and it re-verifies everything itself rather than trusting its caller:
-guard report is a full PASS; report is bound to THIS store path; report
-carries a code identity and that commit is still HEAD with a clean tree at
-append time; the evidence commit equals that HEAD; the spec sha handed in
-matches the evidence sha; the store re-verifies VALID EMPTY at this instant.
-Only then is the event built (re-deriving all window arithmetic) and
-appended with `expected_head=None`, so even a racing concurrent write loses.
-One event, seq 0, `window_registration`. *(Plain English: seven locks on one
-door, checked again in the doorway, and the door only opens once.)*
+store. Its refusal chain, in order (review conditions C1/C2 folded in,
+2026-07-19): every owner/evidence field present; guard report is a full
+PASS; report is bound to THIS store path; report carries a code identity;
+that commit is still HEAD with a clean tree at append time; the evidence
+commit equals that HEAD; the spec sha handed in is 64 lowercase hex, equals
+the evidence sha, AND equals the sha256 of the on-disk spec file computed at
+append time (the reviewed document, the recorded fingerprint, and the file
+must be one and the same); the guard report is younger than
+`GUARD_REPORT_MAX_AGE_S` (3600 s — HEAD/clean-tree cannot see untracked
+cache files the gates read, so age itself refuses); the injected
+`recheck_gates()` is EXECUTED at append time and must report source health
+all-healthy and data gate GO carrying the same evidence ids the evidence
+claims — gate PASSes are re-earned, never inherited; and the store
+re-verifies VALID EMPTY at this instant. Only then is the event built
+(re-deriving all window arithmetic) and appended with `expected_head=None`,
+so even a racing concurrent write loses. One event, seq 0,
+`window_registration`. *(Plain English: ten locks on one door, checked again
+in the doorway, and the door only opens once.)*
+
+Known residual limit (disclosed, per review): these checks defeat stale,
+drifted, or mis-bound activations — they cannot defeat an operator who
+deliberately fabricates every input at once. The owner-typed authorization
+string plus the independent-review PASS are the human locks for that.
 
 ## 5. Void conditions
 

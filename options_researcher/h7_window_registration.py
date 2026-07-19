@@ -7,7 +7,7 @@ any CLI (none exists here on purpose).
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import config
@@ -17,7 +17,7 @@ from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
     ActivationBoundaryError,
 )
-from research.hashing import config_hash, cost_model_hash
+from research.hashing import config_hash, cost_model_hash, sha256_file
 
 # The exact owner-typed inputs required before a window_registration event
 # can be built. Every field is mandatory and None/"" is refused -- no default
@@ -214,11 +214,18 @@ class ActivationRefused(RuntimeError):
 
 
 _SHA256_HEX = 64
+# Independent-review condition C2 (2026-07-19): a guard report older than this
+# many seconds is stale and authorizes nothing -- the world it verified (gates,
+# untracked cache files the data gate read) may have moved without touching
+# HEAD or the tree.
+GUARD_REPORT_MAX_AGE_S = 3600
 
 
 def register_window_real(*, owner: dict, evidence: dict, guard_report,
-                         spec_sha256: str, base_dir, code_state,
-                         clock=None) -> ledger.AppendResult:
+                         spec_sha256: str, spec_path, base_dir, code_state,
+                         recheck_gates, clock=None, now=None,
+                         max_report_age_s: int = GUARD_REPORT_MAX_AGE_S,
+                         ) -> ledger.AppendResult:
     """The Stage-8 PRODUCTION append path (activation-spec 2026-07-18): the
     only code allowed to write the first real ``window_registration`` event.
 
@@ -235,8 +242,18 @@ def register_window_real(*, owner: dict, evidence: dict, guard_report,
        tree -- if code moved or dirtied between guard and append, refuse;
     5. the evidence's ``code_commit`` agrees with that same HEAD;
     6. the activation spec sha handed by the operator matches the evidence's
-       ``activation_spec_sha256`` exactly (64 lowercase hex);
-    7. the target ledger re-verifies VALID EMPTY at this instant -- the
+       ``activation_spec_sha256`` exactly (64 lowercase hex) AND matches the
+       sha256 of the ON-DISK spec file at ``spec_path`` computed here, now --
+       the reviewed document, the recorded fingerprint, and the file on disk
+       must be one and the same (review condition C1);
+    7. the guard report is younger than ``max_report_age_s`` (C2) -- HEAD and
+       tree cleanliness cannot see untracked cache files the gates read, so
+       age itself is a refusal;
+    8. ``recheck_gates()`` is EXECUTED at append time and must report source
+       health all-healthy and data gate GO, carrying the same evidence ids
+       the evidence dict claims (C1) -- gate PASSes are re-earned here, not
+       inherited from the report;
+    9. the target ledger re-verifies VALID EMPTY at this instant -- the
        guard's earlier check is advisory, this one is binding.
 
     Only then is the event built (which re-derives all window arithmetic and
@@ -289,6 +306,45 @@ def register_window_real(*, owner: dict, evidence: dict, guard_report,
             "activation_spec_sha256 in the evidence does not match the spec "
             "sha handed to the append path -- the reviewed spec must be the "
             "registered spec")
+    spec_file = Path(spec_path)
+    if not spec_file.is_file():
+        raise ActivationRefused(
+            f"activation spec file {spec_file} does not exist -- nothing to "
+            "bind the registration to")
+    on_disk = sha256_file(spec_file)
+    if on_disk != sha:
+        raise ActivationRefused(
+            f"on-disk activation spec hashes to {on_disk}, not the reviewed "
+            f"{sha} -- the file changed since review (spec drift)")
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+    try:
+        built = datetime.fromisoformat(guard_report.built_at_utc)
+    except ValueError as exc:
+        raise ActivationRefused(
+            f"guard report built_at_utc {guard_report.built_at_utc!r} is not "
+            "a parseable timestamp -- treated as non-fresh") from exc
+    age = (now - built).total_seconds()
+    if age < 0 or age > max_report_age_s:
+        raise ActivationRefused(
+            f"guard report is {age:.0f}s old (bound {max_report_age_s}s) or "
+            "from the future -- rebuild it at the pinned session")
+
+    gates = recheck_gates()
+    if gates.get("source_health_all_healthy") is not True:
+        raise ActivationRefused(
+            "append-time source-health recheck did not report all-healthy -- "
+            "gate PASSes are re-earned at append, never inherited")
+    if gates.get("data_gate_go") is not True:
+        raise ActivationRefused(
+            "append-time data-gate recheck did not report whole-universe GO")
+    for key in ("source_health_evidence_id", "data_gate_evidence_id"):
+        if gates.get(key) != evidence[key]:
+            raise ActivationRefused(
+                f"recheck {key} {gates.get(key)!r} disagrees with the "
+                f"evidence's {evidence[key]!r} -- the gate run being "
+                "registered must be the gate run that passed")
 
     v = ledger.verify(base_dir=base)
     if not (v.valid and v.empty):

@@ -11,12 +11,14 @@ report that is not a full, store-bound, fresh PASS while pointed at the real
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from options_researcher import h7_activation_guard as ag
 from options_researcher import h7_event_ledger as el
 from options_researcher import h7_window_registration as wr
 from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE
+from research.hashing import sha256_file
 
 _CHECK_NAMES = (
     "ledger_valid_empty",
@@ -25,7 +27,26 @@ _CHECK_NAMES = (
     "owner_inputs_complete",
     "working_tree_clean",
 )
-_SPEC_SHA = "c" * 64
+# A real on-disk spec fixture: the append path hashes the FILE, not a string
+# (review condition C1), so the fixture sha must come from real bytes.
+_SPEC_DIR = tempfile.TemporaryDirectory()
+_SPEC_PATH = Path(_SPEC_DIR.name) / "activation-spec.md"
+_SPEC_PATH.write_text("stage-8 activation spec fixture\n")
+_SPEC_SHA = sha256_file(_SPEC_PATH)
+# Report built 00:00, appends "now" at 00:30 -- inside the 3600s bound (C2).
+_BUILT = "2026-08-01T00:00:00+00:00"
+_NOW = datetime.fromisoformat("2026-08-01T00:30:00+00:00")
+
+
+def gates(**over):
+    base = {
+        "source_health_all_healthy": True,
+        "data_gate_go": True,
+        "source_health_evidence_id": "sh:2026-08-01",
+        "data_gate_evidence_id": "dg:2026-08-01",
+    }
+    base.update(over)
+    return base
 
 
 def _head() -> str:
@@ -68,7 +89,7 @@ def ready_report(base_dir, head, *, ok=True, forward_base=None, code_commit=None
         forward_base=forward_base if forward_base is not None
         else str(Path(base_dir).resolve()),
         code_commit=code_commit if code_commit is not None else head,
-        built_at_utc="2026-08-01T00:00:00+00:00",
+        built_at_utc=_BUILT,
     )
 
 
@@ -85,8 +106,11 @@ class RegisterWindowRealTests(unittest.TestCase):
             evidence=evidence(self.head),
             guard_report=ready_report(self.base, self.head),
             spec_sha256=_SPEC_SHA,
+            spec_path=_SPEC_PATH,
             base_dir=self.base,
             code_state=lambda: (self.head, True),
+            recheck_gates=gates,
+            now=_NOW,
         )
         kwargs.update(over)
         return wr.register_window_real(**kwargs)
@@ -133,6 +157,66 @@ class RegisterWindowRealTests(unittest.TestCase):
             self._call(evidence=evidence(self.head, code_commit="a" * 40))
         self.assertTrue(el.verify(base_dir=self.base).empty)
 
+    # --- review conditions C2/C3 (2026-07-19): pinned refusal branches ---
+
+    def test_refuses_empty_code_commit_identity(self):
+        with self.assertRaises(wr.ActivationRefused):
+            self._call(guard_report=ready_report(self.base, self.head,
+                                                 code_commit=""))
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_empty_built_at(self):
+        report = ready_report(self.base, self.head)
+        report.built_at_utc = ""
+        with self.assertRaises(wr.ActivationRefused):
+            self._call(guard_report=report)
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_malformed_spec_sha(self):
+        for bad in ("abc", "C" * 64, "g" * 64, _SPEC_SHA[:-1] + "G"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(wr.ActivationRefused):
+                    self._call(spec_sha256=bad)
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_stale_guard_report(self):
+        late = _NOW + timedelta(seconds=wr.GUARD_REPORT_MAX_AGE_S + 1)
+        with self.assertRaises(wr.ActivationRefused):
+            self._call(now=late)
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_future_guard_report(self):
+        early = datetime.fromisoformat(_BUILT) - timedelta(seconds=1)
+        with self.assertRaises(wr.ActivationRefused):
+            self._call(now=early)
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_on_disk_spec_drift(self):
+        drifted = Path(self.tmp.name) / "drifted-spec.md"
+        drifted.write_text("stage-8 activation spec fixture EDITED\n")
+        with self.assertRaises(wr.ActivationRefused):
+            self._call(spec_path=drifted)
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_missing_spec_file(self):
+        with self.assertRaises(wr.ActivationRefused):
+            self._call(spec_path=Path(self.tmp.name) / "no-such-spec.md")
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_failed_gate_recheck(self):
+        for over in ({"source_health_all_healthy": False},
+                     {"data_gate_go": False}):
+            with self.subTest(over=over):
+                with self.assertRaises(wr.ActivationRefused):
+                    self._call(recheck_gates=lambda o=over: gates(**o))
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
+    def test_refuses_gate_evidence_id_mismatch(self):
+        with self.assertRaises(wr.ActivationRefused):
+            self._call(recheck_gates=lambda: gates(
+                source_health_evidence_id="sh:some-other-run"))
+        self.assertTrue(el.verify(base_dir=self.base).empty)
+
     def test_refuses_missing_owner_input(self):
         bad = owner_inputs()
         del bad["WINDOW_START_DECISION_SESSION"]
@@ -172,7 +256,9 @@ class RealStoreUntouchedTests(unittest.TestCase):
             wr.register_window_real(
                 owner=owner_inputs(), evidence=evidence(head),
                 guard_report=report, spec_sha256=_SPEC_SHA,
-                base_dir=REAL_FORWARD_STORE, code_state=lambda: (head, True))
+                spec_path=_SPEC_PATH, base_dir=REAL_FORWARD_STORE,
+                code_state=lambda: (head, True), recheck_gates=gates,
+                now=_NOW)
         after = el.verify(base_dir=REAL_FORWARD_STORE)
         self.assertEqual((after.valid, after.empty, after.count, after.head),
                          (before.valid, before.empty, before.count, before.head))
