@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from options_researcher import h7_event_ledger as ledger
@@ -27,6 +28,15 @@ class Check:
 @dataclass
 class GuardReport:
     checks: list[Check] = field(default_factory=list)
+    # Binding + freshness provenance. These do not gate ``ready`` (which is the
+    # AND of every check); they let a downstream real-store append prove the
+    # report it was handed was computed against THIS forward store and THIS
+    # code identity, in the same session -- so a stale or store-mismatched PASS
+    # can never authorize a write. Empty strings on a freshly-built report only
+    # when git is unavailable; the real-append path treats those as non-fresh.
+    forward_base: str = ""
+    code_commit: str = ""
+    built_at_utc: str = ""
 
     @property
     def by_name(self) -> dict[str, Check]:
@@ -44,6 +54,18 @@ def _working_tree_clean() -> Check:
                  "clean" if out == "" else f"dirty: {out.splitlines()[:5]}")
 
 
+def _git_head() -> str:
+    """Current committed code identity (``git rev-parse HEAD``). Empty string
+    if git cannot answer -- the real-append path treats an empty commit as
+    non-fresh and refuses, so this never silently degrades safety."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                             text=True, check=True).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        return ""
+    return out
+
+
 def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
                              universe: tuple, data_gate_result: dict,
                              owner_inputs: dict,
@@ -59,7 +81,8 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
     if not allow_real_readonly and (base == real or real in base.parents):
         raise ActivationBoundaryError("guard fixtures must use synthetic stores")
 
-    report = GuardReport()
+    report = GuardReport(forward_base=str(base), code_commit=_git_head(),
+                         built_at_utc=datetime.now(timezone.utc).isoformat())
     v = ledger.verify(base_dir=base)
     report.checks.append(Check(
         "ledger_valid_empty", v.valid and v.empty,

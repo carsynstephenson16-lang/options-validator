@@ -7,7 +7,7 @@ any CLI (none exists here on purpose).
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import config
@@ -17,7 +17,7 @@ from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
     ActivationBoundaryError,
 )
-from research.hashing import config_hash, cost_model_hash
+from research.hashing import config_hash, cost_model_hash, sha256_file
 
 # The exact owner-typed inputs required before a window_registration event
 # can be built. Every field is mandatory and None/"" is refused -- no default
@@ -212,6 +212,156 @@ def register_window(*, owner: dict, evidence: dict, base_dir,
     ``seq`` is the ledger's 0-based record position (0 for the first event
     -- one seq semantic in this codebase, not two)."""
     base = _synthetic_base(base_dir)
+    event = build_window_registration_event(owner=owner, evidence=evidence)
+    return ledger.append_event(event, base_dir=base, clock=clock,
+                               expected_head=None)
+
+
+class ActivationRefused(RuntimeError):
+    """The guarded real-store append path refused. Every refusal names the
+    failed precondition; nothing was written."""
+
+
+_SHA256_HEX = 64
+# Independent-review condition C2 (2026-07-19): a guard report older than this
+# many seconds is stale and authorizes nothing -- the world it verified (gates,
+# untracked cache files the data gate read) may have moved without touching
+# HEAD or the tree.
+GUARD_REPORT_MAX_AGE_S = 3600
+
+
+def register_window_real(*, owner: dict, evidence: dict, guard_report,
+                         spec_sha256: str, spec_path, base_dir, code_state,
+                         recheck_gates, clock=None, now=None,
+                         max_report_age_s: int = GUARD_REPORT_MAX_AGE_S,
+                         ) -> ledger.AppendResult:
+    """The Stage-8 PRODUCTION append path (activation-spec 2026-07-18): the
+    only code allowed to write the first real ``window_registration`` event.
+
+    Unlike :func:`register_window` it may target the real forward store --
+    its defense is a chain of refusals, each re-verified HERE at append time
+    rather than trusted from the caller:
+
+    1. every owner + evidence field present (``RegistrationInputError``);
+    2. the guard report is a full PASS (``report.ready``);
+    3. the report is BOUND to this exact store (``forward_base``) -- a PASS
+       computed against some other directory authorizes nothing here;
+    4. the report is FRESH: non-empty ``code_commit``/``built_at_utc``, and
+       the commit it saw is still HEAD now (``code_state``), with a clean
+       tree -- if code moved or dirtied between guard and append, refuse;
+    5. the evidence's ``code_commit`` agrees with that same HEAD;
+    6. the activation spec sha handed by the operator matches the evidence's
+       ``activation_spec_sha256`` exactly (64 lowercase hex) AND matches the
+       sha256 of the ON-DISK spec file at ``spec_path`` computed here, now --
+       the reviewed document, the recorded fingerprint, and the file on disk
+       must be one and the same (review condition C1);
+    7. the guard report is younger than ``max_report_age_s`` (C2) -- HEAD and
+       tree cleanliness cannot see untracked cache files the gates read, so
+       age itself is a refusal;
+    8. ``recheck_gates()`` is EXECUTED at append time and must report source
+       health all-healthy and data gate GO, carrying the same evidence ids
+       the evidence dict claims (C1) -- gate PASSes are re-earned here, not
+       inherited from the report;
+    9. the target ledger re-verifies VALID EMPTY at this instant -- the
+       guard's earlier check is advisory, this one is binding.
+
+    Only then is the event built (which re-derives all window arithmetic and
+    coverage rules) and appended with ``expected_head=None`` so a concurrent
+    write still loses. Returns the ledger's own AppendResult."""
+    _require(owner, OWNER_FIELDS, "owner")
+    _require(evidence, EVIDENCE_FIELDS, "evidence")
+
+    if not guard_report.ready:
+        failed = [c.name for c in guard_report.checks if not c.ok]
+        raise ActivationRefused(
+            f"guard report is not a full PASS (failed: {failed or 'no checks'})"
+            " -- activation refused, nothing written")
+
+    base = Path(base_dir)
+    bound = str(base.resolve(strict=False))
+    if guard_report.forward_base != bound:
+        raise ActivationRefused(
+            f"guard report is bound to {guard_report.forward_base!r}, not the "
+            f"target store {bound!r} -- a PASS against another store "
+            "authorizes nothing here")
+
+    if not guard_report.code_commit or not guard_report.built_at_utc:
+        raise ActivationRefused(
+            "guard report carries no code/build identity -- treated as "
+            "non-fresh; rebuild the report at the pinned session")
+
+    head_now, tree_clean = code_state()
+    if not tree_clean:
+        raise ActivationRefused(
+            "working tree is dirty at append time -- the identity the guard "
+            "verified is no longer the identity being registered")
+    if head_now != guard_report.code_commit:
+        raise ActivationRefused(
+            f"HEAD moved since the guard report ({guard_report.code_commit} "
+            f"-> {head_now}) -- re-run the guard at the current commit")
+    if evidence["code_commit"] != head_now:
+        raise ActivationRefused(
+            f"evidence code_commit {evidence['code_commit']} disagrees with "
+            f"HEAD {head_now} -- the reviewed identity must be the appended "
+            "identity")
+
+    sha = str(spec_sha256)
+    if (len(sha) != _SHA256_HEX
+            or any(ch not in "0123456789abcdef" for ch in sha)):
+        raise ActivationRefused(
+            "activation spec sha must be 64 lowercase hex characters")
+    if evidence["activation_spec_sha256"] != sha:
+        raise ActivationRefused(
+            "activation_spec_sha256 in the evidence does not match the spec "
+            "sha handed to the append path -- the reviewed spec must be the "
+            "registered spec")
+    spec_file = Path(spec_path)
+    if not spec_file.is_file():
+        raise ActivationRefused(
+            f"activation spec file {spec_file} does not exist -- nothing to "
+            "bind the registration to")
+    on_disk = sha256_file(spec_file)
+    if on_disk != sha:
+        raise ActivationRefused(
+            f"on-disk activation spec hashes to {on_disk}, not the reviewed "
+            f"{sha} -- the file changed since review (spec drift)")
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+    try:
+        built = datetime.fromisoformat(guard_report.built_at_utc)
+    except ValueError as exc:
+        raise ActivationRefused(
+            f"guard report built_at_utc {guard_report.built_at_utc!r} is not "
+            "a parseable timestamp -- treated as non-fresh") from exc
+    age = (now - built).total_seconds()
+    if age < 0 or age > max_report_age_s:
+        raise ActivationRefused(
+            f"guard report is {age:.0f}s old (bound {max_report_age_s}s) or "
+            "from the future -- rebuild it at the pinned session")
+
+    gates = recheck_gates()
+    if gates.get("source_health_all_healthy") is not True:
+        raise ActivationRefused(
+            "append-time source-health recheck did not report all-healthy -- "
+            "gate PASSes are re-earned at append, never inherited")
+    if gates.get("data_gate_go") is not True:
+        raise ActivationRefused(
+            "append-time data-gate recheck did not report whole-universe GO")
+    for key in ("source_health_evidence_id", "data_gate_evidence_id"):
+        if gates.get(key) != evidence[key]:
+            raise ActivationRefused(
+                f"recheck {key} {gates.get(key)!r} disagrees with the "
+                f"evidence's {evidence[key]!r} -- the gate run being "
+                "registered must be the gate run that passed")
+
+    v = ledger.verify(base_dir=base)
+    if not (v.valid and v.empty):
+        raise ActivationRefused(
+            f"target forward store is not VALID EMPTY at append time "
+            f"(valid={v.valid} empty={v.empty} count={v.count}) -- the "
+            "window_registration must be the chain's first event")
+
     event = build_window_registration_event(owner=owner, evidence=evidence)
     return ledger.append_event(event, base_dir=base, clock=clock,
                                expected_head=None)
