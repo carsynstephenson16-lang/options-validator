@@ -333,7 +333,8 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
     return chain
 
 
-def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.DataFrame:
+def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False,
+                      cache_dir: Path | None = None) -> pd.DataFrame:
     """Cache-ONLY EOD chain read: return the validated parquet if it already
     exists locally, else raise FileNotFoundError. NEVER constructs the
     ThetaData client and NEVER fetches -- the H9 study's "zero new data spend"
@@ -344,6 +345,11 @@ def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.
 
     The IN_SAMPLE_END / allow_oos holdout guard still applies, since reading a
     cached post-2022 chain outside the reveal gate is a holdout look.
+
+    `cache_dir` overrides the global cache directory so callers that take an
+    injectable chain_dir (the H9 census) stay coherent: presence checks and
+    content reads must resolve against the SAME directory, and tests can
+    isolate against a temp dir instead of depending on real-cache absence.
     """
     symbol = _normalize_symbol(symbol)
     date = _normalize_date(date)
@@ -352,7 +358,8 @@ def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.
             f"{symbol} @ {date} is after IN_SAMPLE_END={config.IN_SAMPLE_END}; "
             "post-2022 chains may only be opened through the OOS reveal gate."
         )
-    cached = _cache_path(symbol, date)
+    cached = (Path(cache_dir) / f"{symbol}_{date}.parquet"
+              if cache_dir is not None else _cache_path(symbol, date))
     if cached.exists():
         return validate_chain_schema(pd.read_parquet(cached))
     raise FileNotFoundError(

@@ -47,11 +47,13 @@ class CensusResult:
     eligible_events: list = field(default_factory=list)
 
 
-def _entry_chain(symbol: str, iso: str) -> pd.DataFrame:
+def _entry_chain(symbol: str, iso: str, chain_dir: Path) -> pd.DataFrame:
     # Cache-ONLY (spec §1 zero new data spend): a missing chain raises
     # FileNotFoundError, which the census loop codes as `missing_entry_chain`
     # and excludes the event -- it is NEVER fetched from the paid client.
-    return load_cached_chain(symbol, iso, allow_oos=True)
+    # Reads resolve against the census's OWN chain_dir so presence checks and
+    # content reads can never diverge (post-merge test caught the divergence).
+    return load_cached_chain(symbol, iso, allow_oos=True, cache_dir=chain_dir)
 
 
 def _closes(symbol: str, start_iso: str, end_iso: str) -> pd.Series:
@@ -143,7 +145,7 @@ def run_census(events: list[H9Event], *, chain_dir: Path,
             stats["excluded"] += 1
             continue
         try:
-            chain = _entry_chain(e.symbol, e.t_entry)
+            chain = _entry_chain(e.symbol, e.t_entry, chain_dir)
         except pyarrow.lib.ArrowInvalid:
             raise  # cache corruption is systemic — never a per-event exclusion
         except _CHAIN_LOAD_ERRORS:
