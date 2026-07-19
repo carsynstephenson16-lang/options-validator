@@ -15,7 +15,7 @@ from research.hashing import canonical_json, sha256_hex
 GENESIS_PREV = "0" * 64
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
-TRIAL_TYPES = {"run", "trial_intent"}
+TRIAL_TYPES = {"run", "trial_intent", "retrospective_result"}
 # OOS record types share budget accounting: an oos_attempt is the auditable
 # charge-on-touch event appended BEFORE the holdout backtest executes; the
 # budget counts TOUCHED hypotheses (attempts union reveals), never just
@@ -32,6 +32,30 @@ VALID_RISK_BASES = {"capital_at_risk", "economic_max_loss"}
 RESERVED_KEYS = {"seq", "prev_hash", "record_hash"}
 CHAIN_KEYS = RESERVED_KEYS | {"trial_count", "entry_type"}
 TRIAL_INTENT_KEYS = CHAIN_KEYS | {"timestamp", "reason", "hypothesis_id"}
+# retrospective_result (BS-arc spec 2026-07-17 sec.9): a TRIAL-COUNTING record
+# publishing a result whose inputs already exist (no new run). A post-result
+# trial_intent would be semantically false ("intent" implies pre-result).
+# The attempt number IS this record's chain-computed trial_count -- never
+# restated in prose (owner correction 2026-07-18). Labels are mandatory
+# honesty markers; result is the summary readings being published.
+RETROSPECTIVE_REQUIRED_LABELS = (
+    "outcome-selected",
+    "self-deceiving",
+    "descriptive-only",
+    "no-verdict",
+    "cannot-promote",
+)
+RETROSPECTIVE_RESULT_KEYS = CHAIN_KEYS | {
+    "timestamp",
+    "subject",
+    "hypothesis_id",
+    "report_sha256",
+    "context_sha256",
+    "prereg_ref_sha256",
+    "source_commit",
+    "labels",
+    "result",
+}
 RUN_KEYS = CHAIN_KEYS | {
     "timestamp",
     "run_id",
@@ -93,6 +117,7 @@ DIAGNOSTIC_RESULT_KEYS = CHAIN_KEYS | {
 H7_LANES = {"a", "b", "c"}
 ALLOWED_KEYS_BY_TYPE = {
     "trial_intent": TRIAL_INTENT_KEYS,
+    "retrospective_result": RETROSPECTIVE_RESULT_KEYS,
     "run": RUN_KEYS,
     "oos_attempt": OOS_ATTEMPT_KEYS,
     "oos_reveal": OOS_REVEAL_KEYS,
@@ -285,6 +310,26 @@ def _verify_semantic_records(records: list[dict]) -> None:
             _require_timestamp(rec, "timestamp", i)
             _require_canonical_text(rec, "reason", i)
             _require_optional_canonical_text(rec, "hypothesis_id", i)
+        elif entry_type == "retrospective_result":
+            _require_timestamp(rec, "timestamp", i)
+            _require_canonical_text(rec, "subject", i)
+            _require_optional_canonical_text(rec, "hypothesis_id", i)
+            _require_sha256_hex(rec, "report_sha256", i)
+            _require_sha256_hex(rec, "context_sha256", i)
+            _require_sha256_hex(rec, "prereg_ref_sha256", i)
+            _require_git_sha(rec, "source_commit", i)
+            labels = rec.get("labels")
+            if (not isinstance(labels, list) or not labels
+                    or not all(isinstance(x, str) and x and x == x.strip()
+                               for x in labels)):
+                raise LedgerError(
+                    f"labels must be a non-empty list of trimmed strings at seq {i}")
+            missing = [x for x in RETROSPECTIVE_REQUIRED_LABELS if x not in labels]
+            if missing:
+                raise LedgerError(
+                    f"retrospective_result missing required label(s) at seq {i}: "
+                    f"{missing}")
+            _require_dict(rec, "result", i)
         elif entry_type == "run":
             hypothesis_id = _require_canonical_text(rec, "hypothesis_id", i)
             run_id = _require_canonical_text(rec, "run_id", i)
