@@ -1,0 +1,50 @@
+{
+ "code_sha": "f9f4c97f47c5b19f90eb484e071def1450e8b493",
+ "config_hash": "ae5de5834643f1473279d82403d1545d12bee50221f3ef56ba62996c47ef5811",
+ "eligible_count": 165,
+ "exit_window_gap_days": 0,
+ "floor": 60,
+ "floor_met": true,
+ "manifest_hash": "5e780e71ade0d509d0d9f451c789f68b4c09962699e5bb108f27b6183ce9c4a4",
+ "per_symbol": {
+  "AMZN": {
+   "eligible": 34,
+   "excluded": 0
+  },
+  "CEG": {
+   "eligible": 8,
+   "excluded": 9
+  },
+  "MSFT": {
+   "eligible": 32,
+   "excluded": 2
+  },
+  "NOW": {
+   "eligible": 21,
+   "excluded": 14
+  },
+  "NVDA": {
+   "eligible": 34,
+   "excluded": 2
+  },
+  "PLTR": {
+   "eligible": 20,
+   "excluded": 3
+  },
+  "SMCI": {
+   "eligible": 6,
+   "excluded": 39
+  },
+  "VST": {
+   "eligible": 10,
+   "excluded": 24
+  }
+ },
+ "reasons": {
+  "entry_liquidity_fail": 38,
+  "no_contract_in_bands": 29,
+  "non_earnings_event": 25,
+  "registry_excluded": 1
+ },
+ "spec_sha256": "613d7006164aaf9fff2032e0caf643699b413ad99926c6e027ea3c00f7b7ba6f"
+}

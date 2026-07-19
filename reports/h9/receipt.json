@@ -1,0 +1,866 @@
+{
+ "board": {
+  "avg_loss": -282.8,
+  "avg_win": 481.3666666666666,
+  "capital_efficiency": 13.872998096091385,
+  "expectancy_CI90": [
+   27.82187499999999,
+   574.4625000000001
+  ],
+  "expectancy_per_trade": 290.32499999999993,
+  "gap_gate_forced_insufficient": false,
+  "h9_outcome": "INSUFFICIENT_SAMPLE",
+  "label": "H9",
+  "max_drawdown": 361.3,
+  "n_losses": 4,
+  "n_trades": 16,
+  "n_wins": 12,
+  "return_on_economic_max_loss": NaN,
+  "sharpe_per_trade": 0.5525225328460722,
+  "sortino_per_trade": 12.761262302104441,
+  "total_pnl": 4645.199999999999,
+  "unresolved_data_gap_trades": 0,
+  "unresolved_gap_capital": 0,
+  "unresolved_gap_fraction": 0.0,
+  "verdict": "INSUFFICIENT SAMPLE (4 losses; need >= 10). Ratios below are NOT reliable.",
+  "win_rate": 0.75,
+  "worst_loss": -482.3,
+  "worthless_quote_exits": 0
+ },
+ "census": {
+  "code_sha": "f9f4c97f47c5b19f90eb484e071def1450e8b493",
+  "config_hash": "ae5de5834643f1473279d82403d1545d12bee50221f3ef56ba62996c47ef5811",
+  "eligible_count": 165,
+  "exit_window_gap_days": 0,
+  "floor": 60,
+  "floor_met": true,
+  "manifest_hash": "5e780e71ade0d509d0d9f451c789f68b4c09962699e5bb108f27b6183ce9c4a4",
+  "per_symbol": {
+   "AMZN": {
+    "eligible": 34,
+    "excluded": 0
+   },
+   "CEG": {
+    "eligible": 8,
+    "excluded": 9
+   },
+   "MSFT": {
+    "eligible": 32,
+    "excluded": 2
+   },
+   "NOW": {
+    "eligible": 21,
+    "excluded": 14
+   },
+   "NVDA": {
+    "eligible": 34,
+    "excluded": 2
+   },
+   "PLTR": {
+    "eligible": 20,
+    "excluded": 3
+   },
+   "SMCI": {
+    "eligible": 6,
+    "excluded": 39
+   },
+   "VST": {
+    "eligible": 10,
+    "excluded": 24
+   }
+  },
+  "reasons": {
+   "entry_liquidity_fail": 38,
+   "no_contract_in_bands": 29,
+   "non_earnings_event": 25,
+   "registry_excluded": 1
+  },
+  "spec_sha256": "613d7006164aaf9fff2032e0caf643699b413ad99926c6e027ea3c00f7b7ba6f"
+ },
+ "code_sha": "f9f4c97f47c5b19f90eb484e071def1450e8b493",
+ "config_hash": "ae5de5834643f1473279d82403d1545d12bee50221f3ef56ba62996c47ef5811",
+ "cost_model_hash": "af71c7f65984c259eed7ffc259be72535f35a792bfc0157cadaebf66ff62fa80",
+ "n_trades": 16,
+ "no_trade_log_count": 149,
+ "outcome": "INSUFFICIENT_SAMPLE",
+ "receipt_hash": "5bea2018fa204b2b3bfc221fee2b43f669ce9ff5b90270515dbc267084df3c06",
+ "secondary_cohort_informational": "INSUFFICIENT_SAMPLE",
+ "spec_sha256": "613d7006164aaf9fff2032e0caf643699b413ad99926c6e027ea3c00f7b7ba6f",
+ "study": "H9",
+ "trade_log": [
+  {
+   "event": "AMZN-2018-02-01",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2018-04-26",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2018-07-26",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2018-10-25",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2019-01-31",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2019-04-25",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2019-07-25",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2019-10-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2020-01-30",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2020-04-30",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2020-07-30",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2020-10-29",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2021-02-02",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2021-04-29",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2021-07-29",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2021-10-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2022-02-03",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2022-04-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2022-07-28",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2022-10-27",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2023-02-02",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2023-04-27",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2024-02-01",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2024-04-30",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2024-08-01",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2024-10-31",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2025-02-06",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2025-05-01",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2025-07-31",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2025-10-30",
+   "outcome": "cancel"
+  },
+  {
+   "event": "AMZN-2026-02-05",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "AMZN-2026-04-29",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "CEG-2022-11-08",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "CEG-2024-05-09",
+   "outcome": "cancel"
+  },
+  {
+   "event": "CEG-2024-11-04",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "CEG-2025-02-18",
+   "outcome": "cancel"
+  },
+  {
+   "event": "CEG-2025-11-07",
+   "outcome": "cancel"
+  },
+  {
+   "event": "CEG-2026-02-24",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2018-04-26",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2018-07-19",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2019-01-30",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2019-07-18",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2019-10-23",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2020-04-29",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2020-07-22",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2020-10-27",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2021-04-27",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2021-07-27",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2021-10-26",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2022-01-25",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2022-04-26",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2022-07-26",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2022-10-25",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2023-01-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2023-04-25",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2023-07-25",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2023-10-24",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2024-01-30",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2024-04-25",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2024-07-30",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2024-10-30",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2025-01-29",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2025-04-30",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2025-07-30",
+   "outcome": "cancel"
+  },
+  {
+   "event": "MSFT-2025-10-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2026-01-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "MSFT-2026-04-29",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2018-10-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2019-07-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2019-10-23",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2020-04-29",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2021-04-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2021-07-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2021-10-26",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2022-01-25",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2022-10-23",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2023-01-24",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2023-04-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2023-07-26",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2023-10-25",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2024-01-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2024-04-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2024-07-24",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2024-10-21",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2025-07-23",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2025-10-29",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NOW-2026-01-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NOW-2026-04-17",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2018-02-08",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2018-05-10",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2018-08-16",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2018-11-15",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2019-02-14",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2019-05-16",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2019-08-15",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2019-11-14",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2020-02-13",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2020-05-21",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2020-08-19",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2020-11-18",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2021-02-24",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2021-05-26",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2021-08-18",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2021-11-17",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2022-02-16",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2022-05-25",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2022-08-24",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2022-11-16",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2023-02-22",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2023-05-24",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2023-08-23",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2023-11-21",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2024-02-21",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2024-05-22",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2024-08-28",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2024-11-20",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2025-02-26",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2025-05-28",
+   "outcome": "cancel"
+  },
+  {
+   "event": "NVDA-2025-08-27",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2025-11-19",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2026-02-25",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "NVDA-2026-05-20",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2021-02-16",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2021-11-09",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2022-02-17",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2022-05-09",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2022-08-08",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2023-08-07",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2024-05-06",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2025-02-03",
+   "outcome": "cancel"
+  },
+  {
+   "event": "PLTR-2025-05-05",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2025-08-04",
+   "outcome": "cancel"
+  },
+  {
+   "event": "PLTR-2025-11-03",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "PLTR-2026-02-02",
+   "outcome": "cancel"
+  },
+  {
+   "event": "PLTR-2026-05-04",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "SMCI-2023-11-01",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "SMCI-2024-01-29",
+   "outcome": "cancel"
+  },
+  {
+   "event": "SMCI-2024-04-30",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "SMCI-2024-08-06",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "SMCI-2025-08-05",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "SMCI-2025-11-04",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "VST-2023-11-07",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "VST-2024-11-07",
+   "outcome": "cancel"
+  },
+  {
+   "event": "VST-2025-02-27",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "VST-2025-05-07",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "VST-2025-08-07",
+   "outcome": "cancel"
+  },
+  {
+   "event": "VST-2025-11-06",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "VST-2026-02-26",
+   "outcome": "reaction_below_min"
+  },
+  {
+   "event": "VST-2026-05-07",
+   "outcome": "reaction_below_min"
+  }
+ ],
+ "trades": [
+  {
+   "capital_at_risk": 490.65,
+   "entry_date": "2023-08-07",
+   "event": "AMZN-2023-08-03",
+   "exit_fill_session": "2023-10-02",
+   "exit_reason": "dte_close",
+   "gaps": [],
+   "pnl": -482.3,
+   "symbol": "AMZN",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 561.65,
+   "entry_date": "2023-10-30",
+   "event": "AMZN-2023-10-26",
+   "exit_fill_session": "2023-11-15",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 412.7,
+   "symbol": "AMZN",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 374.65,
+   "entry_date": "2023-11-07",
+   "event": "CEG-2023-11-06",
+   "exit_fill_session": "2024-01-02",
+   "exit_reason": "dte_close",
+   "gaps": [],
+   "pnl": -361.3,
+   "symbol": "CEG",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 546.65,
+   "entry_date": "2024-02-28",
+   "event": "CEG-2024-02-27",
+   "exit_fill_session": "2024-04-02",
+   "exit_reason": "dte_close",
+   "gaps": [],
+   "pnl": 471.7,
+   "symbol": "CEG",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 334.65,
+   "entry_date": "2018-10-26",
+   "event": "MSFT-2018-10-24",
+   "exit_fill_session": "2018-12-03",
+   "exit_reason": "dte_close",
+   "gaps": [],
+   "pnl": 15.7,
+   "symbol": "MSFT",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 240.65,
+   "entry_date": "2019-04-26",
+   "event": "MSFT-2019-04-24",
+   "exit_fill_session": "2019-07-01",
+   "exit_reason": "dte_close",
+   "gaps": [],
+   "pnl": 52.7,
+   "symbol": "MSFT",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 495.65,
+   "entry_date": "2020-01-31",
+   "event": "MSFT-2020-01-29",
+   "exit_fill_session": "2020-02-07",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 765.7,
+   "symbol": "MSFT",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 223.65,
+   "entry_date": "2020-11-16",
+   "event": "PLTR-2020-11-12",
+   "exit_fill_session": "2020-11-24",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 487.7,
+   "symbol": "PLTR",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 148.65,
+   "entry_date": "2021-08-13",
+   "event": "PLTR-2021-08-12",
+   "exit_fill_session": "2021-09-17",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 166.7,
+   "symbol": "PLTR",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 57.65,
+   "entry_date": "2023-05-10",
+   "event": "PLTR-2023-05-08",
+   "exit_fill_session": "2023-05-19",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 87.7,
+   "symbol": "PLTR",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 147.65,
+   "entry_date": "2023-11-03",
+   "event": "PLTR-2023-11-02",
+   "exit_fill_session": "2024-01-02",
+   "exit_reason": "dte_close",
+   "gaps": [],
+   "pnl": -141.3,
+   "symbol": "PLTR",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 170.65,
+   "entry_date": "2024-02-07",
+   "event": "PLTR-2024-02-05",
+   "exit_fill_session": "2024-04-02",
+   "exit_reason": "dte_close",
+   "gaps": [],
+   "pnl": -146.3,
+   "symbol": "PLTR",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 202.65,
+   "entry_date": "2024-08-07",
+   "event": "PLTR-2024-08-05",
+   "exit_fill_session": "2024-08-15",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 236.7,
+   "symbol": "PLTR",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 309.65,
+   "entry_date": "2024-11-06",
+   "event": "PLTR-2024-11-04",
+   "exit_fill_session": "2024-11-18",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 312.7,
+   "symbol": "PLTR",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 455.65,
+   "entry_date": "2024-05-09",
+   "event": "VST-2024-05-08",
+   "exit_fill_session": "2024-05-29",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 473.7,
+   "symbol": "VST",
+   "worthless_quote_exit": false
+  },
+  {
+   "capital_at_risk": 596.65,
+   "entry_date": "2024-08-09",
+   "event": "VST-2024-08-08",
+   "exit_fill_session": "2024-09-23",
+   "exit_reason": "take_profit",
+   "gaps": [],
+   "pnl": 2292.7,
+   "symbol": "VST",
+   "worthless_quote_exit": false
+  }
+ ]
+}
