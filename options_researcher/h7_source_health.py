@@ -8,6 +8,8 @@ schedule: the owner's refresh work-list) and STALE (only post-report grace
 coverage left and it lapses within H7_SOURCE_HEALTH_WARN_SESSIONS XNYS
 sessions: the gate is ABOUT to start failing closed). Unhealthy is
 gate-UNKNOWN or STALE; BANNED stays healthy (an informed pre-report ban).
+Aggregator estimates retained in the append-only store are diagnostic-only
+under amendment v1.4 and are invisible to this health/gating view.
 Exit 1 when any name is unhealthy, 2 when the store is unreadable (fail
 closed). READ-ONLY: this module never mutates any store -- refreshing is
 tools/h7_refresh_earnings.py, owner-in-the-loop.
@@ -29,9 +31,8 @@ from datetime import date, datetime, timedelta
 import config
 from options_researcher.h7_earnings import (
     GATE_UNKNOWN,
-    GATING_EVENT_CLASS,
-    assertions_view,
     earnings_gate,
+    h7_gating_view,
     load_assertions,
     next_report,
     report_date,
@@ -58,9 +59,8 @@ def symbol_health(symbol: str, on: date, assertions: list[dict], *,
     decisions on `on`. Pure observability over the typed gate primitives;
     adds NO gate semantics of its own."""
     sym = symbol.upper()
-    view = [a for a in assertions_view(assertions, known_as_of)
-            if a["symbol"] == sym
-            and a.get("event_class") == GATING_EVENT_CLASS]
+    view = [a for a in h7_gating_view(assertions, known_as_of)
+            if a["symbol"] == sym]
     gate, gate_reason = earnings_gate(sym, on, assertions,
                                       known_as_of=known_as_of)
     newest = max(view, key=lambda a: a["known_as_of_utc"], default=None)
@@ -88,7 +88,8 @@ def symbol_health(symbol: str, on: date, assertions: list[dict], *,
     flags = []
     if coverage != "schedule":
         flags.append(FLAG_MISSING)
-    if coverage == "grace" and grace_sessions_left <= warn_sessions:
+    if (coverage == "grace" and grace_sessions_left is not None
+            and grace_sessions_left <= warn_sessions):
         flags.append(FLAG_STALE)
 
     return {

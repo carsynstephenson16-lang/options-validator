@@ -9,10 +9,11 @@
               promotion contract). Retractions must target the gating row
               promoted from the same raw record they retract.
 
-Source hierarchy, mechanically enforced (roadmap Stage 1): SEC acceptance
-times first, company IR/PR second, aggregator estimates only as disclosed
-`estimated` (notes required); an occurred report from a non-SEC source
-needs notes saying why no SEC acceptance time is cited.
+Source hierarchy, mechanically enforced (roadmap Stage 1 + amendment v1.4):
+SEC acceptance times first, company IR/PR second, aggregator estimates only
+as disclosed diagnostic `estimated` raw evidence (notes required; promotion
+as quarterly-earnings gating evidence is refused); an occurred report from a
+non-SEC source needs notes saying why no SEC acceptance time is cited.
 
 Neither subcommand ever rewrites or reorders an existing row; corrections
 append a NEW raw row and promote it with --supersedes <old G id>. Store locks
@@ -197,6 +198,12 @@ def promote(*, raw_id: str, event_class: str, supersedes: str, notes: str,
                 f"{GATING_EVENT_CLASS} promotion requires fiscal identity IN "
                 f"THE RAW EVIDENCE -- append-raw a row carrying event identity "
                 f"first, then promote that")
+        if (event_class == GATING_EVENT_CLASS
+                and source["source_type"] == "aggregator"):
+            raise SystemExit(
+                f"REFUSED: {raw_id} is aggregator evidence; H7 amendment v1.4 "
+                "keeps aggregator estimates diagnostic-only and prohibits "
+                "promoting them as gating evidence")
         gating = load_assertions(gating_path, raw_path)
         already = [g["record_id"] for g in gating
                    if g.get("promoted_from") == raw_id]

@@ -74,7 +74,7 @@ class TestReviewCounterexamples(unittest.TestCase):
 
 def A(symbol, expected, status="confirmed", event="E1",
       known="2026-07-01T12:00:00+00:00", url="https://example.test/ir",
-      clazz="actual_quarterly_earnings"):
+      clazz="actual_quarterly_earnings", source_type="company_pr"):
     """Assertion-record fixture in the load_assertions output shape."""
     from datetime import datetime
     ts = datetime.fromisoformat(known)
@@ -82,6 +82,7 @@ def A(symbol, expected, status="confirmed", event="E1",
             "fiscal_period": "FY26Q2", "event_class": clazz,
             "expected_date": date.fromisoformat(expected),
             "session_timing": "amc", "status": status, "source_url": url,
+            "source_type": source_type,
             "known_as_of_utc": ts, "checked_at_utc": ts, "notes": ""}
 
 
@@ -103,6 +104,16 @@ class TestEarningsGateTyped(unittest.TestCase):
         rows = [A("ZZZZ", "2026-09-18")]
         state, _ = earnings_gate("ZZZZ", date(2026, 7, 8), rows, known_as_of=_now())
         self.assertEqual(state, GATE_CLEAR)
+
+    def test_aggregator_estimate_is_diagnostic_only(self):
+        rows = [A("ZZZZ", "2026-09-18", status="estimated",
+                  source_type="aggregator")]
+        state, _ = earnings_gate(
+            "ZZZZ", date(2026, 7, 8), rows, known_as_of=_now())
+        self.assertEqual(state, GATE_UNKNOWN)
+        self.assertIsNone(
+            next_report("ZZZZ", date(2026, 7, 8), rows,
+                        known_as_of=_now()))
 
     def test_inside_ban_window_is_banned(self):
         rows = [A("ZZZZ", "2026-07-10")]

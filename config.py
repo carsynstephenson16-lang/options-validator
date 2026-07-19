@@ -526,3 +526,21 @@ LIVE_POLL_SECONDS = 30             # browser polling interval
 LIVE_CACHE_TTL_SECONDS = 25        # server-side payload cache TTL
 LIVE_QUOTE_MAX_AGE_SECONDS = 120   # older quote timestamp => UNAVAILABLE
 LIVE_PROBE_MAX_AGE_DAYS = 7        # recorded schema probe older => live lane off
+
+# ---------------------------------------------------------------------------
+# H9 -- post-earnings conditional HISTORICAL WRITTEN STUDY (spec
+# docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md,
+# owner-approved values 2026-07-16, entry mechanics disclosed in spec §5).
+# One-run contract; kill-not-bless; NEVER a trading lane. Registration gated
+# on the owner's external review (H9_REGISTERED fact required by the CLI gate).
+# Construction is inherited from H6 (DTE/delta bands, TP, DTE-close); costs
+# from the frozen repo cost model. Does NOT reopen the tombstoned H7
+# historical diagnostic.
+# ---------------------------------------------------------------------------
+H9_NAMES = H7_BACKTEST_SYMBOLS          # the 8 audited archive names
+H9_WINDOW = (H7_BACKTEST_START, H7_BACKTEST_END)
+H9_REACTION_MIN = 0.02                  # owner-approved 2026-07-16
+H9_NEXT_REPORT_EXIT_SESSIONS = 2        # owner-approved 2026-07-16
+H9_MIN_ELIGIBLE_EVENTS = 60             # owner-approved 2026-07-16 (census floor)
+H9_PREMIUM_CAP_DOLLARS = 600            # owner-approved: global MAX_LOSS_PER_TRADE binds
+H9_SECONDARY_COHORT = ("NOW", "MSFT", "VST", "CEG")  # E1-uncontaminated, informational only

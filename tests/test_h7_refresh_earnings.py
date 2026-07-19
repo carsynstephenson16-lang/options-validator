@@ -177,6 +177,17 @@ class TestPromote(RefreshBase):
                     supersedes="", notes="", now_utc=NOW,
                     gating_path=self.gating, raw_path=self.raw)
 
+    def test_aggregator_estimate_cannot_be_promoted_as_gating_evidence(self):
+        raw = append_raw(**_schedule_kwargs(
+            source_type="aggregator", status="estimated",
+            notes="diagnostic estimate; no official source found"),
+            path=self.raw)
+        with self.assertRaisesRegex(SystemExit, "diagnostic-only"):
+            promote(raw_id=raw["record_id"],
+                    event_class="actual_quarterly_earnings",
+                    supersedes="", notes="", now_utc=NOW,
+                    gating_path=self.gating, raw_path=self.raw)
+
     def test_non_gating_class_accepts_collector_shaped_rows(self):
         row = promote(raw_id="A0003", event_class="business_update",
                       supersedes="", notes="classified as business update",
