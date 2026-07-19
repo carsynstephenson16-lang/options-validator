@@ -594,7 +594,7 @@ H9_MAX_UNRESOLVED_GAP_FRACTION = 0.10   # disclosed gap-rate ceiling
 # CLI. The freeze commit renames the spec off "-DRAFT" and updates THIS line
 # atomically with the rename, so the sha256 recorded in H9_REGISTERED and the
 # on-disk file never diverge. The prereg gate binds the two (C5).
-H9_SPEC_PATH = "docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md"
+H9_SPEC_PATH = "docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study.md"
 
 # ---------------------------------------------------------------------------
 # CARD 3 -- "near-the-bottom long call" EXPLORATORY IN-SAMPLE HISTORICAL STUDY

@@ -1,12 +1,21 @@
-# H9 — post-earnings conditional historical study (DRAFT; NOT REGISTERED)
+# H9 — post-earnings conditional historical study (REGISTERED)
 
-**Status: DRAFT. No value in §5 is frozen until the owner types it. No code
-may be written against this spec until the owner-typed version is committed,
-sha256-hashed, and recorded as an `H9_REGISTERED` ledger fact whose
-`trial_count` is DERIVED from `ledger/experiments.jsonl` at registration time
-(the append-only ledger is the single source of truth; never pin a stale
-count in the spec, code, or tests — review B3). External independent review
-clears the freeze (owner decision 2026-07-16, hybrid review model).**
+**Status: REGISTERED 2026-07-18 (owner PASS confirmation in chat, this
+session). §5 values were owner-approved 2026-07-16 by reference (entry
+mechanics disclosed in §5). External independent review (hybrid model, owner
+decision 2026-07-16): adversarial fresh-context review returned FAIL with
+four blockers (B1 silent-fetch, B2 non-quarterly exit contamination, B3
+stale trial pin, B4 hardcoded DRAFT path); all were fixed plus conditions
+C5/C6 (commit 3a592a9) and a post-merge chain_dir-coherence defect (commit
+705325d); re-review returned PASS-WITH-CONDITIONS whose residual conditions
+RC1/RC2 are executed by this freeze commit (atomic rename +
+`config.H9_SPEC_PATH` update; `spec_sha256=<hex>` bound literally in the
+`H9_REGISTERED` fact). `trial_count` is DERIVED from
+`ledger/experiments.jsonl` at registration time (the append-only ledger is
+the single source of truth; never pin a stale count in the spec, code, or
+tests — review B3). The sha256 of this exact committed file is bound in the
+`H9_REGISTERED` fact; any later edit to this file is spec drift and the
+prereg gate refuses.**
 
 **Authority:** `H7_7B2R1_DECISIONS` item (5): "a post-earnings-only
 historical study may later be registered as a SEPARATE conditional hypothesis
