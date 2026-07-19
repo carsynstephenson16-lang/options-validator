@@ -584,3 +584,27 @@ H9_NEXT_REPORT_EXIT_SESSIONS = 2        # owner-approved 2026-07-16
 H9_MIN_ELIGIBLE_EVENTS = 60             # owner-approved 2026-07-16 (census floor)
 H9_PREMIUM_CAP_DOLLARS = 600            # owner-approved: global MAX_LOSS_PER_TRADE binds
 H9_SECONDARY_COHORT = ("NOW", "MSFT", "VST", "CEG")  # E1-uncontaminated, informational only
+
+# ---------------------------------------------------------------------------
+# CARD 3 -- "near-the-bottom long call" EXPLORATORY IN-SAMPLE HISTORICAL STUDY
+# (owner-frozen "freeze as is" 2026-07-18; ledger trial_intent
+# CARD3-near-bottom-long-call-v1). This is exploratory in-sample evidence,
+# NEVER a verdict. One frozen card, run once. Universe = H7_BACKTEST_SYMBOLS;
+# window = [CARD3_START, IN_SAMPLE_END] IN-SAMPLE ONLY (no allow_oos read).
+# Fill/liquidity/verdict reuse the frozen repo surfaces (SLIPPAGE_HAIRCUT,
+# COMMISSION_PER_CONTRACT, MIN_OPEN_INTEREST, MAX_SPREAD_PCT,
+# MAX_LOSS_PER_TRADE, MIN_LOSSES_FOR_VERDICT); the numbers below are the
+# card's own frozen signal/structure/exit parameters and nothing else reads
+# them. Do not alter any value without a logged CARD3_PREREG_V2.
+# ---------------------------------------------------------------------------
+CARD3_START = "2018-01-02"            # in-sample start; end = IN_SAMPLE_END
+CARD3_DD_LOOKBACK_D = 252            # trailing high window ("252-session high")
+CARD3_DD_MIN = 0.30                  # close >= 30% below the trailing high
+CARD3_NEAR_LOW_LOOKBACK_D = 60       # trailing low window ("60-session low")
+CARD3_NEAR_LOW_PCT = 0.10           # close within 10% of the trailing low
+CARD3_NEW_LOW_LOOKBACK_D = 20        # "not a new 20-session low" window
+CARD3_DTE_BAND = (60, 120)           # call tenor band, inclusive
+CARD3_DELTA_BAND = (0.55, 0.70)      # call delta band, inclusive
+CARD3_TP_MULT = 2.0                  # take-profit when mid >= 2x entry mid (+100%)
+CARD3_CLOSE_AT_DTE = 30              # time-exit when DTE <= 30
+CARD3_MAX_OPEN_PER_NAME = 1          # max 1 open position per name
