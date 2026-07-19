@@ -1,18 +1,35 @@
-"""One-door reconciliation (Task A3): exactly ONE code path writes the real H7
-forward store -- ``register_window_real`` -- and ``tools/h7_manual_activate.py``
-is its only caller. The CLI no longer appends to the ledger itself.
+"""One-door reconciliation (Task A3): ``register_window_real`` is intended to be
+the only code path that writes the real H7 forward store, and
+``tools/h7_manual_activate.py`` is its only caller.
+
+What the STRUCTURAL (AST) scan below actually proves -- and what it does NOT:
+  * It PROVES that, across the scanned source roots, no module makes a direct
+    ``append_event`` call whose ``base_dir`` is REAL_FORWARD_STORE (literally
+    or via an in-function alias / default-parameter alias), and that the CLI
+    makes no ``append_event`` call at all. In other words: no source-level
+    second door that names the real store.
+  * It does NOT, by itself, prove "exactly one runtime path writes the real
+    store." ``register_window_real`` legitimately appends to whatever
+    ``base_dir`` it is handed (the CLI hands it REAL_FORWARD_STORE via a
+    default), and a static scan cannot follow that value at runtime. The
+    single-writer guarantee is carried by RUNTIME guards, not this scan:
+    ``_synthetic_base`` refuses the real store on every other append path;
+    ``expected_head=None`` makes a concurrent/second write lose; and the
+    append-time VALID-EMPTY re-verify inside ``register_window_real`` refuses
+    if the store is not empty. The scan is the source-level tripwire that
+    keeps a NEW direct door from being added silently.
 
 Four proofs:
-  (a) structural scan: ``register_window_real`` is the sole function in
-      options_researcher/ + tools/ that constructs a real-store-capable
-      ``append_event`` base (append + Path() + no ``_synthetic_base`` guard),
-      and the CLI contains no ``append_event`` call at all;
+  (a) structural scan: no scanned module appends to REAL_FORWARD_STORE (direct,
+      aliased, or default-parameter alias), and the CLI contains no
+      ``append_event`` call at all;
   (b) end-to-end synthetic activation through the CLI ``activate`` -- a seq-0
       window_registration lands with the receipt hashes in its payload;
   (c) a receipt-hash mismatch discovered INSIDE the CLI's append-time
       ``recheck_gates`` refuses through the one door and writes nothing;
-  (d) revert-proof: the same scanner, fed a CLI that regained a direct
-      ``ledger.append_event(..., base_dir=REAL_FORWARD_STORE, ...)``, flags it.
+  (d) revert-proof: the same scanners, fed a CLI that regained a direct or
+      alias-laundered ``append_event(..., base_dir=REAL_FORWARD_STORE, ...)``,
+      flag it.
 """
 from __future__ import annotations
 
@@ -35,7 +52,8 @@ from research.hashing import config_hash, diagnostic_source_hash, sha256_file
 from research.receipts import load_receipt, make_receipt
 from tools import h7_manual_activate as cli
 
-_SCAN_ROOTS = (Path("options_researcher"), Path("tools"))
+_SCAN_ROOTS = (Path("options_researcher"), Path("tools"), Path("research"),
+               Path("data"), Path("harness"))
 _LEDGER_MODULE = "h7_event_ledger.py"  # defines append_event; not a caller
 
 
@@ -81,49 +99,110 @@ def _real_store_constructor_functions(source: str) -> list[str]:
     return out
 
 
-def _appends_to_real_store_literally(source: str) -> bool:
-    """True if any ``append_event`` call passes ``base_dir=REAL_FORWARD_STORE``
-    (a Name/Attribute ending in REAL_FORWARD_STORE). This is the exact old
-    two-door pattern the CLI must never regain."""
-    for sub in ast.walk(ast.parse(source)):
-        if not (isinstance(sub, ast.Call)
+def _is_real_store_ref(node: ast.AST) -> bool:
+    """A bare reference to REAL_FORWARD_STORE (Name or attribute access), NOT a
+    derivation of it such as ``REAL_FORWARD_STORE.resolve()`` (that is a Call)."""
+    return ((isinstance(node, ast.Name) and node.id == "REAL_FORWARD_STORE")
+            or (isinstance(node, ast.Attribute)
+                and node.attr == "REAL_FORWARD_STORE"))
+
+
+def _real_store_alias_names(fn: ast.AST) -> set[str]:
+    """Names bound inside ``fn`` to a bare REAL_FORWARD_STORE reference -- via a
+    default parameter value (``def f(base=REAL_FORWARD_STORE)``) or a local
+    assignment (``base = REAL_FORWARD_STORE``). A value DERIVED from it (e.g.
+    ``REAL_FORWARD_STORE.resolve()``) is a Call, not a bare ref, so it does not
+    launder into the real store for append purposes and is not treated as an
+    alias."""
+    aliases: set[str] = set()
+    if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        a = fn.args
+        positional = a.posonlyargs + a.args
+        offset = len(positional) - len(a.defaults)
+        for i, default in enumerate(a.defaults):
+            if _is_real_store_ref(default):
+                aliases.add(positional[offset + i].arg)
+        for arg, default in zip(a.kwonlyargs, a.kw_defaults):
+            if default is not None and _is_real_store_ref(default):
+                aliases.add(arg.arg)
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign) and _is_real_store_ref(node.value):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    aliases.add(target.id)
+        if (isinstance(node, ast.AnnAssign) and node.value is not None
+                and _is_real_store_ref(node.value)
+                and isinstance(node.target, ast.Name)):
+            aliases.add(node.target.id)
+    return aliases
+
+
+def _appends_to_real_store(source: str) -> bool:
+    """True if any function in ``source`` makes an ``append_event`` call whose
+    ``base_dir`` is the real store -- either literally REAL_FORWARD_STORE, or a
+    name that aliases it (in-function assignment OR default parameter). Catches
+    both the old two-door literal (``base_dir=REAL_FORWARD_STORE``) and an
+    alias-laundered evasion (``def f(base=REAL_FORWARD_STORE): append_event(
+    ..., base_dir=base)``)."""
+    tree = ast.parse(source)
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        aliases = _real_store_alias_names(fn)
+        for sub in ast.walk(fn):
+            if not (isinstance(sub, ast.Call)
+                    and ((isinstance(sub.func, ast.Attribute)
+                          and sub.func.attr == "append_event")
+                         or (isinstance(sub.func, ast.Name)
+                             and sub.func.id == "append_event"))):
+                continue
+            candidates = list(sub.args)
+            candidates += [kw.value for kw in sub.keywords if kw.arg == "base_dir"]
+            for val in candidates:
+                if _is_real_store_ref(val):
+                    return True
+                if isinstance(val, ast.Name) and val.id in aliases:
+                    return True
+    # Module-level append at import time (no enclosing function) -- defensive.
+    for sub in ast.walk(tree):
+        if (isinstance(sub, ast.Call)
                 and ((isinstance(sub.func, ast.Attribute)
                       and sub.func.attr == "append_event")
                      or (isinstance(sub.func, ast.Name)
                          and sub.func.id == "append_event"))):
-            continue
-        for kw in sub.keywords:
-            if kw.arg == "base_dir":
-                val = kw.value
-                if isinstance(val, ast.Name) and val.id == "REAL_FORWARD_STORE":
+            for val in list(sub.args) + [kw.value for kw in sub.keywords
+                                         if kw.arg == "base_dir"]:
+                if _is_real_store_ref(val):
                     return True
-                if (isinstance(val, ast.Attribute)
-                        and val.attr == "REAL_FORWARD_STORE"):
-                    return True
-        for arg in sub.args:  # positional base_dir, defensively
-            if isinstance(arg, ast.Name) and arg.id == "REAL_FORWARD_STORE":
-                return True
     return False
 
 
 def _module_sources() -> dict[str, str]:
     srcs = {}
     for root in _SCAN_ROOTS:
-        for path in sorted(root.glob("*.py")):
-            if path.name == _LEDGER_MODULE:
+        for path in sorted(root.rglob("*.py")):
+            if "__pycache__" in path.parts or path.name == _LEDGER_MODULE:
                 continue
-            srcs[path.name] = path.read_text()
+            srcs[str(path)] = path.read_text()
     return srcs
 
 
 class StructuralOneDoorTests(unittest.TestCase):
-    def test_register_window_real_is_the_sole_real_store_appender(self):
+    def test_register_window_real_is_the_sole_real_store_capable_constructor(self):
+        # NOTE: this proves ``register_window_real`` is the only function that
+        # BUILDS its own append base without the ``_synthetic_base`` refusal --
+        # i.e. the only one structurally CAPABLE of appending to whatever store
+        # it is handed. It does not (and cannot statically) prove exactly one
+        # runtime writer; the real-store single-writer guarantee is carried by
+        # the runtime guards documented at module top (_synthetic_base,
+        # expected_head=None, VALID-EMPTY re-verify).
         offenders = {name: _real_store_constructor_functions(src)
                      for name, src in _module_sources().items()}
         with_constructor = {name: fns for name, fns in offenders.items() if fns}
         self.assertEqual(
-            with_constructor, {"h7_window_registration.py": ["register_window_real"]},
-            "exactly one module/function may construct a real-store append base")
+            with_constructor,
+            {"options_researcher/h7_window_registration.py": ["register_window_real"]},
+            "only register_window_real may construct an unguarded append base")
 
     def test_cli_never_appends_directly(self):
         cli_src = Path("tools/h7_manual_activate.py").read_text()
@@ -134,32 +213,44 @@ class StructuralOneDoorTests(unittest.TestCase):
         # ...and it must call the one door.
         self.assertIn("register_window_real", cli_src)
 
-    def test_no_module_hardcodes_the_real_store_into_an_append(self):
+    def test_no_module_appends_to_the_real_store(self):
+        # No scanned module may append_event to REAL_FORWARD_STORE, whether
+        # literally or via an in-function / default-parameter alias.
         for name, src in _module_sources().items():
             self.assertFalse(
-                _appends_to_real_store_literally(src),
-                f"{name} passes base_dir=REAL_FORWARD_STORE to append_event")
+                _appends_to_real_store(src),
+                f"{name} appends to REAL_FORWARD_STORE (direct or aliased)")
 
-    def test_revert_to_a_direct_cli_append_is_caught(self):
-        # (d) Revert-proof: reconstruct the OLD two-door body -- a direct
-        # ledger.append_event to the real store inside the CLI -- and prove the
-        # SAME scanners the structural tests use would flag it. If a future
-        # edit reintroduces this, test_cli_never_appends_directly (via
-        # _has_append_call) AND test_no_module_hardcodes... (via
-        # _appends_to_real_store_literally) both fail.
-        regressed = (
+    def test_revert_to_a_direct_or_aliased_cli_append_is_caught(self):
+        # (d) Revert-proof: reconstruct BOTH evasions and prove the SAME
+        # scanners the structural tests use would flag them. If a future edit
+        # reintroduces either, test_cli_never_appends_directly (via
+        # _has_append_call) AND test_no_module_appends_to_the_real_store (via
+        # _appends_to_real_store) fail.
+        direct = (
             "from options_researcher import h7_event_ledger as ledger\n"
             "from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE\n"
             "def activate(event):\n"
             "    return ledger.append_event(event, base_dir=REAL_FORWARD_STORE,\n"
             "                               expected_head=None)\n"
         )
-        self.assertTrue(_has_append_call(regressed))
-        self.assertTrue(_appends_to_real_store_literally(regressed))
-        # And the current CLI is clean under both.
+        # Alias-laundered: base_dir=name whose default is REAL_FORWARD_STORE.
+        aliased = (
+            "from options_researcher import h7_event_ledger as ledger\n"
+            "from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE\n"
+            "def activate(event, base=REAL_FORWARD_STORE):\n"
+            "    return ledger.append_event(event, base_dir=base,\n"
+            "                               expected_head=None)\n"
+        )
+        for regressed in (direct, aliased):
+            self.assertTrue(_has_append_call(regressed))
+            self.assertTrue(_appends_to_real_store(regressed))
+        # And the current CLI is clean under both -- its forward_base=
+        # REAL_FORWARD_STORE default is NOT flagged because activate makes no
+        # append_event call (it hands the base to the one door instead).
         cli_src = Path("tools/h7_manual_activate.py").read_text()
         self.assertFalse(_has_append_call(cli_src))
-        self.assertFalse(_appends_to_real_store_literally(cli_src))
+        self.assertFalse(_appends_to_real_store(cli_src))
 
 
 # --------------------------------------------------------------------------- #

@@ -55,8 +55,17 @@ Plus runtime evidence produced inside the activation arc, not typed by the
 owner: independent review PASS (`review_evidence`), this spec's sha256, the
 code commit, source-health and data-gate evidence ids, a fresh Darwin
 durability verification (fsync/F_FULLFSYNC success AND failure paths), and
-`pre_append_state` — plus a FRESH data-audit receipt (receipt_v4 is stale
-and may not be blessed).
+`pre_append_state`.
+
+**Procedural precondition (NOT code-enforced).** A FRESH data-audit receipt
+covering the pinned session is required before activation, but no guard check
+reads it — the pre-versioned `receipt_v4` is stale and must not be blessed.
+This is an OWNER/ORCHESTRATOR-VERIFIED step of the activation sitting: the
+orchestrator confirms by hand, in the same session as the append, that a fresh
+data-audit receipt exists for the pinned session, and records that receipt's
+hash verbatim in the activation fact. The `activation_preconditions()` guard
+does not, and is not being changed to, enforce this; treat a missing or stale
+data-audit receipt as a manual VOID of the sitting, not a code failure.
 
 ## 4. The append procedure (exactly once)
 
