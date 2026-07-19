@@ -626,3 +626,13 @@ parked here so the cut is on the record, not just in the spec.
 
 **Review date:** at the first H5/H6 verdict, or the 2026-10-06 quarterly audit,
 whichever comes first.
+
+## 2026-07-18 — ET long-term exposure (equity/LEAPS, not H7 options)
+Owner thesis: ET (Energy Transfer) is an energy player in the AI buildout and a
+possible long-term play. Its listed options FAIL the frozen H7 liquidity gates
+(~$20 spot, ATM spread ~10.5% > 10% cap; 0 contracts pass the strict 5%
+admission gate), and the owner accepted that (ET_TRADABILITY_ACCEPTED,
+facts.log) rather than loosening gates. If long-term exposure is wanted, the
+honest vehicles are shares (outside this validator's scope) or a deliberate,
+separately-registered LEAPS design that respects costs. Review date: next
+cross-book review.
