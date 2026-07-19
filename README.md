@@ -86,6 +86,22 @@ uv run python -m options_researcher.attractiveness_dashboard    # interactive at
 official ThetaData client on a cache miss). Post-`IN_SAMPLE_END` values stay
 sealed for the legacy holdout machinery unless the reveal gate opens them.
 
+### Isolated external model checks
+
+The root environment does not depend on third-party pricing or portfolio
+libraries. Git-pinned, separate checks are documented in
+`tools/third_party/README.md`:
+
+```bash
+uv run --frozen --project tools/bs_parity python tools/bs_parity/run.py
+uv run --frozen --project tools/financepy_validation python tools/financepy_validation/run.py
+```
+
+`vollib` is parity-test-only. FinancePy is GPL-3.0-or-later and remains in a
+separate validation environment. OpenBB is reserved for non-canonical
+`equity-research` enrichment; `ffn` is deferred, and `pysabr`, `willowtree`,
+and `finoptions` are reference-only.
+
 ### Reproducing a ledger record
 
 A fresh clone canNOT re-run a logged experiment as-is; three things are

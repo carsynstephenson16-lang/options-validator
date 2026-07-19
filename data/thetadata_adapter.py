@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from datetime import date as Date
 from pathlib import Path
 
@@ -39,6 +40,7 @@ import numpy as np
 import pandas as pd
 
 import config
+from data.atomic_io import atomic_parquet_write
 
 CACHE_DIR = Path(os.environ.get("OPTIONS_CACHE_DIR", ".cache/chains"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -110,6 +112,7 @@ def validate_chain_schema(chain: pd.DataFrame) -> pd.DataFrame:
 _API_KEY_ENV_VARS = ("THETADATA_API_KEY", "THETA_DATA_API_KEY")
 
 _client_singleton = None  # module-cached ThetaClient; constructed lazily
+_client_local = threading.local()
 
 
 def _resolve_api_key() -> str:
@@ -137,7 +140,10 @@ def _client():
     the `thetadata` package here (not at module load) keeps this module's
     import cheap and network-free."""
     global _client_singleton
-    if _client_singleton is None:
+    client = getattr(_client_local, "client", None)
+    if client is None and threading.current_thread() is threading.main_thread():
+        client = _client_singleton
+    if client is None:
         from thetadata import ThetaClient
 
         client = ThetaClient(api_key=_resolve_api_key(), dataframe_type="pandas")
@@ -150,8 +156,10 @@ def _client():
                 "ThetaData account has no options subscription entitlement -- "
                 "data calls would fail; check the account tier."
             )
-        _client_singleton = client
-    return _client_singleton
+        _client_local.client = client
+        if threading.current_thread() is threading.main_thread():
+            _client_singleton = client
+    return client
 
 
 def _reset_client() -> None:
@@ -160,7 +168,10 @@ def _reset_client() -> None:
     observed live 2026-07-03: UNAVAILABLE 'Stream removed (Socket closed)'
     after ~3,890 sequential calls on one channel."""
     global _client_singleton
-    _client_singleton = None
+    if hasattr(_client_local, "client"):
+        del _client_local.client
+    if threading.current_thread() is threading.main_thread():
+        _client_singleton = None
 
 
 def _fetch_raw(symbol: str, date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -329,7 +340,7 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
     if dropped:
         print(f"{symbol} @ {date}: dropped {dropped} contracts "
               "missing open interest (fail-closed; untradeable anyway)")
-    chain.to_parquet(cached)
+    atomic_parquet_write(chain, cached)
     return chain
 
 
@@ -414,7 +425,7 @@ def blind_cache_chain(symbol: str, date: str, *, ledger_dir="ledger") -> dict:
         rows, columns = _parquet_metadata_without_values(cached)
     else:
         chain, _dropped = _fetch_merged_chain(symbol, date)
-        chain.to_parquet(cached)
+        atomic_parquet_write(chain, cached)
         rows, columns = len(chain), list(chain.columns)
         del chain  # values must not outlive the write
 

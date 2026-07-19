@@ -11,8 +11,9 @@ gate-UNKNOWN or STALE; BANNED stays healthy (an informed pre-report ban).
 Aggregator estimates retained in the append-only store are diagnostic-only
 under amendment v1.4 and are invisible to this health/gating view.
 Exit 1 when any name is unhealthy, 2 when the store is unreadable (fail
-closed). READ-ONLY: this module never mutates any store -- refreshing is
-tools/h7_refresh_earnings.py, owner-in-the-loop.
+closed). The source stores remain read-only; the command writes only an
+immutable evidence receipt. Refreshing is tools/h7_refresh_earnings.py,
+owner-in-the-loop.
 
 Run:
     uv run python -m options_researcher.h7_source_health [--as-of YYYY-MM-DD]
@@ -27,6 +28,7 @@ from __future__ import annotations
 
 import csv
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import config
 from options_researcher.h7_earnings import (
@@ -37,7 +39,9 @@ from options_researcher.h7_earnings import (
     next_report,
     report_date,
 )
-from options_researcher.h7_scope import watch_universe
+from options_researcher.h7_scope import scope_identity, watch_universe
+from research.hashing import config_hash, diagnostic_source_hash
+from research.receipts import input_files, make_receipt, write_immutable_receipt
 
 FLAG_MISSING = "MISSING"   # no live future schedule assertion
 FLAG_STALE = "STALE"       # only grace coverage left, lapsing within N sessions
@@ -111,6 +115,43 @@ def symbol_health(symbol: str, on: date, assertions: list[dict], *,
     }
 
 
+def evaluate_health(*, requested_on: date, on: date, known_as_of: datetime,
+                    assertions: list[dict], names=None) -> dict:
+    """Build the deterministic health result used by CLI and receipts."""
+    names = list(watch_universe() if names is None else names)
+    warn = config.H7_SOURCE_HEALTH_WARN_SESSIONS
+    rows = [symbol_health(symbol, on, assertions,
+                          known_as_of=known_as_of, warn_sessions=warn)
+            for symbol in names]
+    unhealthy = [row["symbol"] for row in rows if not row["healthy"]]
+    return {
+        "evaluation_session": on.isoformat(),
+        "requested_run_date": requested_on.isoformat(),
+        "known_as_of_utc": known_as_of.isoformat(),
+        "scope": scope_identity(names),
+        "healthy_count": len(rows) - len(unhealthy),
+        "unhealthy_count": len(unhealthy),
+        "unhealthy_symbols": unhealthy,
+        "activation_ready": not unhealthy,
+        "symbols": {row["symbol"]: row for row in rows},
+    }
+
+
+def build_receipt(result: dict) -> dict:
+    """Bind source health to both assertion stores and source identity."""
+    from options_researcher.h7_earnings import ASSERTIONS_PATH, RAW_ASSERTIONS_PATH
+
+    return make_receipt("source_health", {
+        **result,
+        "input_files": input_files({
+            "gating_assertions": ASSERTIONS_PATH,
+            "raw_assertions": RAW_ASSERTIONS_PATH,
+        }),
+        "config_hash": config_hash(),
+        "source_hash": diagnostic_source_hash(),
+    })
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     from zoneinfo import ZoneInfo
@@ -124,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
         help="evaluate for this date with the information cutoff at the "
              "close of the last completed session before it (default: "
              "today America/New_York, cutoff now)")
+    parser.add_argument("--write-receipt", default=None,
+                        help="immutable source-health receipt path")
     args = parser.parse_args(argv)
 
     ny_today = datetime.now(ZoneInfo("America/New_York")).date()
@@ -160,17 +203,18 @@ def main(argv: list[str] | None = None) -> int:
               f"closed): {type(e).__name__}: {e}")
         return 2
 
-    warn = config.H7_SOURCE_HEALTH_WARN_SESSIONS
     names = watch_universe()
+    result = evaluate_health(requested_on=requested_on, on=on,
+                             known_as_of=known_as_of, assertions=assertions,
+                             names=names)
+    warn = config.H7_SOURCE_HEALTH_WARN_SESSIONS
     replay = (f" requested_as_of={requested_on.isoformat()}"
               if args.as_of else "")
     print(f"H7 SOURCE HEALTH on={on.isoformat()}{replay} "
           f"known_as_of={known_as_of.isoformat()} warn<={warn} sessions "
           f"(v3 gating store; read-only)")
-    unhealthy = 0
     for symbol in names:
-        h = symbol_health(symbol, on, assertions,
-                          known_as_of=known_as_of, warn_sessions=warn)
+        h = result["symbols"][symbol]
         flags = ",".join(h["flags"]) if h["flags"] else "-"
         newest = (f"{h['newest_record_id']} {h['status']}/{h['source_type']} "
                   f"known {h['newest_known_as_of'].date().isoformat()}"
@@ -184,9 +228,20 @@ def main(argv: list[str] | None = None) -> int:
         verdict = "ok" if h["healthy"] else "UNHEALTHY"
         print(f"{h['symbol']:>5}: {verdict:>9} gate={h['gate']} [{flags}] "
               f"{due}{runway} | newest: {newest}")
-        if not h["healthy"]:
-            unhealthy += 1
-    print(f"summary: {len(names) - unhealthy}/{len(names)} healthy; "
+    receipt = build_receipt(result)
+    receipt_path = (Path(args.write_receipt) if args.write_receipt else
+                    Path("reports/h7_receipts") /
+                    result["scope"]["scope_id"] / "source_health" /
+                    f"{result['evaluation_session']}.json")
+    try:
+        write_immutable_receipt(receipt, receipt_path)
+    except (OSError, ValueError, FileExistsError) as exc:
+        print(f"H7 SOURCE-HEALTH ERROR -- cannot write receipt: "
+              f"{type(exc).__name__}: {exc}")
+        return 2
+    unhealthy = result["unhealthy_count"]
+    print(f"summary: {result['healthy_count']}/{len(names)} healthy; "
+          f"receipt={receipt_path}; "
           f"exit {'1 (unhealthy names above)' if unhealthy else '0'}")
     return 1 if unhealthy else 0
 

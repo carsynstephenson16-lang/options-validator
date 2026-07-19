@@ -11,7 +11,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from options_researcher import h7_event_ledger as ledger
+from options_researcher.h7_scope import scope_identity
 from options_researcher.h7_window_registration import OWNER_FIELDS
+from research.hashing import config_hash, diagnostic_source_hash
+from research.receipts import verify_receipt
 
 
 @dataclass(frozen=True)
@@ -44,7 +47,12 @@ def _working_tree_clean() -> Check:
 def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
                              universe: tuple, data_gate_result: dict,
                              owner_inputs: dict,
-                             allow_real_readonly: bool = False) -> GuardReport:
+                             allow_real_readonly: bool = False,
+                             strict: bool = False,
+                             source_health_receipt: dict | None = None,
+                             data_gate_receipt: dict | None = None,
+                             backup_restore_receipt: dict | None = None,
+                             completed_session: str | None = None) -> GuardReport:
     from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE, ActivationBoundaryError
     base = Path(forward_base).resolve()
     real = Path(REAL_FORWARD_STORE).resolve()
@@ -72,6 +80,58 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
         "data_gate_go", gate_ok,
         "GO whole-universe" if gate_ok
         else f"verdict={data_gate_result.get('whole_universe_verdict')}"))
+
+    if strict:
+        current_scope = scope_identity()
+        scope_ok = (data_gate_result.get("scope") == current_scope
+                    and tuple(data_gate_result.get("universe", ())) ==
+                    tuple(current_scope["symbols"]))
+        report.checks.append(Check(
+            "scope_identity", scope_ok,
+            "official current scope" if scope_ok else "missing/stale scope identity"))
+        receipts_ok = (source_health_receipt is not None
+                       and data_gate_receipt is not None
+                       and not verify_receipt(source_health_receipt)
+                       and not verify_receipt(data_gate_receipt)
+                       and data_gate_receipt.get("receipt_hash") ==
+                       data_gate_result.get("receipt_hash")
+                       and source_health_receipt.get("receipt_hash") ==
+                       data_gate_receipt.get("source_health_receipt_hash")
+                       and data_gate_receipt.get("scope") == current_scope)
+        report.checks.append(Check(
+            "receipt_chain", receipts_ok,
+            "source-health -> data-gate receipts linked" if receipts_ok
+            else "receipt chain missing, tampered, or mismatched"))
+        source_ok = (source_health_receipt is not None
+                     and source_health_receipt.get("activation_ready") is True
+                     and source_health_receipt.get("healthy_count") == len(universe)
+                     and not source_health_receipt.get("unhealthy_symbols"))
+        report.checks.append(Check(
+            "source_health_all_names", source_ok,
+            "all current names healthy" if source_ok
+            else "source health is partial or stale"))
+        identity_ok = (data_gate_receipt is not None
+                       and data_gate_receipt.get("config_hash") == config_hash()
+                       and data_gate_receipt.get("source_hash") ==
+                       diagnostic_source_hash())
+        report.checks.append(Check(
+            "source_config_identity", identity_ok,
+            "code/config identity matches receipts" if identity_ok
+            else "code/config identity changed since gate"))
+        backup_ok = False
+        if backup_restore_receipt is not None:
+            backup_ok = (
+                not verify_receipt(backup_restore_receipt)
+                and backup_restore_receipt.get("receipt_type") == "backup_restore"
+                and backup_restore_receipt.get("scope") == current_scope
+                and backup_restore_receipt.get("verification", {}).get("ok") is True
+                and (completed_session is None or
+                     backup_restore_receipt.get("completed_session") ==
+                     completed_session))
+        report.checks.append(Check(
+            "fresh_backup_restore", backup_ok,
+            "fresh verified restore evidence" if backup_ok
+            else "missing/stale/unverified backup restore evidence"))
 
     blank = [f for f in OWNER_FIELDS if owner_inputs.get(f) in (None, "")]
     report.checks.append(Check(
