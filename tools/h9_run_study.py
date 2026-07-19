@@ -12,22 +12,47 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
+import config
 from research.facts import read_facts
 
-SPEC_PATH = Path("docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md")
+# B4: the frozen spec path is sourced from config (H9_SPEC_PATH), so the freeze
+# commit renames the spec and updates config atomically -- the CLI never carries
+# a stale "-DRAFT" filename that would FileNotFoundError after the rename.
+SPEC_PATH = Path(config.H9_SPEC_PATH)
 CENSUS_ARTIFACT = Path("reports/h9/census.json")
 RECEIPT_PATH = Path("reports/h9/receipt.json")
+
+# C5: a registration fact may bind the frozen spec's sha256 as `spec_sha256=<hex>`.
+_SPEC_SHA_RE = re.compile(r"spec_sha256=([0-9a-f]{64})")
 
 
 def h9_prereg_gate(base_dir="ledger") -> str | None:
     lines = read_facts(base_dir=base_dir)
-    if not any(line.split("\t", 1)[-1].startswith("H9_REGISTERED") for line in lines):
+    registered = [line for line in lines
+                  if line.split("\t", 1)[-1].startswith("H9_REGISTERED")]
+    if not registered:
         return ("H9 is not registered: no H9_REGISTERED fact in facts.log; "
                 "the owner's external review and registration precede any data read. Refusing.")
+    # C5: when the registration fact binds a spec sha256, the on-disk spec MUST
+    # match it -- otherwise the frozen spec drifted after registration and the
+    # census/run would bind a different document than the one owner-reviewed.
+    on_disk = None
+    for line in registered:
+        m = _SPEC_SHA_RE.search(line)
+        if not m:
+            continue
+        if on_disk is None:
+            from research.hashing import sha256_file
+            on_disk = sha256_file(SPEC_PATH)
+        if m.group(1) != on_disk:
+            return ("H9 spec drift: registered spec_sha256="
+                    f"{m.group(1)} != on-disk {on_disk} ({SPEC_PATH}); the frozen "
+                    "spec changed after registration. Refusing.")
     return None
 
 
@@ -44,15 +69,34 @@ def _code_sha() -> str:
 
 
 def _events():
-    import config
     from options_researcher.h7_earnings import load_raw_assertions
     from options_researcher.h9_events import derive_events, load_event_classes
     return derive_events(load_raw_assertions(), symbols=tuple(config.H9_NAMES),
                          event_classes=load_event_classes())
 
 
+def next_report_map(events) -> dict[str, list[str]]:
+    """Per-symbol sorted next-report exit set, from the CLASSIFIED QUARTERLY
+    events ONLY (spec §2).
+
+    B2: `derive_events` also returns the excluded events (business_update,
+    other_item_202, unclassified) with `occurred_date` populated but
+    `exclusion` set. Those must NEVER become a "next report": a non-quarterly
+    8-K inside the near-report window would either trip the contaminated-
+    geometry fail-loud in h9_study (voiding the one run) or silently shorten a
+    hold. Only quarterly events (exclusion is None) time out and gate exits.
+    """
+    out: dict[str, list[str]] = {}
+    for e in events:
+        if e.exclusion is not None:
+            continue
+        out.setdefault(e.symbol, []).append(e.occurred_date.isoformat())
+    for sym in out:
+        out[sym].sort()
+    return out
+
+
 def _run_census(chain_dir: Path) -> dict:
-    import config
     from options_researcher.h9_census import run_census
     from research.hashing import canonical_json, config_hash, sha256_file, sha256_hex
     res = run_census(_events(), chain_dir=chain_dir)
@@ -74,8 +118,7 @@ def _run_census(chain_dir: Path) -> dict:
 
 
 def _run_study(chain_dir: Path) -> dict:
-    import config
-    from data.thetadata_adapter import get_eod_chain
+    from data.thetadata_adapter import load_cached_chain
     from data.underlying_closes import load_closes_adjusted
     from options_researcher.h9_census import run_census
     from options_researcher.h9_study import adjudicate, simulate_trade, trigger
@@ -91,11 +134,11 @@ def _run_study(chain_dir: Path) -> dict:
     census = run_census(events, chain_dir=chain_dir)
 
     def provider(sym, iso):
-        return get_eod_chain(sym, iso, allow_oos=True)
+        # Cache-ONLY (spec §1): a missing chain raises FileNotFoundError, which
+        # simulate_trade records as a data gap -- the paid client is never built.
+        return load_cached_chain(sym, iso, allow_oos=True)
 
-    occurred_by_symbol: dict[str, list[str]] = {}
-    for e in events:
-        occurred_by_symbol.setdefault(e.symbol, []).append(e.occurred_date.isoformat())
+    occurred_by_symbol = next_report_map(events)
     trades, log = [], []
     for e in census.eligible_events:
         closes = load_closes_adjusted(e.symbol, e.t_pre, e.t_dec, allow_oos=True)

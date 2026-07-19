@@ -2,9 +2,11 @@
 
 **Status: DRAFT. No value in §5 is frozen until the owner types it. No code
 may be written against this spec until the owner-typed version is committed,
-sha256-hashed, and recorded as an `H9_REGISTERED` ledger fact (trial_count
-11 → 12). External independent review clears the freeze (owner decision
-2026-07-16, hybrid review model).**
+sha256-hashed, and recorded as an `H9_REGISTERED` ledger fact whose
+`trial_count` is DERIVED from `ledger/experiments.jsonl` at registration time
+(the append-only ledger is the single source of truth; never pin a stale
+count in the spec, code, or tests — review B3). External independent review
+clears the freeze (owner decision 2026-07-16, hybrid review model).**
 
 **Authority:** `H7_7B2R1_DECISIONS` item (5): "a post-earnings-only
 historical study may later be registered as a SEPARATE conditional hypothesis
@@ -240,7 +242,9 @@ Exactly **one** run. The run artifact binds, content-addressed:
 
 Ledger flow, strictly ordered: owner types §5 → owner's external review
 returns PASS on the typed spec → frozen spec committed + `H9_REGISTERED`
-(spec sha, trial 11→12) → `H9_CENSUS` → `H9_RESULT` (verdict + receipt
+(spec sha256 bound in the fact as `spec_sha256=<hex>`; `trial_count` derived
+from `ledger/experiments.jsonl` at registration, not pinned here) →
+`H9_CENSUS` → `H9_RESULT` (verdict + receipt
 hash). Registration never precedes the external review. Any deviation, crash, or input change
 mid-run voids the run; a voided run is recorded honestly and does NOT refund
 the one-run contract without a new owner decision.
