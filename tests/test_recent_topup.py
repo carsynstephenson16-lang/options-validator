@@ -86,7 +86,7 @@ class ScopeTests(unittest.TestCase):
             recent_topup.scope_symbols("h7"),
             [
                 "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA",
-                "AMD", "AVGO", "IREN", "USAR", "VST", "CEG", "MSFT", "AMZN",
+                "AMD", "AVGO", "IREN", "USAR", "ET", "VST", "CEG", "MSFT", "AMZN",
             ],
         )
 

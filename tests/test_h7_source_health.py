@@ -149,13 +149,14 @@ class TestSymbolHealth(unittest.TestCase):
 class TestUniverseAndSessions(unittest.TestCase):
     def test_watch_universe_is_the_watcher_universe(self):
         names = watch_universe()
-        self.assertEqual(len(names), 14)
+        self.assertEqual(len(names), 15)  # 14 + ET (H7_AMENDMENT_V1_8)
         self.assertNotIn("HYLN", names)
         # IREN ACTIVATED 2026-07-15, USAR ACTIVATED 2026-07-15 (base chain
         # caches built) -- both now in the watch universe. See IREN_ACTIVATION
         # + USAR_ACTIVATION in facts.log.
         self.assertIn("IREN", names)
         self.assertIn("USAR", names)
+        self.assertIn("ET", names)  # ET added H7_AMENDMENT_V1_8 2026-07-17
         for sym in ("CRWV", "NVDA", "VST", "AMZN"):
             self.assertIn(sym, names)
 

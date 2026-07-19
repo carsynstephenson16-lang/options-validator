@@ -75,7 +75,7 @@ class TestWholeUniverseGo(GateBase):
         res = self._eval()
         self.assertEqual(res["evaluation_session"], self.eval_iso)
         self.assertEqual(res["whole_universe_verdict"], "GO")
-        self.assertEqual(res["go_count"], 14)
+        self.assertEqual(res["go_count"], 15)  # +ET (H7_AMENDMENT_V1_8)
         self.assertEqual(res["no_go_count"], 0)
         for sym in watch_universe():
             self.assertEqual(res["symbols"][sym]["verdict"], "GO")
@@ -333,7 +333,7 @@ class TestCliContract(GateBase):
         (self.chain_dir / f"AMZN_{self.eval_iso}.parquet").unlink()
         res = self._eval()
         self.assertEqual(sum(1 for s in res["symbols"].values()
-                             if s["verdict"] == "GO"), 13)
+                             if s["verdict"] == "GO"), 14)  # 15 - 1 (ET added)
         self.assertEqual(res["whole_universe_verdict"], "NO_GO")
         self.assertEqual(self._run(), 1)
 
