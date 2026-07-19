@@ -5,6 +5,7 @@ explicitly NOT verdict-feeding: the "learn facts, not parameters" channel.
 """
 from __future__ import annotations
 
+import fcntl
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,7 +19,14 @@ def append_fact(text: str, base_dir="ledger") -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).isoformat()
     with p.open("a") as f:
-        f.write(f"{stamp}\t{text}\n")
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            f.write(f"{stamp}\t{text}\n")
+            f.flush()
+            import os
+            os.fsync(f.fileno())
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 def read_facts(base_dir="ledger") -> list[str]:

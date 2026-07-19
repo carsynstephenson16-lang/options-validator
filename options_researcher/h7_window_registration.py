@@ -163,6 +163,15 @@ def build_window_registration_event(*, owner: dict, evidence: dict) -> dict:
         "gates": {
             "source_health_evidence_id": evidence["source_health_evidence_id"],
             "data_gate_evidence_id": evidence["data_gate_evidence_id"],
+            "scope_id": evidence.get("scope_id"),
+            "scope_hash": evidence.get("scope_hash"),
+            "source_health_receipt_hash": evidence.get(
+                "source_health_receipt_hash"),
+            "data_gate_receipt_hash": evidence.get("data_gate_receipt_hash"),
+            "backup_restore_receipt_hash": evidence.get(
+                "backup_restore_receipt_hash"),
+            "source_hash": evidence.get("source_hash"),
+            "config_hash": evidence.get("config_hash", config_hash()),
         },
         "coverage_evidence": owner["THETADATA_CONFIRMATION_EVIDENCE"],
         "darwin_durability_verified": bool(evidence["darwin_durability_verified"]),

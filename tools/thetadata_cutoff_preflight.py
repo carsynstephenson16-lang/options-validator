@@ -2,7 +2,7 @@
 
 This tool never fetches data, writes a receipt, appends a fact/event, opens
 H7 Stage 8, or authorizes the paid top-up. It derives the terminal completed
-session, proves the exact 12-name scope, inventories every required cache
+session, proves the exact official 15-name scope, inventories every required cache
 file and BLIND_CACHE fact, runs the current exit audit, checks H6 feature-input
 readiness, verifies the real H7 ledger, and prints the exact future commands.
 """
@@ -28,6 +28,7 @@ from options_researcher import h7_event_ledger  # noqa: E402
 from options_researcher.h6_features import PCT_MIN_OBS, PCT_WINDOW  # noqa: E402
 from options_researcher.h7_data_gate import evaluate as evaluate_data_gate  # noqa: E402
 from options_researcher.h7_earnings import load_assertions  # noqa: E402
+from options_researcher.h7_scope import scope_identity, scope_symbols  # noqa: E402
 from options_researcher.h7_source_health import symbol_health  # noqa: E402
 from research.hashing import sha256_file  # noqa: E402
 from tools import thetadata_exit_audit as exit_audit  # noqa: E402
@@ -39,21 +40,17 @@ DEFAULT_CLOSE_DIR = Path(".cache/underlying")
 DEFAULT_FACTS_PATH = Path("ledger/facts.log")
 DEFAULT_LEDGER_DIR = Path("ledger/h7_forward")
 
-# FROZEN cutoff-decision scope for the 2026-07-25 ThetaData renewal gate.
-# This preflight audits a decision that was REGISTERED on exactly these 12
-# names before IREN existed anywhere in H7 scope. H7_AMENDMENT_V1_5
-# (2026-07-14, ledger/facts.log) added IREN to config.H7_WATCHLIST, growing
-# the *live* watch universe (recent_topup.scope_symbols("h7") /
-# options_researcher.h7_scope.watch_universe()) to 13 names. That growth
-# must never silently widen THIS frozen decision's scope, so the list below
-# is a hardcoded constant, deliberately decoupled from H7_WATCHLIST /
-# watch_universe() -- it does not read config.H7_WATCHLIST and must not be
-# derived from it. Revisiting the cutoff-decision scope itself (e.g. to add
-# IREN) is a new pre-registered decision, not a silent widen of this one.
-FROZEN_CUTOFF_SCOPE = (
+# Historical 12-name scope. Existing reports that carry this identity remain
+# readable as historical evidence, but they are never accepted for the
+# current cutoff or Stage-8 path.
+HISTORICAL_CUTOFF_SCOPE = (
     "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
     "VST", "CEG", "MSFT", "AMZN",
 )
+# Compatibility name for code that needs to identify old reports. New
+# preflight output uses CURRENT_CUTOFF_SCOPE below.
+FROZEN_CUTOFF_SCOPE = HISTORICAL_CUTOFF_SCOPE
+CURRENT_CUTOFF_SCOPE = tuple(scope_symbols())
 SOURCE_PATHS = (
     "config.py",
     "data/cache_provenance.py",
@@ -210,7 +207,7 @@ def _source_health_readiness(as_of: str) -> dict:
             known_as_of=known_as_of,
             warn_sessions=config.H7_SOURCE_HEALTH_WARN_SESSIONS,
         )
-        for symbol in FROZEN_CUTOFF_SCOPE
+        for symbol in CURRENT_CUTOFF_SCOPE
     ]
     unhealthy = [row["symbol"] for row in health if not row["healthy"]]
     return {
@@ -240,11 +237,16 @@ def build_preflight(
     source_identity_fn=source_identity,
     ledger_verify_fn=h7_event_ledger.verify,
     h6_readiness_fn=_h6_input_readiness,
+    scope: dict | None = None,
 ) -> dict:
     """Build a deterministic cutoff report without any write/network path."""
-    symbols = list(FROZEN_CUTOFF_SCOPE)
-    if len(symbols) != 12 or len(symbols) != len(set(symbols)):
-        raise ValueError(f"H7 cutoff scope must be 12 unique names; got {symbols}")
+    scope = scope_identity() if scope is None else scope
+    expected_scope = scope_identity(scope["symbols"])
+    if scope != expected_scope:
+        raise ValueError("cutoff scope identity/hash is invalid")
+    symbols = list(expected_scope["symbols"])
+    if len(symbols) != 15 or len(symbols) != len(set(symbols)):
+        raise ValueError(f"H7 cutoff scope must be 15 unique names; got {symbols}")
     terminal = _terminal_session(cutoff, trading_days_fn)
     required_sessions = [
         day
@@ -325,6 +327,7 @@ def build_preflight(
             requested_gate_date,
             close_dir=close_dir,
             chain_dir=chain_dir,
+            scope=expected_scope,
         )
         data_gate = {
             "evaluation_session": gate["evaluation_session"],
@@ -361,7 +364,7 @@ def build_preflight(
         or data_gate["whole_universe_verdict"] != "GO"
         or data_gate["go_count"] != len(symbols)
     ):
-        blockers.append("current Stage-2 data gate is not exact-session 12/12 GO")
+        blockers.append("current Stage-2 data gate is not exact-session 15/15 GO")
     if not h6.get("ready"):
         blockers.append("H6 current feature-input surface is not ready")
 
@@ -396,6 +399,8 @@ def build_preflight(
         "status": status,
         "blockers": blockers,
         "scope": symbols,
+        "scope_identity": expected_scope,
+        "historical_scope": list(HISTORICAL_CUTOFF_SCOPE),
         "cache": {
             "audit_start": exit_audit.DEFAULT_START,
             "cohort_latest": cohort_latest,

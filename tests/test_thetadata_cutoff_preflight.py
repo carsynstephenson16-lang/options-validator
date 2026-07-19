@@ -43,7 +43,7 @@ def pass_data_gate(requested: date, **kwargs) -> dict:
     return {
         "evaluation_session": prior,
         "whole_universe_verdict": "GO",
-        "go_count": 12,
+        "go_count": 15,
         "no_go_count": 0,
     }
 
@@ -75,9 +75,8 @@ class CutoffPreflightTests(unittest.TestCase):
         self.closes = self.root / "closes"
         self.chains.mkdir()
         self.closes.mkdir()
-        # Frozen cutoff-decision scope (12 names), decoupled from the mutable
-        # H7 watch universe -- see FROZEN_CUTOFF_SCOPE in the tool under test.
-        self.symbols = list(preflight.FROZEN_CUTOFF_SCOPE)
+        # The current cutoff scope is the official versioned 15-name scope.
+        self.symbols = list(preflight.CURRENT_CUTOFF_SCOPE)
         self.facts: dict[tuple[str, str], dict] = {}
 
     def seed(self, sessions: tuple[str, ...]) -> None:
@@ -116,7 +115,7 @@ class CutoffPreflightTests(unittest.TestCase):
         report = self.preflight_report(date(2026, 7, 2))
         self.assertEqual(report["terminal_session"], "2026-07-02")
         self.assertEqual(report["status"], "WAITING_FOR_CUTOFF")
-        self.assertEqual(len(report["scope"]), 12)
+        self.assertEqual(len(report["scope"]), 15)
         self.assertFalse(report["paid_pull_authorized"])
         self.assertEqual(report["cache"]["future_sessions"], ["2026-07-02"])
 
@@ -126,7 +125,7 @@ class CutoffPreflightTests(unittest.TestCase):
         self.assertEqual(report["status"], "OWNER_AUTHORIZED_PULL_REQUIRED")
         self.assertEqual(
             report["cache"]["actionable_missing_by_session"],
-            {"2026-07-02": self.symbols},
+            {"2026-07-02": sorted(self.symbols)},
         )
 
     def test_complete_terminal_cache_is_ready_for_receipts(self):
@@ -160,22 +159,19 @@ class CutoffPreflightTests(unittest.TestCase):
         self.seed(SESSIONS)
         report = self.preflight_report(date(2026, 7, 2))
         self.assertEqual(report["status"], "BLOCK")
-        self.assertEqual(len(report["provenance"]["premature_present"]), 12)
+        self.assertEqual(len(report["provenance"]["premature_present"]), 15)
 
-    def test_current_data_gate_must_be_exact_session_twelve_of_twelve(self):
+    def test_current_data_gate_must_be_exact_session_fifteen_of_fifteen(self):
         self.seed(SESSIONS)
         report = self.preflight_report(CUTOFF, data_gate_fn=blocked_data_gate)
         self.assertEqual(report["status"], "BLOCK")
         self.assertIn("Stage-2 data gate", " ".join(report["blockers"]))
 
-    def test_frozen_cutoff_scope_is_the_exact_pre_iren_twelve(self):
-        # Locks the decoupling: the cutoff-decision scope is a hardcoded
-        # constant, not derived from the mutable H7 watchlist, so later
-        # watchlist growth (e.g. IREN, H7_AMENDMENT_V1_5) can never silently
-        # widen a decision that was registered before it existed.
-        self.assertEqual(len(preflight.FROZEN_CUTOFF_SCOPE), 12)
+    def test_historical_scope_is_preserved_but_not_current(self):
+        self.assertEqual(len(preflight.HISTORICAL_CUTOFF_SCOPE), 12)
         self.assertEqual(
-            len(preflight.FROZEN_CUTOFF_SCOPE), len(set(preflight.FROZEN_CUTOFF_SCOPE))
+            len(preflight.HISTORICAL_CUTOFF_SCOPE),
+            len(set(preflight.HISTORICAL_CUTOFF_SCOPE))
         )
         self.assertNotIn("IREN", preflight.FROZEN_CUTOFF_SCOPE)
         self.assertEqual(
@@ -185,6 +181,8 @@ class CutoffPreflightTests(unittest.TestCase):
                 "VST", "CEG", "MSFT", "AMZN",
             ),
         )
+        self.assertEqual(len(preflight.CURRENT_CUTOFF_SCOPE), 15)
+        self.assertIn("IREN", preflight.CURRENT_CUTOFF_SCOPE)
 
 
 if __name__ == "__main__":
