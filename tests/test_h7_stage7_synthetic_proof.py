@@ -36,7 +36,10 @@ class TestStage7SyntheticProof(unittest.TestCase):
         self.assertEqual(receipt["scoring"]["lane_a_verdict"], "INCONCLUSIVE")
         self.assertEqual(receipt["scoring"]["underlying_move"], 8.0)
         self.assertTrue(all(receipt["refusals"].values()))
-        self.assertTrue(before.empty)
+        # Phase-aware: after Stage 8 activation the real store correctly has
+        # seq-0. This synthetic-only proof must leave it valid and untouched,
+        # not require it to be empty.
+        self.assertTrue(before.valid)
         self.assertEqual(after, before)
 
     def test_receipt_is_independent_of_physical_temp_path(self):
