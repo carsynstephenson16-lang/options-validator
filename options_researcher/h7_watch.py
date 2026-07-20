@@ -55,18 +55,40 @@ H7_POSITIONS_PATH = Path("data/positions/h7_positions.csv")
 
 
 def validate_data_gate_receipt(path: Path, *, evaluation_session: str,
-                               names: list[str] | tuple[str, ...]) -> dict:
-    """Validate the pass file and re-hash every file it named."""
+                               names: list[str] | tuple[str, ...],
+                               included: list[str] | tuple[str, ...] | None
+                               = None) -> dict:
+    """Validate the pass file and re-hash every file it named.
+
+    ``names`` is always the FULL official scope: the receipt's ``scope`` must
+    equal ``scope_identity(names)`` so the evidence provably covers the whole
+    universe (anti-cherry-pick), regardless of trimming.
+
+    ``included`` (Option C trim-at-append): when None the receipt must be a
+    whole-universe GO covering every name -- today's behavior, unchanged. When
+    a subset is given, the whole-universe GO requirement is RELAXED to a
+    per-symbol GO check over the included names only; excluded names may be
+    NO_GO in the same full-scope receipt without failing validation."""
     receipt = load_receipt(Path(path), expected_type="data_gate")
     expected_scope = scope_identity(names)
     if receipt.get("scope") != expected_scope:
         raise ValueError("data-gate receipt scope is not the official current scope")
     if receipt.get("evaluation_session") != evaluation_session:
         raise ValueError("data-gate receipt session does not match watcher")
-    if receipt.get("whole_universe_verdict") != "GO":
-        raise ValueError("data-gate receipt is not a successful whole-universe pass")
-    if receipt.get("go_count") != len(names):
-        raise ValueError("data-gate receipt does not cover every current name")
+    if included is None:
+        if receipt.get("whole_universe_verdict") != "GO":
+            raise ValueError("data-gate receipt is not a successful whole-universe pass")
+        if receipt.get("go_count") != len(names):
+            raise ValueError("data-gate receipt does not cover every current name")
+    else:
+        if not included:
+            raise ValueError("data-gate receipt: empty included set")
+        per_symbol = receipt.get("symbols", {})
+        not_go = sorted(s for s in included
+                        if per_symbol.get(s, {}).get("verdict") != "GO")
+        if not_go:
+            raise ValueError(
+                f"data-gate receipt is not GO for included names: {not_go}")
     if not receipt.get("source_health_receipt_hash"):
         raise ValueError("data-gate receipt is not linked to source health")
     source_path = receipt.get("source_health_receipt_path")

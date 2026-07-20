@@ -40,6 +40,14 @@ window spans less than three calendar months or coverage ends before the
 window does. *(Plain English: you can't register a window your data
 subscription can't see to the end of.)*
 
+**Universe manifest (frozen in the payload).** Every registration also freezes
+a `payload["universe"]` = `{scope_id, scope_hash, included, excluded,
+trim_rule}`. For the default all-15 activation this is the full official scope
+(`included` = all 15, `excluded` = [], `trim_rule` = `"none"`). See §3a for the
+opt-in trimmed form. The manifest is part of the immutable first record, so the
+exact set of names a window covers — and, if trimmed, who was left out and why —
+is auditable forever and cannot be silently changed after the window opens.
+
 ## 3. Preconditions the guard must report green (all-or-nothing)
 
 `activation_preconditions()` — every check, at the same pinned session:
@@ -56,6 +64,43 @@ owner: independent review PASS (`review_evidence`), this spec's sha256, the
 code commit, source-health and data-gate evidence ids, a fresh Darwin
 durability verification (fsync/F_FULLFSYNC success AND failure paths), and
 `pre_append_state`.
+
+## 3a. Option C — trim-at-append (opt-in, data-readiness-only)
+
+By default the guard requires all 15 names green (§3.2/§3.3). The
+`--trim-unhealthy` flag on `tools/h7_manual_activate.py` is an explicit OPT-IN
+(default OFF; without it behavior is exactly the all-or-nothing 15-name check
+above, unchanged) that lets the owner activate a window on the
+currently-healthy subset instead of waiting for every name to be
+earnings-confirmed. The rules that keep this honest:
+
+1. **Selection is by DATA READINESS ONLY.** The included universe is derived
+   from the source-health receipt's per-symbol `healthy` map at the pinned
+   completed session — never recomputed, never a hardcoded list, and **never** a
+   performance, return, or attractiveness signal (that would be selection bias
+   and is forbidden). The `trim_rule` recorded is
+   `"source_health_ready_at_pinned_session"`.
+2. **The excluded set is frozen with reasons.** `payload["universe"].excluded`
+   lists every left-out name with a stable reason code (e.g. `EARNINGS-UNKNOWN`,
+   `EARNINGS-STALE`), so the choice is auditable and provably non-cherry-picked.
+3. **Both gates operate on the included subset, not weakened.**
+   `source_health_whole_universe` passes iff every INCLUDED name is healthy;
+   `data_gate_go` requires per-symbol GO for every INCLUDED name. Excluded names
+   are recorded, not health-checked. The receipt-binding checks
+   (`scope_identity`, `receipt_chain`, `source_config_identity`,
+   `fresh_backup_restore`) still verify the evidence covers the FULL official
+   scope — trimming SELECTS from full-scope evidence, it never narrows it.
+4. **Empty or structurally-empty windows are refused.** An empty included set,
+   or a trim that leaves no included name able to play any lane, refuses
+   (`RegistrationInputError`) and writes nothing.
+5. **The full §4 refusal chain still runs** on a trimmed activation, including
+   the append-time `recheck_gates()` re-earned over the INCLUDED subset.
+
+**Scope of a trimmed verdict (no overclaiming).** A trimmed window's eventual
+verdict is about the INCLUDED names only. The excluded names were left out for
+data readiness, not because anything is known about their edge; they can be
+carried in a later window. A trimmed `SURVIVED` is still bound by §6 — not
+live-trading approval, not a profitability claim, not validation.
 
 **Procedural precondition (NOT code-enforced).** A FRESH data-audit receipt
 covering the pinned session is required before activation, but no guard check
