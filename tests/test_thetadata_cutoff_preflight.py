@@ -1,8 +1,11 @@
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from research.hashing import sha256_file
 from tools import thetadata_cutoff_preflight as preflight
@@ -38,22 +41,23 @@ def h6_ready(*args, **kwargs) -> dict:
     return {"ready": True, "symbols": {}}
 
 
-def pass_data_gate(requested: date, **kwargs) -> dict:
+def pass_data_gate(requested: date, *, scope: dict, **kwargs) -> dict:
     prior = max(day for day in SESSIONS if day < requested.isoformat())
+    count = len(scope["symbols"])
     return {
         "evaluation_session": prior,
         "whole_universe_verdict": "GO",
-        "go_count": 15,
+        "go_count": count,
         "no_go_count": 0,
     }
 
 
-def source_health(as_of: str) -> dict:
+def source_health(as_of: str, *, symbols: list[str]) -> dict:
     return {
         "evaluation_session": as_of,
-        "healthy_count": 11,
+        "healthy_count": len(symbols) - 1,
         "unhealthy_count": 1,
-        "unhealthy_symbols": ["CRWV"],
+        "unhealthy_symbols": [symbols[0]],
         "activation_ready": False,
     }
 
@@ -75,13 +79,15 @@ class CutoffPreflightTests(unittest.TestCase):
         self.closes = self.root / "closes"
         self.chains.mkdir()
         self.closes.mkdir()
-        # The current cutoff scope is the official versioned 15-name scope.
-        self.symbols = list(preflight.CURRENT_CUTOFF_SCOPE)
+        self.frozen_symbols = list(preflight.FROZEN_CUTOFF_SCOPE)
+        self.current_symbols = list(preflight.scope_identity()["symbols"])
+        self.symbols = self.frozen_symbols
         self.facts: dict[tuple[str, str], dict] = {}
 
-    def seed(self, sessions: tuple[str, ...]) -> None:
+    def seed(self, sessions: tuple[str, ...], *, symbols: list[str] | None = None) -> None:
+        symbols = self.symbols if symbols is None else symbols
         for session in sessions:
-            for symbol in self.symbols:
+            for symbol in symbols:
                 path = self.chains / f"{symbol}_{session}.parquet"
                 path.write_bytes(f"{symbol}-{session}".encode())
                 self.facts[(symbol, session)] = {
@@ -89,7 +95,7 @@ class CutoffPreflightTests(unittest.TestCase):
                     "sha256": sha256_file(path),
                 }
 
-    def preflight_report(self, today: date, **overrides) -> dict:
+    def preflight_report(self, today: date, *, scope_mode: str = "frozen", **overrides) -> dict:
         kwargs = {
             "cutoff": CUTOFF,
             "today": today,
@@ -106,6 +112,7 @@ class CutoffPreflightTests(unittest.TestCase):
                 valid=True, empty=True, count=0, head=None
             ),
             "h6_readiness_fn": h6_ready,
+            "scope_mode": scope_mode,
         }
         kwargs.update(overrides)
         return preflight.build_preflight(**kwargs)
@@ -115,7 +122,9 @@ class CutoffPreflightTests(unittest.TestCase):
         report = self.preflight_report(date(2026, 7, 2))
         self.assertEqual(report["terminal_session"], "2026-07-02")
         self.assertEqual(report["status"], "WAITING_FOR_CUTOFF")
-        self.assertEqual(len(report["scope"]), 15)
+        self.assertEqual(report["scope"], self.frozen_symbols)
+        self.assertNotIn("scope_identity", report)
+        self.assertNotIn("historical_scope", report)
         self.assertFalse(report["paid_pull_authorized"])
         self.assertEqual(report["cache"]["future_sessions"], ["2026-07-02"])
 
@@ -125,7 +134,7 @@ class CutoffPreflightTests(unittest.TestCase):
         self.assertEqual(report["status"], "OWNER_AUTHORIZED_PULL_REQUIRED")
         self.assertEqual(
             report["cache"]["actionable_missing_by_session"],
-            {"2026-07-02": sorted(self.symbols)},
+            {"2026-07-02": self.frozen_symbols},
         )
 
     def test_complete_terminal_cache_is_ready_for_receipts(self):
@@ -159,15 +168,34 @@ class CutoffPreflightTests(unittest.TestCase):
         self.seed(SESSIONS)
         report = self.preflight_report(date(2026, 7, 2))
         self.assertEqual(report["status"], "BLOCK")
-        self.assertEqual(len(report["provenance"]["premature_present"]), 15)
+        self.assertEqual(len(report["provenance"]["premature_present"]), 12)
 
-    def test_current_data_gate_must_be_exact_session_fifteen_of_fifteen(self):
+    def test_current_data_gate_must_cover_the_selected_scope(self):
         self.seed(SESSIONS)
         report = self.preflight_report(CUTOFF, data_gate_fn=blocked_data_gate)
         self.assertEqual(report["status"], "BLOCK")
         self.assertIn("Stage-2 data gate", " ".join(report["blockers"]))
 
-    def test_historical_scope_is_preserved_but_not_current(self):
+    def test_current_scope_is_explicit_and_versioned(self):
+        self.seed(SESSIONS, symbols=self.current_symbols)
+        report = self.preflight_report(CUTOFF, scope_mode="current")
+        self.assertEqual(report["status"], "READY_FOR_RECEIPTS")
+        self.assertEqual(report["scope"], self.current_symbols)
+        self.assertEqual(report["scope_identity"], preflight.scope_identity())
+        self.assertEqual(report["historical_scope"], self.frozen_symbols)
+
+    def test_cli_defaults_to_frozen_and_accepts_current_scope(self):
+        report = {"status": "WAITING_FOR_CUTOFF"}
+        for arguments, expected_mode in (
+            (["--today", "2026-07-03", "--json"], "frozen"),
+            (["--today", "2026-07-03", "--scope", "current", "--json"], "current"),
+        ):
+            with patch.object(preflight, "build_preflight", return_value=report) as build:
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(preflight.main(arguments), 0)
+            self.assertEqual(build.call_args.kwargs["scope_mode"], expected_mode)
+
+    def test_frozen_scope_stays_exact_and_current_scope_is_derived(self):
         self.assertEqual(len(preflight.HISTORICAL_CUTOFF_SCOPE), 12)
         self.assertEqual(
             len(preflight.HISTORICAL_CUTOFF_SCOPE),
@@ -181,8 +209,9 @@ class CutoffPreflightTests(unittest.TestCase):
                 "VST", "CEG", "MSFT", "AMZN",
             ),
         )
-        self.assertEqual(len(preflight.CURRENT_CUTOFF_SCOPE), 15)
-        self.assertIn("IREN", preflight.CURRENT_CUTOFF_SCOPE)
+        self.assertFalse(hasattr(preflight, "CURRENT_CUTOFF_SCOPE"))
+        self.assertEqual(len(preflight.scope_identity()["symbols"]), 15)
+        self.assertIn("IREN", preflight.scope_identity()["symbols"])
 
 
 if __name__ == "__main__":
