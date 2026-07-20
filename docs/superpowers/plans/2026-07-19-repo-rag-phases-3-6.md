@@ -978,6 +978,8 @@ git commit -m "feat(repo-rag): exact hybrid retrieval with filters and determini
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
+**Post-review amendment (2026-07-20, Task 4):** quality review approved the merge; two carry-forwards. (a) Executes as Task 5 Step 0: guard `retrieve()` against embedding-dimension mismatch (raise ValueError if `len(record.embedding) != len(query_embedding)`) + four cheap tests (dimension-mismatch raises; empty `source_classes` returns hits across classes; equal-score tie-break ordered by (source_path, chunk_id); component scores populated). (b) CALIBRATION FINDING for Task 7: on the real corpus, `min_score=0.12` is below the hash-provider noise floor (stopword queries score 0.35+, junk 0.22–0.25, genuine queries top ~0.24) — the golden abstain case must be validated empirically; if it fails, prefer a reviewed stopword-filtering change to `_tokens`/embedding or a lexical-overlap requirement over silently raising min_score; record whatever is done honestly.
+
 ---
 
 ### Task 5: Typed query pipeline + event log + CLI (`pipeline.py`, `cli.py`)
@@ -1496,6 +1498,8 @@ git commit -m "feat(repo-rag): typed query pipeline with abstention, citation ve
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
+
+**Post-review amendment (2026-07-20, Task 5):** quality review requires corrupt-index handling before merge: `load_index` failures other than FileNotFoundError (JSONDecodeError, KeyError, ValueError, UnicodeDecodeError) must not traceback — `answer_query` returns a new `INDEX_CORRUPT` outcome (CLI exit 2, same "index unusable" class as INDEX_MISSING; message says delete `.index/` and re-ingest), and `build_status` reports `index_present=False` with a new `index_error: str | None` field carrying a short description. Both paths get tests (corrupt manifest fixture). `finish()` call sites in pipeline.py switch to keyword arguments (transposition footgun). ACCEPTED DEVIATION: `request_id` is derived from the query hash alone (not query+built_at as originally written) — INDEX_MISSING has no build timestamp, and the simpler recipe is strictly derivable; recorded here instead of changing code.
 
 ---
 

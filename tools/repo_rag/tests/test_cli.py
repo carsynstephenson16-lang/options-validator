@@ -82,6 +82,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(result["outcome"], "INDEX_MISSING")
 
+    def test_query_corrupt_index_exit_code(self) -> None:
+        self._run(*self._ingest_args())
+        (self.index_dir / "manifest.json").write_text("{not json", encoding="utf-8")
+        code, result = self._run(
+            "query", "anything",
+            "--index-dir", str(self.index_dir),
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(result["outcome"], "INDEX_CORRUPT")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -84,27 +84,41 @@ def answer_query(
         )
 
     if not query.strip():
-        return finish("EMPTY_QUERY", "Query is empty.", (), False, ())
+        return finish(
+            outcome="EMPTY_QUERY", answer="Query is empty.", citations=(),
+            verified=False, retrieved=(),
+        )
     try:
         index = load_index(index_dir)
     except FileNotFoundError:
         return finish(
-            "INDEX_MISSING",
-            "No index found. Run: python3 -m repo_rag ingest",
-            (),
-            False,
-            (),
+            outcome="INDEX_MISSING",
+            answer="No index found. Run: python3 -m repo_rag ingest",
+            citations=(),
+            verified=False,
+            retrieved=(),
+        )
+    except (json.JSONDecodeError, KeyError, ValueError, UnicodeDecodeError):
+        return finish(
+            outcome="INDEX_CORRUPT",
+            answer=(
+                "Index is unreadable. Delete the .index directory and run: "
+                "python3 -m repo_rag ingest"
+            ),
+            citations=(),
+            verified=False,
+            retrieved=(),
         )
 
     hits = retrieve(query, index.chunks, settings)
     retrieved = tuple((hit.record.chunk_id, hit.score) for hit in hits)
     if not hits:
         return finish(
-            "INSUFFICIENT_EVIDENCE",
-            "Insufficient repository evidence.",
-            (),
-            True,
-            retrieved,
+            outcome="INSUFFICIENT_EVIDENCE",
+            answer="Insufficient repository evidence.",
+            citations=(),
+            verified=True,
+            retrieved=retrieved,
         )
 
     budgeted = []
@@ -125,5 +139,11 @@ def answer_query(
     allowed = {hit.record.citation for hit in budgeted}
     verified = bool(cited) and all(citation in allowed for citation in cited)
     if not verified:
-        return finish("CITATION_MISMATCH", answer, cited, False, retrieved)
-    return finish("ANSWERED", answer, cited, True, retrieved)
+        return finish(
+            outcome="CITATION_MISMATCH", answer=answer, citations=cited,
+            verified=False, retrieved=retrieved,
+        )
+    return finish(
+        outcome="ANSWERED", answer=answer, citations=cited,
+        verified=True, retrieved=retrieved,
+    )

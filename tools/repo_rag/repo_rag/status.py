@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ class StatusReport:
     index_present: bool
     index_chunk_count: int
     index_built_at_utc: str | None
+    index_error: str | None = None
 
     def to_mapping(self) -> dict[str, Any]:
         return asdict(self)
@@ -44,6 +46,7 @@ def build_status(
     index_present = False
     index_chunk_count = 0
     index_built_at: str | None = None
+    index_error: str | None = None
     if index_dir is not None:
         try:
             from .indexing import load_index
@@ -54,6 +57,8 @@ def build_status(
             index_built_at = index.built_at_utc
         except FileNotFoundError:
             pass
+        except (json.JSONDecodeError, KeyError, ValueError, UnicodeDecodeError) as exc:
+            index_error = f"corrupt: {type(exc).__name__}"
 
     return StatusReport(
         status="READY_OFFLINE" if healthy else "CONFIGURATION_INCOMPLETE",
@@ -73,4 +78,5 @@ def build_status(
         index_present=index_present,
         index_chunk_count=index_chunk_count,
         index_built_at_utc=index_built_at,
+        index_error=index_error,
     )

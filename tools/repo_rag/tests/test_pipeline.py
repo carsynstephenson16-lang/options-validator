@@ -122,6 +122,12 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result.outcome, "ANSWERED")
         self.assertEqual(len(result.citations), 1)
 
+    def test_corrupt_index_reported_not_raised(self) -> None:
+        (self.index_dir / "manifest.json").write_text("{not json", encoding="utf-8")
+        result = self._ask("anything at all")
+        self.assertEqual(result.outcome, "INDEX_CORRUPT")
+        self.assertEqual(result.citations, ())
+
 
 if __name__ == "__main__":
     unittest.main()

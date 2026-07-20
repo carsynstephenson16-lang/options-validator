@@ -109,6 +109,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "request_id": result.request_id,
         }
         print(json.dumps(payload, indent=2, sort_keys=True))
-        codes = {"ANSWERED": 0, "INDEX_MISSING": 2, "INSUFFICIENT_EVIDENCE": 3}
+        codes = {
+            "ANSWERED": 0,
+            "INDEX_MISSING": 2,
+            "INDEX_CORRUPT": 2,
+            "INSUFFICIENT_EVIDENCE": 3,
+        }
         return codes.get(result.outcome, 4)
     raise AssertionError(f"unhandled command: {args.command}")
