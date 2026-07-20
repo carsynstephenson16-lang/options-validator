@@ -103,7 +103,7 @@ def build_index(
         source_hashes[source.path] = source.content_sha256
         if previous_hashes.get(source.path) == source.content_sha256:
             unchanged += 1
-            all_rows.extend(previous_records[source.path])
+            all_rows.extend(previous_records.get(source.path, []))
             continue
         if source.path in previous_hashes:
             updated += 1

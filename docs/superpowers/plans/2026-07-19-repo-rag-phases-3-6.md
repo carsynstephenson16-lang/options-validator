@@ -775,6 +775,8 @@ git commit -m "feat(repo-rag): idempotent offline index with provenance and stal
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
+**Post-review amendment (2026-07-20, Task 3):** quality review against the REAL corpus found (a) Critical: rebuild KeyError on zero-chunk sources (empty tracked `__init__.py` files) — fix `all_rows.extend(previous_records[source.path])` → `.get(source.path, [])` plus an empty-file regression test; (b) schema-pinning tests: assert exact manifest key set and exact chunk-row key set so downstream consumers can't be broken by silent renames; (c) plan-level: `reports/h7_audit` receipt JSONs (4 files, 1.3–4 MB each, minified machine output) were 74% of all chunks — added to `policy.json` `denied_segments` to keep retrieval signal-bearing; machine-generated receipts are not research prose. Policy digest change forces a clean rebuild by design.
+
 ---
 
 ### Task 4: Hybrid retrieval (`retrieval.py`)

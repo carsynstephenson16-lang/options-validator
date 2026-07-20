@@ -94,6 +94,55 @@ class IndexingTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             load_index(self.index_dir)
 
+    def test_rebuild_with_empty_source_does_not_crash(self) -> None:
+        (self.root / "docs" / "empty.md").write_text("", encoding="utf-8")
+        tracked = frozenset({"docs/a.md", "docs/b.md", "docs/empty.md"})
+        self._build(tracked)
+        report = self._build(tracked)
+        self.assertEqual(report.sources_unchanged, 3)
+        index = load_index(self.index_dir)
+        self.assertEqual(
+            {record.source_path for record in index.chunks}, {"docs/a.md", "docs/b.md"}
+        )
+
+    def test_manifest_key_set_is_pinned(self) -> None:
+        self._build(self.tracked)
+        manifest = json.loads((self.index_dir / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            set(manifest),
+            {
+                "policy_sha256",
+                "embedding_model",
+                "embedding_dimensions",
+                "chunk_max_chars",
+                "chunk_overlap_lines",
+                "parser",
+                "source_hashes",
+                "built_at_utc",
+            },
+        )
+
+    def test_chunk_row_key_set_is_pinned(self) -> None:
+        self._build(self.tracked)
+        first_row = json.loads(
+            (self.index_dir / "chunks.jsonl").read_text(encoding="utf-8").splitlines()[0]
+        )
+        self.assertEqual(
+            set(first_row),
+            {
+                "chunk_id",
+                "source_path",
+                "source_class",
+                "start_line",
+                "end_line",
+                "text",
+                "content_sha256",
+                "embedding",
+                "parser",
+                "embedding_model",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
