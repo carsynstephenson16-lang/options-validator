@@ -2,9 +2,11 @@
 
 This tool never fetches data, writes a receipt, appends a fact/event, opens
 H7 Stage 8, or authorizes the paid top-up. It derives the terminal completed
-session, proves the exact official 15-name scope, inventories every required cache
-file and BLIND_CACHE fact, runs the current exit audit, checks H6 feature-input
-readiness, verifies the real H7 ledger, and prints the exact future commands.
+session, proves the frozen 12-name historical scope by default or the live
+versioned 15-name scope with ``--scope current``, inventories every required
+cache file and BLIND_CACHE fact, runs the current exit audit, checks H6
+feature-input readiness, verifies the real H7 ledger, and prints the exact
+future commands.
 """
 from __future__ import annotations
 
@@ -28,7 +30,7 @@ from options_researcher import h7_event_ledger  # noqa: E402
 from options_researcher.h6_features import PCT_MIN_OBS, PCT_WINDOW  # noqa: E402
 from options_researcher.h7_data_gate import evaluate as evaluate_data_gate  # noqa: E402
 from options_researcher.h7_earnings import load_assertions  # noqa: E402
-from options_researcher.h7_scope import scope_identity, scope_symbols  # noqa: E402
+from options_researcher.h7_scope import scope_identity  # noqa: E402
 from options_researcher.h7_source_health import symbol_health  # noqa: E402
 from research.hashing import sha256_file  # noqa: E402
 from tools import thetadata_exit_audit as exit_audit  # noqa: E402
@@ -40,17 +42,15 @@ DEFAULT_CLOSE_DIR = Path(".cache/underlying")
 DEFAULT_FACTS_PATH = Path("ledger/facts.log")
 DEFAULT_LEDGER_DIR = Path("ledger/h7_forward")
 
-# Historical 12-name scope. Existing reports that carry this identity remain
-# readable as historical evidence, but they are never accepted for the
-# current cutoff or Stage-8 path.
+# Frozen cutoff-decision scope for the registered 2026-07-29 ThetaData
+# workflow. This must never be derived from the mutable H7 watchlist: changing
+# this mode's symbols would silently change a registered historical artifact.
 HISTORICAL_CUTOFF_SCOPE = (
     "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
     "VST", "CEG", "MSFT", "AMZN",
 )
-# Compatibility name for code that needs to identify old reports. New
-# preflight output uses CURRENT_CUTOFF_SCOPE below.
 FROZEN_CUTOFF_SCOPE = HISTORICAL_CUTOFF_SCOPE
-CURRENT_CUTOFF_SCOPE = tuple(scope_symbols())
+SCOPE_MODES = ("frozen", "current")
 SOURCE_PATHS = (
     "config.py",
     "data/cache_provenance.py",
@@ -195,7 +195,7 @@ def _commands(terminal: str, cutoff: date) -> dict[str, str]:
     }
 
 
-def _source_health_readiness(as_of: str) -> dict:
+def _source_health_readiness(as_of: str, *, symbols: list[str]) -> dict:
     on = date.fromisoformat(as_of)
     known_as_of = session_close_utc(as_of)
     assertions = load_assertions()
@@ -207,7 +207,7 @@ def _source_health_readiness(as_of: str) -> dict:
             known_as_of=known_as_of,
             warn_sessions=config.H7_SOURCE_HEALTH_WARN_SESSIONS,
         )
-        for symbol in CURRENT_CUTOFF_SCOPE
+        for symbol in symbols
     ]
     unhealthy = [row["symbol"] for row in health if not row["healthy"]]
     return {
@@ -218,6 +218,30 @@ def _source_health_readiness(as_of: str) -> dict:
         "unhealthy_symbols": unhealthy,
         "activation_ready": not unhealthy,
     }
+
+
+def _resolve_preflight_scope(
+    scope_mode: str,
+    scope: dict | None,
+) -> tuple[list[str], dict]:
+    """Resolve the immutable historical or live versioned preflight scope."""
+    if scope_mode == "frozen":
+        if scope is not None:
+            raise ValueError("a supplied scope is allowed only with --scope current")
+        symbols = list(FROZEN_CUTOFF_SCOPE)
+        return symbols, scope_identity(symbols)
+
+    if scope_mode != "current":
+        raise ValueError(f"scope must be one of {SCOPE_MODES}; got {scope_mode!r}")
+
+    live_scope = scope_identity()
+    candidate = live_scope if scope is None else scope
+    expected_scope = scope_identity(candidate.get("symbols", ()))
+    if candidate != expected_scope:
+        raise ValueError("current cutoff scope identity/hash is invalid")
+    if expected_scope != live_scope:
+        raise ValueError("current cutoff scope does not match the live H7 scope")
+    return list(expected_scope["symbols"]), expected_scope
 
 
 def build_preflight(
@@ -237,16 +261,11 @@ def build_preflight(
     source_identity_fn=source_identity,
     ledger_verify_fn=h7_event_ledger.verify,
     h6_readiness_fn=_h6_input_readiness,
+    scope_mode: str = "frozen",
     scope: dict | None = None,
 ) -> dict:
     """Build a deterministic cutoff report without any write/network path."""
-    scope = scope_identity() if scope is None else scope
-    expected_scope = scope_identity(scope["symbols"])
-    if scope != expected_scope:
-        raise ValueError("cutoff scope identity/hash is invalid")
-    symbols = list(expected_scope["symbols"])
-    if len(symbols) != 15 or len(symbols) != len(set(symbols)):
-        raise ValueError(f"H7 cutoff scope must be 15 unique names; got {symbols}")
+    symbols, expected_scope = _resolve_preflight_scope(scope_mode, scope)
     terminal = _terminal_session(cutoff, trading_days_fn)
     required_sessions = [
         day
@@ -335,7 +354,7 @@ def build_preflight(
             "go_count": gate["go_count"],
             "no_go_count": gate["no_go_count"],
         }
-        source_health = source_health_fn(audited_end)
+        source_health = source_health_fn(audited_end, symbols=symbols)
 
     ledger = ledger_verify_fn(base_dir=ledger_dir)
     h6 = (
@@ -364,7 +383,10 @@ def build_preflight(
         or data_gate["whole_universe_verdict"] != "GO"
         or data_gate["go_count"] != len(symbols)
     ):
-        blockers.append("current Stage-2 data gate is not exact-session 15/15 GO")
+        blockers.append(
+            "current Stage-2 data gate is not exact-session "
+            f"{len(symbols)}/{len(symbols)} GO"
+        )
     if not h6.get("ready"):
         blockers.append("H6 current feature-input surface is not ready")
 
@@ -388,7 +410,7 @@ def build_preflight(
     else:
         status = "WAITING_FOR_CUTOFF"
 
-    return {
+    report = {
         "schema": SCHEMA,
         "mode": "READ_ONLY_NO_NETWORK",
         "stage8_open": False,
@@ -399,8 +421,6 @@ def build_preflight(
         "status": status,
         "blockers": blockers,
         "scope": symbols,
-        "scope_identity": expected_scope,
-        "historical_scope": list(HISTORICAL_CUTOFF_SCOPE),
         "cache": {
             "audit_start": exit_audit.DEFAULT_START,
             "cohort_latest": cohort_latest,
@@ -431,6 +451,10 @@ def build_preflight(
         "commands": _commands(terminal, cutoff),
         "manual_final_action": "Cancel in the ThetaData account portal only after every receipt verifies.",
     }
+    if scope_mode == "current":
+        report["scope_identity"] = expected_scope
+        report["historical_scope"] = list(HISTORICAL_CUTOFF_SCOPE)
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -441,6 +465,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--close-dir", type=Path, default=DEFAULT_CLOSE_DIR)
     parser.add_argument("--facts", type=Path, default=DEFAULT_FACTS_PATH)
     parser.add_argument("--ledger-dir", type=Path, default=DEFAULT_LEDGER_DIR)
+    parser.add_argument(
+        "--scope",
+        choices=SCOPE_MODES,
+        default="frozen",
+        help="frozen 12-name registered artifact (default) or live versioned scope",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     today = args.today or datetime.now(ZoneInfo("America/New_York")).date()
@@ -452,6 +482,7 @@ def main(argv: list[str] | None = None) -> int:
             close_dir=args.close_dir,
             facts_path=args.facts,
             ledger_dir=args.ledger_dir,
+            scope_mode=args.scope,
         )
     except (OSError, ValueError, csv.Error, h7_event_ledger.LedgerError) as exc:
         print(f"THETADATA CUTOFF PREFLIGHT ERROR -- {type(exc).__name__}: {exc}")
