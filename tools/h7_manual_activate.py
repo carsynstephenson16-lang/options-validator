@@ -68,19 +68,56 @@ def _source_health_by_symbol(source: dict, names: list[str]) -> dict[str, bool]:
             for name in names}
 
 
+def _exclusion_reason(row: dict) -> str:
+    """A stable, auditable reason code for an EXCLUDED (unhealthy) name, read
+    straight from its source-health row -- never a performance/return fact.
+    Unhealthy means the earnings gate is UNKNOWN (no live schedule) or the only
+    coverage left is a lapsing grace window (STALE)."""
+    flags = row.get("flags") or []
+    if row.get("gate") == "UNKNOWN" or "MISSING" in flags:
+        return "EARNINGS-UNKNOWN"
+    if "STALE" in flags:
+        return "EARNINGS-STALE"
+    return "SOURCE-UNHEALTHY"
+
+
+def _trim_universe(source: dict, names: list[str]) -> tuple[list[str], list[dict]]:
+    """Derive the trimmed (included) universe and the excluded set from the
+    source-health receipt's per-symbol healthy map. Selection is by DATA
+    READINESS ONLY; each excluded name carries its reason code. Never
+    recomputes health and never hardcodes a name list."""
+    symbols = source.get("symbols", {})
+    included, excluded = [], []
+    for name in names:
+        row = symbols.get(name, {})
+        if row.get("healthy") is True:
+            included.append(name)
+        else:
+            excluded.append({"symbol": name, "reason": _exclusion_reason(row)})
+    return sorted(included), sorted(excluded, key=lambda e: e["symbol"])
+
+
 def _make_recheck(*, source: dict, data_gate: dict, source_path: Path,
                   data_gate_path: Path, names: list[str],
-                  completed_session: str):
+                  completed_session: str, included: list[str] | None = None):
     """Build the append-time gate recheck handed to ``register_window_real``.
 
     It (a) re-validates the source-health and data-gate receipts by hash
     exactly as ``activate`` did (immutable evidence binding -- a receipt that
     changed between assembly and append refuses), (b) RE-RUNS the source-health
-    and whole-universe data-gate evaluation for the pinned completed session,
-    and (c) returns the bools + evidence ids (the receipt hashes) that
-    ``register_window_real`` cross-checks against the evidence dict."""
+    and data-gate evaluation for the pinned completed session, and (c) returns
+    the bools + evidence ids (the receipt hashes) that ``register_window_real``
+    cross-checks against the evidence dict.
+
+    ``included`` (Option C trim-at-append): when None the recheck re-earns the
+    whole-15 pass (unchanged). When a subset, source health is re-evaluated over
+    the INCLUDED names and the data gate is re-run over the full scope but
+    re-checked per-symbol for the INCLUDED names only -- the same trimmed
+    semantics the guard used, re-earned at append time rather than inherited."""
     source_hash = source["receipt_hash"]
     data_gate_hash = data_gate["receipt_hash"]
+    trimmed = included is not None
+    health_names = list(included) if trimmed else list(names)
 
     def recheck() -> dict:
         # (a) immutable evidence binding: the exact receipts assembled must
@@ -90,7 +127,8 @@ def _make_recheck(*, source: dict, data_gate: dict, source_path: Path,
             raise registration.ActivationRefused(
                 "source-health receipt changed between assembly and append")
         data_now = validate_data_gate_receipt(
-            data_gate_path, evaluation_session=completed_session, names=names)
+            data_gate_path, evaluation_session=completed_session, names=names,
+            included=list(included) if trimmed else None)
         if data_now.get("receipt_hash") != data_gate_hash:
             raise registration.ActivationRefused(
                 "data-gate receipt changed between assembly and append")
@@ -100,12 +138,18 @@ def _make_recheck(*, source: dict, data_gate: dict, source_path: Path,
         known_as_of = session_close_utc(completed_session)
         sh = source_health_mod.evaluate_health(
             requested_on=on, on=on, known_as_of=known_as_of,
-            assertions=source_health_mod.load_assertions(), names=names)
+            assertions=source_health_mod.load_assertions(), names=health_names)
         dg = data_gate_mod.evaluate(
             date.fromisoformat(data_gate["requested_run_date"]),
             scope=scope_identity())
-        data_gate_go = (dg.get("whole_universe_verdict") == "GO"
-                        and dg.get("evaluation_session") == completed_session)
+        session_ok = dg.get("evaluation_session") == completed_session
+        if trimmed:
+            per = dg.get("symbols", {})
+            data_gate_go = session_ok and all(
+                per.get(s, {}).get("verdict") == "GO" for s in health_names)
+        else:
+            data_gate_go = (session_ok
+                            and dg.get("whole_universe_verdict") == "GO")
 
         return {
             "source_health_all_healthy": bool(sh.get("activation_ready")),
@@ -122,7 +166,16 @@ def activate(*, owner_path: Path, evidence_path: Path,
              backup_restore_path: Path, completed_session: str,
              confirmation: str, spec_path: Path = DEFAULT_SPEC_PATH,
              forward_base: Path = REAL_FORWARD_STORE,
-             code_state=_code_state) -> ledger.AppendResult:
+             code_state=_code_state,
+             trim_unhealthy: bool = False) -> ledger.AppendResult:
+    """Assemble the inputs and hand them to the one door.
+
+    ``trim_unhealthy`` (Option C, default OFF): without it the check is exactly
+    today's all-or-nothing 15-name activation. With it, the window's universe is
+    trimmed to the source-HEALTHY subset at the pinned session (data-readiness
+    ONLY), the excluded names + reasons are frozen into the payload, and both
+    gates operate on the included subset. The full ``register_window_real``
+    refusal chain still runs on the trimmed activation."""
     if confirmation != CONFIRMATION:
         raise ValueError(f"type exactly {CONFIRMATION!r} to activate")
     owner = _json_object(owner_path)
@@ -131,13 +184,40 @@ def activate(*, owner_path: Path, evidence_path: Path,
     data_gate = load_receipt(data_gate_path, expected_type="data_gate")
     backup = load_receipt(backup_restore_path, expected_type="backup_restore")
     names = list(scope_identity()["symbols"])
+
+    # Universe selection is by SOURCE HEALTH (data readiness) ONLY -- never any
+    # performance/return signal. Without the flag, included == full scope.
+    if trim_unhealthy:
+        included, excluded = _trim_universe(source, names)
+        if not included:
+            raise registration.RegistrationInputError(
+                "trim leaves an empty universe -- every scope name is source-"
+                "unhealthy at the pinned session; nothing to activate")
+        universe_manifest = {
+            "scope_id": scope_identity()["scope_id"],
+            "scope_hash": scope_identity()["scope_hash"],
+            "included": list(included),
+            "excluded": list(excluded),
+            "trim_rule": registration.TRIM_RULE,
+        }
+    else:
+        included, excluded = list(names), []
+        universe_manifest = registration.default_universe_manifest()
+    included_arg = list(included) if trim_unhealthy else None
+
     validated_gate = validate_data_gate_receipt(
-        data_gate_path, evaluation_session=completed_session, names=names)
+        data_gate_path, evaluation_session=completed_session, names=names,
+        included=included_arg)
     if validated_gate != data_gate:
         raise ValueError("data-gate receipt changed during validation")
     if source.get("receipt_hash") != data_gate.get("source_health_receipt_hash"):
         raise ValueError("data gate is not linked to the supplied source receipt")
-    if source.get("scope") != scope_identity() or source.get("activation_ready") is not True:
+    # The receipt must always be the FULL official scope (anti-cherry-pick).
+    # activation_ready (all-15 healthy) is required ONLY when NOT trimming; when
+    # trimming, only the included subset must be healthy (checked by the guard).
+    if source.get("scope") != scope_identity():
+        raise ValueError("source health receipt is not the official current scope")
+    if not trim_unhealthy and source.get("activation_ready") is not True:
         raise ValueError("source health is not a complete current-scope pass")
     if backup.get("completed_session") != completed_session:
         raise ValueError("backup restore evidence is older than the completed session")
@@ -172,13 +252,14 @@ def activate(*, owner_path: Path, evidence_path: Path,
         universe=tuple(names), data_gate_result=gate_result_for_guard,
         owner_inputs=owner, allow_real_readonly=True, strict=True,
         source_health_receipt=source, data_gate_receipt=data_gate,
-        backup_restore_receipt=backup, completed_session=completed_session)
+        backup_restore_receipt=backup, completed_session=completed_session,
+        included=(tuple(included) if trim_unhealthy else None))
 
     spec_sha256 = sha256_file(Path(spec_path))
     recheck_gates = _make_recheck(
         source=source, data_gate=data_gate, source_path=Path(source_health_path),
         data_gate_path=Path(data_gate_path), names=names,
-        completed_session=completed_session)
+        completed_session=completed_session, included=included_arg)
 
     # THE ONE DOOR. All ten refusals (including a re-check that the guard report
     # is a full store-bound fresh PASS) live inside register_window_real; the CLI
@@ -187,7 +268,7 @@ def activate(*, owner_path: Path, evidence_path: Path,
         owner=owner, evidence=evidence, guard_report=report,
         spec_sha256=spec_sha256, spec_path=Path(spec_path),
         base_dir=forward_base, code_state=code_state,
-        recheck_gates=recheck_gates)
+        recheck_gates=recheck_gates, universe_manifest=universe_manifest)
     if result.seq != 0:
         raise RuntimeError("activation wrote something other than the first event")
     return result
@@ -202,6 +283,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backup-restore-receipt", type=Path, required=True)
     parser.add_argument("--completed-session", required=True)
     parser.add_argument("--activation-spec", type=Path, default=DEFAULT_SPEC_PATH)
+    parser.add_argument(
+        "--trim-unhealthy", action="store_true",
+        help="OPT-IN (default OFF): activate on the source-HEALTHY subset of "
+             "the 15-name scope at the pinned session instead of requiring all "
+             "15. Selection is by DATA READINESS ONLY; the excluded names and "
+             "their reason codes are frozen immutably into the payload. Without "
+             "this flag the check is today's all-or-nothing 15-name activation.")
     parser.add_argument("--confirm", required=True)
     args = parser.parse_args(argv)
     try:
@@ -211,7 +299,8 @@ def main(argv: list[str] | None = None) -> int:
             data_gate_path=args.data_gate_receipt,
             backup_restore_path=args.backup_restore_receipt,
             completed_session=args.completed_session,
-            confirmation=args.confirm, spec_path=args.activation_spec)
+            confirmation=args.confirm, spec_path=args.activation_spec,
+            trim_unhealthy=args.trim_unhealthy)
     except Exception as exc:
         print(f"H7 ACTIVATION BLOCKED -- {type(exc).__name__}: {exc}")
         return 2

@@ -74,7 +74,20 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
                              source_health_receipt: dict | None = None,
                              data_gate_receipt: dict | None = None,
                              backup_restore_receipt: dict | None = None,
-                             completed_session: str | None = None) -> GuardReport:
+                             completed_session: str | None = None,
+                             included: tuple | None = None) -> GuardReport:
+    """When ``included`` is None (default) the guard checks the whole
+    ``universe`` -- today's all-or-nothing 15-name activation, unchanged.
+
+    When ``included`` is a subset (Option C trim-at-append), the source-health
+    and data-gate checks operate on the INCLUDED names ONLY: every included name
+    must be healthy, and every included name must be per-symbol GO in the
+    data-gate receipt. Excluded names are recorded in the payload elsewhere and
+    are NOT health-checked here. The receipt-binding strict checks
+    (``scope_identity``, ``receipt_chain``, ``source_config_identity``,
+    ``fresh_backup_restore``) still verify the receipts cover the FULL official
+    scope -- that is the anti-cherry-pick guarantee: trimming only SELECTS from
+    pre-computed full-scope evidence, it never narrows the evidence itself."""
     from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE, ActivationBoundaryError
     base = Path(forward_base).resolve()
     real = Path(REAL_FORWARD_STORE).resolve()
@@ -89,20 +102,29 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
         "VALID EMPTY" if v.valid and v.empty
         else f"valid={v.valid} empty={v.empty} count={v.count}"))
 
-    unhealthy = sorted(s for s in universe
+    checked_names = tuple(universe if included is None else included)
+    unhealthy = sorted(s for s in checked_names
                        if not source_health_by_symbol.get(s, False))
-    missing = sorted(set(universe) - set(source_health_by_symbol))
+    missing = sorted(set(checked_names) - set(source_health_by_symbol))
     report.checks.append(Check(
         "source_health_whole_universe", not unhealthy and not missing,
         "all healthy" if not unhealthy and not missing
         else f"unhealthy={unhealthy} missing={missing}"))
 
-    gate_ok = (data_gate_result.get("whole_universe_verdict") == "GO"
-               and data_gate_result.get("go_count") == len(data_gate_result.get("universe", [])))
-    report.checks.append(Check(
-        "data_gate_go", gate_ok,
-        "GO whole-universe" if gate_ok
-        else f"verdict={data_gate_result.get('whole_universe_verdict')}"))
+    if included is None:
+        gate_ok = (data_gate_result.get("whole_universe_verdict") == "GO"
+                   and data_gate_result.get("go_count") ==
+                   len(data_gate_result.get("universe", [])))
+        gate_reason = ("GO whole-universe" if gate_ok
+                       else f"verdict={data_gate_result.get('whole_universe_verdict')}")
+    else:
+        per_symbol = data_gate_result.get("symbols", {})
+        not_go = sorted(s for s in checked_names
+                        if per_symbol.get(s, {}).get("verdict") != "GO")
+        gate_ok = bool(checked_names) and not not_go
+        gate_reason = ("GO for all included" if gate_ok
+                       else f"included not GO: {not_go}")
+    report.checks.append(Check("data_gate_go", gate_ok, gate_reason))
 
     if strict:
         current_scope = scope_identity()
@@ -125,14 +147,30 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
             "receipt_chain", receipts_ok,
             "source-health -> data-gate receipts linked" if receipts_ok
             else "receipt chain missing, tampered, or mismatched"))
-        source_ok = (source_health_receipt is not None
-                     and source_health_receipt.get("activation_ready") is True
-                     and source_health_receipt.get("healthy_count") == len(universe)
-                     and not source_health_receipt.get("unhealthy_symbols"))
+        if included is None:
+            source_ok = (source_health_receipt is not None
+                         and source_health_receipt.get("activation_ready") is True
+                         and source_health_receipt.get("healthy_count") == len(universe)
+                         and not source_health_receipt.get("unhealthy_symbols"))
+            source_reason = ("all current names healthy" if source_ok
+                             else "source health is partial or stale")
+        else:
+            # Trim mode: the FULL-scope receipt need not be all-healthy, but
+            # every INCLUDED name must be healthy in its per-symbol map and none
+            # may appear in the receipt's unhealthy list.
+            incl = set(checked_names)
+            receipt_syms = (source_health_receipt.get("symbols", {})
+                            if source_health_receipt else {})
+            source_ok = (source_health_receipt is not None
+                         and bool(incl)
+                         and incl.isdisjoint(set(
+                             source_health_receipt.get("unhealthy_symbols") or []))
+                         and all(receipt_syms.get(s, {}).get("healthy") is True
+                                 for s in incl))
+            source_reason = ("all included names healthy" if source_ok
+                             else "an included name is unhealthy/stale in the receipt")
         report.checks.append(Check(
-            "source_health_all_names", source_ok,
-            "all current names healthy" if source_ok
-            else "source health is partial or stale"))
+            "source_health_all_names", source_ok, source_reason))
         identity_ok = (data_gate_receipt is not None
                        and data_gate_receipt.get("config_hash") == config_hash()
                        and data_gate_receipt.get("source_hash") ==

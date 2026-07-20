@@ -17,7 +17,15 @@ from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
     ActivationBoundaryError,
 )
+from options_researcher.h7_scope import scope_identity
 from research.hashing import config_hash, cost_model_hash, sha256_file
+
+# The two trim_rule values a window_registration payload may carry (Option C,
+# 2026-07-19). "none" = the default all-15 activation; the trim rule names the
+# opt-in data-readiness-only subset selection. The choice is by SOURCE HEALTH
+# at the pinned session ONLY -- never any performance/return signal.
+NO_TRIM_RULE = "none"
+TRIM_RULE = "source_health_ready_at_pinned_session"
 
 # The exact owner-typed inputs required before a window_registration event
 # can be built. Every field is mandatory and None/"" is refused -- no default
@@ -107,13 +115,72 @@ def derive_window_end(start_iso: str, session_count: int) -> str:
     return end_iso
 
 
-def build_window_registration_event(*, owner: dict, evidence: dict) -> dict:
+def _lanes_for_symbol(symbol: str) -> frozenset[str]:
+    """Which H7 lanes a name can play. Core-long-only names
+    (``config.H7_CORE_LONG_ONLY``) are H7a/H7b eligible only -- H7c (the credit
+    lane) stays H5's book -- while every other scope name can play all three
+    lanes. This is the ONLY lane-eligibility fact the structural-emptiness
+    check below needs; it is deliberately simple. With the current config
+    every name can play at least lane 'a', so "no lane playable" reduces to
+    "the included set is empty" -- but the check is written structurally so it
+    still fires if lane eligibility ever narrows to exclude some names entirely.
+    """
+    core = {s.upper() for s in config.H7_CORE_LONG_ONLY}
+    if symbol.upper() in core:
+        return frozenset({"a", "b"})
+    return frozenset({"a", "b", "c"})
+
+
+def default_universe_manifest() -> dict:
+    """The all-15 (no-trim) universe manifest: every official scope name is
+    included, nothing is excluded, ``trim_rule`` is ``NO_TRIM_RULE``."""
+    ident = scope_identity()
+    return {
+        "scope_id": ident["scope_id"],
+        "scope_hash": ident["scope_hash"],
+        "included": list(ident["symbols"]),
+        "excluded": [],
+        "trim_rule": NO_TRIM_RULE,
+    }
+
+
+def _validate_universe_manifest(manifest: dict) -> None:
+    """Refuse a structurally impossible window BEFORE it is registered.
+
+    (1) An empty included set is refused outright -- a window with no names to
+    play is not a window. (2) A window where NO included name can play ANY lane
+    is refused as structurally empty (see ``_lanes_for_symbol``). Both are
+    ``RegistrationInputError`` so the one-door append writes nothing."""
+    included = manifest.get("included") or []
+    if not included:
+        raise RegistrationInputError(
+            "window universe is empty -- refusing to register a window with no "
+            "included names (trim left nothing data-ready)")
+    playable = {lane for s in included for lane in _lanes_for_symbol(s)}
+    if not playable:
+        raise RegistrationInputError(
+            "trimmed universe is structurally empty -- no included name can "
+            "play any H7 lane")
+
+
+def build_window_registration_event(*, owner: dict, evidence: dict,
+                                    universe_manifest: dict | None = None) -> dict:
     """Build (never append) the Stage-8 window_registration event. Every
     owner/evidence input is validated present; the window arithmetic is
     re-derived (never trusted from owner ack strings) and checked against
-    the three-calendar-month rule and paid ThetaData coverage."""
+    the three-calendar-month rule and paid ThetaData coverage.
+
+    ``universe_manifest`` records which scope names this window actually covers
+    (Option C trim-at-append). Default ``None`` = the all-15 manifest. A
+    trimmed manifest lists the included names, each excluded name WITH its
+    reason code, and the ``trim_rule``; it is frozen verbatim into the payload
+    so the data-readiness-only choice is auditable and non-cherry-picked. An
+    empty or structurally lane-empty universe is refused here."""
     _require(owner, OWNER_FIELDS, "owner")
     _require(evidence, EVIDENCE_FIELDS, "evidence")
+    manifest = (default_universe_manifest() if universe_manifest is None
+                else universe_manifest)
+    _validate_universe_manifest(manifest)
 
     start = owner["WINDOW_START_DECISION_SESSION"]
     count = int(owner["WINDOW_DECISION_SESSION_COUNT"])
@@ -174,6 +241,7 @@ def build_window_registration_event(*, owner: dict, evidence: dict) -> dict:
             "config_hash": evidence.get("config_hash", config_hash()),
         },
         "coverage_evidence": owner["THETADATA_CONFIRMATION_EVIDENCE"],
+        "universe": manifest,
         "darwin_durability_verified": bool(evidence["darwin_durability_verified"]),
         "pre_append_state": evidence["pre_append_state"],
     }
@@ -204,6 +272,7 @@ def _synthetic_base(base_dir) -> Path:
 
 
 def register_window(*, owner: dict, evidence: dict, base_dir,
+                    universe_manifest: dict | None = None,
                     clock=None) -> ledger.AppendResult:
     """Append the window_registration event as the ledger's FIRST event.
     Synthetic stores only -- refuses the real forward store and refuses a
@@ -212,7 +281,8 @@ def register_window(*, owner: dict, evidence: dict, base_dir,
     ``seq`` is the ledger's 0-based record position (0 for the first event
     -- one seq semantic in this codebase, not two)."""
     base = _synthetic_base(base_dir)
-    event = build_window_registration_event(owner=owner, evidence=evidence)
+    event = build_window_registration_event(
+        owner=owner, evidence=evidence, universe_manifest=universe_manifest)
     return ledger.append_event(event, base_dir=base, clock=clock,
                                expected_head=None)
 
@@ -232,7 +302,8 @@ GUARD_REPORT_MAX_AGE_S = 3600
 
 def register_window_real(*, owner: dict, evidence: dict, guard_report,
                          spec_sha256: str, spec_path, base_dir, code_state,
-                         recheck_gates, clock=None, now=None,
+                         recheck_gates, universe_manifest: dict | None = None,
+                         clock=None, now=None,
                          max_report_age_s: int = GUARD_REPORT_MAX_AGE_S,
                          ) -> ledger.AppendResult:
     """The Stage-8 PRODUCTION append path (activation-spec 2026-07-18): the
@@ -266,8 +337,10 @@ def register_window_real(*, owner: dict, evidence: dict, guard_report,
        guard's earlier check is advisory, this one is binding.
 
     Only then is the event built (which re-derives all window arithmetic and
-    coverage rules) and appended with ``expected_head=None`` so a concurrent
-    write still loses. Returns the ledger's own AppendResult."""
+    coverage rules, and validates ``universe_manifest`` -- refusing an empty or
+    structurally lane-empty trimmed universe) and appended with
+    ``expected_head=None`` so a concurrent write still loses. Returns the
+    ledger's own AppendResult."""
     _require(owner, OWNER_FIELDS, "owner")
     _require(evidence, EVIDENCE_FIELDS, "evidence")
 
@@ -362,6 +435,7 @@ def register_window_real(*, owner: dict, evidence: dict, guard_report,
             f"(valid={v.valid} empty={v.empty} count={v.count}) -- the "
             "window_registration must be the chain's first event")
 
-    event = build_window_registration_event(owner=owner, evidence=evidence)
+    event = build_window_registration_event(
+        owner=owner, evidence=evidence, universe_manifest=universe_manifest)
     return ledger.append_event(event, base_dir=base, clock=clock,
                                expected_head=None)
