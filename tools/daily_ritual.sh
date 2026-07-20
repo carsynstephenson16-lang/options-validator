@@ -19,6 +19,8 @@ exec > "$LOG" 2>&1
 
 SUMMARY=""
 note() { SUMMARY="${SUMMARY}$1\n"; echo ">>> $1"; }
+CRITICAL=0
+crit() { CRITICAL=1; note "CRITICAL: $1"; }
 
 echo "=== daily ritual ${STAMP} ==="
 
@@ -54,6 +56,16 @@ fi
 # so all three receipts agree on evaluation_session (a bare run stamps the
 # calendar date and the chain refuses on Mondays/holidays).
 RUN_DATE="$(TZ=America/New_York date +%F)"
+AS_OF="$("$UV" run python -c 'from datetime import date; from options_researcher.h7_watch import evaluation_session; print(evaluation_session(date.today()))' | grep -Eo '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | tail -1)"
+SCOPE_ID="$("$UV" run python -c 'from options_researcher.h7_scope import scope_identity; print(scope_identity()["scope_id"])' | grep -Eo '^[A-Za-z0-9._-]+$' | tail -1)"
+if [ -z "$AS_OF" ]; then
+  crit "evaluation session: FAILED to resolve — H6/H8 leg skipped"
+fi
+if [ -z "$SCOPE_ID" ]; then
+  crit "H7 scope identity: FAILED to resolve — receipt reuse unavailable"
+fi
+EXPECTED_SH_RECEIPT="reports/h7_receipts/${SCOPE_ID}/source_health/${AS_OF}.json"
+EXPECTED_DG_RECEIPT="reports/h7_data_gate/${SCOPE_ID}/receipts/${AS_OF}.json"
 SH_OUT="$("$UV" run python -m options_researcher.h7_source_health --as-of "$RUN_DATE" 2>&1)"
 SH_RC=$?
 echo "$SH_OUT"
@@ -64,8 +76,13 @@ else
   note "source health: exit ${SH_RC} — per-name entry bans apply (fail-closed in watcher)"
 fi
 if [ -z "$SH_RECEIPT" ] || [ ! -f "$SH_RECEIPT" ]; then
-  note "source-health receipt: MISSING — gate runs unlinked; watcher will refuse (fail-closed)"
-  SH_RECEIPT=""
+  if [ -n "$AS_OF" ] && [ -n "$SCOPE_ID" ] && [ -f "$EXPECTED_SH_RECEIPT" ]; then
+    note "source-health receipt: already exists for this session (immutable; benign re-run) — reusing $EXPECTED_SH_RECEIPT"
+    SH_RECEIPT="$EXPECTED_SH_RECEIPT"
+  else
+    crit "source-health receipt could not be produced and none exists on disk"
+    SH_RECEIPT=""
+  fi
 fi
 
 # Step 2 — data gate (HARD GATE; NO_GO blocks the watchers, no override).
@@ -78,25 +95,41 @@ DG_OUT="$("$UV" run python -m options_researcher.h7_data_gate "${GATE_ARGS[@]}" 
 DG_RC=$?
 echo "$DG_OUT"
 DG_RECEIPT="$(echo "$DG_OUT" | sed -n 's/^immutable receipt //p' | tail -1)"
-if [ "$DG_RC" -eq 0 ]; then
-  note "data gate: GO"
-  GATE_GO=1
-else
-  note "data gate: NO_GO — watchers NOT run (this is the system working)"
-  GATE_GO=0
+if [ -z "$DG_RECEIPT" ] || [ ! -f "$DG_RECEIPT" ]; then
+  if [ -n "$AS_OF" ] && [ -n "$SCOPE_ID" ] && [ -f "$EXPECTED_DG_RECEIPT" ]; then
+    note "data-gate receipt: already exists for this session (immutable; benign re-run) — reusing $EXPECTED_DG_RECEIPT"
+    DG_RECEIPT="$EXPECTED_DG_RECEIPT"
+  else
+    crit "data-gate receipt could not be produced and none exists on disk"
+    DG_RECEIPT=""
+  fi
 fi
 
-# LumiBot import banners can land on stdout — keep only the final date line.
-AS_OF="$("$UV" run python -c 'from datetime import date; from options_researcher.h7_watch import evaluation_session; print(evaluation_session(date.today()))' | grep -Eo '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | tail -1)"
-if [ -z "$AS_OF" ]; then
-  note "evaluation session: FAILED to resolve — H6/H8 leg skipped"
-  GATE_GO=0
+GATE_GO=0
+if [ -n "$DG_RECEIPT" ] && [ -f "$DG_RECEIPT" ]; then
+  DG_VERDICT_OUT="$("$UV" run python -c 'import sys; from pathlib import Path; from research.receipts import load_receipt; print(load_receipt(Path(sys.argv[1]), expected_type="data_gate")["whole_universe_verdict"])' "$DG_RECEIPT" 2>&1)"
+  DG_VERDICT_RC=$?
+  DG_VERDICT="$(printf '%s\n' "$DG_VERDICT_OUT" | grep -E '^(GO|NO_GO)$' | tail -1)"
+  if [ "$DG_VERDICT_RC" -ne 0 ]; then
+    crit "data-gate receipt exists but could not be read"
+  elif [ "$DG_VERDICT" = "GO" ]; then
+    if [ "$DG_RC" -eq 0 ]; then
+      note "data gate: GO"
+    else
+      note "data gate: GO (reused immutable receipt)"
+    fi
+    GATE_GO=1
+  elif [ "$DG_VERDICT" = "NO_GO" ]; then
+    note "data gate: NO_GO — watchers NOT run (this is the system working)"
+  else
+    crit "data-gate receipt has unexpected verdict: $DG_VERDICT"
+  fi
 fi
 note "evaluation session: ${AS_OF}"
 
 if [ "$GATE_GO" -eq 1 ]; then
   # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
-  "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || note "h7_watch: NONZERO EXIT"
+  "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
 
   # Step 4 — H6 leg (exact-session; features rebuild is mandatory after topup).
   "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || note "h6_features: NONZERO EXIT"
@@ -141,6 +174,15 @@ echo "=== summary ==="
 printf "%b" "$SUMMARY"
 
 # Surface completion without requiring the owner to ask.
-/usr/bin/osascript -e "display notification \"$(printf '%b' "$SUMMARY" | head -c 220 | tr '"' "'")\" with title \"options-validator daily ritual\" subtitle \"session ${AS_OF} — log: .tmp/daily_ritual/${STAMP}.log\"" 2>/dev/null
+TITLE="options-validator daily ritual"
+if [ "$CRITICAL" -eq 1 ]; then
+  TITLE="[BROKEN] $TITLE"
+fi
+/usr/bin/osascript -e "display notification \"$(printf '%b' "$SUMMARY" | head -c 220 | tr '"' "'")\" with title \"$TITLE\" subtitle \"session ${AS_OF} — log: .tmp/daily_ritual/${STAMP}.log\"" 2>/dev/null
 
+if [ "$CRITICAL" -eq 1 ]; then
+  echo "RITUAL STATUS: BROKEN (see CRITICAL lines above)"
+  exit 1
+fi
+echo "RITUAL STATUS: OK"
 exit 0
