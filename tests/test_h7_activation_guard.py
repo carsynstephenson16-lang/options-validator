@@ -87,7 +87,13 @@ class GuardTests(unittest.TestCase):
             source_health_by_symbol={"MSFT": True}, universe=("MSFT",),
             data_gate_result=go_gate(("MSFT",)), owner_inputs={},
             allow_real_readonly=True)
-        self.assertTrue(report.by_name["ledger_valid_empty"].ok)
+        # Phase-aware: post-activation (2026-07-20) the real store is correctly
+        # non-empty, so the ledger_valid_empty precondition now reports not-ok — that
+        # is the guard working (it would refuse a second activation). The invariant
+        # this test guards is that allow_real_readonly lets the snapshot run WITHOUT
+        # raising; assert the report was produced and the check ran, not that it is ok.
+        self.assertIn("ledger_valid_empty", report.by_name)
+        self.assertFalse(report.by_name["ledger_valid_empty"].ok)
 
     def test_real_store_refused_without_readonly_flag(self):
         from options_researcher.h7_paper_lifecycle import (

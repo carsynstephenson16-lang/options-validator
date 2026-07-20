@@ -200,7 +200,10 @@ class TrimActivationTests(unittest.TestCase):
     # -- tests -------------------------------------------------------------- #
     def test_trim_activates_included_and_freezes_excluded_with_reasons(self):
         before = el.verify(base_dir=REAL_FORWARD_STORE)
-        self.assertTrue(before.valid and before.empty)
+        # Phase-aware: pre-activation the real store is VALID EMPTY; post-activation
+        # (2026-07-20, seq-0 window_registration) it is VALID non-empty. The invariant
+        # under test is "valid and UNTOUCHED by this operation", not "empty".
+        self.assertTrue(before.valid)
         source, data_gate = self._write(self.unhealthy)
 
         with ExitStack() as stack:

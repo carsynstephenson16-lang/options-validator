@@ -380,7 +380,10 @@ class ActivationOneDoorTests(unittest.TestCase):
 
     def test_activation_lands_seq0_with_receipt_hashes_in_payload(self):
         real_before = el.verify(base_dir=REAL_FORWARD_STORE)
-        self.assertTrue(real_before.valid and real_before.empty)
+        # Phase-aware: pre-activation the real store is VALID EMPTY; post-activation
+        # (2026-07-20, seq-0 window_registration) it is VALID non-empty. The invariant
+        # under test is "valid and UNTOUCHED by this operation", not "empty".
+        self.assertTrue(real_before.valid)
 
         with ExitStack() as stack:
             self._world_patches(stack)
