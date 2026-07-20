@@ -9,6 +9,17 @@ __pycache__/
 .env.*
 !.env.example
 
+# Read-only provider credentials, tokens, sessions, and OAuth artifacts
+.secrets/
+**/*.token
+**/*.session
+**/token*.json
+**/*-token*.json
+**/session*.json
+**/*-session*.json
+**/oauth*.json
+**/*-oauth*.json
+
 # Local Claude Code agent config / permissions -- never commit
 .claude/
 !ov/.claude/

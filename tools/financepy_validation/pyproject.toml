@@ -1,0 +1,11 @@
+[project]
+name = "options-validator-financepy-validation"
+version = "0.1.0"
+description = "Separate FinancePy model-validation environment"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "financepy @ git+https://github.com/domokane/FinancePy.git@07a2b70d8ef9d647e67f2bd8e2c9fbb331b5364b",
+]
+
+[tool.uv]
+package = false

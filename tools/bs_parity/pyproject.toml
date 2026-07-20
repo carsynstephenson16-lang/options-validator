@@ -1,0 +1,11 @@
+[project]
+name = "options-validator-bs-parity"
+version = "0.1.0"
+description = "Isolated comparator for the local Black-Scholes implementation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "vollib @ git+https://github.com/vollib/py_vollib.git@11f2058f709328339e3906d99cb04ff41af97776",
+]
+
+[tool.uv]
+package = false

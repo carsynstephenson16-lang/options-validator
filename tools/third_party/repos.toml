@@ -1,0 +1,59 @@
+# Git sources intentionally kept outside the root options-validator dependency
+# graph. Re-pin by changing the revision and recording the reason in the
+# accompanying documentation.
+
+[vollib]
+repository = "https://github.com/vollib/py_vollib.git"
+revision = "11f2058f709328339e3906d99cb04ff41af97776"
+license = "MIT"
+role = "isolated Black-Scholes parity test only"
+environment = "tools/bs_parity/pyproject.toml"
+
+[financepy]
+repository = "https://github.com/domokane/FinancePy.git"
+revision = "07a2b70d8ef9d647e67f2bd8e2c9fbb331b5364b"
+license = "GPL-3.0-or-later"
+role = "separate model-validation environment only"
+environment = "tools/financepy_validation/pyproject.toml"
+
+[openbb_platform]
+repository = "https://github.com/OpenBB-finance/OpenBB.git"
+revision = "ebee248ed0bccca65bdfc78e7faae676488f4e5b"
+license = "AGPL-3.0-only"
+role = "equity-research enrichment platform; never a canonical source"
+environment = "equity-research-owned environment"
+
+[openbb_backend_adapter]
+repository = "https://github.com/OpenBB-finance/backends-for-openbb.git"
+revision = "a6293707576e16edda8305adda95b07b6a4b968b"
+license = "MIT"
+role = "adapter scaffold for equity-research enrichment"
+environment = "equity-research-owned environment"
+
+[ffn]
+repository = "https://github.com/pmorissette/ffn.git"
+revision = "86a8b711c2ef1fd70dc85e52565478dc8ccc77fd"
+license = "MIT"
+role = "optional later portfolio-performance reporting"
+environment = "not installed"
+
+[pysabr]
+repository = "https://github.com/ynouri/pysabr.git"
+revision = "be22436625f4c0b605f362444b7aafeecda15959"
+license = "MIT"
+role = "reference material only"
+environment = "not installed"
+
+[willowtree]
+repository = "https://github.com/federicomariamassari/willowtree.git"
+revision = "1a4c37ed896d3213ed8e919737511bc61d355398"
+license = "MIT"
+role = "reference material only"
+environment = "not installed"
+
+[finoptions]
+repository = "https://github.com/bbcho/finoptions-dev.git"
+revision = "d89d4bf857af13ae8c6470a26105910cfe074f5d"
+license = "MIT"
+role = "reference material only"
+environment = "not installed"

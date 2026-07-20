@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture Reviewer"
+  short_description: "Stress-test system architecture"
+  default_prompt: "Use $architecture-reviewer to stress-test this system architecture and prioritize the smallest fixes."
