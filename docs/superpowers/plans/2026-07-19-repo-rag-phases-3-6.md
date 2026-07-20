@@ -449,6 +449,8 @@ git commit -m "feat(repo-rag): line-aware deterministic chunking
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
+**Post-review addendum (2026-07-20, executes as Task 3 Step 0):** Task 2 quality review approved with Minors; before building the index (which bakes chunk texts into chunk_ids), harden chunking: (a) normalize CRLF — `text.replace("\r\n", "\n")` before the existing `rstrip("\n")` in `chunk_text`; (b) add three invariant tests to `test_chunking.py`: `ChunkSettings(max_chars=49)` and `ChunkSettings(overlap_lines=-1)` both raise ValueError; heavy-overlap termination+full coverage (`overlap_lines=200` over 50 short lines still covers 1..50); zero-overlap gapless coverage; plus a CRLF test (`chunk_text("p.md", "a\r\nb\r\n", ChunkSettings()).text == "a\nb"`). Also add `uv.lock` and `.venv/` to `tools/repo_rag/.gitignore` (stray artifact from running `uv` inside the tool dir).
+
 ---
 
 ### Task 3: Idempotent index (`indexing.py`)

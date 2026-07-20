@@ -53,6 +53,35 @@ class ChunkingTests(unittest.TestCase):
         chunk = chunk_text("docs/a.md", "alpha\nbeta", ChunkSettings())[0]
         self.assertEqual(chunk.citation, "docs/a.md:L1-L2")
 
+    def test_invalid_settings_raise(self) -> None:
+        with self.assertRaises(ValueError):
+            ChunkSettings(max_chars=49)
+        with self.assertRaises(ValueError):
+            ChunkSettings(overlap_lines=-1)
+
+    def test_heavy_overlap_terminates_with_full_coverage(self) -> None:
+        lines = "\n".join(f"line {i}" for i in range(1, 51))
+        chunks = chunk_text("p.md", lines, ChunkSettings(max_chars=50, overlap_lines=200))
+        covered: set[int] = set()
+        for chunk in chunks:
+            covered.update(range(chunk.start_line, chunk.end_line + 1))
+        self.assertEqual(covered, set(range(1, 51)))
+
+    def test_zero_overlap_gapless_coverage(self) -> None:
+        lines = "\n".join(f"line {i}" for i in range(1, 30))
+        chunks = chunk_text("p.md", lines, ChunkSettings(max_chars=80, overlap_lines=0))
+        covered: set[int] = set()
+        for chunk in chunks:
+            covered.update(range(chunk.start_line, chunk.end_line + 1))
+        self.assertEqual(covered, set(range(1, 30)))
+        for previous, current in zip(chunks, chunks[1:]):
+            self.assertEqual(current.start_line, previous.end_line + 1)
+
+    def test_crlf_normalized(self) -> None:
+        chunks = chunk_text("p.md", "a\r\nb\r\n", ChunkSettings())
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].text, "a\nb")
+
 
 if __name__ == "__main__":
     unittest.main()

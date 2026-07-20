@@ -49,7 +49,7 @@ def _split_oversized_line(source_path: str, line_number: int, line: str, max_cha
 
 
 def chunk_text(source_path: str, text: str, settings: ChunkSettings) -> tuple[Chunk, ...]:
-    stripped = text.rstrip("\n")
+    stripped = text.replace("\r\n", "\n").rstrip("\n")
     if not stripped:
         return ()
     lines = stripped.split("\n")
