@@ -3,12 +3,19 @@ when the corresponding strategies.h7_lanes.decide_lane_* returned an
 executable action from the same inputs -- the watcher has no lane logic of
 its own. Earnings coverage and the paper book fail CLOSED."""
 
+import io
 import unittest
+from contextlib import redirect_stdout
 from datetime import date, datetime
+from unittest import mock
 
 import pandas as pd
 
 from options_researcher import h7_watch
+from options_researcher.h7_cohort import (
+    CohortUnavailableError,
+    RegisteredCohort,
+)
 
 TODAY = date(2026, 7, 8)
 KNOWN = datetime.fromisoformat("2026-07-08T21:00:00+00:00")
@@ -147,3 +154,81 @@ class TestFailClosedStates(unittest.TestCase):
     def test_lane_c_basket_cap(self):
         card = _card(chain=_chain(center=70.0, iv=0.90), open_h7c=1)
         self.assertEqual(card["lane_c"]["state"], "BASKET-CAP")
+
+
+class TestFrozenCohortWatcher(unittest.TestCase):
+    def test_excluded_name_is_not_entry_evaluated(self):
+        gate_names = ["INCLUDED", "EXCLUDED"]
+        cohort = RegisteredCohort(
+            included=("INCLUDED",),
+            excluded={"EXCLUDED": "EARNINGS-UNKNOWN"},
+            event_id="wr:fixture",
+        )
+        evaluated: list[str] = []
+        validated: dict[str, object] = {}
+
+        def load_closes(symbol, *args, **kwargs):
+            evaluated.append(symbol)
+            return _closes(DEEP_RECLAIM)
+
+        def validate(path, *, evaluation_session, names, included=None):
+            validated["names"] = names
+            validated["included"] = included
+            return {
+                "receipt_hash": "data-gate-hash",
+                "source_health_receipt_hash": "source-health-hash",
+            }
+
+        output = io.StringIO()
+        with (
+            mock.patch.object(h7_watch, "watch_universe",
+                              return_value=gate_names),
+            mock.patch.object(h7_watch, "load_registered_cohort",
+                              return_value=cohort, create=True),
+            mock.patch.object(h7_watch, "validate_data_gate_receipt",
+                              side_effect=validate),
+            mock.patch.object(h7_watch, "load_assertions",
+                              return_value=[_assertion("INCLUDED", "2026-09-18")]),
+            mock.patch.object(h7_watch, "open_h7_book", return_value=((), 0, 0.0)),
+            mock.patch.object(h7_watch, "load_closes_adjusted",
+                              side_effect=load_closes),
+            mock.patch.object(h7_watch, "load_range",
+                              return_value={"2026-07-07": _chain(70.0, 0.40)}),
+            mock.patch.object(h7_watch, "adjustment_factor", return_value=1.0),
+            mock.patch.object(h7_watch, "resolve_board", return_value=([], [])),
+            mock.patch.object(h7_watch, "_watcher_receipt", return_value={}),
+            mock.patch.object(h7_watch, "write_immutable_receipt"),
+            redirect_stdout(output),
+        ):
+            rc = h7_watch.main([
+                "--as-of", "2026-07-08",
+                "--data-gate-receipt", "fixture-data-gate.json",
+                "--write-receipt", "fixture-watcher.json",
+            ])
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(evaluated, ["INCLUDED"])
+        self.assertEqual(validated["names"], gate_names)
+        self.assertEqual(validated["included"], ["INCLUDED"])
+        self.assertIn(
+            "EXCLUDED: EXCLUDED (frozen at registration: EARNINGS-UNKNOWN)",
+            output.getvalue())
+
+    def test_unavailable_cohort_refuses_without_scope_fallback(self):
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                h7_watch, "load_registered_cohort", create=True,
+                side_effect=CohortUnavailableError("fixture store is empty")),
+            mock.patch.object(
+                h7_watch, "validate_data_gate_receipt",
+                side_effect=AssertionError("must refuse before receipt validation")),
+            redirect_stdout(output),
+        ):
+            rc = h7_watch.main([
+                "--as-of", "2026-07-08",
+                "--data-gate-receipt", "fixture-data-gate.json",
+            ])
+
+        self.assertEqual(rc, 2)
+        self.assertIn("fixture store is empty", output.getvalue())
