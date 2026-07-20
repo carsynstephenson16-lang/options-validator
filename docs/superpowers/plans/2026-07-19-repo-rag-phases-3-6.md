@@ -2044,6 +2044,8 @@ git commit -m "feat(repo-rag): golden-set evaluation harness, poisoned-doc and d
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
+**Post-review amendment (2026-07-20, Task 7):** first honest real-corpus eval was 1/4 — hash-embedding cosine is noise at 3.5k-chunk scale and lexical jaccard was diluted by stopwords; the abstain query even matched because THIS PLAN FILE quotes it verbatim (in-corpus contamination). Sanctioned Option B applied: STOPWORDS filtering in `_tokens` (lexical only; embeddings and index untouched) + `require_lexical_overlap=True` on RetrievalSettings; positive golden queries reworded to quote distinctive wording from their target docs (rank-1/rank-2 grounding verified by reviewer); min_score untouched at 0.12; final eval 4/4 exit 0, adversarial junk queries abstain. Quality review: merge-ready, Minors only (forbidden-check skipped on expected-miss — latent, empty forbidden lists today; `hit_rate` is really a pass-rate; kwargs style). Task 8 docs MUST state: (1) eval appends events to the target index's events.jsonl — point --index-dir at a scratch copy for a clean operator log; (2) golden set pins source wording — reword a pinned doc and you update the golden query in the same commit; (3) never paste literal golden/abstain query strings into tracked corpus docs; (4) retrieval limitation: positives require distinctive shared wording with the target doc (offline hash embedding is not semantic); (5) `hit_rate` in eval output = pass rate including abstentions.
+
 ---
 
 ### Task 8: Documentation truth-up + final gate
