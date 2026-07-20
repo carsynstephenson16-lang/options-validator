@@ -72,6 +72,32 @@ class RetrievalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             RetrievalSettings(vector_weight=0.8, lexical_weight=0.1)
 
+    def test_embedding_dimension_mismatch_raises(self) -> None:
+        bad = _record("cx", "docs/bad.md", "some text")
+        object.__setattr__(bad, "embedding", bad.embedding[:32])
+        with self.assertRaises(ValueError):
+            retrieve("query text", (bad,), RetrievalSettings(min_score=0.0))
+
+    def test_empty_source_classes_returns_all_classes(self) -> None:
+        hits = retrieve("gates", CHUNKS, RetrievalSettings(min_score=0.0))
+        classes = {hit.record.source_class for hit in hits}
+        self.assertIn("derived", classes)
+        self.assertIn("canonical", classes)
+
+    def test_equal_score_tie_break_orders_by_path_then_id(self) -> None:
+        twin_a = _record("id-b", "docs/z.md", "identical text twin")
+        twin_b = _record("id-a", "docs/a.md", "identical text twin")
+        hits = retrieve("identical text twin", (twin_a, twin_b), RetrievalSettings(min_score=0.0))
+        self.assertEqual(
+            [(hit.record.source_path, hit.record.chunk_id) for hit in hits],
+            [("docs/a.md", "id-a"), ("docs/z.md", "id-b")],
+        )
+
+    def test_component_scores_populated(self) -> None:
+        hits = retrieve("slippage haircut on fills", CHUNKS, RetrievalSettings(min_score=0.0))
+        self.assertGreater(hits[0].vector_score, 0.0)
+        self.assertGreater(hits[0].lexical_score, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

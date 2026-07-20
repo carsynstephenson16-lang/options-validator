@@ -67,6 +67,11 @@ def retrieve(
     for record in chunks:
         if settings.source_classes and record.source_class not in settings.source_classes:
             continue
+        if len(record.embedding) != len(query_embedding):
+            raise ValueError(
+                f"embedding dimension mismatch: query {len(query_embedding)} "
+                f"vs chunk {len(record.embedding)} ({record.chunk_id})"
+            )
         vector_score = max(0.0, _cosine(query_embedding, record.embedding))
         lexical_score = _jaccard(query_tokens, _tokens(record.text))
         score = settings.vector_weight * vector_score + settings.lexical_weight * lexical_score

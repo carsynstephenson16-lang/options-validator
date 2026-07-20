@@ -24,18 +24,40 @@ class StatusReport:
     configured_corpus_roots: int
     existing_corpus_roots: int
     missing_corpus_roots: tuple[str, ...]
+    index_present: bool
+    index_chunk_count: int
+    index_built_at_utc: str | None
 
     def to_mapping(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def build_status(repository_root: Path, policy: CorpusPolicy) -> StatusReport:
+def build_status(
+    repository_root: Path,
+    policy: CorpusPolicy,
+    index_dir: Path | None = None,
+) -> StatusReport:
     root = repository_root.resolve()
     missing = tuple(path for path in policy.corpus_roots if not (root / path).exists())
     healthy = root.is_dir() and policy.read_only and not missing
+
+    index_present = False
+    index_chunk_count = 0
+    index_built_at: str | None = None
+    if index_dir is not None:
+        try:
+            from .indexing import load_index
+
+            index = load_index(index_dir)
+            index_present = True
+            index_chunk_count = len(index.chunks)
+            index_built_at = index.built_at_utc
+        except FileNotFoundError:
+            pass
+
     return StatusReport(
         status="READY_OFFLINE" if healthy else "CONFIGURATION_INCOMPLETE",
-        phase="isolated-skeleton",
+        phase="retrieval-online" if index_present else "isolated-skeleton",
         application=policy.application,
         repository=policy.repository,
         repository_root=str(root),
@@ -48,4 +70,7 @@ def build_status(repository_root: Path, policy: CorpusPolicy) -> StatusReport:
         configured_corpus_roots=len(policy.corpus_roots),
         existing_corpus_roots=len(policy.corpus_roots) - len(missing),
         missing_corpus_roots=missing,
+        index_present=index_present,
+        index_chunk_count=index_chunk_count,
+        index_built_at_utc=index_built_at,
     )
