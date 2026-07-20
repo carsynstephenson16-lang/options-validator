@@ -53,6 +53,14 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--min-score", type=float, default=RetrievalSettings().min_score)
     query.add_argument("--source-class", action="append", default=None)
     query.add_argument("--max-context-chars", type=int, default=DEFAULT_MAX_CONTEXT_CHARS)
+
+    evaluate_parser = subparsers.add_parser("eval", help="run the golden-set evaluation")
+    evaluate_parser.add_argument(
+        "--golden", type=Path, default=_project_root() / "golden" / "golden_set.json"
+    )
+    evaluate_parser.add_argument("--index-dir", type=Path, default=_default_index_dir())
+    evaluate_parser.add_argument("--top-k", type=int, default=RetrievalSettings().top_k)
+    evaluate_parser.add_argument("--min-score", type=float, default=RetrievalSettings().min_score)
     return parser
 
 
@@ -116,4 +124,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             "INSUFFICIENT_EVIDENCE": 3,
         }
         return codes.get(result.outcome, 4)
+    if args.command == "eval":
+        from .evaluation import evaluate, load_golden_set
+
+        report = evaluate(
+            golden_set=load_golden_set(args.golden),
+            index_dir=args.index_dir,
+            settings=RetrievalSettings(top_k=args.top_k, min_score=args.min_score),
+        )
+        print(json.dumps(report.to_mapping(), indent=2, sort_keys=True))
+        return 0 if report.passed == report.total else 5
     raise AssertionError(f"unhandled command: {args.command}")

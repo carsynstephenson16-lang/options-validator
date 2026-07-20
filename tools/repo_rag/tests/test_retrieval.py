@@ -79,7 +79,11 @@ class RetrievalTests(unittest.TestCase):
             retrieve("query text", (bad,), RetrievalSettings(min_score=0.0))
 
     def test_empty_source_classes_returns_all_classes(self) -> None:
-        hits = retrieve("gates", CHUNKS, RetrievalSettings(min_score=0.0))
+        # "gates" (plural) lexically overlaps c2's "gates"; "gate" (singular)
+        # overlaps c3's "gate" — both real words already in the fixture text,
+        # needed post-Option-B since require_lexical_overlap now drops chunks
+        # with zero token overlap with the query.
+        hits = retrieve("gates gate", CHUNKS, RetrievalSettings(min_score=0.0))
         classes = {hit.record.source_class for hit in hits}
         self.assertIn("derived", classes)
         self.assertIn("canonical", classes)
@@ -97,6 +101,30 @@ class RetrievalTests(unittest.TestCase):
         hits = retrieve("slippage haircut on fills", CHUNKS, RetrievalSettings(min_score=0.0))
         self.assertGreater(hits[0].vector_score, 0.0)
         self.assertGreater(hits[0].lexical_score, 0.0)
+
+    def test_stopwords_excluded_from_lexical_tokens(self) -> None:
+        from repo_rag.retrieval import _tokens
+
+        self.assertEqual(
+            _tokens("the of and to a in recipe for dough"),
+            frozenset({"recipe", "dough"}),
+        )
+
+    def test_zero_lexical_overlap_dropped_when_required(self) -> None:
+        hits = retrieve(
+            "qqzv zxqj sourdough hydration",
+            CHUNKS,
+            RetrievalSettings(min_score=0.0),
+        )
+        self.assertEqual(hits, ())
+
+    def test_zero_lexical_overlap_kept_when_not_required(self) -> None:
+        hits = retrieve(
+            "qqzv zxqj sourdough hydration",
+            CHUNKS,
+            RetrievalSettings(min_score=0.0, require_lexical_overlap=False),
+        )
+        self.assertGreater(len(hits), 0)
 
 
 if __name__ == "__main__":

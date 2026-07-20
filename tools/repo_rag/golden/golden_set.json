@@ -1,0 +1,37 @@
+{
+  "cases": [
+    {
+      "case_id": "guardrail-fills",
+      "query": "no look-ahead conservative fill model quote mid or worse commissions half-spread",
+      "kind": "positive",
+      "expected_source_paths": ["README.md", "AGENTS.md", "CLAUDE.md"],
+      "forbidden_source_paths": []
+    },
+    {
+      "case_id": "verdict-losses-gate",
+      "query": "a scoreboard whose verdict gates on the number of losses not trades dependence-aware confidence intervals append-only research ledger sealed-holdout protocol",
+      "kind": "positive",
+      "expected_source_paths": ["README.md", "AGENTS.md", "CLAUDE.md"],
+      "forbidden_source_paths": []
+    },
+    {
+      "case_id": "h7-ledger-hash-chain",
+      "query": "H7 forward event ledger append only hash chain verify",
+      "kind": "positive",
+      "expected_source_paths": [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "options_researcher/h7_event_ledger.py",
+        "ledger/h7_forward/README.md"
+      ],
+      "forbidden_source_paths": []
+    },
+    {
+      "case_id": "unrelated-abstains",
+      "query": "qqzv zxqj recipe for sourdough pizza dough hydration",
+      "kind": "abstain",
+      "expected_source_paths": [],
+      "forbidden_source_paths": []
+    }
+  ]
+}

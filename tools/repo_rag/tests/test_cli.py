@@ -92,6 +92,31 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(result["outcome"], "INDEX_CORRUPT")
 
+    def test_eval_subcommand_exit_codes(self) -> None:
+        self._run(*self._ingest_args())
+        golden = self.root / "golden.json"
+        golden.write_text(
+            json.dumps(
+                {
+                    "cases": [
+                        {
+                            "case_id": "fills",
+                            "query": "how do fills execute",
+                            "kind": "positive",
+                            "expected_source_paths": ["docs/fills.md"],
+                            "forbidden_source_paths": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        code, report = self._run(
+            "eval", "--golden", str(golden), "--index-dir", str(self.index_dir)
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(report["passed"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

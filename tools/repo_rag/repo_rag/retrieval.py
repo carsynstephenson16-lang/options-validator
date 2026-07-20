@@ -10,6 +10,11 @@ from .providers import DeterministicHashEmbedding
 
 RETRIEVAL_MODE = "exact-brute-force"
 
+STOPWORDS = frozenset(
+    "a an and are as at be but by for from has have how in is it its of on or "
+    "that the this to was what when where which who will with not do does did".split()
+)
+
 
 @dataclass(frozen=True)
 class RetrievalSettings:
@@ -18,6 +23,7 @@ class RetrievalSettings:
     vector_weight: float = 0.5
     lexical_weight: float = 0.5
     source_classes: tuple[str, ...] = ()
+    require_lexical_overlap: bool = True
 
     def __post_init__(self) -> None:
         if self.top_k < 1:
@@ -37,7 +43,9 @@ class RetrievedHit:
 
 
 def _tokens(text: str) -> frozenset[str]:
-    return frozenset(re.findall(r"[a-z0-9_]+", text.casefold()))
+    return frozenset(
+        token for token in re.findall(r"[a-z0-9_]+", text.casefold()) if token not in STOPWORDS
+    )
 
 
 def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
@@ -74,6 +82,8 @@ def retrieve(
             )
         vector_score = max(0.0, _cosine(query_embedding, record.embedding))
         lexical_score = _jaccard(query_tokens, _tokens(record.text))
+        if settings.require_lexical_overlap and lexical_score == 0.0:
+            continue
         score = settings.vector_weight * vector_score + settings.lexical_weight * lexical_score
         if score < settings.min_score:
             continue
