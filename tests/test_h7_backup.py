@@ -52,6 +52,34 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(result["manifest"], "OK")
             self.assertEqual(result["data_gates"], 1)
 
+    def test_restore_verification_finds_data_gate_receipt_in_real_location(self):
+        # Regression (2026-07-20 restore drill): production writes data_gate
+        # receipts to reports/h7_data_gate/<scope_id>/receipts/, NOT
+        # reports/h7_receipts. Before the fix verify_restored_tree scanned only
+        # reports/h7_receipts, so a COMPLETE backup verified as data_gates=0 and
+        # failed closed. This pins the real production path.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            chain = root / ".cache/chains/one.parquet"
+            chain.parent.mkdir(parents=True)
+            chain.write_bytes(b"chain")
+            manifest = root / "data/chain_cache_manifest.txt"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                f"{hashlib.sha256(b'chain').hexdigest()}  5  one.parquet\n")
+            scope_id = scope_identity()["scope_id"]
+            receipt_dir = root / "reports/h7_data_gate" / scope_id / "receipts"
+            record = {"path": ".cache/chains/one.parquet", "exists": True,
+                      "sha256": hashlib.sha256(b"chain").hexdigest()}
+            receipt = make_receipt("data_gate", {
+                "scope": scope_identity(), "whole_universe_verdict": "GO",
+                "go_count": 15, "input_files": {"chain": record},
+            })
+            write_immutable_receipt(receipt, receipt_dir / "2026-07-17.json")
+            result = backup.verify_restored_tree(root)
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(result["data_gates"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

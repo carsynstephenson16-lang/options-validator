@@ -174,8 +174,16 @@ def verify_restored_tree(restored_root: Path) -> dict:
         checks["manifest"] = "BLOCK"
         checks["problems"].append("manifest and chain cache must restore together")
 
-    receipt_dir = restored_root / "reports/h7_receipts"
-    for path in sorted(receipt_dir.rglob("*.json")) if receipt_dir.exists() else []:
+    receipt_root = restored_root / "reports/h7_receipts"
+    receipt_paths = list(receipt_root.rglob("*.json")) if receipt_root.exists() else []
+    # data_gate receipts are written under reports/h7_data_gate/<scope>/receipts/,
+    # NOT reports/h7_receipts -- scan that tree too, or a restored data_gate is
+    # never counted and verification fails closed with data_gates=0 even on a
+    # complete backup (found by the 2026-07-20 restore drill).
+    dg_root = restored_root / "reports/h7_data_gate"
+    if dg_root.exists():
+        receipt_paths += list(dg_root.glob("*/receipts/*.json"))
+    for path in sorted(receipt_paths):
         try:
             receipt = load_receipt(path)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
