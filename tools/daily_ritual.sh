@@ -40,18 +40,45 @@ fi
 if [ "$KEY_OK" -eq 1 ] && "$UV" run python data/recent_topup.py --scope h7 --refresh-closes; then
   note "topup: OK (closes refreshed)"
 else
-  note "topup: FAILED/SKIPPED (no key or subscription lapsed) — running on cached data"
+  if [ "$KEY_OK" -eq 1 ]; then
+    note "topup: FAILED (fetch error — see traceback above; API key resolved OK) — running on cached data"
+  else
+    note "topup: SKIPPED (no API key) — running on cached data"
+  fi
 fi
 
 # Step 1 — source health (run AND record; per-name ban, never blocks board).
-if "$UV" run python -m options_researcher.h7_source_health; then
+# One-door repair (e64e5e9) receipt chain: the gate must LINK the health
+# receipt, and the watcher refuses without a linked gate receipt — so thread
+# the receipt paths through. --as-of maps today to the last completed session
+# so all three receipts agree on evaluation_session (a bare run stamps the
+# calendar date and the chain refuses on Mondays/holidays).
+RUN_DATE="$(TZ=America/New_York date +%F)"
+SH_OUT="$("$UV" run python -m options_researcher.h7_source_health --as-of "$RUN_DATE" 2>&1)"
+SH_RC=$?
+echo "$SH_OUT"
+SH_RECEIPT="$(echo "$SH_OUT" | grep -Eo 'receipt=[^ ;]+' | tail -1 | cut -d= -f2)"
+if [ "$SH_RC" -eq 0 ]; then
   note "source health: HEALTHY"
 else
-  note "source health: exit 1 — per-name entry bans apply (fail-closed in watcher)"
+  note "source health: exit ${SH_RC} — per-name entry bans apply (fail-closed in watcher)"
+fi
+if [ -z "$SH_RECEIPT" ] || [ ! -f "$SH_RECEIPT" ]; then
+  note "source-health receipt: MISSING — gate runs unlinked; watcher will refuse (fail-closed)"
+  SH_RECEIPT=""
 fi
 
 # Step 2 — data gate (HARD GATE; NO_GO blocks the watchers, no override).
-if "$UV" run python -m options_researcher.h7_data_gate; then
+# Same-day re-runs: receipts are immutable but replay-identical; if inputs
+# changed intraday the gate refuses to overwrite — that refusal is the
+# system working, not a bug. Delete nothing; wait for the next session.
+GATE_ARGS=()
+[ -n "$SH_RECEIPT" ] && GATE_ARGS=(--source-health-receipt "$SH_RECEIPT")
+DG_OUT="$("$UV" run python -m options_researcher.h7_data_gate "${GATE_ARGS[@]}" 2>&1)"
+DG_RC=$?
+echo "$DG_OUT"
+DG_RECEIPT="$(echo "$DG_OUT" | sed -n 's/^immutable receipt //p' | tail -1)"
+if [ "$DG_RC" -eq 0 ]; then
   note "data gate: GO"
   GATE_GO=1
 else
@@ -68,8 +95,8 @@ fi
 note "evaluation session: ${AS_OF}"
 
 if [ "$GATE_GO" -eq 1 ]; then
-  # Step 3 — H7 watcher (alerts only).
-  "$UV" run python -m options_researcher.h7_watch && note "h7_watch: ran" || note "h7_watch: NONZERO EXIT"
+  # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
+  "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || note "h7_watch: NONZERO EXIT"
 
   # Step 4 — H6 leg (exact-session; features rebuild is mandatory after topup).
   "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || note "h6_features: NONZERO EXIT"

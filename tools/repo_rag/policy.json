@@ -1,0 +1,45 @@
+{
+  "application": "options-validator-repo-rag",
+  "repository": "options-validator",
+  "read_only": true,
+  "tracked_files_only": true,
+  "corpus_roots": [
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs",
+    "reports",
+    "research",
+    "wiki",
+    "ledger",
+    "options_researcher",
+    "tests"
+  ],
+  "denied_segments": [
+    ".env",
+    ".git",
+    ".venv",
+    ".tmp",
+    ".cache",
+    "__pycache__",
+    "data/positions",
+    "results",
+    "reports/h7_audit"
+  ],
+  "supported_suffixes": [
+    ".md",
+    ".txt",
+    ".json",
+    ".jsonl",
+    ".csv",
+    ".toml",
+    ".py",
+    ".html"
+  ],
+  "source_classes": {
+    "canonical": ["ledger/", "docs/superpowers/", "tests/", "config.py"],
+    "repo_verified": ["options_researcher/", "README.md", "AGENTS.md", "CLAUDE.md"],
+    "derived": ["reports/", "research/", "wiki/"],
+    "external_reference": ["docs/research/notebooklm-modern-ai/"]
+  }
+}
