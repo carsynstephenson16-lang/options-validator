@@ -19,6 +19,7 @@ from options_researcher.h7_board import resolve_board
 from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
     ActivationBoundaryError,
+    RealStoreSession,
 )
 from options_researcher.h7_scope import scope_identity, watch_universe
 from research.hashing import canonical_json, sha256_hex
@@ -117,6 +118,13 @@ def _synthetic_base(base_dir) -> Path:
     return base
 
 
+def _resolve_base(base_dir) -> Path:
+    """Allow only an explicit real-session key to read/write the live book."""
+    if isinstance(base_dir, RealStoreSession):
+        return Path(base_dir.base_dir)
+    return _synthetic_base(base_dir)
+
+
 def _session(value: object, field: str = "evaluation_session") -> str:
     if not isinstance(value, str):
         raise BookValidationError(f"{field} must be YYYY-MM-DD")
@@ -202,7 +210,7 @@ def derive_book(
     *, base_dir, evaluation_session: str, risk_month: str | None = None
 ) -> BookSnapshot:
     """Replay verified lifecycle events through ``evaluation_session``."""
-    base = _synthetic_base(base_dir)
+    base = _resolve_base(base_dir)
     session = _session(evaluation_session)
     month = session[:7] if risk_month is None else risk_month
     try:
@@ -221,13 +229,10 @@ def derive_book(
     for event in events:
         if event.evaluation_session > session:
             continue
-        if (
-            event.event_type == "board_resolution"
-            and isinstance(event.payload.get("book_snapshot_hash"), str)
+        if event.event_type == "board_resolution" and isinstance(
+            event.payload.get("book_snapshot_hash"), str
         ):
-            planned = _session(
-                event.payload.get("planned_fill_session"), "planned_fill_session"
-            )
+            planned = _session(event.payload.get("planned_fill_session"), "planned_fill_session")
             if planned <= event.evaluation_session:
                 raise BookValidationError("board planned fill must follow its session")
             accepted = event.payload.get("accepted")
@@ -261,7 +266,10 @@ def derive_book(
                     planned_fill_session=planned,
                     decision_at_risk=risk,
                     source_event_type="board_resolution",
-                    decision_session=event.evaluation_session,
+                    decision_session=_session(
+                        event.payload.get("decision_session", event.evaluation_session),
+                        "board decision_session",
+                    ),
                     accepted_action_hash=sha256_hex(canonical_json(item["action"])),
                     board_resolution_id=event.event_id,
                 )
@@ -269,12 +277,8 @@ def derive_book(
         if event.event_type == "entry_intent":
             if event.symbol is None or event.lane not in config.H7_LANE_PRIORITY:
                 raise BookValidationError("entry intent has invalid symbol or lane")
-            planned = _session(
-                event.payload.get("planned_fill_session"), "planned_fill_session"
-            )
-            risk = _positive_number(
-                event.payload.get("decision_at_risk"), "decision_at_risk"
-            )
+            planned = _session(event.payload.get("planned_fill_session"), "planned_fill_session")
+            risk = _positive_number(event.payload.get("decision_at_risk"), "decision_at_risk")
             if event.payload.get("position_id") != event.event_id:
                 raise BookValidationError("entry intent position_id must equal event_id")
             if planned <= event.evaluation_session:
@@ -296,11 +300,11 @@ def derive_book(
                 board_key, board_reservation = matches[0]
                 action = event.payload.get("action")
                 if (
-                    event.evaluation_session != board_reservation.decision_session
+                    event.payload.get("decision_session", event.evaluation_session)
+                    != board_reservation.decision_session
                     or planned != board_reservation.planned_fill_session
                     or not isinstance(action, dict)
-                    or sha256_hex(canonical_json(action))
-                    != board_reservation.accepted_action_hash
+                    or sha256_hex(canonical_json(action)) != board_reservation.accepted_action_hash
                     or risk != board_reservation.decision_at_risk
                 ):
                     raise BookValidationError(
@@ -318,16 +322,17 @@ def derive_book(
                 planned_fill_session=planned,
                 decision_at_risk=risk,
                 source_event_type="entry_intent",
-                decision_session=event.evaluation_session,
+                decision_session=_session(
+                    event.payload.get("decision_session", event.evaluation_session),
+                    "entry decision_session",
+                ),
                 accepted_action_hash=(
                     board_reservation.accepted_action_hash
                     if board_reservation is not None
                     else None
                 ),
                 board_resolution_id=(
-                    board_reservation.board_resolution_id
-                    if board_reservation is not None
-                    else None
+                    board_reservation.board_resolution_id if board_reservation is not None else None
                 ),
             )
             intent_events[event.event_id] = event
@@ -338,9 +343,7 @@ def derive_book(
             and event.payload.get("reason") == "intent_materialization_missing"
         ):
             reservation_id = event.payload.get("reservation_id")
-            reservation = (
-                intents.get(reservation_id) if isinstance(reservation_id, str) else None
-            )
+            reservation = intents.get(reservation_id) if isinstance(reservation_id, str) else None
             if (
                 not isinstance(reservation_id, str)
                 or reservation is None
@@ -351,8 +354,7 @@ def derive_book(
                 or event.evaluation_session != reservation.planned_fill_session
                 or event.occurred_at_utc
                 != session_close_utc(reservation.planned_fill_session).isoformat()
-                or event.payload.get("planned_fill_session")
-                != reservation.planned_fill_session
+                or event.payload.get("planned_fill_session") != reservation.planned_fill_session
             ):
                 raise BookValidationError("board reservation expiry is malformed")
             intents.pop(reservation_id)
@@ -417,13 +419,9 @@ def derive_book(
             if event.symbol != reservation.symbol or event.lane != reservation.lane:
                 raise BookValidationError("opening fill changes reserved symbol or lane")
             intent_event = intent_events.get(position_id)
-            intent_action = (
-                intent_event.payload.get("action") if intent_event is not None else None
-            )
+            intent_action = intent_event.payload.get("action") if intent_event is not None else None
             opening_action = event.payload.get("action")
-            intent_legs = (
-                intent_event.payload.get("legs") if intent_event is not None else None
-            )
+            intent_legs = intent_event.payload.get("legs") if intent_event is not None else None
             opening_legs = event.payload.get("legs")
             identity_keys = ("name", "expiration", "strike", "right", "side", "quantity")
             if (
@@ -448,8 +446,7 @@ def derive_book(
             if (
                 payload_session != opened
                 or opened != reservation.planned_fill_session
-                or event.payload.get("decision_session")
-                != reservation.decision_session
+                or event.payload.get("decision_session") != reservation.decision_session
             ):
                 raise BookValidationError("opening fill does not match planned session")
             if position_id in rows:
@@ -466,15 +463,11 @@ def derive_book(
         elif transition == "close":
             prior = rows.get(position_id)
             if prior is None or prior.closed is not None:
-                raise BookValidationError(
-                    f"position {position_id!r} closes without one open fill"
-                )
+                raise BookValidationError(f"position {position_id!r} closes without one open fill")
             closed = _session(event.evaluation_session, "closing fill session")
             exit_intent_id = event.payload.get("exit_intent_id")
             exit_intent = (
-                exit_intents.get(exit_intent_id)
-                if isinstance(exit_intent_id, str)
-                else None
+                exit_intents.get(exit_intent_id) if isinstance(exit_intent_id, str) else None
             )
             if event.payload.get("fill_session") != closed:
                 raise BookValidationError("closing fill payload has the wrong session")
@@ -528,8 +521,7 @@ def derive_book(
     payload = _snapshot_payload(session, month, ordered_rows, reservations)
     open_rows = [row for row in ordered_rows if row.closed is None]
     if any(
-        sum(row.symbol == symbol for row in open_rows)
-        > config.H7_MAX_OPEN_PER_UNDERLYING
+        sum(row.symbol == symbol for row in open_rows) > config.H7_MAX_OPEN_PER_UNDERLYING
         for symbol in {row.symbol for row in open_rows}
     ):
         raise BookValidationError("ledger has multiple open fills for one underlying")
@@ -537,9 +529,7 @@ def derive_book(
         raise BookValidationError("ledger exceeds the open lane-c basket cap")
     if payload["month_actual_risk"] > config.H7_MONTHLY_AT_RISK:
         raise BookValidationError("ledger exceeds the monthly actual-risk sleeve")
-    stage5_reservations = [
-        item for item in reservations if item.board_resolution_id is not None
-    ]
+    stage5_reservations = [item for item in reservations if item.board_resolution_id is not None]
     if stage5_reservations:
         occupied_symbols = [row.symbol for row in open_rows] + [
             item.symbol for item in reservations
@@ -586,8 +576,7 @@ def assess_entry_fill(
         (
             item
             for item in snapshot.reservations
-            if item.reservation_id == entry_intent_id
-            and item.source_event_type == "entry_intent"
+            if item.reservation_id == entry_intent_id and item.source_event_type == "entry_intent"
         ),
         None,
     )
@@ -620,13 +609,10 @@ def assess_entry_fill(
         "month_actual_risk": snapshot.month_actual_risk,
         "month_other_reserved_risk": other_reserved_risk,
         "sleeve_left_before_substitution": (
-            config.H7_MONTHLY_AT_RISK
-            - snapshot.month_actual_risk
-            - other_reserved_risk
+            config.H7_MONTHLY_AT_RISK - snapshot.month_actual_risk - other_reserved_risk
         ),
         "open_symbols_before_substitution": sorted(
-            {row.symbol for row in open_rows}
-            | {item.symbol for item in other_reservations}
+            {row.symbol for row in open_rows} | {item.symbol for item in other_reservations}
         ),
         "open_h7c_before_substitution": other_c,
         "open_positions": [
@@ -693,17 +679,19 @@ def _board_event_id(session: str) -> str:
 
 
 def _append_displacements(
-    *, base: Path, session: str, board_id: str, rejected: list[dict],
-    current_head: str | None, clock
+    *,
+    base: Path,
+    session: str,
+    board_id: str,
+    rejected: list[dict],
+    current_head: str | None,
+    clock,
 ) -> str | None:
     for index, item in enumerate(rejected):
         displaced = ledger.append_event(
             {
                 "schema_version": ledger.SCHEMA_VERSION,
-                "event_id": (
-                    f"h7:displaced:{session}:{index}:"
-                    f"{item['symbol']}:{item['lane']}"
-                ),
+                "event_id": (f"h7:displaced:{session}:{index}:{item['symbol']}:{item['lane']}"),
                 "event_type": "lane_displaced",
                 "occurred_at_utc": session_close_utc(session).isoformat(),
                 "evaluation_session": session,
@@ -731,8 +719,16 @@ def record_board_resolution(
     clock=None,
 ) -> BoardResolutionResult:
     """Resolve candidates against the ledger-derived global book."""
-    base = _synthetic_base(base_dir)
+    base = _resolve_base(base_dir)
     session = _session(evaluation_session)
+    if isinstance(base_dir, RealStoreSession):
+        if base_dir.evaluation_session != session:
+            raise BookValidationError(
+                "RealStoreSession evaluation_session does not match board data"
+            )
+        decision_session = base_dir.decision_session
+    else:
+        decision_session = session
     events = ledger.read_events(base)
     by_id = {event.event_id: event for event in events}
     source = by_id.get(source_health_id)
@@ -764,9 +760,7 @@ def record_board_resolution(
         or set(healthy_symbols) != expected_symbols
         or len(healthy_symbols) != len(expected_symbols)
     ):
-        raise BookValidationError(
-            "board resolution requires exact whole-universe source health"
-        )
+        raise BookValidationError("board resolution requires exact whole-universe source health")
     if gate.payload.get("whole_universe_verdict") != "GO":
         raise BookValidationError("board resolution requires a GO data gate")
     if not isinstance(candidates, list):
@@ -783,9 +777,7 @@ def record_board_resolution(
             raise BookValidationError("candidate lane/action is invalid")
         if action.get("lane") != lane:
             raise BookValidationError("candidate action lane does not match")
-        _positive_number(
-            action.get("max_loss", action.get("cost")), "candidate at-risk"
-        )
+        _positive_number(action.get("max_loss", action.get("cost")), "candidate at-risk")
 
     event_id = _board_event_id(session)
     existing_board = by_id.get(event_id)
@@ -794,6 +786,7 @@ def record_board_resolution(
             existing_board.event_type != "board_resolution"
             or existing_board.evaluation_session != session
             or existing_board.causes != [source_health_id, data_gate_id]
+            or existing_board.payload.get("decision_session", session) != decision_session
         ):
             raise BookValidationError("existing board identity or causes conflict")
         accepted = existing_board.payload.get("accepted")
@@ -811,9 +804,7 @@ def record_board_resolution(
             if isinstance(item, dict)
         ]
         supplied = sorted(canonical_json(item) for item in candidates)
-        recorded = sorted(
-            canonical_json(item) for item in [*accepted, *original_rejected]
-        )
+        recorded = sorted(canonical_json(item) for item in [*accepted, *original_rejected])
         if len(original_rejected) != len(rejected) or supplied != recorded:
             raise BookValidationError("conflicting rerun changed board candidates")
         _append_displacements(
@@ -832,9 +823,9 @@ def record_board_resolution(
             snapshot_hash=snapshot_hash,
         )
 
-    planned_fill_session = _next_session(session)
+    planned_fill_session = _next_session(decision_session)
     snapshot = derive_book(
-        base_dir=base,
+        base_dir=base_dir,
         evaluation_session=session,
         risk_month=planned_fill_session[:7],
     )
@@ -858,6 +849,7 @@ def record_board_resolution(
     payload = {
         "accepted": accepted,
         "rejected": rejected,
+        "decision_session": decision_session,
         "book_snapshot_hash": snapshot.snapshot_hash,
         "planned_fill_session": planned_fill_session,
         "risk_month": snapshot.risk_month,
@@ -878,7 +870,7 @@ def record_board_resolution(
             "schema_version": ledger.SCHEMA_VERSION,
             "event_id": event_id,
             "event_type": "board_resolution",
-            "occurred_at_utc": session_close_utc(session).isoformat(),
+            "occurred_at_utc": session_close_utc(decision_session).isoformat(),
             "evaluation_session": session,
             "symbol": None,
             "lane": None,
@@ -925,9 +917,7 @@ def expire_unmaterialized_reservation(
         or not isinstance(board.payload.get("book_snapshot_hash"), str)
     ):
         raise BookValidationError("Stage-5 board reservation is missing")
-    planned = _session(
-        board.payload.get("planned_fill_session"), "planned_fill_session"
-    )
+    planned = _session(board.payload.get("planned_fill_session"), "planned_fill_session")
     reservation_id = f"{board_resolution_id}:{symbol}:{lane}"
     event_id = f"h7:reservation-expiry:{board_resolution_id}:{symbol}:{lane}"
     existing = by_id.get(event_id)
@@ -960,11 +950,7 @@ def expire_unmaterialized_reservation(
     if reservation is None:
         raise BookValidationError("board reservation already materialized or is absent")
     now = clock() if clock is not None else datetime.now(timezone.utc)
-    if (
-        not isinstance(now, datetime)
-        or now.tzinfo is None
-        or now.utcoffset() != timedelta(0)
-    ):
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() != timedelta(0):
         raise BookValidationError("clock must return a UTC datetime")
     cutoff = session_close_utc(planned)
     if now < cutoff:
@@ -1003,14 +989,10 @@ def _read_mirror(path: Path, session: str) -> tuple[BookRow, ...]:
         with path.open(newline="") as handle:
             reader = csv.DictReader(handle)
             if tuple(reader.fieldnames or ()) != _MIRROR_COLUMNS:
-                raise BookValidationError(
-                    f"mirror header {reader.fieldnames} != {_MIRROR_COLUMNS}"
-                )
+                raise BookValidationError(f"mirror header {reader.fieldnames} != {_MIRROR_COLUMNS}")
             for line, raw in enumerate(reader, start=2):
                 if None in raw:
-                    raise BookValidationError(
-                        f"mirror line {line}: unexpected extra column"
-                    )
+                    raise BookValidationError(f"mirror line {line}: unexpected extra column")
                 symbol = (raw["symbol"] or "").strip()
                 lane = (raw["lane"] or "").strip().lower()
                 opened = _session((raw["opened"] or "").strip(), "opened")
@@ -1027,17 +1009,13 @@ def _read_mirror(path: Path, session: str) -> tuple[BookRow, ...]:
                 try:
                     risk = float(raw["at_risk"])
                 except (TypeError, ValueError) as exc:
-                    raise BookValidationError(
-                        f"mirror line {line}: invalid at_risk"
-                    ) from exc
+                    raise BookValidationError(f"mirror line {line}: invalid at_risk") from exc
                 risk = _positive_number(risk, "mirror at_risk")
                 key = (symbol, lane, opened)
                 if key in seen:
                     raise BookValidationError(f"mirror line {line}: duplicate row")
                 seen.add(key)
-                rows.append(
-                    BookRow(symbol, lane, opened, risk, closed, f"mirror:{line}")
-                )
+                rows.append(BookRow(symbol, lane, opened, risk, closed, f"mirror:{line}"))
     except BookValidationError:
         raise
     except OSError as exc:
@@ -1070,16 +1048,12 @@ def reconcile_position_mirror(
 
     mirror_open = tuple(sorted({row.symbol for row in mirror_rows if row.closed is None}))
     mirror_c = sum(row.lane == "c" and row.closed is None for row in mirror_rows)
-    mirror_spent = sum(
-        row.at_risk for row in mirror_rows if row.opened.startswith(session[:7])
-    )
+    mirror_spent = sum(row.at_risk for row in mirror_rows if row.opened.startswith(session[:7]))
     mismatches: list[str] = []
     ledger_open_from_rows = tuple(
         sorted({row.symbol for row in snapshot.rows if row.closed is None})
     )
-    ledger_c_from_rows = sum(
-        row.lane == "c" and row.closed is None for row in snapshot.rows
-    )
+    ledger_c_from_rows = sum(row.lane == "c" and row.closed is None for row in snapshot.rows)
     if mirror_open != ledger_open_from_rows:
         mismatches.append("open_symbols")
     if mirror_c != ledger_c_from_rows:
