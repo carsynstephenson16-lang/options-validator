@@ -32,6 +32,10 @@ from data.underlying_closes import adjustment_factor, load_closes_adjusted
 from options_researcher import h7_signals as sig
 from options_researcher.chains import load_range
 from options_researcher.h7_board import resolve_board
+from options_researcher.h7_cohort import (
+    CohortUnavailableError,
+    load_registered_cohort,
+)
 from options_researcher.h7_earnings import (
     GATE_BANNED,
     GATE_CLEAR,
@@ -353,7 +357,21 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     eval_date = evaluation_session(run_date)
     eval_iso = eval_date.isoformat()
-    names = watch_universe()
+    # Gate evidence remains bound to the whole official scope.  The frozen
+    # window cohort controls ONLY which names are eligible for entry
+    # evaluation; never substitute it into receipt-scope validation.
+    gate_names = watch_universe()
+    try:
+        cohort = load_registered_cohort()
+    except CohortUnavailableError as exc:
+        print(f"H7 WATCH REFUSED -- {exc}")
+        return 2
+    registered_names = set(cohort.included) | set(cohort.excluded)
+    if set(gate_names) != registered_names:
+        print("H7 WATCH REFUSED -- frozen cohort does not cover the current "
+              "official scope; refusing to infer eligible names")
+        return 2
+    entry_names = [name for name in gate_names if name in cohort.included]
     if not args.data_gate_receipt:
         print("H7 WATCH REFUSED -- actionable output requires a matching "
               "data-gate receipt (run source health, then data gate first).")
@@ -361,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         data_gate_receipt = validate_data_gate_receipt(
             Path(args.data_gate_receipt), evaluation_session=eval_iso,
-            names=names)
+            names=gate_names, included=entry_names)
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         print(f"H7 WATCH REFUSED -- invalid/stale data-gate receipt: "
               f"{type(exc).__name__}: {exc}")
@@ -398,11 +416,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"sleeve: ${config.H7_MONTHLY_AT_RISK - month_spent:.0f} of "
           f"${config.H7_MONTHLY_AT_RISK} left this month; "
           f"open H7c {open_c}/{config.H7C_MAX_CONCURRENT}")
+    for symbol in gate_names:
+        if symbol not in cohort.included:
+            print(f"{symbol}: EXCLUDED (frozen at registration: "
+                  f"{cohort.excluded[symbol]})")
 
-    # pass 1: assemble every name's card (per-symbol gates + decide actions)
+    # pass 1: assemble only the registration-frozen entry cohort (per-symbol
+    # gates + decide actions).  Excluded names are deliberately never loaded.
     cards: list[tuple[str, dict]] = []
     watch_errors: list[str] = []
-    for symbol in names:
+    for symbol in entry_names:
         try:
             closes = load_closes_adjusted(symbol, start_iso, eval_iso,
                                           allow_oos=True)
@@ -470,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
                            if lane["action"] is not None else None),
             })
     receipt = _watcher_receipt(
-        result_rows=result_rows, names=names, evaluation_session=eval_iso,
+        result_rows=result_rows, names=gate_names, evaluation_session=eval_iso,
         run_date=run_date, data_gate_receipt=data_gate_receipt,
         errors=watch_errors)
     receipt_path = (Path(args.write_receipt) if args.write_receipt else
