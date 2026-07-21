@@ -27,6 +27,11 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  # Required: the action exchanges a GitHub OIDC token for a GitHub App
+  # installation token. Without this the run fails before reaching Claude with
+  # "Could not fetch an OIDC token" -- unrelated to Anthropic auth, which is
+  # the CLAUDE_CODE_OAUTH_TOKEN subscription secret above.
+  id-token: write
 
 concurrency:
   group: claude-review-${{ github.event.pull_request.number || github.ref }}
