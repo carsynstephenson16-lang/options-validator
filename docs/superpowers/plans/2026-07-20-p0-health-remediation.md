@@ -195,17 +195,48 @@ CRITICAL=0
 crit() { CRITICAL=1; note "CRITICAL: $1"; }
 ```
 
-- [ ] **Step 2:** Route these existing failure branches through `crit` instead
-  of `note` (keep the message text, drop the old `note` call):
-  - source-health receipt missing (line 66-69 block): the "gate runs unlinked;
-    watcher will refuse" branch.
-  - data gate exited 0 but `DG_RECEIPT` is empty (add this check inside the
-    `DG_RC -eq 0` branch): `[ -z "$DG_RECEIPT" ] && crit "data gate GO but receipt path not captured"`.
-  - `h7_watch: NONZERO EXIT` (line 99).
-  - evaluation-session resolution failure (line 91-94 block).
+**IMPORTANT — learned from the 2026-07-20_1704 run:** "receipt missing" is NOT
+always broken infra. The immutable-receipt tools raise `FileExistsError` and
+exit nonzero when a receipt for the evaluation session **already exists** (a
+same-session re-run, or a second daily run after the 07:10 LaunchAgent). That
+is the system working, and it is exactly what happened at 17:04: source health
+exited 2 and the ritual logged "receipt MISSING" purely because
+`reports/h7_receipts/.../source_health/2026-07-17.json` was already on disk. If
+A4 blindly marks "receipt missing" as CRITICAL, every second run of the day
+reports BROKEN. So disambiguate on whether the receipt file exists.
 
-  Leave as plain `note`: topup failure/skip (runs on cache by design), data
-  gate NO_GO with receipts intact, dashboard rebuild failures, H6/H8/QM legs.
+- [ ] **Step 2:** Route these branches through `crit` (keep the message text):
+  - **source-health / data-gate receipt not captured — only when genuinely
+    un-produced.** After the source-health block, resolve the expected receipt
+    path for the evaluation session and branch:
+
+```zsh
+# EXPECTED_SH_RECEIPT = the immutable path the tool would write for this session.
+# Derive it the same way the source-health tool does (session-dated json under
+# reports/h7_receipts/<window>/source_health/). If SH_RECEIPT is empty:
+if [ -z "$SH_RECEIPT" ]; then
+  if [ -f "$EXPECTED_SH_RECEIPT" ]; then
+    note "source-health receipt: already exists for this session (immutable; benign re-run) — reusing $EXPECTED_SH_RECEIPT"
+    SH_RECEIPT="$EXPECTED_SH_RECEIPT"   # link the existing receipt so the watcher can still run
+  else
+    crit "source-health receipt could not be produced and none exists on disk"
+  fi
+fi
+```
+
+  Reusing the existing immutable receipt (never overwriting it) also *fixes*
+  the watcher-blocked symptom from 17:04: with `SH_RECEIPT` linked, the data
+  gate and watcher can run against the already-written receipts instead of
+  dead-ending. Apply the same exists-vs-missing logic to the data-gate receipt.
+  - data gate exited 0 but `DG_RECEIPT` is empty AND no session receipt exists:
+    `crit "data gate GO but receipt path not captured and none on disk"`.
+  - `h7_watch: NONZERO EXIT` (line 99) — genuine watcher crash, always `crit`.
+  - evaluation-session resolution failure (line 91-94 block) — always `crit`.
+
+  Leave as plain `note`: topup failure/skip (runs on cache by design); data
+  gate **NO_GO with a valid receipt chain** (the designed stop — "the system
+  working"); a receipt that already exists (benign re-run, per above); dashboard
+  rebuild failures; H6/H8/QM legs.
 - [ ] **Step 3:** Replace the final `exit 0` (line 146):
 
 ```zsh
@@ -481,6 +512,30 @@ only; excluded names print one line each:
 Catch `CohortUnavailableError` at the CLI boundary → print the message, exit 2.
 - [ ] **Step 7:** Full suite + ruff; commit; open PR to main (owner merges).
 
+**B2 status (2026-07-20): COMPLETE — PR #11, reviewed and verified against the
+real activated store** (loader returns the exact 9 included / 6 excluded;
+`registered == watch_universe()` holds; `validate_data_gate_receipt` already
+carried the `included=` Option-C hook). Merge is the owner's call. The failing
+`review` CI check on PR #11 is an unrelated infra bug (the Claude-review action
+fails on a missing `id-token: write` workflow permission + empty
+`ANTHROPIC_API_KEY` secret), not a code finding — see P1 note below.
+
+### Task B3 (follow-up from PR #11 review): registered window-bounds enforcement
+
+PR #11's automated review raised a valid P1: the cohort loader reads only the
+NAMES from seq-0 and ignores `payload["window"]`, which carries
+`start_decision_session`/`final_decision_session`. Extend `h7_cohort.py` to also
+expose those bounds (e.g. add `window_start`/`window_end` to `RegisteredCohort`,
+or a sibling `load_registered_window()`), and enforce them where an out-of-window
+session would cause harm. The **load-bearing** enforcement is in Phase C's
+`open_real_session()` (added to its refusal list above) because only a recorded
+entry contaminates the verdict book — the alert-only watcher cannot. Optionally
+have the watcher print a visible "OUT-OF-WINDOW (advisory)" banner when the
+decision session is outside the bounds, but do NOT make the watcher hard-refuse
+without first resolving decision-vs-evaluation-session semantics against the
+spec (a naive `eval_iso < start` check wrongly rejects the normal 07-17-data-
+for-07-20-decision run). Not a B2 blocker; sequence before or with Phase C.
+
 ---
 
 ## Phase C — Real H7 entry path + H7c cutoff
@@ -506,6 +561,18 @@ code path can record a real entry.
    - the data gate verdict is GO;
    - the target symbol (when given) is in `cohort.included` and not
      per-name entry-banned by source health.
+   - **the decision session is inside the registered verdict window**
+     `[window.start_decision_session, window.final_decision_session]`
+     (2026-07-20 .. 2026-10-26 in the real seq-0 payload). This is the hard
+     defense against the PR #11 review finding: the alert-only watcher cannot
+     contaminate the book, but a recorded `entry_intent`/`paper_fill` dated
+     outside the window WOULD poison the once-in-October verdict. Refuse it
+     here. Note the semantic care needed: refuse on the DECISION session, not
+     the evaluation session — the watcher legitimately evaluates the prior
+     completed session's closes (e.g. 07-17 data for a 07-20 decision), so a
+     naive `eval_iso < start` check would wrongly reject normal operation.
+     Confirm the decision-vs-evaluation-session definition against
+     `2026-07-12-h7-stage4-t1-paper-lifecycle-SPEC.md` before coding the bound.
 2. `RealStoreSession` is a frozen dataclass carrying `base_dir`
    (= `REAL_FORWARD_STORE`), the activation `event_id`, and the validated
    receipt paths. In `h7_paper_lifecycle.py` add:
@@ -737,6 +804,13 @@ blocked list instead of scoring on zeros.
 5. **`tools/score_backtest.py:50` preregistration guard:** exploratory
    backtests should require a ledger registration or refuse (ledger-discipline
    skill is the reference for the rule).
+6. **Fix the `review` CI workflow (it fails on every PR).** The Claude-review
+   GitHub Action dies with "Could not fetch an OIDC token — add `id-token:
+   write` to your workflow permissions" and an empty `ANTHROPIC_API_KEY`. Add
+   `permissions: id-token: write` (and `pull-requests: write`, `contents:
+   read`) to the review job and set the `ANTHROPIC_API_KEY` repo secret.
+   Until then every PR shows UNSTABLE for an infra reason, masking real review
+   signal. (The functional gates — Offline Quality Gates, Secret Scan — pass.)
 
 **P2 (cleanup / truth maintenance):**
 - README + H7 docs truth-up: Stage 8 is ACTIVATED (not closed/empty); paper
