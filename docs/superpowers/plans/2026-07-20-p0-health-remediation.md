@@ -804,13 +804,24 @@ blocked list instead of scoring on zeros.
 5. **`tools/score_backtest.py:50` preregistration guard:** exploratory
    backtests should require a ledger registration or refuse (ledger-discipline
    skill is the reference for the rule).
-6. **Fix the `review` CI workflow (it fails on every PR).** The Claude-review
-   GitHub Action dies with "Could not fetch an OIDC token — add `id-token:
-   write` to your workflow permissions" and an empty `ANTHROPIC_API_KEY`. Add
-   `permissions: id-token: write` (and `pull-requests: write`, `contents:
-   read`) to the review job and set the `ANTHROPIC_API_KEY` repo secret.
-   Until then every PR shows UNSTABLE for an infra reason, masking real review
-   signal. (The functional gates — Offline Quality Gates, Secret Scan — pass.)
+6. **Fix the `review` CI workflow — DONE 2026-07-20 (`34e397f`).** The
+   Claude-review action died with "Could not fetch an OIDC token — add
+   `id-token: write` to your workflow permissions".
+   **Anthropic auth was never the problem, and NO API key is needed — do not
+   add one.** The owner is on a Claude **Max** subscription with no API key,
+   and `claude_code_oauth_token` is a first-class input of
+   `anthropics/claude-code-action` ("alternative to anthropic_api_key",
+   verified in the action's own `action.yml`); the `CLAUDE_CODE_OAUTH_TOKEN`
+   secret is set (2026-07-16). `claude setup-token` tokens last ~1 year, so
+   this one is good to ~2027-07 — if reviews silently stop, regenerate it and
+   update the secret. The empty `ANTHROPIC_API_KEY` in the failing log is
+   expected and harmless.
+   **Real cause:** the workflow supplies no `github_token`, so the action
+   authenticates to GitHub via the Claude GitHub App, minting that token by
+   exchanging a GitHub OIDC token — which requires `id-token: write`. Added.
+   Unproven until a PR actually runs it; if it still fails, the fallback is to
+   pass `github_token: ${{ secrets.GITHUB_TOKEN }}` instead of the App path.
+   (The functional gates — Offline Quality Gates, Secret Scan — always passed.)
 
 **P2 (cleanup / truth maintenance):**
 - README + H7 docs truth-up: Stage 8 is ACTIVATED (not closed/empty); paper
