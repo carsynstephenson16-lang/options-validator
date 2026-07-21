@@ -17,6 +17,7 @@ class CorpusPolicy:
     denied_segments: tuple[str, ...]
     supported_suffixes: tuple[str, ...]
     source_classes: dict[str, tuple[str, ...]]
+    bounded_writes: bool = False
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> CorpusPolicy:
@@ -47,6 +48,7 @@ class CorpusPolicy:
             denied_segments=tuple(str(item) for item in raw["denied_segments"]),
             supported_suffixes=tuple(str(item) for item in raw["supported_suffixes"]),
             source_classes=source_classes,
+            bounded_writes=bool(raw.get("bounded_writes", False)),
         )
 
     def digest(self) -> str:
@@ -60,6 +62,7 @@ class CorpusPolicy:
                 "denied_segments": self.denied_segments,
                 "supported_suffixes": self.supported_suffixes,
                 "source_classes": self.source_classes,
+                "bounded_writes": self.bounded_writes,
             },
             sort_keys=True,
             separators=(",", ":"),

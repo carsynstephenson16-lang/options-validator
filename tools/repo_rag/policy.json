@@ -2,6 +2,7 @@
   "application": "options-validator-repo-rag",
   "repository": "options-validator",
   "read_only": true,
+  "bounded_writes": true,
   "tracked_files_only": true,
   "corpus_roots": [
     "README.md",

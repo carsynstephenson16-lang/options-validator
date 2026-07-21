@@ -17,6 +17,7 @@ class StatusReport:
     repository: str
     repository_root: str
     read_only: bool
+    bounded_writes: bool
     network_enabled: bool
     tracked_files_only: bool
     policy_sha256: str
@@ -67,6 +68,7 @@ def build_status(
         repository=policy.repository,
         repository_root=str(root),
         read_only=policy.read_only,
+        bounded_writes=policy.bounded_writes,
         network_enabled=False,
         tracked_files_only=policy.tracked_files_only,
         policy_sha256=policy.digest(),
