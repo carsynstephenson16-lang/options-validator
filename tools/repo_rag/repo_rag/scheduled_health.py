@@ -6,6 +6,7 @@ import csv
 import json
 import math
 import re
+import sqlite3
 import statistics
 import time
 from dataclasses import dataclass
@@ -15,11 +16,9 @@ from typing import Iterable
 
 from .chunking import ChunkSettings
 from .config import CorpusPolicy
-from .indexing import ChunkRecord, build_index, load_index
-from .retrieval import RetrievalSettings, retrieve
-from .writer import Writer
+from .indexing import Fts5UnavailableError, build_index, load_index
+from .writer import WriteRefusedError, Writer
 
-_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _DOC_TYPES = frozenset(
     {"hypothesis", "backtest_run", "ledger", "frozen_params", "notebook", "workflow", "source"}
 )
@@ -130,44 +129,11 @@ class RegressionVerdict:
     reasons: tuple[str, ...]
 
 
-def classify_doc_type(path: str) -> str:
-    lower = path.casefold()
-    if lower.startswith("ledger/"):
-        return "ledger"
-    if "hypothesis" in lower or "/h7_" in lower or lower.endswith("h7.md"):
-        return "hypothesis"
-    if lower.startswith("reports/"):
-        return "backtest_run"
-    if lower.startswith("research/"):
-        return "notebook"
-    if path in {"config.py", "options_researcher/config.py"} or "frozen" in lower:
-        return "frozen_params"
-    if path.endswith(".py") or path in {"README.md", "AGENTS.md", "CLAUDE.md"}:
-        return "workflow"
-    return "source"
-
-
-def _as_of_date(path: str) -> str | None:
-    match = _DATE_RE.search(Path(path).name)
-    return match.group(0) if match else None
-
-
-def _matches(record: ChunkRecord, filters: SearchFilters) -> bool:
-    if filters.source_tier is not None and record.source_class != filters.source_tier:
-        return False
-    if filters.doc_type is not None and classify_doc_type(record.source_path) != filters.doc_type:
-        return False
-    if filters.ticker is not None and f"/{filters.ticker.upper()}/" not in f"/{record.source_path.upper()}/":
-        return False
-    if filters.hypothesis is not None and filters.hypothesis.casefold() not in record.source_path.casefold():
-        return False
-    if filters.since is not None:
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", filters.since):
-            raise ValueError("since must use YYYY-MM-DD")
-        as_of = _as_of_date(record.source_path)
-        if as_of is None or as_of < filters.since:
-            return False
-    return True
+def _fts_match_query(query: str) -> str:
+    tokens = re.findall(r"[A-Za-z0-9_]+", query)
+    if not tokens:
+        raise ValueError("query must include at least one alphanumeric term")
+    return " AND ".join(f'"{token}"' for token in tokens)
 
 
 def _snippet(text: str, limit: int = 320) -> str:
@@ -176,25 +142,59 @@ def _snippet(text: str, limit: int = 320) -> str:
 
 
 def search(index_dir: Path, query: str, limit: int = 5, filters: SearchFilters | None = None) -> tuple[SearchHit, ...]:
-    """Return advisory passages only; no generator or trading decision path."""
+    """Run exact FTS5 MATCH/BM25 retrieval with SQL metadata predicates only."""
     if limit < 1:
         raise ValueError("limit must be at least 1")
     filters = filters or SearchFilters()
-    index = load_index(index_dir)
-    candidates = tuple(record for record in index.chunks if _matches(record, filters))
-    settings = RetrievalSettings(top_k=limit)
-    hits = retrieve(query, candidates, settings)
+    if filters.doc_type is not None and filters.doc_type not in _DOC_TYPES:
+        raise ValueError(f"doc_type must be one of: {', '.join(sorted(_DOC_TYPES))}")
+    if filters.since is not None and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", filters.since):
+        raise ValueError("since must use YYYY-MM-DD")
+    database = index_dir / "search.sqlite3"
+    if not database.is_file():
+        raise FileNotFoundError(f"FTS index not found under {index_dir}")
+    clauses = ["chunks_fts MATCH ?"]
+    parameters: list[object] = [_fts_match_query(query)]
+    for column, value in (
+        ("ticker", None if filters.ticker is None else filters.ticker.upper()),
+        ("hypothesis", None if filters.hypothesis is None else filters.hypothesis.upper()),
+        ("source_tier", filters.source_tier),
+        ("doc_type", filters.doc_type),
+    ):
+        if value is not None:
+            clauses.append(f"c.{column} = ?")
+            parameters.append(value)
+    if filters.since is not None:
+        clauses.append("c.filing_or_asof_date >= ?")
+        parameters.append(filters.since)
+    parameters.append(limit)
+    statement = (
+        "SELECT c.repo_path, c.source_tier, c.locator, c.filing_or_asof_date, c.doc_type, c.text, "
+        "bm25(chunks_fts) AS rank "
+        "FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid "
+        f"WHERE {' AND '.join(clauses)} "
+        "ORDER BY rank, c.repo_path, c.locator LIMIT ?"
+    )
+    connection = sqlite3.connect(database)
+    try:
+        rows = connection.execute(statement, parameters).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "fts5" in str(exc).casefold():
+            raise Fts5UnavailableError("sqlite3 build lacks FTS5 support") from exc
+        raise
+    finally:
+        connection.close()
     return tuple(
         SearchHit(
-            repo_path=hit.record.source_path,
-            source_tier=hit.record.source_class,
-            locator=hit.record.citation,
-            filing_or_asof_date=_as_of_date(hit.record.source_path),
-            doc_type=classify_doc_type(hit.record.source_path),
-            snippet=_snippet(hit.record.text),
-            score=hit.score,
+            repo_path=str(row[0]),
+            source_tier=str(row[1]),
+            locator=str(row[2]),
+            filing_or_asof_date=None if row[3] is None else str(row[3]),
+            doc_type=str(row[4]),
+            snippet=_snippet(str(row[5])),
+            score=float(row[6]),
         )
-        for hit in hits
+        for row in rows
     )
 
 
@@ -340,6 +340,8 @@ def record_evaluation_history(
     k: int = 5,
 ) -> RegressionVerdict:
     """Append one evaluation observation without changing retrieval settings."""
+    if not policy.bounded_writes:
+        raise WriteRefusedError("policy does not authorize bounded RAG writes")
     run_at = now or datetime.now(timezone.utc)
     history = application_root / "eval" / "history.csv"
     verdict = regression_verdict(report, _read_history(history))
@@ -352,7 +354,9 @@ def record_evaluation_history(
         run_at,
         k,
     )
-    Writer(repository_root, application_root).journal_evaluation_history(trigger="evaluation")
+    Writer(
+        repository_root, application_root, bounded_writes=policy.bounded_writes
+    ).journal_evaluation_history(trigger="evaluation")
     return verdict
 
 
@@ -419,21 +423,32 @@ def rotate_artifacts(application_root: Path, keep: int = 12) -> None:
 def run_health(
     *, repository_root: Path, application_root: Path, policy: CorpusPolicy, index_dir: Path, golden_path: Path, now: datetime | None = None
 ) -> tuple[Path, EvaluationReport, RegressionVerdict]:
+    if not policy.bounded_writes:
+        raise WriteRefusedError("policy does not authorize bounded RAG writes")
     run_at = now or datetime.now(timezone.utc)
     before = _manifest_hashes(index_dir)
-    build_index(repository_root, policy, index_dir, ChunkSettings())
+    writer = Writer(repository_root, application_root, bounded_writes=policy.bounded_writes)
+    index_report = build_index(repository_root, policy, index_dir, ChunkSettings())
     after = _manifest_hashes(index_dir)
     delta = {
         "added": sorted(set(after) - set(before)),
         "changed": sorted(path for path in after if path in before and after[path] != before[path]),
         "removed": sorted(set(before) - set(after)),
-        "failed": [],
+        "failed": list(index_report.failed_paths),
     }
     report = evaluate(load_golden_set(golden_path), index_dir)
     verdict = record_evaluation_history(
         repository_root, application_root, report, policy, index_dir, run_at, k=5
     )
-    writer = Writer(repository_root, application_root)
+    writer.append_wiki_log(
+        "ingest",
+        "RAG health",
+        "RAG health indexed "
+        f"{index_report.sources_indexed} sources and {index_report.chunk_count} chunks; "
+        f"{len(index_report.failed_paths)} source failures were reported.",
+        trigger="scheduled health",
+        occurred_at=run_at,
+    )
     report_path = writer.write_report(
         f"rag_health_{run_at.date().isoformat()}",
         _render_report(run_at, delta, report, verdict),

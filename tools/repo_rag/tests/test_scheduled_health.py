@@ -91,6 +91,38 @@ class ScheduledHealthTests(unittest.TestCase):
         self.assertEqual(hits[0].source_tier, "canonical")
         self.assertIn("L1-L1", hits[0].locator)
 
+    def test_search_filters_by_ticker_tier_and_since_in_sql(self) -> None:
+        (self.root / "docs" / "VST_2026-07-20_h7_hypothesis.md").write_text(
+            "VST H7 capacity evidence is registered.\n", encoding="utf-8"
+        )
+        build_index(
+            self.root,
+            self.policy,
+            self.index,
+            ChunkSettings(),
+            tracked_paths=frozenset(
+                {
+                    "docs/h7_hypothesis.md",
+                    "docs/fills.md",
+                    "docs/VST_2026-07-20_h7_hypothesis.md",
+                }
+            ),
+        )
+
+        hits = search(
+            self.index,
+            "VST H7 capacity evidence",
+            filters=SearchFilters(
+                ticker="VST",
+                hypothesis="h7",
+                source_tier="canonical",
+                doc_type="hypothesis",
+                since="2026-07-20",
+            ),
+        )
+
+        self.assertEqual([hit.repo_path for hit in hits], ["docs/VST_2026-07-20_h7_hypothesis.md"])
+
     def test_evaluation_scores_retrieval_and_negative_abstention(self) -> None:
         report = evaluate(load_golden_set(self.golden), self.index)
 
@@ -121,15 +153,29 @@ class ScheduledHealthTests(unittest.TestCase):
         self.assertTrue((self.app / "eval" / "history.csv").is_file())
         journal = (self.app / "logs" / "writes.jsonl").read_text(encoding="utf-8")
         self.assertIn("tools/repo_rag/eval/history.csv", journal)
+        self.assertIn("## [2026-07-20] ingest | RAG health", (self.root / "wiki" / "log.md").read_text(encoding="utf-8"))
         self.assertFalse((self.root / "ledger" / "writes.jsonl").exists())
 
     def test_writer_refuses_raw_wiki_and_model_paths(self) -> None:
         (self.root / "wiki" / "raw").mkdir(parents=True)
-        writer = Writer(self.root, self.app)
+        writer = Writer(self.root, self.app, bounded_writes=True)
         with self.assertRaises(WriteRefusedError):
             writer.write_wiki_page("raw", "source", "no", trigger="test", chunk_ids=())
         with self.assertRaises(WriteRefusedError):
             writer.write_model_supplied_path("ledger/h7_forward/x", "no")
+
+    def test_writer_refuses_writes_when_policy_disables_bounded_writes(self) -> None:
+        writer = Writer(self.root, self.app, bounded_writes=False)
+        with self.assertRaises(WriteRefusedError):
+            writer.write_report("blocked", "no", trigger="test", chunk_ids=())
+
+    def test_writer_refuses_to_overwrite_existing_wiki_page(self) -> None:
+        directory = self.root / "wiki" / "concepts"
+        directory.mkdir(parents=True)
+        (directory / "risk.md").write_text("human page", encoding="utf-8")
+        writer = Writer(self.root, self.app, bounded_writes=True)
+        with self.assertRaises(WriteRefusedError):
+            writer.write_wiki_page("concepts", "risk", "replacement", trigger="test", chunk_ids=())
 
     def _git(self, *args: str) -> None:
         subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)

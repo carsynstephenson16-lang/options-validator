@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,10 +11,17 @@ from typing import Callable
 
 from .chunking import ChunkSettings, chunk_text
 from .config import CorpusPolicy
-from .corpus import SourceFile, discover_sources
+from .corpus import DiscoveryFailure, SourceFile, discover_sources_with_failures
 from .providers import DeterministicHashEmbedding
 
 PARSER_NAME = "line-chunker-v1"
+_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_TICKER_RE = re.compile(r"(?:^|[/_.-])([A-Z]{1,5})(?=$|[/_.-])")
+_HYPOTHESIS_RE = re.compile(r"(?:^|[/_.-])(H\d+)(?=$|[/_.-])", re.IGNORECASE)
+
+
+class Fts5UnavailableError(RuntimeError):
+    """Raised when the local SQLite build cannot provide the required FTS5 search."""
 
 
 @dataclass(frozen=True)
@@ -39,6 +49,7 @@ class IndexReport:
     sources_updated: int
     sources_removed: int
     chunk_count: int
+    failed_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -74,6 +85,91 @@ def _chunk_records(source: SourceFile, text: str, settings: ChunkSettings,
     return records
 
 
+def classify_doc_type(path: str) -> str:
+    """Re-derived options-validator metadata for the advisory FTS index."""
+    lower = path.casefold()
+    if lower.startswith("ledger/"):
+        return "ledger"
+    if "hypothesis" in lower or "/h7_" in lower or lower.endswith("h7.md"):
+        return "hypothesis"
+    if lower.startswith("reports/"):
+        return "backtest_run"
+    if lower.startswith("research/") or lower.startswith("wiki/"):
+        return "notebook"
+    if path in {"config.py", "options_researcher/config.py"} or "frozen" in lower:
+        return "frozen_params"
+    if path.endswith(".py") or path in {"README.md", "AGENTS.md", "CLAUDE.md"}:
+        return "workflow"
+    return "source"
+
+
+def _as_of_date(path: str) -> str | None:
+    match = _DATE_RE.search(Path(path).name)
+    return match.group(0) if match else None
+
+
+def _extract_ticker(path: str) -> str | None:
+    for match in _TICKER_RE.finditer(path):
+        candidate = match.group(1)
+        if candidate != "H":
+            return candidate
+    return None
+
+
+def _extract_hypothesis(path: str) -> str | None:
+    match = _HYPOTHESIS_RE.search(path)
+    return None if match is None else match.group(1).upper()
+
+
+def _build_fts_index(index_dir: Path, rows: list[dict[str, object]]) -> None:
+    """Publish an isolated FTS5/BM25 index from the same deterministic chunk set."""
+    target = index_dir / "search.sqlite3"
+    temporary = index_dir / "search.sqlite3.tmp"
+    if temporary.exists():
+        temporary.unlink()
+    connection = sqlite3.connect(temporary)
+    try:
+        connection.execute(
+            "CREATE TABLE chunks ("
+            "id INTEGER PRIMARY KEY, chunk_id TEXT NOT NULL, repo_path TEXT NOT NULL, "
+            "source_tier TEXT NOT NULL, ticker TEXT, hypothesis TEXT, doc_type TEXT NOT NULL, "
+            "filing_or_asof_date TEXT, locator TEXT NOT NULL, text TEXT NOT NULL)"
+        )
+        connection.execute("CREATE INDEX chunks_metadata ON chunks(source_tier, doc_type, ticker, hypothesis, filing_or_asof_date)")
+        connection.execute("CREATE VIRTUAL TABLE chunks_fts USING fts5(text)")
+        connection.execute("BEGIN")
+        for row in rows:
+            path = str(row["source_path"])
+            cursor = connection.execute(
+                "INSERT INTO chunks(chunk_id, repo_path, source_tier, ticker, hypothesis, doc_type, filing_or_asof_date, locator, text) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    row["chunk_id"],
+                    path,
+                    row["source_class"],
+                    _extract_ticker(path),
+                    _extract_hypothesis(path),
+                    classify_doc_type(path),
+                    _as_of_date(path),
+                    f"{path}:L{row['start_line']}-L{row['end_line']}",
+                    row["text"],
+                ),
+            )
+            connection.execute("INSERT INTO chunks_fts(rowid, text) VALUES (?, ?)", (cursor.lastrowid, row["text"]))
+        connection.execute("COMMIT")
+    except sqlite3.OperationalError as exc:
+        try:
+            connection.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        if "fts5" in str(exc).casefold():
+            raise Fts5UnavailableError("sqlite3 build lacks FTS5 support") from exc
+        raise
+    finally:
+        connection.close()
+    os.replace(temporary, target)
+
+
 def build_index(
     repository_root: Path,
     policy: CorpusPolicy,
@@ -83,7 +179,9 @@ def build_index(
     now: Callable[[], datetime] = _default_now,
 ) -> IndexReport:
     embedder = DeterministicHashEmbedding()
-    sources = discover_sources(repository_root, policy, tracked_paths=tracked_paths)
+    sources, discovery_failures = discover_sources_with_failures(
+        repository_root, policy, tracked_paths=tracked_paths
+    )
     previous_hashes: dict[str, str] = {}
     previous_records: dict[str, list[dict]] = {}
     manifest_path = index_dir / "manifest.json"
@@ -99,7 +197,13 @@ def build_index(
     unchanged = updated = 0
     all_rows: list[dict] = []
     source_hashes: dict[str, str] = {}
+    failures: list[DiscoveryFailure] = list(discovery_failures)
     for source in sources:
+        try:
+            text = (repository_root / source.path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            failures.append(DiscoveryFailure(source.path, f"unreadable during indexing ({exc.__class__.__name__})"))
+            continue
         source_hashes[source.path] = source.content_sha256
         if previous_hashes.get(source.path) == source.content_sha256:
             unchanged += 1
@@ -107,7 +211,6 @@ def build_index(
             continue
         if source.path in previous_hashes:
             updated += 1
-        text = (repository_root / source.path).read_text(encoding="utf-8")
         for record in _chunk_records(source, text, chunk_settings, embedder):
             row = {
                 "chunk_id": record.chunk_id,
@@ -127,6 +230,7 @@ def build_index(
     all_rows.sort(key=lambda row: (row["source_path"], row["start_line"], row["chunk_id"]))
 
     index_dir.mkdir(parents=True, exist_ok=True)
+    _build_fts_index(index_dir, all_rows)
     with chunks_path.open("w", encoding="utf-8") as handle:
         for row in all_rows:
             handle.write(json.dumps(row, sort_keys=True) + "\n")
@@ -142,11 +246,12 @@ def build_index(
     }
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return IndexReport(
-        sources_indexed=len(sources),
+        sources_indexed=len(source_hashes),
         sources_unchanged=unchanged,
         sources_updated=updated,
         sources_removed=removed,
         chunk_count=len(all_rows),
+        failed_paths=tuple(f"{failure.path}: {failure.reason}" for failure in failures),
     )
 
 

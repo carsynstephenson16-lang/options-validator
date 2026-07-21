@@ -18,11 +18,16 @@ class WriteRefusedError(ValueError):
 class Writer:
     """Build paths from code-owned directories, never retrieved/model text."""
 
-    def __init__(self, repository_root: Path, application_root: Path) -> None:
+    def __init__(self, repository_root: Path, application_root: Path, *, bounded_writes: bool) -> None:
         self.repository_root = repository_root.resolve()
         self.application_root = application_root.resolve()
+        self.bounded_writes = bounded_writes
         if not self.application_root.is_relative_to(self.repository_root):
             raise WriteRefusedError("application root must stay inside repository root")
+
+    def _require_bounded_writes(self) -> None:
+        if not self.bounded_writes:
+            raise WriteRefusedError("policy does not authorize bounded RAG writes")
 
     @staticmethod
     def _stem(stem: str) -> str:
@@ -69,6 +74,7 @@ class Writer:
     def write_report(
         self, stem: str, content: str, *, trigger: str, chunk_ids: tuple[str, ...]
     ) -> Path:
+        self._require_bounded_writes()
         directory = self.application_root / "reports"
         target = self._resolve(directory / f"{self._stem(stem)}.md", directory)
         target = self._resolve(self._version(target), directory)
@@ -79,6 +85,7 @@ class Writer:
 
     def journal_evaluation_history(self, *, trigger: str) -> None:
         """Record the append-only evaluation history write in the audit journal."""
+        self._require_bounded_writes()
         history = self._resolve(
             self.application_root / "eval" / "history.csv", self.application_root / "eval"
         )
@@ -95,14 +102,47 @@ class Writer:
         trigger: str,
         chunk_ids: tuple[str, ...],
     ) -> Path:
+        self._require_bounded_writes()
         if section not in {"entities", "concepts", "sources", "workflows"}:
             raise WriteRefusedError("wiki section is not allowlisted")
         directory = self.repository_root / "wiki" / section
         target = self._resolve(directory / f"{self._stem(stem)}.md", directory)
+        if target.exists():
+            raise WriteRefusedError("refusing to overwrite an existing wiki page")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         self._journal(target, content, trigger, chunk_ids)
         return target
+
+    def append_wiki_log(
+        self,
+        operation: str,
+        title: str,
+        body: str,
+        *,
+        trigger: str,
+        occurred_at: datetime | None = None,
+    ) -> None:
+        """Append the required wiki audit event without allowing arbitrary wiki overwrites."""
+        self._require_bounded_writes()
+        if operation not in {"ingest", "lint", "query"}:
+            raise WriteRefusedError("wiki-log operation is not allowlisted")
+        if not title or "\n" in title or not body:
+            raise WriteRefusedError("wiki-log title and body must be non-empty single-line/title content")
+        target = self._resolve(self.repository_root / "wiki" / "log.md", self.repository_root / "wiki")
+        event_date = (occurred_at or datetime.now(timezone.utc)).astimezone(timezone.utc).date().isoformat()
+        entry = (
+            f"\n\n## [{event_date}] {operation} | {title}\n\n"
+            f"{body.strip()}\n"
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists():
+            target.write_text("# Wiki Log" + entry, encoding="utf-8")
+        else:
+            with target.open("a", encoding="utf-8") as handle:
+                handle.write(entry)
+        content = target.read_text(encoding="utf-8")
+        self._journal(target, content, trigger, ())
 
     def write_model_supplied_path(self, _path: str, _content: str) -> None:
         raise WriteRefusedError("model-supplied paths are never honored")

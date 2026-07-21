@@ -52,6 +52,7 @@ class IndexingTests(unittest.TestCase):
         self.assertEqual(report.sources_indexed, 2)
         self.assertTrue((self.index_dir / "manifest.json").exists())
         self.assertTrue((self.index_dir / "chunks.jsonl").exists())
+        self.assertTrue((self.index_dir / "search.sqlite3").exists())
         manifest = json.loads((self.index_dir / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["built_at_utc"], "2026-07-19T12:00:00+00:00")
         self.assertIn("policy_sha256", manifest)

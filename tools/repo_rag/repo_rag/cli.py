@@ -7,7 +7,7 @@ from typing import Sequence
 
 from .chunking import ChunkSettings
 from .config import load_policy
-from .indexing import build_index
+from .indexing import Fts5UnavailableError, build_index
 from .pipeline import DEFAULT_MAX_CONTEXT_CHARS, answer_query
 from .retrieval import RetrievalSettings
 from .scheduled_health import (
@@ -183,7 +183,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     since=args.since,
                 ),
             )
-        except (FileNotFoundError, ValueError, json.JSONDecodeError, KeyError) as exc:
+        except (FileNotFoundError, Fts5UnavailableError, ValueError, json.JSONDecodeError, KeyError) as exc:
             print(json.dumps({"status": "ERROR", "error": str(exc)}, indent=2, sort_keys=True))
             return 2
         payload = {
@@ -214,7 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             verdict = record_evaluation_history(
                 _repository_root(), _project_root(), report, policy, args.index_dir, k=args.k
             )
-        except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError, KeyError) as exc:
+        except (FileNotFoundError, Fts5UnavailableError, OSError, ValueError, json.JSONDecodeError, KeyError) as exc:
             print(json.dumps({"status": "ERROR", "error": str(exc)}, indent=2, sort_keys=True))
             return 2
         payload = report.to_mapping() | {
@@ -232,7 +232,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 index_dir=args.index_dir,
                 golden_path=args.golden,
             )
-        except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError, KeyError) as exc:
+        except (FileNotFoundError, Fts5UnavailableError, OSError, ValueError, json.JSONDecodeError, KeyError) as exc:
             print(json.dumps({"status": "ERROR", "error": str(exc)}, indent=2, sort_keys=True))
             return 2
         print(

@@ -62,6 +62,8 @@ The index lives under `tools/repo_rag/.index/` (gitignored, disposable):
 
 - `chunks.jsonl` — one JSON record per indexed chunk (source path, line range,
   text, source class, hash).
+- `search.sqlite3` — a separate exact FTS5/BM25 index used by raw-passage
+  `search`, scheduled `evaluate`, and `health`.
 - `manifest.json` — per-source ingest state used for idempotent
   update/delete/zero-chunk handling.
 - `events.jsonl` — append-only event log; stores query **hashes**, never query
@@ -98,7 +100,8 @@ these files.
 ## Scheduled health
 
 The raw-passage `search` command keeps retrieval separate from answer
-generation. It returns tier-labelled file/line passages and supports ticker,
+generation. It uses SQLite FTS5 `MATCH` ranked by BM25 with SQL metadata
+predicates, returns tier-labelled file/line passages, and supports ticker,
 hypothesis, tier, document-type, and as-of-date filters. The `evaluate`
 command measures hit@5, MRR, negative-control abstention, false-hit rate, and
 latency against `eval/golden.jsonl`; each observation is appended to the
@@ -123,6 +126,7 @@ The test suite is offline and stdlib-only (no network, no paid API calls).
 
 This application is advisory. Retrieved material remains subject to the parent
 repository's canonical-source, validation, and safety rules. The bounded writer
-cannot honor a model-supplied path, overwrites reports by versioning, journals
+cannot honor a model-supplied path, versions reports, refuses to overwrite
+wiki pages, appends required health-ingest entries to `wiki/log.md`, journals
 every autonomous write, and refuses `wiki/raw/` as well as every research and
 trading artifact.

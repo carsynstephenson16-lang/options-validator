@@ -53,9 +53,12 @@ def build_status(
             from .indexing import load_index
 
             index = load_index(index_dir)
-            index_present = True
-            index_chunk_count = len(index.chunks)
-            index_built_at = index.built_at_utc
+            if not (index_dir / "search.sqlite3").is_file():
+                index_error = "corrupt: scheduled FTS index missing"
+            else:
+                index_present = True
+                index_chunk_count = len(index.chunks)
+                index_built_at = index.built_at_utc
         except FileNotFoundError:
             pass
         except (json.JSONDecodeError, KeyError, ValueError, UnicodeDecodeError) as exc:
