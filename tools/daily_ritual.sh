@@ -191,6 +191,54 @@ fi
 "$UV" run python -m options_researcher.dashboard && note "dashboard: rebuilt" || note "dashboard: FAILED"
 "$UV" run python -m options_researcher.attractiveness_dashboard && note "attractiveness dashboard: rebuilt" || note "attractiveness dashboard: FAILED"
 
+# ---------------------------------------------------------------------------
+# Step 8 — DURABILITY (added 2026-07-21, the day after Stage-8 activation).
+# The live forward window's evidence must not exist only in this working tree:
+# over a 70-session window that would put the entire verdict trail on one disk,
+# unversioned. Commit the generated evidence under a NARROW allow-list (never
+# code), merge+push to origin/main, then take an encrypted restic snapshot.
+# Every step is FAIL-SOFT: a network outage or a concurrent push is noted and
+# retried next run, never a CRITICAL -- persistence must not break the ritual
+# that produces the evidence.
+# ---------------------------------------------------------------------------
+git add -- ledger/facts.log ledger/h7_forward \
+           reports/h7_receipts reports/h7_data_gate 2>/dev/null
+if git diff --cached --quiet 2>/dev/null; then
+  note "evidence: nothing new to persist"
+elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}
+
+Autonomous persistence of the LIVE H7 forward window's daily evidence
+(source-health / data-gate / watcher receipts, facts.log, forward ledger).
+Written by tools/daily_ritual.sh under an evidence-path allow-list; this
+commit never contains code."; then
+  note "evidence: committed"
+else
+  note "evidence: COMMIT FAILED (retries next run)"
+fi
+
+if git fetch -q origin main 2>/dev/null \
+   && git merge -q --no-edit origin/main 2>/dev/null \
+   && git push -q origin main 2>/dev/null; then
+  note "evidence: pushed to origin/main"
+else
+  note "evidence: push deferred (offline / concurrent push) — retries next run"
+fi
+
+# Encrypted off-tree snapshot. Git+GitHub is the primary durable copy; this is
+# belt-and-suspenders and covers the gitignored stores too. Read only the two
+# RESTIC_* keys from .env rather than sourcing it (never export API secrets).
+if [ -f .env ] && grep -q '^RESTIC_REPOSITORY=' .env && command -v restic >/dev/null 2>&1; then
+  RESTIC_REPOSITORY="$(grep -m1 '^RESTIC_REPOSITORY=' .env | cut -d= -f2-)"
+  RESTIC_PASSWORD_FILE="$(grep -m1 '^RESTIC_PASSWORD_FILE=' .env | cut -d= -f2-)"
+  export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE
+  if restic backup --tag "h7-daily-${RUN_DATE}" \
+       ledger reports data/earnings data/chain_cache_manifest.txt >/dev/null 2>&1; then
+    note "restic snapshot: taken"
+  else
+    note "restic snapshot: FAILED (non-blocking)"
+  fi
+fi
+
 echo "=== summary ==="
 printf "%b" "$SUMMARY"
 
