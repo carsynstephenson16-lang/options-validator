@@ -17899,3 +17899,36 @@
 2026-07-20T21:02:39.385693+00:00	DATA_PULL 2026-07-20: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.
 2026-07-20T21:04:49.570547+00:00	DATA_PULL 2026-07-20: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.
 2026-07-20T21:19:49.367243+00:00	DATA_PULL 2026-07-20: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.
+2026-07-21T03:24:59.812441+00:00	DATA_PULL 2026-07-20: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.
+2026-07-21T11:10:15.442479+00:00	BLIND_CACHE symbol=PLTR date=2026-07-20 rows=2276 sha256=2eb932d2c3a37bda6cc197e1aecbbbedd716b88833b4bf79ad7602971628b128 already_cached=false path=.cache/chains/PLTR_2026-07-20.parquet
+2026-07-21T11:10:16.078300+00:00	BLIND_CACHE symbol=NOW date=2026-07-20 rows=1932 sha256=bfa1c17a9cfff2b2c0978efd06fe9ba2e22e5345d6be96a6233750c1deefa833 already_cached=false path=.cache/chains/NOW_2026-07-20.parquet
+2026-07-21T11:10:17.788231+00:00	BLIND_CACHE symbol=NVDA date=2026-07-20 rows=3736 sha256=abee988c6d12bfbc7d4a3f7362d560846117ed7b91d9af8e1d1bf3e2176b6f86 already_cached=false path=.cache/chains/NVDA_2026-07-20.parquet
+2026-07-21T11:10:20.063004+00:00	BLIND_CACHE symbol=AMD date=2026-07-20 rows=6646 sha256=89e206d4529cea173e5e4e145fdfee7d73b1f6cc9b7581d31f2dfd580f4ebd34 already_cached=false path=.cache/chains/AMD_2026-07-20.parquet
+2026-07-21T11:10:20.771316+00:00	BLIND_CACHE symbol=CRWV date=2026-07-20 rows=1843 sha256=ce9a7c1f5a10f9de9a9ea0fbaf9265af7701631d5fc5b538ffd57dfc5718b51c already_cached=false path=.cache/chains/CRWV_2026-07-20.parquet
+2026-07-21T11:10:21.814810+00:00	BLIND_CACHE symbol=SMCI date=2026-07-20 rows=1530 sha256=1d8bee94c0d09a20adbed106bb0acc8b686af5dd600c0b005c6d8e043fef9d6f already_cached=false path=.cache/chains/SMCI_2026-07-20.parquet
+2026-07-21T11:10:22.467851+00:00	BLIND_CACHE symbol=USAR date=2026-07-20 rows=732 sha256=7951dd3e0412a3b44e1b592b6489bccd015f7f3f6fb2885c371a32d0c2fc5519 already_cached=false path=.cache/chains/USAR_2026-07-20.parquet
+2026-07-21T11:10:22.846635+00:00	BLIND_CACHE symbol=ET date=2026-07-20 rows=632 sha256=b25b48f6fe24462632f4e986761b9719f4225c41160156dcf62bc6f63733d159 already_cached=false path=.cache/chains/ET_2026-07-20.parquet
+2026-07-21T11:10:23.698610+00:00	BLIND_CACHE symbol=VST date=2026-07-20 rows=1294 sha256=e5fc17aff8beded33b20bd84c2e5ba6653c3072434f004205e24457f6a71a894 already_cached=false path=.cache/chains/VST_2026-07-20.parquet
+2026-07-21T11:10:24.387869+00:00	BLIND_CACHE symbol=CEG date=2026-07-20 rows=1566 sha256=b80d5df14902fbdf784fb79b26e087f7af913ab8909c760582267f10230dbb66 already_cached=false path=.cache/chains/CEG_2026-07-20.parquet
+2026-07-21T11:10:25.623327+00:00	BLIND_CACHE symbol=MSFT date=2026-07-20 rows=3410 sha256=1d5166a871d6741ee998b315aa2a70d07cafe2979d2a69741c0dd8a812db1cdf already_cached=false path=.cache/chains/MSFT_2026-07-20.parquet
+2026-07-21T11:10:27.639140+00:00	BLIND_CACHE symbol=IREN date=2026-07-20 rows=1534 sha256=9fa7340831b13365dc7ed85be6597cd9a1424a7a8e58e615a190a06fc60b7bfa already_cached=false path=.cache/chains/IREN_2026-07-20.parquet
+2026-07-21T11:10:32.368846+00:00	BLIND_CACHE symbol=AMZN date=2026-07-20 rows=2200 sha256=614c9beefac636d589e9cdf8ffcec581e0da74a116c19705e297f057b949697b already_cached=false path=.cache/chains/AMZN_2026-07-20.parquet
+2026-07-21T11:10:33.020175+00:00	BLIND_CACHE symbol=TEM date=2026-07-20 rows=798 sha256=63ba6d958b037bca2c392411c57d0f8fa1393cdf28f35fbe9a35889d7a21e84d already_cached=false path=.cache/chains/TEM_2026-07-20.parquet
+2026-07-21T11:10:39.751741+00:00	BLIND_CACHE symbol=AVGO date=2026-07-20 rows=3470 sha256=116c471b7b7660f5377a2de9860ebe3ac237961c92c082c36dc4644af05e8674 already_cached=false path=.cache/chains/AVGO_2026-07-20.parquet
+2026-07-21T11:10:39.983284+00:00	DATA_PULL_TOPUP 2026-07-21: recent-days chain top-up (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN) days=['2026-07-20'] fetched=15 gaps=0 audit=PASS WITH WARNINGS. Blind-cache path, no reveal; config boundaries unchanged; today excluded (EOD not final).
+2026-07-21T11:10:44.744574+00:00	DATA_PULL 2026-07-21: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.
+2026-07-21T11:11:18.020574+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh CRWV rows=328 path=.cache/underlying_ohlcv/CRWV.parquet
+2026-07-21T11:11:18.261632+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh TEM rows=524 path=.cache/underlying_ohlcv/TEM.parquet
+2026-07-21T11:11:18.573117+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh PLTR rows=1456 path=.cache/underlying_ohlcv/PLTR.parquet
+2026-07-21T11:11:18.931451+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh NOW rows=2398 path=.cache/underlying_ohlcv/NOW.parquet
+2026-07-21T11:11:19.286477+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh SMCI rows=2398 path=.cache/underlying_ohlcv/SMCI.parquet
+2026-07-21T11:11:19.661529+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh NVDA rows=2398 path=.cache/underlying_ohlcv/NVDA.parquet
+2026-07-21T11:11:20.048079+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh AMD rows=2398 path=.cache/underlying_ohlcv/AMD.parquet
+2026-07-21T11:11:20.426844+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh AVGO rows=2398 path=.cache/underlying_ohlcv/AVGO.parquet
+2026-07-21T11:11:20.718728+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh IREN rows=1170 path=.cache/underlying_ohlcv/IREN.parquet
+2026-07-21T11:11:20.981583+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh USAR rows=755 path=.cache/underlying_ohlcv/USAR.parquet
+2026-07-21T11:11:21.342569+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh ET rows=2398 path=.cache/underlying_ohlcv/ET.parquet
+2026-07-21T11:11:21.707532+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh VST rows=2398 path=.cache/underlying_ohlcv/VST.parquet
+2026-07-21T11:11:21.967793+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh CEG rows=1128 path=.cache/underlying_ohlcv/CEG.parquet
+2026-07-21T11:11:22.366709+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh MSFT rows=2398 path=.cache/underlying_ohlcv/MSFT.parquet
+2026-07-21T11:11:22.658015+00:00	DATA_PULL_OHLCV 2026-07-21: Yahoo OHLCV refresh AMZN rows=2398 path=.cache/underlying_ohlcv/AMZN.parquet
