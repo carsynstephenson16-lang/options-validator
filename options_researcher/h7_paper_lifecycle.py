@@ -59,6 +59,8 @@ class RealStoreSession:
     source_health_receipt_path: Path
     data_gate_receipt_hash: str
     source_health_receipt_hash: str
+    data_gate_config_hash: str
+    data_gate_source_hash: str
     included_symbols: tuple[str, ...]
 
 

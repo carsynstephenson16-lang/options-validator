@@ -5,28 +5,30 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
 from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_forward_book as book
 from options_researcher import h7_paper_lifecycle as lifecycle
+from options_researcher import h7_session as session_module
 from options_researcher import h7_window_registration as registration
 from options_researcher.h7_scope import scope_identity
 from options_researcher.h7_session import (
     SessionRefused,
     open_real_session,
-    record_session_evidence,
 )
-from research.hashing import config_hash, diagnostic_source_hash
-from research.receipts import make_receipt
+from research.hashing import config_hash
+from research.receipts import input_files, load_receipt, make_receipt
 
 DECISION = "2026-07-20"  # operator decision date, inside the window
 EVALUATION = "2026-07-17"  # prior completed source-data session
 FILL = "2026-07-21"  # T+1 recorded quote session
 INCLUDED = ("AMD", "AMZN", "CEG", "ET", "MSFT", "NOW", "PLTR", "TEM", "VST")
+SOURCE_HASH = "c" * 64
 
 
 def _clock(iso: str):
@@ -107,6 +109,11 @@ class RealSessionCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        self.source_hash = patch(
+            "options_researcher.h7_watch.diagnostic_source_hash", return_value=SOURCE_HASH
+        )
+        self.source_hash.start()
+        self.addCleanup(self.source_hash.stop)
         self.root = Path(self.tmp.name)
         self.base = self.root / "forward"
         self.scope = scope_identity()
@@ -165,7 +172,7 @@ class RealSessionCase(unittest.TestCase):
                 "symbols": symbol_map,
                 "input_files": {},
                 "config_hash": config_hash(),
-                "source_hash": diagnostic_source_hash(),
+                "source_hash": SOURCE_HASH,
             },
         )
         source_path.write_text(json.dumps(source))
@@ -188,7 +195,7 @@ class RealSessionCase(unittest.TestCase):
                 ),
                 "source_health_receipt_path": str(source_path),
                 "config_hash": config_hash(),
-                "source_hash": diagnostic_source_hash(),
+                "source_hash": SOURCE_HASH,
             },
         )
         gate_path.write_text(json.dumps(gate))
@@ -203,6 +210,49 @@ class RealSessionCase(unittest.TestCase):
         }
         kwargs.update(over)
         return open_real_session(**kwargs)
+
+    def _write_watcher_receipt(self, evaluation: str, gate_path: Path, *, actionable: bool) -> Path:
+        bindings: dict[str, Path] = {}
+        for symbol in self.scope["symbols"]:
+            close = self.root / f"close-{evaluation}-{symbol}.cache"
+            chain = self.root / f"chain-{evaluation}-{symbol}.cache"
+            close.write_text(f"close {evaluation} {symbol}")
+            chain.write_text(f"chain {evaluation} {symbol}")
+            bindings[f"close:{symbol}"] = close
+            bindings[f"chain:{symbol}"] = chain
+        gate = load_receipt(gate_path, expected_type="data_gate")
+        rows = (
+            [
+                {
+                    "symbol": "AMD",
+                    "lane": "lane_a",
+                    "state": "ENTRY-OK",
+                    "actionable": True,
+                    "action": json.dumps(_long_action(), sort_keys=True),
+                }
+            ]
+            if actionable
+            else []
+        )
+        watcher = make_receipt(
+            "watcher_decision",
+            {
+                "evaluation_session": evaluation,
+                "requested_run_date": DECISION,
+                "scope": self.scope,
+                "data_gate_receipt_hash": gate["receipt_hash"],
+                "source_health_receipt_hash": gate["source_health_receipt_hash"],
+                "input_files": input_files(bindings),
+                "rows": rows,
+                "errors": [],
+                "actionable_count": len(rows),
+                "config_hash": gate["config_hash"],
+                "source_hash": gate["source_hash"],
+            },
+        )
+        path = self.root / f"watcher-{evaluation}.json"
+        path.write_text(json.dumps(watcher))
+        return path
 
 
 class TestSessionRefusals(RealSessionCase):
@@ -241,38 +291,21 @@ class TestSessionRefusals(RealSessionCase):
 class TestEntryOnlyRealPath(RealSessionCase):
     def test_publish_board_intent_approval_fill_and_keep_exits_refused(self):
         decision = self.open(symbol="AMD")
-        decision_evidence = record_session_evidence(decision, symbol="AMD")
-        self.assertTrue(decision_evidence.source_health.appended)
-        self.assertTrue(decision_evidence.data_gate.appended)
-
-        board_result = book.record_board_resolution(
-            base_dir=decision,
-            evaluation_session=EVALUATION,
-            candidates=[
-                {
-                    "symbol": "AMD",
-                    "lane": "a",
-                    "session": EVALUATION,
-                    "action": _long_action(),
-                }
-            ],
-            source_health_id=decision_evidence.source_health.event_id,
-            data_gate_id=decision_evidence.data_gate.event_id,
-            clock=_clock("2026-07-21T01:00:00+00:00"),
+        decision_watcher = self._write_watcher_receipt(
+            EVALUATION, self._paths(EVALUATION)[1], actionable=True
         )
-        intent = lifecycle.record_entry_intent(
-            base_dir=decision,
-            symbol="AMD",
-            action=_long_action(),
-            decision_chain=_chain(),
-            decision_session=EVALUATION,
-            source_health_id=decision_evidence.source_health.event_id,
-            data_gate_id=decision_evidence.data_gate.event_id,
-            board_resolution_id=board_result.event_id,
-            chain_identity="sha256:decision-chain",
-            closes_identity="sha256:decision-closes",
-            clock=_clock("2026-07-21T01:00:00+00:00"),
-        )
+        with patch.object(session_module, "load_range", return_value={EVALUATION: _chain()}):
+            with patch.object(
+                lifecycle,
+                "_clock_utc",
+                return_value=datetime(2026, 7, 21, 1, tzinfo=timezone.utc),
+            ):
+                intent = session_module.propose_entry(
+                    session=decision,
+                    symbol="AMD",
+                    lane="a",
+                    watcher_receipt_path=decision_watcher,
+                )
         stored_intent = next(
             event for event in ledger.read_events(self.base) if event.event_id == intent.event_id
         )
@@ -293,19 +326,24 @@ class TestEntryOnlyRealPath(RealSessionCase):
             source_evaluation_session=FILL,
             symbol="AMD",
         )
-        fill_evidence = record_session_evidence(fill, symbol="AMD")
-        opened = lifecycle.process_entry_fill(
-            base_dir=fill,
-            entry_intent_id=intent.event_id,
-            fill_session=FILL,
-            chain=_chain(),
-            source_health_id=fill_evidence.symbol_source_health.event_id,
-            data_gate_id=fill_evidence.data_gate.event_id,
-            chain_identity="sha256:fill-chain",
-            closes_identity="sha256:fill-closes",
-            underlying_close=100.0,
-            clock=_clock("2026-07-22T01:00:00+00:00"),
-        )
+        fill_watcher = self._write_watcher_receipt(FILL, fill_gate, actionable=False)
+        with patch.object(session_module, "load_range", return_value={FILL: _chain()}):
+            with patch.object(
+                session_module,
+                "load_closes_adjusted",
+                return_value=pd.Series([100.0], index=[FILL]),
+            ):
+                with patch.object(
+                    lifecycle,
+                    "_clock_utc",
+                    return_value=datetime(2026, 7, 22, 1, tzinfo=timezone.utc),
+                ):
+                    opened = session_module.fill_entry(
+                        session=fill,
+                        entry_intent_id=intent.event_id,
+                        symbol="AMD",
+                        watcher_receipt_path=fill_watcher,
+                    )
         self.assertEqual(opened.event_type, "paper_fill", opened.payload)
         self.assertTrue(ledger.verify(self.base).valid)
         snapshot = book.derive_book(base_dir=fill, evaluation_session=FILL)
@@ -317,7 +355,7 @@ class TestEntryOnlyRealPath(RealSessionCase):
                 exit_intent_id="no-exit-path",
                 fill_session=FILL,
                 chain=_chain(),
-                data_gate_id=fill_evidence.data_gate.event_id,
+                data_gate_id=f"h7:data_gate:{FILL}",
                 chain_identity="sha256:exit-chain",
                 closes_identity="sha256:exit-closes",
             )
