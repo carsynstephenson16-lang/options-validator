@@ -4,6 +4,8 @@ import json
 import os
 import re
 import sqlite3
+import tempfile
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +17,7 @@ from .corpus import DiscoveryFailure, SourceFile, discover_sources_with_failures
 from .providers import DeterministicHashEmbedding
 
 PARSER_NAME = "line-chunker-v1"
+INDEX_VERSION = 2
 _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _TICKER_RE = re.compile(r"(?:^|[/_.-])([A-Z]{1,5})(?=$|[/_.-])")
 _HYPOTHESIS_RE = re.compile(r"(?:^|[/_.-])(H\d+)(?=$|[/_.-])", re.IGNORECASE)
@@ -88,16 +91,21 @@ def _chunk_records(source: SourceFile, text: str, settings: ChunkSettings,
 def classify_doc_type(path: str) -> str:
     """Re-derived options-validator metadata for the advisory FTS index."""
     lower = path.casefold()
+    if lower.startswith("reports/"):
+        return "backtest_run"
+    if path in {
+        "config.py",
+        "options_researcher/config.py",
+        "options_researcher/h7_scope.py",
+        "options_researcher/h7_window_registration.py",
+    } or "frozen" in lower:
+        return "frozen_params"
     if lower.startswith("ledger/"):
         return "ledger"
     if "hypothesis" in lower or "/h7_" in lower or lower.endswith("h7.md"):
         return "hypothesis"
-    if lower.startswith("reports/"):
-        return "backtest_run"
     if lower.startswith("research/") or lower.startswith("wiki/"):
         return "notebook"
-    if path in {"config.py", "options_researcher/config.py"} or "frozen" in lower:
-        return "frozen_params"
     if path.endswith(".py") or path in {"README.md", "AGENTS.md", "CLAUDE.md"}:
         return "workflow"
     return "source"
@@ -121,12 +129,17 @@ def _extract_hypothesis(path: str) -> str | None:
     return None if match is None else match.group(1).upper()
 
 
-def _build_fts_index(index_dir: Path, rows: list[dict[str, object]]) -> None:
-    """Publish an isolated FTS5/BM25 index from the same deterministic chunk set."""
-    target = index_dir / "search.sqlite3"
-    temporary = index_dir / "search.sqlite3.tmp"
-    if temporary.exists():
-        temporary.unlink()
+def _temporary_text_file(directory: Path, content: str) -> Path:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory, delete=False) as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+        return Path(handle.name)
+
+
+def _build_fts_index(index_dir: Path, rows: list[dict[str, object]], generation: str) -> Path:
+    """Stage an isolated FTS5/BM25 index for publication with a generation marker."""
+    temporary = index_dir / f"search.sqlite3.{generation}.tmp"
     connection = sqlite3.connect(temporary)
     try:
         connection.execute(
@@ -137,7 +150,9 @@ def _build_fts_index(index_dir: Path, rows: list[dict[str, object]]) -> None:
         )
         connection.execute("CREATE INDEX chunks_metadata ON chunks(source_tier, doc_type, ticker, hypothesis, filing_or_asof_date)")
         connection.execute("CREATE VIRTUAL TABLE chunks_fts USING fts5(text)")
+        connection.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         connection.execute("BEGIN")
+        connection.execute("INSERT INTO meta(key, value) VALUES ('generation', ?)", (generation,))
         for row in rows:
             path = str(row["source_path"])
             cursor = connection.execute(
@@ -167,7 +182,7 @@ def _build_fts_index(index_dir: Path, rows: list[dict[str, object]]) -> None:
         raise
     finally:
         connection.close()
-    os.replace(temporary, target)
+    return temporary
 
 
 def build_index(
@@ -226,15 +241,23 @@ def build_index(
             }
             all_rows.append(row)
 
-    removed = len(set(previous_hashes) - set(source_hashes))
+    failed_source_paths = {failure.path for failure in failures}
+    for failed_path in sorted(failed_source_paths):
+        if failed_path in previous_hashes and failed_path not in source_hashes:
+            source_hashes[failed_path] = previous_hashes[failed_path]
+            all_rows.extend(previous_records.get(failed_path, []))
+    removed = len((set(previous_hashes) - set(source_hashes)) - failed_source_paths)
     all_rows.sort(key=lambda row: (row["source_path"], row["start_line"], row["chunk_id"]))
 
     index_dir.mkdir(parents=True, exist_ok=True)
-    _build_fts_index(index_dir, all_rows)
-    with chunks_path.open("w", encoding="utf-8") as handle:
-        for row in all_rows:
-            handle.write(json.dumps(row, sort_keys=True) + "\n")
+    generation = uuid.uuid4().hex
+    fts_temporary = _build_fts_index(index_dir, all_rows, generation)
+    chunks_temporary = _temporary_text_file(
+        index_dir, "".join(json.dumps(row, sort_keys=True) + "\n" for row in all_rows)
+    )
     manifest = {
+        "index_version": INDEX_VERSION,
+        "generation": generation,
         "policy_sha256": policy.digest(),
         "embedding_model": embedder.name,
         "embedding_dimensions": embedder.dimensions,
@@ -244,7 +267,17 @@ def build_index(
         "source_hashes": dict(sorted(source_hashes.items())),
         "built_at_utc": now().isoformat(),
     }
-    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_temporary = _temporary_text_file(
+        index_dir, json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    )
+    try:
+        os.replace(chunks_temporary, chunks_path)
+        os.replace(fts_temporary, index_dir / "search.sqlite3")
+        os.replace(manifest_temporary, manifest_path)
+    except OSError:
+        for temporary in (chunks_temporary, fts_temporary, manifest_temporary):
+            temporary.unlink(missing_ok=True)
+        raise
     return IndexReport(
         sources_indexed=len(source_hashes),
         sources_unchanged=unchanged,

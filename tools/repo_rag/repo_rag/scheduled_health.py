@@ -16,7 +16,7 @@ from typing import Iterable
 
 from .chunking import ChunkSettings
 from .config import CorpusPolicy
-from .indexing import Fts5UnavailableError, build_index, load_index
+from .indexing import INDEX_VERSION, Fts5UnavailableError, build_index, load_index
 from .writer import WriteRefusedError, Writer
 
 _DOC_TYPES = frozenset(
@@ -24,6 +24,7 @@ _DOC_TYPES = frozenset(
 )
 _HISTORY_COLUMNS = (
     "run_at_utc",
+    "index_version",
     "policy_sha256",
     "chunk_count",
     "golden_cases",
@@ -151,8 +152,15 @@ def search(index_dir: Path, query: str, limit: int = 5, filters: SearchFilters |
     if filters.since is not None and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", filters.since):
         raise ValueError("since must use YYYY-MM-DD")
     database = index_dir / "search.sqlite3"
+    manifest_path = index_dir / "manifest.json"
     if not database.is_file():
         raise FileNotFoundError(f"FTS index not found under {index_dir}")
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"index manifest not found under {index_dir}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    generation = str(manifest.get("generation", ""))
+    if not generation:
+        raise ValueError("FTS index generation is missing; re-run ingest")
     clauses = ["chunks_fts MATCH ?"]
     parameters: list[object] = [_fts_match_query(query)]
     for column, value in (
@@ -177,6 +185,11 @@ def search(index_dir: Path, query: str, limit: int = 5, filters: SearchFilters |
     )
     connection = sqlite3.connect(database)
     try:
+        published = connection.execute(
+            "SELECT value FROM meta WHERE key = 'generation'"
+        ).fetchone()
+        if published is None or published[0] != generation:
+            raise ValueError("FTS index generation mismatch; retry the query")
         rows = connection.execute(statement, parameters).fetchall()
     except sqlite3.OperationalError as exc:
         if "fts5" in str(exc).casefold():
@@ -283,7 +296,9 @@ def _read_history(path: Path) -> list[dict[str, str]]:
 
 
 def regression_verdict(report: EvaluationReport, prior_rows: Iterable[dict[str, str]]) -> RegressionVerdict:
-    prior = list(prior_rows)[-4:]
+    prior = [
+        row for row in prior_rows if row.get("index_version") == str(INDEX_VERSION)
+    ][-4:]
     if not prior:
         return RegressionVerdict(False, None, None, ())
     hit_median = statistics.median(float(row["hit_at_k"]) for row in prior)
@@ -296,19 +311,17 @@ def regression_verdict(report: EvaluationReport, prior_rows: Iterable[dict[str, 
     return RegressionVerdict(bool(reasons), hit_median, false_median, tuple(reasons))
 
 
-def _append_history(
-    path: Path,
+def _history_row(
     report: EvaluationReport,
     policy: CorpusPolicy,
     chunks: int,
     verdict: str,
     now: datetime,
     k: int,
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    needs_header = not path.exists() or path.stat().st_size == 0
-    row = {
+) -> dict[str, str]:
+    return {
         "run_at_utc": now.astimezone(timezone.utc).isoformat(),
+        "index_version": str(INDEX_VERSION),
         "policy_sha256": policy.digest(),
         "chunk_count": str(chunks),
         "golden_cases": str(report.total),
@@ -323,11 +336,6 @@ def _append_history(
         "latency_ms_p95": f"{report.latency_ms_p95:.3f}",
         "verdict": verdict,
     }
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=_HISTORY_COLUMNS)
-        if needs_header:
-            writer.writeheader()
-        writer.writerow(row)
 
 
 def record_evaluation_history(
@@ -343,20 +351,21 @@ def record_evaluation_history(
     if not policy.bounded_writes:
         raise WriteRefusedError("policy does not authorize bounded RAG writes")
     run_at = now or datetime.now(timezone.utc)
-    history = application_root / "eval" / "history.csv"
+    writer = Writer(repository_root, application_root, bounded_writes=policy.bounded_writes)
+    history = writer.evaluation_history_path()
     verdict = regression_verdict(report, _read_history(history))
-    _append_history(
-        history,
-        report,
-        policy,
-        len(load_index(index_dir).chunks),
-        "REGRESSED" if verdict.regressed else "OK",
-        run_at,
-        k,
+    writer.append_evaluation_history(
+        _history_row(
+            report,
+            policy,
+            len(load_index(index_dir).chunks),
+            "REGRESSED" if verdict.regressed else "OK",
+            run_at,
+            k,
+        ),
+        _HISTORY_COLUMNS,
+        trigger="evaluation",
     )
-    Writer(
-        repository_root, application_root, bounded_writes=policy.bounded_writes
-    ).journal_evaluation_history(trigger="evaluation")
     return verdict
 
 

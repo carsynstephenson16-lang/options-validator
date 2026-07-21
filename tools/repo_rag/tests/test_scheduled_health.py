@@ -14,6 +14,7 @@ from repo_rag.scheduled_health import (
     SearchFilters,
     evaluate,
     load_golden_set,
+    record_evaluation_history,
     run_health,
     search,
 )
@@ -168,6 +169,15 @@ class ScheduledHealthTests(unittest.TestCase):
         writer = Writer(self.root, self.app, bounded_writes=False)
         with self.assertRaises(WriteRefusedError):
             writer.write_report("blocked", "no", trigger="test", chunk_ids=())
+
+    def test_history_refuses_an_outside_application_root_before_opening_a_file(self) -> None:
+        report = evaluate(load_golden_set(self.golden), self.index)
+        outside = self.root.parent / "outside-rag-app"
+        with self.assertRaises(WriteRefusedError):
+            record_evaluation_history(
+                self.root, outside, report, self.policy, self.index
+            )
+        self.assertFalse((outside / "eval" / "history.csv").exists())
 
     def test_writer_refuses_to_overwrite_existing_wiki_page(self) -> None:
         directory = self.root / "wiki" / "concepts"

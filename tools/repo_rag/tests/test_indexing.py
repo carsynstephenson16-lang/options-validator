@@ -8,7 +8,7 @@ from pathlib import Path
 
 from repo_rag.chunking import ChunkSettings
 from repo_rag.config import CorpusPolicy
-from repo_rag.indexing import build_index, load_index
+from repo_rag.indexing import build_index, classify_doc_type, load_index
 
 FIXED_NOW = datetime(2026, 7, 19, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -113,6 +113,8 @@ class IndexingTests(unittest.TestCase):
             set(manifest),
             {
                 "policy_sha256",
+                "index_version",
+                "generation",
                 "embedding_model",
                 "embedding_dimensions",
                 "chunk_max_chars",
@@ -121,6 +123,14 @@ class IndexingTests(unittest.TestCase):
                 "source_hashes",
                 "built_at_utc",
             },
+        )
+
+    def test_h7_report_and_frozen_parameter_paths_use_their_path_owned_types(self) -> None:
+        self.assertEqual(
+            classify_doc_type("reports/2026-07-20-h7-backtest.md"), "backtest_run"
+        )
+        self.assertEqual(
+            classify_doc_type("options_researcher/h7_scope.py"), "frozen_params"
         )
 
     def test_chunk_row_key_set_is_pinned(self) -> None:

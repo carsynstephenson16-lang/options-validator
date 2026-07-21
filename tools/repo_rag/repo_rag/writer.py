@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
+from csv import DictReader, DictWriter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -79,16 +82,74 @@ class Writer:
         target = self._resolve(directory / f"{self._stem(stem)}.md", directory)
         target = self._resolve(self._version(target), directory)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        temporary_name: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=target.parent, delete=False
+            ) as handle:
+                temporary_name = handle.name
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_name, target)
+        except OSError:
+            if temporary_name is not None:
+                Path(temporary_name).unlink(missing_ok=True)
+            raise
         self._journal(target, content, trigger, chunk_ids)
         return target
+
+    def evaluation_history_path(self) -> Path:
+        """Resolve the RAG-owned history target before any caller can create it."""
+        self._require_bounded_writes()
+        return self._resolve(
+            self.application_root / "eval" / "history.csv", self.application_root / "eval"
+        )
+
+    def append_evaluation_history(
+        self, row: dict[str, str], fieldnames: tuple[str, ...], *, trigger: str
+    ) -> None:
+        """Append a schema-pinned evaluation row only inside the approved app root."""
+        target = self.evaluation_history_path()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        needs_header = not target.exists() or target.stat().st_size == 0
+        if not needs_header:
+            with target.open(encoding="utf-8", newline="") as handle:
+                reader = DictReader(handle)
+                existing_rows = list(reader)
+                existing_fields = tuple(reader.fieldnames or ())
+            if existing_fields != fieldnames:
+                expected_legacy = tuple(field for field in fieldnames if field != "index_version")
+                if existing_fields != expected_legacy:
+                    raise WriteRefusedError("evaluation history has an unsupported schema")
+                temporary_name: str | None = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        mode="w", encoding="utf-8", dir=target.parent, delete=False, newline=""
+                    ) as handle:
+                        temporary_name = handle.name
+                        migrated = DictWriter(handle, fieldnames=fieldnames)
+                        migrated.writeheader()
+                        for existing in existing_rows:
+                            migrated.writerow({"index_version": "legacy", **existing})
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(temporary_name, target)
+                except OSError:
+                    if temporary_name is not None:
+                        Path(temporary_name).unlink(missing_ok=True)
+                    raise
+        with target.open("a", encoding="utf-8", newline="") as handle:
+            writer = DictWriter(handle, fieldnames=fieldnames)
+            if needs_header:
+                writer.writeheader()
+            writer.writerow(row)
+        self._journal(target, target.read_text(encoding="utf-8"), trigger, ())
 
     def journal_evaluation_history(self, *, trigger: str) -> None:
         """Record the append-only evaluation history write in the audit journal."""
         self._require_bounded_writes()
-        history = self._resolve(
-            self.application_root / "eval" / "history.csv", self.application_root / "eval"
-        )
+        history = self.evaluation_history_path()
         if not history.is_file():
             raise WriteRefusedError("evaluation history must exist before it can be journaled")
         self._journal(history, history.read_text(encoding="utf-8"), trigger, ())
