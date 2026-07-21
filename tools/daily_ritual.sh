@@ -7,7 +7,14 @@
 # system working. Logs to .tmp/daily_ritual/.
 
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-REPO="/Users/carsynstephenson/options-validator"
+# Derive the repo root from THIS script's own location rather than hardcoding
+# one checkout. A hardcoded path silently binds the unattended ritual to
+# whatever branch that one directory happens to be on -- on 2026-07-20 a
+# concurrent agent left it on an in-progress feature branch, which would have
+# run unreviewed code against the real H7 ledger. Deriving the root lets the
+# ritual live in a dedicated ops worktree; the branch guard below is the
+# backstop that makes a wrong branch fail loudly instead of silently.
+REPO="${0:A:h:h}"
 UV="$HOME/.local/bin/uv"
 cd "$REPO" || exit 2
 
@@ -23,6 +30,20 @@ CRITICAL=0
 crit() { CRITICAL=1; note "CRITICAL: $1"; }
 
 echo "=== daily ritual ${STAMP} ==="
+echo "repo: ${REPO}"
+
+# Branch guard (fail-closed). The unattended ritual must only ever run
+# committed, merged code from main. Running a feature branch means running
+# unreviewed work against the REAL H7 forward ledger during a live verdict
+# window -- refuse loudly rather than produce alerts nobody can trust.
+RITUAL_BRANCH="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+if [ "$RITUAL_BRANCH" != "main" ]; then
+  crit "checkout is on '${RITUAL_BRANCH}', not main -- refusing to run the unattended ritual from unmerged code"
+  echo "=== summary ==="
+  printf "%b" "$SUMMARY"
+  /usr/bin/osascript -e "display notification \"on '${RITUAL_BRANCH}', not main -- ritual refused\" with title \"[BROKEN] options-validator daily ritual\" subtitle \"repo: ${REPO}\"" 2>/dev/null
+  exit 1
+fi
 
 # Preflight — ThetaData auth. PATH C (data/thetadata_adapter.py) uses a direct
 # API key over HTTP against the remote MDDS: NO local ThetaTerminal process,
