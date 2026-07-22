@@ -174,6 +174,14 @@ if [ "$GATE_GO" -eq 1 ]; then
   if "$UV" run python -c 'import options_researcher.h8_watch' 2>/dev/null; then
     "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
   fi
+
+  # Step 5b — H10a/b watcher + observation append (forward paper, no orders).
+  # H10's --as-of is a requested RUN date and evaluates the prior completed
+  # session, so pass RUN_DATE (not the already-resolved session in AS_OF).
+  if "$UV" run python -c 'import options_researcher.h10_watch' 2>/dev/null; then
+    "$UV" run python -m options_researcher.h10_watch --as-of "$RUN_DATE" && note "h10_watch: ran" || note "h10_watch: NONZERO EXIT"
+    "$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" && note "h10_observe: appended" || note "h10_observe: NONZERO EXIT"
+  fi
 fi
 
 # QM dashboard context requires the exact completed session. Refresh only
@@ -216,7 +224,7 @@ fi
 # that produces the evidence.
 # ---------------------------------------------------------------------------
 git add -- ledger/facts.log ledger/h7_forward \
-           reports/h7_receipts reports/h7_data_gate 2>/dev/null
+           reports/h7_receipts reports/h7_data_gate reports/h10 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}
