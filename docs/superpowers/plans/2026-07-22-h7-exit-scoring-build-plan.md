@@ -1438,11 +1438,13 @@ scorer code. Rulings on the drafter's ambiguities:
   for Task 7.** Verified directly: `h7_forward_scoring._fill_price`
   (`:142-169`) requires every closing leg to carry raw quotes passing
   `quote_valid` + `passes_liquidity` and a canonical adverse fill price; a
-  §4a settlement close has no market quote by definition. Resolution
-  requires an owner-ratified SPEC amendment (v1.1) — drafted and presented
-  to the owner 2026-07-22; NOT yet ratified. **Tasks 1–6 may proceed now;
-  Tasks 7–8 are HELD until the amendment is ratified and folded into the
-  SPEC.**
+  §4a settlement close has no market quote by definition. RESOLVED:
+  amendment v1.1 (§4a.1 settlement-close scoring seam) owner-approved and
+  ratified 2026-07-22 — spec commit e9da8fd, amended sha256 84aeb2f2…,
+  ledger fact H7_EXIT_SCORING_SPEC_AMENDMENT_V1_1. **Hold lifted: all
+  Tasks 1–8 are cleared.** Task 7 implements the §4a.1 seam (settlement
+  valuator + union statistics + separate auditability fields) as part of
+  the §8 artifact work.
 - **A3 ("accepted by the scorer"): RULED.** Means accepted by the new
   `h7_real_scoring` wrapper module; the §7 ban on touching
   `h7_forward_scoring.py` stands absolutely. Final mechanics contingent on
@@ -1458,6 +1460,7 @@ scorer code. Rulings on the drafter's ambiguities:
   library-only this arc; §7 defines exactly two CLIs and this plan adds no
   third.
 
-Execution status: recorder-brief Task 2 (h10_watch) is in flight with Codex
-and unaffected. This plan's Tasks 1–6 are cleared for Codex now; 7–8 held
-per A2.
+Execution status (updated 2026-07-22): recorder-brief Task 2 (h10_watch)
+COMPLETE and approved (9a3c2d1). This plan's Tasks 1–8 are all cleared for
+Codex following the v1.1 amendment ratification; recorder Tasks 3–5 and this
+plan's Task 1 may run in parallel Codex sessions.
