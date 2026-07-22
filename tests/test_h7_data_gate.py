@@ -18,6 +18,7 @@ from data.cache_runner import trading_days
 from options_researcher import h7_data_gate as gate
 from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_watch import evaluation_session
+from research.hashing import DIAGNOSTIC_SOURCE_HASH_VERSION
 from research.receipts import load_receipt, make_receipt, write_immutable_receipt
 
 REQ = date(2026, 7, 12)   # Sunday (today) -> evaluation session Fri 2026-07-10
@@ -271,6 +272,10 @@ class TestSourceHealthLinkRequired(GateBase):
                          str(self.source_health_path))
         self.assertEqual(receipt["source_health_receipt_hash"],
                          self.source_health["receipt_hash"])
+        self.assertEqual(
+            receipt["source_hash_contract"],
+            DIAGNOSTIC_SOURCE_HASH_VERSION,
+        )
 
 
 class TestCliContract(GateBase):

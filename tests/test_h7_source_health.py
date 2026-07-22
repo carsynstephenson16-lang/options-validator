@@ -23,6 +23,8 @@ from options_researcher.h7_source_health import (
     symbol_health,
     watch_universe,
 )
+from research.hashing import DIAGNOSTIC_SOURCE_HASH_VERSION
+from research.receipts import load_receipt
 
 
 def A(symbol, expected=None, *, status="confirmed", event="E1",
@@ -191,6 +193,11 @@ class TestMainCLI(unittest.TestCase):
                     return_value=["ZZZZ"]), redirect_stdout(buf):
                 rc = main(["--as-of", "2026-07-11",
                            "--write-receipt", str(receipt)])
+            written = load_receipt(receipt, expected_type="source_health")
+            self.assertEqual(
+                written["source_hash_contract"],
+                DIAGNOSTIC_SOURCE_HASH_VERSION,
+            )
         out = buf.getvalue()
         self.assertEqual(rc, 0)
         self.assertIn("on=2026-07-10 requested_as_of=2026-07-11", out)

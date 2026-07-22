@@ -40,7 +40,11 @@ from options_researcher.h7_earnings import (
     report_date,
 )
 from options_researcher.h7_scope import scope_identity, watch_universe
-from research.hashing import config_hash, diagnostic_source_hash
+from research.hashing import (
+    DIAGNOSTIC_SOURCE_HASH_VERSION,
+    config_hash,
+    diagnostic_source_hash,
+)
 from research.receipts import input_files, make_receipt, write_immutable_receipt
 
 FLAG_MISSING = "MISSING"   # no live future schedule assertion
@@ -149,6 +153,7 @@ def build_receipt(result: dict) -> dict:
         }),
         "config_hash": config_hash(),
         "source_hash": diagnostic_source_hash(),
+        "source_hash_contract": DIAGNOSTIC_SOURCE_HASH_VERSION,
     })
 
 

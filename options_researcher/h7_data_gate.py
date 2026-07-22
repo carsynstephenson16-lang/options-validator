@@ -42,7 +42,11 @@ from data.thetadata_adapter import CHAIN_COLUMNS, NUMERIC_CHAIN_COLUMNS
 from data.underlying_closes import adjusted_from_raw
 from options_researcher.h7_scope import scope_identity, scope_symbols
 from options_researcher.h7_watch import evaluation_session
-from research.hashing import config_hash, diagnostic_source_hash
+from research.hashing import (
+    DIAGNOSTIC_SOURCE_HASH_VERSION,
+    config_hash,
+    diagnostic_source_hash,
+)
 from research.receipts import input_files, load_receipt, make_receipt, write_immutable_receipt
 
 SCHEMA_VERSION = 2
@@ -375,6 +379,7 @@ def build_receipt(result: dict, *, source_health_receipt: dict,
         "source_health_receipt_path": str(source_health_receipt_path),
         "config_hash": config_hash(),
         "source_hash": diagnostic_source_hash(),
+        "source_hash_contract": DIAGNOSTIC_SOURCE_HASH_VERSION,
     }
     return make_receipt("data_gate", payload)
 

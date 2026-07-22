@@ -44,7 +44,12 @@ from options_researcher.h7_earnings import (
     load_assertions,
 )
 from options_researcher.h7_scope import scope_identity, watch_universe
-from research.hashing import canonical_json, config_hash, diagnostic_source_hash
+from research.hashing import (
+    DIAGNOSTIC_SOURCE_HASH_VERSION,
+    canonical_json,
+    config_hash,
+    diagnostic_source_hash,
+)
 from research.receipts import (
     changed_input_files,
     input_file_record,
@@ -143,6 +148,7 @@ def _watcher_receipt(*, result_rows: list[dict], names: list[str],
             1 for row in result_rows if row.get("actionable")),
         "config_hash": config_hash(),
         "source_hash": diagnostic_source_hash(),
+        "source_hash_contract": DIAGNOSTIC_SOURCE_HASH_VERSION,
     })
 
 

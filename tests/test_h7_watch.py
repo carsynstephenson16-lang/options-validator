@@ -16,6 +16,7 @@ from options_researcher.h7_cohort import (
     CohortUnavailableError,
     RegisteredCohort,
 )
+from research.hashing import DIAGNOSTIC_SOURCE_HASH_VERSION
 
 TODAY = date(2026, 7, 8)
 KNOWN = datetime.fromisoformat("2026-07-08T21:00:00+00:00")
@@ -157,6 +158,29 @@ class TestFailClosedStates(unittest.TestCase):
 
 
 class TestFrozenCohortWatcher(unittest.TestCase):
+    def test_written_receipt_declares_source_hash_contract(self):
+        with mock.patch.object(
+            h7_watch,
+            "diagnostic_source_hash",
+            return_value="a" * 64,
+        ):
+            receipt = h7_watch._watcher_receipt(
+                result_rows=[],
+                names=["AMD"],
+                evaluation_session="2026-07-07",
+                run_date=TODAY,
+                data_gate_receipt={
+                    "receipt_hash": "gate-hash",
+                    "source_health_receipt_hash": "source-health-hash",
+                },
+                errors=[],
+            )
+
+        self.assertEqual(
+            receipt["source_hash_contract"],
+            DIAGNOSTIC_SOURCE_HASH_VERSION,
+        )
+
     def test_excluded_name_is_not_entry_evaluated(self):
         gate_names = ["INCLUDED", "EXCLUDED"]
         cohort = RegisteredCohort(
