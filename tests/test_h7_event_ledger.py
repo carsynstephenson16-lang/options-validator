@@ -132,6 +132,87 @@ class TestIdempotency(LedgerBase):
         self.assertEqual(self.head.read_bytes(), head_before)
 
 
+class TestWindowScoreEvent(LedgerBase):
+    def _registration(self):
+        return _ev(
+            event_id="window-registration",
+            event_type="window_registration",
+            payload={"scope_id": "h7-forward-15-v1"},
+        )
+
+    def _score(self, **over):
+        event = _ev(
+            event_id="h7:window_score:h7-forward-15-v1:2026-10-26",
+            event_type="window_score",
+            evaluation_session="2026-10-26",
+            occurred_at_utc="2026-10-26T20:00:00+00:00",
+            causes=["window-registration"],
+            payload={
+                "artifact_path": (
+                    "reports/h7_forward_scoring/"
+                    "h7-forward-15-v1/2026-10-26.json"
+                ),
+                "artifact_hash": "a" * 64,
+                "input_ledger_head": "b" * 64,
+                "trade_count": 0,
+                "overall_verdict": "INCONCLUSIVE",
+                "lane_verdicts": {
+                    "a": "INCONCLUSIVE",
+                    "b": "INCONCLUSIVE",
+                    "c": "INCONCLUSIVE",
+                },
+            },
+        )
+        event.update(over)
+        return event
+
+    def test_window_score_is_valid_and_chained_to_registration(self):
+        registration = el.append_event(
+            self._registration(), base_dir=self.base, clock=self._clock()
+        )
+        result = el.append_event(
+            self._score(), base_dir=self.base, clock=self._clock()
+        )
+
+        stored = el.read_events(self.base)[1]
+        self.assertTrue(result.appended)
+        self.assertEqual(stored.event_type, "window_score")
+        self.assertEqual(stored.prev_hash, registration.record_hash)
+        self.assertEqual(stored.causes, ["window-registration"])
+
+    def test_window_score_identical_replay_is_idempotent(self):
+        el.append_event(self._registration(), base_dir=self.base, clock=self._clock())
+        first = el.append_event(
+            self._score(), base_dir=self.base, clock=self._clock()
+        )
+        before = self.events.read_bytes()
+
+        replay = el.append_event(
+            self._score(), base_dir=self.base, clock=self._clock()
+        )
+
+        self.assertFalse(replay.appended)
+        self.assertEqual(replay.record_hash, first.record_hash)
+        self.assertEqual(self.events.read_bytes(), before)
+
+    def test_window_score_conflict_refuses_without_mutation(self):
+        el.append_event(self._registration(), base_dir=self.base, clock=self._clock())
+        el.append_event(self._score(), base_dir=self.base, clock=self._clock())
+        before = self.events.read_bytes(), self.head.read_bytes()
+
+        with self.assertRaises(el.EventConflictError):
+            changed = self._score()
+            changed["payload"]["trade_count"] = 1
+            el.append_event(changed, base_dir=self.base, clock=self._clock())
+
+        self.assertEqual((self.events.read_bytes(), self.head.read_bytes()), before)
+
+    def test_window_score_missing_registration_cause_is_refused(self):
+        with self.assertRaises(el.EventValidationError):
+            el.append_event(self._score(), base_dir=self.base, clock=self._clock())
+        self.assertFalse(self.events.exists())
+
+
 class TestExpectedHead(LedgerBase):
     def test_matching_expected_head_appends(self):
         first = el.append_event(_ev(event_id="e1"), base_dir=self.base,
