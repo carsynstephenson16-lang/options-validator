@@ -353,23 +353,31 @@ spec_sha256=84aeb2f2…) both record owner ratification; the latter states
 explicitly "Build-plan hold on Tasks 7-8 is lifted by this amendment." SPEC
 header updated to match (was stale "NOT BUILD-AUTHORIZED" text). Codex may
 start Task 6.
-- [ ] **Step 1: test-first per SPEC §9** — extend
-`tests/test_h7_event_ledger.py` (follow its `LedgerBase` tempdir pattern) for
-each new event type's validation, chain, idempotency, and refusal rules before
-implementing; then implement in `h7_event_ledger.py` (`EVENT_TYPES` at
-`:52-57` currently has `exit_intent` but no exit-fill/scoring types — extend
-exactly as the SPEC names them).
-- [ ] **Step 2: exit door + scoring module test-first**, mirroring the
-one-door refusal-chain style of `register_window_real`
-(`h7_window_registration.py:303`, 9-point refusal chain) — the SPEC defines
-the checks; every refusal is a typed, tested error.
-- [ ] **Step 3: CLIs** per SPEC §7, following `h7_session.py`'s subcommand
-pattern (`:496-592`).
-- [ ] **Step 4: full suite + ruff + pyright green; commit in SPEC-delta-sized
-units** — `feat(h7): <delta name> per real-exit-scoring SPEC §N`.
+- [x] **Step 1: test-first per SPEC §9** — DONE `39c7f6b`. `window_score` added
+to `EVENT_TYPES`; `tests/test_h7_event_ledger.py` +81 lines covering the new
+type's validation, chain, idempotent replay, and conflict refusal.
+- [x] **Step 2: exit door + scoring module test-first** — DONE `ab7cdb0`
+(`h7_exit_session.py`, `h7_paper_lifecycle.py` +389) and `407a90a`
+(`h7_real_scoring.py`). Refusal chain is typed throughout. **Caveat:** the
+audit found only ~5 of 21 refusal branches carry a dedicated negative test —
+see findings F2/F3/F4.
+- [x] **Step 3: CLIs** per SPEC §7 — DONE. `h7_exit_session` exposes
+`status`/`monitor`/`fill`; `h7_real_scoring` exposes `preview`/`finalize`.
+- [x] **Step 4: full suite + ruff + pyright green; commits in SPEC-delta-sized
+units** — DONE and independently re-verified 2026-07-22: **1,694 tests OK
+exit 0**, ruff clean, pyright 0 errors, worktree clean.
 - [ ] **Step 5 (Claude + independent agent, not Codex): adversarial review**
 of the whole build against the SPEC; PASS/FAIL recorded in the ledger. No
 ritual activation in this task.
+  **STATUS: NOT DONE — this is the live gate.** A pre-review completion audit
+  ran 2026-07-22 (`docs/superpowers/reviews/2026-07-22-h7-task6-completion-audit.md`):
+  safety invariants all held (live ledger untouched, ritual unchanged, frozen
+  scorer byte-identical, no order/network surface), but it raised **F1, a
+  genuine spec violation** — `h7_real_scoring preview` prints an interim
+  verdict, which SPEC §10 and replan R1 both forbid (latent only: unreachable
+  until 2026-10-26). That audit is an INPUT to §9, not the §9 review itself,
+  and claims NO PASS. Remediation list is in the findings doc's "Required
+  before any §9 PASS".
 
 ### Task 7 (GATED on Task 6 review PASS): ritual activation of exit/monitoring sessions
 
