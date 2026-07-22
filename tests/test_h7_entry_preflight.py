@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import unittest
 
-from options_researcher.h7_entry_preflight import preflight
-from tests.test_h7_session_real_path import (
+from test_h7_session_real_path import (
     DECISION,
     EVALUATION,
     INCLUDED,
     RealSessionCase,
     _snapshot,
 )
+
+from options_researcher.h7_entry_preflight import preflight
 
 
 class PreflightCase(RealSessionCase):

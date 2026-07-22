@@ -7,10 +7,10 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+from test_qm_signals import PARAMS, breakout_fixture, parabolic_fixture
 
 from options_researcher import h10_watch, qm_signals
 from options_researcher.h7_watch import evaluation_session
-from tests.test_qm_signals import PARAMS, breakout_fixture, parabolic_fixture
 
 AS_OF = "2026-07-14"
 EVAL_ISO = evaluation_session(date.fromisoformat(AS_OF)).isoformat()
