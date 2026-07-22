@@ -415,7 +415,7 @@ def _frozen_market_result(
         if pair[1].payload.get("settlement_method") is None
     ]
     with tempfile.TemporaryDirectory(prefix="h7-market-score-") as raw:
-        base = Path(raw) / "ledger"
+        base = f"{raw}/ledger"
         write_clock = lambda: datetime(2100, 1, 1, tzinfo=timezone.utc)
         for opening, closing in market:
             intent_id = opening.payload.get("entry_intent_id")
