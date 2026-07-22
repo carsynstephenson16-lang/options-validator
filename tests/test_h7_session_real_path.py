@@ -146,15 +146,26 @@ class RealSessionCase(unittest.TestCase):
         )
 
     def _write_receipts(
-        self, evaluation: str, *, verdict: str = "GO", amd_gate: str = "CLEAR", linked: bool = True
+        self,
+        evaluation: str,
+        *,
+        verdict: str = "GO",
+        amd_gate: str = "CLEAR",
+        linked: bool = True,
+        unhealthy: tuple[str, ...] = (),
     ) -> Path:
         source_path, gate_path = self._paths(evaluation)
+        unhealthy_set = set(unhealthy)
         symbol_map = {
             symbol: {
                 "symbol": symbol,
-                "healthy": True,
-                "gate": amd_gate if symbol == "AMD" else "CLEAR",
-                "flags": [],
+                "healthy": symbol not in unhealthy_set,
+                "gate": (
+                    amd_gate
+                    if symbol == "AMD"
+                    else ("UNKNOWN" if symbol in unhealthy_set else "CLEAR")
+                ),
+                "flags": ["MISSING"] if symbol in unhealthy_set else [],
             }
             for symbol in self.scope["symbols"]
         }
@@ -165,10 +176,10 @@ class RealSessionCase(unittest.TestCase):
                 "requested_run_date": DECISION,
                 "known_as_of_utc": f"{evaluation}T20:00:00+00:00",
                 "scope": self.scope,
-                "healthy_count": len(symbol_map),
-                "unhealthy_count": 0,
-                "unhealthy_symbols": [],
-                "activation_ready": True,
+                "healthy_count": len(symbol_map) - len(unhealthy_set),
+                "unhealthy_count": len(unhealthy_set),
+                "unhealthy_symbols": sorted(unhealthy_set),
+                "activation_ready": not unhealthy_set,
                 "symbols": symbol_map,
                 "input_files": {},
                 "config_hash": config_hash(),
@@ -278,6 +289,15 @@ class TestSessionRefusals(RealSessionCase):
         self._write_receipts(EVALUATION, amd_gate="BANNED")
         with self.assertRaises(SessionRefused):
             self.open(symbol="AMD")
+
+    def test_uses_registered_cohort_for_health_veto(self):
+        excluded = tuple(sorted(set(self.scope["symbols"]) - set(INCLUDED)))
+        self._write_receipts(EVALUATION, unhealthy=excluded)
+
+        session = self.open()
+        self.assertEqual(session.included_symbols, INCLUDED)
+        evidence = session_module.record_session_evidence(session, symbol="AMD")
+        self.assertEqual(evidence.source_health.payload["healthy_symbols"], sorted(INCLUDED))
 
     def test_refuses_before_registered_decision_window_not_prior_data_session(self):
         with self.assertRaises(SessionRefused):

@@ -1,7 +1,8 @@
 # H7 entry authority — two corrections
 
-**Status:** PROPOSED, not applied. Both touch the live forward window's entry
-path, so both wait on owner sign-off.
+**Status:** APPLIED 2026-07-22 at owner direction. Both corrections touch the
+live forward window's entry path; the implementation and verification are
+recorded below.
 **Date:** 2026-07-22
 **Context:** [2026-07-22 preflight work](../../../2026-07-22.md), commit `f56dff6`.
 
@@ -194,12 +195,14 @@ is not conservatism.
 
 ---
 
-## Owner decisions requested
+## Applied decisions
 
-1. Correction 1: apply as a registered bug fix (restores v1.4 per-name), or
-   register the whole-board veto as a deliberate stricter entry rule and accept
-   a zero-trade window?
-2. Correction 2: bump the diagnostic source-hash contract to v3 (dot-dir
-   exclusion), or leave as-is?
-3. Whether either correction, both of which change how a live registered window
-   behaves mid-window, needs a ledger amendment entry beyond a correction fact.
+1. Correction 1 was applied as a registered bug fix, restoring v1.4's
+   per-name source-health rule. No new owner-typed strategy parameter was
+   added.
+2. Correction 2 was applied by activating source-hash contract v3. The v2
+   path set and walker remain available for historical compatibility; v3
+   excludes dot-prefixed scratch/cache components.
+3. The correction is recorded in `ledger/facts.log`. The immutable 2026-07-20
+   registration and its v2 source hash were not rewritten; future receipts use
+   v3 and the pre-existing v2 reproducibility limitation remains explicit.

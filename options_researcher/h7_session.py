@@ -127,9 +127,14 @@ def open_real_session(
     except (OSError, ValueError, KeyError) as exc:
         raise _refuse("linked source-health receipt is unavailable", exc) from exc
     symbols = _source_symbol_map(source, names)
-    unhealthy = sorted(name for name in names if symbols[name].get("healthy") is not True)
+    entry_names = list(cohort.included)
+    unhealthy = sorted(
+        name for name in entry_names if symbols[name].get("healthy") is not True
+    )
     if unhealthy:
-        raise SessionRefused(f"source-health receipt has unhealthy official names: {unhealthy}")
+        raise SessionRefused(
+            f"source-health receipt has unhealthy registered entry names: {unhealthy}"
+        )
 
     if symbol is not None:
         if not isinstance(symbol, str) or not symbol or symbol != symbol.upper():
@@ -192,9 +197,11 @@ def record_session_evidence(session: RealStoreSession, *, symbol: str) -> Sessio
     ):
         raise SessionRefused("session receipt identity changed before publication")
     symbols = _source_symbol_map(source, names)
-    healthy_symbols = sorted(name for name in names if symbols[name].get("healthy") is True)
-    if healthy_symbols != sorted(names):
-        raise SessionRefused("source-health receipt is no longer all healthy")
+    healthy_symbols = sorted(
+        name for name in session.included_symbols if symbols[name].get("healthy") is True
+    )
+    if healthy_symbols != sorted(session.included_symbols):
+        raise SessionRefused("source-health receipt is no longer healthy for the entry cohort")
     if symbols[symbol].get("gate") != "CLEAR":
         raise SessionRefused(f"{symbol} is no longer entry-clear in source health")
 

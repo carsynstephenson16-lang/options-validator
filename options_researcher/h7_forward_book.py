@@ -739,16 +739,20 @@ def record_board_resolution(
         raise BookValidationError("data_gate cause is missing or wrong")
     if source.evaluation_session != session or gate.evaluation_session != session:
         raise BookValidationError("board causes must belong to its session")
-    # The canonical active/operational universe (H7_WATCHLIST + H7_CORE_LONG_ONLY,
-    # minus H7_EXCLUDED e.g. staged names like IREN -- see h7_scope.watch_universe),
-    # not the raw watchlist union, since source_health/data_gate only ever cover
-    # the active universe.
+    # Receipt scope is always the full official universe. A real entry session's
+    # source-health event intentionally carries only the frozen registered
+    # cohort; synthetic/legacy events retain the active operational universe
+    # expectation below.
     source_scope = source.payload.get("scope")
     gate_scope = gate.payload.get("scope")
     if source_scope is not None or gate_scope is not None:
         if source_scope != gate_scope or source_scope != scope_identity():
             raise BookValidationError("board causes have mismatched current scope")
-        expected_symbols = set(scope_identity()["symbols"])
+        expected_symbols = (
+            set(base_dir.included_symbols)
+            if isinstance(base_dir, RealStoreSession)
+            else set(scope_identity()["symbols"])
+        )
     else:
         # Legacy synthetic rehearsals may predate the receipt contract. Keep
         # them replayable; they can never satisfy the real activation packet.
@@ -760,7 +764,9 @@ def record_board_resolution(
         or set(healthy_symbols) != expected_symbols
         or len(healthy_symbols) != len(expected_symbols)
     ):
-        raise BookValidationError("board resolution requires exact whole-universe source health")
+        raise BookValidationError(
+            "board resolution requires exact registered entry-cohort source health"
+        )
     if gate.payload.get("whole_universe_verdict") != "GO":
         raise BookValidationError("board resolution requires a GO data gate")
     if not isinstance(candidates, list):
