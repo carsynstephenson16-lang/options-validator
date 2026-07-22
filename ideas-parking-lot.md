@@ -309,6 +309,16 @@ explicitly declined as discretionary contamination.
 **Review date:** first H5/H6 verdict, ThetaData renewal decision (2026-07-25),
 or 2026-10-06 quarterly audit, whichever comes first.
 
+**Scope clarification 2026-07-22 (owner decision):** the *opposite* direction —
+a read-only reader of equity-research's append-only market-updates store, into
+this repo — was built and **stays** (`options_researcher.market_context`,
+commit `4082141`, doc `docs/market-intelligence-bridge.md`). It is a
+descriptive research-layer utility with zero callers on any strategy, trigger,
+watcher, or receipt path; it does not move a live hypothesis toward its verdict
+and is retained by owner decision, not by the scope gate. The three plugs
+described above (options → equity-research) remain PARKED with the review date
+unchanged, and narratives-into-options-gates remains declined.
+
 ## IBEX options expression of the equity-research LONG (REJECTED on measured data 2026-07-16)
 
 Context: owner asked 2026-07-16 whether the equity-research book's IBEX pick

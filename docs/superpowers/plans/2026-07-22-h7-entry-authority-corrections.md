@@ -142,12 +142,13 @@ are scratch virtualenvs created 2026-07-18, two days before the window opened.
 
 ### Three consequences
 
-1. **The hash is unreproducible.** A fresh clone at the registered
+1. ~~**The hash is unreproducible.** A fresh clone at the registered
    `code_commit` (`83ed268`) computes a *different* `source_hash` than the
    registration recorded, because 98% of the inputs are not in git. The
    registered `gates.source_hash = 1dcb79c8…` can never be re-derived or
    verified by anyone, including future-Carsyn. As an integrity anchor it is
-   inert.
+   inert.~~ **RETRACTED 2026-07-22 — this was wrong; see "Correction to
+   consequence 1" below. It is reproducible, and it re-derives exactly.**
 2. **Receipts expire on unrelated activity.** `pip install` into either venv,
    or deleting them (they are scratch), silently invalidates every outstanding
    receipt — `data-gate receipt source identity is stale`, which is exactly the
@@ -177,13 +178,51 @@ Optional and *not* proposed here: narrowing the paths further to only modules
 that can affect an H7 verdict. That is a bigger judgement call and 133 files is
 already tractable.
 
-### What this does not fix, honestly
+### ~~What this does not fix, honestly~~ (RETRACTED — see below)
 
-The registered window's `gates.source_hash` stays a v2 value and stays
+~~The registered window's `gates.source_hash` stays a v2 value and stays
 unreproducible. Nothing can repair that — it is immutable and its inputs are
 gone. Correction 2 stops the bleeding going forward; it does not retroactively
 make the registration verifiable. That limitation should be recorded in the
-ledger rather than papered over.
+ledger rather than papered over.~~
+
+### Correction to consequence 1 (measured 2026-07-22, after the corrections landed)
+
+The claim above was inferred from the *local working tree* and never tested
+against a clean checkout. Tested, it is false. The registered
+`gates.source_hash` re-derives **exactly**:
+
+```
+git archive 83ed2683345aee578be155d145c76d2fa56c25a6 | tar -x -C <tmp>
+diagnostic_source_hash(root=<tmp>, version=2) ->
+diagnostic_source_hash(root=<tmp>, version=3) ->
+    1dcb79c81dfff91c9829036ad8cd486f6c8207d535e044da97649e535f628d28
+```
+
+which is the value in `ledger/h7_forward/events.jsonl` seq-0
+`payload.gates.source_hash`. Re-derived twice by two independent routes (a
+detached `git worktree` and a `git archive` extraction into a bare temp dir),
+104 files, no `.git` required by the second route.
+
+Why the inference failed: a clean checkout of `83ed268` contains **no**
+dot-prefixed directories under the scanned paths, so v2 and v3 walk the same
+104 files and produce the same digest. The 7,658-file surface is a property of
+*this* working tree, not of the registered commit — the two scratch `.venv`
+directories are untracked, so they never existed in whatever checkout produced
+the activation receipts (`83ed268` is itself "regenerate activation receipts at
+current source identity").
+
+So consequence 1 was wrong; consequences 2 and 3 stand unchanged, and they are
+what Correction 2 actually fixes — the *live* tree's hash does drift on
+unrelated activity (live v2 = `3b728227…`, live v3 = `ea497f35…`), which is why
+receipts kept going stale. The registration itself was never at risk.
+
+`tests/test_source_hash_reproducibility.py` now pins both properties: (a) the
+active contract binds zero gitignored files — measured 0 of 133 under v3 versus
+7,525 of 7,658 under v2, so the test is not vacuous; (b) the live window's
+registered `gates.source_hash` re-derives from a clean checkout of its own
+`code_commit`. Both skip rather than fail when the git object is absent (shallow
+CI clone).
 
 ### Counter-argument considered
 
@@ -205,4 +244,10 @@ is not conservatism.
    excludes dot-prefixed scratch/cache components.
 3. The correction is recorded in `ledger/facts.log`. The immutable 2026-07-20
    registration and its v2 source hash were not rewritten; future receipts use
-   v3 and the pre-existing v2 reproducibility limitation remains explicit.
+   v3.
+4. **2026-07-22, later the same day:** the "v2 reproducibility limitation"
+   recorded in items 1–3 was tested and retracted — the registered
+   `gates.source_hash` re-derives exactly from a clean checkout of the
+   registered `code_commit`. See "Correction to consequence 1" above. Both
+   properties are now regression-tested, and the retraction is appended to
+   `ledger/facts.log` rather than editing the earlier entry.
