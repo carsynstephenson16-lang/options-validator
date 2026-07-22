@@ -20,7 +20,17 @@ LOSSES (not trades or win rate); every strategy number comes from
 `AGENTS.md` is the Codex-facing twin of these rules. When a guardrail
 changes, update `.cursorrules` and `AGENTS.md` together so they don't drift.
 
-## Commands (verified 2026-07-06)
+## Division of labor (owner directive 2026-07-22)
+
+Claude Code sessions ORCHESTRATE: research, specs, Codex briefs, review,
+verification, and owner decision packages. Codex implements code from the
+briefs. The owner types every frozen number, registration, and ratification.
+Delegate heavy reading and routine lifting to subagents (Sonnet for research
+and scouting, Opus for adversarial review); reserve the main session for
+judgment, synthesis, and integrity checks. Claude writes code directly only
+for docs, briefs, and trivial mechanical fixes — not strategy or ledger code.
+
+## Commands (verified 2026-07-06; suite now runs minutes, not ~6 s)
 
 ```bash
 uv sync --frozen                                 # Python 3.12; uv.lock is source of truth
