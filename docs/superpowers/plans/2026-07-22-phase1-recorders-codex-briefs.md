@@ -346,9 +346,13 @@ re-verification; monitoring-session evidence events; decision-vs-evaluation
 session split; owner-visible exit/scoring CLIs; ONE durable scoring result;
 required tests). Where this plan and the SPEC disagree, the SPEC wins.
 
-- [ ] **Step 0 (owner, not Codex): ratification** — owner reads the SPEC and
-records a typed ratification fact in the ledger. Codex MUST refuse to start
-without it (the SPEC's own lines 3-4 demand this).
+- [x] **Step 0 (owner, not Codex): ratification** — DONE 2026-07-22. Ledger
+facts `H7_C1_EXIT_AND_SCORING_SPEC_RATIFIED` (15:59:44Z, spec_sha256=ca639c1e…)
+and `H7_EXIT_SCORING_SPEC_AMENDMENT_V1_1` (16:31:00Z, §4a.1 seam,
+spec_sha256=84aeb2f2…) both record owner ratification; the latter states
+explicitly "Build-plan hold on Tasks 7-8 is lifted by this amendment." SPEC
+header updated to match (was stale "NOT BUILD-AUTHORIZED" text). Codex may
+start Task 6.
 - [ ] **Step 1: test-first per SPEC §9** — extend
 `tests/test_h7_event_ledger.py` (follow its `LedgerBase` tempdir pattern) for
 each new event type's validation, chain, idempotency, and refusal rules before

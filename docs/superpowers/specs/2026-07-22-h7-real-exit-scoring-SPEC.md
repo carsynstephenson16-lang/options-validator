@@ -1,9 +1,14 @@
 # H7 real-store exit and scoring path — SPEC
 
-**Status: SPEC CANDIDATE ONLY. NOT BUILD-AUTHORIZED. REAL EXITS AND REAL-STORE
-SCORING REMAIN INACTIVE.** This document defines the next H7 implementation
-arc required by `H7_C1_EXIT_AND_SCORING_DEADLINES`. It does not authorize an
-exit, score the live window, change a frozen parameter, or create an order path.
+**Status: BUILD-AUTHORIZED (ledger fact `H7_C1_EXIT_AND_SCORING_SPEC_RATIFIED`,
+2026-07-22T15:59:44Z, spec_sha256=ca639c1e…, further amended same day by
+`H7_EXIT_SCORING_SPEC_AMENDMENT_V1_1` for §4a.1, spec_sha256=84aeb2f2…).
+REAL EXITS AND REAL-STORE SCORING REMAIN INACTIVE** pending the SPEC §9
+fresh-context independent adversarial review and a separate owner-typed PASS
+after the build. This document defines the next H7 implementation arc
+required by `H7_C1_EXIT_AND_SCORING_DEADLINES`. Being build-authorized does
+not itself authorize an exit, score the live window, change a frozen
+parameter, or create an order path.
 
 **Amended 2026-07-22 (same day, pre-registration):** an adversarial review of
 this candidate against the live code and store (ten findings confirmed or
