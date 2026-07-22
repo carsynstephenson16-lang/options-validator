@@ -17,6 +17,7 @@ class StatusReport:
     repository: str
     repository_root: str
     read_only: bool
+    bounded_writes: bool
     network_enabled: bool
     tracked_files_only: bool
     policy_sha256: str
@@ -52,9 +53,12 @@ def build_status(
             from .indexing import load_index
 
             index = load_index(index_dir)
-            index_present = True
-            index_chunk_count = len(index.chunks)
-            index_built_at = index.built_at_utc
+            if not (index_dir / "search.sqlite3").is_file():
+                index_error = "corrupt: scheduled FTS index missing"
+            else:
+                index_present = True
+                index_chunk_count = len(index.chunks)
+                index_built_at = index.built_at_utc
         except FileNotFoundError:
             pass
         except (json.JSONDecodeError, KeyError, ValueError, UnicodeDecodeError) as exc:
@@ -67,6 +71,7 @@ def build_status(
         repository=policy.repository,
         repository_root=str(root),
         read_only=policy.read_only,
+        bounded_writes=policy.bounded_writes,
         network_enabled=False,
         tracked_files_only=policy.tracked_files_only,
         policy_sha256=policy.digest(),

@@ -75,7 +75,8 @@ def config_hash() -> str:
     return sha256_hex(canonical_json(vals))
 
 
-def source_snapshot(paths=SOURCE_HASH_PATHS, root=None) -> dict:
+def source_snapshot(paths=SOURCE_HASH_PATHS, root=None, *,
+                    exclude_dot_dirs: bool = False) -> dict:
     """Hash the verdict/backtest source surface, excluding ledgers and outputs.
 
     This is intentionally separate from `git rev-parse HEAD`: ledger anchoring
@@ -84,14 +85,22 @@ def source_snapshot(paths=SOURCE_HASH_PATHS, root=None) -> dict:
     """
     root_path = Path(root) if root is not None else REPO_ROOT
     out = {}
+    def include(path: Path) -> bool:
+        if "__pycache__" in path.parts:
+            return False
+        if exclude_dot_dirs:
+            relative_parts = path.relative_to(root_path).parts
+            if any(part.startswith(".") for part in relative_parts):
+                return False
+        return True
+
     for item in paths:
         path = root_path / item
         if path.is_dir():
             files = sorted(
-                p for p in path.rglob("*.py")
-                if "__pycache__" not in p.parts
+                p for p in path.rglob("*.py") if include(p)
             )
-        elif path.is_file():
+        elif path.is_file() and include(path):
             files = [path]
         else:
             continue
@@ -101,8 +110,10 @@ def source_snapshot(paths=SOURCE_HASH_PATHS, root=None) -> dict:
     return out
 
 
-def source_hash(paths=SOURCE_HASH_PATHS, root=None) -> str:
-    return sha256_hex(canonical_json(source_snapshot(paths=paths, root=root)))
+def source_hash(paths=SOURCE_HASH_PATHS, root=None, *,
+                exclude_dot_dirs: bool = False) -> str:
+    return sha256_hex(canonical_json(source_snapshot(
+        paths=paths, root=root, exclude_dot_dirs=exclude_dot_dirs)))
 
 
 def data_window_hash(window: dict) -> str:
@@ -113,14 +124,32 @@ def data_window_hash(window: dict) -> str:
 
 # ---------------------------------------------------------------------------
 # Diagnostic source-hash contract v2 (7b-2, owner decision 2026-07-10).
-# The legacy SOURCE_HASH_PATHS above stays byte-identical so every historical
-# ledger entry keeps verifying; H7 diagnostic records bind this WIDER surface
-# (everything that can affect a diagnostic verdict) and carry an explicit
-# source_hash_version so the contract is versioned, never retro-changed.
+# The v2 path set and walker remain available byte-for-byte as the legacy
+# contract. H7 diagnostic records bind this WIDER surface (everything that can
+# affect a diagnostic verdict) and carry an explicit source_hash_version so the
+# contract is versioned, never retro-changed.
 # ---------------------------------------------------------------------------
 DIAGNOSTIC_SOURCE_PATHS_V2 = SOURCE_HASH_PATHS + ("options_researcher", "tools")
-DIAGNOSTIC_SOURCE_HASH_VERSION = 2
+DIAGNOSTIC_SOURCE_PATHS_V3 = DIAGNOSTIC_SOURCE_PATHS_V2
+DIAGNOSTIC_SOURCE_HASH_VERSION = 3
 
 
-def diagnostic_source_hash(root=None) -> str:
-    return source_hash(paths=DIAGNOSTIC_SOURCE_PATHS_V2, root=root)
+def diagnostic_source_hash(root=None, *, version: int | None = None) -> str:
+    """Hash the selected version of the diagnostic source contract.
+
+    Version 2 intentionally keeps its original dot-directory behavior for
+    historical records. Version 3 excludes every dot-prefixed path component,
+    so ignored virtualenvs and scratch/cache directories cannot affect new
+    entry or audit receipts. The unversioned call always uses the active
+    contract version.
+    """
+    selected = DIAGNOSTIC_SOURCE_HASH_VERSION if version is None else version
+    if selected == 2:
+        return source_hash(paths=DIAGNOSTIC_SOURCE_PATHS_V2, root=root)
+    if selected == 3:
+        return source_hash(
+            paths=DIAGNOSTIC_SOURCE_PATHS_V3,
+            root=root,
+            exclude_dot_dirs=True,
+        )
+    raise ValueError(f"unsupported diagnostic source-hash version: {selected}")

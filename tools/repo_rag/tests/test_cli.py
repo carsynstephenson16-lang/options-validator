@@ -117,6 +117,33 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(report["passed"], 1)
 
+    def test_search_json_schema_and_explicit_abstention(self) -> None:
+        self._run(*self._ingest_args())
+        code, positive = self._run(
+            "search", "quote mid slippage haircut", "--index-dir", str(self.index_dir), "--json"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(positive["outcome"], "RESULTS")
+        self.assertEqual(
+            set(positive["results"][0]),
+            {
+                "repo_path",
+                "source_tier",
+                "locator",
+                "filing_or_asof_date",
+                "doc_type",
+                "snippet",
+                "score",
+            },
+        )
+        code, result = self._run(
+            "search", "zzqx absent passage", "--index-dir", str(self.index_dir), "--json"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["outcome"], "NO_SUPPORTING_EVIDENCE")
+        self.assertEqual(result["results"], [])
+        self.assertEqual(set(result), {"outcome", "query", "filters", "results"})
+
 
 if __name__ == "__main__":
     unittest.main()

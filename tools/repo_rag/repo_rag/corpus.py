@@ -16,6 +16,12 @@ class SourceFile:
     line_count: int
 
 
+@dataclass(frozen=True)
+class DiscoveryFailure:
+    path: str
+    reason: str
+
+
 def git_tracked_paths(repository_root: Path) -> frozenset[str]:
     """Ask git for tracked paths. Callers in tests inject tracked_paths instead."""
     completed = subprocess.run(
@@ -61,10 +67,21 @@ def discover_sources(
     policy: CorpusPolicy,
     tracked_paths: frozenset[str] | None = None,
 ) -> tuple[SourceFile, ...]:
+    sources, _failures = discover_sources_with_failures(repository_root, policy, tracked_paths)
+    return sources
+
+
+def discover_sources_with_failures(
+    repository_root: Path,
+    policy: CorpusPolicy,
+    tracked_paths: frozenset[str] | None = None,
+) -> tuple[tuple[SourceFile, ...], tuple[DiscoveryFailure, ...]]:
+    """Return admitted source metadata and recoverable read/decode failures."""
     if tracked_paths is None:
         tracked_paths = git_tracked_paths(repository_root)
     root_resolved = repository_root.resolve()
     selected: list[SourceFile] = []
+    failures: list[DiscoveryFailure] = []
     for path in sorted(tracked_paths):
         if not _under_corpus_roots(path, policy):
             continue
@@ -84,11 +101,13 @@ def discover_sources(
             continue
         try:
             raw = absolute.read_bytes()
-        except OSError:
+        except OSError as exc:
+            failures.append(DiscoveryFailure(path, f"unreadable ({exc.__class__.__name__})"))
             continue
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:
+            failures.append(DiscoveryFailure(path, "invalid UTF-8"))
             continue
         selected.append(
             SourceFile(
@@ -98,4 +117,4 @@ def discover_sources(
                 line_count=text.count("\n") + (0 if text.endswith("\n") or not text else 1),
             )
         )
-    return tuple(selected)
+    return tuple(selected), tuple(failures)

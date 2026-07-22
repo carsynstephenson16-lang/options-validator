@@ -43,6 +43,28 @@ class LifecycleValidationError(LifecycleError):
 
 
 @dataclass(frozen=True)
+class RealStoreSession:
+    """Validated authority for the entry-only real forward-store path.
+
+    Production callers obtain this through ``h7_session.open_real_session``.
+    Tests may use an equivalent temporary-store instance to exercise the
+    typed real path without mutating ``REAL_FORWARD_STORE``.
+    """
+
+    base_dir: Path
+    activation_event_id: str
+    decision_session: str
+    evaluation_session: str
+    data_gate_receipt_path: Path
+    source_health_receipt_path: Path
+    data_gate_receipt_hash: str
+    source_health_receipt_hash: str
+    data_gate_config_hash: str
+    data_gate_source_hash: str
+    included_symbols: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class TransitionResult:
     event_id: str
     event_type: str
@@ -65,6 +87,10 @@ class PaperPosition:
 
 
 def _synthetic_base(base_dir) -> Path:
+    if isinstance(base_dir, RealStoreSession):
+        raise ActivationBoundaryError(
+            "RealStoreSession authorizes entry transitions only; exits remain synthetic"
+        )
     if base_dir is None:
         raise ActivationBoundaryError("an explicit synthetic base_dir is required")
     base = Path(base_dir)
@@ -75,6 +101,24 @@ def _synthetic_base(base_dir) -> Path:
             "the real H7 forward store is prohibited until Stage 8 activation"
         )
     return base
+
+
+def _resolve_base(base_dir) -> Path:
+    """Permit only the explicit session key to select a real entry store."""
+    if isinstance(base_dir, RealStoreSession):
+        return Path(base_dir.base_dir)
+    return _synthetic_base(base_dir)
+
+
+def _operational_decision_session(base_dir, source_session: str) -> str:
+    """Map a real session's source-data date to its registered decision date."""
+    if not isinstance(base_dir, RealStoreSession):
+        return source_session
+    if base_dir.evaluation_session != source_session:
+        raise LifecycleValidationError(
+            "RealStoreSession evaluation_session does not match entry source data"
+        )
+    return base_dir.decision_session
 
 
 def _next_session(session: str) -> str:
@@ -88,11 +132,7 @@ def _next_session(session: str) -> str:
 
 def _clock_utc(clock) -> datetime:
     now = clock() if clock is not None else datetime.now(timezone.utc)
-    if (
-        not isinstance(now, datetime)
-        or now.tzinfo is None
-        or now.utcoffset() != timedelta(0)
-    ):
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() != timedelta(0):
         raise LifecycleValidationError("clock must return a UTC datetime")
     return now
 
@@ -172,9 +212,7 @@ def _transition(
             kwargs["expected_head"] = expected_head
         result = event_ledger.append_event(event, **kwargs)
     except event_ledger.EventConflictError as exc:
-        raise LifecycleValidationError(
-            f"conflicting rerun for {event['event_id']!r}"
-        ) from exc
+        raise LifecycleValidationError(f"conflicting rerun for {event['event_id']!r}") from exc
     except event_ledger.LedgerHeadConflictError as exc:
         raise LifecycleValidationError(
             "forward ledger changed during lifecycle capacity evaluation; rerun"
@@ -284,8 +322,9 @@ def record_entry_intent(
     clock=None,
 ) -> TransitionResult:
     """Record a board-resolved T intent with frozen contract identity."""
-    base = _synthetic_base(base_dir)
-    _, write_clock = _record_after_session_close(decision_session, clock)
+    base = _resolve_base(base_dir)
+    operational_decision = _operational_decision_session(base_dir, decision_session)
+    _, write_clock = _record_after_session_close(operational_decision, clock)
     events = event_ledger.read_events(base)
     _require_event(events, source_health_id, "source_health", session=decision_session)
     gate = _require_event(events, data_gate_id, "data_gate", session=decision_session)
@@ -298,6 +337,10 @@ def record_entry_intent(
         raise LifecycleValidationError("entry intent requires a GO decision-session data gate")
     if not isinstance(symbol, str) or not symbol or symbol != symbol.upper():
         raise LifecycleValidationError("symbol must be uppercase")
+    if isinstance(base_dir, RealStoreSession) and symbol not in base_dir.included_symbols:
+        raise LifecycleValidationError(
+            "real entry intent symbol is outside the frozen registered cohort"
+        )
     if not isinstance(chain_identity, str) or not chain_identity:
         raise LifecycleValidationError("chain_identity is required")
     if not isinstance(closes_identity, str) or not closes_identity:
@@ -309,8 +352,7 @@ def record_entry_intent(
         isinstance(item, dict)
         and item.get("symbol") == symbol
         and item.get("lane") == lane
-        and event_ledger.canonical_json(item.get("action"))
-        == event_ledger.canonical_json(action)
+        and event_ledger.canonical_json(item.get("action")) == event_ledger.canonical_json(action)
         for item in accepted
     ):
         raise LifecycleValidationError(
@@ -327,7 +369,7 @@ def record_entry_intent(
             raise LifecycleValidationError(
                 f"{symbol} lane {lane} already has an unresolved entry intent"
             )
-    for position in replay_positions(base_dir=base):
+    for position in _replay_positions_at_base(base):
         if (
             position.state != "closed"
             and position.symbol == symbol
@@ -343,17 +385,18 @@ def record_entry_intent(
             f"decision chain cannot reconstruct the accepted action: {decision_gap}"
         )
     if not all(
-        passes_liquidity(row.open_interest, row.bid, row.ask)
-        for row in decision_rows.values()
+        passes_liquidity(row.open_interest, row.bid, row.ask) for row in decision_rows.values()
     ):
         raise LifecycleValidationError("accepted action is not liquid in its decision chain")
     decision_legs, decision_net_debit = _entry_prices(legs, decision_rows)
-    decision_cash_kind, decision_at_risk = _entry_economics(
-        action, decision_net_debit, len(legs)
-    )
+    decision_cash_kind, decision_at_risk = _entry_economics(action, decision_net_debit, len(legs))
     expected_head = _EXPECTED_HEAD_UNSET
     if isinstance(board.payload.get("book_snapshot_hash"), str):
-        planned_fill_session = _next_session(decision_session)
+        planned_fill_session = _next_session(operational_decision)
+        if board.payload.get("decision_session", decision_session) != operational_decision:
+            raise LifecycleValidationError(
+                "board resolution decision session does not match entry intent"
+            )
         if board.payload.get("planned_fill_session") != planned_fill_session:
             raise LifecycleValidationError(
                 "Stage-5 board reservation has the wrong planned fill session"
@@ -371,23 +414,20 @@ def record_entry_intent(
         from options_researcher.h7_forward_book import derive_book
 
         book = derive_book(
-            base_dir=base,
+            base_dir=base_dir,
             evaluation_session=planned_fill_session,
         )
         reservation_ids = {item.reservation_id for item in book.reservations}
         board_reservation_id = f"{board_resolution_id}:{symbol}:{lane}"
         if event_id not in reservation_ids and board_reservation_id not in reservation_ids:
-            raise LifecycleValidationError(
-                "Stage-5 board reservation is absent or already expired"
-            )
+            raise LifecycleValidationError("Stage-5 board reservation is absent or already expired")
         expected_head = events[-1].record_hash
-    decision_commission = (
-        len(legs) * config.H7_FORWARD_CONTRACTS * config.COMMISSION_PER_CONTRACT
-    )
+    decision_commission = len(legs) * config.H7_FORWARD_CONTRACTS * config.COMMISSION_PER_CONTRACT
     payload = {
         "position_id": event_id,
-        "decision_session": decision_session,
-        "planned_fill_session": _next_session(decision_session),
+        "decision_session": operational_decision,
+        "evaluation_session": decision_session,
+        "planned_fill_session": _next_session(operational_decision),
         "structure": kind,
         "action": action,
         "legs": legs,
@@ -405,7 +445,7 @@ def record_entry_intent(
         _event(
             event_id=event_id,
             event_type="entry_intent",
-            occurred_at_utc=session_close_utc(decision_session).isoformat(),
+            occurred_at_utc=session_close_utc(operational_decision).isoformat(),
             evaluation_session=decision_session,
             symbol=symbol,
             lane=lane,
@@ -421,9 +461,10 @@ def _terminal_for_intent(
     events: list[event_ledger.StoredEvent], intent_id: str
 ) -> event_ledger.StoredEvent | None:
     for ev in events:
-        if ev.event_type in {"paper_fill", "skip"} and ev.payload.get(
-            "entry_intent_id"
-        ) == intent_id:
+        if (
+            ev.event_type in {"paper_fill", "skip"}
+            and ev.payload.get("entry_intent_id") == intent_id
+        ):
             return ev
     return None
 
@@ -468,13 +509,18 @@ def _validated_approval(
     return approval
 
 
-def record_owner_approval(
-    *, base_dir, entry_intent_id: str, clock=None
-) -> TransitionResult:
+def record_owner_approval(*, base_dir, entry_intent_id: str, clock=None) -> TransitionResult:
     """Record approval before T+1 close; late approval mechanically skips."""
-    base = _synthetic_base(base_dir)
+    base = _resolve_base(base_dir)
     events = event_ledger.read_events(base)
     intent = _require_event(events, entry_intent_id, "entry_intent")
+    if (
+        isinstance(base_dir, RealStoreSession)
+        and intent.payload.get("decision_session") != base_dir.decision_session
+    ):
+        raise LifecycleValidationError(
+            "RealStoreSession decision session does not match entry intent"
+        )
     terminal = _terminal_for_intent(events, entry_intent_id)
     if terminal is not None:
         return _as_result(terminal)
@@ -532,9 +578,7 @@ def record_owner_approval(
 def _quote_rows(chain, legs: list[dict]) -> tuple[dict[str, pd.Series] | None, str | None]:
     if not isinstance(chain, pd.DataFrame) or chain.empty:
         return None, "chain_missing_or_empty"
-    required = {
-        "expiration", "strike", "right", "bid", "ask", "open_interest", "delta"
-    }
+    required = {"expiration", "strike", "right", "bid", "ask", "open_interest", "delta"}
     if not required.issubset(chain.columns):
         return None, "chain_schema_invalid"
     rows: dict[str, pd.Series] = {}
@@ -670,7 +714,7 @@ def process_entry_fill(
     clock=None,
 ) -> TransitionResult:
     """Resolve an approved intent exactly once at its T+1 EOD quotes."""
-    base = _synthetic_base(base_dir)
+    base = _resolve_base(base_dir)
     events = event_ledger.read_events(base)
     intent = _require_event(events, entry_intent_id, "entry_intent")
     terminal = _terminal_for_intent(events, entry_intent_id)
@@ -682,6 +726,15 @@ def process_entry_fill(
         raise LifecycleValidationError(
             f"entry fill must use T+1 session {planned}, got {fill_session}"
         )
+    if isinstance(base_dir, RealStoreSession):
+        if base_dir.evaluation_session != fill_session:
+            raise LifecycleValidationError(
+                "RealStoreSession evaluation_session does not match entry fill"
+            )
+        if intent.payload.get("decision_session") != base_dir.decision_session:
+            raise LifecycleValidationError(
+                "RealStoreSession decision session does not match entry intent"
+            )
     _, write_clock = _record_after_session_close(fill_session, clock)
     if not isinstance(chain_identity, str) or not chain_identity:
         raise LifecycleValidationError("fill chain_identity is required")
@@ -708,7 +761,7 @@ def process_entry_fill(
             causes=[entry_intent_id],
             clock=write_clock,
         )
-    for position in replay_positions(base_dir=base):
+    for position in _replay_positions_at_base(base):
         if (
             position.state != "closed"
             and position.symbol == intent.symbol
@@ -801,9 +854,7 @@ def process_entry_fill(
             causes=[entry_intent_id, gap_id],
             clock=write_clock,
         )
-    if not all(
-        passes_liquidity(row.open_interest, row.bid, row.ask) for row in rows.values()
-    ):
+    if not all(passes_liquidity(row.open_interest, row.bid, row.ask) for row in rows.values()):
         if existing_fill is not None:
             raise LifecycleValidationError(
                 "conflicting rerun no longer reproduces the recorded entry fill"
@@ -844,7 +895,7 @@ def process_entry_fill(
         from options_researcher.h7_forward_book import assess_entry_fill
 
         assessment = assess_entry_fill(
-            base_dir=base,
+            base_dir=base_dir,
             entry_intent_id=entry_intent_id,
             fill_session=fill_session,
             actual_at_risk=at_risk,
@@ -854,9 +905,7 @@ def process_entry_fill(
             "capacity_snapshot": assessment.capacity_snapshot,
             "projected_month_risk": assessment.projected_month_risk,
             "projected_open_h7c": assessment.projected_open_h7c,
-            "projected_underlying_occupancy": (
-                assessment.projected_underlying_occupancy
-            ),
+            "projected_underlying_occupancy": (assessment.projected_underlying_occupancy),
             "failed_constraints": list(assessment.failed_constraints),
             "limits": {
                 "monthly_at_risk": config.H7_MONTHLY_AT_RISK,
@@ -895,7 +944,7 @@ def process_entry_fill(
         "position_id": intent.payload["position_id"],
         "entry_intent_id": entry_intent_id,
         "owner_approval_id": approval.event_id,
-        "decision_session": intent.evaluation_session,
+        "decision_session": intent.payload["decision_session"],
         "fill_session": fill_session,
         "structure": intent.payload["structure"],
         "action": action,
@@ -1007,8 +1056,7 @@ def observe_exit(
         (
             ev
             for ev in events
-            if ev.event_type == "exit_intent"
-            and ev.payload.get("position_id") == position_id
+            if ev.event_type == "exit_intent" and ev.payload.get("position_id") == position_id
         ),
         None,
     )
@@ -1042,9 +1090,10 @@ def observe_exit(
         if next_report is not None:
             report = date.fromisoformat(next_report)
             after_fill = _next_session(planned_fill)
-            if date.fromisoformat(planned_fill) >= report or date.fromisoformat(
-                after_fill
-            ) >= report:
+            if (
+                date.fromisoformat(planned_fill) >= report
+                or date.fromisoformat(after_fill) >= report
+            ):
                 reasons.append("pre_earnings")
                 earnings_reason = True
     if earnings_reason:
@@ -1059,9 +1108,7 @@ def observe_exit(
             or source.payload.get("gate") != earnings_gate
             or source.payload.get("healthy") is not expected_healthy
         ):
-            raise LifecycleValidationError(
-                "earnings exit source-health event is inconsistent"
-            )
+            raise LifecycleValidationError("earnings exit source-health event is inconsistent")
 
     gap: TransitionResult | None = None
     rows: dict[str, pd.Series] | None = None
@@ -1134,14 +1181,18 @@ def observe_exit(
             )
         return gap
 
-    ordered_reasons = [reason for reason in (
-        "pre_earnings",
-        "earnings_unknown",
-        "scheduled_dte",
-        "underlying_stop",
-        "credit_stop",
-        "profit_target",
-    ) if reason in reasons]
+    ordered_reasons = [
+        reason
+        for reason in (
+            "pre_earnings",
+            "earnings_unknown",
+            "scheduled_dte",
+            "underlying_stop",
+            "credit_stop",
+            "profit_target",
+        )
+        if reason in reasons
+    ]
     causes = [position.entry_event_id, data_gate_id]
     if earnings_reason and source_health_id is not None:
         causes.append(source_health_id)
@@ -1207,8 +1258,7 @@ def process_exit_fill(
     prior_gaps = [
         ev
         for ev in events
-        if ev.event_type == "data_gap"
-        and ev.payload.get("exit_intent_id") == exit_intent_id
+        if ev.event_type == "data_gap" and ev.payload.get("exit_intent_id") == exit_intent_id
     ]
     if prior_gaps:
         latest = prior_gaps[-1].evaluation_session
@@ -1218,9 +1268,7 @@ def process_exit_fill(
                 f"exit retry must use first later session {expected}, got {fill_session}"
             )
     elif fill_session != planned:
-        raise LifecycleValidationError(
-            f"exit must first attempt planned session {planned}"
-        )
+        raise LifecycleValidationError(f"exit must first attempt planned session {planned}")
     _, write_clock = _record_after_session_close(fill_session, clock)
     if not isinstance(chain_identity, str) or not chain_identity:
         raise LifecycleValidationError("exit-fill chain_identity is required")
@@ -1232,14 +1280,10 @@ def process_exit_fill(
         or not math.isfinite(float(underlying_close))
         or float(underlying_close) <= 0
     ):
-        raise LifecycleValidationError(
-            "exit-fill underlying_close must be finite and positive"
-        )
+        raise LifecycleValidationError("exit-fill underlying_close must be finite and positive")
     expiration = date.fromisoformat(str(position.entry_payload["action"]["expiration"]))
     if date.fromisoformat(fill_session) >= expiration:
-        raise LifecycleValidationError(
-            f"exit unresolved at expiration {expiration}; failing loud"
-        )
+        raise LifecycleValidationError(f"exit unresolved at expiration {expiration}; failing loud")
     gate = _require_event(events, data_gate_id, "data_gate", session=fill_session)
     if gate.payload.get("whole_universe_verdict") != "GO":
         if existing is not None:
@@ -1262,8 +1306,7 @@ def process_exit_fill(
     legs = position.entry_payload["legs"]
     rows, gap_reason = _quote_rows(chain, legs)
     if rows is None or not all(
-        passes_liquidity(row.open_interest, row.bid, row.ask)
-        for row in (rows or {}).values()
+        passes_liquidity(row.open_interest, row.bid, row.ask) for row in (rows or {}).values()
     ):
         if existing is not None:
             raise LifecycleValidationError(
@@ -1326,9 +1369,8 @@ def process_exit_fill(
     )
 
 
-def replay_positions(*, base_dir) -> list[PaperPosition]:
-    """Project verified lifecycle events into deterministic position state."""
-    base = _synthetic_base(base_dir)
+def _replay_positions_at_base(base: Path) -> list[PaperPosition]:
+    """Replay a verified ledger already authorized by the caller's boundary."""
     events = event_ledger.read_events(base)
     positions: dict[str, PaperPosition] = {}
     for ev in events:
@@ -1379,3 +1421,8 @@ def replay_positions(*, base_dir) -> list[PaperPosition]:
         else:
             raise LifecycleValidationError(f"unknown paper_fill transition {transition!r}")
     return list(positions.values())
+
+
+def replay_positions(*, base_dir) -> list[PaperPosition]:
+    """Project synthetic lifecycle events into deterministic position state."""
+    return _replay_positions_at_base(_synthetic_base(base_dir))

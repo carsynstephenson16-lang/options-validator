@@ -6,6 +6,7 @@
     "harness",
     "options_researcher/attractiveness_dashboard.py",
     "options_researcher/qm_dashboard.py",
+    "options_researcher/market_context.py",
     "research",
     "config.py",
     "metrics.py"

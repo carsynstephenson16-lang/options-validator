@@ -7,9 +7,23 @@ from typing import Sequence
 
 from .chunking import ChunkSettings
 from .config import load_policy
-from .indexing import build_index
+from .indexing import Fts5UnavailableError, build_index
 from .pipeline import DEFAULT_MAX_CONTEXT_CHARS, answer_query
 from .retrieval import RetrievalSettings
+from .scheduled_health import (
+    SearchFilters,
+    record_evaluation_history,
+    run_health,
+)
+from .scheduled_health import (
+    evaluate as evaluate_scheduled,
+)
+from .scheduled_health import (
+    load_golden_set as load_scheduled_golden,
+)
+from .scheduled_health import (
+    search as search_index,
+)
 from .status import build_status
 
 
@@ -61,6 +75,33 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_parser.add_argument("--index-dir", type=Path, default=_default_index_dir())
     evaluate_parser.add_argument("--top-k", type=int, default=RetrievalSettings().top_k)
     evaluate_parser.add_argument("--min-score", type=float, default=RetrievalSettings().min_score)
+
+    search = subparsers.add_parser("search", help="return advisory retrieved passages")
+    search.add_argument("query")
+    search.add_argument("--index-dir", type=Path, default=_default_index_dir())
+    search.add_argument("--limit", type=int, default=5)
+    search.add_argument("--ticker")
+    search.add_argument("--hypothesis")
+    search.add_argument("--tier", dest="source_tier")
+    search.add_argument("--doc-type")
+    search.add_argument("--since")
+    search.add_argument("--json", action="store_true", dest="as_json")
+
+    scheduled_eval = subparsers.add_parser(
+        "evaluate", help="score the owner-curated scheduled-health golden set"
+    )
+    scheduled_eval.add_argument(
+        "--golden", type=Path, default=_project_root() / "eval" / "golden.jsonl"
+    )
+    scheduled_eval.add_argument("--index-dir", type=Path, default=_default_index_dir())
+    scheduled_eval.add_argument("--k", type=int, default=5)
+    scheduled_eval.add_argument("--json", action="store_true", dest="as_json")
+
+    health = subparsers.add_parser("health", help="refresh, evaluate, and write a bounded report")
+    health.add_argument("--policy", type=Path, default=_project_root() / "policy.json")
+    health.add_argument("--repo-root", type=Path, default=_repository_root())
+    health.add_argument("--index-dir", type=Path, default=_default_index_dir())
+    health.add_argument("--golden", type=Path, default=_project_root() / "eval" / "golden.jsonl")
     return parser
 
 
@@ -134,4 +175,82 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(json.dumps(report.to_mapping(), indent=2, sort_keys=True))
         return 0 if report.passed == report.total else 5
+    if args.command == "search":
+        try:
+            hits = search_index(
+                args.index_dir,
+                args.query,
+                args.limit,
+                SearchFilters(
+                    ticker=args.ticker,
+                    hypothesis=args.hypothesis,
+                    source_tier=args.source_tier,
+                    doc_type=args.doc_type,
+                    since=args.since,
+                ),
+            )
+        except (FileNotFoundError, Fts5UnavailableError, ValueError, json.JSONDecodeError, KeyError) as exc:
+            print(json.dumps({"status": "ERROR", "error": str(exc)}, indent=2, sort_keys=True))
+            return 2
+        payload = {
+            "outcome": "RESULTS" if hits else "NO_SUPPORTING_EVIDENCE",
+            "query": args.query,
+            "filters": {
+                "ticker": args.ticker,
+                "hypothesis": args.hypothesis,
+                "tier": args.source_tier,
+                "doc_type": args.doc_type,
+                "since": args.since,
+            },
+            "results": [hit.__dict__ for hit in hits],
+        }
+        if args.as_json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        elif not hits:
+            print("No supporting evidence found in the indexed corpus.")
+        else:
+            for hit in hits:
+                print(f"[{hit.source_tier}] {hit.repo_path} — {hit.locator}")
+                print(hit.snippet)
+        return 0
+    if args.command == "evaluate":
+        try:
+            policy = load_policy(_project_root() / "policy.json")
+            report = evaluate_scheduled(load_scheduled_golden(args.golden), args.index_dir, args.k)
+            verdict = record_evaluation_history(
+                _repository_root(), _project_root(), report, policy, args.index_dir, k=args.k
+            )
+        except (FileNotFoundError, Fts5UnavailableError, OSError, ValueError, json.JSONDecodeError, KeyError) as exc:
+            print(json.dumps({"status": "ERROR", "error": str(exc)}, indent=2, sort_keys=True))
+            return 2
+        payload = report.to_mapping() | {
+            "verdict": "REGRESSED" if verdict.regressed else "OK",
+            "regression_reasons": list(verdict.reasons),
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if args.command == "health":
+        try:
+            report_path, report, verdict = run_health(
+                repository_root=args.repo_root,
+                application_root=_project_root(),
+                policy=load_policy(args.policy),
+                index_dir=args.index_dir,
+                golden_path=args.golden,
+            )
+        except (FileNotFoundError, Fts5UnavailableError, OSError, ValueError, json.JSONDecodeError, KeyError) as exc:
+            print(json.dumps({"status": "ERROR", "error": str(exc)}, indent=2, sort_keys=True))
+            return 2
+        print(
+            json.dumps(
+                {
+                    "report_path": str(report_path),
+                    "evaluation": report.to_mapping(),
+                    "verdict": "REGRESSED" if verdict.regressed else "OK",
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     raise AssertionError(f"unhandled command: {args.command}")

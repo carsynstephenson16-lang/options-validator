@@ -52,24 +52,51 @@ class TestDiagnosticRecords(unittest.TestCase):
             self.assertEqual(recs[-1]["attempt_hash"], attempt_hash)
             self.assertEqual(recs[-1]["trial_count"], before)
 
-    def test_attempt_binds_v2_source_surface(self):
+    def test_attempt_binds_v3_source_surface(self):
         with tempfile.TemporaryDirectory() as base:
             _seed_h7_registration(base)
             _attempt(base)
             rec = ledger.read_all(base)[-1]
-            self.assertEqual(rec["source_hash_version"], 2)
+            self.assertEqual(rec["source_hash_version"], 3)
             self.assertEqual(rec["source_hash_v2"],
                              hashing.diagnostic_source_hash())
-            # v2 covers options_researcher/ (the NO-GO gap) and tools/
+            # v3 covers options_researcher/ and tools/ while excluding
+            # dot-prefixed scratch directories.
             snap = hashing.source_snapshot(
                 paths=hashing.DIAGNOSTIC_SOURCE_PATHS_V2)
             self.assertTrue(any(p.startswith("options_researcher/")
                                 for p in snap))
             self.assertTrue(any(p.startswith("tools/") for p in snap))
-            # the legacy contract is untouched (historical entries verify)
-            legacy = hashing.source_snapshot()
-            self.assertFalse(any(p.startswith("options_researcher/")
-                                 for p in legacy))
+
+    def test_v3_excludes_dot_prefixed_components_but_v2_does_not(self):
+        with tempfile.TemporaryDirectory() as base:
+            root = Path(base)
+            for relative in (
+                "options_researcher/kept.py",
+                "options_researcher/.venv/ignored.py",
+                "options_researcher/.tmp/ignored.py",
+                "options_researcher/.cache/ignored.py",
+                "options_researcher/__pycache__/ignored.py",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# fixture\n")
+
+            v2 = hashing.source_snapshot(
+                paths=("options_researcher",), root=root)
+            v3 = hashing.source_snapshot(
+                paths=("options_researcher",), root=root,
+                exclude_dot_dirs=True)
+            self.assertIn("options_researcher/.venv/ignored.py", v2)
+            self.assertIn("options_researcher/.tmp/ignored.py", v2)
+            self.assertIn("options_researcher/.cache/ignored.py", v2)
+            self.assertNotIn("options_researcher/.venv/ignored.py", v3)
+            self.assertNotIn("options_researcher/.tmp/ignored.py", v3)
+            self.assertNotIn("options_researcher/.cache/ignored.py", v3)
+            self.assertNotIn("options_researcher/__pycache__/ignored.py", v2)
+            self.assertEqual(
+                v3, {"options_researcher/kept.py": v3["options_researcher/kept.py"]}
+            )
 
     def test_duplicate_result_rejected(self):
         with tempfile.TemporaryDirectory() as base:
@@ -186,7 +213,7 @@ class TestDiagnosticRecords(unittest.TestCase):
             _seed_h7_registration(base)
             _attempt(base)
             with mock.patch.object(diagnostics,
-                                   "DIAGNOSTIC_SOURCE_HASH_VERSION", 3):
+                                   "DIAGNOSTIC_SOURCE_HASH_VERSION", 4):
                 with self.assertRaises(diagnostics.DiagnosticError):
                     diagnostics.verify_attempt_current(
                         "H7a-diag-1", base_dir=base, receipt=OK_RECEIPT)

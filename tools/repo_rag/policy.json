@@ -2,6 +2,7 @@
   "application": "options-validator-repo-rag",
   "repository": "options-validator",
   "read_only": true,
+  "bounded_writes": true,
   "tracked_files_only": true,
   "corpus_roots": [
     "README.md",
@@ -37,9 +38,10 @@
     ".html"
   ],
   "source_classes": {
-    "canonical": ["ledger/", "docs/superpowers/", "tests/", "config.py"],
-    "repo_verified": ["options_researcher/", "README.md", "AGENTS.md", "CLAUDE.md"],
-    "derived": ["reports/", "research/", "wiki/"],
-    "external_reference": ["docs/research/notebooklm-modern-ai/"]
+    "registered_hypothesis": ["ledger/", "docs/superpowers/specs/", "docs/h7-forward-operations.md"],
+    "frozen_parameters": ["config.py", "options_researcher/config.py", "options_researcher/h7_scope.py", "options_researcher/h7_window_registration.py"],
+    "derived_backtest": ["reports/", "options_researcher/h4_backtest.py"],
+    "exploratory_notebook": ["research/", "wiki/", "docs/research/"],
+    "workflow": ["options_researcher/", "tests/", "docs/superpowers/plans/", "README.md", "AGENTS.md", "CLAUDE.md"]
   }
 }

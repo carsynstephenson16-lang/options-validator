@@ -1,4 +1,7 @@
 .index/
+reports/
+logs/
+eval/history.csv
 __pycache__/
 uv.lock
 .venv/

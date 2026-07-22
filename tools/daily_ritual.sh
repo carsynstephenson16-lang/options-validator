@@ -152,6 +152,20 @@ if [ "$GATE_GO" -eq 1 ]; then
   # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
   "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
 
+  # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing). The forward
+  # ledger holds only the registration event, so the append path has never run
+  # on real receipts. Prove the entry door would open BEFORE a name triggers,
+  # rather than discovering a refusal on the one day it matters.
+  PF_OUT="$("$UV" run python -m options_researcher.h7_entry_preflight \
+              --data-gate-receipt "$DG_RECEIPT" 2>&1)"
+  PF_RC=$?
+  echo "$PF_OUT"
+  if [ "$PF_RC" -eq 0 ]; then
+    note "h7 entry preflight: real entry path REACHABLE"
+  else
+    crit "h7 entry preflight: real entry path WOULD REFUSE — H7 cannot take an entry today"
+  fi
+
   # Step 4 — H6 leg (exact-session; features rebuild is mandatory after topup).
   "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || note "h6_features: NONZERO EXIT"
   "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"

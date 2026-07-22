@@ -551,6 +551,16 @@ code path can record a real entry.
 
 **Design — extend the one-door pattern, don't bypass it:**
 
+**C1 timing/evidence amendment (owner-authorized 2026-07-20):** an operator
+decision date and the immutable source-data evaluation date are distinct
+facts. The window guard and planned T+1 fill use `decision_session`; the
+receipt, board, and intent's root `evaluation_session` retain the prior
+source-data date. A valid receipt chain may therefore support a decision
+without relabeling stale cache data as fresh. Before the typed lifecycle
+functions may cite that chain, the session module publishes only idempotent,
+receipt-hash-bound `source_health` / `data_gate` evidence. It cannot publish
+an intent, approval, fill, exit, or score directly.
+
 1. New module `options_researcher/h7_session.py` exposing
    `open_real_session() -> RealStoreSession`. It refuses (typed
    `SessionRefused` error) unless ALL hold:
@@ -575,7 +585,8 @@ code path can record a real entry.
      `2026-07-12-h7-stage4-t1-paper-lifecycle-SPEC.md` before coding the bound.
 2. `RealStoreSession` is a frozen dataclass carrying `base_dir`
    (= `REAL_FORWARD_STORE`), the activation `event_id`, and the validated
-   receipt paths. In `h7_paper_lifecycle.py` add:
+   receipt paths, hashes, `decision_session`, and `evaluation_session`. In
+   `h7_paper_lifecycle.py` add:
 
 ```python
 def _resolve_base(base_dir):
@@ -598,16 +609,20 @@ def _resolve_base(base_dir):
    **~2026-10-26**. Record both deadlines in `ledger/facts.log` when C1 merges.
 4. CLI: `python -m options_researcher.h7_session {status|propose|approve|fill}`
    — `propose --symbol S --lane L --data-gate-receipt PATH` builds an
-   `entry_intent` from today's board state; `approve --intent-id ID --owner
+   `entry_intent` only from the immutable watcher receipt's exact
+   `ENTRY-OK` action; `approve --intent-id ID --owner
    carsyn` records `owner_approval` (owner runs this by hand — approval is
    never automated); `fill --intent-id ID` records the `paper_fill` at the
-   spec's fill session/pricing rules. Every subcommand goes through
+   spec's fill session/pricing rules using receipt-hashed cache files. Every
+   subcommand goes through
    `open_real_session()` first and appends only via the existing typed
    lifecycle functions (which use `append_event` with head chaining
-   internally). No new append code.
+   internally), except the narrow receipt-evidence publisher described above.
 
 **Files:**
 - Create: `options_researcher/h7_session.py`, `tests/test_h7_session_real_path.py`
+- Modify: `options_researcher/h7_cohort.py` (load and validate frozen window
+  decision-date bounds)
 - Modify: `options_researcher/h7_paper_lifecycle.py` (add `RealStoreSession`,
   `_resolve_base`; swap guard in the 3 entry functions)
 - Modify: `options_researcher/h7_forward_book.py` (swap guard in
@@ -617,9 +632,11 @@ def _resolve_base(base_dir):
   via the synthetic door with a registration event (never the repo store):
   - refusals: no activation record; missing/unlinked receipts; gate NO_GO;
     symbol not in cohort; symbol entry-banned by source health.
-  - happy path: propose → approve → fill lands `entry_intent`,
+  - happy path: receipt-derived propose → approve → fill lands `entry_intent`,
     `owner_approval`, `paper_fill` in causal order; `verify()` stays valid;
-    `derive_book` shows the position.
+    `derive_book` shows the position; a prior source-data session and a later
+    decision session yield the next session after the decision date, never the
+    source date.
   - boundary: exits still refuse — `process_exit_fill` with a
     `RealStoreSession` must raise `ActivationBoundaryError` (guard unchanged).
   - repo-store safety: every test asserts the actual `REAL_FORWARD_STORE`

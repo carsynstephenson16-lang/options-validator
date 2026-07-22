@@ -16,8 +16,9 @@ import pandas as pd
 
 from data.cache_runner import trading_days
 from options_researcher import h7_data_gate as gate
-from options_researcher.h7_scope import watch_universe
+from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_watch import evaluation_session
+from research.receipts import load_receipt, make_receipt, write_immutable_receipt
 
 REQ = date(2026, 7, 12)   # Sunday (today) -> evaluation session Fri 2026-07-10
 
@@ -58,6 +59,16 @@ class GateBase(unittest.TestCase):
                          [("2026-07-08", 90.0), ("2026-07-09", 95.0),
                           (self.eval_iso, 100.0)])
             _write_chain(self.chain_dir, sym, self.eval_iso, _good_chain())
+        scope = scope_identity(watch_universe())
+        self.eval_scope_id = scope["scope_id"]
+        self.source_health = make_receipt("source_health", {
+            "evaluation_session": self.eval_iso,
+            "scope": scope,
+            "symbols": {sym: {"healthy": True, "gate": "CLEAR"}
+                        for sym in watch_universe()},
+        })
+        self.source_health_path = Path(tmp.name) / "source_health.json"
+        write_immutable_receipt(self.source_health, self.source_health_path)
 
     def _eval(self):
         return gate.evaluate(REQ, close_dir=self.close_dir,
@@ -67,7 +78,9 @@ class GateBase(unittest.TestCase):
         return gate.main(["--as-of", REQ.isoformat(),
                           "--close-dir", str(self.close_dir),
                           "--chain-dir", str(self.chain_dir),
-                          "--reports-dir", str(self.reports), *argv_extra])
+                          "--reports-dir", str(self.reports),
+                          "--source-health-receipt", str(self.source_health_path),
+                          *argv_extra])
 
 
 class TestWholeUniverseGo(GateBase):
@@ -233,6 +246,31 @@ class TestChainFailures(GateBase):
         self.assertEqual(res["symbols"]["AMD"]["chain"]["row_count"], 0)
         self.assertEqual(res["symbols"]["AMD"]["verdict"], "NO_GO")
         self.assertEqual(self._run(), 1)
+
+
+class TestSourceHealthLinkRequired(GateBase):
+    """An UNLINKED gate receipt is immutable and permanently revokes that
+    session's real-entry authority (h7_session refuses a receipt chain with
+    no source-health link). The gate must therefore refuse to write one at
+    all rather than silently stamping nulls."""
+
+    def test_omitted_source_health_receipt_is_exit_2_and_writes_nothing(self):
+        rc = gate.main(["--as-of", REQ.isoformat(),
+                        "--close-dir", str(self.close_dir),
+                        "--chain-dir", str(self.chain_dir),
+                        "--reports-dir", str(self.reports)])
+        self.assertEqual(rc, 2)
+        self.assertFalse(self.reports.exists() and any(self.reports.rglob("*.json")))
+
+    def test_linked_receipt_records_the_source_health_path_and_hash(self):
+        self.assertEqual(self._run(), 0)
+        receipt = load_receipt(
+            self.reports / self.eval_scope_id / "receipts" / f"{self.eval_iso}.json",
+            expected_type="data_gate")
+        self.assertEqual(receipt["source_health_receipt_path"],
+                         str(self.source_health_path))
+        self.assertEqual(receipt["source_health_receipt_hash"],
+                         self.source_health["receipt_hash"])
 
 
 class TestCliContract(GateBase):
