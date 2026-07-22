@@ -170,6 +170,19 @@ if [ "$GATE_GO" -eq 1 ]; then
   "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || note "h6_features: NONZERO EXIT"
   "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"
 
+  # Step 4b — H5 LEAPS entry-trigger watch (alert-only; never auto-enters).
+  EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
+  mkdir -p reports/h5
+  if "$UV" run python -m options_researcher.entry_watch | tee "$EW_OUT"; then
+    if grep -q "FIRE" "$EW_OUT"; then
+      crit "H5 ENTRY TRIGGER FIRE — read $EW_OUT and evaluate per H5 CORE rules"
+    else
+      note "h5 entry watch: WAIT (no trigger fired)"
+    fi
+  else
+    note "WARNING: h5 entry watch failed to run"
+  fi
+
   # Step 5 — H8 watcher, only once its tooling exists (registered lanes only).
   if "$UV" run python -c 'import options_researcher.h8_watch' 2>/dev/null; then
     "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
@@ -224,7 +237,7 @@ fi
 # that produces the evidence.
 # ---------------------------------------------------------------------------
 git add -- ledger/facts.log ledger/h7_forward \
-           reports/h7_receipts reports/h7_data_gate reports/h10 2>/dev/null
+           reports/h7_receipts reports/h7_data_gate reports/h5 reports/h10 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}
