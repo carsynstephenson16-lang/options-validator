@@ -132,7 +132,9 @@ config edits.
 
 Reuse, do not duplicate: signal functions from `qm_signals` (same ones
 `options_researcher/qm_watch.py` calls), `adverse_buy`/`adverse_sell` pricing
-and `passes_liquidity` from `data/thetadata_adapter.py`, the H7 admission
+from `data/pandas_feed.py` (`:53`/`:62`) and `passes_liquidity` from
+`data/thetadata_adapter.py` (`:456`) — the exact split `qm_watch.py:34-35`
+imports (brief corrected 2026-07-22 after Codex flagged the mismatch), the H7 admission
 re-measure used by the watcher stack (≥5 NTM monthly contracts, spread ≤5%,
 OI ≥100 — per seq 15/16). Follow `qm_watch.py`'s injectable-loader signature
 style (`load_adjusted`, `load_chain`, `params`, `gate` as function args) so all
