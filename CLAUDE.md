@@ -4,8 +4,11 @@ Research platform anchored to four AI-infrastructure core names (VST, CEG,
 MSFT, AMZN), plus the owner-authorized H7 story-name watchlist. **Research
 only — this is NOT a live bot and places no orders.**
 A "no edge after costs" finding is a success, not a failure to fix. Mission,
-current status, and the phase roadmap live in `README.md`; treat the README
-roadmap as the scope gate — no scanner, suggestor, or optimizer beyond it.
+current status, and the phase roadmap live in `README.md`. **Scope loosened
+2026-07-22 (owner-directed):** the blanket "no scanner/suggestor/optimizer
+unless on the phase plan" restriction is retired; the binding limit is now
+`.cursorrules`' Scope guard test — "does this move a live hypothesis toward
+its verdict?" — plus the absolute rule that this is never a live-order bot.
 
 ## Non-negotiable research guardrails
 

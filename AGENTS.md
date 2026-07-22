@@ -89,7 +89,7 @@ Add position sizing, max-loss limits, daily loss limits, and kill-switch logic w
 Log every decision path for trading bots.
 Do not hardcode current prices, event probabilities, or market odds.
 If live data access is unavailable, return a blocker instead of guessing.
-Do not expand this repo into a live scanner, suggestor, or trading bot unless the README phase plan is explicitly changed first.
+Do not turn this repo into a live trading bot: no live order placement.
 Do not use "proven," "confirmed," "edge found," "works," or "guaranteed" about backtest results. Use "survived this test," "not yet rejected," "rejected," or "consistent with zero edge."
 The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
 forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
