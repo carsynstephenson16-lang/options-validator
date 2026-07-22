@@ -160,6 +160,10 @@ if [ "$GATE_GO" -eq 1 ]; then
               --data-gate-receipt "$DG_RECEIPT" 2>&1)"
   PF_RC=$?
   echo "$PF_OUT"
+  PF_RECEIPT_DIR="reports/h7_receipts/${SCOPE_ID}/preflight"
+  mkdir -p "$PF_RECEIPT_DIR"
+  printf '%s\nexit_code=%s\n' "$PF_OUT" "$PF_RC" > \
+    "${PF_RECEIPT_DIR}/${AS_OF}.txt"
   if [ "$PF_RC" -eq 0 ]; then
     note "h7 entry preflight: real entry path REACHABLE"
   else
@@ -168,7 +172,8 @@ if [ "$GATE_GO" -eq 1 ]; then
 
   # Step 4 — H6 leg (exact-session; features rebuild is mandatory after topup).
   "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || note "h6_features: NONZERO EXIT"
-  "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"
+  "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" \
+    --write-receipt "reports/h6_forward/${AS_OF}.json" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"
 
   # Step 4b — H5 LEAPS entry-trigger watch (alert-only; never auto-enters).
   EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
@@ -185,7 +190,9 @@ if [ "$GATE_GO" -eq 1 ]; then
 
   # Step 5 — H8 watcher, only once its tooling exists (registered lanes only).
   if "$UV" run python -c 'import options_researcher.h8_watch' 2>/dev/null; then
-    "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
+    mkdir -p reports/h8_forward
+    "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" --json \
+      > "reports/h8_forward/${AS_OF}.json" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
   fi
 
   # Step 5b — H10a/b watcher + observation append (forward paper, no orders).
@@ -226,6 +233,17 @@ fi
 "$UV" run python -m options_researcher.dashboard && note "dashboard: rebuilt" || note "dashboard: FAILED"
 "$UV" run python -m options_researcher.attractiveness_dashboard && note "attractiveness dashboard: rebuilt" || note "attractiveness dashboard: FAILED"
 
+# Per-hypothesis capture receipt. A missing/refused leg is CRITICAL, but this
+# runs fail-soft so Step 8 can still preserve every artifact that did exist.
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -m options_researcher.ritual_receipt \
+    --as-of "$AS_OF" --run-date "$RUN_DATE" \
+    && note "capture receipt: complete" \
+    || crit "capture receipt: MISSING/REFUSED — see per-hypothesis lines above"
+else
+  crit "capture receipt: REFUSED — evaluation session unavailable"
+fi
+
 # ---------------------------------------------------------------------------
 # Step 8 — DURABILITY (added 2026-07-21, the day after Stage-8 activation).
 # The live forward window's evidence must not exist only in this working tree:
@@ -237,7 +255,8 @@ fi
 # that produces the evidence.
 # ---------------------------------------------------------------------------
 git add -- ledger/facts.log ledger/h7_forward \
-           reports/h7_receipts reports/h7_data_gate reports/h5 reports/h10 2>/dev/null
+           reports/h7_receipts reports/h7_data_gate reports/h5 reports/h6_forward \
+           reports/h8_forward reports/h10 reports/ritual 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}
