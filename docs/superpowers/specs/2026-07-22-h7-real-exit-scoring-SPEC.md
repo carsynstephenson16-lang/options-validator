@@ -190,6 +190,33 @@ window result exists, so it can never be chosen with visible P&L:
   §11), so any settlement-closed position carries the §8 assignment
   disclosure in the scoring artifact.
 
+### 4a.1 Settlement-close scoring seam (amendment v1.1, 2026-07-22, owner-approved)
+
+Positions terminally closed under §4a cannot honestly satisfy
+`h7_forward_scoring._fill_price` (`:142-169`), which requires each closing
+leg to carry raw market quotes passing `quote_valid` and `passes_liquidity`
+plus a canonical adverse fill price — validation built for market fills,
+meaningless for a quoteless settlement. Resolution, with
+`h7_forward_scoring.py` remaining byte-identical (§2, §7):
+
+- Settlement-terminal positions are excluded from `score_forward_window`'s
+  leg-quote reconstruction and are instead valued by a new, independently
+  reviewed, typed settlement valuator implementing exactly the §4a rules
+  above (intrinsic against the receipt-bound adjusted close; the
+  conservative zero/full-width-loss fallback; commissions only on ITM
+  legs). Zero discretion; fabricating synthetic quotes is prohibited
+  everywhere.
+- `h7_real_scoring` produces the single §8 artifact by recomputing the
+  seq-0-frozen verdict statistics — identical loss gate
+  (`min_losses_for_verdict`), bootstrap parameters, and CI thresholds,
+  hash-verified against the registration — over the union of
+  frozen-scorer-valued market closes and settlement-valued closes.
+- The artifact additionally records the frozen-scorer sub-result on market
+  closes alone, the settled-position count, and the settled positions'
+  aggregate P&L contribution, so the two valuation paths stay separately
+  auditable forever.
+- This seam is inside the §9 independent-review scope.
+
 ## 5. Required delta 3 — monitoring-session evidence events
 
 Every real exit observation and exit-fill attempt must publish the session's
