@@ -35,7 +35,8 @@ uv run python -m options_researcher.attractiveness
 uv run python -m options_researcher.entry_watch  # WAIT/FIRE vs frozen entry triggers
 uv run python -m options_researcher.h7_watch  # session-aligned H7 watcher; alerts only
 uv run python -m options_researcher.h7_source_health  # earnings provenance health; exit 1 = refresh needed
-uv run python -m options_researcher.h7_data_gate  # Stage 2 whole-universe data gate (read-only, BUILD-ONLY); operator order (amendment v1.4, 2026-07-14): run+record source health -> data gate must be exit 0 -> watcher; source-unhealthy names are entry-banned per-name by the watcher's fail-closed gate (they no longer block the whole board); a data-gate NO_GO still blocks the run
+uv run python -m options_researcher.h7_data_gate --source-health-receipt <path>  # Stage 2 whole-universe data gate (read-only, BUILD-ONLY); --source-health-receipt is REQUIRED (a receipt written without it is immutable and permanently revokes that session's real-entry authority); operator order (amendment v1.4, 2026-07-14): run+record source health -> data gate must be exit 0 -> watcher; source-unhealthy names are entry-banned per-name by the watcher's fail-closed gate (they no longer block the whole board); a data-gate NO_GO still blocks the run
+uv run python -m options_researcher.h7_entry_preflight  # read-only daily proof the real entry path would open (exit 1 = it would refuse); writes nothing
 uv run python -m options_researcher.h7_event_ledger verify  # Stage 3 forward-event ledger verifier (BUILD-ONLY, INACTIVE); NEVER hand-edit ledger/h7_forward/{events.jsonl,HEAD} -- append only via the typed Python API; a hand edit breaks the hash chain and verify refuses
 uv run python tools/h7_refresh_earnings.py --help  # owner-run append-raw/promote refresher
 uv run python -m options_researcher.portfolio    # mark the H5 paper book

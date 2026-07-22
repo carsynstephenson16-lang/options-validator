@@ -331,20 +331,29 @@ def evaluate(requested_run_date: date, *, close_dir: Path = DEFAULT_CLOSE_DIR,
     }
 
 
-def build_receipt(result: dict, *, source_health_receipt: dict | None = None,
-                  source_health_receipt_path: Path | None = None) -> dict:
-    """Bind the gate result to the current code/config and source receipt."""
-    source_receipt_hash = (source_health_receipt.get("receipt_hash")
-                           if source_health_receipt else None)
-    if source_health_receipt is not None:
-        if source_health_receipt.get("receipt_type") != "source_health":
-            raise ValueError("data gate requires a source_health receipt")
-        if (source_health_receipt.get("evaluation_session")
-                != result["evaluation_session"]):
-            raise ValueError("source-health receipt session does not match gate")
-        if source_health_receipt.get("scope", {}).get("scope_hash") != \
-                result["scope"]["scope_hash"]:
-            raise ValueError("source-health receipt scope does not match gate")
+def build_receipt(result: dict, *, source_health_receipt: dict,
+                  source_health_receipt_path: Path) -> dict:
+    """Bind the gate result to the current code/config and source receipt.
+
+    The source-health link is MANDATORY. A gate receipt written without it is
+    immutable and permanently revokes that session's real-entry authority --
+    ``h7_session.open_real_session`` refuses an unlinked chain -- so an
+    unlinked receipt must never reach disk in the first place.
+    """
+    if source_health_receipt is None or source_health_receipt_path is None:
+        raise ValueError(
+            "data gate requires a linked source_health receipt; refusing to "
+            "write an unlinked receipt (it would be immutable and would "
+            "revoke this session's entry authority)")
+    if source_health_receipt.get("receipt_type") != "source_health":
+        raise ValueError("data gate requires a source_health receipt")
+    if (source_health_receipt.get("evaluation_session")
+            != result["evaluation_session"]):
+        raise ValueError("source-health receipt session does not match gate")
+    if source_health_receipt.get("scope", {}).get("scope_hash") != \
+            result["scope"]["scope_hash"]:
+        raise ValueError("source-health receipt scope does not match gate")
+    source_receipt_hash = source_health_receipt.get("receipt_hash")
     payload = {
         "evaluation_session": result["evaluation_session"],
         "requested_run_date": result["requested_run_date"],
@@ -363,8 +372,7 @@ def build_receipt(result: dict, *, source_health_receipt: dict | None = None,
             )
         }).items())),
         "source_health_receipt_hash": source_receipt_hash,
-        "source_health_receipt_path": (str(source_health_receipt_path)
-                                        if source_health_receipt_path else None),
+        "source_health_receipt_path": str(source_health_receipt_path),
         "config_hash": config_hash(),
         "source_hash": diagnostic_source_hash(),
     }
@@ -434,7 +442,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--reports-dir", default=str(DEFAULT_REPORTS_DIR))
     parser.add_argument("--scope", default=None,
                         help="scope JSON file; defaults to official H7 scope")
-    parser.add_argument("--source-health-receipt", default=None)
+    parser.add_argument("--source-health-receipt", default=None,
+                        help="REQUIRED immutable source-health receipt for the "
+                             "same evaluation session; the gate refuses to "
+                             "write an unlinked receipt")
     parser.add_argument("--write-receipt", default=None,
                         help="immutable data-gate receipt path")
     args = parser.parse_args(argv)
@@ -448,6 +459,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if requested > ny_today:
         print(f"--as-of {requested} is in the future; refusing.")
+        return 2
+    if not args.source_health_receipt:
+        print("H7 DATA GATE ERROR -- --source-health-receipt is required "
+              "(fail closed, no artifact written). A gate receipt with no "
+              "source-health link is immutable and permanently revokes this "
+              "session's real-entry authority. Run "
+              "`python -m options_researcher.h7_source_health` first and pass "
+              "the receipt path it prints, or use tools/daily_ritual.sh, "
+              "which chains them for you.")
         return 2
 
     try:
