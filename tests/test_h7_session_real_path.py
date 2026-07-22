@@ -153,10 +153,13 @@ class RealSessionCase(unittest.TestCase):
         amd_gate: str = "CLEAR",
         linked: bool = True,
         unhealthy: tuple[str, ...] = (),
+        source_names: tuple[str, ...] | None = None,
     ) -> Path:
         source_path, gate_path = self._paths(evaluation)
         unhealthy_set = set(unhealthy)
-        symbol_map = {
+        source_names = source_names or tuple(self.scope["symbols"])
+        source_unhealthy = unhealthy_set & set(source_names)
+        source_symbol_map = {
             symbol: {
                 "symbol": symbol,
                 "healthy": symbol not in unhealthy_set,
@@ -167,7 +170,7 @@ class RealSessionCase(unittest.TestCase):
                 ),
                 "flags": ["MISSING"] if symbol in unhealthy_set else [],
             }
-            for symbol in self.scope["symbols"]
+            for symbol in source_names
         }
         source = make_receipt(
             "source_health",
@@ -176,11 +179,11 @@ class RealSessionCase(unittest.TestCase):
                 "requested_run_date": DECISION,
                 "known_as_of_utc": f"{evaluation}T20:00:00+00:00",
                 "scope": self.scope,
-                "healthy_count": len(symbol_map) - len(unhealthy_set),
-                "unhealthy_count": len(unhealthy_set),
-                "unhealthy_symbols": sorted(unhealthy_set),
-                "activation_ready": not unhealthy_set,
-                "symbols": symbol_map,
+                "healthy_count": len(source_symbol_map) - len(source_unhealthy),
+                "unhealthy_count": len(source_unhealthy),
+                "unhealthy_symbols": sorted(source_unhealthy),
+                "activation_ready": not source_unhealthy,
+                "symbols": source_symbol_map,
                 "input_files": {},
                 "config_hash": config_hash(),
                 "source_hash": SOURCE_HASH,
@@ -194,8 +197,8 @@ class RealSessionCase(unittest.TestCase):
                 "requested_run_date": DECISION,
                 "scope": self.scope,
                 "whole_universe_verdict": verdict,
-                "go_count": len(symbol_map) if verdict == "GO" else 0,
-                "no_go_count": 0 if verdict == "GO" else len(symbol_map),
+                "go_count": len(self.scope["symbols"]) if verdict == "GO" else 0,
+                "no_go_count": 0 if verdict == "GO" else len(self.scope["symbols"]),
                 "symbols": {
                     symbol: {"symbol": symbol, "verdict": verdict}
                     for symbol in self.scope["symbols"]
@@ -298,6 +301,16 @@ class TestSessionRefusals(RealSessionCase):
         self.assertEqual(session.included_symbols, INCLUDED)
         evidence = session_module.record_session_evidence(session, symbol="AMD")
         self.assertEqual(evidence.source_health.payload["healthy_symbols"], sorted(INCLUDED))
+
+    def test_refuses_receipt_not_covering_full_official_scope(self):
+        self._write_receipts(EVALUATION, source_names=INCLUDED)
+
+        with self.assertRaises(SessionRefused) as ctx:
+            self.open()
+        self.assertIn(
+            "does not cover the full official scope",
+            str(ctx.exception),
+        )
 
     def test_refuses_before_registered_decision_window_not_prior_data_session(self):
         with self.assertRaises(SessionRefused):
