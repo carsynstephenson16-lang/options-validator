@@ -212,6 +212,18 @@ follow the script's own idiom.) Add `reports/h10/` to the Step-8 allow-list.
 - [ ] **Step 5: Verify the ritual script parses** — `bash -n tools/daily_ritual.sh`.
 - [ ] **Step 6: Commit** — `feat(h10): paper book, append-only observations, ritual wiring`
 
+> **Correction recorded 2026-07-22 (orchestrator ratification, after the
+> fact):** the committed implementation (d06c13a) passes `--as-of "$RUN_DATE"`
+> to `h10_watch`/`h10_observe` — not `"$AS_OF"` as the Step 4 snippet says —
+> and keys the receipt filename and `as_of` fields by RUN_DATE. This is
+> functionally correct: Task 2 defined `--as-of` as a *requested run date*
+> that evaluates the last completed session strictly before it (mirroring
+> `qm_watch`), so passing the already-resolved `$AS_OF` would have evaluated
+> one session too early. The evaluated session lives in the receipt's
+> `evaluation_session` field. The deviation had been recorded only as an
+> inline shell comment (`daily_ritual.sh:192-193`); this note is the missing
+> plan-level record. Task 5's artifact map below is aligned to it.
+
 ### Task 4: H5 `entry_watch` into the ritual with loud FIRE surfacing
 
 **Files:**
@@ -252,20 +264,73 @@ Task 5 receipt is where the alert lands — coordinate with Task 5.) Add
   durability block at `:208`; receipt path into the allow-list)
 - Test: `tests/test_ritual_receipt.py` (create)
 
-Contract: `python -m options_researcher.ritual_receipt --as-of $AS_OF` writes
+> **Corrected 2026-07-22 (orchestrator ruling, after Codex correctly stopped
+> and reported):** the original contract named artifacts that nothing writes
+> (H7 preflight is write-nothing by tested contract; `h6_watch` writes only
+> with `--write-receipt`, which the ritual did not pass; `h8_watch` has no
+> file output at all) and keyed H10 by AS_OF when the committed Task 3
+> implementation keys it by RUN_DATE. A literal build would report MISSING
+> every day. Step 0 below makes the artifacts exist at the RITUAL layer —
+> no watcher/preflight module is modified — and the artifact map is now
+> normative.
+
+Contract: `python -m options_researcher.ritual_receipt --as-of $AS_OF
+--run-date $RUN_DATE` (both required; the module never derives a date from
+the wall clock — keeps tests deterministic and offline) writes
 `reports/ritual/capture_receipt_<AS_OF>.json` summarizing, for each of
-H5/H6/H7/H8/H10: `{"status": "CAPTURED"|"NO_SIGNAL"|"REFUSED"|"MISSING", "evidence": <path or null>, "detail": <one line>}`, by checking the existence
-and freshness (must be dated AS_OF) of that day's artifacts: H7 = data-gate
-receipt + watch output + preflight result; H6/H8 = watcher outputs; H5 =
-`reports/h5/entry_watch_<AS_OF>.txt`; H10 = receipt + observation line. Any
+H5/H6/H7/H8/H10: `{"status": "CAPTURED"|"NO_SIGNAL"|"REFUSED"|"MISSING", "evidence": <path or null>, "detail": <one line>}`. Any
 `MISSING`/`REFUSED` → exit 1, and the ritual must surface that as a loud
 failure line (not abort the durability step — evidence still gets committed).
+
+Artifact map (normative):
+
+| Hyp | Artifact(s) checked | Date key |
+|-----|---------------------|----------|
+| H5 | `reports/h5/entry_watch_<AS_OF>.txt` (exists since Task 4) | AS_OF |
+| H6 | `reports/h6_forward/<AS_OF>.json` (Step 0b) | AS_OF |
+| H7 | data-gate receipt (same path the ritual computes as `$DG_RECEIPT`), `reports/h7_receipts/<scope>/watcher/<AS_OF>.json` (h7_watch already writes it), `reports/h7_receipts/<scope>/preflight/<AS_OF>.txt` (Step 0a) | AS_OF |
+| H8 | `reports/h8_forward/<AS_OF>.json` (Step 0c) | AS_OF |
+| H10 | `reports/h10/receipts/h10_watch_<RUN_DATE>.json` + the `reports/h10/observations.jsonl` line with `as_of == RUN_DATE`; the receipt's embedded `evaluation_session` MUST equal AS_OF, else status REFUSED with detail "session mismatch" | RUN_DATE |
+
+JSON artifacts must be non-empty and parse as JSON; an empty or unparseable
+file is MISSING (a shell redirect creates an empty file even when the
+producing command fails).
+
+- [ ] **Step 0: make the artifacts exist (ritual-layer capture wiring only):**
+  - **0a — H7 preflight text.** The ritual already captures preflight stdout
+    in `PF_OUT` (`daily_ritual.sh:159-162`). After the echo, write `$PF_OUT`
+    plus a final `exit_code=<n>` line to
+    `reports/h7_receipts/${SCOPE_ID}/preflight/${AS_OF}.txt` (`mkdir -p`
+    first). Do NOT modify `h7_entry_preflight.py` — its write-nothing
+    property is a tested contract. Verified safe 2026-07-22: no code
+    enumerates `reports/h7_receipts/` (all H7 receipts are read by explicit
+    path, and `research/hashing.py` hash surfaces exclude `reports/`
+    entirely); the tree is already in the Step-8 allow-list.
+  - **0b — H6 receipt.** The `h6_watch` line (`daily_ritual.sh:171`) gains
+    `--write-receipt "reports/h6_forward/${AS_OF}.json"`. This matches the
+    module's own `H6_RECEIPT_DIR` default and the existing
+    `reports/h6_forward/2026-07-13.json` naming; verified 2026-07-22 that
+    nothing scans that directory (`thetadata_cutoff_preflight.py:158` only
+    composes a command string). Known behavior: an intra-day re-run whose
+    snapshot differs exits nonzero on the immutable-receipt collision —
+    loud, by design; the existing `|| note` handles it.
+  - **0c — H8 JSON.** The `h8_watch` line (`daily_ritual.sh:188`) gains
+    `--json` with stdout REDIRECTED (not `tee` — a pipe would mask the exit
+    code) to `reports/h8_forward/${AS_OF}.json`; `mkdir -p reports/h8_forward`
+    first. `--json` stdout is pure `json.dumps` (`h8_watch.py:876-877`);
+    BLOCKER lines stay on stderr and still reach the ritual log. Do not
+    modify `h8_watch.py`.
+  - **0d — allow-list.** Step-8 `git add` list (`daily_ritual.sh:239-240`)
+    gains `reports/h6_forward reports/h8_forward reports/ritual`.
+  - `bash -n tools/daily_ritual.sh` clean.
 - [ ] **Step 1: Write failing tests** — synthetic tmp dirs; cases: all present
 → exit 0 with five CAPTURED/NO_SIGNAL entries; one missing → exit 1 and status
-MISSING; stale (yesterday-dated) artifact → MISSING with detail "stale".
+MISSING; stale (yesterday-dated) artifact → MISSING with detail "stale";
+H10 receipt present but `evaluation_session != AS_OF` → REFUSED "session
+mismatch"; empty/unparseable JSON artifact → MISSING.
 - [ ] **Step 2: Implement; suite + ruff + pyright green.**
-- [ ] **Step 3: Wire into the ritual** before the durability block; add
-`reports/ritual/` to the allow-list; `bash -n` clean.
+- [ ] **Step 3: Wire into the ritual** before the durability block (receipt
+step runs with `--as-of "$AS_OF" --run-date "$RUN_DATE"`); `bash -n` clean.
 - [ ] **Step 4: Commit** — `feat(ritual): per-hypothesis capture receipt; silent no-op runs impossible`
 
 ### Task 6 (GATED — owner ratification required first): H7 real exit + scoring
@@ -325,7 +390,9 @@ Spec coverage: R1→Tasks 6, R2→Task 7, R3→Tasks 1-3, R4→Task 4, R5→Task
 §3 items covered. Gates: Task 6 Step 0 enforces the SPEC's NOT-BUILD-AUTHORIZED
 stamp; Task 7 gates on review PASS. Types/naming: h10 artifact paths
 (`reports/h10/receipts/h10_watch_<AS_OF>.json`, `reports/h10/observations.jsonl`)
-are used consistently across Tasks 2, 3, 5. Known intentional deviation from
+are used consistently across Tasks 2, 3, 5 *(superseded on the H10 date key by
+the 2026-07-22 correction notes in Tasks 3 and 5 — the filename key is
+RUN_DATE)*. Known intentional deviation from
 the writing-plans house style: Task 6 contains interface-level rather than
 line-level code because its line-level truth is the owner-ratified SPEC — 
 duplicating it here would create a second, driftable copy.
