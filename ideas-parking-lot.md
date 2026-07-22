@@ -641,6 +641,20 @@ A skeptical research subagent's brief (the arc's §-notes) found every BS
 vol) or a normalization tool. The items below were cut from that arc's scope and  
 parked here so the cut is on the record, not just in the spec.
 
+### BS "fair value vs market price" richness ranking — park-leaning-REJECT
+
+- **What:** rank contracts by (BS theoretical value − market price) using some
+  vol input, treat the largest residuals as "opportunities."
+- **Why parked (nearly rejected):** the research brief flagged this as the
+  **most self-deceiving** candidate — the residual is IV-minus-your-vol-input
+  restated, i.e. short vol dressed as a pricing error, which hides the risk
+  being taken. Same failure family as the rejected `TAOV` composite (see
+  "Explicitly rejected"). It is recorded here, not built.
+- **Gate before building:** would need an explicit owner override AND a
+  pre-registration proving the residual carries signal *beyond* the existing
+  `vrp_for_seller` / `H5_IVR_*` axes after costs — the same non-redundancy bar
+  the VIXEQ richness park failed. Default expectation: it does not.
+
 ### Generic (non-earnings-conditioned) term/skew richness score
 
 - **What:** a bare IV term-structure slope or skew-richness ranking column with
@@ -699,6 +713,30 @@ cross-book review.
 
 
 
+
+## 2026-07-21 — PRYMY (Prysmian S.p.A.) — structurally out of scope, no options exist
+Owner asked for an analysis on "pry" / PRYMY. **This validator cannot analyze it:
+PRYMY is an *unsponsored* ADR quoted OTC (OTCMKTS/Pink), not listed on NYSE or
+Nasdaq.** OCC clears standardized options listed on a national securities
+exchange and the underlying must meet the selecting exchange's listing
+standards, so an OTC unsponsored ADR has no listed US options chain. The
+"option chain" tabs on Yahoo / Benzinga / Seeking Alpha are template pages
+rendered for every symbol, not evidence that contracts exist.
+
+Consequences: no ThetaData chain to cache, no spread/OI liquidity gates to
+evaluate, nothing for H5/H6/H7/H8 to consume. It also does not move any live
+hypothesis toward its verdict, so it fails the README "Scope status" scope gate
+independently of the data problem.
+
+Concentration note: Prysmian is power/grid cable — the *same* AI-infrastructure
+power factor the existing book is already concentrated in. Adding it would
+increase, not diversify, that exposure.
+
+Un-park gate: only if Prysmian lists an exchange-traded US ADR with an OCC
+options chain that passes the frozen liquidity gates, AND it is written into a
+registered hypothesis. Milan-listed PRY options are a different market
+(non-US clearing, EUR, different hours) and are out of this repo's scope
+entirely. Review date: next cross-book review.
 
 ## Primary Model Separation & Corner Indicator
 
