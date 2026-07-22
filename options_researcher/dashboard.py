@@ -147,7 +147,8 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
             reports: list[str] | None = None,
             closes: dict[str, list[float]] | None = None,
             triggers: dict[str, str] | None = None,
-            data_as_of: str | None = None) -> dict:
+            data_as_of: str | None = None,
+            h7_window: dict | None = None) -> dict:
     """Gather book, achievements, reports, and sparkline data into one dict.
 
     Every argument defaults to loading the real project state; pass any of
@@ -174,6 +175,18 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
             print(f"WARN entry-watch unavailable, trigger panel empty: {e}",
                   file=sys.stderr)
             triggers = {}
+    if h7_window is None:
+        try:
+            from options_researcher.h7_window_status import window_status
+
+            h7_window = window_status()
+        except Exception as exc:
+            # Presentation boundary: the rest of mission control must remain
+            # visible, while this panel shows the exact status failure.
+            h7_window = {
+                "ok": False,
+                "detail": f"window status unavailable: {exc}",
+            }
 
     achievements = []
     for line in facts:
@@ -191,6 +204,7 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         "sparklines": dict(closes),
         "triggers": dict(triggers),
         "data_as_of": data_as_of,
+        "h7_window": h7_window,
     }
 
 
@@ -380,6 +394,35 @@ def _reports_list(reports: list[str]) -> str:
     return f"<ul>{items}</ul>"
 
 
+def _h7_window_panel(window: dict) -> str:
+    """Render the read-only H7 operating summary as a standalone panel."""
+    if not window.get("ok"):
+        return (
+            '<div style="border:1px solid #a33;padding:12px;margin:12px 0">'
+            f'<b>H7 FORWARD WINDOW</b> &mdash; UNAVAILABLE: '
+            f'{_esc(window.get("detail", "unknown error"))}</div>'
+        )
+
+    receipts = window["receipts"]
+    gate = receipts["data_gate_verdict"] or (
+        "present" if receipts["data_gate_present"] else "MISSING"
+    )
+    return (
+        '<div style="border:1px solid #6ab;padding:12px;margin:12px 0">'
+        f'<b>H7 FORWARD WINDOW</b> (live, scores once {_esc(window["end"])})<br>'
+        f'sessions: {_esc(window["sessions_elapsed"])}/'
+        f'{_esc(window["total_sessions"])} elapsed '
+        f'({_esc(window["sessions_remaining"])} left) &middot; '
+        f'entries taken: {_esc(window["entries_taken"])}<br>'
+        f'universe: {_esc(len(window["included"]))} in / '
+        f'{_esc(len(window["excluded"]))} out &middot; '
+        f'session {_esc(receipts["evaluation_session"])} receipts: '
+        f'health {"OK" if receipts["source_health_present"] else "MISSING"}, '
+        f'gate {_esc(gate)}'
+        '</div>'
+    )
+
+
 def render(data: dict) -> str:
     """Render the assemble() dict into a single self-contained HTML string.
 
@@ -394,6 +437,10 @@ def render(data: dict) -> str:
     sparklines = data.get("sparklines", {})
     triggers = data.get("triggers", {})
     data_as_of = data.get("data_as_of") or "unknown"
+    h7_window = data.get(
+        "h7_window",
+        {"ok": False, "detail": "window status missing from dashboard data"},
+    )
 
     as_of = _datetime.now(timezone.utc).date().isoformat()
     party_cards = "".join(
@@ -585,6 +632,8 @@ def render(data: dict) -> str:
   <h1>MISSION CONTROL</h1>
   <div class="header-sub">SCANNER MODE &mdash; as of {_esc(as_of)}</div>
 </div>
+
+{_h7_window_panel(h7_window)}
 
 <div class="panel">
   <h2>PARTY</h2>

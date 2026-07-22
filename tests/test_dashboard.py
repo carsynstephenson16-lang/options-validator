@@ -24,6 +24,57 @@ class AssembleTests(unittest.TestCase):
 
 
 class RenderTests(unittest.TestCase):
+    @staticmethod
+    def _offline_parts() -> dict:
+        return {
+            "book": {"marks": [], "bucket_issues": []},
+            "facts": [],
+            "reports": [],
+            "closes": {},
+            "triggers": {},
+            "data_as_of": "2026-07-21",
+        }
+
+    def test_h7_window_panel_rendered(self):
+        from options_researcher import dashboard
+
+        data = dashboard.assemble(
+            h7_window={
+                "ok": True,
+                "start": "2026-07-20",
+                "end": "2026-10-26",
+                "total_sessions": 70,
+                "sessions_elapsed": 3,
+                "sessions_remaining": 67,
+                "included": ["AMD"],
+                "excluded": ["NVDA"],
+                "event_counts": {"window_registration": 1},
+                "entries_taken": 0,
+                "receipts": {
+                    "evaluation_session": "2026-07-21",
+                    "source_health_present": True,
+                    "data_gate_present": False,
+                    "data_gate_verdict": None,
+                },
+            },
+            **self._offline_parts(),
+        )
+
+        html = dashboard.render(data)
+        self.assertIn("H7 FORWARD WINDOW", html)
+        self.assertIn("entries taken: 0", html)
+
+    def test_h7_window_panel_absent_store(self):
+        from options_researcher import dashboard
+
+        data = dashboard.assemble(
+            h7_window={"ok": False, "detail": "no forward store"},
+            **self._offline_parts(),
+        )
+
+        html = dashboard.render(data)
+        self.assertIn("no forward store", html)
+
     def test_render_contains_sections_and_no_external_assets(self):
         from options_researcher.dashboard import render
         html = render(assemble(book={"marks": [], "bucket_issues": []},
