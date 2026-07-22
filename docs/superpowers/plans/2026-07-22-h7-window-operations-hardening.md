@@ -8,6 +8,16 @@
 
 **Tech Stack:** Python 3.12 / uv, unittest (offline), zsh LaunchAgent ritual, append-only hash-chained JSONL store.
 
+**Execution status (2026-07-22):** Tasks 1–6 are implemented and verified;
+the real-exit/scoring scope required by Task 7 is opened in
+`docs/superpowers/specs/2026-07-22-h7-real-exit-scoring-SPEC.md` and remains
+deliberately inactive pending its own build/review/owner gate. The complete
+suite is 1,626/1,626 green; Ruff and Pyright are clean; the forward store
+remains `VALID records=1` with zero entries. Task 2 Step 8 is necessarily
+pending the 2026-07-23 07:10 unattended run. The dashboard HTML was rebuilt
+and source-verified; an interactive preview browser was unavailable in the
+implementation session.
+
 ---
 
 ## Investigation verdicts this plan encodes (2026-07-22)
@@ -31,15 +41,15 @@
 **Files:**
 - Append (via normal fact flow, never hand-edit): `ledger/facts.log`
 
-- [ ] **Step 1: Present the verification evidence to the owner**
+- [x] **Step 1: Present the verification evidence to the owner**
 
 Show the owner the adversarial verification report from this session (cohort veto CONFIRMED at `options_researcher/h7_session.py:130-137`; 15-name coverage retained at `h7_session.py:68-71,111,129,184,199`; cohort loaded from verified seq-0 via `options_researcher/h7_cohort.py:48-64`; v3 hashing at `research/hashing.py:134`; 26/26 targeted tests green; empirical probe: next correct ritual run opens the door with 8 entry-ready names, NOW banned per-name). Also present the 7 non-blocking findings (coverage-refusal test gap, no version field in receipts, `source_hash_v2` field literal now carrying a v3 hash, `verify_attempt_current` hard-refuses non-v3, v2 walker output-identical-not-code-identical, stale plan-doc caveat, hand-formatted fact timestamp).
 
-- [ ] **Step 2: Owner types the verdict**
+- [x] **Step 2: Owner types the verdict**
 
 The owner types PASS / FAIL (with any conditions) in chat. FAIL or conditions → stop; the conditions become new tasks before Task 2.
 
-- [ ] **Step 3: Record the review fact**
+- [x] **Step 3: Record the review fact**
 
 Append one fact to `ledger/facts.log` (via the Python fact-append path used by prior review facts — never a hand edit) recording: owner adversarial review of commit `1079263` per `H7_C1_EXIT_AND_SCORING_DEADLINES`, verdict verbatim, the seven disclosed non-blocking findings, and D2's reconciliation rule if the owner confirms it in the same sitting.
 
@@ -51,7 +61,7 @@ Append one fact to `ledger/facts.log` (via the Python fact-append path used by p
 - Modify (merge): entire branch delta, notably `options_researcher/h7_session.py`, `research/hashing.py`, `tools/daily_ritual.sh`
 - Conflict-resolve: `reports/h7_data_gate/h7-forward-15-v1/receipts/2026-07-20.json` (+ any receipt paths that conflict by merge day), `tools/daily_ritual.sh`
 
-- [ ] **Step 1: Snapshot both sides' receipt sets**
+- [x] **Step 1: Snapshot both sides' receipt sets**
 
 ```bash
 cd /Users/carsynstephenson/options-validator
@@ -62,7 +72,7 @@ git diff --name-only origin/main...HEAD -- reports/ | sort
 
 List every `reports/**` path changed on both sides — these are the deliberate-resolution set.
 
-- [ ] **Step 2: Merge on a clean main checkout**
+- [x] **Step 2: Merge on a clean main checkout**
 
 ```bash
 git checkout main && git pull --ff-only origin main
@@ -71,7 +81,7 @@ git merge --no-ff feature/h7-real-entry-path
 
 Expected: CONFLICT on `tools/daily_ritual.sh` and on one or more `reports/h7_data_gate/h7-forward-15-v1/receipts/*.json` / `reports/h7_receipts/h7-forward-15-v1/source_health/*.json`.
 
-- [ ] **Step 3: Resolve receipts — main's copy always survives (rule D2)**
+- [x] **Step 3: Resolve receipts — main's copy always survives (rule D2)**
 
 ```bash
 git checkout --ours -- reports/h7_data_gate/h7-forward-15-v1/ reports/h7_receipts/h7-forward-15-v1/
@@ -89,7 +99,7 @@ print('linked OK:', d['source_health_receipt_path'])"
 
 Non-conflicting branch-only receipts (e.g. the orphan dev `source_health/2026-07-21.json` if main produced none) merge in unchanged — they are valid immutable records.
 
-- [ ] **Step 4: Resolve `tools/daily_ritual.sh` — union of both improvements**
+- [x] **Step 4: Resolve `tools/daily_ritual.sh` — union of both improvements**
 
 Start from **main's** version (repo-root derivation + refuse-off-main guard from `7ffc587`, Step-8 evidence commit/push/snapshot from `b95c102`) and insert the branch's preflight block immediately after the `h7_watch` line inside the `GATE_GO` branch, exactly:
 
@@ -110,7 +120,7 @@ Start from **main's** version (repo-root derivation + refuse-off-main guard from
 
 `git add tools/daily_ritual.sh`
 
-- [ ] **Step 5: Full suite + lint before concluding the merge**
+- [x] **Step 5: Full suite + lint before concluding the merge**
 
 ```bash
 uv run python -m unittest discover -s tests   # exit code is the verdict (~8 min)
@@ -119,7 +129,7 @@ uv run ruff check .
 
 Expected: OK / clean. Any failure → fix within the merge commit, re-run.
 
-- [ ] **Step 6: Commit the merge, append the reconciliation fact, push**
+- [x] **Step 6: Commit the merge, append the reconciliation fact, push**
 
 ```bash
 git commit   # merge commit; message: merge(h7): entry-authority corrections + preflight to main; receipts reconciled to launchd copies
@@ -133,7 +143,7 @@ git push origin main
 
 (Per commit policy: merge executes only after Task 1's owner PASS.)
 
-- [ ] **Step 7: Fast-forward the ops checkout now (don't wait for Step 8's next self-merge)**
+- [x] **Step 7: Fast-forward the ops checkout now (don't wait for Step 8's next self-merge)**
 
 ```bash
 git -C /Users/carsynstephenson/options-validator-ops pull --ff-only origin main
@@ -151,11 +161,11 @@ After the next 07:10 run, read the newest `/Users/carsynstephenson/options-valid
 **Files:**
 - Modify: `tests/test_h7_session_real_path.py` (fixture pattern lives at the existing `test_uses_registered_cohort_for_health_veto`, currently `:293-301`)
 
-- [ ] **Step 1: Read the neighboring test's fixture**
+- [x] **Step 1: Read the neighboring test's fixture**
 
 Read `tests/test_h7_session_real_path.py` in full; identify the helper that builds the 15-name real-shaped source-health receipt used at `:293-301`.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Duplicate `test_uses_registered_cohort_for_health_veto`, rename to `test_refuses_receipt_not_covering_full_official_scope`, and change ONE thing: build the receipt's `symbols` map over **only the 9 cohort names** (drop the 6 excluded names). Assert the door refuses:
 
@@ -171,7 +181,7 @@ def test_refuses_receipt_not_covering_full_official_scope(self):
 
 (The refusal string is exact — `options_researcher/h7_session.py:68-71`.)
 
-- [ ] **Step 3: Run it — must FAIL only if the guard is broken; expect PASS**
+- [x] **Step 3: Run it — must FAIL only if the guard is broken; expect PASS**
 
 ```bash
 uv run python -m unittest tests.test_h7_session_real_path -v
@@ -179,7 +189,7 @@ uv run python -m unittest tests.test_h7_session_real_path -v
 
 This is a pin on existing behavior, so it should pass immediately. To prove the test has teeth, temporarily change `!=` to `>` in the `set(symbols) != set(names)` check at `h7_session.py:70`, rerun (expect the new test FAILS), revert.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/test_h7_session_real_path.py
@@ -196,7 +206,7 @@ git commit -m "test(h7): pin 15-name source-health coverage refusal against regr
 
 Rationale (verification finding B): receipts carry a bare `source_hash`; a v2-era receipt fails only as generically "stale". New receipts declare their contract. Validators are NOT changed (they correctly recompute with the current contract); dated existing receipts are NOT touched.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In each of the three test files, extend the existing receipt-writing test with one assertion on the written receipt dict:
 
@@ -206,7 +216,7 @@ self.assertEqual(receipt["source_hash_contract"], DIAGNOSTIC_SOURCE_HASH_VERSION
 
 importing `from research.hashing import DIAGNOSTIC_SOURCE_HASH_VERSION`. Run each module: expect FAIL (KeyError).
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 In each producer, directly beside the existing `"source_hash": diagnostic_source_hash(),` line add:
 
@@ -216,7 +226,7 @@ In each producer, directly beside the existing `"source_hash": diagnostic_source
 
 with the matching import. No other change; `receipt_hash` self-binding covers the new field automatically for new receipts.
 
-- [ ] **Step 3: Run the three test modules, then the full suite**
+- [x] **Step 3: Run the three test modules, then the full suite**
 
 ```bash
 uv run python -m unittest tests.test_h7_source_health tests.test_h7_data_gate tests.test_h7_watch
@@ -225,7 +235,7 @@ uv run python -m unittest discover -s tests
 
 Expected: OK. If any receipt-fixture test elsewhere compares full dict equality, update the fixture — never a dated on-disk receipt.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add options_researcher/h7_source_health.py options_researcher/h7_data_gate.py options_researcher/h7_watch.py tests/
@@ -240,7 +250,7 @@ git commit -m "feat(h7): declare source-hash contract version in new receipts"
 - Create: `options_researcher/h7_window_status.py`
 - Test: `tests/test_h7_window_status.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 """Offline tests for the read-only H7 window status view."""
@@ -281,7 +291,7 @@ class WindowStatusRealStore(unittest.TestCase):
 
 Run: `uv run python -m unittest tests.test_h7_window_status -v` → FAIL (module missing).
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 ```python
 """Read-only status of the live H7 forward paper window.
@@ -379,7 +389,7 @@ if __name__ == "__main__":
 
 Note for the implementer: before finishing, print `payload["universe"]["excluded"]` once from the real store to confirm whether entries are plain symbols or dicts, and simplify the `excluded` line to match reality (the seq-0 record is the source of truth; the defensive branch above must not survive if the shape is unambiguous).
 
-- [ ] **Step 3: Run the tests**
+- [x] **Step 3: Run the tests**
 
 ```bash
 uv run python -m unittest tests.test_h7_window_status -v
@@ -388,7 +398,7 @@ uv run python -m options_researcher.h7_window_status   # eyeball the real output
 
 Expected: OK; CLI prints the live summary (day 3/70 territory, entries 0).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add options_researcher/h7_window_status.py tests/test_h7_window_status.py
@@ -403,7 +413,7 @@ git commit -m "feat(h7): read-only forward-window status module + CLI"
 - Modify: `options_researcher/dashboard.py` (`assemble` at `:146`, `render` at `:383`)
 - Test: `tests/test_dashboard.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Read `tests/test_dashboard.py` first for its existing assemble/render call pattern, then add:
 
@@ -431,7 +441,7 @@ def test_h7_window_panel_absent_store(self):
 
 Run `uv run python -m unittest tests.test_dashboard -v` → FAIL (unexpected kwarg).
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 In `assemble(...)` add the keyword `h7_window: dict | None = None` and default it fail-visible:
 
@@ -466,7 +476,7 @@ def _h7_window_panel(win: dict) -> str:
         '</div>')
 ```
 
-- [ ] **Step 3: Run tests, then rebuild the real dashboard and look at it**
+- [x] **Step 3: Run tests, then rebuild the real dashboard and inspect it**
 
 ```bash
 uv run python -m unittest tests.test_dashboard -v
@@ -476,7 +486,7 @@ open .tmp/dashboard/index.html
 
 Expected: tests OK; the page shows the window panel with live numbers.
 
-- [ ] **Step 4: Full suite + commit**
+- [x] **Step 4: Full suite + commit**
 
 ```bash
 uv run python -m unittest discover -s tests
@@ -493,7 +503,7 @@ git commit -m "feat(dashboard): H7 forward-window status panel"
 **Files:**
 - Create (next session, own arc): `docs/superpowers/plans/2026-07-XX-h7-real-exit-scoring-SPEC.md`
 
-- [ ] **Step 1: Open the spec with the six investigated deltas as its required scope**
+- [x] **Step 1: Open the spec with the six investigated deltas as its required scope**
 
 (1) an exit-authorized session type — `RealStoreSession` is entry-only by declared design (`h7_paper_lifecycle.py:89-93` refuses); (2) receipt re-verification per exit session mirroring `h7_session._watcher_receipt_for_session`/`_load_bound_chain`/`_load_bound_close`; (3) per-monitoring-session evidence events (`data_gate`, plus `source_health` for earnings exits); (4) decision-vs-evaluation session mapping for `observe_exit`; (5) exit + scoring CLI; (6) a scoring output record/artifact convention — **none exists today** — honoring the frozen scorer identity in the seq-0 record (`options_researcher.h7_forward_scoring`, min_losses=10, bootstrap=5000, scores ONCE).
 
