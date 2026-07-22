@@ -16,6 +16,10 @@ conformance, scoring-path SPEC conformance, safety/inactivity)
 > review, triggered because the Codex session ended mid-audit. The findings
 > below are inputs to §9, not a substitute for it. **No PASS is claimed.**
 
+**Post-audit status:** Codex remediated F1-F6 and F9 and answered F7/F10. The
+fresh-context review and its one remaining owner-governance blocker are recorded
+in [2026-07-22-h7-task6-independent-adversarial-review.md](2026-07-22-h7-task6-independent-adversarial-review.md).
+
 ## Verdict
 
 The build is mechanically complete and the safety-critical invariants held.

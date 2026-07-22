@@ -1,6 +1,10 @@
-"""One-door reconciliation (Task A3): ``register_window_real`` is intended to be
-the only code path that writes the real H7 forward store, and
-``tools/h7_manual_activate.py`` is its only caller.
+"""One-door registration reconciliation plus typed post-registration writers.
+
+``register_window_real`` is the only path allowed to create seq-0 in the real
+H7 forward store, and ``tools/h7_manual_activate.py`` is its only caller.  The
+later real exit/scoring arc intentionally adds factory-issued, receipt-gated
+append paths after registration; those are distinct typed doors, not alternate
+activation paths.
 
 What the STRUCTURAL (AST) scan below actually proves -- and what it does NOT:
   * It PROVES that, across the scanned source roots, no module makes a direct
@@ -12,12 +16,13 @@ What the STRUCTURAL (AST) scan below actually proves -- and what it does NOT:
     store." ``register_window_real`` legitimately appends to whatever
     ``base_dir`` it is handed (the CLI hands it REAL_FORWARD_STORE via a
     default), and a static scan cannot follow that value at runtime. The
-    single-writer guarantee is carried by RUNTIME guards, not this scan:
-    ``_synthetic_base`` refuses the real store on every other append path;
-    ``expected_head=None`` makes a concurrent/second write lose; and the
+    registration guarantee is carried by RUNTIME guards, not this scan:
+    ``expected_head=None`` makes a concurrent/second seq-0 write lose, and the
     append-time VALID-EMPTY re-verify inside ``register_window_real`` refuses
-    if the store is not empty. The scan is the source-level tripwire that
-    keeps a NEW direct door from being added silently.
+    if the store is not empty. Post-registration writers must separately earn
+    their typed authority and can never create or replace seq 0. The scan is
+    the source-level tripwire that keeps a NEW direct named-store door from
+    being added silently.
 
 Four proofs:
   (a) structural scan: no scanned module appends to REAL_FORWARD_STORE (direct,
@@ -188,21 +193,32 @@ def _module_sources() -> dict[str, str]:
 
 
 class StructuralOneDoorTests(unittest.TestCase):
-    def test_register_window_real_is_the_sole_real_store_capable_constructor(self):
+    def test_register_window_real_is_the_sole_unguarded_registration_constructor(self):
         # NOTE: this proves ``register_window_real`` is the only function that
         # BUILDS its own append base without the ``_synthetic_base`` refusal --
         # i.e. the only one structurally CAPABLE of appending to whatever store
         # it is handed. It does not (and cannot statically) prove exactly one
-        # runtime writer; the real-store single-writer guarantee is carried by
-        # the runtime guards documented at module top (_synthetic_base,
-        # expected_head=None, VALID-EMPTY re-verify).
+        # runtime writer; post-registration typed writers inherit a validated
+        # base and are covered by the separate guard proof below.
         offenders = {name: _real_store_constructor_functions(src)
                      for name, src in _module_sources().items()}
         with_constructor = {name: fns for name, fns in offenders.items() if fns}
         self.assertEqual(
             with_constructor,
             {"options_researcher/h7_window_registration.py": ["register_window_real"]},
-            "only register_window_real may construct an unguarded append base")
+            "only register_window_real may construct an unguarded seq-0 append base")
+
+    def test_post_registration_typed_writers_keep_runtime_guards(self):
+        sources = _module_sources()
+        exit_source = sources["options_researcher/h7_exit_session.py"]
+        lifecycle_source = sources["options_researcher/h7_paper_lifecycle.py"]
+        scoring_source = sources["options_researcher/h7_real_scoring.py"]
+
+        self.assertIn("_revalidate(session)", exit_source)
+        self.assertIn("_validate_bound_transition_inputs", lifecycle_source)
+        self.assertIn("_resolve_exit_base", lifecycle_source)
+        self.assertIn("_revalidate(session)", scoring_source)
+        self.assertIn("_require_review_passes(session)", scoring_source)
 
     def test_cli_never_appends_directly(self):
         cli_src = Path("tools/h7_manual_activate.py").read_text()

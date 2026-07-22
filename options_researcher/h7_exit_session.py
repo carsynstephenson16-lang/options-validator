@@ -31,6 +31,7 @@ from options_researcher.h7_paper_lifecycle import (
     TransitionResult,
 )
 from options_researcher.h7_scope import scope_identity, watch_universe
+from options_researcher.h7_watch import evaluation_session as watcher_evaluation_session
 from research.hashing import (
     DIAGNOSTIC_SOURCE_HASH_VERSION,
     canonical_json,
@@ -297,7 +298,10 @@ def _authorized_positions(
             raise ExitSessionRefused("open position did not originate inside the window")
         if evaluation_session < position.entry_session:
             continue
-        if date.fromisoformat(decision_session) <= expiration:
+        if (
+            date.fromisoformat(decision_session) <= expiration
+            or date.fromisoformat(evaluation_session) == expiration
+        ):
             authorized.append(position.position_id)
     if decision_session > window_end and not authorized:
         raise ExitSessionRefused(
@@ -324,6 +328,14 @@ def open_real_exit_session(
     if _utc_now(now) < session_close_utc(evaluation):
         raise ExitSessionRefused(
             f"source evaluation session {evaluation} has unfinished EOD"
+        )
+    mapped_evaluation = watcher_evaluation_session(
+        date.fromisoformat(decision)
+    ).isoformat()
+    if evaluation != mapped_evaluation:
+        raise ExitSessionRefused(
+            f"decision session {decision} requires mapped completed session "
+            f"{mapped_evaluation}, got {evaluation}"
         )
     base = Path(base_dir)
     try:
@@ -524,6 +536,101 @@ def load_bound_close(session: RealExitSession, symbol: str) -> float | None:
     return value
 
 
+def _validate_bound_transition_inputs(
+    session: RealExitSession,
+    *,
+    symbol: str,
+    data_gate_id: str,
+    chain: pd.DataFrame,
+    chain_identity: str,
+    closes_identity: str,
+    underlying_close: float | None,
+    source_health_id: str | None,
+) -> None:
+    """Bind a real lifecycle mutation to the factory-verified receipt bytes."""
+    _revalidate(session)
+    if symbol not in session.included_symbols:
+        raise ExitSessionRefused(f"{symbol} is outside the frozen registered cohort")
+    events = ledger.read_events(session.base_dir)
+    expected_gate_id = f"h7:data_gate:{session.evaluation_session}"
+    gate = next((event for event in events if event.event_id == data_gate_id), None)
+    global_source_id = f"h7:source_health:{session.evaluation_session}"
+    global_source = next(
+        (event for event in events if event.event_id == global_source_id), None
+    )
+    if (
+        data_gate_id != expected_gate_id
+        or gate is None
+        or gate.event_type != "data_gate"
+        or gate.evaluation_session != session.evaluation_session
+        or gate.payload.get("receipt_hash") != session.data_gate_receipt_hash
+        or gate.payload.get("receipt_path") != str(session.data_gate_receipt_path)
+        or gate.payload.get("scope") != scope_identity()
+        or gate.payload.get("whole_universe_verdict")
+        != session.data_gate_verdict
+        or gate.payload.get("go_count") != session.data_gate_go_count
+        or gate.payload.get("no_go_count") != session.data_gate_no_go_count
+        or gate.payload.get("source_health_receipt_hash")
+        != session.source_health_receipt_hash
+        or gate.payload.get("source_health_receipt_path")
+        != str(session.source_health_receipt_path)
+        or gate.causes != [global_source_id]
+        or global_source is None
+        or global_source.event_type != "source_health"
+        or global_source.evaluation_session != session.evaluation_session
+        or global_source.symbol is not None
+        or global_source.payload.get("receipt_hash")
+        != session.source_health_receipt_hash
+        or global_source.payload.get("receipt_path")
+        != str(session.source_health_receipt_path)
+    ):
+        raise ExitSessionRefused(
+            "real exit mutation requires the deterministic receipt-bound data gate"
+        )
+    expected_chain_identity = binding_identity(session, f"chain:{symbol}")
+    expected_closes_identity = binding_identity(session, f"close:{symbol}")
+    if (
+        chain_identity != expected_chain_identity
+        or closes_identity != expected_closes_identity
+    ):
+        raise ExitSessionRefused("real exit mutation has unbound chain/close identity")
+    expected_chain = load_bound_chain(session, symbol)
+    if not isinstance(chain, pd.DataFrame) or not chain.equals(expected_chain):
+        raise ExitSessionRefused("real exit mutation changed the receipt-bound chain")
+    expected_close = load_bound_close(session, symbol)
+    if (
+        (expected_close is None) != (underlying_close is None)
+        or (
+            expected_close is not None
+            and underlying_close is not None
+            and float(underlying_close) != expected_close
+        )
+    ):
+        raise ExitSessionRefused("real exit mutation changed the receipt-bound close")
+    if source_health_id is None:
+        return
+    expected_source_id = f"h7:source_health:{session.evaluation_session}:{symbol}"
+    source = next(
+        (event for event in events if event.event_id == source_health_id), None
+    )
+    state = source_health_state(session, symbol)
+    if (
+        source_health_id != expected_source_id
+        or source is None
+        or source.event_type != "source_health"
+        or source.evaluation_session != session.evaluation_session
+        or source.symbol != symbol
+        or source.payload.get("receipt_hash") != session.source_health_receipt_hash
+        or source.payload.get("receipt_path")
+        != str(session.source_health_receipt_path)
+        or source.payload.get("gate") != state.gate
+        or source.payload.get("healthy") is not state.healthy
+    ):
+        raise ExitSessionRefused(
+            "real exit mutation requires deterministic receipt-bound source health"
+        )
+
+
 def _append_evidence(base: Path, event: dict) -> TransitionResult:
     try:
         result = ledger.append_event(event, base_dir=base)
@@ -641,6 +748,11 @@ def _needs_earnings_evidence(
     session: RealExitSession, position: lifecycle.PaperPosition
 ) -> bool:
     if position.lane != "c":
+        return False
+    expiration = date.fromisoformat(
+        str(position.entry_payload["action"]["expiration"])
+    )
+    if date.fromisoformat(session.evaluation_session) >= expiration:
         return False
     state = source_health_state(session, position.symbol)
     if state.gate == "UNKNOWN":
@@ -788,14 +900,31 @@ def fill_real_exits(session: RealExitSession, *, clock=None) -> ExitRunReport:
     for position in positions:
         published: list[TransitionResult] = []
         try:
-            evidence = record_exit_evidence(
-                session, symbol=position.symbol, include_symbol=False
-            )
-            published.extend(_evidence_events(evidence))
             if position.exit_intent_id is None:
                 raise ExitSessionRefused(
                     f"pending position {position.position_id} has no exit intent"
                 )
+            intent = next(
+                (
+                    event
+                    for event in events
+                    if event.event_id == position.exit_intent_id
+                    and event.event_type == "exit_intent"
+                ),
+                None,
+            )
+            if intent is None:
+                raise ExitSessionRefused(
+                    f"pending position {position.position_id} has no valid exit intent"
+                )
+            include_symbol = intent.payload.get("primary_reason") in {
+                "pre_earnings",
+                "earnings_unknown",
+            }
+            evidence = record_exit_evidence(
+                session, symbol=position.symbol, include_symbol=include_symbol
+            )
+            published.extend(_evidence_events(evidence))
             transition = lifecycle.process_exit_fill(
                 base_dir=session,
                 exit_intent_id=position.exit_intent_id,
@@ -809,6 +938,11 @@ def fill_real_exits(session: RealExitSession, *, clock=None) -> ExitRunReport:
                     session, f"close:{position.symbol}"
                 ),
                 underlying_close=load_bound_close(session, position.symbol),
+                source_health_id=(
+                    evidence.symbol_source_health.event_id
+                    if evidence.symbol_source_health is not None
+                    else None
+                ),
                 clock=clock,
             )
             published.append(transition)

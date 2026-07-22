@@ -15,7 +15,7 @@ from options_researcher import h7_real_scoring as real_scoring
 from options_researcher import h7_window_registration as registration
 from options_researcher.h7_scope import scope_identity
 from research.hashing import sha256_file
-from research.receipts import load_receipt
+from research.receipts import load_receipt, make_receipt, write_immutable_receipt
 
 FINAL = "2026-10-26"
 AFTER_FINAL = datetime(2026, 10, 27, 1, tzinfo=timezone.utc)
@@ -117,7 +117,11 @@ class RealScoringCase(unittest.TestCase):
         )
 
     def append(self, event):
-        return ledger.append_event(event, base_dir=self.base, clock=_clock())
+        return ledger.append_event(
+            event,
+            base_dir=self.base,
+            clock=lambda: datetime.fromisoformat(event["occurred_at_utc"]),
+        )
 
     def _snapshot(self):
         return {
@@ -126,7 +130,111 @@ class RealScoringCase(unittest.TestCase):
             if path.is_file()
         }
 
-    def _append_opening(self, *, expiration="2026-08-21"):
+    def _append_gate(self, session: str) -> str:
+        source_id = f"h7:source_health:{session}"
+        gate_id = f"h7:data_gate:{session}"
+        scope = scope_identity()
+        receipt_dir = self.root / "receipts"
+        source_path = receipt_dir / f"source-{session}.json"
+        gate_path = receipt_dir / f"gate-{session}.json"
+        source_receipt = make_receipt(
+            "source_health",
+            {
+                "evaluation_session": session,
+                "scope": scope,
+                "symbols": {
+                    symbol: {
+                        "symbol": symbol,
+                        "healthy": True,
+                        "gate": "CLEAR",
+                    }
+                    for symbol in scope["symbols"]
+                },
+            },
+        )
+        write_immutable_receipt(source_receipt, source_path)
+        gate_receipt = make_receipt(
+            "data_gate",
+            {
+                "evaluation_session": session,
+                "scope": scope,
+                "whole_universe_verdict": "GO",
+                "go_count": len(scope["symbols"]),
+                "no_go_count": 0,
+                "source_health_receipt_hash": source_receipt["receipt_hash"],
+                "source_health_receipt_path": str(source_path),
+            },
+        )
+        write_immutable_receipt(gate_receipt, gate_path)
+        source_hash = source_receipt["receipt_hash"]
+        existing = {event.event_id for event in ledger.read_events(self.base)}
+        if source_id not in existing:
+            self.append(
+                _event(
+                    source_id,
+                    "source_health",
+                    session,
+                    payload={
+                        "scope": scope,
+                        "healthy_symbols": ["AMD"],
+                        "receipt_hash": source_hash,
+                        "receipt_path": str(source_path),
+                    },
+                )
+            )
+        if gate_id not in existing:
+            self.append(
+                _event(
+                    gate_id,
+                    "data_gate",
+                    session,
+                    causes=[source_id],
+                    payload={
+                        "scope": scope,
+                        "whole_universe_verdict": "GO",
+                        "go_count": len(scope["symbols"]),
+                        "no_go_count": 0,
+                        "receipt_hash": gate_receipt["receipt_hash"],
+                        "receipt_path": str(gate_path),
+                        "source_health_receipt_hash": source_hash,
+                        "source_health_receipt_path": str(source_path),
+                    },
+                )
+            )
+        return gate_id
+
+    def _append_symbol_source(self, session: str) -> str:
+        source_id = f"h7:source_health:{session}:AMD"
+        scope = scope_identity()
+        source_path = self.root / "receipts" / f"source-{session}.json"
+        source_receipt = load_receipt(source_path, expected_type="source_health")
+        if source_id not in {
+            event.event_id for event in ledger.read_events(self.base)
+        }:
+            self.append(
+                _event(
+                    source_id,
+                    "source_health",
+                    session,
+                    symbol="AMD",
+                    payload={
+                        "scope": scope,
+                        "healthy": True,
+                        "gate": "CLEAR",
+                        "receipt_hash": source_receipt["receipt_hash"],
+                        "receipt_path": str(source_path),
+                    },
+                )
+            )
+        return source_id
+
+    def _append_opening(
+        self,
+        *,
+        expiration="2026-08-21",
+        intent_decision="2026-07-20",
+        opening_decision: str | None = None,
+    ):
         intent_id = "intent:AMD:a"
         open_id = "open:AMD:a"
         entry_price = adverse_buy(5.1)
@@ -156,11 +264,30 @@ class RealScoringCase(unittest.TestCase):
                 causes=[self.registration.event_id],
                 payload={
                     "position_id": intent_id,
-                    "decision_session": "2026-07-20",
+                    "decision_session": intent_decision,
                     "planned_fill_session": "2026-07-21",
                     "decision_at_risk": at_risk,
                     "action": action,
                     "legs": [frozen_leg],
+                },
+            )
+        )
+        fill_session = "2026-07-21"
+        gate_id = self._append_gate(fill_session)
+        source_id = self._append_symbol_source(fill_session)
+        approval_id = f"s4.owner_approval:{intent_id}"
+        self.append(
+            _event(
+                approval_id,
+                "owner_approval",
+                intent_decision,
+                symbol="AMD",
+                lane="a",
+                causes=[intent_id],
+                payload={
+                    "entry_intent_id": intent_id,
+                    "fill_session": fill_session,
+                    "approval_cutoff_utc": "2026-07-21T20:00:00+00:00",
                 },
             )
         )
@@ -176,16 +303,16 @@ class RealScoringCase(unittest.TestCase):
             _event(
                 open_id,
                 "paper_fill",
-                "2026-07-21",
+                fill_session,
                 symbol="AMD",
                 lane="a",
-                causes=[intent_id],
+                causes=[intent_id, approval_id, source_id, gate_id],
                 payload={
                     "transition": "open",
                     "position_id": intent_id,
                     "entry_intent_id": intent_id,
-                    "decision_session": "2026-07-20",
-                    "fill_session": "2026-07-21",
+                    "decision_session": opening_decision or intent_decision,
+                    "fill_session": fill_session,
                     "structure": "long_call",
                     "action": action,
                     "legs": [opening_leg],
@@ -194,20 +321,30 @@ class RealScoringCase(unittest.TestCase):
                     "at_risk": at_risk,
                     "closes_identity": "sha256:entry-close",
                     "underlying_close": 100.0,
-                    "underlying_close_session": "2026-07-21",
+                    "underlying_close_session": fill_session,
                     "underlying_close_identity": "sha256:entry-close",
                 },
             )
         )
         return intent_id, open_id, action, opening_leg, at_risk
 
-    def _append_market_close(self, *, offset=False):
+    def _append_market_close(
+        self,
+        *,
+        omit_close_gate=False,
+        with_retry_gap=False,
+        gap_symbol="AMD",
+        primary_reason="profit_target",
+        trigger_reasons=None,
+    ):
         position_id, open_id, action, opening_leg, _ = self._append_opening()
         exit_id = "exit:AMD:a"
-        trigger_source = "2026-07-21" if offset else "2026-07-22"
+        trigger_source = "2026-07-21"
         trigger_decision = "2026-07-22"
-        close_source = "2026-07-22" if offset else "2026-07-23"
-        close_decision = "2026-07-23"
+        close_source = "2026-07-23" if with_retry_gap else "2026-07-22"
+        close_decision = "2026-07-24" if with_retry_gap else "2026-07-23"
+        reasons = [primary_reason] if trigger_reasons is None else trigger_reasons
+        trigger_gate = self._append_gate(trigger_source)
         self.append(
             _event(
                 exit_id,
@@ -215,7 +352,7 @@ class RealScoringCase(unittest.TestCase):
                 trigger_source,
                 symbol="AMD",
                 lane="a",
-                causes=[open_id],
+                causes=[open_id, trigger_gate],
                 payload={
                     "position_id": position_id,
                     "opening_fill_id": open_id,
@@ -223,12 +360,37 @@ class RealScoringCase(unittest.TestCase):
                     "decision_session": trigger_decision,
                     "source_evaluation_session": trigger_source,
                     "planned_fill_session": "2026-07-23",
-                    "primary_reason": "profit_target",
-                    "trigger_reasons": ["profit_target"],
+                    "primary_reason": primary_reason,
+                    "trigger_reasons": reasons,
                 },
             )
         )
+        if with_retry_gap:
+            gap_source = "2026-07-22"
+            gap_decision = "2026-07-23"
+            gap_gate = self._append_gate(gap_source)
+            self.append(
+                _event(
+                    f"s4.data_gap:{gap_source}:exit_fill:{exit_id}",
+                    "data_gap",
+                    gap_source,
+                    symbol=gap_symbol,
+                    lane="a",
+                    causes=[exit_id, gap_gate],
+                    payload={
+                        "position_id": position_id,
+                        "phase": "exit_fill",
+                        "reason": "contract_missing_or_duplicate",
+                        "chain_identity": "sha256:retry-chain",
+                        "closes_identity": "sha256:retry-close",
+                        "exit_intent_id": exit_id,
+                        "decision_session": gap_decision,
+                        "source_evaluation_session": gap_source,
+                    },
+                )
+            )
         exit_price = adverse_sell(11.0)
+        close_gate = self._append_gate(close_source)
         closing_leg = {
             **opening_leg,
             "side": "sell",
@@ -244,7 +406,7 @@ class RealScoringCase(unittest.TestCase):
                 close_source,
                 symbol="AMD",
                 lane="a",
-                causes=[exit_id],
+                causes=[exit_id] if omit_close_gate else [exit_id, close_gate],
                 payload={
                     "transition": "close",
                     "position_id": position_id,
@@ -254,7 +416,8 @@ class RealScoringCase(unittest.TestCase):
                     "decision_session": close_decision,
                     "source_evaluation_session": close_source,
                     "structure": action["kind"],
-                    "primary_reason": "profit_target",
+                    "primary_reason": primary_reason,
+                    "trigger_reasons": reasons,
                     "legs": [closing_leg],
                     "net_close_credit_per_share": exit_price,
                     "commission": config.COMMISSION_PER_CONTRACT,
@@ -266,8 +429,11 @@ class RealScoringCase(unittest.TestCase):
             )
         )
 
-    def _append_settlement(self, *, bound_close=True):
+    def _append_settlement(
+        self, *, bound_close=True, opening_fill_id: str | None = None
+    ):
         expiration = "2026-08-21"
+        decision = "2026-08-24"
         position_id, open_id, action, opening_leg, _ = self._append_opening(
             expiration=expiration
         )
@@ -275,6 +441,7 @@ class RealScoringCase(unittest.TestCase):
         intrinsic = 20.0 if bound_close else None
         cash = 20.0 if bound_close else 0.0
         itm = bound_close
+        gate_id = self._append_gate(expiration)
         self.append(
             _event(
                 "settlement:AMD:a",
@@ -282,17 +449,19 @@ class RealScoringCase(unittest.TestCase):
                 expiration,
                 symbol="AMD",
                 lane="a",
-                causes=[open_id],
+                causes=[open_id, gate_id],
                 payload={
                     "transition": "close",
                     "position_id": position_id,
-                    "opening_fill_id": open_id,
+                    "opening_fill_id": opening_fill_id or open_id,
                     "exit_intent_id": None,
+                    "trigger_session": expiration,
                     "fill_session": expiration,
-                    "decision_session": expiration,
+                    "decision_session": decision,
                     "source_evaluation_session": expiration,
                     "structure": action["kind"],
                     "primary_reason": "expiration_settlement",
+                    "trigger_reasons": ["expiration_settlement"],
                     "legs": [
                         {
                             "name": "long",
@@ -341,6 +510,11 @@ class TestRealScoringAuthority(RealScoringCase):
             patch.object(real_scoring, "DEFAULT_ARTIFACT_ROOT", self.artifacts),
             patch.object(
                 real_scoring,
+                "_score_result",
+                side_effect=AssertionError("preview must not compute an interim result"),
+            ),
+            patch.object(
+                real_scoring,
                 "_utc_now",
                 return_value=AFTER_FINAL,
             ),
@@ -350,6 +524,17 @@ class TestRealScoringAuthority(RealScoringCase):
 
         self.assertEqual(code, 0)
         self.assertIn("NOT FINAL", output.getvalue())
+        self.assertIn("RESULT WITHHELD", output.getvalue())
+        for leaked in (
+            "trades=",
+            "verdict=",
+            "SURVIVED",
+            "REJECTED",
+            "INCONCLUSIVE",
+            "expectancy",
+            "confidence interval",
+        ):
+            self.assertNotIn(leaked, output.getvalue())
         self.assertEqual(self._snapshot(), before)
 
     def test_preview_before_window_completion_is_not_final_and_writes_nothing(self):
@@ -438,6 +623,36 @@ class TestRealScoringPublication(RealScoringCase):
             [self.registration.event_id, "open:AMD:a", "close:AMD:a"],
         )
 
+    def test_market_close_after_canonical_retry_gap_is_scorable(self):
+        self._append_market_close(with_retry_gap=True)
+
+        finalized = real_scoring.finalize_real_score(
+            self.open(), owner="carsyn", now=AFTER_FINAL
+        )
+
+        self.assertEqual(finalized.result["n_trades"], 1)
+
+    def test_retry_gap_cannot_change_position_symbol(self):
+        self._append_market_close(with_retry_gap=True, gap_symbol="MSFT")
+
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "retry gap"):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+    def test_earnings_reason_cannot_hide_behind_lower_priority_primary(self):
+        self._append_market_close(
+            primary_reason="scheduled_dte",
+            trigger_reasons=["pre_earnings", "scheduled_dte"],
+        )
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "noncanonical trigger reasons"
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
     def test_intrinsic_settlement_is_scored_without_fabricated_quotes(self):
         self._append_settlement(bound_close=True)
 
@@ -453,7 +668,7 @@ class TestRealScoringPublication(RealScoringCase):
         self.assertNotIn("raw_bid", json.dumps(trade))
 
     def test_market_score_preserves_offset_source_dates_after_due_check(self):
-        self._append_market_close(offset=True)
+        self._append_market_close()
 
         result = real_scoring.finalize_real_score(
             self.open(), owner="carsyn", now=AFTER_FINAL
@@ -463,6 +678,16 @@ class TestRealScoringPublication(RealScoringCase):
         self.assertEqual(trade["entry_date"], "2026-07-21")
         self.assertEqual(trade["exit_date"], "2026-07-22")
         self.assertEqual(trade["decision_session"], "2026-07-20")
+
+    def test_market_close_without_receipt_gate_cause_is_refused(self):
+        self._append_market_close(omit_close_gate=True)
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "data-gate cause"
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
 
     def test_missing_close_conservative_settlement_remains_scorable(self):
         self._append_settlement(bound_close=False)
@@ -475,6 +700,16 @@ class TestRealScoringPublication(RealScoringCase):
         self.assertEqual(trade["settlement_method"], "conservative_full_loss")
         self.assertIsNone(trade["underlying_exit_close"])
         self.assertIsNone(trade["underlying_return"])
+
+    def test_settlement_with_wrong_opening_lineage_is_refused(self):
+        self._append_settlement(opening_fill_id="wrong:opening")
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "opening lineage"
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
 
     def test_orphan_artifact_recovers_only_at_same_input_head(self):
         session = self.open()
@@ -548,6 +783,177 @@ class TestRealScoringPublication(RealScoringCase):
         )
 
         with self.assertRaises(real_scoring.RealScoringIncomplete):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+    def test_opening_cannot_change_intent_decision_lineage(self):
+        self._append_opening(opening_decision="2026-11-02")
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "entry-intent lineage"
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+    def test_skip_cannot_terminalize_an_unrelated_intent(self):
+        intent_id = "intent:AMD:skip"
+        self.append(
+            _event(
+                intent_id,
+                "entry_intent",
+                "2026-07-20",
+                symbol="AMD",
+                lane="a",
+                causes=[self.registration.event_id],
+                payload={
+                    "position_id": intent_id,
+                    "decision_session": "2026-07-20",
+                    "planned_fill_session": "2026-07-21",
+                },
+            )
+        )
+        self.append(
+            _event(
+                "skip:forged",
+                "skip",
+                "2026-07-21",
+                symbol="AMD",
+                lane="a",
+                causes=[self.registration.event_id],
+                payload={
+                    "entry_intent_id": intent_id,
+                    "reason": "approval_missing",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "entry-intent lineage"
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+    def test_allowed_skip_reason_requires_canonical_fill_evidence(self):
+        intent_id = "intent:AMD:forged-skip"
+        fill_session = "2026-07-21"
+        self.append(
+            _event(
+                intent_id,
+                "entry_intent",
+                "2026-07-20",
+                symbol="AMD",
+                lane="a",
+                causes=[self.registration.event_id],
+                payload={
+                    "position_id": intent_id,
+                    "decision_session": "2026-07-20",
+                    "planned_fill_session": fill_session,
+                },
+            )
+        )
+        self.append(
+            _event(
+                f"s4.skip:{fill_session}:approval_missing:{intent_id}",
+                "skip",
+                fill_session,
+                symbol="AMD",
+                lane="a",
+                causes=[intent_id],
+                payload={
+                    "entry_intent_id": intent_id,
+                    "reason": "approval_missing",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "evidence"):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+    def test_canonical_approval_missing_skip_is_a_valid_terminal(self):
+        intent_id = "intent:AMD:valid-skip"
+        fill_session = "2026-07-21"
+        self.append(
+            _event(
+                intent_id,
+                "entry_intent",
+                "2026-07-20",
+                symbol="AMD",
+                lane="a",
+                causes=[self.registration.event_id],
+                payload={
+                    "position_id": intent_id,
+                    "decision_session": "2026-07-20",
+                    "planned_fill_session": fill_session,
+                },
+            )
+        )
+        self._append_gate(fill_session)
+        self._append_symbol_source(fill_session)
+        self.append(
+            _event(
+                f"s4.skip:{fill_session}:approval_missing:{intent_id}",
+                "skip",
+                fill_session,
+                symbol="AMD",
+                lane="a",
+                causes=[intent_id],
+                payload={
+                    "entry_intent_id": intent_id,
+                    "reason": "approval_missing",
+                },
+            )
+        )
+
+        result = real_scoring.finalize_real_score(
+            self.open(), owner="carsyn", now=AFTER_FINAL
+        )
+
+        self.assertEqual(result.result["n_trades"], 0)
+
+    def test_skip_recorded_before_fill_cutoff_cannot_terminalize_intent(self):
+        intent_id = "intent:AMD:early-skip"
+        fill_session = "2026-07-21"
+        self.append(
+            _event(
+                intent_id,
+                "entry_intent",
+                "2026-07-20",
+                symbol="AMD",
+                lane="a",
+                causes=[self.registration.event_id],
+                payload={
+                    "position_id": intent_id,
+                    "decision_session": "2026-07-20",
+                    "planned_fill_session": fill_session,
+                },
+            )
+        )
+        self._append_gate(fill_session)
+        self._append_symbol_source(fill_session)
+        early = _event(
+            f"s4.skip:{fill_session}:approval_missing:{intent_id}",
+            "skip",
+            fill_session,
+            symbol="AMD",
+            lane="a",
+            causes=[intent_id],
+            payload={
+                "entry_intent_id": intent_id,
+                "reason": "approval_missing",
+            },
+        )
+        ledger.append_event(
+            early,
+            base_dir=self.base,
+            clock=_clock("2026-07-21T19:59:59+00:00"),
+        )
+
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "cutoff"):
             real_scoring.finalize_real_score(
                 self.open(), owner="carsyn", now=AFTER_FINAL
             )

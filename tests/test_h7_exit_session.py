@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -224,6 +225,7 @@ class ExitSessionCase(unittest.TestCase):
         close_value: float = 100.0,
         missing_close_symbol: str | None = None,
         amd_next_report: str | None = None,
+        source_hash_contract: str = DIAGNOSTIC_SOURCE_HASH_VERSION,
     ) -> Path:
         cache = self.root / "cache"
         cache.mkdir(exist_ok=True)
@@ -270,7 +272,7 @@ class ExitSessionCase(unittest.TestCase):
                 "input_files": {},
                 "config_hash": config_hash(),
                 "source_hash": SOURCE_HASH,
-                "source_hash_contract": DIAGNOSTIC_SOURCE_HASH_VERSION,
+                "source_hash_contract": source_hash_contract,
             },
         )
         source_path.write_text(json.dumps(source), encoding="utf-8")
@@ -296,7 +298,7 @@ class ExitSessionCase(unittest.TestCase):
                 "source_health_receipt_path": str(source_path),
                 "config_hash": config_hash(),
                 "source_hash": SOURCE_HASH,
-                "source_hash_contract": DIAGNOSTIC_SOURCE_HASH_VERSION,
+                "source_hash_contract": source_hash_contract,
             },
         )
         gate_path.write_text(json.dumps(gate), encoding="utf-8")
@@ -350,6 +352,87 @@ class TestExitAuthority(ExitSessionCase):
         with self.assertRaises(exit_session.ExitSessionRefused):
             self.open()
 
+    def test_corrupt_and_absent_ledgers_are_refused(self):
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "registration or hash chain is unavailable"
+        ):
+            self.open(base_dir=self.root / "absent-forward")
+
+        events_path = self.base / "events.jsonl"
+        events_path.write_bytes(events_path.read_bytes() + b"corrupt")
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "hash chain is unavailable"
+        ):
+            self.open()
+
+    def test_wrong_cohort_wrong_date_and_stale_hash_contract_are_refused(self):
+        stale_scope = {**self.scope, "scope_hash": "f" * 64}
+        with (
+            patch.object(exit_session, "scope_identity", return_value=stale_scope),
+            self.assertRaisesRegex(
+                exit_session.ExitSessionRefused, "scope identity is stale"
+            ),
+        ):
+            self.open()
+
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "follows decision session"
+        ):
+            self.open(
+                decision_session=EVALUATION,
+                source_evaluation_session=DECISION,
+            )
+
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "mapped completed session"
+        ):
+            self.open(
+                decision_session="2026-07-22",
+                source_evaluation_session=EVALUATION,
+            )
+
+        self.gate_path = self._write_receipts(source_hash_contract="stale-contract")
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "source-hash contract is stale"
+        ):
+            self.open()
+
+    def test_forged_capability_and_post_open_input_change_are_refused(self):
+        session = self.open()
+        forged = replace(session, _authority_token=object())
+        with self.assertRaises(exit_session.ExitSessionRefused):
+            exit_session.record_exit_evidence(
+                forged, symbol="AMD", include_symbol=False
+            )
+
+        changed = self.root / "cache" / f"chain-AMD-{EVALUATION}.parquet"
+        _chain(bid=9.0, ask=9.2).to_parquet(changed, index=False)
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "input changed since pass"
+        ):
+            exit_session.record_exit_evidence(
+                session, symbol="AMD", include_symbol=False
+            )
+
+    def test_exit_evidence_identical_replay_is_idempotent(self):
+        session = self.open()
+
+        first = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=True
+        )
+        count = len(ledger.read_events(self.base))
+        replay = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=True
+        )
+
+        self.assertTrue(first.source_health.appended)
+        self.assertTrue(first.data_gate.appended)
+        self.assertTrue(first.symbol_source_health.appended)
+        self.assertFalse(replay.source_health.appended)
+        self.assertFalse(replay.data_gate.appended)
+        self.assertFalse(replay.symbol_source_health.appended)
+        self.assertEqual(len(ledger.read_events(self.base)), count)
+
     def test_exit_evidence_faithfully_records_no_go_and_unhealthy_symbol(self):
         self.gate_path = self._write_receipts(
             verdict="NO_GO", amd_gate="UNKNOWN", amd_healthy=False
@@ -401,8 +484,6 @@ class TestRealLifecycleSeam(ExitSessionCase):
         )
 
     def test_forged_real_exit_session_is_refused(self):
-        from dataclasses import replace
-
         forged = replace(self.open(), _authority_token=object())
         evidence = exit_session.record_exit_evidence(
             self.open(), symbol="AMD", include_symbol=False
@@ -423,6 +504,142 @@ class TestRealLifecycleSeam(ExitSessionCase):
                 source_health_id=None,
                 clock=_clock("2026-07-21T01:00:00+00:00"),
             )
+
+    def test_entry_capability_is_refused_by_exit_path(self):
+        entry_session = lifecycle.RealStoreSession(
+            base_dir=self.base,
+            activation_event_id=self.registration.event_id,
+            decision_session=DECISION,
+            evaluation_session=EVALUATION,
+            data_gate_receipt_path=self.gate_path,
+            source_health_receipt_path=self.root / "unused-source.json",
+            data_gate_receipt_hash="d" * 64,
+            source_health_receipt_hash="e" * 64,
+            data_gate_config_hash=config_hash(),
+            data_gate_source_hash=SOURCE_HASH,
+            included_symbols=self.included,
+        )
+
+        with self.assertRaisesRegex(
+            lifecycle.ActivationBoundaryError, "entry transitions only"
+        ):
+            lifecycle.observe_exit(
+                base_dir=entry_session,
+                position_id="position:AMD:a",
+                evaluation_session=EVALUATION,
+                chain=_chain(),
+                data_gate_id="unused",
+                chain_identity="unused",
+                closes_identity="unused",
+                underlying_close=100.0,
+                earnings_gate="CLEAR",
+                next_report=None,
+                source_health_id=None,
+            )
+
+    def test_mutation_revalidates_receipt_bound_bytes(self):
+        session = self.open()
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+        changed = self.root / "cache" / f"chain-AMD-{EVALUATION}.parquet"
+        _chain(bid=9.0, ask=9.2).to_parquet(changed, index=False)
+
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "input changed since pass"
+        ):
+            lifecycle.observe_exit(
+                base_dir=session,
+                position_id="position:AMD:a",
+                evaluation_session=EVALUATION,
+                chain=_chain(),
+                data_gate_id=evidence.data_gate.event_id,
+                chain_identity="sha256:stale-chain",
+                closes_identity=exit_session.binding_identity(
+                    session, "close:AMD"
+                ),
+                underlying_close=100.0,
+                earnings_gate="CLEAR",
+                next_report=None,
+                source_health_id=None,
+                clock=_clock("2026-07-21T01:00:00+00:00"),
+            )
+
+    def test_mutation_refuses_fabricated_in_memory_inputs(self):
+        session = self.open()
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "receipt-bound chain"
+        ):
+            lifecycle.observe_exit(
+                base_dir=session,
+                position_id="position:AMD:a",
+                evaluation_session=EVALUATION,
+                chain=_chain(bid=50.0, ask=50.1),
+                data_gate_id=evidence.data_gate.event_id,
+                chain_identity=exit_session.binding_identity(session, "chain:AMD"),
+                closes_identity=exit_session.binding_identity(session, "close:AMD"),
+                underlying_close=1.0,
+                earnings_gate="CLEAR",
+                next_report=None,
+                source_health_id=None,
+                clock=_clock("2026-07-21T01:00:00+00:00"),
+            )
+
+    def test_exit_intent_identical_replay_is_idempotent(self):
+        session = self.open()
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+        kwargs = {
+            "base_dir": session,
+            "position_id": "position:AMD:a",
+            "evaluation_session": EVALUATION,
+            "chain": exit_session.load_bound_chain(session, "AMD"),
+            "data_gate_id": evidence.data_gate.event_id,
+            "chain_identity": exit_session.binding_identity(session, "chain:AMD"),
+            "closes_identity": exit_session.binding_identity(session, "close:AMD"),
+            "underlying_close": exit_session.load_bound_close(session, "AMD"),
+            "earnings_gate": "CLEAR",
+            "next_report": None,
+            "source_health_id": None,
+            "clock": _clock("2026-07-21T01:00:00+00:00"),
+        }
+
+        first = lifecycle.observe_exit(**kwargs)
+        replay = lifecycle.observe_exit(**kwargs)
+
+        self.assertTrue(first.appended)
+        self.assertFalse(replay.appended)
+        self.assertEqual(first.event_id, replay.event_id)
+
+    def test_typed_session_reaches_real_store_replay_but_plain_path_cannot(self):
+        session = self.open()
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+        with patch.object(lifecycle, "REAL_FORWARD_STORE", self.base):
+            result = lifecycle.observe_exit(
+                base_dir=session,
+                position_id="position:AMD:a",
+                evaluation_session=EVALUATION,
+                chain=exit_session.load_bound_chain(session, "AMD"),
+                data_gate_id=evidence.data_gate.event_id,
+                chain_identity=exit_session.binding_identity(session, "chain:AMD"),
+                closes_identity=exit_session.binding_identity(session, "close:AMD"),
+                underlying_close=exit_session.load_bound_close(session, "AMD"),
+                earnings_gate="CLEAR",
+                next_report=None,
+                source_health_id=None,
+                clock=_clock("2026-07-21T01:00:00+00:00"),
+            )
+            with self.assertRaises(lifecycle.ActivationBoundaryError):
+                lifecycle.replay_positions(base_dir=self.base)
+
+        self.assertIsNotNone(result)
 
     def test_real_profit_target_uses_decision_date_for_t_plus_one(self):
         session = self.open()
@@ -463,11 +680,11 @@ class TestRealLifecycleSeam(ExitSessionCase):
             base_dir=session,
             position_id="position:AMD:a",
             evaluation_session=EVALUATION,
-            chain=pd.DataFrame(),
+            chain=exit_session.load_bound_chain(session, "AMD"),
             data_gate_id=evidence.data_gate.event_id,
             chain_identity=exit_session.binding_identity(session, "chain:AMD"),
             closes_identity=exit_session.binding_identity(session, "close:AMD"),
-            underlying_close=None,
+            underlying_close=exit_session.load_bound_close(session, "AMD"),
             earnings_gate="CLEAR",
             next_report=None,
             source_health_id=None,
@@ -644,6 +861,35 @@ class TestRealLifecycleSeam(ExitSessionCase):
             ledger.read_events(self.base)[-1].causes,
         )
 
+        fill_evaluation = "2026-07-21"
+        fill_decision = "2026-07-22"
+        fill_gate = self._write_receipts(
+            evaluation=fill_evaluation,
+            requested=fill_decision,
+            chain_frame=_put_chain(),
+            amd_next_report="2026-07-22",
+        )
+        fill_session = exit_session.open_real_exit_session(
+            base_dir=self.base,
+            decision_session=fill_decision,
+            source_evaluation_session=fill_evaluation,
+            data_gate_receipt_path=fill_gate,
+            now=datetime(2026, 7, 23, 1, tzinfo=timezone.utc),
+        )
+
+        report = exit_session.fill_real_exits(
+            fill_session, clock=_clock("2026-07-22T01:00:00+00:00")
+        )
+
+        self.assertFalse(report.failed)
+        close = report.outcomes[0].events[-1]
+        self.assertEqual(close.event_type, "paper_fill")
+        stored_close = ledger.read_events(self.base)[-1]
+        self.assertIn(
+            f"h7:source_health:{fill_evaluation}:AMD",
+            stored_close.causes,
+        )
+
     def test_earnings_unknown_uses_actual_unhealthy_source_evidence(self):
         self._append_position(
             event_id="open:AMD:c",
@@ -742,29 +988,116 @@ class TestRealLifecycleSeam(ExitSessionCase):
             fill_session, symbol="AMD", include_symbol=False
         )
 
-        closed = lifecycle.process_exit_fill(
-            base_dir=fill_session,
-            exit_intent_id=intent.event_id,
-            fill_session=fill_evaluation,
-            chain=exit_session.load_bound_chain(fill_session, "AMD"),
-            data_gate_id=fill_evidence.data_gate.event_id,
-            chain_identity=exit_session.binding_identity(
-                fill_session, "chain:AMD"
-            ),
-            closes_identity=exit_session.binding_identity(
-                fill_session, "close:AMD"
-            ),
-            underlying_close=exit_session.load_bound_close(fill_session, "AMD"),
-            clock=_clock("2026-07-22T01:00:00+00:00"),
-        )
+        chain = exit_session.load_bound_chain(fill_session, "AMD")
+        chain_identity = exit_session.binding_identity(fill_session, "chain:AMD")
+        closes_identity = exit_session.binding_identity(fill_session, "close:AMD")
+        underlying_close = exit_session.load_bound_close(fill_session, "AMD")
+
+        def fill():
+            return lifecycle.process_exit_fill(
+                base_dir=fill_session,
+                exit_intent_id=intent.event_id,
+                fill_session=fill_evaluation,
+                chain=chain,
+                data_gate_id=fill_evidence.data_gate.event_id,
+                chain_identity=chain_identity,
+                closes_identity=closes_identity,
+                underlying_close=underlying_close,
+                clock=_clock("2026-07-22T01:00:00+00:00"),
+            )
+
+        closed = fill()
+        replay = fill()
 
         self.assertEqual(closed.event_type, "paper_fill")
+        self.assertTrue(closed.appended)
+        self.assertFalse(replay.appended)
+        self.assertEqual(closed.event_id, replay.event_id)
         self.assertEqual(closed.payload["decision_session"], fill_decision)
         self.assertEqual(closed.payload["source_evaluation_session"], fill_evaluation)
         self.assertEqual(closed.payload["fill_session"], fill_evaluation)
 
 
 class TestPostWindowAndSettlement(ExitSessionCase):
+    def _append_credit_settlement_position(
+        self, *, expiration: str, position_id: str
+    ) -> None:
+        self._append_position(
+            event_id=f"open:{position_id}",
+            position_id=position_id,
+            lane="c",
+            structure="bull_put_spread",
+            expiration=expiration,
+            legs=[
+                {
+                    "name": "short",
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": "P",
+                    "side": "sell",
+                    "quantity": 1,
+                    "raw_bid": 5.0,
+                    "raw_ask": 5.1,
+                    "raw_open_interest": 500,
+                    "raw_delta": -0.30,
+                    "fill_price": 4.95,
+                },
+                {
+                    "name": "long",
+                    "expiration": expiration,
+                    "strike": 90.0,
+                    "right": "P",
+                    "side": "buy",
+                    "quantity": 1,
+                    "raw_bid": 2.0,
+                    "raw_ask": 2.1,
+                    "raw_open_interest": 500,
+                    "raw_delta": -0.15,
+                    "fill_price": 2.13,
+                },
+            ],
+        )
+
+    def _settle_credit_position(
+        self, *, position_id: str, close_value: float | None
+    ):
+        expiration = "2026-07-24"
+        decision = "2026-07-27"
+        self._append_credit_settlement_position(
+            expiration=expiration, position_id=position_id
+        )
+        gate = self._write_receipts(
+            evaluation=expiration,
+            requested=expiration,
+            close_value=85.0 if close_value is None else close_value,
+            verdict="NO_GO" if close_value is None else "GO",
+            missing_close_symbol="AMD" if close_value is None else None,
+        )
+        session = exit_session.open_real_exit_session(
+            base_dir=self.base,
+            decision_session=decision,
+            source_evaluation_session=expiration,
+            data_gate_receipt_path=gate,
+            now=datetime(2026, 7, 25, 1, tzinfo=timezone.utc),
+        )
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+        return lifecycle.observe_exit(
+            base_dir=session,
+            position_id=position_id,
+            evaluation_session=expiration,
+            chain=exit_session.load_bound_chain(session, "AMD"),
+            data_gate_id=evidence.data_gate.event_id,
+            chain_identity=exit_session.binding_identity(session, "chain:AMD"),
+            closes_identity=exit_session.binding_identity(session, "close:AMD"),
+            underlying_close=exit_session.load_bound_close(session, "AMD"),
+            earnings_gate="CLEAR",
+            next_report=None,
+            source_health_id=None,
+            clock=_clock("2026-07-25T01:00:00+00:00"),
+        )
+
     def test_post_window_authority_is_limited_to_in_window_positions(self):
         evaluation = "2026-10-30"
         decision = "2026-11-02"
@@ -808,6 +1141,7 @@ class TestPostWindowAndSettlement(ExitSessionCase):
 
     def test_expiration_settles_at_receipt_bound_intrinsic(self):
         expiration = "2026-07-24"
+        decision = "2026-07-27"
         self._append_position(
             event_id="open:settlement",
             position_id="position:settlement",
@@ -837,7 +1171,7 @@ class TestPostWindowAndSettlement(ExitSessionCase):
         )
         session = exit_session.open_real_exit_session(
             base_dir=self.base,
-            decision_session=expiration,
+            decision_session=decision,
             source_evaluation_session=expiration,
             data_gate_receipt_path=gate,
             now=datetime(2026, 7, 25, 1, tzinfo=timezone.utc),
@@ -846,23 +1180,35 @@ class TestPostWindowAndSettlement(ExitSessionCase):
             session, symbol="AMD", include_symbol=False
         )
 
-        settled = lifecycle.observe_exit(
-            base_dir=session,
-            position_id="position:settlement",
-            evaluation_session=expiration,
-            chain=exit_session.load_bound_chain(session, "AMD"),
-            data_gate_id=evidence.data_gate.event_id,
-            chain_identity=exit_session.binding_identity(session, "chain:AMD"),
-            closes_identity=exit_session.binding_identity(session, "close:AMD"),
-            underlying_close=exit_session.load_bound_close(session, "AMD"),
-            earnings_gate="CLEAR",
-            next_report=None,
-            source_health_id=None,
-            clock=_clock("2026-07-25T01:00:00+00:00"),
-        )
+        chain = exit_session.load_bound_chain(session, "AMD")
+        chain_identity = exit_session.binding_identity(session, "chain:AMD")
+        closes_identity = exit_session.binding_identity(session, "close:AMD")
+
+        def settle(underlying_close: float):
+            return lifecycle.observe_exit(
+                base_dir=session,
+                position_id="position:settlement",
+                evaluation_session=expiration,
+                chain=chain,
+                data_gate_id=evidence.data_gate.event_id,
+                chain_identity=chain_identity,
+                closes_identity=closes_identity,
+                underlying_close=underlying_close,
+                earnings_gate="CLEAR",
+                next_report=None,
+                source_health_id=None,
+                clock=_clock("2026-07-25T01:00:00+00:00"),
+            )
+
+        settled = settle(120.0)
+        replay = settle(120.0)
 
         self.assertEqual(settled.event_type, "paper_fill")
+        self.assertTrue(settled.appended)
+        self.assertFalse(replay.appended)
         self.assertEqual(settled.payload["settlement_method"], "intrinsic_at_close")
+        self.assertEqual(settled.payload["decision_session"], decision)
+        self.assertEqual(settled.payload["source_evaluation_session"], expiration)
         self.assertEqual(settled.payload["net_close_credit_per_share"], 20.0)
         self.assertEqual(settled.payload["commission"], config.COMMISSION_PER_CONTRACT)
         positions = lifecycle._replay_positions_at_base(self.base)
@@ -870,9 +1216,14 @@ class TestPostWindowAndSettlement(ExitSessionCase):
             next(row for row in positions if row.position_id == "position:settlement").state,
             "closed",
         )
+        with self.assertRaisesRegex(
+            exit_session.ExitSessionRefused, "receipt-bound close"
+        ):
+            settle(119.0)
 
     def test_missing_expiration_close_uses_conservative_terminal_fallback(self):
         expiration = "2026-07-24"
+        decision = "2026-07-27"
         self._append_position(
             event_id="open:fallback",
             position_id="position:fallback",
@@ -903,7 +1254,7 @@ class TestPostWindowAndSettlement(ExitSessionCase):
         )
         session = exit_session.open_real_exit_session(
             base_dir=self.base,
-            decision_session=expiration,
+            decision_session=decision,
             source_evaluation_session=expiration,
             data_gate_receipt_path=gate,
             now=datetime(2026, 7, 25, 1, tzinfo=timezone.utc),
@@ -916,7 +1267,7 @@ class TestPostWindowAndSettlement(ExitSessionCase):
             base_dir=session,
             position_id="position:fallback",
             evaluation_session=expiration,
-            chain=pd.DataFrame(),
+            chain=exit_session.load_bound_chain(session, "AMD"),
             data_gate_id=evidence.data_gate.event_id,
             chain_identity=exit_session.binding_identity(session, "chain:AMD"),
             closes_identity=exit_session.binding_identity(session, "close:AMD"),
@@ -932,6 +1283,38 @@ class TestPostWindowAndSettlement(ExitSessionCase):
         )
         self.assertEqual(settled.payload["net_close_credit_per_share"], 0.0)
         self.assertEqual(settled.payload["commission"], 0.0)
+
+    def test_credit_spread_intrinsic_settlement_is_symmetric(self):
+        settled = self._settle_credit_position(
+            position_id="position:credit-intrinsic", close_value=85.0
+        )
+
+        self.assertEqual(settled.payload["settlement_method"], "intrinsic_at_close")
+        self.assertEqual(settled.payload["net_close_credit_per_share"], -10.0)
+        self.assertEqual(
+            [leg["settlement_cash_per_share"] for leg in settled.payload["legs"]],
+            [-15.0, 5.0],
+        )
+        self.assertEqual(
+            settled.payload["commission"], 2 * config.COMMISSION_PER_CONTRACT
+        )
+
+    def test_credit_spread_missing_close_charges_full_width(self):
+        settled = self._settle_credit_position(
+            position_id="position:credit-fallback", close_value=None
+        )
+
+        self.assertEqual(
+            settled.payload["settlement_method"], "conservative_full_loss"
+        )
+        self.assertEqual(settled.payload["net_close_credit_per_share"], -10.0)
+        self.assertEqual(
+            [leg["settlement_cash_per_share"] for leg in settled.payload["legs"]],
+            [-10.0, 0.0],
+        )
+        self.assertEqual(
+            settled.payload["commission"], 2 * config.COMMISSION_PER_CONTRACT
+        )
 
 
 class TestExitBatchAndCli(ExitSessionCase):
@@ -980,6 +1363,55 @@ class TestExitBatchAndCli(ExitSessionCase):
         event_types = [event.event_type for event in ledger.read_events(self.base)]
         self.assertIn("data_gate", event_types)
         self.assertNotIn("exit_intent", event_types)
+
+    def test_reopened_session_observes_same_source_session_new_fill(self):
+        before_fill = self.open()
+        self._append_position(
+            event_id="open:AMD:b:same-session",
+            position_id="position:AMD:b:same-session",
+            lane="b",
+            structure="long_call",
+            expiration="2027-01-15",
+            legs=[
+                {
+                    "name": "long",
+                    "expiration": "2027-01-15",
+                    "strike": 100.0,
+                    "right": "C",
+                    "side": "buy",
+                    "quantity": 1,
+                    "raw_bid": 5.0,
+                    "raw_ask": 5.1,
+                    "raw_open_interest": 500,
+                    "raw_delta": 0.60,
+                    "fill_price": 5.16,
+                }
+            ],
+        )
+        self.assertNotIn(
+            "position:AMD:b:same-session",
+            before_fill.authorized_position_ids,
+        )
+
+        after_fill = self.open()
+        self.assertIn(
+            "position:AMD:b:same-session",
+            after_fill.authorized_position_ids,
+        )
+        report = exit_session.monitor_real_exits(
+            after_fill, clock=_clock("2026-07-21T01:00:00+00:00")
+        )
+        outcome = next(
+            item
+            for item in report.outcomes
+            if item.position_id == "position:AMD:b:same-session"
+        )
+        self.assertFalse(outcome.failed)
+        intent = outcome.events[-1]
+        self.assertEqual(intent.event_type, "exit_intent")
+        self.assertEqual(intent.payload["source_evaluation_session"], EVALUATION)
+        self.assertEqual(intent.payload["decision_session"], DECISION)
+        self.assertEqual(intent.payload["planned_fill_session"], "2026-07-22")
 
     def test_monitor_batch_reports_partial_failure(self):
         self._append_position(

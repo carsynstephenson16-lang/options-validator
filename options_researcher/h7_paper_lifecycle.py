@@ -192,6 +192,12 @@ def _resolve_exit_base(
         raise ActivationBoundaryError(
             "forged RealExitSession cannot authorize a real-store transition"
         )
+    # A factory token proves provenance, not continued authority.  Re-earn the
+    # receipt/hash contract at the mutation boundary so a session cannot be
+    # reused after its ledger, receipts, or bound cache bytes change.
+    from options_researcher import h7_exit_session
+
+    h7_exit_session._revalidate(base_dir)
     if base_dir.evaluation_session != source_session:
         raise LifecycleValidationError(
             "RealExitSession evaluation_session does not match exit source data"
@@ -1080,7 +1086,9 @@ def process_entry_fill(
 
 
 def _position(base: Path, position_id: str) -> PaperPosition:
-    found = {p.position_id: p for p in replay_positions(base_dir=base)}.get(position_id)
+    found = {p.position_id: p for p in _replay_positions_at_base(base)}.get(
+        position_id
+    )
     if found is None:
         raise LifecycleValidationError(f"position {position_id!r} is not open in the ledger")
     return found
@@ -1100,6 +1108,7 @@ def _gap_transition(
     exit_intent_id: str | None = None,
     decision_session: str | None = None,
     lineage_cause: str | None = None,
+    source_health_id: str | None = None,
     clock=None,
 ) -> TransitionResult:
     payload = {
@@ -1117,6 +1126,8 @@ def _gap_transition(
     causes = [data_gate_id]
     if lineage_cause is not None:
         causes.insert(0, lineage_cause)
+    if source_health_id is not None:
+        causes.append(source_health_id)
     return _transition(
         base,
         _event(
@@ -1143,6 +1154,7 @@ def _expiration_settlement(
     chain_identity: str,
     closes_identity: str,
     underlying_close: float | None,
+    source_health_id: str | None,
     clock,
 ) -> TransitionResult:
     """Record the pre-registered terminal accounting close from SPEC §4a."""
@@ -1154,8 +1166,7 @@ def _expiration_settlement(
             raise LifecycleValidationError(
                 "deterministic settlement id has the wrong event type"
             )
-        return _as_result(existing)
-    if position.state == "closed":
+    if existing is None and position.state == "closed":
         raise LifecycleValidationError(
             "position already closed through a different terminal event"
         )
@@ -1263,6 +1274,8 @@ def _expiration_settlement(
     if position.exit_intent_id is not None:
         causes.append(position.exit_intent_id)
     causes.append(data_gate_id)
+    if source_health_id is not None:
+        causes.append(source_health_id)
     payload = {
         "transition": "close",
         "position_id": position.position_id,
@@ -1331,6 +1344,19 @@ def observe_exit(
         base_dir, evaluation_session
     )
     position = _position(base, position_id)
+    if isinstance(base_dir, RealExitSession):
+        from options_researcher import h7_exit_session
+
+        h7_exit_session._validate_bound_transition_inputs(
+            base_dir,
+            symbol=position.symbol,
+            data_gate_id=data_gate_id,
+            chain=chain,
+            chain_identity=chain_identity,
+            closes_identity=closes_identity,
+            underlying_close=underlying_close,
+            source_health_id=source_health_id,
+        )
     events = event_ledger.read_events(base)
     existing_exit = next(
         (
@@ -1361,6 +1387,7 @@ def observe_exit(
                 chain_identity=chain_identity,
                 closes_identity=closes_identity,
                 underlying_close=underlying_close,
+                source_health_id=None,
                 clock=write_clock,
             )
         raise LifecycleValidationError(
@@ -1553,6 +1580,7 @@ def process_exit_fill(
     chain_identity: str,
     closes_identity: str,
     underlying_close=None,
+    source_health_id: str | None = None,
     clock=None,
 ) -> TransitionResult:
     """Fill a queued exit, retrying only after a visible prior data gap."""
@@ -1564,6 +1592,56 @@ def process_exit_fill(
     if isinstance(base_dir, RealExitSession):
         _resolve_exit_base(base_dir, fill_session, position_id=position_id)
     position = _position(base, position_id)
+    if isinstance(base_dir, RealExitSession):
+        from options_researcher import h7_exit_session
+
+        h7_exit_session._validate_bound_transition_inputs(
+            base_dir,
+            symbol=position.symbol,
+            data_gate_id=data_gate_id,
+            chain=chain,
+            chain_identity=chain_identity,
+            closes_identity=closes_identity,
+            underlying_close=underlying_close,
+            source_health_id=source_health_id,
+        )
+    earnings_dependent = intent.payload.get("primary_reason") in {
+        "pre_earnings",
+        "earnings_unknown",
+    }
+    if isinstance(base_dir, RealExitSession):
+        if earnings_dependent:
+            if source_health_id is None:
+                raise LifecycleValidationError(
+                    "earnings-dependent exit fill requires source_health_id"
+                )
+            source = _require_event(
+                events,
+                source_health_id,
+                "source_health",
+                session=fill_session,
+            )
+            state = next(
+                (
+                    item
+                    for item in base_dir.source_health_states
+                    if item.symbol == position.symbol
+                ),
+                None,
+            )
+            if (
+                state is None
+                or source.symbol != position.symbol
+                or source.payload.get("gate") != state.gate
+                or source.payload.get("healthy") is not state.healthy
+            ):
+                raise LifecycleValidationError(
+                    "exit-fill source-health event is inconsistent"
+                )
+        elif source_health_id is not None:
+            raise LifecycleValidationError(
+                "non-earnings exit fill must not cite source-health evidence"
+            )
     expiration = date.fromisoformat(
         str(position.entry_payload["action"]["expiration"])
     )
@@ -1586,6 +1664,7 @@ def process_exit_fill(
             chain_identity=chain_identity,
             closes_identity=closes_identity,
             underlying_close=underlying_close,
+            source_health_id=source_health_id,
             clock=settlement_clock,
         )
     existing = next(
@@ -1657,6 +1736,7 @@ def process_exit_fill(
             lineage_cause=(
                 exit_intent_id if isinstance(base_dir, RealExitSession) else None
             ),
+            source_health_id=source_health_id,
             clock=write_clock,
         )
     legs = position.entry_payload["legs"]
@@ -1685,6 +1765,7 @@ def process_exit_fill(
             lineage_cause=(
                 exit_intent_id if isinstance(base_dir, RealExitSession) else None
             ),
+            source_health_id=source_health_id,
             clock=write_clock,
         )
     priced_legs, net_close_credit = _close_prices(legs, rows)
@@ -1727,7 +1808,11 @@ def process_exit_fill(
             evaluation_session=fill_session,
             symbol=position.symbol,
             lane=position.lane,
-            causes=[exit_intent_id, data_gate_id],
+            causes=[
+                exit_intent_id,
+                data_gate_id,
+                *([source_health_id] if source_health_id is not None else []),
+            ],
             payload=payload,
         ),
         clock=write_clock,

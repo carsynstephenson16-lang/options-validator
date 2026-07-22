@@ -2,7 +2,8 @@
 
 **Status: BUILD-AUTHORIZED (ledger fact `H7_C1_EXIT_AND_SCORING_SPEC_RATIFIED`,
 2026-07-22T15:59:44Z, spec_sha256=ca639c1e…, further amended same day by
-`H7_EXIT_SCORING_SPEC_AMENDMENT_V1_1` for §4a.1, spec_sha256=84aeb2f2…).
+`H7_EXIT_SCORING_SPEC_AMENDMENT_V1_1` for §4a.1, spec_sha256=84aeb2f2…, and
+owner-ratified `H7_EXIT_SCORING_SPEC_AMENDMENT_V1_2` for §4 item 2).
 REAL EXITS AND REAL-STORE SCORING REMAIN INACTIVE** pending the SPEC §9
 fresh-context independent adversarial review and a separate owner-typed PASS
 after the build. This document defines the next H7 implementation arc
@@ -21,6 +22,13 @@ concrete ritual ordering (§7), two added result disclosures (§8), and an
 evidence appendix (§11). This pre-registration pass does NOT count as the
 fresh-context independent adversarial review the build arc requires in §9 —
 that review still happens after the build, on the built code.
+
+**Amended 2026-07-22 (v1.2, post-build and result-blind):** the owner ratified
+the fresh-context review's narrow reconciliation of §4 item 2 with §4a and §6.
+It authorizes only the first post-expiration operational decision session whose
+mapped completed evaluation session is expiration, and only for the frozen
+terminal-settlement accounting event. It adds no market-quote exit, retry,
+monitoring extension, entry, or discretionary trigger authority.
 
 ## 1. Goal and deadline
 
@@ -131,6 +139,12 @@ For every monitoring or fill session it must:
    is the intent's `planned_fill_session` when no prior exit `data_gap`
    exists for it, else the first XNYS session after the latest such gap
    (matching the frozen retry rule in `process_exit_fill`);
+   for terminal expiration settlement only, authorize the first XNYS
+   operational decision session after contract expiration whose mapped latest
+   completed evaluation session is exactly the expiration session. This
+   exception authorizes no market-quote exit, retry, monitoring extension, new
+   entry, or discretionary trigger; it authorizes only the pre-registered §4a
+   terminal accounting event for an in-window position;
 3. load and integrity-check the full-official-scope data-gate receipt and its
    linked source-health receipt for the exact completed evaluation session;
 4. require receipt scope, session, link hashes, config hash, source hash, and
