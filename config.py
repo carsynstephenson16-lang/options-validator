@@ -77,6 +77,13 @@ BACKTEST_START       = "2018-01-01"   # must span 2018 / 2020 / 2022 regimes
 BACKTEST_END         = "2026-06-30"
 IN_SAMPLE_END        = "2022-12-31"   # in-sample <= this; out-of-sample after
 
+# RQ1 descriptive rank-quality study (ledger seq 17). These parameters belong
+# to that frozen, spent one-run study only; they do not grade, rank, or trigger.
+RQ1_CACHE_START = "2017-01-01"  # permits the first 2018 forward outcome window
+RQ1_HORIZON_SESSIONS = 21
+RQ1_NOTABLE_ABS_RHO = 0.30
+RQ1_RV_ANNUALIZATION_SESSIONS = 252
+
 # ---------------------------------------------------------------------------
 # DATA & COSTS
 # ---------------------------------------------------------------------------

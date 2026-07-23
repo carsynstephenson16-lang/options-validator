@@ -118,3 +118,28 @@ about trust in the method, not a corrupted file. Recommend: before EX3 is
 marked truly DONE, add the missing causal-reconstruction test (and, cheaply,
 count/log the silently-dropped board-days so the usable-row disclosure is
 honest).
+
+---
+
+## EX3a closure addendum — 2026-07-23
+
+**Status:** PASS. This addendum closes the blocker above; it does not revise
+the historical review's evidence or re-run the spent RQ1 study.
+
+`CausalBoardTests.test_truncated_cache_reconstructs_day_board_without_future_inputs`
+now calls `_default_rows` directly with offline fixtures. It compares the
+day-D reconstructed row from a full chain/feature/earnings fixture to the row
+from that fixture truncated at D. The fake card is deliberately sensitive to
+the feature value, so a later feature leak changes the day-D board; the rows
+match. The test also asserts that a later earnings date never reaches a
+day-D card build.
+
+`test_reconstruction_logs_counted_skipped_board_days` confirms a malformed
+chain day is logged individually and in a final aggregate count. The registered
+21-session horizon, 0.30 notable threshold, 252-session annualization, and
+2017-01-01 cache start are now named in `config.py` with their seq-17 scope.
+
+No `run_once` call, report change, or ledger append was made. The recorded
+report remains provenance-bound to `a0d2861` and its historical runner hash;
+the current source is intentionally newer only for this test/observability/
+configuration follow-up.

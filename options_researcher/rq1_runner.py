@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import math
 import os
 import subprocess
+from collections import Counter
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -25,10 +27,13 @@ from typing import Any, Callable, Mapping, Sequence
 import numpy as np
 import pandas as pd
 
+import config
+
 DEFAULT_REPORT_PATH = Path("reports/rq1/rq1-v1.json")
-HORIZON_SESSIONS = 21
-NOTABLE_ABS_RHO = 0.30
+HORIZON_SESSIONS = config.RQ1_HORIZON_SESSIONS
+NOTABLE_ABS_RHO = config.RQ1_NOTABLE_ABS_RHO
 REGISTRATION_SEQ = 17
+logger = logging.getLogger(__name__)
 
 
 class RQ1Error(RuntimeError):
@@ -59,9 +64,7 @@ def spearman_rho(x: Sequence[float], y: Sequence[float]) -> float | None:
     return None if pd.isna(result) else float(result)
 
 
-def forward_realized_vol(
-    closes: pd.Series, *, horizon: int = HORIZON_SESSIONS
-) -> pd.Series:
+def forward_realized_vol(closes: pd.Series, *, horizon: int = HORIZON_SESSIONS) -> pd.Series:
     """Annualized realized volatility over returns from t+1 through t+h.
 
     The shift is deliberate: the signal day's return is not allowed into its
@@ -76,7 +79,9 @@ def forward_realized_vol(
         raise ValueError("closes must be finite and positive")
     log_values = np.log(values.to_numpy(dtype=float))
     returns = pd.Series(log_values, index=values.index).diff()
-    return returns.rolling(horizon).std(ddof=1).shift(-horizon) * np.sqrt(252.0)
+    return returns.rolling(horizon).std(ddof=1).shift(-horizon) * np.sqrt(
+        config.RQ1_RV_ANNUALIZATION_SESSIONS
+    )
 
 
 def filter_causal_board_rows(
@@ -170,9 +175,7 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
                 if math.isfinite(number):
                     pairs.append((float(row["green_fraction"]), number))
             if len(pairs) >= 2:
-                rho = spearman_rho(
-                    [pair[0] for pair in pairs], [pair[1] for pair in pairs]
-                )
+                rho = spearman_rho([pair[0] for pair in pairs], [pair[1] for pair in pairs])
                 if rho is not None:
                     daily.append(rho)
         cross_sectional[outcome] = {
@@ -242,8 +245,7 @@ def _append_ledger_result(report: Mapping[str, Any], report_path: Path) -> str:
     from research import hashing, ledger
 
     if any(
-        record.get("entry_type") == "retrospective_result"
-        and record.get("hypothesis_id") == "RQ1"
+        record.get("entry_type") == "retrospective_result" and record.get("hypothesis_id") == "RQ1"
         for record in ledger.read_all("ledger")
     ):
         raise OneRunError("RQ1 already has a retrospective result in the ledger")
@@ -308,8 +310,8 @@ def run_once(
     return report
 
 
-def _date_limited_dates(loader: Callable[[], Sequence[date]], day: date) -> list[date]:
-    return [item for item in loader() if item <= day]
+def _date_limited_dates(values: Sequence[date], day: date) -> list[date]:
+    return [item for item in values if item <= day]
 
 
 def _finite_number(value: object) -> float | None:
@@ -326,7 +328,6 @@ def _default_rows() -> list[dict[str, Any]]:
     """Reconstruct board scores from cached chains without network access."""
     import glob
 
-    import config
     from data.underlying_closes import load_closes, load_closes_adjusted
     from options_researcher.attractiveness import (
         ladder_cards,
@@ -339,22 +340,32 @@ def _default_rows() -> list[dict[str, Any]]:
     from options_researcher.fomc import load_fomc
 
     rows: list[dict[str, Any]] = []
+    skipped_days: Counter[str] = Counter()
     for symbol in config.ATTRACTIVENESS_UNIVERSE:
-        files = {Path(path).stem.rsplit("_", 1)[-1]: Path(path)
-                 for path in glob.glob(f".cache/chains/{symbol}_*.parquet")}
+        files = {
+            Path(path).stem.rsplit("_", 1)[-1]: Path(path)
+            for path in glob.glob(f".cache/chains/{symbol}_*.parquet")
+        }
         if not files:
             continue
         features = load_features(symbol).sort_index()
-        raw_closes = load_closes(symbol, "2017-01-01", config.BACKTEST_END, allow_oos=True)
+        raw_closes = load_closes(
+            symbol, config.RQ1_CACHE_START, config.BACKTEST_END, allow_oos=True
+        )
         adjusted_closes = load_closes_adjusted(
-            symbol, "2017-01-01", config.BACKTEST_END, allow_oos=True
+            symbol, config.RQ1_CACHE_START, config.BACKTEST_END, allow_oos=True
         )
         forward_rv = forward_realized_vol(adjusted_closes)
         future_iv = features["atm_iv"].shift(-HORIZON_SESSIONS) - features["atm_iv"]
         try:
-            earnings_loader = lambda: load_earnings(symbol)
-        except Exception:  # pragma: no cover - import is static
-            earnings_loader = lambda: []
+            earnings_all = load_earnings(symbol)
+        except (FileNotFoundError, ValueError) as exc:
+            logger.warning(
+                "RQ1 reconstruction %s: earnings unavailable; cards use UNKNOWN (%s)",
+                symbol,
+                exc,
+            )
+            earnings_all = []
         try:
             fomc_all = load_fomc()
         except (FileNotFoundError, ValueError):
@@ -375,36 +386,58 @@ def _default_rows() -> list[dict[str, Any]]:
                 close = float(raw_closes.loc[day_iso])
                 chain = pd.read_parquet(files[day_iso])
                 day = date.fromisoformat(day_iso)
-                earnings = _date_limited_dates(earnings_loader, day)
+                earnings = _date_limited_dates(earnings_all, day)
                 fomc = [item for item in fomc_all if item <= day]
-                iv_rank = (float(feature["iv_rank"])
-                           if pd.notna(feature["iv_rank"]) else 0.0)
-                iv_minus_rv = (float(feature["iv_minus_rv"])
-                               if pd.notna(feature["iv_minus_rv"]) else 0.0)
+                iv_rank = float(feature["iv_rank"]) if pd.notna(feature["iv_rank"]) else 0.0
+                iv_minus_rv = (
+                    float(feature["iv_minus_rv"]) if pd.notna(feature["iv_minus_rv"]) else 0.0
+                )
                 cards: list[dict[str, Any]] = []
-                cards.extend(ladder_cards(
-                    put_card_rows, symbol, chain, day_iso,
-                    rank_key="annualized_yield", higher_is_better=True,
-                    close=close, rv21=float(feature["rv21"]),
-                    iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                    earnings_dates=earnings, fomc_dates=fomc,
-                ))
-                cards.extend(ladder_cards(
-                    long_call_card_rows, symbol, chain, day_iso,
-                    rank_key="breakeven_move", higher_is_better=False,
-                    close=close, iv_rank=iv_rank,
-                ))
+                cards.extend(
+                    ladder_cards(
+                        put_card_rows,
+                        symbol,
+                        chain,
+                        day_iso,
+                        rank_key="annualized_yield",
+                        higher_is_better=True,
+                        close=close,
+                        rv21=float(feature["rv21"]),
+                        iv_rank=iv_rank,
+                        iv_minus_rv=iv_minus_rv,
+                        earnings_dates=earnings,
+                        fomc_dates=fomc,
+                    )
+                )
+                cards.extend(
+                    ladder_cards(
+                        long_call_card_rows,
+                        symbol,
+                        chain,
+                        day_iso,
+                        rank_key="breakeven_move",
+                        higher_is_better=False,
+                        close=close,
+                        iv_rank=iv_rank,
+                    )
+                )
                 if symbol in config.H4_THESIS_NAMES:
-                    cards.extend(leaps_card_rows(
-                        symbol, chain, day_iso, close=close, iv_rank=iv_rank,
-                        bucket_room=config.H4_THESIS_MAX_PREMIUM_TOTAL,
-                    ))
+                    cards.extend(
+                        leaps_card_rows(
+                            symbol,
+                            chain,
+                            day_iso,
+                            close=close,
+                            iv_rank=iv_rank,
+                            bucket_room=config.H4_THESIS_MAX_PREMIUM_TOTAL,
+                        )
+                    )
                 scored = [
                     (green_fraction(card.get("grades", {})), card)
-                    for card in cards if "skipped" not in card
+                    for card in cards
+                    if "skipped" not in card
                 ]
-                scored = [(score, card) for score, card in scored
-                          if score is not None]
+                scored = [(score, card) for score, card in scored if score is not None]
                 if not scored:
                     continue
                 best_score, best_card = max(
@@ -412,22 +445,38 @@ def _default_rows() -> list[dict[str, Any]]:
                 )
                 rv = _finite_number(forward_rv.get(day_iso))
                 iv_delta = _finite_number(future_iv.get(day_iso))
-                rows.append({
-                    "symbol": symbol,
-                    "date": day_iso,
-                    "lane": "best_prebadge_card",
-                    "green_fraction": float(best_score),
-                    "features_as_of": feature_as_of,
-                    "forward_rv": rv,
-                    "forward_iv_change": iv_delta,
-                    "synthetic": False,
-                    "lookahead_contaminated": False,
-                    "card_expiry": str(best_card.get("expiry", "")),
-                })
-            except (FileNotFoundError, KeyError, TypeError, ValueError, IndexError):
-                # A missing/malformed day is a disclosed gap, not a fabricated
-                # zero score. The aggregate remains honest about usable rows.
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "date": day_iso,
+                        "lane": "best_prebadge_card",
+                        "green_fraction": float(best_score),
+                        "features_as_of": feature_as_of,
+                        "forward_rv": rv,
+                        "forward_iv_change": iv_delta,
+                        "synthetic": False,
+                        "lookahead_contaminated": False,
+                        "card_expiry": str(best_card.get("expiry", "")),
+                    }
+                )
+            except (FileNotFoundError, KeyError, TypeError, ValueError, IndexError) as exc:
+                # A missing/malformed day is a counted, logged gap, not a
+                # fabricated zero score. The aggregate uses only usable rows.
+                skipped_days[type(exc).__name__] += 1
+                logger.warning(
+                    "RQ1 reconstruction skipped %s %s (%s): %s",
+                    symbol,
+                    day_iso,
+                    type(exc).__name__,
+                    exc,
+                )
                 continue
+    if skipped_days:
+        logger.warning(
+            "RQ1 reconstruction skipped %d board day(s): %s",
+            sum(skipped_days.values()),
+            dict(sorted(skipped_days.items())),
+        )
     return rows
 
 
@@ -435,7 +484,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT_PATH)
     parser.add_argument(
-        "--execute", action="store_true",
+        "--execute",
+        action="store_true",
         help="run once and append the descriptive retrospective result",
     )
     args = parser.parse_args(argv)

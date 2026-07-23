@@ -30,7 +30,7 @@ detailed specs in `2026-07-22-rq2-scanner-enrichment-briefs.md` and
 - **EX2 — VERIFIED:** the existing R1–R5 Phase-1 recorder path continues per
   the replan; focused H10, capture-receipt, H7-exit, ritual syntax, and diff
   checks pass. No activation or trigger surface was added.
-- **EX3 — RUN SPENT; residue open (status corrected 2026-07-23):** the RQ1
+- **EX3 — RUN SPENT; EX3a safety residue closed (2026-07-23):** the RQ1
   runner was adversarially reviewed before its single run. The receipt is
   `reports/rq1/rq1-v1.json`; the typed retrospective result is ledger seq 20.
   The report is descriptive-only and cannot promote a badge. Its disclosed
@@ -38,9 +38,11 @@ detailed specs in `2026-07-22-rq2-scanner-enrichment-briefs.md` and
   orchestrator adversarial review
   (`docs/superpowers/reviews/2026-07-23-ex1-ex3-orchestrator-review.md`)
   verified the one-run artifact intact (hashes, chain, seq-17 citation,
-  no-verdict framing) but found the EX3 acceptance criterion "causal-
-  reconstruction property test" was never implemented — see EX3a below.
-  The DONE claim was premature on that one criterion.
+  no-verdict framing) found the EX3 acceptance criterion "causal-
+  reconstruction property test" was initially missing. EX3a now exercises
+  `_default_rows` directly: truncating all later fixture inputs reproduces the
+  exact day-D board and confirms later earnings never enter that board. The
+  spent report and ledger result were not re-run or altered.
 - **EX4–EX8 — QUEUED:** EX4 starts with the partial-branch reconciliation;
   EX8 is unblocked by EX0.
 - **EX9 — NEXT URGENT:** earnings-variance machinery remains calendar-urgent
@@ -92,7 +94,7 @@ registration. Output: one receipt-bound report; append the result record.
 reproduces day-D board exactly); one-run gate refuses a second run;
 adversarial review recorded BEFORE the run.
 
-### EX3a — residue (opened 2026-07-23, Codex): causal-reconstruction test
+### EX3a — complete (2026-07-23, Codex): causal-reconstruction test
 
 The 2026-07-23 orchestrator review found the causal-reconstruction property
 test missing: `_default_rows` (the path that rebuilds each day's board from
@@ -105,6 +107,16 @@ reconstruction loop, and lift the runner's inline constants (21, 0.30, 252,
 grade; the recorded report already discloses these values). If the causal
 test FAILS, that is a material finding about the recorded RQ1 report — stop
 and escalate to the owner before touching anything else.
+
+**Closure:** `tests/test_rq1_runner.py` now invokes `_default_rows` against a
+full offline fixture and the same fixture truncated at day D. The day-D row is
+byte-identical; later features would change the card grade if they leaked, and
+the test also asserts that later earnings are absent. The reconstruction loop
+now counts and logs skipped board-days (test-pinned), and the seq-17 values
+21, 0.30, 252, and `2017-01-01` live in `config.py`. No RQ1 runner invocation,
+report mutation, or ledger append occurred. The recorded report remains bound
+to source commit `a0d2861`; this follow-up changes only the current method's
+test/observability/configuration surface.
 
 ## EX4 — Badge B: term-structure corner (seq 18)
 
