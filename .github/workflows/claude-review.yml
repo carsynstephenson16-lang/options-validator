@@ -9,9 +9,11 @@ name: Claude PR Review
 #      in to your Max account):   claude setup-token
 #   3. Store it as a repo secret named CLAUDE_CODE_OAUTH_TOKEN:
 #      Settings -> Secrets and variables -> Actions -> New repository secret.
-# Until the secret exists the job fails fast (harmless). Usage counts against
-# your Max plan limits, not dollars. The token is long-lived but expires
-# eventually — re-run `claude setup-token` and update the secret if reviews stop.
+# Until the secret exists the review step is skipped with a visible warning so
+# an unconfigured optional reviewer cannot fail an otherwise healthy PR.
+# Usage counts against your Max plan limits, not dollars. The token is
+# long-lived but expires eventually — re-run `claude setup-token` and update
+# the secret if reviews stop.
 #
 # Alternative (zero-token): the managed Code Review service at
 # https://claude.ai/admin-settings/claude-code -> Code Review -> Setup, which
@@ -52,7 +54,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check Claude authentication
+        id: auth
+        shell: bash
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "CLAUDE_CODE_OAUTH_TOKEN is not configured; skipping optional Claude review."
+          fi
+
       - name: Claude review
+        if: steps.auth.outputs.enabled == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
