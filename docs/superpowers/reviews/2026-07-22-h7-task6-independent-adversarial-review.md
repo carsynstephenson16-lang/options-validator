@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-22  
 **Branch:** `docs/replan-2026-07-22`  
-**Review basis:** candidate worktree after `53e7184`  
+**Review basis:** exact candidate commit `22d0f15`  
 **Reviewer:** fresh-context independent Codex reviewer  
 **Normative source:** `docs/superpowers/specs/2026-07-22-h7-real-exit-scoring-SPEC.md`
 
@@ -12,12 +12,12 @@
 reviewed authority, receipt-binding, lifecycle, causal-lineage, idempotency,
 concurrency, scoring, or result-withholding boundaries.
 
-**Task 6 / activation: BLOCKED pending final proof and owner PASS.** The owner
+**Task 6 / activation: BLOCKED pending owner PASS.** The owner
 ratified `H7_EXIT_SCORING_SPEC_AMENDMENT_V1_2` exactly as recommended below at
 2026-07-22T23:37:48Z, resolving the review's sole normative condition. The
-build remains **BUILD-ONLY / INACTIVE** until the exact committed candidate
-passes the complete offline suite and receives the separate §9 owner PASS.
-Task 7 remains closed.
+exact committed candidate then passed the complete offline suite and the
+independent-review PASS was recorded. The build remains **BUILD-ONLY /
+INACTIVE** until it receives the separate §9 owner PASS. Task 7 remains closed.
 
 ## Owner ruling applied to F1
 
@@ -89,6 +89,7 @@ The owner ratified this narrowly scoped amendment verbatim:
 
 | Check | Result |
 |---|---|
+| Complete offline suite on `22d0f15` | **1,718/1,718 passed** |
 | Real scoring | **25/25 passed** |
 | Real exit session | **38/38 passed** |
 | Paper lifecycle | **35/35 passed** |
@@ -100,15 +101,15 @@ The owner ratified this narrowly scoped amendment verbatim:
 | Frozen scorer | **Unchanged** |
 | Real forward ledger | **Unchanged; VALID, seq-0 registration only** |
 
-The complete offline suite still must be run against the exact committed
-candidate after the amendment is owner-ratified. A pre-remediation full-suite
-result is not substituted for that final proof.
+The complete offline suite passed against exact candidate commit `22d0f15`
+after the amendment was owner-ratified. The result is not inferred from an
+earlier run or from focused-test coverage.
 
 ## Exact path to unconditional §9 PASS
 
-1. Apply the ratified wording to the SPEC without broadening any authority.
-2. Commit the reviewed candidate and amendment.
-3. Run the complete offline suite against that exact commit.
+1. ~~Apply the ratified wording to the SPEC without broadening authority.~~
+2. ~~Commit the reviewed candidate and amendment (`22d0f15`).~~
+3. ~~Run the complete offline suite against that exact commit (1,718 passed).~~
 4. Record the separate owner-typed Task 6 PASS required by SPEC §9.
 
 Until those steps are complete, no activation fact may be written and no
