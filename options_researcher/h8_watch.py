@@ -18,7 +18,9 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -751,6 +753,35 @@ def _json_safe(value) -> dict:
     return json.loads(json.dumps(value, default=_json_default, allow_nan=False))
 
 
+def _write_json_artifact(payload: dict, output: Path) -> None:
+    """Atomically publish a strict JSON snapshot without using stdout."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    serialized = (
+        json.dumps(payload, sort_keys=True, indent=2, allow_nan=False) + "\n"
+    )
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=output.parent,
+        prefix=f".{output.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        temporary = Path(handle.name)
+        try:
+            handle.write(serialized)
+            handle.flush()
+            os.fsync(handle.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        os.replace(temporary, output)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def build_snapshot(
     on: date,
     *,
@@ -858,7 +889,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--assertions", type=Path, default=ASSERTIONS_PATH)
     parser.add_argument("--raw-assertions", type=Path, default=RAW_ASSERTIONS_PATH)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
+    if args.out is not None and not args.json:
+        parser.error("--out requires --json")
 
     iso = args.as_of.isoformat()
     try:
@@ -875,6 +909,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(exc))
 
     if args.json:
+        output = args.out or Path("reports/h8_forward") / f"{iso}.json"
+        _write_json_artifact(payload, output)
         print(json.dumps(payload, sort_keys=True, indent=2))
     else:
         print(f"H8 FORWARD PAPER ONLY @ {iso} -- live orders: disabled")
@@ -897,8 +933,8 @@ def main(argv: list[str] | None = None) -> int:
             f"${cap['headroom']:,.2f} of ${cap['cap']:,.2f} "
             f"(used ${cap['used']:,.2f})"
         )
-        for error in payload["errors"]:
-            print(f"  BLOCKER: {error}", file=sys.stderr)
+    for error in payload["errors"]:
+        print(f"  BLOCKER: {error}", file=sys.stderr)
     return 2 if payload["errors"] else 0
 
 

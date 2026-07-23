@@ -169,6 +169,27 @@ class RitualReceiptTests(unittest.TestCase):
                 self.assertEqual(rc, 1)
                 self.assertEqual(receipt["hypotheses"]["H8"]["status"], "MISSING")
 
+    def test_h8_blocked_entry_and_out_of_window_entry_are_no_signal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_complete_artifacts(root)
+            _write_json(
+                root / "reports/h8_forward" / f"{AS_OF}.json",
+                {
+                    "evaluation_session": AS_OF,
+                    "entries": [
+                        {"symbol": "PLTR", "status": "BLOCKED"},
+                        {"symbol": "AMZN", "status": "OUT_OF_WINDOW"},
+                    ],
+                    "exits": [],
+                    "errors": [],
+                },
+            )
+            rc, receipt = _run(root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["hypotheses"]["H8"]["status"], "NO_SIGNAL")
+
 
 if __name__ == "__main__":
     unittest.main()

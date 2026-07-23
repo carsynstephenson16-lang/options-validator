@@ -233,8 +233,17 @@ def _load_receipt_chain(
         or any(symbols[name].get("verdict") != "GO" for name in names)
     ):
         raise ExitSessionRefused("whole-universe GO disagrees with symbol results")
-    if gate.get("config_hash") != config_hash():
-        raise ExitSessionRefused("data-gate config identity is stale")
+    receipt_config_hash = gate.get("config_hash")
+    current_config_hash = config_hash()
+    if receipt_config_hash != current_config_hash:
+        raise ExitSessionRefused(
+            "data-gate config identity is stale: "
+            f"receipt config_hash={receipt_config_hash}; "
+            f"current config_hash={current_config_hash}; "
+            "expected after a config-touching merge landed after this "
+            "session's receipts were cut; the next session's receipts "
+            "re-key automatically; do not attempt to rewrite receipts."
+        )
     if gate.get("source_hash") != diagnostic_source_hash():
         raise ExitSessionRefused("data-gate live source identity is stale")
     if gate.get("source_hash_contract") != DIAGNOSTIC_SOURCE_HASH_VERSION:
