@@ -366,18 +366,23 @@ see findings F2/F3/F4.
 - [x] **Step 4: full suite + ruff + pyright green; commits in SPEC-delta-sized
 units** — DONE and independently re-verified 2026-07-22: **1,694 tests OK
 exit 0**, ruff clean, pyright 0 errors, worktree clean.
-- [ ] **Step 5 (Claude + independent agent, not Codex): adversarial review**
-of the whole build against the SPEC; PASS/FAIL recorded in the ledger. No
-ritual activation in this task.
-  **STATUS: NOT DONE — this is the live gate.** A pre-review completion audit
-  ran 2026-07-22 (`docs/superpowers/reviews/2026-07-22-h7-task6-completion-audit.md`):
-  safety invariants all held (live ledger untouched, ritual unchanged, frozen
-  scorer byte-identical, no order/network surface), but it raised **F1, a
-  genuine spec violation** — `h7_real_scoring preview` prints an interim
-  verdict, which SPEC §10 and replan R1 both forbid (latent only: unreachable
-  until 2026-10-26). That audit is an INPUT to §9, not the §9 review itself,
-  and claims NO PASS. Remediation list is in the findings doc's "Required
-  before any §9 PASS".
+- [x] **Step 5 (Claude + independent agent, not Codex): adversarial review** —
+  gate CLOSED by owner 2026-07-22, **with a recorded deviation from this
+  step's assignment**. Sequence: completion audit (`53e7184`, findings
+  F1-F10) → Codex remediation `22d0f15` (F1 structural fix verified; F3/F6/F9
+  genuine; F2/F4/F5 partial — residue listed in the review doc's orchestrator
+  addendum) → §9 review recorded PASS
+  (`2026-07-22-h7-task6-independent-adversarial-review.md`, `e99ef46`) →
+  owner ratified `H7_EXIT_SCORING_SPEC_AMENDMENT_V1_2` and typed
+  `H7_REAL_EXIT_SCORING_OWNER_PASS` (`9679248`). Orchestrator independently
+  reproduced: 1,718/1,718 suite, all focused counts, spec hash, ledger VALID,
+  and the fail-closed token check (finalize refuses; PASS facts deliberately
+  lack activation tokens). **Deviation:** the review doc's stated reviewer is
+  a fresh-context Codex reviewer, not the "Claude + independent agent, not
+  Codex" this step required — recorded in the review doc's addendum; whether
+  the PASS stands as-is or a Claude-side review is commissioned before Task 7
+  is an open owner decision. The owner PASS withholds Task 7/activation
+  authority either way.
 
 ### Task 7 (GATED on Task 6 review PASS): ritual activation of exit/monitoring sessions
 

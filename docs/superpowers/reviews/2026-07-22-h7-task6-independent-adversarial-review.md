@@ -129,3 +129,82 @@ earlier run or from focused-test coverage.
 Completion of these four review steps does not authorize an activation fact,
 Task 7 wiring, real H7 events, scoring, or live trading. Each remains closed
 unless separately and explicitly authorized by the owner.
+
+---
+
+## Orchestrator post-verification addendum (2026-07-22, appended after gate closure)
+
+Independent re-verification by the Claude orchestrator session, with one
+Sonnet subagent on the remediation diff. Findings recorded so the record
+stays honest; nothing here reopens the gate — that is the owner's call alone.
+
+### Independently reproduced (measured, not taken from this doc)
+
+- Full offline suite at HEAD: **1,718 tests, OK, exit 0** — matches.
+- All five focused-suite counts (38/38, 25/25, 35/35, 7/7, 7/7) — reproduced
+  exactly by fresh runs.
+- Fail-closed claim **empirically confirmed**: the hardened
+  `_require_review_passes` requires `verdict=PASS`, `owner=carsyn`, and
+  `spec_sha256=<registered hash>` tokens in the last matching fact line; a
+  direct token scan of `ledger/facts.log` shows all three absent from both
+  recorded PASS facts, so `finalize` refuses. The build-review PASS did not
+  arm the scoring door.
+- v1.2 amendment spec hash `c66d0e39…` re-derived from
+  `git show 22d0f15:<spec>` — matches the ratification fact byte-for-byte.
+- Forward ledger: `VALID records=1 head=a1ea228c2abb`, unchanged.
+- F1 remediation is structural, not cosmetic: `preview_real_score` no longer
+  calls `_score_result` at all, and the test patches `_score_result` with an
+  `AssertionError` side effect so any computation would fail the test.
+- F3 (both directions), F6 (all three call sites), F9 (`os.link` atomic
+  publication + race-simulation test) verified genuine.
+- F7's new explanation (AST one-door classifier false positive in
+  `tests/test_h7_one_door.py:85-104`) verified correct against the classifier
+  code; it supersedes the completion audit's "no behavioral effect" reading.
+
+### Discrepancy 1 — reviewer identity deviates from the brief (governance)
+
+This review's stated reviewer is a "fresh-context independent Codex
+reviewer." The Codex brief's Task 6 Step 5 assigned the §9 review to
+"**Claude + independent agent, not Codex**," and the replan's division of
+labor (§2.5) assigns review to Claude. A fresh context is real mitigation,
+and every number in the review reproduced — but the same tool lineage that
+wrote the build and the remediation also reviewed it, and git authorship
+(all commits under the owner's identity, per repo policy) cannot
+corroborate reviewer identity either way. The owner typed the Task 6 PASS
+at `e99ef46`; whether that PASS stands as-is, or a Claude-side fresh review
+is commissioned before Task 7, is an owner decision. The owner's PASS
+already withholds Task 7/activation authority, so nothing is live while
+that decision is pending.
+
+### Discrepancy 2 — the disposition table overstates F2 (and narrows F4/F5)
+
+The table marks F2 "Remediated." Exhaustive grep across `tests/` shows 3 of
+the completion audit's 8 named untested refusal branches, plus one
+sub-branch, are **still untested**:
+
+- gate shape checks (`h7_exit_session.py:190-234` — wrong evaluation
+  session, scope coverage, non-canonical verdict, malformed symbol results,
+  GO/symbol disagreement, and related);
+- changed source-health inputs (`:261-265`) — the new mutation tests hit the
+  look-alike data-gate check (`:177`), a distinct code path;
+- post-window with zero authorized positions (`:305-308`);
+- the source-health-side stale-hash-contract check (`:261`) is shadowed by
+  the data-gate copy in the test setup and never independently reached.
+
+F4 proves one drift vector (cache bytes mutated on disk) of the four the
+audit named. F5 now covers `bull_put_spread` but `call_debit_spread`
+settlement (intrinsic and fallback) has zero coverage repo-wide.
+
+None of these are activation-safety holes today (the store is empty and
+fail-closed); they are honest residue that should ride into Task 7's
+preconditions or receive an explicit owner waiver with reasoning.
+
+### Observation — fact timestamps
+
+`H7_EXIT_SCORING_SPEC_AMENDMENT_V1_2` and
+`H7_REAL_EXIT_SCORING_INDEPENDENT_REVIEW_PASS` were appended 0.9 ms apart
+(one write batch), while this doc narrates ratification at 23:37:48Z and a
+~35-minute suite run before the PASS was recorded. Consistent with
+batch-logging after the fact; recorded here because ledger timestamps are
+the project's evidence of sequence, and future readers should not mistake
+the two facts for independently-timed milestones.
