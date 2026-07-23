@@ -870,5 +870,80 @@ JSON
 
 ```
 
+## 2026-07-22 — Quant-methods survey: parked and rejected outcomes
+
+Full ranked survey with evidence, equations, and sources:
+`reports/2026-07-22-scanner-quant-methods-survey.md`. Top-5 selections went to
+Codex briefs (`docs/superpowers/plans/2026-07-22-rq2-scanner-enrichment-briefs.md`)
+under the replan's N2/N3 frame; everything below is what did NOT make the top five.
+
+### Parked (viable, gated — survey ranks 7–20)
+
+Common gate unless noted: ships display-only, fail-closed, owner-typed constants;
+entry into ranking only via an RQ2-class registration. Review date: first RQ2
+adjudication or the 2026-10-06 quarterly audit, whichever first.
+
+- **Tail-shape line** (rolling 252d skew/kurtosis/jump-count "this name jumps") —
+  strongest of the parked set; NaN-gate under ~250 obs.
+- **Vol-of-vol** (21d stdev of Δatm_iv) — must be earnings-conditioned or it
+  restates the earnings badge.
+- **IV-rank ex-earnings variant + naming fix** — current `iv_rank` is a percentile
+  (features.py:80), not the broker-platform min-max "IV rank"; relabel + optional
+  ex-earnings window (126-obs floor still binds).
+- **Rank-stability meter** — needs a small append-only board-history log first;
+  scope flips within an expiry bucket to avoid rollover false alarms.
+- **Spread-stability liquidity annotation** ("3× its usual spread today") — 20-file
+  join; exclude earnings weeks from the baseline.
+- **Taylor 1-day P&L attribution line** — 1-day horizon only; keep out of the
+  intrinsic-only scenario table (deliberate design there).
+- **OU half-life of IV** — log(atm_iv)/iv_rank only, ADF-gated; NEVER on price
+  (near-unit-root names).
+- **Beta-to-QQQ translation line** — NEEDS-DATA: no QQQ/SPY closes exist in
+  `.cache/underlying/` (QQQ/SPY chain caches are legacy series ending 2026-06-30;
+  closes are not derivable from chain files); one sanctioned fetch away.
+- **CVaR (5%) for the CSP lane** — deep-history names only, minimum
+  independent-window gate; refuses (not guesses) on CRWV/USAR/TEM/IREN/CEG.
+- **Model-free implied variance strip (Britten-Jones–Neuberger/VIX-style)** —
+  dense-chain names only; needs the rates CSV and a frozen zero-bid strike-stop
+  rule.
+- **HAR-RV / EWMA / GARCH forecast comparison** — a registered forecast-error study
+  (vs next-21d realized, vs naive rv21) must come FIRST; replacing rv21 changes
+  cushion/VRP inputs = registration territory.
+- **25Δ risk-reversal skew line** — descriptive only; wings fail liquidity gates on
+  ~half the universe; the unrun IV-direction written test bears on any stronger use.
+- **PCA first-eigenvalue share** — only alongside its Marchenko-Pastur null line
+  (λ₊=(1+√q)²); bare eigenvalue share overstates concentration at N=15.
+- **Early-assignment dividend flag + T-bill collateral comparison** — top of the
+  unlock queue, not really "parked": blocked solely on `data/rates/treasury_cmt.csv`
+  and `data/rates/expected_dividends.csv` (loaders in `data/rates.py` are built and
+  fail-closed; `data/rates/` does not exist as of 2026-07-22). OCC-official
+  mechanics. Unlocks the moment the owner sources the two CSVs.
+
+### Design-only notes (no build)
+
+- **Charm line for the 14-DTE ladder bucket** — gated on a beginner-explainer
+  rewrite; vanna/volga rejected outright.
+- **Regime-conditional GREEN/AMBER thresholds** — requires a validated regime read
+  plus per-regime numbers typed BEFORE observation; otherwise curve-fitting. Far
+  future.
+- **Put-call parity / box implied-financing checks** — folds into the BS design §5
+  detector as one more tier; blocked on the same synchronized-fields cache gap.
+- **American-exercise premium** — one-time feasibility scan across the cache; not a
+  standing feature unless it finds material magnitudes.
+- **SABR** — out-of-scope note: the cards need a few observed deltas, not a smile
+  model.
+
+### Rejected 2026-07-22 (not parked — reasons in the survey §6)
+
+HMM regime badge; 12-1 momentum overlay; EVT/Hill tail estimation; IV-surface PCA;
+Monte Carlo scenario fans; Cholesky joint simulation / point-estimate portfolio VaR;
+Avellaneda–Stoikov; gamma/theta breakeven (m*) card framing (delta-hedged concept
+misapplied to unhedged lanes — only the implied-daily-move half survives inside the
+N3 brief); fresh conditional-expected-return studies (H9 spent / H10 live / Card 3
+sealed); sector/market-cap diversification score (no data, no payoff over the
+correlation meter). The full-market TS×VRP interaction study above (the 2026-07-22
+"Primary Model Separation" section) remains parked per the replan §7 — its
+repo-scale corner survives as Badge B in the briefs.
+
 
 
