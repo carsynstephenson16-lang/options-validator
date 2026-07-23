@@ -3,9 +3,14 @@
 **Verdict: PARKED, not adopted.** Measured against this repo's guardrails, the
 feed cannot serve as a ThetaData backup or an index-chain source as-is.
 
+**Retirement update (2026-07-23):** the owner asked to remove the feed if it
+was ineffective. The ignored `lse_env/` and untracked `test_lse_feed.py`
+probe were deleted. `lse-data` was never part of `pyproject.toml`, `uv.lock`,
+or a production/research import path. This report remains as provenance.
+
 ## What it actually is (Repo-verified + Official-source, accessed 2026-07-23)
 
-- `test_lse_feed.py` is a 29-line read-only smoke test of the `lse-data`
+- `test_lse_feed.py` was a 29-line read-only smoke test of the `lse-data`
   v0.14.0 PyPI package by **"London Strategic Edge"**
   (londonstrategicedge.com) — **NOT LSEG / London Stock Exchange Group**; the
   name collision is a real confusion risk. The package lives in an ad hoc

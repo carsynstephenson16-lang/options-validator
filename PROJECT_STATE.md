@@ -66,9 +66,10 @@ earnings variance decomposition). Build order:
 - Index option chains: NOT funded (owner decision 2026-07-23) — implied-vol
   dispersion parked; realized-vol/beta/concentration proceed on closes.
 - Alpha Vantage full-history closes now paywalled — Yahoo path is the
-  sanctioned fallback. `test_lse_feed.py`: owner says intentional; assessment
-  of the LSE feed as a possible provider is in
-  `reports/2026-07-23-lse-feed-assessment.md` (if present; else pending).
+  sanctioned fallback. The isolated LSE feed probe was retired 2026-07-23
+  after its measured payload failed quote, liquidity, staleness, and
+  point-in-time-history requirements; audit:
+  `reports/2026-07-23-lse-feed-assessment.md`.
 
 ## Standing rules that bite
 

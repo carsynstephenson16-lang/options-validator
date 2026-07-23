@@ -933,7 +933,7 @@ adjudication or the 2026-10-06 quarterly audit, whichever first.
 - **SABR** — out-of-scope note: the cards need a few observed deltas, not a smile
   model.
 
-### LSE feed ("London Strategic Edge", lse-data) — parked 2026-07-23
+### LSE feed ("London Strategic Edge", lse-data) — retired 2026-07-23
 
 - **What:** owner-flagged `test_lse_feed.py` probe of an unverified options
   data vendor (NOT LSEG — name collision). Assessed same day:
@@ -946,6 +946,9 @@ adjudication or the 2026-10-06 quarterly audit, whichever first.
   tier carries bid/ask/OI and true historical chains; even then, scope =
   spot-quotes/flow color only, never chain or backtest data.
 - **Review date:** with the ThetaData extension decision (~2026-10-01).
+- **Retirement:** isolated probe script and ignored virtualenv removed after
+  owner review; no project dependency or active import existed. Reconsider
+  only if the un-park gate is independently satisfied.
 
 ### Rejected 2026-07-22 (not parked — reasons in the survey §6)
 
@@ -959,5 +962,90 @@ correlation meter). The full-market TS×VRP interaction study above (the 2026-07
 "Primary Model Separation" section) remains parked per the replan §7 — its
 repo-scale corner survives as Badge B in the briefs.
 
+## Repo-wide execution-mode enforcement layer (parked 2026-07-23)
+
+- **What:** an external (ChatGPT) "Phase 1" proposal — four global execution
+  modes (EXPLORE / IMPLEMENT / VALIDATE / OOS_REVEAL) resolved from one env
+  var/CLI source, plus a new registered-run wrapper, OOS path guard, manifest
+  validator, OOS access ledger, exploration logger, hash caching, and a
+  distinct research-integrity CI lane.
+- **Why parked:** a 2026-07-23 three-agent evaluation (inventory / queue fit /
+  incident history) found 5 of its 10 components already exist in this repo
+  (several twice — e.g. `research/ledger.py` + `h7_event_ledger.py`;
+  `research/experiments.py::register` + robustness `ExperimentSpec`), and the
+  two genuinely missing pieces (mode resolver, distinct CI lane) have ZERO
+  documented incidents behind them; a second global gate over the existing
+  function-level gates (`authorize_oos_run`, `reveal_oos`, robustness
+  `doctor`) risks two-sources-of-truth divergence. Fails the scope-guard
+  sentence today. Full reasoning:
+  `docs/superpowers/plans/2026-07-23-integrity-hardening-batch-v1-codex-brief.md`.
+- **Parked with it:** a data-layer OOS read guard (blocking raw parquet reads
+  past `IN_SAMPLE_END` outside the sanctioned entry points) — a real gap, but
+  zero incidents and the sealed holdout is intact at 0/3 reveals.
+- **Un-park gate:** a new historical-backtest arc with a declared OOS design,
+  OR a first real OOS near-miss incident, plus explicit owner decision.
+- **Salvaged instead (not parked):** the incident-backed Integrity Hardening
+  Batch v1 (same brief file): live-order-hook tests + promotion, hook-registration
+  doctor, frozen-values drift check, parking-lot section-preservation check,
+  optional robustness netguard.
+
+## Six-library adoption proposal (parked 2026-07-23)
+
+- **What:** an external recommendation to add six libraries — QuantLib
+  (pricing/Greeks verification), SciPy (calibration/statistical validation),
+  PyArrow (parquet storage), Polars (faster point-in-time processing), Numba
+  (faster Monte Carlo/payoff simulation), CVXPY (portfolio-level risk/capital
+  allocation) — plus "vectorbt as an independent research cross-check."
+- **Decision (2026-07-23, three-agent evaluation: repo audit + two external
+  research passes):** install NOTHING today. Every item fails the scope-guard
+  sentence: no live hypothesis (H5/H6/H7/H8) or registered robustness
+  experiment is blocked on any of them, and no repo code would import them.
+- **Per-library findings:**
+  - **PyArrow — already satisfied.** Direct dep (`pyarrow>=14,<22`, installed
+    21.0.0) backing the parquet cache; nothing to add. Only sub-item: the
+    `<22` cap is stale vs PyPI 25.0.0 — bump only when something needs it.
+  - **SciPy — already installed transitively** (lumibot hard-requires
+    `scipy>=1.14.0`; venv has 1.18.0). Repo stats code deliberately hand-rolls
+    dependence-aware methods scipy does NOT offer: `scipy.stats.bootstrap` is
+    IID-only (no block/stationary bootstrap — the verdict CI in `metrics.py`),
+    `scipy.stats.permutation_test` has no circular-block mode (robustness
+    layer), and Holm step-down isn't in scipy at all. **Un-park gate:** the
+    day the first repo `import scipy` lands (likeliest candidate: swapping
+    `black_scholes.py::implied_vol`'s hand-rolled Newton+bisection for
+    `scipy.optimize.brentq`), promote scipy to a direct pinned dep in the
+    same commit.
+  - **Polars — already installed transitively** (lumibot + thetadata). Zero
+    repo imports; EOD chains for 4–15 names are pandas-sized; second
+    dataframe idiom is a real cost in a beginner-Python-owned codebase.
+    **Un-park gate:** a *profiled* pandas wall-clock bottleneck in a
+    robustness-layer loop that reprocesses full chains repeatedly.
+  - **QuantLib — absent, park.** Repo froze its own dependency-free
+    Black-Scholes module 2026-07-17 (`options_researcher/black_scholes.py`,
+    docstring: "no I/O or third-party dependencies"). PyPI `QuantLib` 1.43
+    (2026-07-14) is healthy with macOS wheels both arches — no install risk,
+    just no need. **Un-park gate:** a registered hypothesis needing
+    American-exercise-aware Greeks with error bars tight enough that the
+    European-BS approximation would move a verdict.
+  - **Numba — absent, skip.** No Monte Carlo or profiled slow loop exists
+    anywhere in the codebase; would tax the fast offline test suite (JIT
+    compile on first call), narrows the numpy ceiling (`<2.5` vs repo `<3`),
+    and ships NO Intel-Mac wheels. **Un-park gate:** a specific profiled
+    resampling loop measured as the bottleneck AND shown to resist numpy
+    vectorization.
+  - **CVXPY — absent, skip.** Sizing is owner-typed hard caps and integer
+    slots in `config.py` — not a convex program; `tools/h7_adjudicate.py`
+    declares portfolio-cap simulation out of scope (v1.2(6)). Would pull 5+
+    compiled solver backends for a problem that doesn't exist here.
+    **Un-park gate:** a pre-registered hypothesis whose sizing genuinely
+    needs joint cross-name correlation-aware optimization.
+  - **vectorbt cross-check — parked with the rest.** A second backtest
+    engine, even "for cross-checks," collides with the engineering rule
+    (Lumibot is the one engine; don't build/adopt parallel backtest infra)
+    and has no live hypothesis behind it. Backtrader/Zipline were already
+    "skip" in the source recommendation; agreed.
+- **Full evidence:**
+  `docs/superpowers/plans/2026-07-23-six-library-adoption-codex-brief.md`.
+- **Review date:** next quarterly audit, or immediately when any un-park
+  gate above fires.
 
 
