@@ -20,6 +20,29 @@ detailed specs in `2026-07-22-rq2-scanner-enrichment-briefs.md` and
 - Every study runner is built, adversarially reviewed, and only then RUN ONCE
   per its registration; results append to the ledger before discussion.
 
+## Execution status — 2026-07-23
+
+- **EX0 — OWNER BLOCKING:** still open; its four pin addendum values are not
+  typed, so EX8 remains blocked.
+- **EX1 — DONE:** honesty wording and the 252-vs-365 disclosure are shipped
+  and test-pinned; card ordering and grades were not changed.
+- **EX2 — VERIFIED:** the existing R1–R5 Phase-1 recorder path continues per
+  the replan; focused H10, capture-receipt, H7-exit, ritual syntax, and diff
+  checks pass. No activation or trigger surface was added.
+- **EX3 — DONE:** the RQ1 runner was adversarially reviewed before its single
+  run. The receipt is `reports/rq1/rq1-v1.json`; the typed retrospective
+  result is ledger seq 20. The report is descriptive-only and cannot promote
+  a badge. Its disclosed usable scope is 4,886 name-days across MSFT, AMZN,
+  VST, and CEG.
+- **EX4–EX8 — QUEUED:** EX4 starts with the partial-branch reconciliation;
+  EX8 waits for EX0.
+- **EX9 — NEXT URGENT:** earnings-variance machinery remains calendar-urgent
+  ahead of the August prints and is the next queue jump if capacity changes.
+- **EX10 — LATER:** waits behind the recorders and EX3–EX9 movement.
+
+The one-run RQ1 boundary is spent: do not rerun it, alter its recipe, or
+interpret its descriptive rho values as a verdict.
+
 ---
 
 ## EX0 — BLOCKING: owner pin addendum (owner, not Codex)
