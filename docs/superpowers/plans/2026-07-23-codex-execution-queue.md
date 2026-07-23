@@ -30,11 +30,17 @@ detailed specs in `2026-07-22-rq2-scanner-enrichment-briefs.md` and
 - **EX2 — VERIFIED:** the existing R1–R5 Phase-1 recorder path continues per
   the replan; focused H10, capture-receipt, H7-exit, ritual syntax, and diff
   checks pass. No activation or trigger surface was added.
-- **EX3 — DONE:** the RQ1 runner was adversarially reviewed before its single
-  run. The receipt is `reports/rq1/rq1-v1.json`; the typed retrospective
-  result is ledger seq 20. The report is descriptive-only and cannot promote
-  a badge. Its disclosed usable scope is 4,886 name-days across MSFT, AMZN,
-  VST, and CEG.
+- **EX3 — RUN SPENT; residue open (status corrected 2026-07-23):** the RQ1
+  runner was adversarially reviewed before its single run. The receipt is
+  `reports/rq1/rq1-v1.json`; the typed retrospective result is ledger seq 20.
+  The report is descriptive-only and cannot promote a badge. Its disclosed
+  usable scope is 4,886 name-days across MSFT, AMZN, VST, and CEG. The
+  orchestrator adversarial review
+  (`docs/superpowers/reviews/2026-07-23-ex1-ex3-orchestrator-review.md`)
+  verified the one-run artifact intact (hashes, chain, seq-17 citation,
+  no-verdict framing) but found the EX3 acceptance criterion "causal-
+  reconstruction property test" was never implemented — see EX3a below.
+  The DONE claim was premature on that one criterion.
 - **EX4–EX8 — QUEUED:** EX4 starts with the partial-branch reconciliation;
   EX8 is unblocked by EX0.
 - **EX9 — NEXT URGENT:** earnings-variance machinery remains calendar-urgent
@@ -85,6 +91,20 @@ registration. Output: one receipt-bound report; append the result record.
 **Acceptance:** causal-reconstruction property test (truncated cache
 reproduces day-D board exactly); one-run gate refuses a second run;
 adversarial review recorded BEFORE the run.
+
+### EX3a — residue (opened 2026-07-23, Codex): causal-reconstruction test
+
+The 2026-07-23 orchestrator review found the causal-reconstruction property
+test missing: `_default_rows` (the path that rebuilds each day's board from
+the parquet cache) has zero test coverage against forward-peeking. Build the
+test now — it verifies the METHOD offline and does not re-run the spent
+study; the one-run boundary stays spent. Also from the review, same commit:
+count and log the silently-dropped board-days in the runner's
+reconstruction loop, and lift the runner's inline constants (21, 0.30, 252,
+"2017-01-01") into `config.py` with a comment citing seq 17 (documentation-
+grade; the recorded report already discloses these values). If the causal
+test FAILS, that is a material finding about the recorded RQ1 report — stop
+and escalate to the owner before touching anything else.
 
 ## EX4 — Badge B: term-structure corner (seq 18)
 

@@ -17,9 +17,13 @@ briefs; Claude orchestrates; the owner types every frozen number.
   recorders being built (replan R1–R2). **H10a/b** registered (backstops
   2026-10-06 / 2027-01-06) — capture path being built (R3). **H5** triggers
   2/3 met, watch manual (R4 wires it). **H6/H8** sample-gated forward books.
-- **RQ1** (seq 17): baseline test of the scanner's GREEN ranking — registered,
-  UNRUN, runner not yet built (queue EX3). N4 resolved: run against the
-  pre-badge recipe.
+- **RQ1** (seq 17): RUN 2026-07-23, one-run spent (result = ledger seq 20;
+  receipt `reports/rq1/rq1-v1.json`). Pooled Spearman rho −0.326 vs forward
+  21-session realized vol (notable, descriptive-only) and +0.086 vs forward
+  IV change (not notable); 4,886 usable name-days, MSFT/AMZN/VST/CEG. NO
+  VERDICT, no promotion. Residue EX3a open: causal-reconstruction property
+  test was never built (2026-07-23 review) — verify-the-method only; never
+  rerun the study.
 - **RQ2-v1** (seq 18) + **A2-v1** (seq 19): owner-typed freezes 2026-07-23 —
   corner badge 75/25 earnings-GATED (near 15–45 / long 60–120 DTE); bounce
   lens −20% / mom>0 / RV≥70th with mandatory negative-priors text; five CSP
