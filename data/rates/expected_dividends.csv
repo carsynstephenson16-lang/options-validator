@@ -1,0 +1,16 @@
+symbol,effective_date,expected_annual_cash_dividend,known_as_of_utc,valid_through,source_url,captured_at_utc,units
+MSFT,2026-06-10,3.64,2026-07-23T06:16:00+00:00,2026-09-13,https://news.microsoft.com/source/2026/06/10/microsoft-announces-quarterly-dividend-29/,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+AMZN,2026-02-06,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+VST,2026-04-30,0.916,2026-07-23T06:16:00+00:00,2026-08-03,https://www.prnewswire.com/news-releases/vistra-declares-dividend-on-common-stock-series-b-preferred-stock-and-series-c-preferred-stock-302759203.html,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+CEG,2026-04-28,1.706,2026-07-23T06:16:00+00:00,2026-08-01,https://investors.constellationenergy.com/news-releases/news-release-details/constellation-energy-corporation-declares-dividend-12,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+NVDA,2026-05-20,1.00,2026-07-23T06:16:00+00:00,2026-08-23,https://www.sec.gov/Archives/edgar/data/1045810/000104581026000051/q1fy27pr.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+AMD,2026-02-04,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/2488/000000248826000018/amd-20251227.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+AVGO,2026-06-03,2.60,2026-07-23T06:16:00+00:00,2026-09-06,https://www.prnewswire.com/news-releases/broadcom-inc-announces-second-quarter-fiscal-year-2026-financial-results-and-quarterly-dividend-302790698.html,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+NOW,2026-01-29,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1373715/000137371526000007/now-20251231.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+PLTR,2026-05-05,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1321655/000132165526000028/pltr-20260331.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+SMCI,2025-08-28,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1375365/000137536525000027/smci-20250630.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+ET,2026-04-27,1.35,2026-07-23T06:16:00+00:00,2026-07-31,https://www.sec.gov/Archives/edgar/data/1276187/000127618726000021/ex991eterq12026.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+IREN,2025-08-28,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1878848/000187884825000063/iren-20250630.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+TEM,2026-02-24,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1717115/000119312526066961/tem-20251231.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+CRWV,2026-05-08,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1769628/000176962826000222/crwv-20260331.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
+USAR,2026-02-12,0.0,2026-07-23T06:16:00+00:00,2026-10-26,https://www.sec.gov/Archives/edgar/data/1970622/000121390026015109/ea0269018-03.htm,2026-07-23T06:16:00+00:00,usd_per_share_per_year
