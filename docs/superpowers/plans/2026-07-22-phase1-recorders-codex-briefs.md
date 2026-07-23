@@ -384,6 +384,43 @@ exit 0**, ruff clean, pyright 0 errors, worktree clean.
   is an open owner decision. The owner PASS withholds Task 7/activation
   authority either way.
 
+### Task 6a (UNGATED — run before Task 7): close the recorded test residue
+
+**Files:** `tests/test_h7_exit_session.py` (extend). No production code changes
+are expected; every guard below already exists. **If writing a test exposes a
+real defect, STOP and report — do not fix production code under this task.**
+
+Source of record: the orchestrator addendum in
+`docs/superpowers/reviews/2026-07-22-h7-task6-independent-adversarial-review.md`
+(Discrepancy 2). The §9 disposition table said "Remediated" for F2; these
+branches were verified still untested repo-wide 2026-07-22:
+
+- [ ] Gate shape checks (`h7_exit_session.py:190-234`): one refusal test per
+named message — wrong evaluation session, scope not covered, non-canonical
+verdict, counts not covering scope, incomplete/malformed symbol results,
+GO-disagrees-with-symbol-results, stale config identity, stale live source
+identity, no linked source-health path, stale/mismatched receipt.
+- [ ] Changed source-health inputs (`:261-265`). CAREFUL: the existing
+mutation tests hit the look-alike data-gate check ("data-gate input changed
+since pass", `:177`), a different code path. Construct the fixture so the
+data-gate bindings still verify while a source-health input file changed, and
+assert the "source-health inputs changed since pass" refusal specifically.
+- [ ] Source-health-side stale hash contract (`:261`): vary the contract field
+on the source-health receipt only (data-gate copy at `:241` currently shadows
+it in `_write_receipts`-based fixtures).
+- [ ] Post-window with zero authorized positions (`:305-308`): post-window
+decision session, no in-window open-position lineage → typed refusal.
+- [ ] F4 drift vectors beyond mutated cache bytes: (a) data-gate receipt file
+rewritten on disk between `open()` and `observe_exit` → refusal via
+`_revalidate`; (b) conflicting ledger append between `open()` and a mutating
+call → head-conflict refusal.
+- [ ] F5: `call_debit_spread` expiration settlement — intrinsic path and
+conservative fallback (mirror the credit-spread tests at
+`tests/test_h7_exit_session.py:1287,1302`).
+
+Steps: add the tests; full suite + ruff + pyright green; commit —
+`test(h7): close F2/F4/F5 residue recorded by the task6 review addendum`.
+
 ### Task 7 (GATED on Task 6 review PASS): ritual activation of exit/monitoring sessions
 
 **Files:** `tools/daily_ritual.sh`; possibly a small runbook doc
