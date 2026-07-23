@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import math
 import os
 import subprocess
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -29,6 +30,7 @@ DEFAULT_REPORT_PATH = Path("reports/rq1/rq1-v1.json")
 HORIZON_SESSIONS = 21
 NOTABLE_ABS_RHO = 0.30
 REGISTRATION_SEQ = 17
+logger = logging.getLogger(__name__)
 
 
 class RQ1Error(RuntimeError):
@@ -276,7 +278,30 @@ def run_once(
 ) -> dict[str, Any]:
     """Build the single RQ1 report and optionally append its ledger result."""
     if report_path.exists():
-        raise OneRunError(f"RQ1 one-run artifact already exists: {report_path}")
+        if not append_result:
+            raise OneRunError(f"RQ1 one-run artifact already exists: {report_path}")
+        # A report is intentionally created before ledger publication. If the
+        # append failed after the report was written, retry that verified
+        # artifact instead of rebuilding or overwriting it.
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise OneRunError(
+                f"existing RQ1 artifact is unreadable: {report_path}"
+            ) from exc
+        if (
+            not isinstance(report, dict)
+            or report.get("schema") != "rq1_rank_quality_v1"
+            or report.get("hypothesis_id") != "RQ1"
+            or report.get("registration_seq") != REGISTRATION_SEQ
+            or not isinstance(report.get("results"), dict)
+            or not isinstance(report.get("provenance"), dict)
+        ):
+            raise OneRunError(
+                f"existing RQ1 artifact failed provenance validation: {report_path}"
+            )
+        _append_ledger_result(report, report_path)
+        return report
     rows = list(load_rows())
     results = summarize(rows)
     report: dict[str, Any] = {
@@ -308,8 +333,78 @@ def run_once(
     return report
 
 
-def _date_limited_dates(loader: Callable[[], Sequence[date]], day: date) -> list[date]:
-    return [item for item in loader() if item <= day]
+def _date_index(values: Sequence[object]) -> pd.Index:
+    return pd.Index([str(value)[:10] for value in values], name="date")
+
+
+def exact_forward_iv(
+    features: pd.DataFrame,
+    sessions: Sequence[object],
+    *,
+    horizon: int = HORIZON_SESSIONS,
+) -> pd.Series:
+    """Return IV change at the exact trading-session horizon.
+
+    Chain observations can be sparse. Align them to the underlying's
+    trading-session calendar before shifting so a missing session remains
+    missing instead of becoming the next available chain row.
+    """
+    if horizon < 1:
+        raise ValueError("horizon must be positive")
+    if "atm_iv" not in features:
+        raise KeyError("features missing atm_iv")
+    feature_index = _date_index(features.index)
+    if feature_index.has_duplicates:
+        raise ValueError("features contain duplicate dates")
+    session_index = _date_index(sessions)
+    if session_index.has_duplicates:
+        raise ValueError("sessions contain duplicate dates")
+    iv = pd.Series(features["atm_iv"].to_numpy(), index=feature_index)
+    aligned = iv.reindex(session_index)
+    return aligned.shift(-horizon) - aligned
+
+
+def _point_in_time_earnings(
+    assertions: list[dict] | None, symbol: str, day: date
+) -> list[date]:
+    """Return earnings known by the board-day close, including future dates."""
+    if assertions is None:
+        raise RQ1Error("point-in-time earnings assertions are unavailable")
+    from options_researcher.h7_earnings import (
+        GATING_EVENT_CLASS,
+        assertions_view,
+        report_date,
+    )
+
+    cutoff = datetime.combine(day, time.max, tzinfo=timezone.utc)
+    return sorted(
+        report_date(row)
+        for row in assertions_view(assertions, cutoff)
+        if row["symbol"] == symbol.upper()
+        and row.get("event_class") == GATING_EVENT_CLASS
+        and report_date(row) is not None
+    )
+
+
+def _point_in_time_fomc(events: Sequence[object], day: date) -> list[date]:
+    """Return FOMC dates only when each row carries announcement provenance."""
+    cutoff = datetime.combine(day, time.max, tzinfo=timezone.utc)
+    dates: list[date] = []
+    for event in events:
+        if not isinstance(event, Mapping):
+            raise RQ1Error(
+                "FOMC calendar lacks known_as_of_utc provenance; refusing "
+                "historical board reconstruction"
+            )
+        raw_date = event.get("date")
+        known_as_of = event.get("known_as_of_utc")
+        if not isinstance(raw_date, date) or not isinstance(known_as_of, datetime):
+            raise RQ1Error("FOMC event provenance is malformed")
+        if known_as_of.tzinfo is None or known_as_of.utcoffset() is None:
+            raise RQ1Error("FOMC event known_as_of_utc must be timezone-aware")
+        if known_as_of <= cutoff and raw_date >= day:
+            dates.append(raw_date)
+    return sorted(dates)
 
 
 def _finite_number(value: object) -> float | None:
@@ -334,9 +429,9 @@ def _default_rows() -> list[dict[str, Any]]:
         long_call_card_rows,
         put_card_rows,
     )
-    from options_researcher.earnings import load_earnings
     from options_researcher.features import load_features
     from options_researcher.fomc import load_fomc
+    from options_researcher.h7_earnings import load_assertions
 
     rows: list[dict[str, Any]] = []
     for symbol in config.ATTRACTIVENESS_UNIVERSE:
@@ -350,11 +445,15 @@ def _default_rows() -> list[dict[str, Any]]:
             symbol, "2017-01-01", config.BACKTEST_END, allow_oos=True
         )
         forward_rv = forward_realized_vol(adjusted_closes)
-        future_iv = features["atm_iv"].shift(-HORIZON_SESSIONS) - features["atm_iv"]
+        future_iv = exact_forward_iv(features, raw_closes.index)
         try:
-            earnings_loader = lambda: load_earnings(symbol)
-        except Exception:  # pragma: no cover - import is static
-            earnings_loader = lambda: []
+            assertions_all = load_assertions()
+        except (FileNotFoundError, ValueError) as exc:
+            logger.warning(
+                "RQ1 reconstruction: point-in-time earnings unavailable (%s)",
+                exc,
+            )
+            assertions_all = None
         try:
             fomc_all = load_fomc()
         except (FileNotFoundError, ValueError):
@@ -375,8 +474,8 @@ def _default_rows() -> list[dict[str, Any]]:
                 close = float(raw_closes.loc[day_iso])
                 chain = pd.read_parquet(files[day_iso])
                 day = date.fromisoformat(day_iso)
-                earnings = _date_limited_dates(earnings_loader, day)
-                fomc = [item for item in fomc_all if item <= day]
+                earnings = _point_in_time_earnings(assertions_all, symbol, day)
+                fomc = _point_in_time_fomc(fomc_all, day)
                 iv_rank = (float(feature["iv_rank"])
                            if pd.notna(feature["iv_rank"]) else 0.0)
                 iv_minus_rv = (float(feature["iv_minus_rv"])
@@ -424,9 +523,23 @@ def _default_rows() -> list[dict[str, Any]]:
                     "lookahead_contaminated": False,
                     "card_expiry": str(best_card.get("expiry", "")),
                 })
-            except (FileNotFoundError, KeyError, TypeError, ValueError, IndexError):
+            except (
+                FileNotFoundError,
+                KeyError,
+                TypeError,
+                ValueError,
+                IndexError,
+                RQ1Error,
+            ) as exc:
                 # A missing/malformed day is a disclosed gap, not a fabricated
                 # zero score. The aggregate remains honest about usable rows.
+                logger.warning(
+                    "RQ1 reconstruction skipped %s %s (%s): %s",
+                    symbol,
+                    day_iso,
+                    type(exc).__name__,
+                    exc,
+                )
                 continue
     return rows
 
