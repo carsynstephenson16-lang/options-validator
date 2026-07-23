@@ -55,6 +55,7 @@ class PutCardTests(unittest.TestCase):
         verdict = rows[0]["verdict"]
         self.assertIn("%/yr", verdict)
         self.assertNotIn("%/mo", verdict)
+        self.assertIn("simple, not compounded", verdict)
 
 
 class FomcCardTests(unittest.TestCase):

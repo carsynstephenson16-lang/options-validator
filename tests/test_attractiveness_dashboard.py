@@ -212,6 +212,8 @@ class RenderTests(unittest.TestCase):
     def test_render_has_label_and_no_external_assets(self):
         html = ad.render(self._assembled())
         self.assertIn("Your gain or loss", html)
+        self.assertIn("365 calendar days", html)
+        self.assertIn("252 trading sessions", html)
         self.assertNotIn("You end up with", html)
         self.assertNotIn("http://", html)
         self.assertNotIn("https://cdn", html)
