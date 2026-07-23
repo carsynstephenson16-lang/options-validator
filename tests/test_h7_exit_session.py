@@ -175,6 +175,8 @@ class ExitSessionCase(unittest.TestCase):
         }
         if structure == "long_call":
             action.update(strike=100.0, delta=0.60)
+        elif structure == "call_debit_spread":
+            action.update(long_strike=100.0, short_strike=110.0)
         elif structure == "bull_put_spread":
             action.update(short_strike=100.0, long_strike=90.0)
         net_debit = -2.82 if structure == "bull_put_spread" else 5.16
@@ -226,6 +228,9 @@ class ExitSessionCase(unittest.TestCase):
         missing_close_symbol: str | None = None,
         amd_next_report: str | None = None,
         source_hash_contract: str = DIAGNOSTIC_SOURCE_HASH_VERSION,
+        source_input_paths: dict[str, Path] | None = None,
+        source_overrides: dict[str, object] | None = None,
+        gate_overrides: dict[str, object] | None = None,
     ) -> Path:
         cache = self.root / "cache"
         cache.mkdir(exist_ok=True)
@@ -258,49 +263,49 @@ class ExitSessionCase(unittest.TestCase):
         unhealthy = sorted(
             symbol for symbol, state in states.items() if state["healthy"] is not True
         )
-        source = make_receipt(
-            "source_health",
-            {
-                "evaluation_session": evaluation,
-                "requested_run_date": requested,
-                "scope": self.scope,
-                "healthy_count": len(states) - len(unhealthy),
-                "unhealthy_count": len(unhealthy),
-                "unhealthy_symbols": unhealthy,
-                "activation_ready": not unhealthy,
-                "symbols": states,
-                "input_files": {},
-                "config_hash": config_hash(),
-                "source_hash": SOURCE_HASH,
-                "source_hash_contract": source_hash_contract,
-            },
-        )
+        source_payload: dict[str, object] = {
+            "evaluation_session": evaluation,
+            "requested_run_date": requested,
+            "scope": self.scope,
+            "healthy_count": len(states) - len(unhealthy),
+            "unhealthy_count": len(unhealthy),
+            "unhealthy_symbols": unhealthy,
+            "activation_ready": not unhealthy,
+            "symbols": states,
+            "input_files": input_files(source_input_paths or {}),
+            "config_hash": config_hash(),
+            "source_hash": SOURCE_HASH,
+            "source_hash_contract": source_hash_contract,
+        }
+        if source_overrides is not None:
+            source_payload.update(source_overrides)
+        source = make_receipt("source_health", source_payload)
         source_path.write_text(json.dumps(source), encoding="utf-8")
 
         gate_path = self.root / f"gate-{evaluation}.json"
-        gate = make_receipt(
-            "data_gate",
-            {
-                "evaluation_session": evaluation,
-                "requested_run_date": requested,
-                "scope": self.scope,
-                "whole_universe_verdict": verdict,
-                "go_count": len(states) if verdict == "GO" else 0,
-                "no_go_count": 0 if verdict == "GO" else len(states),
-                "symbols": {
-                    symbol: {"symbol": symbol, "verdict": verdict}
-                    for symbol in self.scope["symbols"]
-                },
-                "input_files": input_files(bindings),
-                "source_health_receipt_hash": (
-                    source["receipt_hash"] if linked else "f" * 64
-                ),
-                "source_health_receipt_path": str(source_path),
-                "config_hash": config_hash(),
-                "source_hash": SOURCE_HASH,
-                "source_hash_contract": source_hash_contract,
+        gate_payload: dict[str, object] = {
+            "evaluation_session": evaluation,
+            "requested_run_date": requested,
+            "scope": self.scope,
+            "whole_universe_verdict": verdict,
+            "go_count": len(states) if verdict == "GO" else 0,
+            "no_go_count": 0 if verdict == "GO" else len(states),
+            "symbols": {
+                symbol: {"symbol": symbol, "verdict": verdict}
+                for symbol in self.scope["symbols"]
             },
-        )
+            "input_files": input_files(bindings),
+            "source_health_receipt_hash": (
+                source["receipt_hash"] if linked else "f" * 64
+            ),
+            "source_health_receipt_path": str(source_path),
+            "config_hash": config_hash(),
+            "source_hash": SOURCE_HASH,
+            "source_hash_contract": source_hash_contract,
+        }
+        if gate_overrides is not None:
+            gate_payload.update(gate_overrides)
+        gate = make_receipt("data_gate", gate_payload)
         gate_path.write_text(json.dumps(gate), encoding="utf-8")
         return gate_path
 
@@ -317,6 +322,14 @@ class ExitSessionCase(unittest.TestCase):
 
 
 class TestExitAuthority(ExitSessionCase):
+    def _assert_gate_refusal(
+        self, *, gate_overrides: dict[str, object], expected: str
+    ) -> None:
+        self.gate_path = self._write_receipts(gate_overrides=gate_overrides)
+        with self.assertRaises(exit_session.ExitSessionRefused) as caught:
+            self.open()
+        self.assertEqual(str(caught.exception), expected)
+
     def test_factory_carries_registration_receipts_cohort_and_bindings(self):
         session = self.open()
 
@@ -340,6 +353,116 @@ class TestExitAuthority(ExitSessionCase):
         state = exit_session.source_health_state(session, "AMD")
         self.assertEqual(state.gate, "UNKNOWN")
         self.assertFalse(state.healthy)
+
+    def test_gate_wrong_evaluation_session_is_refused(self):
+        self._assert_gate_refusal(
+            gate_overrides={"evaluation_session": "2026-07-17"},
+            expected="data-gate receipt has the wrong evaluation session",
+        )
+
+    def test_gate_scope_not_covered_is_refused(self):
+        stale_scope = {**self.scope, "scope_hash": "f" * 64}
+        self._assert_gate_refusal(
+            gate_overrides={"scope": stale_scope},
+            expected="data-gate receipt does not cover the official scope",
+        )
+
+    def test_gate_noncanonical_verdict_is_refused(self):
+        self._assert_gate_refusal(
+            gate_overrides={"whole_universe_verdict": "MAYBE"},
+            expected="data-gate receipt verdict is not canonical",
+        )
+
+    def test_gate_counts_not_covering_scope_are_refused(self):
+        self._assert_gate_refusal(
+            gate_overrides={"go_count": 0, "no_go_count": 0},
+            expected="data-gate receipt counts do not cover the scope",
+        )
+
+    def test_gate_incomplete_symbol_results_are_refused(self):
+        symbols = {
+            symbol: {"symbol": symbol, "verdict": "GO"}
+            for symbol in self.scope["symbols"]
+            if symbol != "AMD"
+        }
+        self._assert_gate_refusal(
+            gate_overrides={"symbols": symbols},
+            expected="data-gate receipt symbol results are incomplete",
+        )
+
+    def test_gate_malformed_symbol_results_are_refused(self):
+        symbols = {
+            symbol: {"symbol": symbol, "verdict": "GO"}
+            for symbol in self.scope["symbols"]
+        }
+        symbols["AMD"] = {"symbol": "AMD", "verdict": "MAYBE"}
+        self._assert_gate_refusal(
+            gate_overrides={"symbols": symbols},
+            expected="data-gate receipt symbol results are malformed",
+        )
+
+    def test_gate_go_disagreeing_with_symbol_results_is_refused(self):
+        symbols = {
+            symbol: {"symbol": symbol, "verdict": "GO"}
+            for symbol in self.scope["symbols"]
+        }
+        symbols["AMD"] = {"symbol": "AMD", "verdict": "NO_GO"}
+        self._assert_gate_refusal(
+            gate_overrides={"symbols": symbols},
+            expected="whole-universe GO disagrees with symbol results",
+        )
+
+    def test_gate_stale_config_identity_is_refused(self):
+        self._assert_gate_refusal(
+            gate_overrides={"config_hash": "f" * 64},
+            expected="data-gate config identity is stale",
+        )
+
+    def test_gate_stale_live_source_identity_is_refused(self):
+        self._assert_gate_refusal(
+            gate_overrides={"source_hash": "f" * 64},
+            expected="data-gate live source identity is stale",
+        )
+
+    def test_gate_without_linked_source_health_path_is_refused(self):
+        self._assert_gate_refusal(
+            gate_overrides={"source_health_receipt_path": None},
+            expected="data-gate receipt has no linked source-health path",
+        )
+
+    def test_gate_with_stale_linked_source_health_receipt_is_refused(self):
+        self._assert_gate_refusal(
+            gate_overrides={"source_health_receipt_hash": "f" * 64},
+            expected="linked source-health receipt is stale or mismatched",
+        )
+
+    def test_changed_source_health_input_is_refused_by_source_check(self):
+        source_input = self.root / "source-health-input.txt"
+        source_input.write_text("original", encoding="utf-8")
+        self.gate_path = self._write_receipts(
+            source_input_paths={"source-fixture": source_input}
+        )
+        source_input.write_text("changed", encoding="utf-8")
+
+        with self.assertRaises(exit_session.ExitSessionRefused) as caught:
+            self.open()
+
+        self.assertEqual(
+            str(caught.exception),
+            "source-health inputs changed since pass: ['source-fixture']",
+        )
+
+    def test_source_health_stale_hash_contract_is_independently_refused(self):
+        self.gate_path = self._write_receipts(
+            source_overrides={"source_hash_contract": "stale-contract"}
+        )
+
+        with self.assertRaises(exit_session.ExitSessionRefused) as caught:
+            self.open()
+
+        self.assertEqual(
+            str(caught.exception), "source-health source-hash contract is stale"
+        )
 
     def test_unlinked_receipt_and_changed_cache_bytes_are_refused(self):
         self.gate_path = self._write_receipts(linked=False)
@@ -564,6 +687,90 @@ class TestRealLifecycleSeam(ExitSessionCase):
                 source_health_id=None,
                 clock=_clock("2026-07-21T01:00:00+00:00"),
             )
+
+    def test_mutation_revalidates_rewritten_data_gate_receipt(self):
+        session = self.open()
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+        chain = exit_session.load_bound_chain(session, "AMD")
+        chain_identity = exit_session.binding_identity(session, "chain:AMD")
+        closes_identity = exit_session.binding_identity(session, "close:AMD")
+        underlying_close = exit_session.load_bound_close(session, "AMD")
+        rewritten = json.loads(self.gate_path.read_text(encoding="utf-8"))
+        rewritten.pop("receipt_hash")
+        rewritten["requested_run_date"] = "2026-07-22"
+        self.gate_path.write_text(
+            json.dumps(make_receipt("data_gate", rewritten)), encoding="utf-8"
+        )
+
+        with self.assertRaises(exit_session.ExitSessionRefused) as caught:
+            lifecycle.observe_exit(
+                base_dir=session,
+                position_id="position:AMD:a",
+                evaluation_session=EVALUATION,
+                chain=chain,
+                data_gate_id=evidence.data_gate.event_id,
+                chain_identity=chain_identity,
+                closes_identity=closes_identity,
+                underlying_close=underlying_close,
+                earnings_gate="CLEAR",
+                next_report=None,
+                source_health_id=None,
+                clock=_clock("2026-07-21T01:00:00+00:00"),
+            )
+
+        self.assertEqual(
+            str(caught.exception), "exit-session receipt identity changed"
+        )
+
+    def test_conflicting_ledger_append_before_mutation_is_refused(self):
+        session = self.open()
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+        chain = exit_session.load_bound_chain(session, "AMD")
+        chain_identity = exit_session.binding_identity(session, "chain:AMD")
+        closes_identity = exit_session.binding_identity(session, "close:AMD")
+        underlying_close = exit_session.load_bound_close(session, "AMD")
+        ledger.append_event(
+            {
+                "schema_version": ledger.SCHEMA_VERSION,
+                "event_id": f"s4.exit_intent:{EVALUATION}:position:AMD:a",
+                "event_type": "exit_intent",
+                "occurred_at_utc": f"{EVALUATION}T20:00:00+00:00",
+                "evaluation_session": EVALUATION,
+                "symbol": "AMD",
+                "lane": "a",
+                "causes": ["open:AMD:a", evidence.data_gate.event_id],
+                "payload": {
+                    "position_id": "position:AMD:a",
+                    "fixture": "conflicting concurrent append",
+                },
+            },
+            base_dir=self.base,
+            clock=_clock("2026-07-21T01:00:00+00:00"),
+        )
+
+        with self.assertRaisesRegex(
+            lifecycle.LifecycleValidationError, "conflicting rerun"
+        ) as caught:
+            lifecycle.observe_exit(
+                base_dir=session,
+                position_id="position:AMD:a",
+                evaluation_session=EVALUATION,
+                chain=chain,
+                data_gate_id=evidence.data_gate.event_id,
+                chain_identity=chain_identity,
+                closes_identity=closes_identity,
+                underlying_close=underlying_close,
+                earnings_gate="CLEAR",
+                next_report=None,
+                source_health_id=None,
+                clock=_clock("2026-07-21T01:00:00+00:00"),
+            )
+
+        self.assertIsInstance(caught.exception.__cause__, ledger.EventConflictError)
 
     def test_mutation_refuses_fabricated_in_memory_inputs(self):
         session = self.open()
@@ -1019,6 +1226,45 @@ class TestRealLifecycleSeam(ExitSessionCase):
 
 
 class TestPostWindowAndSettlement(ExitSessionCase):
+    def _append_debit_settlement_position(
+        self, *, expiration: str, position_id: str
+    ) -> None:
+        self._append_position(
+            event_id=f"open:{position_id}",
+            position_id=position_id,
+            lane="b",
+            structure="call_debit_spread",
+            expiration=expiration,
+            legs=[
+                {
+                    "name": "long",
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": "C",
+                    "side": "buy",
+                    "quantity": 1,
+                    "raw_bid": 7.0,
+                    "raw_ask": 7.1,
+                    "raw_open_interest": 500,
+                    "raw_delta": 0.60,
+                    "fill_price": 7.16,
+                },
+                {
+                    "name": "short",
+                    "expiration": expiration,
+                    "strike": 110.0,
+                    "right": "C",
+                    "side": "sell",
+                    "quantity": 1,
+                    "raw_bid": 2.0,
+                    "raw_ask": 2.1,
+                    "raw_open_interest": 500,
+                    "raw_delta": 0.25,
+                    "fill_price": 1.95,
+                },
+            ],
+        )
+
     def _append_credit_settlement_position(
         self, *, expiration: str, position_id: str
     ) -> None:
@@ -1098,6 +1344,46 @@ class TestPostWindowAndSettlement(ExitSessionCase):
             clock=_clock("2026-07-25T01:00:00+00:00"),
         )
 
+    def _settle_debit_position(
+        self, *, position_id: str, close_value: float | None
+    ):
+        expiration = "2026-07-24"
+        decision = "2026-07-27"
+        self._append_debit_settlement_position(
+            expiration=expiration, position_id=position_id
+        )
+        gate = self._write_receipts(
+            evaluation=expiration,
+            requested=expiration,
+            close_value=120.0 if close_value is None else close_value,
+            verdict="NO_GO" if close_value is None else "GO",
+            missing_close_symbol="AMD" if close_value is None else None,
+        )
+        session = exit_session.open_real_exit_session(
+            base_dir=self.base,
+            decision_session=decision,
+            source_evaluation_session=expiration,
+            data_gate_receipt_path=gate,
+            now=datetime(2026, 7, 25, 1, tzinfo=timezone.utc),
+        )
+        evidence = exit_session.record_exit_evidence(
+            session, symbol="AMD", include_symbol=False
+        )
+        return lifecycle.observe_exit(
+            base_dir=session,
+            position_id=position_id,
+            evaluation_session=expiration,
+            chain=exit_session.load_bound_chain(session, "AMD"),
+            data_gate_id=evidence.data_gate.event_id,
+            chain_identity=exit_session.binding_identity(session, "chain:AMD"),
+            closes_identity=exit_session.binding_identity(session, "close:AMD"),
+            underlying_close=exit_session.load_bound_close(session, "AMD"),
+            earnings_gate="CLEAR",
+            next_report=None,
+            source_health_id=None,
+            clock=_clock("2026-07-25T01:00:00+00:00"),
+        )
+
     def test_post_window_authority_is_limited_to_in_window_positions(self):
         evaluation = "2026-10-30"
         decision = "2026-11-02"
@@ -1125,6 +1411,44 @@ class TestPostWindowAndSettlement(ExitSessionCase):
                 chain_identity="unused",
                 closes_identity="unused",
             )
+
+    def test_post_window_authority_without_open_lineage_is_refused(self):
+        empty_base = self.root / "empty-forward"
+        excluded = [
+            name for name in self.scope["symbols"] if name not in self.included
+        ]
+        registration.register_window(
+            owner=_owner_inputs(),
+            evidence=_registration_evidence(),
+            base_dir=empty_base,
+            universe_manifest={
+                "scope_id": self.scope["scope_id"],
+                "scope_hash": self.scope["scope_hash"],
+                "included": list(self.included),
+                "excluded": [
+                    {"symbol": symbol, "reason": "EARNINGS-UNKNOWN"}
+                    for symbol in excluded
+                ],
+                "trim_rule": "source_health_ready_at_pinned_session",
+            },
+        )
+        evaluation = "2026-10-30"
+        decision = "2026-11-02"
+        gate = self._write_receipts(evaluation=evaluation, requested=decision)
+
+        with self.assertRaises(exit_session.ExitSessionRefused) as caught:
+            exit_session.open_real_exit_session(
+                base_dir=empty_base,
+                decision_session=decision,
+                source_evaluation_session=evaluation,
+                data_gate_receipt_path=gate,
+                now=datetime(2026, 11, 3, 1, tzinfo=timezone.utc),
+            )
+
+        self.assertEqual(
+            str(caught.exception),
+            "post-window exit authority has no in-window open-position lineage",
+        )
 
     def test_unfinished_eod_is_refused(self):
         evaluation = "2026-07-22"
@@ -1315,6 +1639,36 @@ class TestPostWindowAndSettlement(ExitSessionCase):
         self.assertEqual(
             settled.payload["commission"], 2 * config.COMMISSION_PER_CONTRACT
         )
+
+    def test_debit_spread_intrinsic_settlement_is_symmetric(self):
+        settled = self._settle_debit_position(
+            position_id="position:debit-intrinsic", close_value=120.0
+        )
+
+        self.assertEqual(settled.payload["settlement_method"], "intrinsic_at_close")
+        self.assertEqual(settled.payload["net_close_credit_per_share"], 10.0)
+        self.assertEqual(
+            [leg["settlement_cash_per_share"] for leg in settled.payload["legs"]],
+            [20.0, -10.0],
+        )
+        self.assertEqual(
+            settled.payload["commission"], 2 * config.COMMISSION_PER_CONTRACT
+        )
+
+    def test_debit_spread_missing_close_uses_full_loss_fallback(self):
+        settled = self._settle_debit_position(
+            position_id="position:debit-fallback", close_value=None
+        )
+
+        self.assertEqual(
+            settled.payload["settlement_method"], "conservative_full_loss"
+        )
+        self.assertEqual(settled.payload["net_close_credit_per_share"], 0.0)
+        self.assertEqual(
+            [leg["settlement_cash_per_share"] for leg in settled.payload["legs"]],
+            [0.0, 0.0],
+        )
+        self.assertEqual(settled.payload["commission"], 0.0)
 
 
 class TestExitBatchAndCli(ExitSessionCase):
