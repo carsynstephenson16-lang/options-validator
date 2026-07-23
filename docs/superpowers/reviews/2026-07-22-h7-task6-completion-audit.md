@@ -19,6 +19,9 @@ conformance, scoring-path SPEC conformance, safety/inactivity)
 **Post-audit status:** Codex remediated F1-F6 and F9 and answered F7/F10. The
 fresh-context review and its one remaining owner-governance blocker are recorded
 in [2026-07-22-h7-task6-independent-adversarial-review.md](2026-07-22-h7-task6-independent-adversarial-review.md).
+That blocker was ratified, the exact committed candidate passed 1,718 tests,
+and the owner closed the Task 6 §9 build-review gate at `e99ef46`. The owner's
+PASS explicitly does not authorize Task 7, real events, scoring, or live trading.
 
 ## Verdict
 

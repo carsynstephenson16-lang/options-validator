@@ -12,12 +12,14 @@
 reviewed authority, receipt-binding, lifecycle, causal-lineage, idempotency,
 concurrency, scoring, or result-withholding boundaries.
 
-**Task 6 / activation: BLOCKED pending owner PASS.** The owner
+**Task 6 §9 build-review gate: PASS AND CLOSED.** The owner
 ratified `H7_EXIT_SCORING_SPEC_AMENDMENT_V1_2` exactly as recommended below at
 2026-07-22T23:37:48Z, resolving the review's sole normative condition. The
 exact committed candidate then passed the complete offline suite and the
-independent-review PASS was recorded. The build remains **BUILD-ONLY /
-INACTIVE** until it receives the separate §9 owner PASS. Task 7 remains closed.
+independent-review PASS was recorded. At 2026-07-23T00:24:54Z the owner gave
+the separate Task 6 PASS at commit `e99ef46` while explicitly withholding Task
+7 wiring, real H7 events, scoring, and live-trading authority. The build
+therefore remains **BUILD-ONLY / INACTIVE**. Task 7 remains closed.
 
 ## Owner ruling applied to F1
 
@@ -26,6 +28,18 @@ has signed off. It reports only that the result is withheld; it does not
 compute or expose trade count, verdict, expectancy, confidence intervals, or
 other scoring statistics. This is stricter and easier to audit than treating
 trade count as harmless interim information.
+
+## Owner Task 6 PASS
+
+The owner typed:
+
+> I give H7_REAL_EXIT_SCORING_OWNER_PASS for Task 6 at commit e99ef46. This
+> closes the §9 build-review gate only; it does not authorize Task 7 wiring,
+> real H7 events, scoring, or live trading.
+
+The append-only fact records that wording verbatim without the separate
+activation-shaped token tuple consumed by the scoring finalizer. This is
+intentional: the build-review gate is closed, while scoring remains refused.
 
 ## Completion-audit findings disposition
 
@@ -110,7 +124,8 @@ earlier run or from focused-test coverage.
 1. ~~Apply the ratified wording to the SPEC without broadening authority.~~
 2. ~~Commit the reviewed candidate and amendment (`22d0f15`).~~
 3. ~~Run the complete offline suite against that exact commit (1,718 passed).~~
-4. Record the separate owner-typed Task 6 PASS required by SPEC §9.
+4. ~~Record the separate owner-typed Task 6 PASS required by SPEC §9.~~
 
-Until those steps are complete, no activation fact may be written and no
-Task 7 wiring may begin.
+Completion of these four review steps does not authorize an activation fact,
+Task 7 wiring, real H7 events, scoring, or live trading. Each remains closed
+unless separately and explicitly authorized by the owner.
