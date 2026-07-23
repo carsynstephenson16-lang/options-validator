@@ -413,9 +413,18 @@ class TestExitAuthority(ExitSessionCase):
         )
 
     def test_gate_stale_config_identity_is_refused(self):
+        receipt_hash = "f" * 64
+        current_hash = config_hash()
         self._assert_gate_refusal(
-            gate_overrides={"config_hash": "f" * 64},
-            expected="data-gate config identity is stale",
+            gate_overrides={"config_hash": receipt_hash},
+            expected=(
+                "data-gate config identity is stale: "
+                f"receipt config_hash={receipt_hash}; "
+                f"current config_hash={current_hash}; "
+                "expected after a config-touching merge landed after this "
+                "session's receipts were cut; the next session's receipts "
+                "re-key automatically; do not attempt to rewrite receipts."
+            ),
         )
 
     def test_gate_stale_live_source_identity_is_refused(self):

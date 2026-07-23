@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -37,8 +38,60 @@ class PureMetricTests(unittest.TestCase):
         )
         self.assertIsNone(rq1_runner.spearman_rho([1.0], [2.0]))
 
+    def test_forward_iv_uses_exact_trading_session_horizon(self):
+        features = pd.DataFrame(
+            {"atm_iv": [0.20, 0.30, 0.40]},
+            index=pd.Index(["2026-01-02", "2026-01-05", "2026-01-07"]),
+        )
+        sessions = ["2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07"]
+
+        result = rq1_runner.exact_forward_iv(features, sessions, horizon=2)
+
+        self.assertTrue(pd.isna(result.iloc[0]))
+        self.assertAlmostEqual(result.iloc[1], 0.10)
+        self.assertTrue(pd.isna(result.iloc[2]))
+        self.assertTrue(pd.isna(result.iloc[3]))
+
 
 class CausalBoardTests(unittest.TestCase):
+    def test_earnings_are_selected_from_the_board_day_information_set(self):
+        assertions = [
+            {
+                "record_id": "known",
+                "symbol": "AAA",
+                "event_id": "AAA-Q1",
+                "record_type": "assertion",
+                "supersedes": "",
+                "event_class": "actual_quarterly_earnings",
+                "status": "confirmed",
+                "expected_date": date(2026, 2, 1),
+                "occurred_date": None,
+                "known_as_of_utc": datetime(2026, 1, 2, 15, tzinfo=timezone.utc),
+            },
+            {
+                "record_id": "future-known-later",
+                "symbol": "AAA",
+                "event_id": "AAA-Q2",
+                "record_type": "assertion",
+                "supersedes": "",
+                "event_class": "actual_quarterly_earnings",
+                "status": "confirmed",
+                "expected_date": date(2026, 5, 1),
+                "occurred_date": None,
+                "known_as_of_utc": datetime(2026, 2, 1, tzinfo=timezone.utc),
+            },
+        ]
+
+        result = rq1_runner._point_in_time_earnings(
+            assertions, "AAA", date(2026, 1, 2)
+        )
+
+        self.assertEqual(result, [date(2026, 2, 1)])
+
+    def test_unproven_fomc_calendar_is_fail_closed(self):
+        with self.assertRaises(rq1_runner.RQ1Error):
+            rq1_runner._point_in_time_fomc([date(2026, 2, 1)], date(2026, 1, 2))
+
     def test_future_feature_row_is_excluded(self):
         rows = [
             {
@@ -94,6 +147,18 @@ class CausalBoardTests(unittest.TestCase):
             f"/fixture/.cache/chains/AAA_{day}.parquet",
             f"/fixture/.cache/chains/AAA_{later_day}.parquet",
         ]
+        future_known_assertion = {
+            "record_id": "future-known-later",
+            "symbol": "AAA",
+            "event_id": "AAA-Q1",
+            "record_type": "assertion",
+            "supersedes": "",
+            "event_class": "actual_quarterly_earnings",
+            "status": "confirmed",
+            "expected_date": date(2026, 2, 1),
+            "occurred_date": None,
+            "known_as_of_utc": datetime(2026, 1, 5, 15, tzinfo=timezone.utc),
+        }
         observed_earnings: list[tuple[str, tuple[object, ...]]] = []
 
         def fake_ladder_cards(_builder, _symbol, _chain, board_day, **kwargs):
@@ -101,7 +166,6 @@ class CausalBoardTests(unittest.TestCase):
                 return []
             earnings = tuple(kwargs.get("earnings_dates", []))
             observed_earnings.append((board_day, earnings))
-            self.assertTrue(all(item.isoformat() <= board_day for item in earnings))
             return [
                 {
                     "grades": {"past_rv21": "GREEN" if kwargs.get("rv21", 0) < 0.5 else "RED"},
@@ -119,8 +183,8 @@ class CausalBoardTests(unittest.TestCase):
                 patch("data.underlying_closes.load_closes_adjusted", return_value=closes),
                 patch("options_researcher.features.load_features", return_value=features),
                 patch(
-                    "options_researcher.earnings.load_earnings",
-                    return_value=[pd.Timestamp(later_day).date()],
+                    "options_researcher.h7_earnings.load_assertions",
+                    return_value=[future_known_assertion],
                 ),
                 patch("options_researcher.fomc.load_fomc", return_value=[]),
                 patch(
@@ -157,7 +221,7 @@ class CausalBoardTests(unittest.TestCase):
             patch("data.underlying_closes.load_closes", return_value=closes),
             patch("data.underlying_closes.load_closes_adjusted", return_value=closes),
             patch("options_researcher.features.load_features", return_value=features),
-            patch("options_researcher.earnings.load_earnings", return_value=[]),
+            patch("options_researcher.h7_earnings.load_assertions", return_value=[]),
             patch("options_researcher.fomc.load_fomc", return_value=[]),
             patch(
                 "options_researcher.rq1_runner.pd.read_parquet", side_effect=KeyError("bad chain")
@@ -226,6 +290,46 @@ class OneRunTests(unittest.TestCase):
             second = rq1_runner.summarize(rows)
             self.assertEqual(first["results"]["pooled"], second["pooled"])
             self.assertEqual(first["results"]["observation_count"], 2)
+
+    def test_failed_ledger_append_can_retry_existing_report(self):
+        rows = [
+            {
+                "symbol": "AAA",
+                "date": "2026-01-02",
+                "green_fraction": 0.5,
+                "forward_rv": 0.3,
+                "forward_iv_change": 0.1,
+                "features_as_of": "2026-01-02",
+                "synthetic": False,
+            }
+        ]
+        calls = 0
+
+        def loader():
+            nonlocal calls
+            calls += 1
+            return rows
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "rq1.json"
+            with patch(
+                "options_researcher.rq1_runner._append_ledger_result",
+                side_effect=[RuntimeError("ledger temporarily unavailable"), "hash"],
+            ):
+                with self.assertRaisesRegex(RuntimeError, "temporarily unavailable"):
+                    rq1_runner.run_once(
+                        load_rows=loader,
+                        report_path=path,
+                        append_result=True,
+                    )
+                retry = rq1_runner.run_once(
+                    load_rows=loader,
+                    report_path=path,
+                    append_result=True,
+                )
+
+        self.assertEqual(calls, 1)
+        self.assertEqual(retry["hypothesis_id"], "RQ1")
 
 
 if __name__ == "__main__":

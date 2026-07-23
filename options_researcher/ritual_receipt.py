@@ -8,6 +8,7 @@ from the wall clock.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import date
@@ -252,8 +253,26 @@ def _h10(root: Path, as_of: str, run_date: str) -> CaptureResult:
     if failure is not None:
         return failure
     assert observations is not None
-    if not any(row.get("as_of") == run_date for row in observations):
+    matching = [row for row in observations if row.get("as_of") == run_date]
+    if not matching:
         return _result("MISSING", detail="stale" if observations else "artifact missing")
+    if len(matching) != 1:
+        return _result("REFUSED", detail="duplicate H10 observation")
+    observation = matching[0]
+    expected_receipt = str(receipt_path.relative_to(root))
+    try:
+        receipt_hash = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+    except (OSError, PermissionError):
+        return _result("MISSING", detail="receipt unreadable")
+    if (
+        observation.get("receipt") != expected_receipt
+        or observation.get("receipt_sha256") != receipt_hash
+    ):
+        return _result(
+            "REFUSED",
+            evidence=_evidence(root, observation_path),
+            detail="H10 observation receipt binding mismatch",
+        )
 
     evaluations = _object_list(receipt.get("evaluations"))
     if not evaluations:

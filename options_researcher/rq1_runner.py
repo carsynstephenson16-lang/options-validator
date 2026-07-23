@@ -20,7 +20,8 @@ import math
 import os
 import subprocess
 from collections import Counter
-from datetime import date, datetime, timezone
+from collections.abc import Iterable
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -278,7 +279,30 @@ def run_once(
 ) -> dict[str, Any]:
     """Build the single RQ1 report and optionally append its ledger result."""
     if report_path.exists():
-        raise OneRunError(f"RQ1 one-run artifact already exists: {report_path}")
+        if not append_result:
+            raise OneRunError(f"RQ1 one-run artifact already exists: {report_path}")
+        # A report is intentionally created before ledger publication. If the
+        # append failed after the report was written, retry that verified
+        # artifact instead of rebuilding or overwriting it.
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise OneRunError(
+                f"existing RQ1 artifact is unreadable: {report_path}"
+            ) from exc
+        if (
+            not isinstance(report, dict)
+            or report.get("schema") != "rq1_rank_quality_v1"
+            or report.get("hypothesis_id") != "RQ1"
+            or report.get("registration_seq") != REGISTRATION_SEQ
+            or not isinstance(report.get("results"), dict)
+            or not isinstance(report.get("provenance"), dict)
+        ):
+            raise OneRunError(
+                f"existing RQ1 artifact failed provenance validation: {report_path}"
+            )
+        _append_ledger_result(report, report_path)
+        return report
     rows = list(load_rows())
     results = summarize(rows)
     report: dict[str, Any] = {
@@ -310,8 +334,78 @@ def run_once(
     return report
 
 
-def _date_limited_dates(values: Sequence[date], day: date) -> list[date]:
-    return [item for item in values if item <= day]
+def _date_index(values: Iterable[object]) -> pd.Index:
+    return pd.Index([str(value)[:10] for value in values], name="date")
+
+
+def exact_forward_iv(
+    features: pd.DataFrame,
+    sessions: Iterable[object],
+    *,
+    horizon: int = HORIZON_SESSIONS,
+) -> pd.Series:
+    """Return IV change at the exact trading-session horizon.
+
+    Chain observations can be sparse. Align them to the underlying's
+    trading-session calendar before shifting so a missing session remains
+    missing instead of becoming the next available chain row.
+    """
+    if horizon < 1:
+        raise ValueError("horizon must be positive")
+    if "atm_iv" not in features:
+        raise KeyError("features missing atm_iv")
+    feature_index = _date_index(features.index)
+    if feature_index.has_duplicates:
+        raise ValueError("features contain duplicate dates")
+    session_index = _date_index(sessions)
+    if session_index.has_duplicates:
+        raise ValueError("sessions contain duplicate dates")
+    iv = pd.Series(features["atm_iv"].to_numpy(), index=feature_index)
+    aligned = iv.reindex(session_index)
+    return aligned.shift(-horizon) - aligned
+
+
+def _point_in_time_earnings(
+    assertions: list[dict] | None, symbol: str, day: date
+) -> list[date]:
+    """Return earnings known by the board-day close, including future dates."""
+    if assertions is None:
+        raise RQ1Error("point-in-time earnings assertions are unavailable")
+    from options_researcher.h7_earnings import (
+        GATING_EVENT_CLASS,
+        assertions_view,
+        report_date,
+    )
+
+    cutoff = datetime.combine(day, time.max, tzinfo=timezone.utc)
+    return sorted(
+        report_date(row)
+        for row in assertions_view(assertions, cutoff)
+        if row["symbol"] == symbol.upper()
+        and row.get("event_class") == GATING_EVENT_CLASS
+        and report_date(row) is not None
+    )
+
+
+def _point_in_time_fomc(events: Sequence[object], day: date) -> list[date]:
+    """Return FOMC dates only when each row carries announcement provenance."""
+    cutoff = datetime.combine(day, time.max, tzinfo=timezone.utc)
+    dates: list[date] = []
+    for event in events:
+        if not isinstance(event, Mapping):
+            raise RQ1Error(
+                "FOMC calendar lacks known_as_of_utc provenance; refusing "
+                "historical board reconstruction"
+            )
+        raw_date = event.get("date")
+        known_as_of = event.get("known_as_of_utc")
+        if not isinstance(raw_date, date) or not isinstance(known_as_of, datetime):
+            raise RQ1Error("FOMC event provenance is malformed")
+        if known_as_of.tzinfo is None or known_as_of.utcoffset() is None:
+            raise RQ1Error("FOMC event known_as_of_utc must be timezone-aware")
+        if known_as_of <= cutoff and raw_date >= day:
+            dates.append(raw_date)
+    return sorted(dates)
 
 
 def _finite_number(value: object) -> float | None:
@@ -335,9 +429,9 @@ def _default_rows() -> list[dict[str, Any]]:
         long_call_card_rows,
         put_card_rows,
     )
-    from options_researcher.earnings import load_earnings
     from options_researcher.features import load_features
     from options_researcher.fomc import load_fomc
+    from options_researcher.h7_earnings import load_assertions
 
     rows: list[dict[str, Any]] = []
     skipped_days: Counter[str] = Counter()
@@ -356,20 +450,22 @@ def _default_rows() -> list[dict[str, Any]]:
             symbol, config.RQ1_CACHE_START, config.BACKTEST_END, allow_oos=True
         )
         forward_rv = forward_realized_vol(adjusted_closes)
-        future_iv = features["atm_iv"].shift(-HORIZON_SESSIONS) - features["atm_iv"]
+        future_iv = exact_forward_iv(features, raw_closes.index)
         try:
-            earnings_all = load_earnings(symbol)
+            assertions_all = load_assertions()
         except (FileNotFoundError, ValueError) as exc:
-            logger.warning(
-                "RQ1 reconstruction %s: earnings unavailable; cards use UNKNOWN (%s)",
-                symbol,
-                exc,
-            )
-            earnings_all = []
+            raise RQ1Error(
+                f"point-in-time earnings assertions unavailable: {exc}"
+            ) from exc
         try:
             fomc_all = load_fomc()
         except (FileNotFoundError, ValueError):
             fomc_all = []
+        if any(not isinstance(event, Mapping) for event in fomc_all):
+            raise RQ1Error(
+                "FOMC calendar lacks known_as_of_utc provenance; refusing "
+                "historical board reconstruction"
+            )
         for day_iso in sorted(files):
             if day_iso < config.STUDY_ERA_START.get(symbol, config.BACKTEST_START):
                 continue
@@ -386,11 +482,17 @@ def _default_rows() -> list[dict[str, Any]]:
                 close = float(raw_closes.loc[day_iso])
                 chain = pd.read_parquet(files[day_iso])
                 day = date.fromisoformat(day_iso)
-                earnings = _date_limited_dates(earnings_all, day)
-                fomc = [item for item in fomc_all if item <= day]
-                iv_rank = float(feature["iv_rank"]) if pd.notna(feature["iv_rank"]) else 0.0
+                earnings = _point_in_time_earnings(assertions_all, symbol, day)
+                fomc = _point_in_time_fomc(fomc_all, day)
+                iv_rank = (
+                    float(feature["iv_rank"])
+                    if pd.notna(feature["iv_rank"])
+                    else 0.0
+                )
                 iv_minus_rv = (
-                    float(feature["iv_minus_rv"]) if pd.notna(feature["iv_minus_rv"]) else 0.0
+                    float(feature["iv_minus_rv"])
+                    if pd.notna(feature["iv_minus_rv"])
+                    else 0.0
                 )
                 cards: list[dict[str, Any]] = []
                 cards.extend(
@@ -459,7 +561,14 @@ def _default_rows() -> list[dict[str, Any]]:
                         "card_expiry": str(best_card.get("expiry", "")),
                     }
                 )
-            except (FileNotFoundError, KeyError, TypeError, ValueError, IndexError) as exc:
+            except (
+                FileNotFoundError,
+                KeyError,
+                TypeError,
+                ValueError,
+                IndexError,
+                RQ1Error,
+            ) as exc:
                 # A missing/malformed day is a counted, logged gap, not a
                 # fabricated zero score. The aggregate uses only usable rows.
                 skipped_days[type(exc).__name__] += 1

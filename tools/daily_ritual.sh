@@ -235,8 +235,8 @@ if [ "$GATE_GO" -eq 1 ]; then
   # Step 5 — H8 watcher, only once its tooling exists (registered lanes only).
   if "$UV" run python -c 'import options_researcher.h8_watch' 2>/dev/null; then
     mkdir -p reports/h8_forward
-    "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" --json \
-      > "reports/h8_forward/${AS_OF}.json" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
+    "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" --json --out \
+      "reports/h8_forward/${AS_OF}.json" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
   fi
 
   # Step 5b — H10a/b watcher + observation append (forward paper, no orders).

@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import io
 import json
 import tempfile
@@ -54,8 +55,9 @@ def _write_complete_artifacts(root: Path) -> None:
             "errors": [],
         },
     )
+    receipt_path = root / "reports/h10/receipts" / f"h10_watch_{RUN_DATE}.json"
     _write_json(
-        root / "reports/h10/receipts" / f"h10_watch_{RUN_DATE}.json",
+        receipt_path,
         {
             "as_of": RUN_DATE,
             "evaluation_session": AS_OF,
@@ -69,7 +71,17 @@ def _write_complete_artifacts(root: Path) -> None:
     )
     observations = root / "reports/h10/observations.jsonl"
     observations.parent.mkdir(parents=True, exist_ok=True)
-    observations.write_text(json.dumps({"as_of": RUN_DATE}) + "\n", encoding="utf-8")
+    observations.write_text(
+        json.dumps(
+            {
+                "as_of": RUN_DATE,
+                "receipt": f"reports/h10/receipts/h10_watch_{RUN_DATE}.json",
+                "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _run(root: Path) -> tuple[int, dict]:
@@ -156,6 +168,27 @@ class RitualReceiptTests(unittest.TestCase):
 
                 self.assertEqual(rc, 1)
                 self.assertEqual(receipt["hypotheses"]["H8"]["status"], "MISSING")
+
+    def test_h8_blocked_entry_and_out_of_window_entry_are_no_signal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_complete_artifacts(root)
+            _write_json(
+                root / "reports/h8_forward" / f"{AS_OF}.json",
+                {
+                    "evaluation_session": AS_OF,
+                    "entries": [
+                        {"symbol": "PLTR", "status": "BLOCKED"},
+                        {"symbol": "AMZN", "status": "OUT_OF_WINDOW"},
+                    ],
+                    "exits": [],
+                    "errors": [],
+                },
+            )
+            rc, receipt = _run(root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["hypotheses"]["H8"]["status"], "NO_SIGNAL")
 
 
 if __name__ == "__main__":

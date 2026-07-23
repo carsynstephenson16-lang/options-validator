@@ -93,11 +93,11 @@ def _chain(_symbol: str, _eval_iso: str) -> pd.DataFrame:
     )
 
 
-def _assertion(report: str) -> dict:
+def _assertion(report: str, *, symbol: str = "PLTR") -> dict:
     return {
-        "record_id": "PLTR-2026Q3-confirmed",
-        "symbol": "PLTR",
-        "event_id": "PLTR-2026Q3",
+        "record_id": f"{symbol}-2026Q3-confirmed",
+        "symbol": symbol,
+        "event_id": f"{symbol}-2026Q3",
         "fiscal_period": "2026Q3",
         "record_type": "assertion",
         "event_class": "actual_quarterly_earnings",
@@ -242,6 +242,27 @@ class FireTests(unittest.TestCase):
 
 
 class CapTests(unittest.TestCase):
+    def test_monthly_cap_is_reserved_across_symbols_in_one_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_book(root / "h10_positions.csv", open_premium=1_400.00)
+            rc, _, receipt, _ = _run(
+                root,
+                adjusted=_adjusted_breakout,
+                universe=["PLTR", "NVDA"],
+                assertions=[
+                    _assertion("2026-10-01"),
+                    _assertion("2026-10-01", symbol="NVDA"),
+                ],
+            )
+
+        self.assertEqual(rc, 0)
+        rows = receipt["evaluations"]
+        self.assertEqual([row["status"] for row in rows], ["FIRED", "SKIPPED"])
+        self.assertEqual(rows[1]["reason"], "CAP")
+        self.assertTrue(rows[0]["book_action_required"])
+        self.assertFalse(rows[1]["book_action_required"])
+
     def test_cap_exceeded_is_skipped_with_cap_reason(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

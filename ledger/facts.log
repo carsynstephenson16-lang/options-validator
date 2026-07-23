@@ -18014,3 +18014,4 @@
 2026-07-23T12:08:31.975033+00:00	DATA_PULL_OHLCV 2026-07-23: Yahoo OHLCV refresh CEG rows=1130 path=.cache/underlying_ohlcv/CEG.parquet
 2026-07-23T12:08:32.385161+00:00	DATA_PULL_OHLCV 2026-07-23: Yahoo OHLCV refresh MSFT rows=2400 path=.cache/underlying_ohlcv/MSFT.parquet
 2026-07-23T12:08:32.675244+00:00	DATA_PULL_OHLCV 2026-07-23: Yahoo OHLCV refresh AMZN rows=2400 path=.cache/underlying_ohlcv/AMZN.parquet
+2026-07-23T15:37:48.545792+00:00	DATA_PULL 2026-07-23: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.

@@ -1,9 +1,16 @@
+import contextlib
 import csv
+import io
+import json
 import math
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import date, datetime
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -16,6 +23,7 @@ from options_researcher.h8_watch import (
     evaluate_entry,
     evaluate_exit,
     load_book,
+    main,
     next_scheduled_report,
     validate_book,
     validate_cross_book,
@@ -500,6 +508,96 @@ class BookLoaderTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             load_book(path)
+
+
+class ArtifactContractTests(unittest.TestCase):
+    def test_json_defaults_to_program_written_exact_session_artifact(self):
+        payload = {
+            "evaluation_session": AS_OF.isoformat(),
+            "entries": [],
+            "exits": [],
+            "errors": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stdout = io.StringIO()
+            with (
+                contextlib.chdir(root),
+                contextlib.redirect_stdout(stdout),
+                mock.patch(
+                    "options_researcher.h8_watch.build_snapshot",
+                    return_value=payload,
+                ),
+            ):
+                rc = main(["--as-of", AS_OF.isoformat(), "--json"])
+            artifact = root / "reports/h8_forward" / f"{AS_OF.isoformat()}.json"
+            parsed = json.loads(artifact.read_text(encoding="utf-8"))
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(parsed["evaluation_session"], AS_OF.isoformat())
+
+    def test_subprocess_artifact_is_parseable_despite_stdout_banner(self):
+        header = ",".join(BOOK_FIELDS) + "\n"
+        repo = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            h8_book = root / "h8.csv"
+            h6_book = root / "h6.csv"
+            h8_book.write_text(header, encoding="utf-8")
+            h6_book.write_text(header, encoding="utf-8")
+            chain_dir = root / "chains"
+            chain_dir.mkdir()
+            artifact = root / "h8.json"
+            wrapper = root / "banner_wrapper.py"
+            wrapper.write_text(
+                "from runpy import run_module\n"
+                "print('fixture import banner')\n"
+                "run_module('options_researcher.h8_watch', run_name='__main__')\n",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["PYTHONPATH"] = os.pathsep.join(
+                filter(None, (str(repo), env.get("PYTHONPATH")))
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(wrapper),
+                    "--as-of",
+                    AS_OF.isoformat(),
+                    "--json",
+                    "--out",
+                    str(artifact),
+                    "--book",
+                    str(h8_book),
+                    "--h6-book",
+                    str(h6_book),
+                    "--chain-dir",
+                    str(chain_dir),
+                ],
+                cwd=repo,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            parsed = json.loads(artifact.read_text(encoding="utf-8"))
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("fixture import banner", completed.stdout)
+        self.assertEqual(parsed["evaluation_session"], AS_OF.isoformat())
+        self.assertTrue(parsed["errors"])
+
+    def test_daily_ritual_passes_out_path_without_shell_redirection(self):
+        source = (Path(__file__).resolve().parents[1] / "tools/daily_ritual.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("--json --out", source)
+        self.assertNotRegex(
+            source,
+            r">\s*[\"']?reports/h8_forward/\$\{AS_OF\}\.json",
+        )
 
 
 if __name__ == "__main__":

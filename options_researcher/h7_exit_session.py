@@ -233,8 +233,17 @@ def _load_receipt_chain(
         or any(symbols[name].get("verdict") != "GO" for name in names)
     ):
         raise ExitSessionRefused("whole-universe GO disagrees with symbol results")
-    if gate.get("config_hash") != config_hash():
-        raise ExitSessionRefused("data-gate config identity is stale")
+    receipt_config_hash = gate.get("config_hash")
+    current_config_hash = config_hash()
+    if receipt_config_hash != current_config_hash:
+        raise ExitSessionRefused(
+            "data-gate config identity is stale: "
+            f"receipt config_hash={receipt_config_hash}; "
+            f"current config_hash={current_config_hash}; "
+            "expected after a config-touching merge landed after this "
+            "session's receipts were cut; the next session's receipts "
+            "re-key automatically; do not attempt to rewrite receipts."
+        )
     if gate.get("source_hash") != diagnostic_source_hash():
         raise ExitSessionRefused("data-gate live source identity is stale")
     if gate.get("source_hash_contract") != DIAGNOSTIC_SOURCE_HASH_VERSION:
@@ -291,18 +300,18 @@ def _authorized_positions(
         ):
             raise ExitSessionRefused("open position has incomplete decision lineage")
         try:
-            expiration = date.fromisoformat(expiration_value)
+            date.fromisoformat(expiration_value)
         except ValueError as exc:
             raise _refuse("open position expiration is invalid", exc) from exc
         if not window_start <= opening_decision <= window_end:
             raise ExitSessionRefused("open position did not originate inside the window")
         if evaluation_session < position.entry_session:
             continue
-        if (
-            date.fromisoformat(decision_session) <= expiration
-            or date.fromisoformat(evaluation_session) == expiration
-        ):
-            authorized.append(position.position_id)
+        # Exit authority remains available for every in-window open position,
+        # including positions that are already overdue.  The mutation path
+        # still requires a receipt-bound session and settles at expiration
+        # once an expiration-session receipt is available.
+        authorized.append(position.position_id)
     if decision_session > window_end and not authorized:
         raise ExitSessionRefused(
             "post-window exit authority has no in-window open-position lineage"
@@ -857,8 +866,15 @@ def _is_due_exit(
     expiration = date.fromisoformat(
         str(position.entry_payload["action"]["expiration"])
     )
-    if date.fromisoformat(session.evaluation_session) >= expiration:
+    evaluation = date.fromisoformat(session.evaluation_session)
+    decision = date.fromisoformat(session.decision_session)
+    if evaluation >= expiration:
         return True
+    # A Friday operational decision is built from Thursday's completed
+    # receipt.  Do not use that pre-expiration mark as a terminal settlement;
+    # wait for the next decision backed by an expiration-session receipt.
+    if decision == expiration:
+        return False
     intent = next(
         (event for event in events if event.event_id == position.exit_intent_id),
         None,

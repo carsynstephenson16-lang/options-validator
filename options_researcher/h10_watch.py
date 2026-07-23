@@ -458,8 +458,13 @@ def main(
     load_chain = load_chain or _load_chain
 
     print(f"H10 WATCH session={eval_iso} run={run_date.isoformat()} ({BANNER})")
-    evaluations = [
-        _evaluation(
+    # Reserve accepted costs in receipt order.  Passing the same starting
+    # balance to every symbol would let a multi-symbol watcher run exceed the
+    # registered monthly cap.
+    evaluations: list[dict[str, Any]] = []
+    reserved_premium = open_premium
+    for symbol in names:
+        row = _evaluation(
             symbol,
             eval_iso=eval_iso,
             params=params,
@@ -468,10 +473,16 @@ def main(
             load_chain=load_chain,
             assertions=assertions,
             known_as_of=effective_known_as_of,
-            open_premium=open_premium,
+            open_premium=reserved_premium,
         )
-        for symbol in names
-    ]
+        evaluations.append(row)
+        if row["status"] == "FIRED" and reserved_premium is not None:
+            candidate = row["candidate_contract"]
+            if candidate is None:  # pragma: no cover - internal invariant
+                raise RuntimeError("FIRED evaluation has no candidate contract")
+            reserved_premium = round(
+                reserved_premium + float(candidate["entry_cost"]), 2
+            )
     for row in evaluations:
         reason = f" reason={row['reason']}" if row["reason"] else ""
         fired = [name for name, value in row["signals"].items() if value]
