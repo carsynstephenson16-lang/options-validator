@@ -75,6 +75,11 @@ If a check fails, inspect the failure and fix it when the failure relates to the
 
 If a check cannot run because of missing dependencies, credentials, data, internet, or environment setup, state the blocker clearly and list the exact command the user should run.
 
+Research robustness experiments use
+`uv run python -m options_researcher.robustness --help`. They read only
+precomputed point-in-time panels and remain separate from production ranking
+and the Lumibot finalist path.
+
 ## Quant, Trading, and Market Rules
 
 Do not claim a strategy has edge without evidence from data, costs, slippage, and out-of-sample testing.

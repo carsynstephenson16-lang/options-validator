@@ -57,6 +57,7 @@ uv run python -m options_researcher.dashboard    # writes .tmp/dashboard/index.h
 uv run python -m options_researcher.live_dashboard --serve  # 127.0.0.1 live-preview server (two lanes: OFFICIAL H5 vs LIVE PREVIEW; FIRE stays with entry_watch)
 uv run python -m options_researcher.live_quotes --probe  # one-shot live schema probe (regular session ONLY; required before the live lane turns on)
 uv run python -m options_researcher.attractiveness_dashboard  # writes .tmp/dashboard/attractiveness.html
+uv run python -m options_researcher.robustness --help  # registered research-only walk-forward/null/stability experiments
 ```
 
 Tests are `unittest` (not pytest) and must stay runnable offline against the

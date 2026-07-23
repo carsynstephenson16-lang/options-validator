@@ -80,6 +80,7 @@ uv run python tools/thetadata_exit_audit.py --scope h7          # read-only forw
 uv run python -m options_researcher.portfolio                 # mark recorded options, if any
 uv run python -m options_researcher.dashboard                  # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.attractiveness_dashboard    # interactive at-expiration scenario view (writes .tmp/dashboard/attractiveness.html)
+uv run python -m options_researcher.robustness --help            # registered research-only robustness experiments
 ```
 
 `smoke_test.py` probes a single in-sample chain (cached parquet, or the
