@@ -352,19 +352,35 @@ measured wrong); pooling horizons or workstream conclusions.
 
 ## 13. Remaining owner decisions (blocking order) and next state
 
-1. **Ratify Part-II values by typing them into the registrations** (RQ2/A2:
-   badge thresholds 75/25 GATED; bounce −20%/mom>0/70th; 21-DTE/50% exits;
-   α=0.10; adverse gate 10; 12-mo backstop). Until typed, they are
-   LLM-drafted-owner-forwarded working values.
-2. **ThetaData extension** (coverage ends 2026-11-30) — decide by
-   ~2026-10-01 or the program loses its data spine mid-window.
-3. **Dividends CSV spot-check** — DELIVERED and loader-verified this session;
-   spot-check the six payer amounts (NVDA's fresh 25× raise first) against the
-   cited SEC/IR URLs before the assignment flag ever renders.
-4. **Index-chain top-up (SPY/QQQ)** yes/no — gates implied-vol dispersion.
-5. **A2 / C / D / E registrations** — owner types each as its brief matures;
-   sequencing after Phase-1 recorders per the standing directive.
+1. **Part-II value ratification** (DONE 2026-07-23). The owner-typed RQ2/A2
+   values are frozen in ledger sequences 18 and 19: badge thresholds 75/25
+   with confirmed-earnings gating; bounce −20%/mom>0/70th; 21-DTE and 50%
+   exit arms; α=0.10; adverse gate 10; and a 12-month backstop.
+   **1b. Four pin-items the registrations left unfrozen — owner addendum
+   required BEFORE the RQ2/A2 runners execute** (specifying them now, before
+   any result exists, is clean; after results it is contamination):
+   (i) the A2 "fixed-horizon" CSP arm's horizon length (a session count —
+   distinct from the assignment-accepting hold-to-expiry arm);
+   (ii) the bucket split for top-minus-bottom (terciles proposed);
+   (iii) the Holm p-value sidedness convention (one-sided in the hypothesized
+   direction, matching the CI90-lower-bound promotion rule, proposed);
+   (iv) Badge B's exact "applicable event window" (proposed: a confirmed
+   report date strictly inside the near leg's remaining 15–45 DTE life).
+2. **ThetaData extension** — the deadline is recorded as approximately
+   2026-10-01; coverage is confirmed through 2026-11-30 and renewal/extension
+   remains an owner account action.
+3. **Dividends CSV spot-check** (DONE 2026-07-23). NVDA was checked first;
+   all six cited SEC/issuer/IR amounts match the CSV. Evidence:
+   `reports/2026-07-23-dividend-payer-spot-check.md`.
+4. **Index-chain top-up (SPY/QQQ)** — DECIDED NO FOR NOW. SPY/QQQ option
+   chains are not funded or pulled; implied-vol dispersion remains blocked,
+   while realized-vol / beta / concentration work uses existing closes.
+5. **A2 / C / D / E registrations** — A2 values are frozen; C / D / E remain
+   separate registrations as their briefs mature, with sequencing after
+   Phase-1 recorders per the standing directive.
 
-**Recommended next state:** Phase-1 recorders + H1 (now) → RQ1 runner brief →
-registrations (A2, RQ2 badges, C, D-descriptive, E) → badge/panel/card builds
-→ August earnings season captured by D → quarterly cadence per §7.
+**Recommended next state (updated post-registration):** owner types the §13.1b
+pin addendum → Codex executes the queue in
+`docs/superpowers/plans/2026-07-23-codex-execution-queue.md` (H1 + recorders
+first, RQ1 runner, badges, N3 lines, panel, A2 runner, Workstream D before the
+August prints) → quarterly cadence per §7.
