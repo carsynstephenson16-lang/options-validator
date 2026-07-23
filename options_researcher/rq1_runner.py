@@ -449,15 +449,18 @@ def _default_rows() -> list[dict[str, Any]]:
         try:
             assertions_all = load_assertions()
         except (FileNotFoundError, ValueError) as exc:
-            logger.warning(
-                "RQ1 reconstruction: point-in-time earnings unavailable (%s)",
-                exc,
-            )
-            assertions_all = None
+            raise RQ1Error(
+                f"point-in-time earnings assertions unavailable: {exc}"
+            ) from exc
         try:
             fomc_all = load_fomc()
         except (FileNotFoundError, ValueError):
             fomc_all = []
+        if any(not isinstance(event, Mapping) for event in fomc_all):
+            raise RQ1Error(
+                "FOMC calendar lacks known_as_of_utc provenance; refusing "
+                "historical board reconstruction"
+            )
         for day_iso in sorted(files):
             if day_iso < config.STUDY_ERA_START.get(symbol, config.BACKTEST_START):
                 continue
