@@ -35,6 +35,9 @@ results/*
 /20??-??-??.md
 /Untitled*.md
 /Untitled*.canvas
+# owner scratch probe of the parked LSE feed (assessment: reports/2026-07-23-
+# lse-feed-assessment.md); untracked by design — ruff skips gitignored files
+/test_lse_feed.py
 
 # session scratch (web research cache)
 .firecrawl/
