@@ -1,0 +1,31 @@
+{
+  "as_of": "2026-07-22",
+  "hypotheses": {
+    "H10": {
+      "detail": "no signal",
+      "evidence": "reports/h10/receipts/h10_watch_2026-07-23.json",
+      "status": "NO_SIGNAL"
+    },
+    "H5": {
+      "detail": "no signal",
+      "evidence": "reports/h5/entry_watch_2026-07-22.txt",
+      "status": "NO_SIGNAL"
+    },
+    "H6": {
+      "detail": "no signal",
+      "evidence": "reports/h6_forward/2026-07-22.json",
+      "status": "NO_SIGNAL"
+    },
+    "H7": {
+      "detail": "artifact missing",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H8": {
+      "detail": "unparseable JSON",
+      "evidence": null,
+      "status": "MISSING"
+    }
+  },
+  "run_date": "2026-07-23"
+}
