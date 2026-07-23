@@ -22,8 +22,9 @@ detailed specs in `2026-07-22-rq2-scanner-enrichment-briefs.md` and
 
 ## Execution status — 2026-07-23
 
-- **EX0 — OWNER BLOCKING:** still open; its four pin addendum values are not
-  typed, so EX8 remains blocked.
+- **EX0 — DONE (2026-07-23):** the four pin addendum values are typed as
+  ledger fact `RQ2_A2_PIN_ADDENDUM_V1`; EX8 is unblocked (runners must cite
+  the fact and refuse without it).
 - **EX1 — DONE:** honesty wording and the 252-vs-365 disclosure are shipped
   and test-pinned; card ordering and grades were not changed.
 - **EX2 — VERIFIED:** the existing R1–R5 Phase-1 recorder path continues per
@@ -35,7 +36,7 @@ detailed specs in `2026-07-22-rq2-scanner-enrichment-briefs.md` and
   a badge. Its disclosed usable scope is 4,886 name-days across MSFT, AMZN,
   VST, and CEG.
 - **EX4–EX8 — QUEUED:** EX4 starts with the partial-branch reconciliation;
-  EX8 waits for EX0.
+  EX8 is unblocked by EX0.
 - **EX9 — NEXT URGENT:** earnings-variance machinery remains calendar-urgent
   ahead of the August prints and is the next queue jump if capacity changes.
 - **EX10 — LATER:** waits behind the recorders and EX3–EX9 movement.
@@ -45,12 +46,15 @@ interpret its descriptive rho values as a verdict.
 
 ---
 
-## EX0 — BLOCKING: owner pin addendum (owner, not Codex)
+## EX0 — DONE 2026-07-23: owner pin addendum (typed on owner directive)
 
 Four unfrozen blanks in seq 18–19 (program doc §13.1b): fixed-horizon arm
 length; bucket split; Holm sidedness; Badge B "applicable event window."
 Owner types a short addendum fact; RQ2/A2 runners (EX6/EX7) must refuse to
 run without it. EX1–EX5 are NOT blocked by this.
+
+Closed 2026-07-23 by ledger fact `RQ2_A2_PIN_ADDENDUM_V1` (owner-directed
+entry; validation in `reports/2026-07-23-pin-addendum-validation.md`).
 
 ## EX1 — H1 honesty bundle (owner-prioritized; no dependencies)
 

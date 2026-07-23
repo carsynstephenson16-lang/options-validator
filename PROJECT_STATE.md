@@ -24,7 +24,9 @@ briefs; Claude orchestrates; the owner types every frozen number.
   corner badge 75/25 earnings-GATED (near 15–45 / long 60–120 DTE); bounce
   lens −20% / mom>0 / RV≥70th with mandatory negative-priors text; five CSP
   exit arms incl. 50%-capture and 21-DTE; Holm α=0.10 (Romano–Wolf switch at
-  K≈10–12); adverse gate 10; 12-month backstop. UNRUN.
+  K≈10–12); adverse gate 10; 12-month backstop. UNRUN; §13.1b pins closed
+  2026-07-23 via ledger fact `RQ2_A2_PIN_ADDENDUM_V1` (10 sessions / terciles
+  / one-sided / report strictly inside near-leg life).
 - Spent forever: H1/H2, H9, Card 3, QM study. H7 historical diagnostic
   permanently withdrawn. Sealed SPY/QQQ holdout: reveal budget 0/3.
 
@@ -41,8 +43,8 @@ earnings variance decomposition). Build order:
 - EX3 RQ1 runner: build → adversarial review → run ONCE.
 - EX4/EX5 badges, EX6 expectation lines, EX7 concentration panel:
   display-only, byte-identical-ordering test pins mandatory.
-- EX8 A2 runner + RQ2 scoring: **BLOCKED on the owner pin addendum (§13.1b:
-  fixed-horizon length; bucket split; test sidedness; corner event window).**
+- EX8 A2 runner + RQ2 scoring: **unblocked 2026-07-23 — pin addendum typed
+  (`RQ2_A2_PIN_ADDENDUM_V1`).**
 - EX9 earnings-variance machinery: **CALENDAR-URGENT — August prints start
   ~2 weeks out; missed events are unrecoverable by construction.**
 
@@ -78,8 +80,8 @@ earnings variance decomposition). Build order:
 
 ## Next session, start here
 
-1. If the owner hasn't typed the 4-item pin addendum yet, that's the blocker
-   for EX8 — nothing else waits on it.
+1. Pin addendum is DONE (fact `RQ2_A2_PIN_ADDENDUM_V1`) — EX8 is unblocked;
+   check Codex progress on EX4–EX9.
 2. Check Codex progress against the EX queue acceptance criteria; review
    diffs adversarially (esp. the byte-identical ordering pins).
 3. ThetaData extension decision countdown (~2026-10-01).

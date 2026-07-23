@@ -366,6 +366,14 @@ measured wrong); pooling horizons or workstream conclusions.
    direction, matching the CI90-lower-bound promotion rule, proposed);
    (iv) Badge B's exact "applicable event window" (proposed: a confirmed
    report date strictly inside the near leg's remaining 15–45 DTE life).
+
+   **1b status (2026-07-23): DONE.** Owner-directed addendum typed as ledger
+   fact `RQ2_A2_PIN_ADDENDUM_V1`: (i) 10 trading sessions (expiry-first
+   entries resolve at expiration settlement); (ii) terciles — top vs bottom
+   third, 5 names per bucket on the 15-name board; (iii) one-sided in the
+   hypothesized direction; (iv) confirmed report date strictly inside the
+   near leg's remaining life. Validation:
+   `reports/2026-07-23-pin-addendum-validation.md`.
 2. **ThetaData extension** — the deadline is recorded as approximately
    2026-10-01; coverage is confirmed through 2026-11-30 and renewal/extension
    remains an owner account action.
@@ -379,8 +387,8 @@ measured wrong); pooling horizons or workstream conclusions.
    separate registrations as their briefs mature, with sequencing after
    Phase-1 recorders per the standing directive.
 
-**Recommended next state (updated post-registration):** owner types the §13.1b
-pin addendum → Codex executes the queue in
+**Recommended next state (updated 2026-07-23, addendum typed):** Codex
+executes the queue in
 `docs/superpowers/plans/2026-07-23-codex-execution-queue.md` (H1 + recorders
 first, RQ1 runner, badges, N3 lines, panel, A2 runner, Workstream D before the
 August prints) → quarterly cadence per §7.
