@@ -2,8 +2,10 @@
 
 The registered decision date and the completed source-data date are separate
 facts.  A Day T+1 operator decision may use T's immutable receipts, while its
-window membership remains keyed to the registered decision date.  This module
-never places orders and deliberately exposes no exit or scoring authority.
+window membership remains keyed to the registered decision date. This module
+never places orders. Its manual entry-fill command hands a newly opened paper
+position to the separate receipt-bound exit authority for same-session
+observation; it exposes no independent exit or scoring command.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from data.cache_runner import session_close_utc
 from data.underlying_closes import load_closes_adjusted
@@ -32,6 +35,9 @@ from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_watch import evaluation_session, validate_data_gate_receipt
 from research.hashing import canonical_json
 from research.receipts import input_file_record, load_receipt
+
+if TYPE_CHECKING:
+    from options_researcher.h7_exit_session import ExitRunReport
 
 
 class SessionRefused(RuntimeError):
@@ -466,6 +472,37 @@ def fill_entry(
     )
 
 
+def fill_entry_and_observe_exit(
+    *,
+    session: RealStoreSession,
+    entry_intent_id: str,
+    symbol: str,
+    watcher_receipt_path: Path,
+) -> tuple[TransitionResult, ExitRunReport]:
+    """Record a manual paper fill, then observe it in that same session."""
+    entry = fill_entry(
+        session=session,
+        entry_intent_id=entry_intent_id,
+        symbol=symbol,
+        watcher_receipt_path=watcher_receipt_path,
+    )
+    from options_researcher import h7_exit_session
+
+    try:
+        exit_authority = h7_exit_session.open_real_exit_session(
+            data_gate_receipt_path=session.data_gate_receipt_path,
+            decision_session=session.decision_session,
+            source_evaluation_session=session.evaluation_session,
+            base_dir=session.base_dir,
+        )
+        report = h7_exit_session.monitor_real_exits(exit_authority)
+    except h7_exit_session.ExitSessionRefused as exc:
+        raise SessionRefused(
+            "same-session exit observation refused after paper entry fill"
+        ) from exc
+    return entry, report
+
+
 def _intent_symbol(intent_id: str) -> str:
     """Read identity only; this does not create an authority bypass."""
     events = ledger.read_events(REAL_FORWARD_STORE)
@@ -571,13 +608,24 @@ def main(argv: list[str] | None = None) -> int:
                 source_evaluation_session=args.source_evaluation_session,
                 symbol=intent_symbol,
             )
-            result = fill_entry(
+            result, exit_report = fill_entry_and_observe_exit(
                 session=session,
                 entry_intent_id=args.intent_id,
                 symbol=intent_symbol,
                 watcher_receipt_path=Path(args.watcher_receipt),
             )
             print(f"H7 PAPER FILL {result.event_id} appended={result.appended}")
+            for outcome in exit_report.outcomes:
+                print(
+                    f"H7 SAME-SESSION EXIT {outcome.position_id} "
+                    f"{outcome.action} {outcome.detail}"
+                )
+            if exit_report.failed:
+                print(
+                    "H7 PAPER FILL EXIT MONITOR REFUSED -- "
+                    "paper entry requires operator attention"
+                )
+                return 2
             return 0
     except (
         SessionRefused,

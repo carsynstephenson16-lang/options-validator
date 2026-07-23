@@ -2,9 +2,11 @@
 # Automated daily ritual — frozen operator order per H7 amendment v1.4
 # (2026-07-14): topup -> source health -> data gate (HARD) -> h7_watch ->
 # h6_features -> h6_watch [-> h8_watch if built] -> dashboards.
-# Owner-authorized for unattended cron use 2026-07-15. Alert-only: this
-# script takes ZERO book actions; a failing gate stopping the run IS the
-# system working. Logs to .tmp/daily_ritual/.
+# Owner-authorized for unattended cron use 2026-07-15. It never creates,
+# approves, or fills an entry and never places a broker order. After the
+# real-exit review/owner pass it does perform receipt-bound mechanical
+# real-paper exit management; a refusal blocks the H7 entry path. Logs to
+# .tmp/daily_ritual/.
 
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 # Derive the repo root from THIS script's own location rather than hardcoding
@@ -148,26 +150,68 @@ if [ -n "$DG_RECEIPT" ] && [ -f "$DG_RECEIPT" ]; then
 fi
 note "evaluation session: ${AS_OF}"
 
-if [ "$GATE_GO" -eq 1 ]; then
-  # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
-  "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
-
-  # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing). The forward
-  # ledger holds only the registration event, so the append path has never run
-  # on real receipts. Prove the entry door would open BEFORE a name triggers,
-  # rather than discovering a refusal on the one day it matters.
-  PF_OUT="$("$UV" run python -m options_researcher.h7_entry_preflight \
-              --data-gate-receipt "$DG_RECEIPT" 2>&1)"
-  PF_RC=$?
-  echo "$PF_OUT"
-  PF_RECEIPT_DIR="reports/h7_receipts/${SCOPE_ID}/preflight"
-  mkdir -p "$PF_RECEIPT_DIR"
-  printf '%s\nexit_code=%s\n' "$PF_OUT" "$PF_RC" > \
-    "${PF_RECEIPT_DIR}/${AS_OF}.txt"
-  if [ "$PF_RC" -eq 0 ]; then
-    note "h7 entry preflight: real entry path REACHABLE"
+# Step 2c — H7 real-paper exit management. This is intentionally outside
+# GATE_GO: a NO_GO must create an honest exit data-gap/retry record rather than
+# silently leave an existing paper position unmanaged. Due fills/retries go
+# first; the observation pass then includes every position still open. Neither
+# command has a network or broker-order surface.
+H7_EXIT_READY=0
+if [ -z "$AS_OF" ] || [ -z "$DG_RECEIPT" ] || [ ! -f "$DG_RECEIPT" ]; then
+  crit "h7 exit management: receipt/evaluation session unavailable — H7 entry path blocked"
+else
+  EXIT_FILL_OUT="$("$UV" run python -m options_researcher.h7_exit_session fill \
+    --data-gate-receipt "$DG_RECEIPT" \
+    --decision-session "$RUN_DATE" \
+    --source-evaluation-session "$AS_OF" 2>&1)"
+  EXIT_FILL_RC=$?
+  echo "$EXIT_FILL_OUT"
+  if [ "$EXIT_FILL_RC" -eq 0 ]; then
+    note "h7 exit fill: ran"
   else
-    crit "h7 entry preflight: real entry path WOULD REFUSE — H7 cannot take an entry today"
+    crit "h7 exit fill: REFUSED (exit ${EXIT_FILL_RC}) — H7 entry path blocked"
+  fi
+
+  EXIT_MONITOR_OUT="$("$UV" run python -m options_researcher.h7_exit_session monitor \
+    --data-gate-receipt "$DG_RECEIPT" \
+    --decision-session "$RUN_DATE" \
+    --source-evaluation-session "$AS_OF" 2>&1)"
+  EXIT_MONITOR_RC=$?
+  echo "$EXIT_MONITOR_OUT"
+  if [ "$EXIT_MONITOR_RC" -eq 0 ]; then
+    note "h7 exit monitor: ran"
+  else
+    crit "h7 exit monitor: REFUSED (exit ${EXIT_MONITOR_RC}) — H7 entry path blocked"
+  fi
+
+  if [ "$EXIT_FILL_RC" -eq 0 ] && [ "$EXIT_MONITOR_RC" -eq 0 ]; then
+    H7_EXIT_READY=1
+  fi
+fi
+
+if [ "$GATE_GO" -eq 1 ]; then
+  if [ "$H7_EXIT_READY" -eq 1 ]; then
+    # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
+    "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
+
+    # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing). The forward
+    # ledger holds only the registration event, so the append path has never run
+    # on real receipts. Prove the entry door would open BEFORE a name triggers,
+    # rather than discovering a refusal on the one day it matters.
+    PF_OUT="$("$UV" run python -m options_researcher.h7_entry_preflight \
+                --data-gate-receipt "$DG_RECEIPT" 2>&1)"
+    PF_RC=$?
+    echo "$PF_OUT"
+    PF_RECEIPT_DIR="reports/h7_receipts/${SCOPE_ID}/preflight"
+    mkdir -p "$PF_RECEIPT_DIR"
+    printf '%s\nexit_code=%s\n' "$PF_OUT" "$PF_RC" > \
+      "${PF_RECEIPT_DIR}/${AS_OF}.txt"
+    if [ "$PF_RC" -eq 0 ]; then
+      note "h7 entry preflight: real entry path REACHABLE"
+    else
+      crit "h7 entry preflight: real entry path WOULD REFUSE — H7 cannot take an entry today"
+    fi
+  else
+    note "h7 entry path: SKIPPED — exit management did not complete cleanly"
   fi
 
   # Step 4 — H6 leg (exact-session; features rebuild is mandatory after topup).

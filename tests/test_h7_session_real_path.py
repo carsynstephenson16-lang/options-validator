@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pandas as pd
 
@@ -322,6 +322,52 @@ class TestSessionRefusals(RealSessionCase):
 
 
 class TestEntryOnlyRealPath(RealSessionCase):
+    def test_fill_handoff_opens_then_monitors_a_fresh_exit_session(self):
+        fill_session = self.open(symbol="AMD")
+        entry_result = lifecycle.TransitionResult(
+            event_id="s4.paper_fill.open:fixture",
+            event_type="paper_fill",
+            payload={},
+            appended=True,
+        )
+        exit_authority = object()
+        exit_report = Mock(failed=False)
+        calls: list[str] = []
+
+        with (
+            patch.object(
+                session_module,
+                "fill_entry",
+                side_effect=lambda **_kwargs: calls.append("entry_fill") or entry_result,
+            ) as fill_entry,
+            patch(
+                "options_researcher.h7_exit_session.open_real_exit_session",
+                side_effect=lambda **_kwargs: calls.append("exit_open") or exit_authority,
+            ) as open_exit,
+            patch(
+                "options_researcher.h7_exit_session.monitor_real_exits",
+                side_effect=lambda _authority: calls.append("exit_monitor") or exit_report,
+            ) as monitor,
+        ):
+            entry, report = session_module.fill_entry_and_observe_exit(
+                session=fill_session,
+                entry_intent_id="s4.entry_intent:fixture",
+                symbol="AMD",
+                watcher_receipt_path=self.root / "watcher.json",
+            )
+
+        self.assertIs(entry, entry_result)
+        self.assertIs(report, exit_report)
+        self.assertEqual(calls, ["entry_fill", "exit_open", "exit_monitor"])
+        fill_entry.assert_called_once()
+        open_exit.assert_called_once_with(
+            data_gate_receipt_path=fill_session.data_gate_receipt_path,
+            decision_session=fill_session.decision_session,
+            source_evaluation_session=fill_session.evaluation_session,
+            base_dir=fill_session.base_dir,
+        )
+        monitor.assert_called_once_with(exit_authority)
+
     def test_publish_board_intent_approval_fill_and_keep_exits_refused(self):
         decision = self.open(symbol="AMD")
         decision_watcher = self._write_watcher_receipt(

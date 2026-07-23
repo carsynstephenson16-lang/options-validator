@@ -426,15 +426,19 @@ Steps: add the tests; full suite + ruff + pyright green; commit —
 **Files:** `tools/daily_ritual.sh`; possibly a small runbook doc
 `docs/superpowers/plans/2026-07-22-h7-operator-runbook.md` (create).
 
-- [ ] **Step 1:** wire the SPEC's monitoring/evaluation session commands into
-the ritual after `h7_entry_preflight` (`:159-160`), preserving the one-door
-rule: the ritual RECORDS and ALERTS; owner-in-the-loop CLI steps
-(`propose|approve|fill`, exit equivalents) remain manual by design — the
-ritual never fires them.
-- [ ] **Step 2:** operator runbook: the exact command sequence the owner runs
-on an ENTRY-OK or EXIT-DUE day, copy-pasteable, with where each receipt lands.
-- [ ] **Step 3:** `bash -n` clean; first live rehearsal observed; commit —
-`feat(h7): ritual surfaces exit/monitoring sessions; operator runbook`
+- [x] **Step 1:** owner authorized the normative SPEC behavior on 2026-07-22:
+the ritual runs receipt-bound paper `fill` then `monitor` unconditionally,
+outside `GATE_GO` and before the H7 watcher/preflight path. A refusal is
+CRITICAL and skips that H7 entry path. It never invokes entry
+`propose|approve|fill`, scoring, or a broker-order surface.
+- [x] **Step 2:** operator runbook added at
+`docs/superpowers/plans/2026-07-22-h7-operator-runbook.md`, including exact
+ENTRY-OK and EXIT-DUE sequences and evidence locations.
+- [ ] **Step 3:** `zsh -n` and `bash -n` are clean; focused tests, ruff, and
+pyright are green. The first 2026-07-23 07:10 live rehearsal remains pending.
+It cannot rehearse this unmerged branch because the ritual correctly refuses
+every checkout other than `main`; do not merge or push until the owner resolves
+that requested ordering conflict.
 
 ---
 
