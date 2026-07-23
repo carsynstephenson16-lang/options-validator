@@ -933,6 +933,20 @@ adjudication or the 2026-10-06 quarterly audit, whichever first.
 - **SABR** — out-of-scope note: the cards need a few observed deltas, not a smile
   model.
 
+### LSE feed ("London Strategic Edge", lse-data) — parked 2026-07-23
+
+- **What:** owner-flagged `test_lse_feed.py` probe of an unverified options
+  data vendor (NOT LSEG — name collision). Assessed same day:
+  `reports/2026-07-23-lse-feed-assessment.md`.
+- **Why parked:** measured chain payload has no bid/ask/open interest (only
+  last-trade + vendor-modeled greeks), no point-in-time chain history, and
+  returned already-expired contracts against a 7–30 DTE live request —
+  unusable under the mid-or-worse-fills and liquidity-gate guardrails.
+- **Gate before building:** stale-date recheck + vendor confirmation that any
+  tier carries bid/ask/OI and true historical chains; even then, scope =
+  spot-quotes/flow color only, never chain or backtest data.
+- **Review date:** with the ThetaData extension decision (~2026-10-01).
+
 ### Rejected 2026-07-22 (not parked — reasons in the survey §6)
 
 HMM regime badge; 12-1 momentum overlay; EVT/Hill tail estimation; IV-surface PCA;
