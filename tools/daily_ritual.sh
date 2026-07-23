@@ -2,9 +2,11 @@
 # Automated daily ritual — frozen operator order per H7 amendment v1.4
 # (2026-07-14): topup -> source health -> data gate (HARD) -> h7_watch ->
 # h6_features -> h6_watch [-> h8_watch if built] -> dashboards.
-# Owner-authorized for unattended cron use 2026-07-15. Alert-only: this
-# script takes ZERO book actions; a failing gate stopping the run IS the
-# system working. Logs to .tmp/daily_ritual/.
+# Owner-authorized for unattended cron use 2026-07-15. It never creates,
+# approves, or fills an entry and never places a broker order. After the
+# real-exit review/owner pass it does perform receipt-bound mechanical
+# real-paper exit management; a refusal blocks the H7 entry path. Logs to
+# .tmp/daily_ritual/.
 
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 # Derive the repo root from THIS script's own location rather than hardcoding
@@ -148,31 +150,101 @@ if [ -n "$DG_RECEIPT" ] && [ -f "$DG_RECEIPT" ]; then
 fi
 note "evaluation session: ${AS_OF}"
 
-if [ "$GATE_GO" -eq 1 ]; then
-  # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
-  "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
-
-  # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing). The forward
-  # ledger holds only the registration event, so the append path has never run
-  # on real receipts. Prove the entry door would open BEFORE a name triggers,
-  # rather than discovering a refusal on the one day it matters.
-  PF_OUT="$("$UV" run python -m options_researcher.h7_entry_preflight \
-              --data-gate-receipt "$DG_RECEIPT" 2>&1)"
-  PF_RC=$?
-  echo "$PF_OUT"
-  if [ "$PF_RC" -eq 0 ]; then
-    note "h7 entry preflight: real entry path REACHABLE"
+# Step 2c — H7 real-paper exit management. This is intentionally outside
+# GATE_GO: a NO_GO must create an honest exit data-gap/retry record rather than
+# silently leave an existing paper position unmanaged. Due fills/retries go
+# first; the observation pass then includes every position still open. Neither
+# command has a network or broker-order surface.
+H7_EXIT_READY=0
+if [ -z "$AS_OF" ] || [ -z "$DG_RECEIPT" ] || [ ! -f "$DG_RECEIPT" ]; then
+  crit "h7 exit management: receipt/evaluation session unavailable — H7 entry path blocked"
+else
+  EXIT_FILL_OUT="$("$UV" run python -m options_researcher.h7_exit_session fill \
+    --data-gate-receipt "$DG_RECEIPT" \
+    --decision-session "$RUN_DATE" \
+    --source-evaluation-session "$AS_OF" 2>&1)"
+  EXIT_FILL_RC=$?
+  echo "$EXIT_FILL_OUT"
+  if [ "$EXIT_FILL_RC" -eq 0 ]; then
+    note "h7 exit fill: ran"
   else
-    crit "h7 entry preflight: real entry path WOULD REFUSE — H7 cannot take an entry today"
+    crit "h7 exit fill: REFUSED (exit ${EXIT_FILL_RC}) — H7 entry path blocked"
+  fi
+
+  EXIT_MONITOR_OUT="$("$UV" run python -m options_researcher.h7_exit_session monitor \
+    --data-gate-receipt "$DG_RECEIPT" \
+    --decision-session "$RUN_DATE" \
+    --source-evaluation-session "$AS_OF" 2>&1)"
+  EXIT_MONITOR_RC=$?
+  echo "$EXIT_MONITOR_OUT"
+  if [ "$EXIT_MONITOR_RC" -eq 0 ]; then
+    note "h7 exit monitor: ran"
+  else
+    crit "h7 exit monitor: REFUSED (exit ${EXIT_MONITOR_RC}) — H7 entry path blocked"
+  fi
+
+  if [ "$EXIT_FILL_RC" -eq 0 ] && [ "$EXIT_MONITOR_RC" -eq 0 ]; then
+    H7_EXIT_READY=1
+  fi
+fi
+
+if [ "$GATE_GO" -eq 1 ]; then
+  if [ "$H7_EXIT_READY" -eq 1 ]; then
+    # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
+    "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
+
+    # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing). The forward
+    # ledger holds only the registration event, so the append path has never run
+    # on real receipts. Prove the entry door would open BEFORE a name triggers,
+    # rather than discovering a refusal on the one day it matters.
+    PF_OUT="$("$UV" run python -m options_researcher.h7_entry_preflight \
+                --data-gate-receipt "$DG_RECEIPT" 2>&1)"
+    PF_RC=$?
+    echo "$PF_OUT"
+    PF_RECEIPT_DIR="reports/h7_receipts/${SCOPE_ID}/preflight"
+    mkdir -p "$PF_RECEIPT_DIR"
+    printf '%s\nexit_code=%s\n' "$PF_OUT" "$PF_RC" > \
+      "${PF_RECEIPT_DIR}/${AS_OF}.txt"
+    if [ "$PF_RC" -eq 0 ]; then
+      note "h7 entry preflight: real entry path REACHABLE"
+    else
+      crit "h7 entry preflight: real entry path WOULD REFUSE — H7 cannot take an entry today"
+    fi
+  else
+    note "h7 entry path: SKIPPED — exit management did not complete cleanly"
   fi
 
   # Step 4 — H6 leg (exact-session; features rebuild is mandatory after topup).
   "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || note "h6_features: NONZERO EXIT"
-  "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"
+  "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" \
+    --write-receipt "reports/h6_forward/${AS_OF}.json" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"
+
+  # Step 4b — H5 LEAPS entry-trigger watch (alert-only; never auto-enters).
+  EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
+  mkdir -p reports/h5
+  if "$UV" run python -m options_researcher.entry_watch | tee "$EW_OUT"; then
+    if grep -q "FIRE" "$EW_OUT"; then
+      crit "H5 ENTRY TRIGGER FIRE — read $EW_OUT and evaluate per H5 CORE rules"
+    else
+      note "h5 entry watch: WAIT (no trigger fired)"
+    fi
+  else
+    note "WARNING: h5 entry watch failed to run"
+  fi
 
   # Step 5 — H8 watcher, only once its tooling exists (registered lanes only).
   if "$UV" run python -c 'import options_researcher.h8_watch' 2>/dev/null; then
-    "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
+    mkdir -p reports/h8_forward
+    "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" --json \
+      > "reports/h8_forward/${AS_OF}.json" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
+  fi
+
+  # Step 5b — H10a/b watcher + observation append (forward paper, no orders).
+  # H10's --as-of is a requested RUN date and evaluates the prior completed
+  # session, so pass RUN_DATE (not the already-resolved session in AS_OF).
+  if "$UV" run python -c 'import options_researcher.h10_watch' 2>/dev/null; then
+    "$UV" run python -m options_researcher.h10_watch --as-of "$RUN_DATE" && note "h10_watch: ran" || note "h10_watch: NONZERO EXIT"
+    "$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" && note "h10_observe: appended" || note "h10_observe: NONZERO EXIT"
   fi
 fi
 
@@ -205,6 +277,17 @@ fi
 "$UV" run python -m options_researcher.dashboard && note "dashboard: rebuilt" || note "dashboard: FAILED"
 "$UV" run python -m options_researcher.attractiveness_dashboard && note "attractiveness dashboard: rebuilt" || note "attractiveness dashboard: FAILED"
 
+# Per-hypothesis capture receipt. A missing/refused leg is CRITICAL, but this
+# runs fail-soft so Step 8 can still preserve every artifact that did exist.
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -m options_researcher.ritual_receipt \
+    --as-of "$AS_OF" --run-date "$RUN_DATE" \
+    && note "capture receipt: complete" \
+    || crit "capture receipt: MISSING/REFUSED — see per-hypothesis lines above"
+else
+  crit "capture receipt: REFUSED — evaluation session unavailable"
+fi
+
 # ---------------------------------------------------------------------------
 # Step 8 — DURABILITY (added 2026-07-21, the day after Stage-8 activation).
 # The live forward window's evidence must not exist only in this working tree:
@@ -216,7 +299,8 @@ fi
 # that produces the evidence.
 # ---------------------------------------------------------------------------
 git add -- ledger/facts.log ledger/h7_forward \
-           reports/h7_receipts reports/h7_data_gate 2>/dev/null
+           reports/h7_receipts reports/h7_data_gate reports/h5 reports/h6_forward \
+           reports/h8_forward reports/h10 reports/ritual 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}

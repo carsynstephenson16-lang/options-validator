@@ -714,7 +714,10 @@ def _headline(symbol: str, kind: str, card: dict) -> str:
     else:
         money = f"collect ${float(card['credit']):,.0f} now"
         if card.get("annualized_yield") is not None:
-            money += f" (~{100 * card['annualized_yield']:.0f}%/yr)"
+            money += (
+                f" (~{100 * card['annualized_yield']:.0f}%/yr) "
+                "(simple, not compounded)"
+            )
     star = "★ " if card.get("rank_leader") else ""
     return (f"{star}{lead} — {money} — result by {card['expiry']} "
             f"({card['dte']} days out)")
@@ -2551,8 +2554,11 @@ def render(
         f"{_pinned_html(data)}"
         f"{symbols_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
-        "not predictions. Quotes move intraday; verify the live broker quote "
-        "before making a decision.</footer></main></body></html>"
+        "not predictions. Income annualization uses 365 calendar days; "
+        "realized-volatility inputs use 252 trading sessions. Quotes move "
+        "intraday; verify the live broker quote before making a decision. "
+        "Annualized income is simple, not compounded.</footer>"
+        "</main></body></html>"
     )
 
 

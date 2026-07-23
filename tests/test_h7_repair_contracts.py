@@ -5,9 +5,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from data import cache_runner
 from options_researcher.h7_scope import H7_SCOPE_ID, scope_hash, scope_identity
+from research import receipts as receipt_module
+from research.hashing import canonical_json
 from research.receipts import input_files, load_receipt, make_receipt, write_immutable_receipt
 
 
@@ -49,6 +52,25 @@ class ReceiptContractTests(unittest.TestCase):
             path.write_text(json.dumps(value))
             with self.assertRaises(ValueError):
                 load_receipt(path)
+
+    def test_concurrent_conflicting_publication_cannot_clobber_winner(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "receipt.json"
+            first = make_receipt("test", {"value": 1})
+            winner = make_receipt("test", {"value": 2})
+            original_link = receipt_module.os.link
+
+            def competing_link(src, dst):
+                path.write_text(canonical_json(winner) + "\n", encoding="utf-8")
+                return original_link(src, dst)
+
+            with (
+                patch.object(receipt_module.os, "link", side_effect=competing_link),
+                self.assertRaises(FileExistsError),
+            ):
+                write_immutable_receipt(first, path)
+
+            self.assertEqual(load_receipt(path, expected_type="test"), winner)
 
     def test_file_hash_changes_are_visible(self):
         with tempfile.TemporaryDirectory() as temp:

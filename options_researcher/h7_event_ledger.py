@@ -54,6 +54,7 @@ EVENT_TYPES = (
     "entry_intent", "exit_intent", "owner_approval", "paper_fill",
     "skip", "data_gap",
     "window_registration",  # Stage 8: first-and-only preamble event, causes=[]
+    "window_score",
 )
 LANES = ("a", "b", "c")
 # The exact logical fields a caller supplies. logical_hash commits to these.

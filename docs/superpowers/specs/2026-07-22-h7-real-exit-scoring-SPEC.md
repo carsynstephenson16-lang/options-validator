@@ -1,9 +1,15 @@
 # H7 real-store exit and scoring path — SPEC
 
-**Status: SPEC CANDIDATE ONLY. NOT BUILD-AUTHORIZED. REAL EXITS AND REAL-STORE
-SCORING REMAIN INACTIVE.** This document defines the next H7 implementation
-arc required by `H7_C1_EXIT_AND_SCORING_DEADLINES`. It does not authorize an
-exit, score the live window, change a frozen parameter, or create an order path.
+**Status: BUILD-AUTHORIZED (ledger fact `H7_C1_EXIT_AND_SCORING_SPEC_RATIFIED`,
+2026-07-22T15:59:44Z, spec_sha256=ca639c1e…, further amended same day by
+`H7_EXIT_SCORING_SPEC_AMENDMENT_V1_1` for §4a.1, spec_sha256=84aeb2f2…, and
+owner-ratified `H7_EXIT_SCORING_SPEC_AMENDMENT_V1_2` for §4 item 2).
+REAL EXITS AND REAL-STORE SCORING REMAIN INACTIVE** pending the SPEC §9
+fresh-context independent adversarial review and a separate owner-typed PASS
+after the build. This document defines the next H7 implementation arc
+required by `H7_C1_EXIT_AND_SCORING_DEADLINES`. Being build-authorized does
+not itself authorize an exit, score the live window, change a frozen
+parameter, or create an order path.
 
 **Amended 2026-07-22 (same day, pre-registration):** an adversarial review of
 this candidate against the live code and store (ten findings confirmed or
@@ -16,6 +22,13 @@ concrete ritual ordering (§7), two added result disclosures (§8), and an
 evidence appendix (§11). This pre-registration pass does NOT count as the
 fresh-context independent adversarial review the build arc requires in §9 —
 that review still happens after the build, on the built code.
+
+**Amended 2026-07-22 (v1.2, post-build and result-blind):** the owner ratified
+the fresh-context review's narrow reconciliation of §4 item 2 with §4a and §6.
+It authorizes only the first post-expiration operational decision session whose
+mapped completed evaluation session is expiration, and only for the frozen
+terminal-settlement accounting event. It adds no market-quote exit, retry,
+monitoring extension, entry, or discretionary trigger authority.
 
 ## 1. Goal and deadline
 
@@ -126,6 +139,12 @@ For every monitoring or fill session it must:
    is the intent's `planned_fill_session` when no prior exit `data_gap`
    exists for it, else the first XNYS session after the latest such gap
    (matching the frozen retry rule in `process_exit_fill`);
+   for terminal expiration settlement only, authorize the first XNYS
+   operational decision session after contract expiration whose mapped latest
+   completed evaluation session is exactly the expiration session. This
+   exception authorizes no market-quote exit, retry, monitoring extension, new
+   entry, or discretionary trigger; it authorizes only the pre-registered §4a
+   terminal accounting event for an in-window position;
 3. load and integrity-check the full-official-scope data-gate receipt and its
    linked source-health receipt for the exact completed evaluation session;
 4. require receipt scope, session, link hashes, config hash, source hash, and
@@ -189,6 +208,33 @@ window result exists, so it can never be chosen with visible P&L:
   clearing-member decision, not a mechanical rule (pin risk — mechanics in
   §11), so any settlement-closed position carries the §8 assignment
   disclosure in the scoring artifact.
+
+### 4a.1 Settlement-close scoring seam (amendment v1.1, 2026-07-22, owner-approved)
+
+Positions terminally closed under §4a cannot honestly satisfy
+`h7_forward_scoring._fill_price` (`:142-169`), which requires each closing
+leg to carry raw market quotes passing `quote_valid` and `passes_liquidity`
+plus a canonical adverse fill price — validation built for market fills,
+meaningless for a quoteless settlement. Resolution, with
+`h7_forward_scoring.py` remaining byte-identical (§2, §7):
+
+- Settlement-terminal positions are excluded from `score_forward_window`'s
+  leg-quote reconstruction and are instead valued by a new, independently
+  reviewed, typed settlement valuator implementing exactly the §4a rules
+  above (intrinsic against the receipt-bound adjusted close; the
+  conservative zero/full-width-loss fallback; commissions only on ITM
+  legs). Zero discretion; fabricating synthetic quotes is prohibited
+  everywhere.
+- `h7_real_scoring` produces the single §8 artifact by recomputing the
+  seq-0-frozen verdict statistics — identical loss gate
+  (`min_losses_for_verdict`), bootstrap parameters, and CI thresholds,
+  hash-verified against the registration — over the union of
+  frozen-scorer-valued market closes and settlement-valued closes.
+- The artifact additionally records the frozen-scorer sub-result on market
+  closes alone, the settled-position count, and the settled positions'
+  aggregate P&L contribution, so the two valuation paths stay separately
+  auditable forever.
+- This seam is inside the §9 independent-review scope.
 
 ## 5. Required delta 3 — monitoring-session evidence events
 

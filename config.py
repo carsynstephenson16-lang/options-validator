@@ -509,6 +509,24 @@ QM_NTM_BAND = 0.10        # "near-ATM" = strikes within +/-10% of raw close
 #                           couples to H7's registered surface)
 
 # ---------------------------------------------------------------------------
+# H10a/b -- QM signal continuation (REGISTERED forward-paper studies).
+# These values transcribe the chained registrations; they are not a retune.
+# ---------------------------------------------------------------------------
+H10_MAX_PREMIUM_PER_TRADE = 600  # ledger/experiments.jsonl seq 15/16
+H10_MONTHLY_PREMIUM_CAP = 2_000  # ledger/experiments.jsonl seq 15/16
+H10_DELTA_MIN = 0.40  # ledger/experiments.jsonl seq 15/16
+H10_DELTA_MAX = 0.60  # ledger/experiments.jsonl seq 15/16
+H10_STRIKE_BAND_PCT = 0.10  # ledger/experiments.jsonl seq 15/16
+H10_DTE_MIN = 30  # ledger/experiments.jsonl seq 15/16
+H10_DTE_MAX = 60  # ledger/experiments.jsonl seq 15/16
+H10_PROFIT_TARGET_PCT = 1.00  # ledger/experiments.jsonl seq 15/16
+H10_TIME_EXIT_SESSIONS = 20  # ledger/experiments.jsonl seq 15/16
+H10_DTE_EXIT = 21  # ledger/experiments.jsonl seq 15/16
+H10_MIN_LOSSES_FOR_VERDICT = 7  # ledger/experiments.jsonl seq 15/16
+H10A_WINDOW_END = "2026-10-06"  # ledger/experiments.jsonl seq 15
+H10B_WINDOW_END = "2027-01-06"  # ledger/experiments.jsonl seq 16
+
+# ---------------------------------------------------------------------------
 # --- ATTRACTIVENESS DASHBOARD v2 TECHNICALS (presentation layer ONLY) ---
 # Spec: docs/superpowers/specs/2026-07-16-attractiveness-v2-technicals-
 # context-design.md. LLM-asserted presentation-layer values (proposed

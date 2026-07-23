@@ -35,7 +35,6 @@ A "no edge after costs" finding is a SUCCESS, not a failure to fix.
   missing, STOP and report -- do not work around it by building infrastructure.
 - Every number in strategy logic comes from config.py. No magic numbers.
 - Keep it minimal. The goal is to validate edge, not build a framework.
-  Resist adding features that aren't on the phase plan in README.md.
 
 ## Verdict rule
 - Expectancy-per-trade after costs (with a bootstrap CI) is the headline.
@@ -44,8 +43,7 @@ A "no edge after costs" finding is a SUCCESS, not a failure to fix.
   its own -- the rare losses decide whether the edge is real.
 
 ## Scope
-Validator only. No live order placement, no scanner/suggestor, no parameter
-optimizer unless explicitly added to the phase plan.
+Validator only. No live order placement.
 
 ## Optional public-web research fetchers
 `uv sync --extra web-fetchers` installs Trafilatura (text extraction from

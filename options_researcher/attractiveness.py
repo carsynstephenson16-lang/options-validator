@@ -179,7 +179,8 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
         verdict = (f"you'd be promising to buy 100 sh of {symbol} at "
                    f"${k:.0f} (${k * 100:,.0f} set aside); pays "
                    f"${credit:,.0f} now = {100 * yield_mo:.2f}% over "
-                   f"{int(r['dte'])}d (~{100 * ann:.0f}%/yr); the stock is "
+                   f"{int(r['dte'])}d (~{100 * ann:.0f}%/yr) "
+                   "(simple, not compounded); the stock is "
                    f"{100 * otm:.1f}% above your promise level and its "
                    f"typical monthly wiggle is {100 * monthly_move:.1f}%.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
@@ -234,7 +235,8 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
         ann = yield_mo * 365.0 / max(int(r["dte"]), 1)
         verdict = (f"rents out your 100 sh for ${credit:,.0f} "
                    f"({100 * yield_mo:.2f}% of today's value over "
-                   f"{int(r['dte'])}d, ~{100 * ann:.0f}%/yr); if "
+                   f"{int(r['dte'])}d, ~{100 * ann:.0f}%/yr) "
+                   "(simple, not compounded); if "
                    f"{symbol} finishes above ${k:.0f} you sell at "
                    f"${k * 100:,.0f} = {100 * (k / close - 1):+.1f}% vs today "
                    f"({100 * (k / cost_basis - 1):+.1f}% vs your cost) -- "
@@ -296,7 +298,8 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                    f"${leaps_strike:.0f} + premium ${leaps_premium:.2f} = "
                    f"${safety_strike:.2f}, so assignment can't lock a loss; "
                    f"income {100 * yield_mo:.2f}% over {int(r['dte'])}d "
-                   f"(~{100 * ann:.0f}%/yr) on the ${leaps_cost:,.0f} "
+                   f"(~{100 * ann:.0f}%/yr) (simple, not compounded) "
+                   f"on the ${leaps_cost:,.0f} "
                    "you put into the LEAPS.")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
@@ -487,7 +490,8 @@ def main():
             star = "★ " if c.get("rank_leader") else "  "
             badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
             print(f"{star}${c['strike']:.0f} {c['expiry']} "
-                  f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                  f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr, "
+                  "simple, not compounded): "
                   f"{c['verdict']}")
             print(f"    [{badges}]")
             if c["grades"]["iv_for_seller"] == "GREEN":
@@ -509,7 +513,8 @@ def main():
                 star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
                 print(f"{star}${c['strike']:.0f} {c['expiry']} "
-                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr, "
+                      "simple, not compounded): "
                       f"{c['verdict']}")
                 print(f"    [{badges}]")
             if not rows:
@@ -534,7 +539,8 @@ def main():
                 star = "★ " if c.get("rank_leader") else "  "
                 badges = " ".join(f"{k}:{v}" for k, v in c["grades"].items())
                 print(f"{star}${c['strike']:.0f} {c['expiry']} "
-                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr): "
+                      f"({c['dte']}d, {100 * c['annualized_yield']:.0f}%/yr, "
+                      "simple, not compounded): "
                       f"{c['verdict']}")
                 print(f"    [{badges}]")
             if not pmcc:

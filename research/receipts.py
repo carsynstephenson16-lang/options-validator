@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
 
@@ -99,12 +100,20 @@ def write_immutable_receipt(receipt: dict, path: Path) -> str:
     payload = canonical_json(receipt) + "\n"
     if path.exists():
         if path.read_text() == payload:
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                durable_sync(dir_fd)
+            finally:
+                os.close(dir_fd)
             return str(receipt["receipt_hash"])
         raise FileExistsError(f"refusing to overwrite H7 receipt: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    tmp = Path(tmp_name)
     try:
+        os.fchmod(fd, 0o644)
         data = payload.encode("utf-8")
         offset = 0
         while offset < len(data):
@@ -118,7 +127,20 @@ def write_immutable_receipt(receipt: dict, path: Path) -> str:
         raise
     finally:
         os.close(fd)
-    os.replace(tmp, path)
+    try:
+        # Atomic no-clobber publication: a competing finalizer can win this
+        # name, but can never be overwritten after both observed it absent.
+        os.link(tmp, path)
+    except FileExistsError:
+        if path.read_text(encoding="utf-8") != payload:
+            raise FileExistsError(
+                f"refusing to overwrite H7 receipt: {path}"
+            ) from None
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
     dir_fd = os.open(path.parent, os.O_RDONLY)
     try:
         durable_sync(dir_fd)
