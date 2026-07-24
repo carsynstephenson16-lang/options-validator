@@ -322,7 +322,7 @@ fi
 # ---------------------------------------------------------------------------
 git add -- ledger/facts.log ledger/h7_forward \
            reports/h7_receipts reports/h7_data_gate reports/h5 reports/h6_forward \
-           reports/h8_forward reports/h10 reports/ritual 2>/dev/null
+           reports/h8_forward reports/h10 reports/ritual reports/intraday_capture 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}
