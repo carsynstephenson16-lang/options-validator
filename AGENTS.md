@@ -102,6 +102,12 @@ arc, with its historical diagnostic permanently retired. Before adding a new
 capability, ticker, strategy, or tool, answer: "Does this move one of the live
 hypotheses toward its declared verdict?" If no, write it into
 `ideas-parking-lot.md` and continue.
+Registration feasibility gate (2026-07-24): a new loss-gated hypothesis or
+forward window may only be registered if the historical base rate of its full
+entry stack projects expected entries >= 2x the loss bar over the declared
+window, OR the registration explicitly pre-accepts the starvation risk quoting
+the computed number (H10 precedent). See
+docs/superpowers/2026-07-24-registration-feasibility-gate.md.
 
 ## Data Rules
 
