@@ -711,3 +711,20 @@ INTRADAY_CAPTURE_TIMES = {
 INTRADAY_CAPTURE_TOLERANCE_MINUTES = 10
 INTRADAY_CACHE_DIR = ".cache/intraday"              # disposable chain cache
 INTRADAY_RECEIPT_DIR = "reports/intraday_capture"   # durable per-capture receipts
+
+# ---------------------------------------------------------------------------
+# IV SOLVER CALIBRATION -- measures whether OUR options_researcher.
+# black_scholes.implied_vol (parity spot, Treasury CMT continuous rate,
+# continuous dividend yield) agrees with ThetaData's own EOD atm_iv
+# (European BS, synchronized tick spot, SOFR rate, q=0) closely enough to
+# splice a solver-derived ATM IV into intraday_capture's iv_rank_preview.
+# See options_researcher/iv_solver_calibration.py (the offline calibration
+# run) and options_researcher/intraday_capture.py's
+# solver_iv_calibration_gate (the fail-closed read side: no receipt, no
+# splice, no exceptions).
+# ---------------------------------------------------------------------------
+IV_CALIBRATION_SESSIONS = 60             # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_MEDIAN_ABS_DIFF_MAX = 0.02  # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_IQR_MAX = 0.03            # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_MAX_AGE_DAYS = 30         # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_RECEIPT_DIR = "reports/iv_solver_calibration"  # durable per-run calibration receipts

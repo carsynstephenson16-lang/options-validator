@@ -53,10 +53,26 @@ consequences baked into the design below, not an afterthought:
      parity_spot_from_chain, the same helper live_quotes uses for its own
      no-stock-entitlement case) computed from the ALREADY-FETCHED
      option_snapshot_quote chain -- no extra paid call. ATM IV / IV-rank
-     preview, which genuinely require greeks, are recorded as an honest gap
-     ("greeks_note") rather than solved for: a solver-based IV from the
-     repo's own black_scholes.py + parity spot + a live treasury rate is a
-     real follow-up, deliberately NOT built here to keep this fix scoped.
+     preview genuinely require greeks; when the greeks endpoint fails, a
+     SOLVER-DERIVED ATM IV is now attempted before recording an honest gap
+     (2026-07-24, IV-solver-capture): options_researcher.black_scholes.
+     implied_vol (spec-frozen, reused unmodified) against the entitled
+     chain's own bid/ask mid, a point-in-time Treasury rate
+     (data.rates.risk_free_rate) and dividend yield
+     (data.rates.dividend_yield), with a bounded delta fixed-point contract
+     reselection since this chain has no delta column of its own -- see
+     _solver_atm_iv below. A solver-derived IV is NEVER spliced into
+     iv_rank_preview (which compares against ThetaData's OWN EOD atm_iv
+     history -- a different solver, different conventions) unless
+     solver_iv_calibration_gate(symbol) passes a measured calibration
+     receipt (options_researcher/iv_solver_calibration.py); otherwise
+     iv_rank_preview stays null with an honest iv_label. Only when the
+     solver ALSO fails is the ORIGINAL honest-gap behavior preserved
+     (greeks_note records the specific reason, never a blanket label):
+     one of "solver: no_european_bs_root", "solver: not_converged",
+     "solver: expired", "solver: no dividend data for {symbol}",
+     "solver: no rate curve coverage", "solver: no quotes at selected
+     contract", or "solver: no spot available" (see _solver_atm_iv).
 
 Reuses rather than reinvents: live_quotes' session-gate machinery,
 column-resolution helpers (_pick_col via the adapter), _assemble_chain_frame,
@@ -64,6 +80,8 @@ resolve_expiries, iv_rank_preview, _load_iv_history, and the per-day
 expirations/open-interest memos; data.thetadata_adapter.passes_liquidity and
 mid_price; data.underlying_closes.parity_spot_from_chain (live_quotes' own
 no-stock-entitlement fallback); options_researcher.chains.atm_row;
+options_researcher.black_scholes.implied_vol/delta (spec-frozen, ZERO
+changes); data.rates.risk_free_rate/dividend_yield;
 data.atomic_io.atomic_parquet_write; and research.hashing.config_hash for
 receipt provenance.
 
@@ -83,10 +101,13 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 import config
+from data import rates as data_rates
 from data.atomic_io import atomic_parquet_write
 from data.thetadata_adapter import _pick_col, mid_price, passes_liquidity
 from data.underlying_closes import parity_spot_from_chain
 from options_researcher import live_quotes as lq
+from options_researcher.black_scholes import delta as bs_delta
+from options_researcher.black_scholes import implied_vol
 from options_researcher.chains import atm_row
 from research.hashing import config_hash
 
@@ -296,6 +317,124 @@ def _spot_for_symbol(spot_row: dict | None, chain_like: pd.DataFrame,
     }, note
 
 
+# ---------------------------------------------------------------------------
+# Solver-derived ATM IV (fallback when the greeks endpoint fails/denies)
+# ---------------------------------------------------------------------------
+
+def _solver_atm_iv(chain_like: pd.DataFrame, spot: float, symbol: str,
+                   monthly: date, today: date) -> tuple[float | None, str | None]:
+    """Best-effort solver-derived ATM IV when the greeks endpoint is not
+    entitled or otherwise fails. Reuses options_researcher.black_scholes.
+    implied_vol (spec-frozen, ZERO changes) against `chain_like`'s OWN
+    bid/ask mid (the entitled option_snapshot_quote chain -- no extra paid
+    call), a point-in-time Treasury rate (data.rates.risk_free_rate) and
+    dividend yield (data.rates.dividend_yield).
+
+    Contract selection: `chain_like` has no delta column here (the greeks
+    endpoint that would have supplied one just failed), so the EOD
+    atm_iv convention (chains.atm_row's delta-column nearest-0.50-put
+    selection) cannot be reused directly. Instead: seed with the
+    nearest-strike-to-spot put, solve its IV, compute
+    options_researcher.black_scholes.delta() at the solved sigma, and
+    re-select+re-solve ONCE against whichever immediately neighboring
+    strike has a delta closer to 0.50 -- a bounded, single extra pass, not
+    an iterative fixed point.
+
+    Returns (atm_iv_or_None, reason_or_None). `reason` is None on success,
+    else one of the specific "solver: ..." strings the module docstring
+    documents -- never a blanket label.
+    """
+    t = (monthly - today).days / 365.0
+    if t <= 0:
+        return None, "solver: expired"
+    try:
+        r = data_rates.risk_free_rate(today, monthly).rate
+    except data_rates.MissingRateError:
+        return None, "solver: no rate curve coverage"
+    try:
+        q = data_rates.dividend_yield(symbol, today, spot).yield_rate
+    except data_rates.MissingDividendYieldError:
+        return None, f"solver: no dividend data for {symbol}"
+
+    exp_dates = pd.to_datetime(chain_like["expiration"]).dt.date
+    puts = chain_like[(chain_like["right"] == "P") & (exp_dates == monthly)
+                      & (chain_like["bid"] > 0) & (chain_like["ask"] >= chain_like["bid"])]
+    if puts.empty:
+        return None, "solver: no quotes at selected contract"
+
+    def _solve(row):
+        price = mid_price(float(row["bid"]), float(row["ask"]))
+        return implied_vol(price=price, S=spot, K=float(row["strike"]), t=t,
+                           r=r, right="P", q=q)
+
+    strikes = sorted(puts["strike"].unique())
+    seed_strike = min(strikes, key=lambda k: abs(k - spot))
+    seed_row = puts[puts["strike"] == seed_strike].iloc[0]
+    seed_result = _solve(seed_row)
+    if not seed_result.ok:
+        return None, f"solver: {seed_result.reason}"
+
+    best_result = seed_result
+    best_gap = abs(abs(bs_delta(S=spot, K=seed_strike, t=t, r=r,
+                                sigma=seed_result.iv, right="P", q=q)) - 0.50)
+    seed_idx = strikes.index(seed_strike)
+    for neighbor_idx in (seed_idx - 1, seed_idx + 1):
+        if neighbor_idx < 0 or neighbor_idx >= len(strikes):
+            continue
+        neighbor_strike = strikes[neighbor_idx]
+        neighbor_row = puts[puts["strike"] == neighbor_strike].iloc[0]
+        neighbor_result = _solve(neighbor_row)
+        if not neighbor_result.ok:
+            continue
+        neighbor_gap = abs(abs(bs_delta(S=spot, K=neighbor_strike, t=t, r=r,
+                                        sigma=neighbor_result.iv, right="P",
+                                        q=q)) - 0.50)
+        if neighbor_gap < best_gap:
+            best_result, best_gap = neighbor_result, neighbor_gap
+
+    return best_result.iv, None
+
+
+def _load_latest_calibration_receipt(receipt_dir: str | Path | None = None
+                                     ) -> dict | None:
+    """Newest reports/iv_solver_calibration receipt, or None. Mirrors
+    live_quotes.load_latest_probe's convention exactly: receipts are named
+    by run date (YYYY-MM-DD.json), so a lexicographic filename sort is also
+    a chronological sort."""
+    d = Path(receipt_dir if receipt_dir is not None
+             else config.IV_CALIBRATION_RECEIPT_DIR)
+    try:
+        names = sorted(n for n in os.listdir(d) if n.endswith(".json"))
+    except FileNotFoundError:
+        return None
+    if not names:
+        return None
+    with open(d / names[-1], encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def solver_iv_calibration_gate(symbol: str) -> bool:
+    """True only if the newest calibration receipt exists, is younger than
+    config.IV_CALIBRATION_MAX_AGE_DAYS, its config_hash matches the CURRENT
+    config/code (a change since calibration invalidates it), and `symbol`
+    is in its names_passed list. Fail-closed in every other case -- missing
+    receipt, stale receipt, hash mismatch, a names_failed symbol, or any
+    unexpected receipt shape all return False; this NEVER raises."""
+    try:
+        receipt = _load_latest_calibration_receipt()
+        if receipt is None:
+            return False
+        age = pd.Timestamp(datetime.now(timezone.utc)) - pd.Timestamp(
+            receipt.get("run_at_utc"))
+        if pd.isna(age) or age > pd.Timedelta(days=config.IV_CALIBRATION_MAX_AGE_DAYS):
+            return False
+        if receipt.get("config_hash") != config_hash():
+            return False
+        return symbol in (receipt.get("names_passed") or [])
+    except Exception:
+        return False
+
+
 def _capture_symbol(client, symbol: str, spot_row: dict | None,
                     today: date, ny_iso: str) -> tuple[dict, pd.DataFrame | None]:
     """One name's descriptive capture row + its full nearest-monthly chain
@@ -359,10 +498,14 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
         })
 
     # Best-effort greeks enrichment (ATM IV / IV-rank preview). Never lets a
-    # PERMISSION_DENIED here touch the entitled fields already computed.
+    # PERMISSION_DENIED here touch the entitled fields already computed. On
+    # failure, attempt a solver-derived ATM IV (2026-07-24) before recording
+    # an honest gap -- see _solver_atm_iv and the module docstring.
     atm_iv = None
     ivr = None
     greeks_note = None
+    iv_source = None
+    iv_label = None
     try:
         g = client.option_snapshot_greeks_all(symbol, expiration=monthly)
         gf = lq._assemble_chain_frame(g, f"{symbol} greeks {monthly}", with_greeks=True)
@@ -388,10 +531,28 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
         if atm_iv is not None:
             ivr = lq._finite_or_none(
                 lq.iv_rank_preview(lq._load_iv_history(symbol), atm_iv))
+            iv_source = "greeks_endpoint"
     except Exception as exc:
-        greeks_note = (
+        greeks_exc_note = (
             "not entitled: option greeks endpoint requires professional "
             f"tier ({type(exc).__name__}: {exc})")
+        spot_for_solver = summary.get("spot_mid")
+        if spot_for_solver is not None and math.isfinite(spot_for_solver):
+            solved_iv, solver_reason = _solver_atm_iv(
+                chain_like, spot_for_solver, symbol, monthly, today)
+        else:
+            solved_iv, solver_reason = None, "solver: no spot available"
+        if solved_iv is not None:
+            atm_iv = solved_iv
+            iv_source = "bs_solver"
+            if solver_iv_calibration_gate(symbol):
+                ivr = lq._finite_or_none(
+                    lq.iv_rank_preview(lq._load_iv_history(symbol), atm_iv))
+            else:
+                ivr = None
+                iv_label = "solver-derived, not rank-comparable"
+        else:
+            greeks_note = f"{greeks_exc_note}; solver fallback failed: {solver_reason}"
 
     chain_frame = pd.DataFrame(rows)
 
@@ -399,6 +560,8 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
         "monthly_expiration": monthly.isoformat(),
         "atm_iv": atm_iv,
         "iv_rank_preview": ivr,
+        "iv_source": iv_source,
+        "iv_label": iv_label,
         "greeks_note": greeks_note,
         "chain_contracts_total": total,
         "chain_contracts_admitted": admitted,
