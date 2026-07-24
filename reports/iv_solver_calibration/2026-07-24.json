@@ -1,0 +1,3763 @@
+{
+  "config_hash": "7d9fd0f20bc44bfc58a322a28aa25f10d2cf232c5ece65857d1a3a880e6bb429",
+  "contract_selection": "chains.atm_row(chains.nearest_monthly(chain, day, min_dte=15, max_dte=60), right='P', target_delta=0.50) -- ThetaData's own cached delta column, the EXACT features.py convention",
+  "end_iso": "2026-07-24",
+  "names_failed": {
+    "AMD": "insufficient pairs (n_pairs=1)",
+    "AMZN": "insufficient pairs (n_pairs=1)",
+    "AVGO": "insufficient pairs (n_pairs=1)",
+    "CEG": "insufficient pairs (n_pairs=1)",
+    "CRWV": "insufficient pairs (n_pairs=1)",
+    "ET": "insufficient pairs (n_pairs=1)",
+    "IREN": "insufficient pairs (n_pairs=1)",
+    "MSFT": "insufficient pairs (n_pairs=1)",
+    "NOW": "insufficient pairs (n_pairs=1)",
+    "NVDA": "insufficient pairs (n_pairs=1)",
+    "PLTR": "insufficient pairs (n_pairs=1)",
+    "SMCI": "insufficient pairs (n_pairs=1)",
+    "TEM": "insufficient pairs (n_pairs=1)",
+    "USAR": "insufficient pairs (n_pairs=1)",
+    "VST": "insufficient pairs (n_pairs=1)"
+  },
+  "names_passed": [],
+  "per_name": {
+    "AMD": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "AMZN": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "AVGO": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "CEG": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "CRWV": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "ET": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "IREN": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "MSFT": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "NOW": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "NVDA": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "PLTR": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "SMCI": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "TEM": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "USAR": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    },
+    "VST": {
+      "fail_reason": "insufficient pairs (n_pairs=1)",
+      "iqr_high": null,
+      "iqr_low": null,
+      "iqr_width": null,
+      "median_abs_diff": null,
+      "n_pairs": 1,
+      "n_sessions_considered": 60,
+      "n_skipped": 59,
+      "pass": false,
+      "skips": [
+        {
+          "day": "2026-04-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-04-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-19",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-27",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-28",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-05-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-03",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-04",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-05",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-11",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-12",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-18",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-22",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-23",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-24",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-25",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-26",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-29",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-06-30",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-01",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-02",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-06",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-07",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-08",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-09",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-10",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-13",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-14",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-15",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-16",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-17",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-20",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-21",
+          "reason": "no rate curve coverage"
+        },
+        {
+          "day": "2026-07-22",
+          "reason": "no rate curve coverage"
+        }
+      ]
+    }
+  },
+  "receipt_kind": "iv_solver_calibration/v1",
+  "run_at_utc": "2026-07-24T14:54:20.993776+00:00",
+  "sessions_evaluated": 60
+}
