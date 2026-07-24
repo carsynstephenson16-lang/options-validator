@@ -7,11 +7,14 @@ or ledger/, and never renders the verdict vocabulary owned by entry_watch's
 trigger grading or the attractiveness dashboard's badges (mirrored by
 tests/test_intraday_capture.py's vocabulary test). It snapshots
 config.ATTRACTIVENESS_UNIVERSE (all 15 scope names) several times per
-trading day: spot (bid/mid/ask), nearest-monthly ATM IV, an intraday IV-rank
-PREVIEW (via live_quotes.iv_rank_preview against the trailing EOD atm_iv
-history -- the only correct way to compute this offline), and a full
-nearest-monthly chain snapshot with per-contract passes_liquidity admission
-counts. It is entirely separate from live_quotes' LIVE PREVIEW lane (which
+trading day: spot (bid/mid/ask from the stock feed, or a put-call-parity
+mid-only fallback when that feed is not entitled -- see "ENTITLEMENT
+REALITY" below), nearest-monthly ATM IV, an intraday IV-rank PREVIEW (via
+live_quotes.iv_rank_preview against the trailing EOD atm_iv history --
+the only correct way to compute this offline, when the greeks endpoint is
+entitled), and a full nearest-monthly chain snapshot with per-contract
+passes_liquidity admission counts. It is entirely separate from live_quotes'
+LIVE PREVIEW lane (which
 feeds the H5 mission-control dashboard) and from entry_watch's trigger
 grading: this tool captures what the board looked like, it never grades one.
 
@@ -25,22 +28,44 @@ write-once JSON under reports/intraday_capture/{date}/{tag}.json
 (config.INTRADAY_RECEIPT_DIR), mirroring h10_watch's _write_receipt: an
 identical rerun is a benign no-op, a conflicting rerun refuses (exit 2).
 
-Probe auto-heal: before capturing, this module checks live_quotes.probe_ok()
-against the latest recorded schema probe. If it is missing or stale AND the
-wall clock is already inside the regular session (guaranteed true at capture
-time, since we refuse outside the session first), it runs ONE fresh
-live_quotes.run_probe() and re-checks -- this is the permanent fix for the
-cold-start problem (a probe that predates today). If still not ok, the
-capture refuses fail-closed (exit 1) rather than fetching against unverified
-response schemas.
+Probe auto-heal: before capturing, this module checks its OWN
+capture_probe_ok() (see below) against the latest recorded schema probe. If
+it is missing or stale AND the wall clock is already inside the regular
+session (guaranteed true at capture time, since we refuse outside the
+session first), it runs ONE fresh live_quotes.run_probe() and re-checks --
+this is the permanent fix for the cold-start problem (a probe that predates
+today). If still not ok, the capture refuses fail-closed (exit 1) rather
+than fetching against unverified response schemas.
 
-Reuses rather than reinvents: live_quotes' probe/session-gate machinery,
-column-resolution helpers (_pick_col, _normalize_contract_keys via the
-adapter), _assemble_chain_frame, resolve_expiries, iv_rank_preview,
-_load_iv_history, and the per-day expirations/open-interest memos;
-data.thetadata_adapter.passes_liquidity and mid_price;
-options_researcher.chains.atm_row; data.atomic_io.atomic_parquet_write; and
-research.hashing.config_hash for receipt provenance.
+ENTITLEMENT REALITY (probe-verified 2026-07-24, this account's ThetaData
+tier at the time): stock_snapshot_quote and option_snapshot_greeks_all both
+return PERMISSION_DENIED (stock quotes need a paid stock add-on; greeks need
+the PROFESSIONAL option tier -- this account is on STANDARD). Two
+consequences baked into the design below, not an afterthought:
+  1. capture_probe_ok() uses its OWN REQUIRED_PROBE_ENDPOINTS -- expirations,
+     option_snapshot_quote (bid/ask, no greeks), open_interest -- and does
+     NOT require option_snapshot_greeks_all, unlike
+     live_quotes.REQUIRED_PROBE_ENDPOINTS. Gating this module's entitled
+     quotes+OI core on an endpoint this account can never pass would
+     silently zero out every capture. live_quotes.probe_ok() itself is
+     UNTOUCHED -- this is a separate, module-local gate.
+  2. Spot falls back to put-call parity (data.underlying_closes.
+     parity_spot_from_chain, the same helper live_quotes uses for its own
+     no-stock-entitlement case) computed from the ALREADY-FETCHED
+     option_snapshot_quote chain -- no extra paid call. ATM IV / IV-rank
+     preview, which genuinely require greeks, are recorded as an honest gap
+     ("greeks_note") rather than solved for: a solver-based IV from the
+     repo's own black_scholes.py + parity spot + a live treasury rate is a
+     real follow-up, deliberately NOT built here to keep this fix scoped.
+
+Reuses rather than reinvents: live_quotes' session-gate machinery,
+column-resolution helpers (_pick_col via the adapter), _assemble_chain_frame,
+resolve_expiries, iv_rank_preview, _load_iv_history, and the per-day
+expirations/open-interest memos; data.thetadata_adapter.passes_liquidity and
+mid_price; data.underlying_closes.parity_spot_from_chain (live_quotes' own
+no-stock-entitlement fallback); options_researcher.chains.atm_row;
+data.atomic_io.atomic_parquet_write; and research.hashing.config_hash for
+receipt provenance.
 
     uv run python -m options_researcher.intraday_capture --session-tag open
     uv run python -m options_researcher.intraday_capture --session-tag open --force
@@ -49,6 +74,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -59,6 +85,7 @@ import pandas as pd
 import config
 from data.atomic_io import atomic_parquet_write
 from data.thetadata_adapter import _pick_col, mid_price, passes_liquidity
+from data.underlying_closes import parity_spot_from_chain
 from options_researcher import live_quotes as lq
 from options_researcher.chains import atm_row
 from research.hashing import config_hash
@@ -66,6 +93,19 @@ from research.hashing import config_hash
 NY_TZ = "America/New_York"
 CACHE_DIR = Path(config.INTRADAY_CACHE_DIR)
 RECEIPT_DIR = Path(config.INTRADAY_RECEIPT_DIR)
+
+# This module's own required-probe-endpoint set -- see the "ENTITLEMENT
+# REALITY" note above for why it deliberately omits
+# option_snapshot_greeks_all (present in live_quotes.REQUIRED_PROBE_ENDPOINTS
+# for the H5 LEAPS delta/IV preview, but not required by this module's
+# entitled quotes+OI core). Never edit live_quotes.REQUIRED_PROBE_ENDPOINTS
+# to "fix" this -- that would weaken live_quotes' own gate for an unrelated
+# module's entitlement gap.
+REQUIRED_PROBE_ENDPOINTS = (
+    "option_list_expirations",
+    "option_snapshot_quote",
+    "option_snapshot_open_interest",
+)
 
 
 def _parse_hhmm(value: str) -> time:
@@ -135,21 +175,54 @@ def validate_session_tag(tag: str, now_ny: datetime, *,
 # Probe auto-heal
 # ---------------------------------------------------------------------------
 
+def capture_probe_ok(probe: dict | None, now_utc) -> tuple[bool, str]:
+    """Mirrors live_quotes.probe_ok's version/age/endpoint checks exactly,
+    but against THIS module's REQUIRED_PROBE_ENDPOINTS (no
+    option_snapshot_greeks_all -- see the module docstring's "ENTITLEMENT
+    REALITY" note). A missing stock entitlement is never fatal here either:
+    spot falls back to put-call parity (see _spot_for_symbol), same as
+    live_quotes' own non-fatal handling of stock_entitled=False."""
+    if probe is None:
+        return False, ("no schema probe recorded -- run "
+                       "`python -m options_researcher.live_quotes --probe` "
+                       "during a regular session")
+    installed = lq._installed_thetadata_version()
+    recorded = probe.get("thetadata_version")
+    if recorded != installed:
+        return False, (f"probe recorded thetadata=={recorded} but {installed} "
+                       "is installed -- re-probe before trusting columns")
+    try:
+        age = pd.Timestamp(now_utc) - pd.Timestamp(probe.get("probed_at_utc"))
+    except (TypeError, ValueError):
+        return False, "probe probed_at_utc missing or unusable"
+    if pd.isna(age) or age > pd.Timedelta(days=config.LIVE_PROBE_MAX_AGE_DAYS):
+        return False, (f"probe older than LIVE_PROBE_MAX_AGE_DAYS="
+                       f"{config.LIVE_PROBE_MAX_AGE_DAYS} -- re-probe")
+    endpoints = probe.get("endpoints") or {}
+    for name in REQUIRED_PROBE_ENDPOINTS:
+        rec = endpoints.get(name) or {}
+        if not rec.get("ok"):
+            return False, f"probe endpoint {name} not ok: {rec.get('error')}"
+    return True, "ok"
+
+
 def ensure_probe_ok(client, now_ny: datetime, now_utc: datetime
                     ) -> tuple[dict | None, bool, bool, str]:
     """(probe, healed, ok, reason). If the existing probe already passes
-    live_quotes.probe_ok, returns it unchanged (healed=False). Otherwise --
-    since a capture run only calls this after confirming in_regular_session
-    -- runs ONE fresh live_quotes.run_probe() and re-checks. Never runs a
-    probe outside the regular session (mirrors run_probe's own refusal)."""
+    THIS module's capture_probe_ok, returns it unchanged (healed=False).
+    Otherwise -- since a capture run only calls this after confirming
+    in_regular_session -- runs ONE fresh live_quotes.run_probe() (the
+    shared probe file/format both modules read) and re-checks against
+    capture_probe_ok. Never runs a probe outside the regular session
+    (mirrors run_probe's own refusal)."""
     probe = lq.load_latest_probe()
-    ok, reason = lq.probe_ok(probe, now_utc)
+    ok, reason = capture_probe_ok(probe, now_utc)
     if ok:
         return probe, False, ok, reason
     if not lq.in_regular_session(now_ny):
         return probe, False, ok, reason
     probe = lq.run_probe(client=client, now_ny=now_ny)
-    ok, reason = lq.probe_ok(probe, now_utc)
+    ok, reason = capture_probe_ok(probe, now_utc)
     return probe, True, ok, reason
 
 
@@ -196,22 +269,46 @@ def _stock_spots(client, universe: list[str], probe: dict, now_utc
     return out
 
 
+def _spot_for_symbol(spot_row: dict | None, chain_like: pd.DataFrame,
+                     ny_iso: str) -> tuple[dict, str | None]:
+    """(spot_fields, note_or_None). Prefers the batched stock quote; falls
+    back to put-call parity (data.underlying_closes.parity_spot_from_chain,
+    live_quotes' own no-stock-entitlement fallback) computed from the
+    ALREADY-FETCHED entitled option_snapshot_quote chain -- no extra paid
+    call. spot_source is "stock_snapshot" | "parity_fallback" | None."""
+    if spot_row is not None and not spot_row.get("error"):
+        return {
+            "spot_bid": spot_row["bid"], "spot_ask": spot_row["ask"],
+            "spot_mid": spot_row["mid"],
+            "spot_ts": (spot_row["ts"].isoformat()
+                       if spot_row["ts"] is not None else None),
+            "spot_source": "stock_snapshot",
+        }, None
+    note = (spot_row["error"] if spot_row is not None and spot_row.get("error")
+           else "symbol missing from batched stock snapshot")
+    parity = parity_spot_from_chain(chain_like, ny_iso)
+    if not math.isfinite(parity):
+        return {"spot_bid": None, "spot_ask": None, "spot_mid": None,
+                "spot_ts": None, "spot_source": None}, note
+    return {
+        "spot_bid": None, "spot_ask": None, "spot_mid": float(parity),
+        "spot_ts": None, "spot_source": "parity_fallback",
+    }, note
+
+
 def _capture_symbol(client, symbol: str, spot_row: dict | None,
                     today: date, ny_iso: str) -> tuple[dict, pd.DataFrame | None]:
     """One name's descriptive capture row + its full nearest-monthly chain
     frame (or None on failure). Lets exceptions propagate -- the caller
-    wraps this per symbol so one name's failure never aborts the board."""
+    wraps this per symbol so one name's failure never aborts the board.
+
+    The entitled core (expirations, option_snapshot_quote bid/ask,
+    open_interest) always runs. Greeks (ATM IV / IV-rank preview) are a
+    best-effort ENRICHMENT in a separate try/except: a PERMISSION_DENIED
+    there (this account is on STANDARD, not PROFESSIONAL, as of 2026-07-24)
+    degrades only atm_iv/iv_rank_preview/chain iv+delta columns to an
+    honest gap, never the quotes+OI core."""
     summary: dict = {"symbol": symbol, "status": "ok"}
-    if spot_row is None:
-        summary["spot_note"] = "symbol missing from batched stock snapshot"
-    elif spot_row.get("error"):
-        summary["spot_note"] = spot_row["error"]
-    else:
-        summary["spot_bid"] = spot_row["bid"]
-        summary["spot_ask"] = spot_row["ask"]
-        summary["spot_mid"] = spot_row["mid"]
-        summary["spot_ts"] = (spot_row["ts"].isoformat()
-                              if spot_row["ts"] is not None else None)
 
     exps = lq._expirations(client, symbol, ny_iso)
     monthly = lq.resolve_expiries(exps, today)["monthly"]
@@ -220,15 +317,21 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
         summary["note"] = "no monthly expiry in the 15-60 DTE band"
         return summary, None
 
-    g = client.option_snapshot_greeks_all(symbol, expiration=monthly)
-    gf = lq._assemble_chain_frame(g, f"{symbol} greeks {monthly}", with_greeks=True)
+    # Entitled core: bid/ask chain (no greeks) + open interest.
+    q = client.option_snapshot_quote(symbol, expiration=monthly)
+    chain_like = lq._assemble_chain_frame(q, f"{symbol} option_snapshot_quote")
     oi_map, oi_asof = lq._open_interest(client, symbol, monthly, ny_iso)
+
+    spot_fields, spot_note = _spot_for_symbol(spot_row, chain_like, ny_iso)
+    summary.update(spot_fields)
+    if spot_note:
+        summary["spot_note"] = spot_note
 
     admitted = {"C": 0, "P": 0}
     total = {"C": 0, "P": 0}
     spreads: list[float] = []
     rows: list[dict] = []
-    for _, row in gf.iterrows():
+    for _, row in chain_like.iterrows():
         right = str(row.get("right", "")).strip().upper()
         strike = float(row["strike"])
         bid = lq._finite_or_none(row["bid"])
@@ -246,32 +349,57 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
             row_admitted = passes_liquidity(oi, bid, ask)
         if row_admitted and right in admitted:
             admitted[right] += 1
-        iv_val = lq._finite_or_none(row.get("iv"))
-        delta_val = lq._finite_or_none(row.get("delta"))
         rows.append({
             "expiration": exp_iso, "strike": strike, "right": right,
             "bid": bid if bid is not None else float("nan"),
             "ask": ask if ask is not None else float("nan"),
-            "iv": iv_val if iv_val is not None else float("nan"),
-            "delta": delta_val if delta_val is not None else float("nan"),
+            "iv": float("nan"), "delta": float("nan"),  # filled in below if entitled
             "open_interest": float(oi) if oi is not None else float("nan"),
             "admitted": bool(row_admitted),
         })
-    chain_frame = pd.DataFrame(rows)
 
-    atm = atm_row(gf, monthly)
+    # Best-effort greeks enrichment (ATM IV / IV-rank preview). Never lets a
+    # PERMISSION_DENIED here touch the entitled fields already computed.
     atm_iv = None
-    if atm is not None:
-        iv = lq._finite_or_none(atm["iv"])
-        atm_iv = iv if iv is not None and iv > 0 else None
+    ivr = None
+    greeks_note = None
+    try:
+        g = client.option_snapshot_greeks_all(symbol, expiration=monthly)
+        gf = lq._assemble_chain_frame(g, f"{symbol} greeks {monthly}", with_greeks=True)
+        gkey = {
+            (pd.Timestamp(r["expiration"]).date().isoformat(), float(r["strike"]),
+             str(r.get("right", "")).strip().upper()):
+                (lq._finite_or_none(r.get("iv")), lq._finite_or_none(r.get("delta")))
+            for _, r in gf.iterrows()
+        }
+        for row_dict in rows:
+            key = (row_dict["expiration"], row_dict["strike"], row_dict["right"])
+            match = gkey.get(key)
+            if match is not None:
+                iv_val, delta_val = match
+                if iv_val is not None:
+                    row_dict["iv"] = iv_val
+                if delta_val is not None:
+                    row_dict["delta"] = delta_val
+        atm = atm_row(gf, monthly)
+        if atm is not None:
+            iv = lq._finite_or_none(atm["iv"])
+            atm_iv = iv if iv is not None and iv > 0 else None
+        if atm_iv is not None:
+            ivr = lq._finite_or_none(
+                lq.iv_rank_preview(lq._load_iv_history(symbol), atm_iv))
+    except Exception as exc:
+        greeks_note = (
+            "not entitled: option greeks endpoint requires professional "
+            f"tier ({type(exc).__name__}: {exc})")
 
-    ivr = (lq.iv_rank_preview(lq._load_iv_history(symbol), atm_iv)
-           if atm_iv is not None else float("nan"))
+    chain_frame = pd.DataFrame(rows)
 
     summary.update({
         "monthly_expiration": monthly.isoformat(),
         "atm_iv": atm_iv,
-        "iv_rank_preview": lq._finite_or_none(ivr),
+        "iv_rank_preview": ivr,
+        "greeks_note": greeks_note,
         "chain_contracts_total": total,
         "chain_contracts_admitted": admitted,
         "min_spread_pct_observed": min(spreads) if spreads else None,

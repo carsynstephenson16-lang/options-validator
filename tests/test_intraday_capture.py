@@ -7,6 +7,9 @@ the repo's real reports/intraday_capture or .cache/intraday.
 """
 import glob
 import inspect
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
@@ -20,6 +23,8 @@ import config
 from options_researcher import intraday_capture as ic
 from options_researcher import live_quotes as lq
 from options_researcher.chains import third_friday
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 NY = ZoneInfo("America/New_York")
 TODAY = date(2026, 7, 15)                      # a Wednesday
@@ -60,23 +65,60 @@ def _probe(now_utc, **over):
     return p
 
 
+def _probe_realistic_entitlement(now_utc, **over):
+    """Mirrors the real 2026-07-24 09:31 production probe (reports/
+    live_probe/2026-07-24.json, primary checkout): stock_snapshot_quote AND
+    option_snapshot_greeks_all both PERMISSION_DENIED (this account is on a
+    tier without a stock add-on and without the PROFESSIONAL option tier);
+    expirations, option_snapshot_quote, and open_interest all ok."""
+    return _probe(
+        now_utc,
+        stock_entitled=False,
+        endpoints={
+            "stock_snapshot_quote": {
+                "ok": False, "columns": None,
+                "error": "PERMISSION_DENIED: FREE subscription does not "
+                        "include stock quotes"},
+            "option_list_expirations": {"ok": True, "columns": ["expiration"],
+                                        "error": None},
+            "option_snapshot_quote": {
+                "ok": True,
+                "columns": ["expiration", "strike", "right", "bid", "ask"],
+                "error": None},
+            "option_snapshot_greeks_all": {
+                "ok": False, "columns": None,
+                "error": "PERMISSION_DENIED: requires a PROFESSIONAL "
+                        "option subscription"},
+            "option_snapshot_open_interest": {
+                "ok": True,
+                "columns": ["expiration", "strike", "right", "open_interest"],
+                "error": None},
+        },
+        **over)
+
+
 class FakeClient:
     """Records every call; raises where a test asks it to."""
 
     def __init__(self, spots=None, stock_ts=None, greeks_raises=(),
-                 oi_raises=(), expirations_raises=(), stock_raises=False):
+                 oi_raises=(), expirations_raises=(), quote_raises=(),
+                 stock_raises=False):
         self.spots = spots or {}
         self.stock_ts = stock_ts
         self.greeks_raises = set(greeks_raises)
         self.oi_raises = set(oi_raises)
         self.expirations_raises = set(expirations_raises)
+        self.quote_raises = set(quote_raises)
         self.stock_raises = stock_raises
-        self.calls = {"stock": 0, "expirations": [], "greeks": [], "oi": []}
+        self.calls = {"stock": 0, "expirations": [], "quote": [],
+                      "greeks": [], "oi": []}
 
     def stock_snapshot_quote(self, symbols, **kw):
         self.calls["stock"] += 1
         if self.stock_raises:
-            raise RuntimeError("stock feed down")
+            raise RuntimeError(
+                "PERMISSION_DENIED: FREE subscription does not include "
+                "stock quotes")
         rows = []
         for s in symbols:
             if s not in self.spots:
@@ -94,19 +136,39 @@ class FakeClient:
             raise RuntimeError("boom expirations")
         return pd.DataFrame({"expiration": [MONTHLY_EXP.isoformat()]})
 
+    def option_snapshot_quote(self, symbol, expiration=None, **kw):
+        """ENTITLED: bid/ask only, no greeks. The entitled core (spread%,
+        OI-based admission, put-call-parity spot fallback) is built entirely
+        from this + option_snapshot_open_interest."""
+        self.calls["quote"].append((symbol, str(expiration)))
+        if symbol in self.quote_raises:
+            raise RuntimeError("boom quote")
+        exp = expiration.isoformat() if hasattr(expiration, "isoformat") else str(expiration)
+        return pd.DataFrame([
+            {"expiration": exp, "strike": 150.0, "right": "P", "bid": 2.0,
+             "ask": 2.1},
+            {"expiration": exp, "strike": 150.0, "right": "C", "bid": 2.2,
+             "ask": 2.4},
+            # wide spread -- must fail the spread gate regardless of OI
+            {"expiration": exp, "strike": 200.0, "right": "C", "bid": 0.05,
+             "ask": 0.50},
+        ])
+
     def option_snapshot_greeks_all(self, symbol, expiration=None, **kw):
+        """This account is on STANDARD as of 2026-07-24: PERMISSION_DENIED
+        is the REAL failure mode when greeks_raises requests it, mirroring
+        the production incident, not a synthetic exception type."""
         self.calls["greeks"].append((symbol, str(expiration)))
         if symbol in self.greeks_raises:
-            raise RuntimeError("boom greeks")
+            raise RuntimeError(
+                "PERMISSION_DENIED: option greeks requires a PROFESSIONAL "
+                "subscription")
         exp = expiration.isoformat() if hasattr(expiration, "isoformat") else str(expiration)
         return pd.DataFrame([
             {"expiration": exp, "strike": 150.0, "right": "P", "bid": 2.0,
              "ask": 2.1, "delta": -0.50, "implied_vol": 0.30},
             {"expiration": exp, "strike": 150.0, "right": "C", "bid": 2.2,
              "ask": 2.4, "delta": 0.55, "implied_vol": 0.28},
-            # wide spread -- must fail the spread gate regardless of OI
-            {"expiration": exp, "strike": 200.0, "right": "C", "bid": 0.05,
-             "ask": 0.50, "delta": 0.10, "implied_vol": 0.60},
         ])
 
     def option_snapshot_open_interest(self, symbol, expiration=None, **kw):
@@ -281,6 +343,52 @@ class ProbeAutoHealTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Capture-specific probe gate (entitlement reality: this module's gate must
+# differ from live_quotes.probe_ok's -- see the 2026-07-24 production
+# incident: greeks denied should NOT block a quotes+OI capture)
+# ---------------------------------------------------------------------------
+
+class CaptureProbeOkTests(unittest.TestCase):
+    def test_passes_when_greeks_denied_but_quotes_and_oi_ok(self):
+        probe = _probe_realistic_entitlement(NOW_NY.astimezone(timezone.utc))
+        ok, reason = ic.capture_probe_ok(probe, NOW_NY.astimezone(timezone.utc))
+        self.assertTrue(ok, reason)
+
+    def test_live_quotes_own_gate_would_refuse_the_same_probe(self):
+        # Proves the two gates are genuinely different, not accidentally
+        # identical: live_quotes.REQUIRED_PROBE_ENDPOINTS includes
+        # option_snapshot_greeks_all, so ITS OWN probe_ok refuses the exact
+        # probe capture_probe_ok just accepted above. live_quotes' gate is
+        # untouched by this fix.
+        probe = _probe_realistic_entitlement(NOW_NY.astimezone(timezone.utc))
+        ok, reason = lq.probe_ok(probe, NOW_NY.astimezone(timezone.utc))
+        self.assertFalse(ok)
+        self.assertIn("option_snapshot_greeks_all", reason)
+
+    def test_fails_when_the_entitled_quote_endpoint_itself_fails(self):
+        now_utc = NOW_NY.astimezone(timezone.utc)
+        base = _probe_realistic_entitlement(now_utc)
+        broken_endpoints = dict(base["endpoints"])
+        broken_endpoints["option_snapshot_quote"] = {
+            "ok": False, "columns": None, "error": "boom"}
+        probe = _probe(now_utc, stock_entitled=False, endpoints=broken_endpoints)
+        ok, reason = ic.capture_probe_ok(probe, now_utc)
+        self.assertFalse(ok)
+        self.assertIn("option_snapshot_quote", reason)
+
+    def test_fails_when_probe_missing_same_as_live_quotes(self):
+        ok, _ = ic.capture_probe_ok(None, NOW_NY.astimezone(timezone.utc))
+        self.assertFalse(ok)
+
+    def test_fails_on_version_mismatch_same_as_live_quotes(self):
+        now_utc = NOW_NY.astimezone(timezone.utc)
+        probe = _probe_realistic_entitlement(now_utc, thetadata_version="0.0.0-wrong")
+        ok, reason = ic.capture_probe_ok(probe, now_utc)
+        self.assertFalse(ok)
+        self.assertIn("thetadata", reason)
+
+
+# ---------------------------------------------------------------------------
 # Full-board capture (integration, fully offline)
 # ---------------------------------------------------------------------------
 
@@ -317,14 +425,21 @@ class CaptureIntegrationTests(unittest.TestCase):
         self.assertTrue(out.exists())
         self.assertIn("config_hash", receipt)
         self.assertFalse(receipt["force"])
+        # Greeks are entitled in the default fixture -- no honest-gap note,
+        # and ATM IV/IV-rank preview should be genuinely populated.
+        self.assertIsNone(receipt["names"]["VST"]["greeks_note"])
+        self.assertEqual(receipt["names"]["VST"]["atm_iv"], 0.30)
+        self.assertEqual(receipt["names"]["VST"]["spot_source"], "stock_snapshot")
 
     def test_per_name_degradation_does_not_abort_the_board(self):
+        # option_snapshot_quote is part of the entitled CORE (unlike
+        # greeks) -- a failure there is a genuine per-name hard abort.
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
-                            greeks_raises={"VST"})
+                            quote_raises={"VST"})
         rc, receipt, *_ = self._run(client)
         self.assertEqual(rc, 0)
         self.assertEqual(receipt["names"]["VST"]["status"], "unavailable")
-        self.assertIn("boom greeks", receipt["names"]["VST"]["note"])
+        self.assertIn("boom quote", receipt["names"]["VST"]["note"])
         self.assertEqual(receipt["names"]["CEG"]["status"], "ok")
 
     def test_oi_failure_fails_soft_to_zero_admission_not_a_board_abort(self):
@@ -343,14 +458,20 @@ class CaptureIntegrationTests(unittest.TestCase):
                          {"C": 0, "P": 0})
         self.assertIsNone(receipt["names"]["CEG"]["open_interest_asof"])
 
-    def test_spot_missing_degrades_but_chain_still_captured(self):
+    def test_spot_missing_falls_back_to_parity_and_chain_still_captured(self):
         client = FakeClient(spots={"CEG": 90.0})  # VST absent from stock batch
         rc, receipt, *_ = self._run(client)
         self.assertEqual(rc, 0)
         vst = receipt["names"]["VST"]
         self.assertEqual(vst["status"], "ok")  # chain still fetched
         self.assertIn("missing from batched stock snapshot", vst["spot_note"])
-        self.assertNotIn("spot_bid", vst)
+        # No per-symbol row means no stock bid/ask -- but the parity
+        # fallback (computed from the already-fetched entitled quote chain)
+        # still supplies a mid.
+        self.assertIsNone(vst["spot_bid"])
+        self.assertIsNone(vst["spot_ask"])
+        self.assertIsNotNone(vst["spot_mid"])
+        self.assertEqual(vst["spot_source"], "parity_fallback")
 
     def test_whole_stock_batch_failure_degrades_every_name_spot_only(self):
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0}, stock_raises=True)
@@ -381,6 +502,64 @@ class CaptureIntegrationTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertTrue(receipt["force"])
         self.assertEqual(receipt["session_tag"], "midday")
+
+    # -- Entitlement reality (2026-07-24 production incident) -------------
+
+    def test_stock_denied_falls_back_to_parity_spot(self):
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0}, stock_raises=True)
+        probe = _probe_realistic_entitlement(NOW_NY.astimezone(timezone.utc))
+        rc, receipt, *_ = self._run(client, probe=probe)
+        self.assertEqual(rc, 0)
+        for sym in UNIVERSE:
+            row = receipt["names"][sym]
+            self.assertEqual(row["status"], "ok")
+            self.assertEqual(row["spot_source"], "parity_fallback")
+            self.assertIsNotNone(row["spot_mid"])
+            self.assertIsNone(row["spot_bid"])
+            self.assertIsNone(row["spot_ask"])
+            self.assertIn("PERMISSION_DENIED", row["spot_note"])
+            # the entitled quotes+OI core is untouched by the spot fallback
+            self.assertEqual(row["chain_contracts_admitted"], {"C": 1, "P": 1})
+
+    def test_greeks_denied_records_honest_gap_and_core_still_works(self):
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
+                            greeks_raises={"VST", "CEG"})
+        probe = _probe_realistic_entitlement(NOW_NY.astimezone(timezone.utc))
+        rc, receipt, *_ = self._run(client, probe=probe)
+        self.assertEqual(rc, 0)
+        for sym in UNIVERSE:
+            row = receipt["names"][sym]
+            self.assertEqual(row["status"], "ok")
+            self.assertIsNone(row["atm_iv"])
+            self.assertIsNone(row["iv_rank_preview"])
+            self.assertIn("not entitled: option greeks endpoint requires "
+                          "professional tier", row["greeks_note"])
+            self.assertIn("PERMISSION_DENIED", row["greeks_note"])
+            # the entitled quotes+OI core is untouched by the greeks gap
+            self.assertEqual(row["chain_contracts_admitted"], {"C": 1, "P": 1})
+            self.assertIsNotNone(row["min_spread_pct_observed"])
+            self.assertIsNotNone(row["chain_cache_path"])
+            chain = pd.read_parquet(row["chain_cache_path"])
+            self.assertTrue(chain["iv"].isna().all())
+            self.assertTrue(chain["delta"].isna().all())
+
+    def test_realistic_2026_07_24_production_entitlement_end_to_end(self):
+        # Both denials at once, exactly as the real 09:31 run saw them:
+        # stock_snapshot_quote AND option_snapshot_greeks_all both
+        # PERMISSION_DENIED, expirations/quote/OI all fine.
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
+                            stock_raises=True, greeks_raises={"VST", "CEG"})
+        probe = _probe_realistic_entitlement(NOW_NY.astimezone(timezone.utc))
+        rc, receipt, *_ = self._run(client, probe=probe)
+        self.assertEqual(rc, 0)
+        covered = sum(1 for n in receipt["names"].values() if n["status"] == "ok")
+        self.assertEqual(covered, len(UNIVERSE))
+        for sym in UNIVERSE:
+            row = receipt["names"][sym]
+            self.assertEqual(row["spot_source"], "parity_fallback")
+            self.assertIsNone(row["atm_iv"])
+            self.assertEqual(row["chain_contracts_admitted"], {"C": 1, "P": 1})
+            self.assertEqual(row["chain_contracts_total"], {"C": 2, "P": 1})
 
 
 class ProbeAutoHealIntegrationTests(unittest.TestCase):
@@ -523,6 +702,108 @@ class MainCLITests(unittest.TestCase):
     def test_main_requires_session_tag(self):
         with self.assertRaises(SystemExit):
             ic.main([])
+
+
+# ---------------------------------------------------------------------------
+# tools/intraday_capture.sh banner-pollution guard (2026-07-24 production
+# incident: LumiBot + python-dotenv print import-time INFO banner lines to
+# stdout, so a naive `$(uv run python -c ...)` command substitution
+# captures banner text ahead of the real answer -- the same class of bug
+# the 2026-07-23 H8 fix addressed, fixed here the way
+# tools/daily_ritual.sh:82 fixes AS_OF: a strict whitelist grep + tail -1.)
+# ---------------------------------------------------------------------------
+
+WRAPPER = REPO_ROOT / "tools" / "intraday_capture.sh"
+
+
+class WrapperBannerPollutionGuardTests(unittest.TestCase):
+    """Static/structural checks that the specific fix elements are present,
+    mirroring tests/test_h7_daily_exit_order.py's source-order style."""
+
+    def test_tag_extraction_uses_a_strict_whitelist_filter(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn(
+            "grep -Eo '^(open_auction|open|midmorning|midday|preclose|NONE)$'",
+            source)
+        self.assertIn("| tail -1", source)
+
+    def test_none_sentinel_disambiguates_benign_skip_from_unparseable_output(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        # The python side always prints a real tag OR the literal "NONE"
+        # sentinel -- never a bare empty line, which would be ambiguous
+        # between "legitimately no window near" and "banner ate the answer".
+        self.assertIn('or "NONE"', source)
+        self.assertIn('if [ "$TAG" = "NONE" ]; then', source)
+
+    def test_empty_filtered_tag_always_refuses_loudly(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        idx_extract = source.index('TAG="$(echo "$TAG_RAW"')
+        idx_refuse = source.index(
+            'if [ "$TAG_RC" -ne 0 ] || [ -z "$TAG" ]; then')
+        idx_none_check = source.index('if [ "$TAG" = "NONE" ]; then')
+        # Extraction happens first, then the "unparseable" refusal check,
+        # then (only for a non-empty, non-NONE tag) the benign-skip check.
+        self.assertLess(idx_extract, idx_refuse)
+        self.assertLess(idx_refuse, idx_none_check)
+        exit_snippet = source[idx_refuse:idx_refuse + 400]
+        self.assertIn("exit 1", exit_snippet)
+
+    def test_exit_code_label_mapping_is_evidence_based_not_guessed(self):
+        # The bug this specifically fixes: exit(2) from argparse (a usage
+        # error, e.g. banner-polluted --session-tag) and exit(2) from this
+        # module's OWN receipt-conflict path are indistinguishable by exit
+        # code alone. The wrapper must diagnose from the module's printed
+        # output, not assume a meaning for a bare exit code.
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("grep -q '^intraday_capture refused:'", source)
+        self.assertIn("grep -q '^intraday_capture receipt CONFLICT'", source)
+        self.assertIn("unrecognized failure mode", source)
+        # The old blind `case "$CAP_RC" in 2) ... RECEIPT CONFLICT` pattern
+        # must be gone.
+        self.assertNotIn('2) crit "intraday_capture', source)
+
+
+class TagDerivationBannerLiveTests(unittest.TestCase):
+    """Runs the EXACT python one-liner the wrapper uses (real imports, real
+    LumiBot/dotenv banner side effects -- not mocked), through the SAME
+    grep pipeline, proving end-to-end that banner noise cannot leak into
+    the extracted tag. This is the live counterpart to the static checks
+    above; together they prove both the fix's presence and its behavior."""
+
+    def _run_tag_script(self, now_ny_literal: str) -> str:
+        script = (
+            "from datetime import datetime\n"
+            "from zoneinfo import ZoneInfo\n"
+            "from options_researcher.intraday_capture import nearest_session_tag\n"
+            "NY = ZoneInfo('America/New_York')\n"
+            f"now_ny = {now_ny_literal}\n"
+            'print(nearest_session_tag(now_ny) or "NONE")\n'
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.pathsep.join(
+            filter(None, (str(REPO_ROOT), env.get("PYTHONPATH"))))
+        completed = subprocess.run(
+            [sys.executable, "-c", script], cwd=REPO_ROOT, env=env,
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        raw = completed.stdout + completed.stderr
+        whitelist = {"open_auction", "open", "midmorning", "midday",
+                     "preclose", "NONE"}
+        matches = [ln for ln in raw.splitlines() if ln.strip() in whitelist]
+        self.assertTrue(
+            matches,
+            f"no whitelisted line found in real subprocess output: {raw!r}")
+        return matches[-1]
+
+    def test_real_import_time_noise_does_not_pollute_a_resolved_tag(self):
+        tag = self._run_tag_script(
+            "datetime(2026, 7, 24, 9, 35, tzinfo=NY)")  # exactly "open"
+        self.assertEqual(tag, "open")
+
+    def test_real_import_time_noise_does_not_pollute_the_none_sentinel(self):
+        tag = self._run_tag_script(
+            "datetime(2026, 7, 24, 12, 0, tzinfo=NY)")  # between windows
+        self.assertEqual(tag, "NONE")
 
 
 if __name__ == "__main__":
