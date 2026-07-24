@@ -9,13 +9,14 @@ import io
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
 import config
 from options_researcher.h7_earnings import GATE_CLEAR, GATE_UNKNOWN
 from options_researcher.h7_source_health import (
+    FLAG_GRACE,
     FLAG_MISSING,
     FLAG_STALE,
     _sessions_between,
@@ -106,6 +107,76 @@ class TestSymbolHealth(unittest.TestCase):
         self.assertEqual(h["gate"], GATE_UNKNOWN)
         self.assertEqual(h["coverage"], "none")
         self.assertEqual(h["flags"], [FLAG_MISSING])
+
+    def test_now_shaped_confirmed_past_is_inferred_grace_and_healthy(self):
+        # Owner amendment 2026-07-24 (H7_POST_REPORT_GRACE_DAYS): the exact
+        # NOW case that motivated it -- confirmed report 2 days ago, no
+        # occurred record yet, nothing scheduled. Distinct coverage/flag
+        # from the PROVEN "grace" state so it is never mistaken for either
+        # an ordinary confirmed-date CLEAR or the proven occurred grace.
+        h = self._health([A("ZZZZ", "2026-07-06")], on=date(2026, 7, 8))
+        self.assertTrue(h["healthy"])
+        self.assertEqual(h["gate"], GATE_CLEAR)
+        self.assertEqual(h["coverage"], "post_report_grace")
+        self.assertEqual(h["flags"], [FLAG_MISSING, FLAG_GRACE])
+        self.assertEqual(h["grace_started"], date(2026, 7, 6))
+        self.assertEqual(
+            h["grace_end"],
+            date(2026, 7, 6) + timedelta(days=config.H7_POST_REPORT_GRACE_DAYS))
+        self.assertIsNone(h["next_report"])
+
+    def test_post_report_grace_day_45_still_grace_day_46_unknown(self):
+        # Day 45 is still inside the inferred grace window (gate CLEAR,
+        # coverage post_report_grace) -- it also trips STALE because zero
+        # sessions of runway remain, same convention as the proven-occurred
+        # grace's own boundary (test_grace_lapsing_within_warn_sessions_...).
+        # Day 46: the inferred grace has fully lapsed, exactly like the
+        # proven path -- gate UNKNOWN, coverage none.
+        started = date(2026, 5, 1)
+        day45 = started + timedelta(days=45)
+        day46 = started + timedelta(days=46)
+        h45 = self._health([A("ZZZZ", started.isoformat())], on=day45)
+        h46 = self._health([A("ZZZZ", started.isoformat())], on=day46)
+        self.assertEqual(h45["gate"], GATE_CLEAR)
+        self.assertEqual(h45["coverage"], "post_report_grace")
+        self.assertIn(FLAG_GRACE, h45["flags"])
+        self.assertFalse(h46["healthy"])
+        self.assertEqual(h46["gate"], GATE_UNKNOWN)
+        self.assertEqual(h46["coverage"], "none")
+
+    def test_post_report_grace_with_runway_is_healthy(self):
+        # Well clear of the STALE warning threshold: healthy, distinct
+        # coverage/flag, matching the NOW case (2 days elapsed of 45).
+        h = self._health([A("ZZZZ", "2026-05-01")], on=date(2026, 5, 11))
+        self.assertTrue(h["healthy"])
+        self.assertEqual(h["gate"], GATE_CLEAR)
+        self.assertEqual(h["coverage"], "post_report_grace")
+        self.assertEqual(h["flags"], [FLAG_MISSING, FLAG_GRACE])
+        self.assertGreater(h["grace_sessions_left"], WARN)
+
+    def test_no_past_report_at_all_gets_no_grace(self):
+        # CRWV-shaped: no gating assertions whatsoever -- confirmed-only
+        # inferred grace requires a confirmed past date to infer from.
+        h = self._health([])
+        self.assertFalse(h["healthy"])
+        self.assertEqual(h["coverage"], "none")
+        self.assertNotIn(FLAG_GRACE, h["flags"])
+
+    def test_estimated_past_date_gets_no_inferred_grace(self):
+        # Only CONFIRMED (never merely estimated) past dates qualify --
+        # unchanged owner rule from 7b-0.1.
+        h = self._health([A("ZZZZ", "2026-07-06", status="estimated")],
+                         on=date(2026, 7, 8))
+        self.assertFalse(h["healthy"])
+        self.assertEqual(h["coverage"], "none")
+        self.assertEqual(h["gate"], GATE_UNKNOWN)
+
+    def test_confirmed_future_date_takes_schedule_not_grace(self):
+        # A live future confirmed date always wins; the amendment never
+        # substitutes for actually knowing the next report.
+        h = self._health([A("ZZZZ", "2026-09-18")])
+        self.assertEqual(h["coverage"], "schedule")
+        self.assertNotIn(FLAG_GRACE, h["flags"])
 
     def test_no_assertions_is_unknown_missing_unhealthy(self):
         h = self._health([])

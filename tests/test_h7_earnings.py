@@ -3,7 +3,7 @@ report. Estimated dates are handled conservatively: the ban starts before the
 EARLIEST estimate for the symbol and stays on until past the LATEST."""
 
 import unittest
-from datetime import date
+from datetime import date, datetime
 
 from options_researcher.h7_earnings import (
     GATE_BANNED,
@@ -93,8 +93,11 @@ def _now():
 
 class TestEarningsGateTyped(unittest.TestCase):
     """Owner decision 2026-07-10: typed CLEAR|BANNED|UNKNOWN gate. UNKNOWN
-    always fails closed. Grace starts ONLY from a verified occurred report;
-    expired estimates and stale scheduled dates never start it."""
+    always fails closed. Grace starts from a verified occurred report OR
+    (owner amendment 2026-07-24, H7_POST_REPORT_GRACE_DAYS) is INFERRED from
+    a passed CONFIRMED report date alone, for 45 calendar days, with no
+    occurred proof required. Expired ESTIMATES (never confirmed) and dates
+    beyond either grace window never start/extend it."""
 
     def test_no_assertions_is_unknown(self):
         state, _ = earnings_gate("ZZZZ", date(2026, 7, 8), [], known_as_of=_now())
@@ -140,11 +143,51 @@ class TestEarningsGateTyped(unittest.TestCase):
         state, _ = earnings_gate("ZZZZ", date(2026, 7, 8), rows, known_as_of=_now())
         self.assertEqual(state, GATE_UNKNOWN)
 
-    def test_passed_confirmed_without_occurrence_is_unknown(self):
-        # a confirmed schedule that passed with no occurred record: UNKNOWN
+    def test_passed_confirmed_without_occurrence_is_clear_within_post_report_grace(self):
+        # Owner amendment 2026-07-24 (H7_POST_REPORT_GRACE_DAYS): a
+        # confirmed schedule that passed 7 days ago, still with no occurred
+        # record, is now INFERRED clear -- this is the NOW-shaped case that
+        # motivated the amendment (reported 2026-07-22, source health
+        # UNHEALTHY by 2026-07-24 under the pre-amendment rule).
         rows = [A("ZZZZ", "2026-07-01")]
-        state, _ = earnings_gate("ZZZZ", date(2026, 7, 8), rows, known_as_of=_now())
+        state, reason = earnings_gate("ZZZZ", date(2026, 7, 8), rows, known_as_of=_now())
+        self.assertEqual(state, GATE_CLEAR)
+        self.assertIn("Inference", reason)
+
+    def test_passed_confirmed_beyond_post_report_grace_is_unknown(self):
+        # 50 days past a confirmed date with no occurred record: the
+        # inferred grace has also lapsed -- fails closed exactly as before.
+        rows = [A("ZZZZ", "2026-07-01", known="2026-05-01T00:00:00+00:00")]
+        state, _ = earnings_gate(
+            "ZZZZ", date(2026, 8, 20), rows,
+            known_as_of=datetime.fromisoformat("2026-08-20T00:00:00+00:00"))
         self.assertEqual(state, GATE_UNKNOWN)
+
+    def test_post_report_grace_day_45_clear_day_46_unknown(self):
+        # Mirrors test_grace_day_45_clear_day_46_unknown but for the
+        # INFERRED (confirmed-only) grace path, not a proven occurred record.
+        rows = [A("ZZZZ", "2026-05-01")]  # confirmed, default status
+        day45 = date(2026, 6, 15)   # (on - expected_date).days == 45
+        day46 = date(2026, 6, 16)
+        self.assertEqual(
+            earnings_gate("ZZZZ", day45, rows, known_as_of=_now())[0], GATE_CLEAR)
+        self.assertEqual(
+            earnings_gate("ZZZZ", day46, rows, known_as_of=_now())[0], GATE_UNKNOWN)
+
+    def test_no_past_report_at_all_gets_no_inferred_grace(self):
+        # CRWV-shaped: "NO GATING ASSERTIONS" at all -- no confirmed date to
+        # infer from, so no grace either. Stays UNKNOWN exactly as before.
+        state, reason = earnings_gate("ZZZZ", date(2026, 7, 8), [], known_as_of=_now())
+        self.assertEqual(state, GATE_UNKNOWN)
+        self.assertEqual(reason, "no gating point-in-time assertions for symbol")
+
+    def test_confirmed_future_date_still_wins_over_inferred_grace(self):
+        # A confirmed FUTURE date takes the ordinary "next report known"
+        # path; the amendment never overrides a live schedule.
+        rows = [A("ZZZZ", "2026-09-18")]
+        state, reason = earnings_gate("ZZZZ", date(2026, 7, 8), rows, known_as_of=_now())
+        self.assertEqual(state, GATE_CLEAR)
+        self.assertNotIn("Inference", reason)
 
     def test_point_in_time_filter_hides_later_knowledge(self):
         from datetime import datetime
