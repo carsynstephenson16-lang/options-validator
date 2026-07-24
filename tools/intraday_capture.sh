@@ -47,26 +47,41 @@ if [ "$CAPTURE_BRANCH" != "main" ]; then
   exit 1
 fi
 
-# Self-select the session_tag nearest the current wall clock. An empty
-# result (outside every window's tolerance, e.g. a LaunchAgent firing late
-# after the machine woke from sleep) is a benign skip, not an error --
-# tools/intraday_capture.sh is meant to be safe to invoke opportunistically.
-TAG="$("$UV" run python -c '
+# Self-select the session_tag nearest the current wall clock. "No window is
+# near" (outside every tolerance, e.g. a LaunchAgent firing late after the
+# machine woke from sleep) is a benign skip, not an error -- this script is
+# meant to be safe to invoke opportunistically.
+#
+# BANNER-POLLUTION GUARD (same class as the 2026-07-23 H8 fix): LumiBot
+# v4.5.63 + python-dotenv print import-time INFO banner lines to stdout on
+# `uv run python -c ...`, so the raw command substitution is NOT just the
+# answer -- it's banner lines followed by the answer. Filter it the same
+# way tools/daily_ritual.sh:82 filters AS_OF: pipe through a strict
+# whitelist regex and take the last match. Unlike AS_OF (which has no
+# legitimate empty value), "no window near" IS legitimate here, so the
+# python side prints an explicit "NONE" sentinel rather than an empty
+# line -- an empty line is ambiguous between "prints '' on purpose" and
+# "banner pollution ate the real answer," but "NONE" surviving the
+# whitelist is unambiguous either way: a truly EMPTY filtered result now
+# means only one thing -- the output was unparseable -- and that always
+# refuses loudly rather than silently skipping.
+TAG_RAW="$("$UV" run python -c '
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from options_researcher.intraday_capture import nearest_session_tag
 now_ny = datetime.now(ZoneInfo("America/New_York"))
-print(nearest_session_tag(now_ny) or "")
+print(nearest_session_tag(now_ny) or "NONE")
 ' 2>&1)"
 TAG_RC=$?
-if [ "$TAG_RC" -ne 0 ]; then
-  crit "could not resolve a session_tag from the wall clock -- see output above:"
-  echo "$TAG"
+TAG="$(echo "$TAG_RAW" | grep -Eo '^(open_auction|open|midmorning|midday|preclose|NONE)$' | tail -1)"
+if [ "$TAG_RC" -ne 0 ] || [ -z "$TAG" ]; then
+  crit "could not resolve a session_tag from the wall clock (nonzero exit, or unparseable/banner-polluted output) -- raw output:"
+  echo "$TAG_RAW"
   echo "=== summary ==="
   printf "%b" "$SUMMARY"
   exit 1
 fi
-if [ -z "$TAG" ]; then
+if [ "$TAG" = "NONE" ]; then
   note "no scheduled capture window is near the current wall clock -- skipping (benign)"
   echo "=== summary ==="
   printf "%b" "$SUMMARY"
@@ -78,12 +93,21 @@ note "session_tag: ${TAG}"
 CAP_OUT="$("$UV" run python -m options_researcher.intraday_capture --session-tag "$TAG" 2>&1)"
 CAP_RC=$?
 echo "$CAP_OUT"
-case "$CAP_RC" in
-  0) note "intraday_capture (${TAG}): OK -- $(echo "$CAP_OUT" | grep -m1 '^coverage:')" ;;
-  1) crit "intraday_capture (${TAG}): REFUSED (exit 1) -- see output above" ;;
-  2) crit "intraday_capture (${TAG}): RECEIPT CONFLICT (exit 2) -- see output above" ;;
-  *) crit "intraday_capture (${TAG}): unexpected exit ${CAP_RC}" ;;
-esac
+# Evidence-based labeling, not exit-code guessing: options_researcher.
+# intraday_capture's own exit(2) (receipt conflict) collides with
+# argparse's exit(2) for a usage error (e.g. an invalid --session-tag), so
+# an exit code ALONE cannot honestly distinguish them. Diagnose from the
+# module's own printed lines (main() always prints one of these), and only
+# fall back to a generic label when nothing recognized is present.
+if [ "$CAP_RC" -eq 0 ]; then
+  note "intraday_capture (${TAG}): OK -- $(echo "$CAP_OUT" | grep -m1 '^coverage:')"
+elif echo "$CAP_OUT" | grep -q '^intraday_capture refused:'; then
+  crit "intraday_capture (${TAG}): REFUSED (exit ${CAP_RC}) -- $(echo "$CAP_OUT" | grep -m1 '^intraday_capture refused:')"
+elif echo "$CAP_OUT" | grep -q '^intraday_capture receipt CONFLICT'; then
+  crit "intraday_capture (${TAG}): RECEIPT CONFLICT (exit ${CAP_RC}) -- $(echo "$CAP_OUT" | grep -m1 '^intraday_capture receipt CONFLICT')"
+else
+  crit "intraday_capture (${TAG}): FAILED (exit ${CAP_RC}) -- unrecognized failure mode, see output above"
+fi
 
 echo "=== summary ==="
 printf "%b" "$SUMMARY"
