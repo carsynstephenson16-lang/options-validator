@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import logging
 import subprocess
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -13,6 +14,7 @@ from typing import Mapping, Sequence
 from options_researcher.robustness.models import ExperimentSpec, SpecValidationError
 from options_researcher.robustness.registry import ExperimentRegistry
 from options_researcher.robustness.reporting import write_reports
+from options_researcher.robustness.return_matrix import DEFAULT_MATRIX_ROOT, ReturnMatrixWriter
 from options_researcher.robustness.screening import (
     LumibotFinalistAdapter,
     PanelObservation,
@@ -30,6 +32,8 @@ from options_researcher.robustness.statistics import (
     holm_step_down,
 )
 from options_researcher.robustness.walk_forward import WalkForwardSplitter
+
+logger = logging.getLogger(__name__)
 
 PANEL_FIELDS = {
     "panel_date",
@@ -274,6 +278,7 @@ def run_experiment(
     output_directory: str | Path,
     workers: int = 1,
     lumibot_adapter: LumibotFinalistAdapter | None = None,
+    matrix_root: str | Path = DEFAULT_MATRIX_ROOT,
 ) -> tuple[Path, Path, Path]:
     spec.require_registration(registration_records)
     if workers < 1 or workers > 8:
@@ -369,6 +374,28 @@ def run_experiment(
                 bid_ask_stress=bid_ask_stress,
             )
 
+    # Fail-open return-matrix capture (owner-directed 2026-07-24; see
+    # options_researcher/robustness/return_matrix.py). Every call site below
+    # is wrapped in its own try/except that logs and continues -- a capture
+    # failure must NEVER change parameter_nulls/adjusted/stability, never
+    # prevent record_completed_task/finish_run, and never prevent
+    # write_reports. This is an observability side-channel, not part of the
+    # registered computation.
+    matrix_writer: ReturnMatrixWriter | None = None
+    date_to_fold: dict[str, int] = {}
+    try:
+        matrix_writer = ReturnMatrixWriter(spec, matrix_root=matrix_root)
+        for fold in folds:
+            for panel_date in fold.test_dates:
+                date_to_fold[panel_date] = fold.fold
+    except Exception:
+        logger.warning(
+            "return-matrix writer setup failed for run %s; continuing without capture",
+            spec.run_id,
+            exc_info=True,
+        )
+        matrix_writer = None
+
     parameter_nulls: dict[str, tuple[float, float, tuple[float, float]]] = {}
     for index, parameter_id in enumerate(parameter_ids):
         aggregate_rows = oos_rows[parameter_id]
@@ -381,6 +408,21 @@ def run_experiment(
             permutations=spec.permutation_count,
             seed=spec.random_seed + index * 100_000,
         )
+        if matrix_writer is not None:
+            try:
+                matrix_writer.capture(
+                    parameter_id,
+                    aggregate_rows,
+                    bucket_count=bucket_count,
+                    date_to_fold=date_to_fold,
+                )
+            except Exception:
+                logger.warning(
+                    "return-matrix capture failed for parameter %s in run %s",
+                    parameter_id,
+                    spec.run_id,
+                    exc_info=True,
+                )
     adjusted = holm_step_down(
         {parameter_id: parameter_nulls[parameter_id][0] for parameter_id in parameter_ids},
         alpha=spec.multiple_testing_alpha,
@@ -436,6 +478,14 @@ def run_experiment(
                 "artifact_paths": [],
             },
         )
+
+    if matrix_writer is not None:
+        try:
+            matrix_writer.finalize()
+        except Exception:
+            logger.warning(
+                "return-matrix finalize failed for run %s", spec.run_id, exc_info=True
+            )
     registry.finish_run(spec.run_id)
 
     if lumibot_adapter is not None:
@@ -447,4 +497,4 @@ def run_experiment(
         }
         finalist = max(aggregate, key=lambda item: (aggregate[item], item))
         handoff_finalists(lumibot_adapter, (finalist,))
-    return write_reports(registry, spec.run_id, output_directory)
+    return write_reports(registry, spec.run_id, output_directory, matrix_root=matrix_root)

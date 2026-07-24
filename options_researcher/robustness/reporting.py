@@ -5,11 +5,24 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import os
 import tempfile
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
+import config
+from metrics import dsr, sample_moments
 from options_researcher.robustness.registry import ExperimentRegistry
+from options_researcher.robustness.return_matrix import (
+    DEFAULT_MATRIX_ROOT,
+    MANIFEST_NAME,
+    measured_trial_sr_stats,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -110,7 +123,66 @@ def _csv_text(tasks: list[dict[str, object]]) -> str:
     return output.getvalue()
 
 
-def _markdown_text(payload: dict[str, object]) -> str:
+def _governance_dsr_bullet(run_id: str, matrix_root: str | Path) -> str:
+    """Best-effort, NEVER-blocking read of the return-matrix manifest for one
+    additive Governance bullet (owner-directed 2026-07-24). Any failure --
+    missing matrix, malformed manifest, thin sample -- degrades to an honest
+    string; it never raises into write_reports and never touches the JSON or
+    CSV artifacts. See options_researcher/robustness/return_matrix.py and
+    docs/superpowers/specs/2026-07-24-robustness-return-matrix-addendum.md.
+    """
+    unavailable = (
+        "- DSR (measured-from-return-matrix): matrix unavailable; N=0 variants; "
+        "population = parameter-variant selection within this one experiment, "
+        "NOT the whole-program trial count; diagnostic only, never gates promotion."
+    )
+    try:
+        manifest_path = Path(matrix_root) / run_id / MANIFEST_NAME
+        if not manifest_path.exists():
+            return unavailable
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        parquet_path = manifest["output"]["path"]
+        mean_trial_sr, trial_sr_variance, n_trials = measured_trial_sr_stats(parquet_path)
+        frame = pd.read_parquet(parquet_path)
+        best_sr = float("-inf")
+        best_series: np.ndarray | None = None
+        for _parameter_id, group in frame.groupby("parameter_id"):
+            series = group.sort_values("panel_date")["cost_adjusted_return"].to_numpy(dtype=float)
+            if len(series) < 2:
+                continue
+            std = float(series.std(ddof=1))
+            if not np.isfinite(std) or std == 0.0:
+                continue
+            variant_sr = float(series.mean()) / std
+            if variant_sr > best_sr:
+                best_sr, best_series = variant_sr, series
+        if best_series is None or len(best_series) < config.DSR_MIN_T:
+            value_text = "INSUFFICIENT SAMPLE FOR DSR"
+        else:
+            skew, kurt = sample_moments(best_series)
+            value = dsr(
+                best_sr,
+                len(best_series),
+                skew,
+                kurt,
+                trial_sr_variance=trial_sr_variance,
+                n_trials=n_trials,
+                mean_trial_sr=mean_trial_sr,
+            )
+            value_text = f"{value:.4f}" if np.isfinite(value) else "nan"
+        return (
+            f"- DSR (measured-from-return-matrix): {value_text}; N={n_trials} variants; "
+            "population = parameter-variant selection within this one experiment, "
+            "NOT the whole-program trial count; diagnostic only, never gates promotion."
+        )
+    except Exception:
+        logger.warning(
+            "DSR governance bullet computation failed for run %s", run_id, exc_info=True
+        )
+        return unavailable
+
+
+def _markdown_text(payload: dict[str, object], governance_dsr_bullet: str) -> str:
     run = payload["run"]
     tasks = payload["tasks"]
     assert isinstance(run, dict)
@@ -191,6 +263,7 @@ def _markdown_text(payload: dict[str, object]) -> str:
             "- Fast-screen outputs are exploratory and display-only.",
             "- Lumibot remains the event-driven finalist validation path.",
             "- No production recommendation while governance blocks remain.",
+            governance_dsr_bullet,
             "",
         ]
     )
@@ -198,7 +271,11 @@ def _markdown_text(payload: dict[str, object]) -> str:
 
 
 def write_reports(
-    registry: ExperimentRegistry, run_id: str, output_directory: str | Path
+    registry: ExperimentRegistry,
+    run_id: str,
+    output_directory: str | Path,
+    *,
+    matrix_root: str | Path = DEFAULT_MATRIX_ROOT,
 ) -> tuple[Path, Path, Path]:
     output = Path(output_directory)
     payload = _report_payload(registry, run_id)
@@ -219,5 +296,6 @@ def write_reports(
         + "\n",
     )
     _atomic_write(csv_path, _csv_text(tasks))
-    _atomic_write(markdown_path, _markdown_text(payload))
+    governance_dsr_bullet = _governance_dsr_bullet(run_id, matrix_root)
+    _atomic_write(markdown_path, _markdown_text(payload, governance_dsr_bullet))
     return json_path, csv_path, markdown_path
