@@ -186,11 +186,20 @@ class EntryWindowTests(unittest.TestCase):
             self.assertEqual(state.report, CONFIRMED_REPORT)
 
     def test_before_and_after_window_are_out_of_window(self):
+        # Regression for the 2026-07-22 h8_forward receipt bug: the terminal
+        # OUT_OF_WINDOW fall-through dropped `report` even though a future
+        # confirmed report exists (evidence: reports/h8_forward/2026-07-22.json
+        # showed AMZN OUT_OF_WINDOW with "report": null despite AMZN's
+        # confirmed 2026-07-30 report / G0022 being on file). Both the early
+        # and late sessions below still have a future confirmed report, so
+        # `.report` must be populated, not None.
         rows = [assertion("PLTR", "2026-07-31")]
         early = entry_window_state("PLTR", date(2026, 7, 9), rows, known_as_of=KNOWN)
         self.assertEqual(early.state, "OUT_OF_WINDOW")
+        self.assertEqual(early.report, CONFIRMED_REPORT)
         late = entry_window_state("PLTR", date(2026, 7, 22), rows, known_as_of=KNOWN)
         self.assertEqual(late.state, "OUT_OF_WINDOW")
+        self.assertEqual(late.report, CONFIRMED_REPORT)
 
     def test_estimated_date_in_window_fails_closed(self):
         rows = [assertion("PLTR", "2026-07-31", status="estimated")]
