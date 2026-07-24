@@ -192,8 +192,14 @@ def register(hypothesis_id, decision_threshold, is_result, *, data_window,
         "is_result": safe_is_result,
         "oos_window": oos_window,
         "oos_result": None,
-        "deflated_sharpe": None,  # Phase-1B stub -- never computed in 1A
-        "pbo": None,              # Phase-1B stub -- never computed in 1A
+        # Phase-1B (2026-07-24): the ledger schema now accepts a fully-shaped
+        # deflated_sharpe dict (research/ledger.py:_require_deflated_sharpe),
+        # but register() itself has no per-trial SR series to deflate against
+        # -- DSR is a display/diagnostic layer computed at read time (see
+        # metrics.scoreboard()'s dsr_* kwargs and tools/score_backtest.py's
+        # --dsr-n-source flag), never written back into a run record here.
+        "deflated_sharpe": None,
+        "pbo": None,              # Phase-1B stub -- never computed in 1A; out of scope
         "notes": notes,
         "scope": scope,
     }
