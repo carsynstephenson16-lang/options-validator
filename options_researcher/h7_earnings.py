@@ -140,6 +140,15 @@ GATE_REASON_NO_ASSERTIONS = "no gating point-in-time assertions for symbol"
 GATE_REASON_GRACE_EXPIRED = ("next report unknown: no live future assertion "
                              "and no proven report within the grace window")
 GATE_REASON_CONFLICT_PREFIX = "conflicting"
+# Owner amendment 2026-07-24 (H7_POST_REPORT_GRACE_DAYS, docs/superpowers/
+# 2026-07-24-h7-amendment-post-report-grace.md): distinct from the PROVEN
+# occurred-based grace above -- this is an INFERENCE from a passed CONFIRMED
+# report date alone, with no occurred/verified record. Reported for
+# traceability; never string-matched as a failure reason.
+GATE_REASON_POST_REPORT_GRACE_INFERRED = (
+    "next report unknown; inferred no imminent earnings from a passed "
+    "confirmed report date within the post-report grace window "
+    "(Inference, not a proven occurred record)")
 
 
 def _utc(value: str, ctx: str):
@@ -401,12 +410,17 @@ def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
                   known_as_of) -> tuple[str, str]:
     """(state, reason) with state CLEAR | BANNED | UNKNOWN.
 
-    CLEAR requires the information set at `known_as_of` to either identify
-    the next scheduled report (a live estimated/confirmed assertion dated
-    on/after `on`) or PROVE a realized report (status=occurred) within the
-    previous H7_EARNINGS_POST_REPORT_GRACE_D calendar days. Expired
-    estimates and passed schedules grant nothing. Multiple unresolved dates
-    for one symbol/fiscal period are a CONFLICT -> UNKNOWN (owner decision
+    CLEAR requires the information set at `known_as_of` to identify the next
+    scheduled report (a live estimated/confirmed assertion dated on/after
+    `on`), PROVE a realized report (status=occurred) within the previous
+    H7_EARNINGS_POST_REPORT_GRACE_D calendar days, or -- owner amendment
+    2026-07-24 -- INFER no imminent earnings from a passed CONFIRMED (not
+    merely estimated) report date within H7_POST_REPORT_GRACE_DAYS calendar
+    days, with no occurred proof required. The inferred path never fires
+    while a live future assertion exists (that always wins) and never fires
+    for a symbol with no confirmed report at all -- an expired ESTIMATE still
+    grants nothing (unchanged owner rule). Multiple unresolved dates for one
+    symbol/fiscal period are a CONFLICT -> UNKNOWN (owner decision
     2026-07-11: never silently trust either source, never just ban both).
     UNKNOWN always fails closed."""
     sym = symbol.upper()
@@ -433,7 +447,18 @@ def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
     occurred_recent = [a for a in view
                        if a["status"] == "occurred"
                        and timedelta(0) <= (on - report_date(a)) <= grace]
-    if not future and not occurred_recent:
+    # Owner amendment 2026-07-24 (H7_POST_REPORT_GRACE_DAYS): the newest
+    # CONFIRMED (never merely estimated) report date that has already
+    # passed, absent any live future date, infers "no imminent earnings"
+    # for the grace window even without a proven occurred record.
+    post_report_grace = timedelta(days=config.H7_POST_REPORT_GRACE_DAYS)
+    confirmed_past = [a["expected_date"] for a in live
+                      if a["status"] == "confirmed" and a["expected_date"] < on]
+    newest_confirmed_past = max(confirmed_past, default=None)
+    inferred_grace = (
+        newest_confirmed_past is not None
+        and (on - newest_confirmed_past) <= post_report_grace)
+    if not future and not occurred_recent and not inferred_grace:
         return GATE_UNKNOWN, GATE_REASON_GRACE_EXPIRED
     rec = {
         "confirmed": [report_date(a) for a in view
@@ -443,6 +468,8 @@ def earnings_gate(symbol: str, on: date, assertions: list[dict], *,
     }
     if any(start <= on <= end for start, end in _ban_windows(rec)):
         return GATE_BANNED, "inside a pre-report ban window"
+    if not future and not occurred_recent and inferred_grace:
+        return GATE_CLEAR, GATE_REASON_POST_REPORT_GRACE_INFERRED
     return GATE_CLEAR, "next report known or realized report within grace"
 
 

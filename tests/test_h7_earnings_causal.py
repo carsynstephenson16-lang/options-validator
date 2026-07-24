@@ -62,13 +62,34 @@ class TestCausalGateProofs(unittest.TestCase):
                                  known_as_of=AT("2026-07-08T23:59:59+00:00"))
         self.assertEqual(state, GATE_UNKNOWN)
 
-    def test_4_scheduled_report_passing_without_occurrence_becomes_unknown(self):
+    def test_4_scheduled_report_passing_without_occurrence_stays_clear_within_post_report_grace(self):
+        # AMENDED 2026-07-24 (owner amendment, H7_POST_REPORT_GRACE_DAYS;
+        # docs/superpowers/2026-07-24-h7-amendment-post-report-grace.md).
+        # As originally written under H7_OWNER_DECISIONS_7B01 (2026-07-10)
+        # this checklist item asserted GATE_UNKNOWN the day after a
+        # confirmed report passed with no occurred record -- the NOW case
+        # (reported 2026-07-22, already UNHEALTHY [MISSING] and refusing the
+        # whole registered entry door by 2026-07-24) showed that proof
+        # requirement makes the real door refuse over a name that had simply
+        # reported. The owner now infers "no imminent earnings" from that
+        # same passed CONFIRMED date for 45 calendar days, no occurred proof
+        # required. See test_4b below for where it still goes UNKNOWN.
         rows = [A("ZZZZ", "2026-07-01")]   # confirmed, then... silence
         before, _ = earnings_gate("ZZZZ", date(2026, 6, 20), rows,
                                   known_as_of=AT("2026-06-20T23:59:59+00:00"))
         after, _ = earnings_gate("ZZZZ", date(2026, 7, 2), rows,
                                  known_as_of=AT("2026-07-02T23:59:59+00:00"))
         self.assertEqual(before, GATE_CLEAR)
+        self.assertEqual(after, GATE_CLEAR)
+
+    def test_4b_scheduled_report_passing_without_occurrence_still_expires_eventually(self):
+        # The ORIGINAL checklist-4 UNKNOWN still holds once the 45-day
+        # inferred grace has also lapsed -- unproven silence eventually
+        # fails closed again, just later than before the 2026-07-24
+        # amendment (was day+1, is now day 46).
+        rows = [A("ZZZZ", "2026-07-01")]
+        after, _ = earnings_gate("ZZZZ", date(2026, 8, 20), rows,
+                                 known_as_of=AT("2026-08-20T23:59:59+00:00"))
         self.assertEqual(after, GATE_UNKNOWN)
 
     def test_5_day_45_covered_day_46_unknown_absent_future_assertion(self):

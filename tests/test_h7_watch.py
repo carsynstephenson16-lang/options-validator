@@ -6,7 +6,7 @@ its own. Earnings coverage and the paper book fail CLOSED."""
 import io
 import unittest
 from contextlib import redirect_stdout
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest import mock
 
 import pandas as pd
@@ -127,6 +127,27 @@ class TestFailClosedStates(unittest.TestCase):
         # a passed estimate never marked occurred grants nothing (owner rule)
         rows = [_assertion("XXXX", "2026-06-10", status="estimated")]
         card = _card(assertions=rows)
+        self.assertEqual(card["lane_a"]["state"], "EARNINGS-UNKNOWN")
+
+    def test_confirmed_past_within_post_report_grace_is_entry_eligible(self):
+        # Owner amendment 2026-07-24 (H7_POST_REPORT_GRACE_DAYS): the
+        # NOW-shaped case -- a confirmed report date that passed 7 days ago
+        # with no occurred record yet must stay entry-known (not
+        # EARNINGS-UNKNOWN). The watcher's lane layer carries no earnings
+        # logic of its own -- it shares earnings_gate() with source health,
+        # so it inherits the amendment automatically.
+        rows = [_assertion("XXXX", "2026-07-01")]   # 7 days before TODAY
+        card = _card(assertions=rows)
+        self.assertEqual(card["earnings_gate"], "CLEAR")
+        self.assertEqual(card["lane_a"]["state"], "ENTRY-OK")
+
+    def test_confirmed_past_beyond_post_report_grace_is_earnings_unknown(self):
+        # 46 days past a confirmed-but-unproven report: fails closed again,
+        # exactly like the pre-amendment behavior.
+        stale = (TODAY - timedelta(days=46)).isoformat()
+        rows = [_assertion("XXXX", stale)]
+        card = _card(assertions=rows)
+        self.assertEqual(card["earnings_gate"], "UNKNOWN")
         self.assertEqual(card["lane_a"]["state"], "EARNINGS-UNKNOWN")
 
     def test_banned_symbol_reports_ban_not_entry(self):

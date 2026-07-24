@@ -440,6 +440,22 @@ H7B_RV_MIN_HISTORY_D = 106       # "min 6mo listed": 126 sessions minus the RV w
 # Day grace+1 without a valid future assertion = EARNINGS-UNKNOWN (fails
 # closed). Expired estimates / old scheduled dates NEVER start the grace.
 H7_EARNINGS_POST_REPORT_GRACE_D = 45
+# Owner-directed amendment 2026-07-24 (docs/superpowers/2026-07-24-h7-amendment-
+# post-report-grace.md): the PROVEN grace above requires a distinct occurred/
+# verified record, which in practice lags a real report by days-to-weeks (the
+# 8-K/press confirmation has to be sourced and promoted). NOW reported
+# 2026-07-22 and was already UNHEALTHY [MISSING] by 2026-07-24 -- the real
+# entry door refused the whole registered cohort over a name that had simply
+# reported, not a data problem. Owner-typed 2026-07-24 (verbatim intent: "if
+# a company reports earnings wait 1.5 months to get the new earnings date so
+# the company has time") = 45 calendar days. This grants an INFERRED
+# (Inference, not Test-verified) CLEAR from a passed CONFIRMED report date
+# alone -- US quarterly reporters cannot plausibly report again within 45
+# days, so "no imminent earnings" is inferable without a confirmed next date.
+# It never substitutes for the PROVEN occurred-based grace, never re-admits a
+# name with no past report at all, and never touches registered cohort
+# membership. See earnings_gate() in options_researcher/h7_earnings.py.
+H7_POST_REPORT_GRACE_DAYS = 45  # owner-typed 2026-07-24 (1.5 months)
 H7_EARNINGS_ESTIMATE_CLUSTER_D = 14   # estimates within this many days refer
 #                                       to the same report (frozen 7b-0.1;
 #                                       was module-private in h7_earnings.py)
