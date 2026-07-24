@@ -7,6 +7,7 @@ the repo's real reports/intraday_capture or .cache/intraday.
 """
 import glob
 import inspect
+import json
 import os
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 from zoneinfo import ZoneInfo
 
@@ -22,7 +24,9 @@ import pandas as pd
 import config
 from options_researcher import intraday_capture as ic
 from options_researcher import live_quotes as lq
+from options_researcher.black_scholes import bs_price as _bs_price
 from options_researcher.chains import third_friday
+from research.hashing import config_hash
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -522,19 +526,33 @@ class CaptureIntegrationTests(unittest.TestCase):
             self.assertEqual(row["chain_contracts_admitted"], {"C": 1, "P": 1})
 
     def test_greeks_denied_records_honest_gap_and_core_still_works(self):
+        # 2026-07-24 (IV-solver-capture): a greeks denial now attempts the
+        # solver fallback before recording an honest gap -- deterministically
+        # force that fallback to ALSO fail (no rate curve coverage) so this
+        # test's outcome never depends on the real repo's Treasury CSV
+        # content or its validity window. See SolverIvCaptureIntegrationTests
+        # for the solver-SUCCESS paths.
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
                             greeks_raises={"VST", "CEG"})
         probe = _probe_realistic_entitlement(NOW_NY.astimezone(timezone.utc))
-        rc, receipt, *_ = self._run(client, probe=probe)
+        with mock.patch.object(
+                ic.data_rates, "risk_free_rate",
+                side_effect=ic.data_rates.MissingRateError("no curve")):
+            rc, receipt, *_ = self._run(client, probe=probe)
         self.assertEqual(rc, 0)
         for sym in UNIVERSE:
             row = receipt["names"][sym]
             self.assertEqual(row["status"], "ok")
             self.assertIsNone(row["atm_iv"])
             self.assertIsNone(row["iv_rank_preview"])
+            self.assertIsNone(row["iv_source"])
+            self.assertIsNone(row["iv_label"])
             self.assertIn("not entitled: option greeks endpoint requires "
                           "professional tier", row["greeks_note"])
             self.assertIn("PERMISSION_DENIED", row["greeks_note"])
+            # the solver fallback's specific failure reason is recorded too
+            # -- never a blanket label in place of the greeks note.
+            self.assertIn("solver: no rate curve coverage", row["greeks_note"])
             # the entitled quotes+OI core is untouched by the greeks gap
             self.assertEqual(row["chain_contracts_admitted"], {"C": 1, "P": 1})
             self.assertIsNotNone(row["min_spread_pct_observed"])
@@ -546,11 +564,16 @@ class CaptureIntegrationTests(unittest.TestCase):
     def test_realistic_2026_07_24_production_entitlement_end_to_end(self):
         # Both denials at once, exactly as the real 09:31 run saw them:
         # stock_snapshot_quote AND option_snapshot_greeks_all both
-        # PERMISSION_DENIED, expirations/quote/OI all fine.
+        # PERMISSION_DENIED, expirations/quote/OI all fine. The solver
+        # fallback is deterministically forced to fail too (see the test
+        # above) so this stays independent of real Treasury CSV content.
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
                             stock_raises=True, greeks_raises={"VST", "CEG"})
         probe = _probe_realistic_entitlement(NOW_NY.astimezone(timezone.utc))
-        rc, receipt, *_ = self._run(client, probe=probe)
+        with mock.patch.object(
+                ic.data_rates, "risk_free_rate",
+                side_effect=ic.data_rates.MissingRateError("no curve")):
+            rc, receipt, *_ = self._run(client, probe=probe)
         self.assertEqual(rc, 0)
         covered = sum(1 for n in receipt["names"].values() if n["status"] == "ok")
         self.assertEqual(covered, len(UNIVERSE))
@@ -558,6 +581,7 @@ class CaptureIntegrationTests(unittest.TestCase):
             row = receipt["names"][sym]
             self.assertEqual(row["spot_source"], "parity_fallback")
             self.assertIsNone(row["atm_iv"])
+            self.assertIsNone(row["iv_source"])
             self.assertEqual(row["chain_contracts_admitted"], {"C": 1, "P": 1})
             self.assertEqual(row["chain_contracts_total"], {"C": 2, "P": 1})
 
@@ -642,6 +666,288 @@ class ReceiptImmutabilityTests(unittest.TestCase):
                                      receipt_dir=receipt_dir)
         self.assertEqual(rc, 2)
         self.assertEqual(out.read_text(), '{"not": "the same content"}')  # untouched
+
+
+# ---------------------------------------------------------------------------
+# Solver-derived ATM IV (2026-07-24, IV-solver-capture)
+# ---------------------------------------------------------------------------
+
+class SolverAtmIvTests(unittest.TestCase):
+    """Direct unit tests of _solver_atm_iv: contract selection, the bounded
+    delta fixed-point reselection, and every specific failure reason."""
+
+    def setUp(self):
+        self.today = date(2026, 7, 15)
+        self.monthly = third_friday(2026, 8)  # 37 DTE from self.today
+        rate_patcher = mock.patch.object(
+            ic.data_rates, "risk_free_rate",
+            return_value=SimpleNamespace(rate=0.04))
+        div_patcher = mock.patch.object(
+            ic.data_rates, "dividend_yield",
+            return_value=SimpleNamespace(yield_rate=0.01))
+        self.addCleanup(rate_patcher.stop)
+        self.addCleanup(div_patcher.stop)
+        rate_patcher.start()
+        div_patcher.start()
+
+    def test_reselects_to_a_neighbor_with_closer_to_050_delta(self):
+        # spot=151.0: the nearest-to-spot strike (150.0, true sigma 0.20)
+        # has delta -0.4266 (gap 0.0734 from 0.50); its neighbor (152.5,
+        # true sigma 0.25) has delta -0.5179 (gap 0.0179) -- strictly
+        # closer. Values confirmed by direct computation while writing
+        # this test. The fixed-point reselection must pick the neighbor.
+        spot = 151.0
+        exp_iso = self.monthly.isoformat()
+        rows = [
+            {"expiration": exp_iso, "strike": 147.5, "right": "P",
+             "bid": 1.28967453449129, "ask": 1.28967453449129},
+            {"expiration": exp_iso, "strike": 150.0, "right": "P",
+             "bid": 3.129947148330899, "ask": 3.129947148330899},
+            {"expiration": exp_iso, "strike": 152.5, "right": "P",
+             "bid": 5.340925499570034, "ask": 5.340925499570034},
+        ]
+        chain = pd.DataFrame(rows)
+        iv, reason = ic._solver_atm_iv(chain, spot, "VST", self.monthly, self.today)
+        self.assertIsNone(reason)
+        self.assertAlmostEqual(iv, 0.25, places=3)
+
+    def test_seed_wins_when_it_already_has_the_closest_delta(self):
+        # ATM seed with symmetric neighbors -- the seed's own delta is
+        # already closest to 0.50, so reselection must be a no-op.
+        spot = 150.0
+        exp_iso = self.monthly.isoformat()
+        t = (self.monthly - self.today).days / 365.0
+        rows = []
+        for strike, sigma in ((145.0, 0.20), (150.0, 0.20), (155.0, 0.20)):
+            price = _bs_price(S=spot, K=strike, t=t, r=0.04, sigma=sigma,
+                              right="P", q=0.01)
+            rows.append({"expiration": exp_iso, "strike": strike, "right": "P",
+                        "bid": price, "ask": price})
+        chain = pd.DataFrame(rows)
+        iv, reason = ic._solver_atm_iv(chain, spot, "VST", self.monthly, self.today)
+        self.assertIsNone(reason)
+        self.assertAlmostEqual(iv, 0.20, places=3)
+
+    def test_expired_reports_specific_reason(self):
+        past = self.today - timedelta(days=400)
+        iv, reason = ic._solver_atm_iv(pd.DataFrame(), 150.0, "VST", past, self.today)
+        self.assertIsNone(iv)
+        self.assertEqual(reason, "solver: expired")
+
+    def test_no_rate_curve_coverage_reports_specific_reason(self):
+        with mock.patch.object(
+                ic.data_rates, "risk_free_rate",
+                side_effect=ic.data_rates.MissingRateError("no curve")):
+            iv, reason = ic._solver_atm_iv(pd.DataFrame(), 150.0, "VST",
+                                           self.monthly, self.today)
+        self.assertIsNone(iv)
+        self.assertEqual(reason, "solver: no rate curve coverage")
+
+    def test_no_dividend_data_reports_specific_reason(self):
+        with mock.patch.object(
+                ic.data_rates, "dividend_yield",
+                side_effect=ic.data_rates.MissingDividendYieldError("no div")):
+            iv, reason = ic._solver_atm_iv(pd.DataFrame(), 150.0, "VST",
+                                           self.monthly, self.today)
+        self.assertIsNone(iv)
+        self.assertEqual(reason, "solver: no dividend data for VST")
+
+    def test_no_quotes_at_selected_contract_reports_specific_reason(self):
+        chain = pd.DataFrame(columns=["expiration", "strike", "right", "bid", "ask"])
+        iv, reason = ic._solver_atm_iv(chain, 150.0, "VST", self.monthly, self.today)
+        self.assertIsNone(iv)
+        self.assertEqual(reason, "solver: no quotes at selected contract")
+
+    def test_no_european_bs_root_reports_specific_reason(self):
+        exp_iso = self.monthly.isoformat()
+        # Deep ITM put priced far below its own intrinsic value: no root.
+        chain = pd.DataFrame([{"expiration": exp_iso, "strike": 500.0,
+                              "right": "P", "bid": 0.01, "ask": 0.01}])
+        iv, reason = ic._solver_atm_iv(chain, 150.0, "VST", self.monthly, self.today)
+        self.assertIsNone(iv)
+        self.assertEqual(reason, "solver: no_european_bs_root")
+
+
+# ---------------------------------------------------------------------------
+# solver_iv_calibration_gate (2026-07-24, IV-solver-capture)
+# ---------------------------------------------------------------------------
+
+class SolverIvCalibrationGateTests(unittest.TestCase):
+    def test_missing_receipt_dir_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "does_not_exist"
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", str(missing)):
+                self.assertFalse(ic.solver_iv_calibration_gate("VST"))
+
+    def test_fresh_matching_passed_symbol_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                receipt = {
+                    "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "config_hash": config_hash(),
+                    "names_passed": ["VST"],
+                }
+                (Path(tmp) / "2026-07-24.json").write_text(json.dumps(receipt))
+                self.assertTrue(ic.solver_iv_calibration_gate("VST"))
+                self.assertFalse(ic.solver_iv_calibration_gate("CEG"))
+
+    def test_stale_receipt_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                old = (datetime.now(timezone.utc)
+                      - timedelta(days=config.IV_CALIBRATION_MAX_AGE_DAYS + 5))
+                receipt = {
+                    "run_at_utc": old.isoformat(),
+                    "config_hash": config_hash(),
+                    "names_passed": ["VST"],
+                }
+                (Path(tmp) / "2026-06-01.json").write_text(json.dumps(receipt))
+                self.assertFalse(ic.solver_iv_calibration_gate("VST"))
+
+    def test_config_hash_mismatch_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                receipt = {
+                    "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "config_hash": "stale-hash-from-before-a-config-change",
+                    "names_passed": ["VST"],
+                }
+                (Path(tmp) / "2026-07-24.json").write_text(json.dumps(receipt))
+                self.assertFalse(ic.solver_iv_calibration_gate("VST"))
+
+    def test_symbol_not_in_names_passed_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                receipt = {
+                    "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "config_hash": config_hash(),
+                    "names_passed": ["CEG"],
+                }
+                (Path(tmp) / "2026-07-24.json").write_text(json.dumps(receipt))
+                self.assertFalse(ic.solver_iv_calibration_gate("VST"))
+
+    def test_malformed_receipt_fails_closed_without_raising(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                (Path(tmp) / "2026-07-24.json").write_text("{not valid json")
+                self.assertFalse(ic.solver_iv_calibration_gate("VST"))
+
+    def test_newest_receipt_wins_when_several_exist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                older = {
+                    "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "config_hash": config_hash(), "names_passed": ["VST"],
+                }
+                newer = {
+                    "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "config_hash": config_hash(), "names_passed": ["CEG"],
+                }
+                (Path(tmp) / "2026-07-01.json").write_text(json.dumps(older))
+                (Path(tmp) / "2026-07-24.json").write_text(json.dumps(newer))
+                # newest (lexicographically-last filename) is 2026-07-24,
+                # which passes CEG, not VST.
+                self.assertFalse(ic.solver_iv_calibration_gate("VST"))
+                self.assertTrue(ic.solver_iv_calibration_gate("CEG"))
+
+
+# ---------------------------------------------------------------------------
+# Solver splice -- capture integration (2026-07-24, IV-solver-capture)
+# ---------------------------------------------------------------------------
+
+class SolverIvCaptureIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        lq._reset_memos()
+
+    def _run(self, client, *, session_tag="midmorning", now_ny=None,
+             universe=UNIVERSE, probe=None):
+        now_ny = now_ny or NOW_NY
+        probe = probe or _probe_realistic_entitlement(now_ny.astimezone(timezone.utc))
+        cache_dir, receipt_dir = _tmp_dirs()
+        with mock.patch.object(lq, "load_latest_probe",
+                               lambda dir=lq.PROBE_DIR: probe):
+            rc, receipt = ic.capture(
+                session_tag, client=client, now_ny=now_ny, force=False,
+                universe=universe, cache_dir=cache_dir, receipt_dir=receipt_dir)
+        return rc, receipt
+
+    def test_solver_success_and_gate_pass_splices_rank(self):
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
+                            greeks_raises={"VST", "CEG"})
+        history = [0.20 + 0.001 * i for i in range(150)]  # >= PCT_MIN_OBS
+        with tempfile.TemporaryDirectory() as calib_dir:
+            # config_hash() hashes ALL uppercase config constants, including
+            # IV_CALIBRATION_RECEIPT_DIR itself -- so the receipt's stored
+            # hash must be computed INSIDE the same patched config state the
+            # gate will later re-hash and compare against, or the patch's
+            # own directory value silently mismatches the receipt.
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", calib_dir):
+                calibration_receipt = {
+                    "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "config_hash": config_hash(),
+                    "names_passed": ["VST", "CEG"],
+                }
+                (Path(calib_dir) / "2026-07-24.json").write_text(
+                    json.dumps(calibration_receipt))
+                with mock.patch.object(ic.data_rates, "risk_free_rate",
+                                       return_value=SimpleNamespace(rate=0.04)), \
+                     mock.patch.object(ic.data_rates, "dividend_yield",
+                                       return_value=SimpleNamespace(yield_rate=0.0)), \
+                     mock.patch.object(lq, "_load_iv_history", return_value=history):
+                    rc, receipt = self._run(client)
+        self.assertEqual(rc, 0)
+        row = receipt["names"]["VST"]
+        self.assertEqual(row["status"], "ok")
+        self.assertEqual(row["iv_source"], "bs_solver")
+        self.assertIsNotNone(row["atm_iv"])
+        self.assertIsNotNone(row["iv_rank_preview"])
+        self.assertIsNone(row["iv_label"])
+        self.assertIsNone(row["greeks_note"])
+
+    def test_solver_success_no_receipt_nulls_rank_with_label(self):
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
+                            greeks_raises={"VST", "CEG"})
+        with tempfile.TemporaryDirectory() as calib_dir:
+            with mock.patch.object(ic.data_rates, "risk_free_rate",
+                                   return_value=SimpleNamespace(rate=0.04)), \
+                 mock.patch.object(ic.data_rates, "dividend_yield",
+                                   return_value=SimpleNamespace(yield_rate=0.0)), \
+                 mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", calib_dir):
+                # No receipt written -- calib_dir stays empty.
+                rc, receipt = self._run(client)
+        self.assertEqual(rc, 0)
+        row = receipt["names"]["VST"]
+        self.assertEqual(row["iv_source"], "bs_solver")
+        self.assertIsNotNone(row["atm_iv"])
+        self.assertIsNone(row["iv_rank_preview"])
+        self.assertEqual(row["iv_label"], "solver-derived, not rank-comparable")
+        self.assertIsNone(row["greeks_note"])
+
+    def test_solver_failure_records_specific_reason_string(self):
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
+                            greeks_raises={"VST", "CEG"})
+        with mock.patch.object(
+                ic.data_rates, "risk_free_rate",
+                side_effect=ic.data_rates.MissingRateError("no curve")):
+            rc, receipt = self._run(client)
+        self.assertEqual(rc, 0)
+        row = receipt["names"]["VST"]
+        self.assertIsNone(row["iv_source"])
+        self.assertIsNone(row["atm_iv"])
+        self.assertIsNone(row["iv_rank_preview"])
+        self.assertIn("solver: no rate curve coverage", row["greeks_note"])
+        self.assertIn("not entitled", row["greeks_note"])
+
+    def test_greeks_success_path_is_unaffected_by_solver_wiring(self):
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0})  # greeks OK
+        rc, receipt = self._run(
+            client, probe=_probe(NOW_NY.astimezone(timezone.utc)))
+        self.assertEqual(rc, 0)
+        row = receipt["names"]["VST"]
+        self.assertEqual(row["iv_source"], "greeks_endpoint")
+        self.assertEqual(row["atm_iv"], 0.30)
+        self.assertIsNone(row["iv_label"])
+        self.assertIsNone(row["greeks_note"])
 
 
 # ---------------------------------------------------------------------------
