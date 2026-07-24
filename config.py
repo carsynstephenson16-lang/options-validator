@@ -175,6 +175,29 @@ MIN_LOSSES_FOR_VERDICT = 10
 BOOTSTRAP_SAMPLES      = 5_000        # for the expectancy confidence interval
 
 # ---------------------------------------------------------------------------
+# PSR / DSR (Probabilistic / Deflated Sharpe Ratio) -- Phase-1B DISPLAY/
+# DIAGNOSTIC layer (metrics.py: sample_moments/psr/expected_max_sr/dsr;
+# research/ledger.py: deflated_sharpe schema). This completes work Phase-1A
+# explicitly deferred to 1B -- see
+# docs/superpowers/specs/2026-07-01-research-integrity-foundation-design.md.
+# DSR/PSR are diagnostics, NEVER certifiers: nothing gates, grades, ranks, or
+# triggers on them, and the loss-gated verdict above is untouched.
+# LLM-proposed, owner-delegated 2026-07-24: DSR_MIN_T is a minimum
+# return-observation-count floor below which PSR/DSR are unreliable enough
+# to render as the string "INSUFFICIENT SAMPLE FOR DSR" instead of a number.
+# Scale chosen to match MIN_LOSSES_FOR_VERDICT=10 immediately above -- the
+# same order-of-magnitude sample floor the scoreboard already trusts before
+# it will speak a verdict.
+DSR_MIN_T = 10
+# LLM-proposed, owner-delegated 2026-07-24: below 2 trials there is nothing
+# to have been selected from, so "expected max of N trials" is meaningless.
+DSR_MIN_N_TRIALS = 2
+# LLM-proposed, owner-delegated 2026-07-24: E[max SR] null-mean default when
+# no per-trial Sharpe distribution is known -- a neutral (not flattering)
+# assumption about the mean of the trials the reported SR was selected from.
+DSR_DEFAULT_MEAN_TRIAL_SR = 0.0
+
+# ---------------------------------------------------------------------------
 # RESEARCH INTEGRITY (Phase 1A) -- frozen, verdict-affecting knobs
 # ---------------------------------------------------------------------------
 # These are hashed into the cost-model snapshot (research/hashing.py) and
