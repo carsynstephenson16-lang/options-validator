@@ -165,24 +165,28 @@ H7_EXIT_READY=0
 if [ -z "$AS_OF" ] || [ -z "$DG_RECEIPT" ] || [ ! -f "$DG_RECEIPT" ]; then
   crit "h7 exit management: receipt/evaluation session unavailable — H7 entry path blocked"
 else
-  EXIT_FILL_OUT="$("$UV" run python -m options_researcher.h7_exit_session fill \
+  # No output capture here (banner-pollution guard): these two calls' stdout
+  # was previously captured into a variable purely to be echoed straight back
+  # -- nothing ever parsed a value out of it. exec above already redirects
+  # this whole script's stdout+stderr to $LOG, so letting the process write
+  # directly gets the exact same log content without a needless capture that
+  # would otherwise hold LumiBot v4.5.63's import-time banner line.
+  "$UV" run python -m options_researcher.h7_exit_session fill \
     --data-gate-receipt "$DG_RECEIPT" \
     --decision-session "$RUN_DATE" \
-    --source-evaluation-session "$AS_OF" 2>&1)"
+    --source-evaluation-session "$AS_OF"
   EXIT_FILL_RC=$?
-  echo "$EXIT_FILL_OUT"
   if [ "$EXIT_FILL_RC" -eq 0 ]; then
     note "h7 exit fill: ran"
   else
     crit "h7 exit fill: REFUSED (exit ${EXIT_FILL_RC}) — H7 entry path blocked"
   fi
 
-  EXIT_MONITOR_OUT="$("$UV" run python -m options_researcher.h7_exit_session monitor \
+  "$UV" run python -m options_researcher.h7_exit_session monitor \
     --data-gate-receipt "$DG_RECEIPT" \
     --decision-session "$RUN_DATE" \
-    --source-evaluation-session "$AS_OF" 2>&1)"
+    --source-evaluation-session "$AS_OF"
   EXIT_MONITOR_RC=$?
-  echo "$EXIT_MONITOR_OUT"
   if [ "$EXIT_MONITOR_RC" -eq 0 ]; then
     note "h7 exit monitor: ran"
   else
@@ -235,18 +239,24 @@ if [ "$GATE_GO" -eq 1 ]; then
     # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
     "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
 
-    # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing). The forward
-    # ledger holds only the registration event, so the append path has never run
-    # on real receipts. Prove the entry door would open BEFORE a name triggers,
-    # rather than discovering a refusal on the one day it matters.
-    PF_OUT="$("$UV" run python -m options_researcher.h7_entry_preflight \
-                --data-gate-receipt "$DG_RECEIPT" 2>&1)"
-    PF_RC=$?
-    echo "$PF_OUT"
+    # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing besides its
+    # own --out receipt below). The forward ledger holds only the
+    # registration event, so the append path has never run on real receipts.
+    # Prove the entry door would open BEFORE a name triggers, rather than
+    # discovering a refusal on the one day it matters.
+    #
+    # --out (not a shell capture): banner-pollution guard, same class as the
+    # 2026-07-23 H8 fix. This receipt is committed as durable H7 evidence
+    # (Step 8 below); capturing this process's stdout into a shell variable
+    # first would have put LumiBot v4.5.63's import-time banner line into
+    # that committed file. The module writes its own receipt directly; its
+    # normal stdout still reaches $LOG via the script-level exec redirect.
     PF_RECEIPT_DIR="reports/h7_receipts/${SCOPE_ID}/preflight"
     mkdir -p "$PF_RECEIPT_DIR"
-    printf '%s\nexit_code=%s\n' "$PF_OUT" "$PF_RC" > \
-      "${PF_RECEIPT_DIR}/${AS_OF}.txt"
+    "$UV" run python -m options_researcher.h7_entry_preflight \
+                --data-gate-receipt "$DG_RECEIPT" \
+                --out "${PF_RECEIPT_DIR}/${AS_OF}.txt"
+    PF_RC=$?
     if [ "$PF_RC" -eq 0 ]; then
       note "h7 entry preflight: real entry path REACHABLE"
     else
@@ -264,9 +274,19 @@ if [ "$GATE_GO" -eq 1 ]; then
   # Step 4b — H5 LEAPS entry-trigger watch (alert-only; never auto-enters).
   # Reads the attractiveness feature store rebuilt above, which is why that
   # rebuild now runs ahead of the GATE_GO block instead of after it.
+  #
+  # --out (not `| tee`): banner-pollution guard, same class as the
+  # 2026-07-23 H8 fix. `| tee "$EW_OUT"` would have captured LumiBot
+  # v4.5.63's import-time banner line into the persisted FIRE-signal receipt
+  # `grep -q "FIRE"` reads below -- and in zsh (no `setopt PIPE_FAIL`), `if
+  # cmd | tee file; then` checks tee's exit status, not cmd's, so a real
+  # entry_watch failure could have been silently swallowed by a
+  # successful tee. The module now writes its own report file directly;
+  # its normal stdout still reaches $LOG via the script-level exec
+  # redirect, and $? below is entry_watch's own exit code.
   EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
   mkdir -p reports/h5
-  if "$UV" run python -m options_researcher.entry_watch | tee "$EW_OUT"; then
+  if "$UV" run python -m options_researcher.entry_watch --out "$EW_OUT"; then
     if grep -q "FIRE" "$EW_OUT"; then
       crit "H5 ENTRY TRIGGER FIRE — read $EW_OUT and evaluate per H5 CORE rules"
     else
