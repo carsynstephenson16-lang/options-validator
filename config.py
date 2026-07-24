@@ -644,3 +644,31 @@ CARD3_DELTA_BAND = (0.55, 0.70)      # call delta band, inclusive
 CARD3_TP_MULT = 2.0                  # take-profit when mid >= 2x entry mid (+100%)
 CARD3_CLOSE_AT_DTE = 30              # time-exit when DTE <= 30
 CARD3_MAX_OPEN_PER_NAME = 1          # max 1 open position per name
+
+# ---------------------------------------------------------------------------
+# INTRADAY CAPTURE -- descriptive-only option-board snapshots (owner-directed
+# 2026-07-24; module: options_researcher/intraday_capture.py). ALERTS/DISPLAY
+# ONLY: zero verdict authority, never trades, never touches entry_watch or
+# the ledger. Universe = ATTRACTIVENESS_UNIVERSE (all 15 scope names) --
+# imported by the module, never copied into a second list here.
+# ---------------------------------------------------------------------------
+# session_tag -> scheduled ET wall-clock time ("HH:MM", 24h). The first four
+# are OWNER-TYPED 2026-07-24 (open auction / post-auction open / mid-morning /
+# midday). "preclose" is LLM-PROPOSED 2026-07-24 -- added to make the parked
+# UNH question ("are EOD spreads a close-widening artifact?") testable, by
+# comparing a 15:45 snapshot against the same day's EOD marks; the owner may
+# delete this entry.
+INTRADAY_CAPTURE_TIMES = {
+    "open_auction": "09:31",  # owner-typed 2026-07-24
+    "open":         "09:35",  # owner-typed 2026-07-24
+    "midmorning":   "11:00",  # owner-typed 2026-07-24
+    "midday":       "13:00",  # owner-typed 2026-07-24
+    "preclose":     "15:45",  # LLM-proposed 2026-07-24, owner may delete
+}
+# LLM-proposed plumbing value: how far (minutes) the wall clock may drift
+# from a session_tag's scheduled time and still count as that capture
+# window. Gates nothing strategic -- it only decides whether a run refuses
+# or proceeds; --force bypasses it entirely for manual/testing runs.
+INTRADAY_CAPTURE_TOLERANCE_MINUTES = 10
+INTRADAY_CACHE_DIR = ".cache/intraday"              # disposable chain cache
+INTRADAY_RECEIPT_DIR = "reports/intraday_capture"   # durable per-capture receipts
