@@ -198,6 +198,22 @@ DSR_MIN_N_TRIALS = 2
 DSR_DEFAULT_MEAN_TRIAL_SR = 0.0
 
 # ---------------------------------------------------------------------------
+# CSCV (Combinatorially Symmetric Cross-Validation) -- FORWARD-LOOKING FLOOR
+# ONLY. No CSCV/PBO implementation exists anywhere in this repo yet; these
+# two constants are pre-registered floors for when one is built, so a future
+# CSCV run cannot quietly launch under-powered. Official-source: Bailey,
+# D.H., Borwein, J., Lopez de Prado, M., & Zhu, Q.J., "The Probability of
+# Backtest Overfitting" (Journal of Computational Finance): "N >> 10 is
+# required" (the trial/variant-count floor) and "S=16 is a reasonable value
+# in most cases" (the split-count default). LLM-proposed, owner-delegated
+# 2026-07-24; forward-looking -- no registered grid meets the M floor yet
+# (RQ2-v1 has M=2-3 candidate parameter variants, A2-v1 has M=1-5 per lane),
+# so CSCV/PBO stay inapplicable to the currently-registered grids by design
+# until a grid is built wide enough to clear CSCV_MIN_VARIANTS_M.
+CSCV_MIN_VARIANTS_M = 10
+CSCV_MIN_SPLITS_S = 16
+
+# ---------------------------------------------------------------------------
 # RESEARCH INTEGRITY (Phase 1A) -- frozen, verdict-affecting knobs
 # ---------------------------------------------------------------------------
 # These are hashed into the cost-model snapshot (research/hashing.py) and

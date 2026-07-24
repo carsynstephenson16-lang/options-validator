@@ -382,6 +382,7 @@ class RegistryAndReportTests(unittest.TestCase):
                     registry,
                     output_directory=base / "reports",
                     workers=1,
+                    matrix_root=base / "matrices",
                 )
                 task_count = len(registry.task_records(spec.run_id))
                 second = run_experiment(
@@ -396,6 +397,7 @@ class RegistryAndReportTests(unittest.TestCase):
                     registry,
                     output_directory=base / "reports",
                     workers=2,
+                    matrix_root=base / "matrices",
                 )
                 self.assertEqual(len(registry.task_records(spec.run_id)), task_count)
             self.assertEqual(first, second)

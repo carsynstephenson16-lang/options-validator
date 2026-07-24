@@ -115,6 +115,52 @@ def cost_adjusted_primary_metric(
     )
 
 
+def daily_spread_series(
+    rows: Sequence[PanelObservation], *, bucket_count: int
+) -> tuple[tuple[str, float, int], ...]:
+    """(panel_date, spread, observation_count) aligned 1:1 with
+    ``cost_adjusted_primary_metric(rows, bucket_count=...).daily_spreads``.
+
+    Companion read-only view for the robustness return-matrix capture
+    (options_researcher/robustness/return_matrix.py) -- it never feeds back
+    into the registered metric. It mirrors cost_adjusted_primary_metric's
+    per-day skip rule exactly (bucket_size = len(daily) // bucket_count;
+    skip if < 1) using the identical single-lane/single-parameter/
+    no-duplicate-identity validation and the identical sort/slice/sum/divide
+    arithmetic, so the returned spread floats are the SAME values
+    cost_adjusted_primary_metric computes internally -- this is not a second
+    source of truth, just a second view of the one computation.
+    ``observation_count`` is ``len(top) + len(bottom)`` for that day (i.e.
+    2 * bucket_size), the same quantity PrimaryMetric accumulates into
+    top_count/bottom_count across all days.
+    """
+    if bucket_count < 2:
+        raise ValueError("bucket_count must be at least two")
+    lanes = {row.lane for row in rows}
+    parameters = {row.parameter_id for row in rows}
+    if len(lanes) > 1:
+        raise ValueError("daily spread series requires a single lane")
+    if len(parameters) > 1:
+        raise ValueError("daily spread series requires a single parameter variant")
+    identities = [(row.panel_date, row.ticker) for row in rows]
+    if len(set(identities)) != len(identities):
+        raise ValueError("daily spread series refuses duplicate date/ticker rows")
+
+    ordered = sorted(rows, key=lambda row: (row.panel_date, row.ticker))
+    series: list[tuple[str, float, int]] = []
+    for panel_date, daily_iter in groupby(ordered, key=lambda row: row.panel_date):
+        daily = sorted(daily_iter, key=lambda row: (-row.score, row.ticker))
+        bucket_size = len(daily) // bucket_count
+        if bucket_size < 1:
+            continue
+        top = daily[:bucket_size]
+        bottom = daily[-bucket_size:]
+        top_mean = sum(row.forward_cost_adjusted_return for row in top) / len(top)
+        bottom_mean = sum(row.forward_cost_adjusted_return for row in bottom) / len(bottom)
+        series.append((panel_date, top_mean - bottom_mean, len(top) + len(bottom)))
+    return tuple(series)
+
+
 def evaluate_parameter_variants(
     rows: Sequence[PanelObservation], *, bucket_count: int, workers: int = 1
 ) -> tuple[tuple[str, PrimaryMetric], ...]:
