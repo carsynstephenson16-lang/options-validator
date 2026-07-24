@@ -1,0 +1,6 @@
+2026-07-24 07:11:31,881 | INFO | LumiBot v4.5.63 starting
+H5 LEAPS ENTRY TRIGGER WATCH (pre-registered H5_ENTRY_TRIGGER_PREREG; this tool alerts, it never auto-enters)
+VST: WAIT  close $168.98 (as of 2026-07-23) vs trigger $160.00; IV-rank 0.56 (max 0.5) -- waiting on: close $168.98 > trigger $160.00; IV-rank 0.56 > 0.5; LEAPS fails liquidity gates
+  note: IV-rank is stale (features built 2026-07-22 < close 2026-07-23) -- rerun the feature refresh
+AMZN: WAIT  close $233.66 (as of 2026-07-23) vs trigger $220.00; IV-rank 0.92 (max 0.5) -- waiting on: close $233.66 > trigger $220.00; IV-rank 0.92 > 0.5
+  note: IV-rank is stale (features built 2026-07-22 < close 2026-07-23) -- rerun the feature refresh

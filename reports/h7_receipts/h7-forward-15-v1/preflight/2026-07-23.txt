@@ -1,0 +1,6 @@
+2026-07-24 07:11:21,125 | INFO | LumiBot v4.5.63 starting
+2026-07-24 07:11:22,103 | INFO | .env file loaded from: /Users/carsynstephenson/options-validator-ops/.env
+H7 ENTRY PREFLIGHT decision=2026-07-24 session=2026-07-23 (read-only; writes nothing)
+  data-gate receipt: reports/h7_data_gate/h7-forward-15-v1/receipts/2026-07-23.json
+  REAL ENTRY PATH WOULD REFUSE: source-health receipt has unhealthy registered entry names: ['NOW']
+exit_code=1
