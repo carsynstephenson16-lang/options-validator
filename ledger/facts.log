@@ -18047,3 +18047,4 @@
 2026-07-24T11:11:49.102996+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh CEG rows=1131 path=.cache/underlying_ohlcv/CEG.parquet
 2026-07-24T11:11:49.438474+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh MSFT rows=2401 path=.cache/underlying_ohlcv/MSFT.parquet
 2026-07-24T11:11:49.762692+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh AMZN rows=2401 path=.cache/underlying_ohlcv/AMZN.parquet
+2026-07-24T12:59:40.899053+00:00	H7_AMENDMENT_POST_REPORT_GRACE ratified 2026-07-24: 45-day post-report earnings grace (H7_POST_REPORT_GRACE_DAYS=45, owner-typed); doc docs/superpowers/2026-07-24-h7-amendment-post-report-grace.md sha256 25e5a21cc5dd693b48edf9fdc2aeab7134aea42a222fa693b6db60979e220601; activation commit 352a4e4.
