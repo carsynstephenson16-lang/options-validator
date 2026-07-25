@@ -686,8 +686,12 @@ def main(**assemble_kwargs) -> str:
     data = assemble(**assemble_kwargs)
     out_html = render(data)
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
+    # tmp + os.replace so a mid-write crash can never leave a truncated page
+    # over the last good one (same convention as h7_data_gate receipts).
+    tmp_path = f"{OUTPUT_PATH}.{os.getpid()}.tmp"
+    with open(tmp_path, "w") as f:
         f.write(out_html)
+    os.replace(tmp_path, OUTPUT_PATH)
     abs_path = os.path.abspath(OUTPUT_PATH)
     print(f"wrote {abs_path}")
     print("open it in your browser to see mission control")

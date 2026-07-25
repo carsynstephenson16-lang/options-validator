@@ -199,7 +199,8 @@ else
 fi
 
 # QM OHLCV refresh and the attractiveness feature rebuild run BEFORE the
-# GATE_GO block below (moved 2026-07-24; see facts.log H10_RITUAL_ORDER_FIX):
+# GATE_GO block below (moved 2026-07-24 in the ritual-grace integration wave,
+# merge 7c39a70; a facts.log entry for the move was never appended):
 # Step 5b (H10 watcher/observe) reads underlying OHLCV via
 # data/underlying_ohlcv.py's load_ohlcv/load_ohlcv_adjusted, and Step 4b
 # (H5 entry_watch) reads IV-rank via options_researcher/features.py
@@ -342,7 +343,8 @@ fi
 # ---------------------------------------------------------------------------
 git add -- ledger/facts.log ledger/h7_forward \
            reports/h7_receipts reports/h7_data_gate reports/h5 reports/h6_forward \
-           reports/h8_forward reports/h10 reports/ritual reports/intraday_capture 2>/dev/null
+           reports/h8_forward reports/h10 reports/ritual reports/intraday_capture \
+           reports/live_probe 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}
