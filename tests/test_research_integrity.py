@@ -134,6 +134,9 @@ class LedgerChainTests(unittest.TestCase):
             "is_result": {"verdict": "x"},
             "oos_window": {"start": "2023-01-01", "end": "2024-12-31"},
             "oos_result": None,
+            # null is ONE of two valid shapes since Phase-1B (null or a fully
+            # -shaped dict, see DeflatedSharpeSchemaTests below) -- this
+            # fixture just needs any valid shape, and null is the simplest.
             "deflated_sharpe": None,
             "pbo": None,
             "notes": "",
@@ -452,6 +455,148 @@ class LedgerChainTests(unittest.TestCase):
             ledger.append(self._intent("next"), self.base)
 
 
+class DeflatedSharpeSchemaTests(unittest.TestCase):
+    """Phase-1B (2026-07-24): deflated_sharpe used to be hard-pinned to
+    always-null (research/ledger.py:355-358, see
+    docs/superpowers/specs/2026-07-01-research-integrity-foundation-design.md
+    :400 -- "DSR/PBO are Phase-1B warnings behind a minimum-N guard, never
+    certifiers"). This pins the NEW rule the schema now enforces: null stays
+    valid (all Phase-1A history), a fully-shaped diagnostic dict is ALSO now
+    valid, and anything else (a bare number, a partial dict, an unknown
+    field) is rejected. `pbo` is untouched -- still hard-null, out of scope.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = self._tmp.name
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _dsr_dict(self, **overrides):
+        base = {
+            "value": 0.5,
+            "psr_vs_zero": 0.6,
+            "t": 60,
+            "skew": -1.2,
+            "kurt": 6.0,
+            "n_trials": 21,
+            "n_provenance": "ledger-trial-count",
+            "trial_sr_variance": 0.09,
+            "note": "deflated for N=21 trials (ledger-trial-count); "
+                    "DSR does not replace the loss-gated verdict",
+        }
+        base.update(overrides)
+        return base
+
+    def _run(self, deflated_sharpe=None):
+        return {
+            "entry_type": "run",
+            "timestamp": "2026-07-01T00:00:00+00:00",
+            "run_id": "run1",
+            "hypothesis_id": "H1",
+            "decision_threshold": "expectancy CI lower bound > 0",
+            "code_sha": TEST_CODE_SHA,
+            "config_hash": TEST_CONFIG_HASH,
+            "cost_model_hash": TEST_COST_MODEL_HASH,
+            "source_hash": TEST_SOURCE_HASH,
+            "data_window_hash": TEST_DATA_WINDOW_HASH,
+            "risk_basis": "economic_max_loss",
+            "is_window": {"start": "2018-01-01", "end": "2022-12-31"},
+            "is_result": {"verdict": "x"},
+            "oos_window": {"start": "2023-01-01", "end": "2024-12-31"},
+            "oos_result": None,
+            "deflated_sharpe": deflated_sharpe,
+            "pbo": None,
+            "notes": "",
+            "scope": {"symbols": ["SPY"]},
+        }
+
+    def test_null_is_valid(self):
+        ledger.append(self._run(None), self.base)
+        ledger.verify(self.base)  # no raise
+
+    def test_valid_dict_is_valid(self):
+        h = ledger.append(self._run(self._dsr_dict()), self.base)
+        ledger.verify(self.base)  # no raise
+        rec = ledger.read_all(self.base)[-1]
+        self.assertEqual(rec["record_hash"], h)
+        self.assertEqual(rec["deflated_sharpe"]["n_trials"], 21)
+
+    def test_bare_number_rejected(self):
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(0.5), self.base)
+
+    def test_bare_string_rejected(self):
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run("0.5"), self.base)
+
+    def test_empty_dict_rejected_missing_all_fields(self):
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run({}), self.base)
+
+    def test_missing_one_field_rejected(self):
+        bad = self._dsr_dict()
+        del bad["note"]
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(bad), self.base)
+
+    def test_unknown_field_rejected(self):
+        bad = self._dsr_dict(extra_field="not part of the schema")
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(bad), self.base)
+
+    def test_n_trials_below_dsr_min_n_trials_rejected(self):
+        bad = self._dsr_dict(n_trials=config.DSR_MIN_N_TRIALS - 1)
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(bad), self.base)
+
+    def test_n_trials_at_floor_accepted(self):
+        bad = self._dsr_dict(n_trials=config.DSR_MIN_N_TRIALS)
+        ledger.append(self._run(bad), self.base)
+        ledger.verify(self.base)  # no raise
+
+    def test_t_below_dsr_min_t_rejected(self):
+        bad = self._dsr_dict(t=config.DSR_MIN_T - 1)
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(bad), self.base)
+
+    def test_t_at_floor_accepted(self):
+        bad = self._dsr_dict(t=config.DSR_MIN_T)
+        ledger.append(self._run(bad), self.base)
+        ledger.verify(self.base)  # no raise
+
+    def test_non_int_n_trials_rejected(self):
+        bad = self._dsr_dict(n_trials=21.0)  # float, not int
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(bad), self.base)
+
+    def test_non_int_t_rejected(self):
+        bad = self._dsr_dict(t=60.0)  # float, not int
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(bad), self.base)
+
+    def test_empty_provenance_rejected(self):
+        bad = self._dsr_dict(n_provenance="   ")
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(self._run(bad), self.base)
+
+    def test_non_finite_value_rejected_by_validator(self):
+        # canonical_json(allow_nan=False) means append() can never SMUGGLE a
+        # NaN into the file in the first place; this pins the semantic
+        # validator's own defense-in-depth guard directly (a hand-tampered
+        # file with a raw `NaN` token would still be caught here).
+        bad = self._run(self._dsr_dict(value=float("nan")))
+        with self.assertRaises(ledger.LedgerError):
+            ledger._require_deflated_sharpe(bad, 0)
+
+    def test_pbo_enforcement_unchanged_still_hard_null(self):
+        bad = self._run(self._dsr_dict())
+        bad["pbo"] = 0.1
+        with self.assertRaises(ledger.LedgerError):
+            ledger.append(bad, self.base)
+
+
 class LedgerAnchoringTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -604,6 +749,13 @@ class RegisterCounterTests(unittest.TestCase):
         self.assertEqual(rec["entry_type"], "run")
         self.assertEqual(rec["hypothesis_id"], "H1")
         self.assertIsNone(rec["oos_result"])
+        # Phase-1B (2026-07-24): register() itself still always writes null --
+        # it has no per-trial SR series to deflate against (DSR is a
+        # display/diagnostic layer computed at read time, see
+        # metrics.scoreboard()'s dsr_* kwargs). This pins register()'s own
+        # behavior, NOT a ledger-wide "must always be null" rule any more --
+        # see DeflatedSharpeSchemaTests below for the new null-or-valid-dict
+        # rule the ledger schema itself now enforces.
         self.assertIsNone(rec["deflated_sharpe"])
         self.assertIsNone(rec["pbo"])
         self.assertEqual(rec["source_hash"], hashing.source_hash())

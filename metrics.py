@@ -21,6 +21,7 @@ Run a demo:  python metrics.py
 """
 from __future__ import annotations
 
+import math
 from datetime import date
 
 import numpy as np
@@ -256,7 +257,187 @@ def _max_drawdown(pnls):
     return float((running_max - equity).max())
 
 
-def scoreboard(trades, label="strategy"):
+# ---------------------------------------------------------------------------
+# PROBABILISTIC / DEFLATED SHARPE RATIO (PSR / DSR) -- display/diagnostic
+# layer only (Phase-1B; see config.py for the DSR_* knobs and
+# research/ledger.py for the ledger-schema side).
+#
+# Official-source: Bailey, D.H. & Lopez de Prado, M. (2012), "The Sharpe
+# Ratio Efficient Frontier", Journal of Risk 15(2); and (2014), "The
+# Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest
+# Overfitting, and Non-Normality", Journal of Portfolio Management 40(5).
+#
+# PSR(SR*) = Phi[ (SR_hat - SR*) * sqrt(T-1)
+#                  / sqrt(1 - gamma3*SR_hat + ((gamma4-1)/4)*SR_hat**2) ]
+#   SR_hat  = observed per-period (NOT annualized) Sharpe ratio
+#   T       = number of return observations
+#   gamma3  = sample skewness of the per-period returns
+#   gamma4  = sample RAW (non-excess) kurtosis -- a normal sample has
+#             gamma4 = 3.0, not 0.0. This is the convention the papers use;
+#             it is why the "(gamma4-1)/4" term above is not "(gamma4+2)/4"
+#             (the equivalent formula written in EXCESS-kurtosis terms).
+#
+# DSR = PSR evaluated at SR* = E[max of N independent trial Sharpes], i.e.
+# the deflation substitutes a "what would the best of N random trials look
+# like" benchmark for the naive SR*=0 null. E[max SR] (Bailey & Lopez de
+# Prado 2014, eq. 10, via the classic Euler-Mascheroni-corrected Gumbel
+# approximation for the expected maximum of N iid draws):
+#   E[max SR] = mean_trial_sr + sqrt(trial_sr_variance) *
+#               [ (1-gamma)*Phi^-1(1 - 1/N) + gamma*Phi^-1(1 - 1/(N*e)) ]
+#   gamma = Euler-Mascheroni constant ~ 0.5772156649
+#
+# Both PSR and DSR are diagnostics ONLY: nothing in this repo gates, grades,
+# ranks, or triggers on them, and the loss-gated `verdict` above is computed
+# with zero knowledge of any of this. "Insufficient sample" here means
+# "cannot trust the deflation," not "cannot trust the strategy" -- the
+# scoreboard()'s refusal philosophy (thin sample -> honest NaN / string, not
+# a confident-looking number) is preserved throughout.
+#
+# No scipy import here (repo convention: metrics.py is numpy-only; scipy is
+# only a transitive dependency pinned in uv.lock). Phi is exact via
+# math.erf; Phi^-1 (the probit / inverse-CDF) uses Peter Acklam's published
+# rational-approximation coefficients (absolute error < 1.15e-9 across
+# (0,1)), refined by one Halley step against math.erfc for near-machine
+# precision -- both the approximation and the refinement are Acklam's
+# published algorithm, not an ad hoc addition.
+# ---------------------------------------------------------------------------
+EULER_MASCHERONI = 0.5772156649015329
+
+_ACKLAM_A = (-3.969683028665376e01, 2.209460984245205e02, -2.759285104469687e02,
+             1.383577518672690e02, -3.066479806614716e01, 2.506628277459239e00)
+_ACKLAM_B = (-5.447609879822406e01, 1.615858368580409e02, -1.556989798598866e02,
+             6.680131188771972e01, -1.328068155288572e01)
+_ACKLAM_C = (-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e00,
+             -2.549732539343734e00, 4.374664141464968e00, 2.938163982698783e00)
+_ACKLAM_D = (7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00,
+             3.754408661907416e00)
+_ACKLAM_P_LOW = 0.02425
+
+
+def _norm_cdf(z: float) -> float:
+    """Standard normal CDF Phi(z), exact via math.erf (stdlib, no scipy)."""
+    return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
+
+
+def _norm_ppf(p: float) -> float:
+    """Standard normal inverse-CDF (probit) Phi^-1(p) via Peter Acklam's
+    rational approximation, refined by one Halley step against math.erfc.
+    Raises ValueError outside the open interval (0, 1) -- Phi^-1 is undefined
+    at the boundary."""
+    if not 0.0 < p < 1.0:
+        raise ValueError(f"p must lie in the open interval (0, 1): {p!r}")
+    a1, a2, a3, a4, a5, a6 = _ACKLAM_A
+    b1, b2, b3, b4, b5 = _ACKLAM_B
+    c1, c2, c3, c4, c5, c6 = _ACKLAM_C
+    d1, d2, d3, d4 = _ACKLAM_D
+    p_low = _ACKLAM_P_LOW
+    p_high = 1.0 - p_low
+
+    if p < p_low:
+        q = math.sqrt(-2.0 * math.log(p))
+        x = (((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) / (
+            ((((d1 * q + d2) * q + d3) * q + d4) * q + 1.0)
+        )
+    elif p <= p_high:
+        q = p - 0.5
+        r = q * q
+        x = (((((a1 * r + a2) * r + a3) * r + a4) * r + a5) * r + a6) * q / (
+            ((((b1 * r + b2) * r + b3) * r + b4) * r + b5) * r + 1.0
+        )
+    else:
+        q = math.sqrt(-2.0 * math.log(1.0 - p))
+        x = -(((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) / (
+            ((((d1 * q + d2) * q + d3) * q + d4) * q + 1.0)
+        )
+
+    # Halley refinement step (Acklam's published follow-up) against the
+    # exact error function, pushing accuracy to near machine precision.
+    e = 0.5 * math.erfc(-x / math.sqrt(2.0)) - p
+    u = e * math.sqrt(2.0 * math.pi) * math.exp(x * x / 2.0)
+    x = x - u / (1.0 + x * u / 2.0)
+    return x
+
+
+def sample_moments(rets):
+    """(skew, kurt) via the plain (biased / population, method-of-moments)
+    estimators used by Bailey & Lopez de Prado -- NOT scipy's bias-corrected
+    g1/G1 estimators. `kurt` is the RAW (non-excess) convention: a normal
+    sample has kurt ~ 3.0, not ~0.0.
+
+    Never raises: below the minimum sample needed to define a statistic (3
+    observations for skew, 4 for kurt) -- or when the sample variance is
+    zero/non-finite, which makes both statistics undefined -- returns NaN
+    for the affected statistic(s), matching scoreboard()'s refusal
+    philosophy (thin sample = honest NaN, not a confident-looking number).
+    """
+    x = np.asarray(rets, dtype=float)
+    n = len(x)
+    if n < 3:
+        return float("nan"), float("nan")
+    dev = x - x.mean()
+    m2 = float(np.mean(dev**2))
+    if not math.isfinite(m2) or m2 <= 0:
+        return float("nan"), float("nan")
+    skew = float(np.mean(dev**3)) / m2**1.5
+    if n < 4:
+        return skew, float("nan")
+    kurt = float(np.mean(dev**4)) / m2**2
+    return skew, kurt
+
+
+def psr(sr, sr_star, t, skew, kurt) -> float:
+    """Probabilistic Sharpe Ratio: P(true SR > sr_star | observed sr̂, T, skew,
+    kurt). Returns NaN (never raises) when the sample is too thin to trust:
+    t < 2 (sqrt(T-1) undefined for a meaningful CI), or the variance term
+    inside the square root is non-positive or non-finite (can happen with
+    extreme skew/kurtosis combined with a large observed Sharpe) -- both are
+    valid NaN outcomes, not error conditions, matching scoreboard()'s
+    refusal philosophy for a thin/degenerate sample.
+    """
+    if t < 2:
+        return float("nan")
+    denom_sq = 1.0 - skew * sr + ((kurt - 1.0) / 4.0) * sr**2
+    if not math.isfinite(denom_sq) or denom_sq <= 0:
+        return float("nan")
+    z = (sr - sr_star) * math.sqrt(t - 1) / math.sqrt(denom_sq)
+    if not math.isfinite(z):
+        return float("nan")
+    return _norm_cdf(z)
+
+
+def expected_max_sr(mean_trial_sr, trial_sr_variance, n_trials) -> float:
+    """E[max of N iid trial Sharpe ratios] (Bailey & Lopez de Prado 2014,
+    eq. 10) -- the SR* the Deflated Sharpe Ratio substitutes for the naive
+    SR*=0 null, to correct for having selected the best of N trials.
+
+    Raises ValueError if n_trials < 2: with fewer than 2 trials there is
+    nothing to have been selected from, so "expected max of N" is not a
+    meaningful question (unlike psr()'s thin-sample cases, this is a
+    contract violation by the caller, not a valid NaN outcome).
+    """
+    if n_trials < 2:
+        raise ValueError(
+            f"n_trials must be >= 2 (nothing to have been selected from): {n_trials!r}"
+        )
+    n = float(n_trials)
+    std = math.sqrt(trial_sr_variance)
+    z_a = _norm_ppf(1.0 - 1.0 / n)
+    z_b = _norm_ppf(1.0 - 1.0 / (n * math.e))
+    return mean_trial_sr + std * ((1.0 - EULER_MASCHERONI) * z_a + EULER_MASCHERONI * z_b)
+
+
+def dsr(sr, t, skew, kurt, *, trial_sr_variance, n_trials, mean_trial_sr=0.0) -> float:
+    """Deflated Sharpe Ratio: psr() evaluated against SR* = E[max of
+    n_trials trial Sharpes] instead of SR*=0, correcting for selection bias
+    across a multiple-trial research process. Propagates expected_max_sr()'s
+    ValueError when n_trials < 2; otherwise inherits psr()'s NaN-on-thin-
+    sample behavior unchanged."""
+    sr_star = expected_max_sr(mean_trial_sr, trial_sr_variance, n_trials)
+    return psr(sr, sr_star, t, skew, kurt)
+
+
+def scoreboard(trades, label="strategy", *, dsr_n_trials=None,
+               dsr_trial_sr_variance=None, dsr_n_provenance=None):
     pnls, wins, losses, cap, economic_max_loss, entry_dates = _validated_arrays(trades)
     n = len(trades)
     n_win, n_loss = int(wins.sum()), int(losses.sum())
@@ -292,7 +473,9 @@ def scoreboard(trades, label="strategy"):
     else:
         verdict = "NO EDGE -- expectancy indistinguishable from zero after costs"
 
-    return {
+    sharpe_per_trade = (mean_r / std_r) if std_r else float("nan")
+
+    result = {
         "label": label,
         "n_trades": n, "n_wins": n_win, "n_losses": n_loss,
         "win_rate": (n_win / n) if n else 0.0,
@@ -303,12 +486,41 @@ def scoreboard(trades, label="strategy"):
         "worst_loss": float(loss_pnls.min()) if n_loss else 0.0,
         "total_pnl": float(pnls.sum()),
         "max_drawdown": _max_drawdown(pnls),
-        "sharpe_per_trade": (mean_r / std_r) if std_r else float("nan"),
+        "sharpe_per_trade": sharpe_per_trade,
         "sortino_per_trade": (mean_r / dstd) if dstd else float("nan"),
         "capital_efficiency": float(pnls.sum() / cap.mean()) if cap.mean() else float("nan"),
         "return_on_economic_max_loss": economic_return,
         "verdict": verdict,
     }
+
+    # ---- PSR/DSR: opt-in display/diagnostic layer only ----------------------
+    # Only activates when ALL THREE dsr_* kwargs are supplied; absent any one,
+    # none of these keys appear (default behavior is byte-identical to before
+    # this layer existed). `verdict` above is computed with zero knowledge of
+    # any of this and is never touched by it.
+    if (dsr_n_trials is not None and dsr_trial_sr_variance is not None
+            and dsr_n_provenance is not None):
+        skew, kurt = sample_moments(rets)
+        psr_vs_zero = psr(sharpe_per_trade, 0.0, n, skew, kurt)
+        if n < config.DSR_MIN_T:
+            dsr_value = "INSUFFICIENT SAMPLE FOR DSR"
+        else:
+            dsr_value = dsr(
+                sharpe_per_trade, n, skew, kurt,
+                trial_sr_variance=dsr_trial_sr_variance,
+                n_trials=dsr_n_trials,
+                mean_trial_sr=config.DSR_DEFAULT_MEAN_TRIAL_SR,
+            )
+        result["dsr"] = dsr_value
+        result["psr_vs_zero"] = psr_vs_zero
+        result["dsr_n_trials"] = dsr_n_trials
+        result["dsr_n_provenance"] = dsr_n_provenance
+        result["dsr_note"] = (
+            f"deflated for N={dsr_n_trials} trials ({dsr_n_provenance}); "
+            "DSR does not replace the loss-gated verdict"
+        )
+
+    return result
 
 
 def print_scoreboard(s):

@@ -11,6 +11,7 @@ from __future__ import annotations
 import glob
 import os
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
@@ -84,11 +85,23 @@ def _gather() -> list[dict]:
     return out
 
 
-def main(rows: list[dict] | None = None) -> None:
+def main(rows: list[dict] | None = None, *, out: str | Path | None = None) -> None:
+    """Print the WAIT/FIRE report. If `out` is given, ALSO write the exact
+    same text directly to that path from Python (data/atomic_io.atomic_text_write)
+    rather than relying on a shell capturing this function's stdout.
+
+    Banner-pollution guard (same class as the 2026-07-23/24 H8/intraday_capture
+    fixes): `uv run python -m options_researcher.entry_watch` prints LumiBot
+    v4.5.63's import-time INFO banner line to stdout before this function's
+    own output. A shell `| tee file` capture of that combined stream mixes the
+    banner into a receipt meant to hold only the report -- and in zsh (no
+    `setopt PIPE_FAIL`), `if cmd | tee file; then` even checks tee's exit
+    status, not cmd's. Writing the file from here sidesteps both problems.
+    """
     if rows is None:
         rows = _gather()
-    print("H5 LEAPS ENTRY TRIGGER WATCH (pre-registered "
-          "H5_ENTRY_TRIGGER_PREREG; this tool alerts, it never auto-enters)")
+    lines = ["H5 LEAPS ENTRY TRIGGER WATCH (pre-registered "
+             "H5_ENTRY_TRIGGER_PREREG; this tool alerts, it never auto-enters)"]
     for r in rows:
         line = (f"{r['symbol']}: {r['verdict']}  close ${r['close']:,.2f} "
                 f"(as of {r['close_asof']}) vs trigger ${r['trigger']:,.2f}; "
@@ -100,14 +113,30 @@ def main(rows: list[dict] | None = None) -> None:
             line += (" -- ALL conditions met: evaluate the 0.70-delta LEAPS "
                      "per H5 CORE rules with FRESH data before any entry "
                      "(re-subscribe/audit first if the chain cache is old)")
-        print(line)
+        lines.append(line)
         if r["chain_asof"] and r["chain_asof"] < r["close_asof"]:
-            print(f"  note: chain cache is stale ({r['chain_asof']} < close "
-                  f"{r['close_asof']}) -- liquidity check may be outdated")
+            lines.append(f"  note: chain cache is stale ({r['chain_asof']} < close "
+                         f"{r['close_asof']}) -- liquidity check may be outdated")
         if r["iv_asof"] and r["iv_asof"] < r["close_asof"]:
-            print(f"  note: IV-rank is stale (features built {r['iv_asof']} "
-                  f"< close {r['close_asof']}) -- rerun the feature refresh")
+            lines.append(f"  note: IV-rank is stale (features built {r['iv_asof']} "
+                         f"< close {r['close_asof']}) -- rerun the feature refresh")
+    for line in lines:
+        print(line)
+    if out is not None:
+        from data.atomic_io import atomic_text_write
+
+        atomic_text_write("\n".join(lines) + "\n", Path(out))
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="H5 LEAPS entry-trigger watch (pre-registered; alert-only, "
+                    "never auto-enters)")
+    parser.add_argument("--out", type=Path, default=None,
+                        help="also write the exact report text to this path "
+                             "directly from Python, so a shell caller never "
+                             "needs to capture/tee this process's stdout")
+    args = parser.parse_args()
+    main(out=args.out)

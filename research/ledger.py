@@ -6,10 +6,12 @@ A second tracked file, HEAD, holds the current tip so it is diffable in git.
 """
 from __future__ import annotations
 
+import math
 import re
 from datetime import date, datetime
 from pathlib import Path
 
+import config
 from research.hashing import canonical_json, sha256_hex
 
 GENESIS_PREV = "0" * 64
@@ -278,6 +280,70 @@ def _require_scope(rec: dict, seq: int) -> dict:
     return scope
 
 
+# Phase-1B (2026-07-24): deflated_sharpe is a DISPLAY/DIAGNOSTIC add-on, never
+# a certifier (see metrics.py psr()/dsr() and docs/superpowers/specs/
+# 2026-07-01-research-integrity-foundation-design.md:400). It must stay
+# EITHER null (every Phase-1A record, and any record that never computed a
+# DSR) OR this fully-shaped dict recording the PSR/DSR computation and its
+# provenance. Any other type -- a bare number, a string, a partially-shaped
+# dict -- is rejected so a future caller can never smuggle an unvalidated
+# number onto the hash chain. `pbo` enforcement is UNCHANGED (still always
+# null; PBO stays out of scope for this mission).
+DEFLATED_SHARPE_KEYS = {
+    "value", "psr_vs_zero", "t", "skew", "kurt",
+    "n_trials", "n_provenance", "trial_sr_variance", "note",
+}
+
+
+def _require_finite_number(d: dict, key: str, seq: int, ctx: str) -> float:
+    value = d.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise LedgerError(f"{ctx}{key} must be a finite number at seq {seq}")
+    if not math.isfinite(value):
+        raise LedgerError(f"{ctx}{key} must be a finite number at seq {seq}")
+    return float(value)
+
+
+def _require_deflated_sharpe(rec: dict, seq: int) -> None:
+    value = rec.get("deflated_sharpe")
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        raise LedgerError(f"deflated_sharpe must be null or an object at seq {seq}")
+    unknown = sorted(set(value) - DEFLATED_SHARPE_KEYS)
+    if unknown:
+        raise LedgerError(f"deflated_sharpe has unknown field(s) at seq {seq}: {unknown}")
+    missing = sorted(DEFLATED_SHARPE_KEYS - set(value))
+    if missing:
+        raise LedgerError(f"deflated_sharpe missing field(s) at seq {seq}: {missing}")
+
+    _require_finite_number(value, "value", seq, "deflated_sharpe.")
+    _require_finite_number(value, "psr_vs_zero", seq, "deflated_sharpe.")
+    _require_finite_number(value, "skew", seq, "deflated_sharpe.")
+    _require_finite_number(value, "kurt", seq, "deflated_sharpe.")
+    _require_finite_number(value, "trial_sr_variance", seq, "deflated_sharpe.")
+
+    t = value.get("t")
+    if type(t) is not int or t < config.DSR_MIN_T:
+        raise LedgerError(
+            f"deflated_sharpe.t must be an int >= DSR_MIN_T ({config.DSR_MIN_T}) "
+            f"at seq {seq}"
+        )
+    n_trials = value.get("n_trials")
+    if type(n_trials) is not int or n_trials < config.DSR_MIN_N_TRIALS:
+        raise LedgerError(
+            f"deflated_sharpe.n_trials must be an int >= DSR_MIN_N_TRIALS "
+            f"({config.DSR_MIN_N_TRIALS}) at seq {seq}"
+        )
+    n_provenance = value.get("n_provenance")
+    if not isinstance(n_provenance, str) or not n_provenance.strip():
+        raise LedgerError(
+            f"deflated_sharpe.n_provenance must be a non-empty string at seq {seq}")
+    note = value.get("note")
+    if not isinstance(note, str) or not note.strip():
+        raise LedgerError(f"deflated_sharpe.note must be a non-empty string at seq {seq}")
+
+
 def _verify_semantic_records(records: list[dict]) -> None:
     trial_count = 0
     runs_by_hypothesis = {}
@@ -352,8 +418,7 @@ def _verify_semantic_records(records: list[dict]) -> None:
                 raise LedgerError(f"is_window.end must be before oos_window.start at seq {i}")
             if rec.get("oos_result") is not None:
                 raise LedgerError(f"run oos_result must be null at seq {i}")
-            if rec.get("deflated_sharpe") is not None:
-                raise LedgerError(f"deflated_sharpe must be null at seq {i}")
+            _require_deflated_sharpe(rec, i)
             if rec.get("pbo") is not None:
                 raise LedgerError(f"pbo must be null at seq {i}")
             if not isinstance(rec.get("notes"), str):

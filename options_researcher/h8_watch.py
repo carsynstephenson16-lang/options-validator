@@ -287,7 +287,11 @@ def entry_window_state(
                 "inside the confirmed T-15..T-8 entry window",
                 report=report,
             )
-    return WindowDecision("OUT_OF_WINDOW", "outside the T-15..T-8 entry window")
+    return WindowDecision(
+        "OUT_OF_WINDOW",
+        "outside the T-15..T-8 entry window",
+        report=future[0][0],
+    )
 
 
 def next_scheduled_report(

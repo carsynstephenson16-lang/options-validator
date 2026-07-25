@@ -3,11 +3,15 @@
 Roadmap Stage 1 (docs/superpowers/plans/2026-07-11-h7-forward-roadmap.md):
 per-symbol reporting over the v3 GATING store ONLY. For each name the
 watcher evaluates: the newest gating assertion (class/status/source type),
-days to the next expected report, and two flags -- MISSING (no live future
-schedule: the owner's refresh work-list) and STALE (only post-report grace
+days to the next expected report, and three flags -- MISSING (no live future
+schedule: the owner's refresh work-list), STALE (only post-report grace
 coverage left and it lapses within H7_SOURCE_HEALTH_WARN_SESSIONS XNYS
-sessions: the gate is ABOUT to start failing closed). Unhealthy is
-gate-UNKNOWN or STALE; BANNED stays healthy (an informed pre-report ban).
+sessions: the gate is ABOUT to start failing closed), and GRACE (owner
+amendment 2026-07-24: the current CLEAR is an INFERENCE from a passed
+CONFIRMED report date within H7_POST_REPORT_GRACE_DAYS calendar days, not a
+proven occurred record -- always shown distinctly, never displayed as a
+plain confirmed-date CLEAR). Unhealthy is gate-UNKNOWN or STALE; BANNED
+stays healthy (an informed pre-report ban).
 Aggregator estimates retained in the append-only store are diagnostic-only
 under amendment v1.4 and are invisible to this health/gating view.
 Exit 1 when any name is unhealthy, 2 when the store is unreadable (fail
@@ -49,6 +53,11 @@ from research.receipts import input_files, make_receipt, write_immutable_receipt
 
 FLAG_MISSING = "MISSING"   # no live future schedule assertion
 FLAG_STALE = "STALE"       # only grace coverage left, lapsing within N sessions
+# Owner amendment 2026-07-24 (H7_POST_REPORT_GRACE_DAYS): marks the INFERRED
+# post-report grace state (a passed CONFIRMED date, no occurred proof) so it
+# is never displayed or mistaken as an ordinary confirmed-date CLEAR. See
+# docs/superpowers/2026-07-24-h7-amendment-post-report-grace.md.
+FLAG_GRACE = "GRACE"
 
 
 def _sessions_between(start: date, end: date) -> int:
@@ -82,21 +91,48 @@ def symbol_health(symbol: str, on: date, assertions: list[dict], *,
     occurred_recent = [report_date(a) for a in view
                        if a["status"] == "occurred"
                        and timedelta(0) <= (on - report_date(a)) <= grace]
+    # Owner amendment 2026-07-24 (H7_POST_REPORT_GRACE_DAYS): INFERRED
+    # coverage from a passed CONFIRMED date alone, no occurred proof. This
+    # is a display-observability mirror of earnings_gate()'s own inferred
+    # branch, kept separate from the PROVEN `occurred_recent` grace above so
+    # the board can flag it distinctly (FLAG_GRACE) instead of showing an
+    # ordinary confirmed-date CLEAR.
+    post_report_grace = timedelta(days=config.H7_POST_REPORT_GRACE_DAYS)
+    confirmed_past = [a["expected_date"] for a in view
+                      if a["status"] == "confirmed"
+                      and a["expected_date"] is not None
+                      and a["expected_date"] < on]
+    newest_confirmed_past = max(confirmed_past, default=None)
+    inferred_recent = (
+        newest_confirmed_past is not None
+        and (on - newest_confirmed_past) <= post_report_grace)
 
-    grace_end = grace_sessions_left = None
+    grace_end = grace_sessions_left = grace_started = None
     if live_future:
         coverage = "schedule"
     elif occurred_recent:
         coverage = "grace"
-        grace_end = max(occurred_recent) + grace
+        grace_started = max(occurred_recent)
+        grace_end = grace_started + grace
+        grace_sessions_left = _sessions_between(on, grace_end)
+    elif inferred_recent:
+        coverage = "post_report_grace"
+        grace_started = newest_confirmed_past
+        grace_end = grace_started + post_report_grace
         grace_sessions_left = _sessions_between(on, grace_end)
     else:
         coverage = "none"
 
     flags = []
     if coverage != "schedule":
+        # Still true and still the owner's refresh work-list under inferred
+        # grace: there is no live future schedule, only an inference that
+        # none is imminent.
         flags.append(FLAG_MISSING)
-    if (coverage == "grace" and grace_sessions_left is not None
+    if coverage == "post_report_grace":
+        flags.append(FLAG_GRACE)
+    if (coverage in ("grace", "post_report_grace")
+            and grace_sessions_left is not None
             and grace_sessions_left <= warn_sessions):
         flags.append(FLAG_STALE)
 
@@ -112,6 +148,7 @@ def symbol_health(symbol: str, on: date, assertions: list[dict], *,
         "next_report": upcoming,
         "days_to_report": (upcoming - on).days if upcoming else None,
         "coverage": coverage,
+        "grace_started": grace_started,
         "grace_end": grace_end,
         "grace_sessions_left": grace_sessions_left,
         "flags": flags,
@@ -227,9 +264,14 @@ def main(argv: list[str] | None = None) -> int:
         due = (f"report in {h['days_to_report']}d "
                f"({h['next_report'].isoformat()})"
                if h["next_report"] else "next report UNKNOWN")
-        runway = (f", grace ends {h['grace_end'].isoformat()} "
-                  f"({h['grace_sessions_left']} sessions left)"
-                  if h["coverage"] == "grace" else "")
+        runway = ""
+        if h["coverage"] in ("grace", "post_report_grace"):
+            elapsed = (on - h["grace_started"]).days if h["grace_started"] else None
+            tag = ("INFERRED GRACE" if h["coverage"] == "post_report_grace"
+                   else "grace")
+            runway = (f", {tag} ends {h['grace_end'].isoformat()} "
+                      f"(elapsed {elapsed}d, {h['grace_sessions_left']} "
+                      f"sessions left)")
         verdict = "ok" if h["healthy"] else "UNHEALTHY"
         print(f"{h['symbol']:>5}: {verdict:>9} gate={h['gate']} [{flags}] "
               f"{due}{runway} | newest: {newest}")

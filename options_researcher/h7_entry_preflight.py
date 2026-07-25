@@ -101,6 +101,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="defaults to the ritual's receipt for the session")
     parser.add_argument("--receipts-dir", default=str(DEFAULT_RECEIPTS_DIR))
     parser.add_argument("--base-dir", default=str(REAL_FORWARD_STORE))
+    parser.add_argument("--out", type=Path, default=None,
+                        help="also write the exact report text (plus a "
+                             "trailing exit_code=N line, the format "
+                             "options_researcher.ritual_receipt parses) to "
+                             "this path directly from Python -- banner-"
+                             "pollution guard, same class as the 2026-07-23 "
+                             "H8 fix: a shell capturing this process's "
+                             "stdout would also capture LumiBot v4.5.63's "
+                             "import-time INFO banner line ahead of the "
+                             "real report text.")
     args = parser.parse_args(argv)
 
     from datetime import datetime
@@ -123,20 +133,30 @@ def main(argv: list[str] | None = None) -> int:
                        source_evaluation_session=evaluation,
                        data_gate_receipt_path=gate_path,
                        base_dir=Path(args.base_dir))
-    print(f"H7 ENTRY PREFLIGHT decision={result.decision_session} "
-          f"session={result.evaluation_session} (read-only; writes nothing)")
-    print(f"  data-gate receipt: {gate_path}")
+    lines = [f"H7 ENTRY PREFLIGHT decision={result.decision_session} "
+             f"session={result.evaluation_session} (read-only; writes nothing)",
+             f"  data-gate receipt: {gate_path}"]
     if not result.ok:
-        print(f"  REAL ENTRY PATH WOULD REFUSE: {result.refusal}")
-        return 1
-    print(f"  entry-ready ({len(result.entry_ready)}): "
-          f"{', '.join(result.entry_ready) or 'none'}")
-    for symbol, reason in sorted(result.banned.items()):
-        print(f"  entry-banned {symbol}: {reason}")
-    if not result.entry_ready:
-        print("  REAL ENTRY PATH REACHABLE but NO symbol is entry-ready.")
-        return 1
-    return 0
+        lines.append(f"  REAL ENTRY PATH WOULD REFUSE: {result.refusal}")
+        rc = 1
+    else:
+        lines.append(f"  entry-ready ({len(result.entry_ready)}): "
+                     f"{', '.join(result.entry_ready) or 'none'}")
+        for symbol, reason in sorted(result.banned.items()):
+            lines.append(f"  entry-banned {symbol}: {reason}")
+        if not result.entry_ready:
+            lines.append("  REAL ENTRY PATH REACHABLE but NO symbol is entry-ready.")
+            rc = 1
+        else:
+            rc = 0
+
+    for line in lines:
+        print(line)
+    if args.out is not None:
+        from data.atomic_io import atomic_text_write
+
+        atomic_text_write("\n".join(lines) + f"\nexit_code={rc}\n", args.out)
+    return rc
 
 
 if __name__ == "__main__":

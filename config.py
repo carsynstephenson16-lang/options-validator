@@ -186,6 +186,45 @@ MIN_LOSSES_FOR_VERDICT = 10
 BOOTSTRAP_SAMPLES      = 5_000        # for the expectancy confidence interval
 
 # ---------------------------------------------------------------------------
+# PSR / DSR (Probabilistic / Deflated Sharpe Ratio) -- Phase-1B DISPLAY/
+# DIAGNOSTIC layer (metrics.py: sample_moments/psr/expected_max_sr/dsr;
+# research/ledger.py: deflated_sharpe schema). This completes work Phase-1A
+# explicitly deferred to 1B -- see
+# docs/superpowers/specs/2026-07-01-research-integrity-foundation-design.md.
+# DSR/PSR are diagnostics, NEVER certifiers: nothing gates, grades, ranks, or
+# triggers on them, and the loss-gated verdict above is untouched.
+# LLM-proposed, owner-delegated 2026-07-24: DSR_MIN_T is a minimum
+# return-observation-count floor below which PSR/DSR are unreliable enough
+# to render as the string "INSUFFICIENT SAMPLE FOR DSR" instead of a number.
+# Scale chosen to match MIN_LOSSES_FOR_VERDICT=10 immediately above -- the
+# same order-of-magnitude sample floor the scoreboard already trusts before
+# it will speak a verdict.
+DSR_MIN_T = 10
+# LLM-proposed, owner-delegated 2026-07-24: below 2 trials there is nothing
+# to have been selected from, so "expected max of N trials" is meaningless.
+DSR_MIN_N_TRIALS = 2
+# LLM-proposed, owner-delegated 2026-07-24: E[max SR] null-mean default when
+# no per-trial Sharpe distribution is known -- a neutral (not flattering)
+# assumption about the mean of the trials the reported SR was selected from.
+DSR_DEFAULT_MEAN_TRIAL_SR = 0.0
+
+# ---------------------------------------------------------------------------
+# CSCV (Combinatorially Symmetric Cross-Validation) -- FORWARD-LOOKING FLOOR
+# ONLY. No CSCV/PBO implementation exists anywhere in this repo yet; these
+# two constants are pre-registered floors for when one is built, so a future
+# CSCV run cannot quietly launch under-powered. Official-source: Bailey,
+# D.H., Borwein, J., Lopez de Prado, M., & Zhu, Q.J., "The Probability of
+# Backtest Overfitting" (Journal of Computational Finance): "N >> 10 is
+# required" (the trial/variant-count floor) and "S=16 is a reasonable value
+# in most cases" (the split-count default). LLM-proposed, owner-delegated
+# 2026-07-24; forward-looking -- no registered grid meets the M floor yet
+# (RQ2-v1 has M=2-3 candidate parameter variants, A2-v1 has M=1-5 per lane),
+# so CSCV/PBO stay inapplicable to the currently-registered grids by design
+# until a grid is built wide enough to clear CSCV_MIN_VARIANTS_M.
+CSCV_MIN_VARIANTS_M = 10
+CSCV_MIN_SPLITS_S = 16
+
+# ---------------------------------------------------------------------------
 # RESEARCH INTEGRITY (Phase 1A) -- frozen, verdict-affecting knobs
 # ---------------------------------------------------------------------------
 # These are hashed into the cost-model snapshot (research/hashing.py) and
@@ -451,6 +490,22 @@ H7B_RV_MIN_HISTORY_D = 106       # "min 6mo listed": 126 sessions minus the RV w
 # Day grace+1 without a valid future assertion = EARNINGS-UNKNOWN (fails
 # closed). Expired estimates / old scheduled dates NEVER start the grace.
 H7_EARNINGS_POST_REPORT_GRACE_D = 45
+# Owner-directed amendment 2026-07-24 (docs/superpowers/2026-07-24-h7-amendment-
+# post-report-grace.md): the PROVEN grace above requires a distinct occurred/
+# verified record, which in practice lags a real report by days-to-weeks (the
+# 8-K/press confirmation has to be sourced and promoted). NOW reported
+# 2026-07-22 and was already UNHEALTHY [MISSING] by 2026-07-24 -- the real
+# entry door refused the whole registered cohort over a name that had simply
+# reported, not a data problem. Owner-typed 2026-07-24 (verbatim intent: "if
+# a company reports earnings wait 1.5 months to get the new earnings date so
+# the company has time") = 45 calendar days. This grants an INFERRED
+# (Inference, not Test-verified) CLEAR from a passed CONFIRMED report date
+# alone -- US quarterly reporters cannot plausibly report again within 45
+# days, so "no imminent earnings" is inferable without a confirmed next date.
+# It never substitutes for the PROVEN occurred-based grace, never re-admits a
+# name with no past report at all, and never touches registered cohort
+# membership. See earnings_gate() in options_researcher/h7_earnings.py.
+H7_POST_REPORT_GRACE_DAYS = 45  # owner-typed 2026-07-24 (1.5 months)
 H7_EARNINGS_ESTIMATE_CLUSTER_D = 14   # estimates within this many days refer
 #                                       to the same report (frozen 7b-0.1;
 #                                       was module-private in h7_earnings.py)
@@ -655,3 +710,48 @@ CARD3_DELTA_BAND = (0.55, 0.70)      # call delta band, inclusive
 CARD3_TP_MULT = 2.0                  # take-profit when mid >= 2x entry mid (+100%)
 CARD3_CLOSE_AT_DTE = 30              # time-exit when DTE <= 30
 CARD3_MAX_OPEN_PER_NAME = 1          # max 1 open position per name
+
+# ---------------------------------------------------------------------------
+# INTRADAY CAPTURE -- descriptive-only option-board snapshots (owner-directed
+# 2026-07-24; module: options_researcher/intraday_capture.py). ALERTS/DISPLAY
+# ONLY: zero verdict authority, never trades, never touches entry_watch or
+# the ledger. Universe = ATTRACTIVENESS_UNIVERSE (all 15 scope names) --
+# imported by the module, never copied into a second list here.
+# ---------------------------------------------------------------------------
+# session_tag -> scheduled ET wall-clock time ("HH:MM", 24h). The first four
+# are OWNER-TYPED 2026-07-24 (open auction / post-auction open / mid-morning /
+# midday). "preclose" is LLM-PROPOSED 2026-07-24 -- added to make the parked
+# UNH question ("are EOD spreads a close-widening artifact?") testable, by
+# comparing a 15:45 snapshot against the same day's EOD marks; the owner may
+# delete this entry.
+INTRADAY_CAPTURE_TIMES = {
+    "open_auction": "09:31",  # owner-typed 2026-07-24
+    "open":         "09:35",  # owner-typed 2026-07-24
+    "midmorning":   "11:00",  # owner-typed 2026-07-24
+    "midday":       "13:00",  # owner-typed 2026-07-24
+    "preclose":     "15:45",  # LLM-proposed 2026-07-24, owner may delete
+}
+# LLM-proposed plumbing value: how far (minutes) the wall clock may drift
+# from a session_tag's scheduled time and still count as that capture
+# window. Gates nothing strategic -- it only decides whether a run refuses
+# or proceeds; --force bypasses it entirely for manual/testing runs.
+INTRADAY_CAPTURE_TOLERANCE_MINUTES = 10
+INTRADAY_CACHE_DIR = ".cache/intraday"              # disposable chain cache
+INTRADAY_RECEIPT_DIR = "reports/intraday_capture"   # durable per-capture receipts
+
+# ---------------------------------------------------------------------------
+# IV SOLVER CALIBRATION -- measures whether OUR options_researcher.
+# black_scholes.implied_vol (parity spot, Treasury CMT continuous rate,
+# continuous dividend yield) agrees with ThetaData's own EOD atm_iv
+# (European BS, synchronized tick spot, SOFR rate, q=0) closely enough to
+# splice a solver-derived ATM IV into intraday_capture's iv_rank_preview.
+# See options_researcher/iv_solver_calibration.py (the offline calibration
+# run) and options_researcher/intraday_capture.py's
+# solver_iv_calibration_gate (the fail-closed read side: no receipt, no
+# splice, no exceptions).
+# ---------------------------------------------------------------------------
+IV_CALIBRATION_SESSIONS = 60             # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_MEDIAN_ABS_DIFF_MAX = 0.02  # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_IQR_MAX = 0.03            # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_MAX_AGE_DAYS = 30         # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
+IV_CALIBRATION_RECEIPT_DIR = "reports/iv_solver_calibration"  # durable per-run calibration receipts

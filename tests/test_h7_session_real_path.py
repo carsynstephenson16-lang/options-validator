@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -21,6 +21,7 @@ from options_researcher.h7_session import (
     SessionRefused,
     open_real_session,
 )
+from options_researcher.h7_source_health import evaluate_health
 from research.hashing import config_hash
 from research.receipts import input_files, load_receipt, make_receipt
 
@@ -154,12 +155,12 @@ class RealSessionCase(unittest.TestCase):
         linked: bool = True,
         unhealthy: tuple[str, ...] = (),
         source_names: tuple[str, ...] | None = None,
+        symbols_override: dict | None = None,
     ) -> Path:
         source_path, gate_path = self._paths(evaluation)
         unhealthy_set = set(unhealthy)
         source_names = source_names or tuple(self.scope["symbols"])
-        source_unhealthy = unhealthy_set & set(source_names)
-        source_symbol_map = {
+        source_symbol_map = symbols_override or {
             symbol: {
                 "symbol": symbol,
                 "healthy": symbol not in unhealthy_set,
@@ -172,6 +173,13 @@ class RealSessionCase(unittest.TestCase):
             }
             for symbol in source_names
         }
+        # Derive counts from the map actually used (real evaluate_health()
+        # output when symbols_override is given) rather than the synthetic
+        # unhealthy_set, so both code paths stay internally consistent.
+        source_unhealthy = sorted(
+            symbol for symbol, row in source_symbol_map.items()
+            if row.get("healthy") is not True
+        )
         source = make_receipt(
             "source_health",
             {
@@ -181,7 +189,7 @@ class RealSessionCase(unittest.TestCase):
                 "scope": self.scope,
                 "healthy_count": len(source_symbol_map) - len(source_unhealthy),
                 "unhealthy_count": len(source_unhealthy),
-                "unhealthy_symbols": sorted(source_unhealthy),
+                "unhealthy_symbols": source_unhealthy,
                 "activation_ready": not source_unhealthy,
                 "symbols": source_symbol_map,
                 "input_files": {},
@@ -319,6 +327,58 @@ class TestSessionRefusals(RealSessionCase):
         session = self.open(symbol="AMD")
         self.assertEqual(session.decision_session, DECISION)
         self.assertEqual(session.evaluation_session, EVALUATION)
+
+    def _grace_shaped_assertions(self, evaluation: str) -> list[dict]:
+        """Real v3-gating-store-shaped fixtures: NOW reported 7 days before
+        `evaluation` with only a CONFIRMED (never occurred) record -- the
+        exact 2026-07-24 owner-amendment shape. The rest of the registered
+        cohort carries an ordinary far-future confirmed schedule."""
+        known = datetime.fromisoformat("2026-07-01T12:00:00+00:00")
+        on = date.fromisoformat(evaluation)
+
+        def row(symbol: str, expected: date, *, event: str) -> dict:
+            return {
+                "record_id": f"{symbol}-{event}", "symbol": symbol,
+                "event_id": f"{symbol}-{event}", "fiscal_period": "FY26Q2",
+                "record_type": "assertion",
+                "event_class": "actual_quarterly_earnings", "status": "confirmed",
+                "expected_date": expected, "occurred_date": None,
+                "session_timing": "amc", "source_type": "company_pr",
+                "source_url": "https://example.test/ir",
+                "known_as_of_utc": known, "checked_at_utc": known,
+                "supersedes": "", "promoted_from": "", "notes": "",
+            }
+
+        rows = [row("NOW", on - timedelta(days=7), event="past")]
+        for symbol in INCLUDED:
+            if symbol != "NOW":
+                rows.append(row(symbol, date(2026, 9, 1), event="future"))
+        return rows
+
+    def test_grace_name_in_cohort_no_longer_refuses_the_door(self):
+        # 2026-07-24 owner amendment: the door refused the WHOLE registered
+        # cohort the moment NOW went UNHEALTHY [MISSING] on nothing more
+        # than having reported. Prove the fix at the layer h7_session.py
+        # actually consumes: run the REAL evaluate_health() over a
+        # NOW-shaped fixture (not a hand-set healthy flag) and confirm the
+        # resulting receipt lets the door open.
+        result = evaluate_health(
+            requested_on=date.fromisoformat(EVALUATION),
+            on=date.fromisoformat(EVALUATION),
+            known_as_of=datetime.fromisoformat(f"{EVALUATION}T20:00:00+00:00"),
+            assertions=self._grace_shaped_assertions(EVALUATION),
+            names=self.scope["symbols"],
+        )
+        self.assertTrue(result["symbols"]["NOW"]["healthy"])
+        self.assertEqual(result["symbols"]["NOW"]["coverage"], "post_report_grace")
+        self.assertEqual(result["symbols"]["NOW"]["gate"], "CLEAR")
+
+        self._write_receipts(EVALUATION, symbols_override=result["symbols"])
+
+        session = self.open()   # must NOT raise SessionRefused
+        self.assertIn("NOW", session.included_symbols)
+        evidence = session_module.record_session_evidence(session, symbol="NOW")
+        self.assertIn("NOW", evidence.source_health.payload["healthy_symbols"])
 
 
 class TestEntryOnlyRealPath(RealSessionCase):

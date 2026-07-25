@@ -18015,3 +18015,36 @@
 2026-07-23T12:08:32.385161+00:00	DATA_PULL_OHLCV 2026-07-23: Yahoo OHLCV refresh MSFT rows=2400 path=.cache/underlying_ohlcv/MSFT.parquet
 2026-07-23T12:08:32.675244+00:00	DATA_PULL_OHLCV 2026-07-23: Yahoo OHLCV refresh AMZN rows=2400 path=.cache/underlying_ohlcv/AMZN.parquet
 2026-07-23T15:37:48.545792+00:00	DATA_PULL 2026-07-23: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.
+2026-07-24T11:10:14.426347+00:00	BLIND_CACHE symbol=NOW date=2026-07-23 rows=1986 sha256=8d8b97cf0db6becb5e55aa9c316100edf35d70bf62cfbbe7e7140aad860fa67e already_cached=false path=.cache/chains/NOW_2026-07-23.parquet
+2026-07-24T11:10:15.694249+00:00	BLIND_CACHE symbol=SMCI date=2026-07-23 rows=1576 sha256=a619aaf04ae96b184382309b019695f976e6a4894e749e547be95a14f836e031 already_cached=false path=.cache/chains/SMCI_2026-07-23.parquet
+2026-07-24T11:10:17.099668+00:00	BLIND_CACHE symbol=NVDA date=2026-07-23 rows=3772 sha256=c1327aa109c81672f113a9b5b7dea2900da575428d2c392f609c80a67f6014c8 already_cached=false path=.cache/chains/NVDA_2026-07-23.parquet
+2026-07-24T11:10:19.496850+00:00	BLIND_CACHE symbol=AMD date=2026-07-23 rows=6804 sha256=2d132552097ee8b2bda592dd2a3126a4b05cdd5a9f4f7b01a72c53d96967cf4f already_cached=false path=.cache/chains/AMD_2026-07-23.parquet
+2026-07-24T11:10:22.187932+00:00	BLIND_CACHE symbol=CRWV date=2026-07-23 rows=1913 sha256=cff6d5810db75a4b90d77644b437253b44790a4675782ece8fd61b2632d5e6ef already_cached=false path=.cache/chains/CRWV_2026-07-23.parquet
+2026-07-24T11:10:22.781915+00:00	BLIND_CACHE symbol=IREN date=2026-07-23 rows=1598 sha256=d16a13a0dbac7c5b76c53c5608421cd6f7fa7b102c8cacec0a569401fcdece07 already_cached=false path=.cache/chains/IREN_2026-07-23.parquet
+2026-07-24T11:10:23.441854+00:00	BLIND_CACHE symbol=USAR date=2026-07-23 rows=770 sha256=0a1264091e0d67e737ca89186163d9e7451fe3e406036083a40f0618f05486c0 already_cached=false path=.cache/chains/USAR_2026-07-23.parquet
+2026-07-24T11:10:23.773768+00:00	BLIND_CACHE symbol=ET date=2026-07-23 rows=656 sha256=5120a2c9cc65c150ac29a2af5fde3233802f01a9d165d2d8ed2b58b0f165971f already_cached=false path=.cache/chains/ET_2026-07-23.parquet
+2026-07-24T11:10:24.302611+00:00	BLIND_CACHE symbol=VST date=2026-07-23 rows=1356 sha256=fe5464dcc63e98970ffc2880957bcf1b40fb76296719299914b9a38b40735dc8 already_cached=false path=.cache/chains/VST_2026-07-23.parquet
+2026-07-24T11:10:24.864472+00:00	BLIND_CACHE symbol=CEG date=2026-07-23 rows=1632 sha256=263415c2ea4139cb4c469e247949a06c63775a376e9d9c3480b15b070f48ef84 already_cached=false path=.cache/chains/CEG_2026-07-23.parquet
+2026-07-24T11:10:26.216016+00:00	BLIND_CACHE symbol=MSFT date=2026-07-23 rows=3524 sha256=598ba417215307a7c37863d857ef592b7681b2c3fc500430d24dfe80d1295b93 already_cached=false path=.cache/chains/MSFT_2026-07-23.parquet
+2026-07-24T11:10:27.517789+00:00	BLIND_CACHE symbol=AMZN date=2026-07-23 rows=2472 sha256=0b2af04a8e515a733053fd91d9fd72e41788bf7f6e58c791ab0fa8e9c4a412fc already_cached=false path=.cache/chains/AMZN_2026-07-23.parquet
+2026-07-24T11:10:29.165705+00:00	BLIND_CACHE symbol=AVGO date=2026-07-23 rows=3622 sha256=3e834063c74852a020f621ed4e6cf85fc4ced00ac87471cb352f58e626abf657 already_cached=false path=.cache/chains/AVGO_2026-07-23.parquet
+2026-07-24T11:10:32.681652+00:00	BLIND_CACHE symbol=TEM date=2026-07-23 rows=864 sha256=75e29a933ef861f410ba781df1de111060e360efec9d85484c05a75aa90962e5 already_cached=false path=.cache/chains/TEM_2026-07-23.parquet
+2026-07-24T11:10:55.798227+00:00	BLIND_CACHE symbol=PLTR date=2026-07-23 rows=2328 sha256=5d595ded5739c14881c106b073d651b71ec46adcab1959535988c3f8b1386dd9 already_cached=false path=.cache/chains/PLTR_2026-07-23.parquet
+2026-07-24T11:10:55.981280+00:00	DATA_PULL_TOPUP 2026-07-24: recent-days chain top-up (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN) days=['2026-07-23'] fetched=15 gaps=0 audit=PASS WITH WARNINGS. Blind-cache path, no reveal; config boundaries unchanged; today excluded (EOD not final).
+2026-07-24T11:11:00.731857+00:00	DATA_PULL 2026-07-24: Yahoo closes refresh for forward scope (CRWV/TEM/PLTR/NOW/SMCI/NVDA/AMD/AVGO/IREN/USAR/ET/VST/CEG/MSFT/AMZN); same-day partial rows excluded by fetcher.
+2026-07-24T11:11:45.290861+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh CRWV rows=331 path=.cache/underlying_ohlcv/CRWV.parquet
+2026-07-24T11:11:45.534576+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh TEM rows=527 path=.cache/underlying_ohlcv/TEM.parquet
+2026-07-24T11:11:45.808383+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh PLTR rows=1459 path=.cache/underlying_ohlcv/PLTR.parquet
+2026-07-24T11:11:46.062350+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh NOW rows=2401 path=.cache/underlying_ohlcv/NOW.parquet
+2026-07-24T11:11:46.410383+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh SMCI rows=2401 path=.cache/underlying_ohlcv/SMCI.parquet
+2026-07-24T11:11:46.865326+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh NVDA rows=2401 path=.cache/underlying_ohlcv/NVDA.parquet
+2026-07-24T11:11:47.220332+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh AMD rows=2401 path=.cache/underlying_ohlcv/AMD.parquet
+2026-07-24T11:11:47.599888+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh AVGO rows=2401 path=.cache/underlying_ohlcv/AVGO.parquet
+2026-07-24T11:11:47.851943+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh IREN rows=1173 path=.cache/underlying_ohlcv/IREN.parquet
+2026-07-24T11:11:48.129901+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh USAR rows=758 path=.cache/underlying_ohlcv/USAR.parquet
+2026-07-24T11:11:48.459568+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh ET rows=2401 path=.cache/underlying_ohlcv/ET.parquet
+2026-07-24T11:11:48.803117+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh VST rows=2401 path=.cache/underlying_ohlcv/VST.parquet
+2026-07-24T11:11:49.102996+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh CEG rows=1131 path=.cache/underlying_ohlcv/CEG.parquet
+2026-07-24T11:11:49.438474+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh MSFT rows=2401 path=.cache/underlying_ohlcv/MSFT.parquet
+2026-07-24T11:11:49.762692+00:00	DATA_PULL_OHLCV 2026-07-24: Yahoo OHLCV refresh AMZN rows=2401 path=.cache/underlying_ohlcv/AMZN.parquet
+2026-07-24T12:59:40.899053+00:00	H7_AMENDMENT_POST_REPORT_GRACE ratified 2026-07-24: 45-day post-report earnings grace (H7_POST_REPORT_GRACE_DAYS=45, owner-typed); doc docs/superpowers/2026-07-24-h7-amendment-post-report-grace.md sha256 25e5a21cc5dd693b48edf9fdc2aeab7134aea42a222fa693b6db60979e220601; activation commit 352a4e4.

@@ -86,6 +86,13 @@ the ThetaData terminal or subscription needs owner sign-off first.
   validation design, e.g. a forward paper-trading window.
 - Live hypothesis: H5 Sector Income Core (ledger trial 6), passive forward
   window — see README "Scope status".
+- **Registration feasibility gate (2026-07-24):** before registering any
+  loss-gated hypothesis or forward window, compute the historical base rate
+  of the full entry stack and project expected entries over the window;
+  refuse registration unless expected entries ≥ 2× the loss bar, or the
+  registration explicitly pre-accepts the starvation risk with the computed
+  number quoted (H10 precedent). See
+  `docs/superpowers/2026-07-24-registration-feasibility-gate.md`.
 
 ## Optional public-web research fetchers
 

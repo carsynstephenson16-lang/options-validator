@@ -4,6 +4,14 @@
 frozen number; nothing here is registered yet. Companion to
 `reports/2026-07-22-scanner-quant-methods-survey.md` (ranked survey and evidence).
 
+**2026-07-24 update (owner-directed):** the owner delegated every `[OWNER]` blank
+below to Claude this date ("i had you type those in for me"). The resolved values
+live in the **§ Delegated values (2026-07-24)** table at the end of this doc. Every
+value is **LLM-proposed under owner delegation** — per the standing provenance rule
+they are tested at implementation time and re-confirmed at registration time, never
+silently frozen. The `[OWNER …]` markers in the brief bodies are left in place so
+the delegation is visible, not overwritten.
+
 **Standing constraints binding every brief below (from the owner-approved replan,
 `docs/superpowers/specs/2026-07-22-project-replan-design.md`):**
 1. **Ordering:** Phase 1 recorders (R1–R5) come first. These briefs are Phase-3 work
@@ -239,3 +247,38 @@ Regime slices (descriptive):   rv21 terciles; earnings-week flag — never gate
 5. **Priority** — confirm these queue behind Phase-1 recorders (default), or
    explicitly pull Brief H1 forward (safe: wording-only).
 ```
+
+## § Delegated values (2026-07-24) — owner-delegated, LLM-proposed
+
+Owner delegation recorded 2026-07-24 ("i had you type those in for me"). Every value
+below is **LLM-proposed**: tested at implementation, re-confirmed at the RQ2
+registration act, never silently frozen. Where the 2026-07-23 twelve-month program
+already carried an owner-forwarded value, that value is kept unchanged and marked.
+
+| Blank | Value | Reasoning |
+|---|---|---|
+| B1 long-tenor band | `H7_IV_TENOR_DTE_BAND` (72,108) | Reuses an existing frozen constant and the `atm_iv_90d()` code path; one tenor convention repo-wide, not two; matches the IV90 already rendered on watcher lines |
+| B1 `ts_pctl` corner cut | ≥ 0.80 (draft kept) | Extreme-quintile cut; display-only badge, symmetric with the vrp cut |
+| B1 `vrp_pctl` corner cut | ≤ 0.20 (draft kept) | Symmetric quintile |
+| B1 tag-vs-gate | **(ii) event-gated flag** | The badge is *named* earnings-conditioned; a no-event fire under that name misleads even with a tag. No information is lost — `ts_slope`/`ts_pctl` columns still render for every name; only the corner FLAG requires a confirmed report inside the near window. Fail-closed spirit |
+| A1 `dist_52w_high` | ≤ −20% | Correction-grade drawdown; deliberately DISTINCT from H7 lane A's frozen 25% so badge ≠ lane, and it arms ahead of the lane, giving observational lead time |
+| A1 `mom_1m` | ≥ +5% | Modest reclaim evidence on names whose monthly vol runs 10–20%; higher would make the badge a momentum-chaser rather than a bounce lens |
+| A1 `rv21` percentile | ≥ 0.60 | Flags bounce setups only in vol expansion; keeps the badge quiet in sleepy drifts |
+| C1 ρ̄ window | 63 sessions (draft kept) | One trading quarter; matches `analysis/power_check.py` precedent |
+| C1 clustering window | 5 sessions (draft kept) | One trading week |
+| N3-1 rate choice | **Moot — use the live curve** | `data/rates/treasury_cmt.csv` went LIVE 2026-07-23; the r=0 approximation question no longer exists. Fail-closed on staleness per `data/rates.py` |
+| V1 min completed cycles | 6 (draft kept) | Below ~6 non-overlapping cycles a median/IQR is noise, not history |
+| RQ2 K (candidate badges) | **3** — B1 corner, A1 bounce, V1 VRP-cal | C1 is a panel and N3-1 is prose; neither ranks, so neither is a ranking candidate |
+| RQ2 attempts counter | Start at **3**, with the survey screen footnoted | The 20-method survey was a prior-based literature screen, not fitted to our cache — that distinction is what keeps Holm-across-3 defensible. Any cache-tuned design variant increments the counter; past ~8–10, upgrade to White/SPA per this brief's own rule |
+| RQ2 card roles in scope | Income seller cards (short put / covered call) + long-call cards | The two families the board actually renders |
+| RQ2 ranking rule (if promoted) | Lexicographic tiebreak within equal GREEN-fraction | Least-disruptive promotion; a badge never overrides GREEN-fraction itself |
+| RQ2 exit convention | Hold-to-expiry | The brief's own proposal; consistent with the owner-forwarded Part-II working values (2026-07-23 program) |
+| RQ2 forward window | Start 2026-09-01; backstop 2027-09-01 | Post-Phase-1-recorders realistic ship date; 12-month backstop per this brief's recommendation |
+| RQ2 bucket split | Terciles (top 5 vs bottom 5 of 15) | Quintiles are 3-name buckets at N=15 — too thin for a spread metric |
+| RQ2 MIN_ADVERSE_BOTTOM_BUCKET | 10 (owner-forwarded 2026-07-23, unchanged) | — |
+| RQ2 Holm α | 0.10 (owner-forwarded 2026-07-23, unchanged) | — |
+
+**Feasibility-gate note (2026-07-24 process rule):** the RQ2 registration must quote
+its projected adverse-count reachability (bottom-bucket cards accrue daily, so the
+10-adverse bar projects reachable within weeks — compute and state the number at
+registration time per `docs/superpowers/2026-07-24-registration-feasibility-gate.md`).

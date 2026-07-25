@@ -1,7 +1,13 @@
 #!/bin/zsh
 # Automated daily ritual — frozen operator order per H7 amendment v1.4
-# (2026-07-14): topup -> source health -> data gate (HARD) -> h7_watch ->
-# h6_features -> h6_watch [-> h8_watch if built] -> dashboards.
+# (2026-07-14): topup -> source health -> data gate (HARD) -> h7 exit
+# management -> QM OHLCV refresh -> attractiveness feature rebuild ->
+# h7_watch -> h6_features -> h6_watch -> h5 entry_watch [-> h8_watch if
+# built] -> h10_watch/h10_observe -> dashboards. The QM OHLCV refresh and
+# attractiveness feature rebuild moved ahead of h10_watch/h10_observe and
+# h5 entry_watch on 2026-07-24 (H10_RITUAL_ORDER_FIX, facts.log): each
+# consumer was running BEFORE its own data refresh, producing false
+# DATA/stale-IV-rank skips (see the 2026-07-24 07:10 production log).
 # Owner-authorized for unattended cron use 2026-07-15. It never creates,
 # approves, or fills an entry and never places a broker order. After the
 # real-exit review/owner pass it does perform receipt-bound mechanical
@@ -159,24 +165,28 @@ H7_EXIT_READY=0
 if [ -z "$AS_OF" ] || [ -z "$DG_RECEIPT" ] || [ ! -f "$DG_RECEIPT" ]; then
   crit "h7 exit management: receipt/evaluation session unavailable — H7 entry path blocked"
 else
-  EXIT_FILL_OUT="$("$UV" run python -m options_researcher.h7_exit_session fill \
+  # No output capture here (banner-pollution guard): these two calls' stdout
+  # was previously captured into a variable purely to be echoed straight back
+  # -- nothing ever parsed a value out of it. exec above already redirects
+  # this whole script's stdout+stderr to $LOG, so letting the process write
+  # directly gets the exact same log content without a needless capture that
+  # would otherwise hold LumiBot v4.5.63's import-time banner line.
+  "$UV" run python -m options_researcher.h7_exit_session fill \
     --data-gate-receipt "$DG_RECEIPT" \
     --decision-session "$RUN_DATE" \
-    --source-evaluation-session "$AS_OF" 2>&1)"
+    --source-evaluation-session "$AS_OF"
   EXIT_FILL_RC=$?
-  echo "$EXIT_FILL_OUT"
   if [ "$EXIT_FILL_RC" -eq 0 ]; then
     note "h7 exit fill: ran"
   else
     crit "h7 exit fill: REFUSED (exit ${EXIT_FILL_RC}) — H7 entry path blocked"
   fi
 
-  EXIT_MONITOR_OUT="$("$UV" run python -m options_researcher.h7_exit_session monitor \
+  "$UV" run python -m options_researcher.h7_exit_session monitor \
     --data-gate-receipt "$DG_RECEIPT" \
     --decision-session "$RUN_DATE" \
-    --source-evaluation-session "$AS_OF" 2>&1)"
+    --source-evaluation-session "$AS_OF"
   EXIT_MONITOR_RC=$?
-  echo "$EXIT_MONITOR_OUT"
   if [ "$EXIT_MONITOR_RC" -eq 0 ]; then
     note "h7 exit monitor: ran"
   else
@@ -188,23 +198,65 @@ else
   fi
 fi
 
+# QM OHLCV refresh and the attractiveness feature rebuild run BEFORE the
+# GATE_GO block below (moved 2026-07-24; see facts.log H10_RITUAL_ORDER_FIX):
+# Step 5b (H10 watcher/observe) reads underlying OHLCV via
+# data/underlying_ohlcv.py's load_ohlcv/load_ohlcv_adjusted, and Step 4b
+# (H5 entry_watch) reads IV-rank via options_researcher/features.py
+# load_features() -- both are refreshers for stores those consumers read
+# moments later, and running the refresh first (not after) is the fix.
+# They stay unconditional on GATE_GO -- dashboards must rebuild off cached
+# truth regardless of gate state -- only their position moved.
+
+# QM dashboard context requires the exact completed session. Refresh only
+# missing/stale OHLCV names, then fail visibly if Yahoo cannot supply AS_OF.
+# The attractiveness dashboard still rebuilds: its QM list will show three
+# DATA BLOCKED slots while the unchanged mechanical list remains available.
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -m options_researcher.qm_dashboard --refresh-ohlcv --as-of "$AS_OF" \
+    && note "QM OHLCV: exact-session current to $AS_OF" \
+    || note "QM OHLCV: FAILED/STALE — QM Top 3 will show DATA BLOCKED"
+else
+  note "QM OHLCV: SKIPPED (no evaluation session) — QM Top 3 will show DATA BLOCKED"
+fi
+
+# Attractiveness feature store — separate from the H6 manifested store
+# (.tmp/research/attractiveness vs .tmp/research; a shared path corrupted the
+# H6 AMZN manifest 2026-07-16). Rebuild to the evaluation session so the
+# dashboard's IV-ranks are never silently stale at BACKTEST_END, and so
+# Step 4b's entry_watch (which reads this same store) never reads yesterday's
+# IV-rank against today's close.
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -c "from options_researcher.features import build_all; build_all('$AS_OF')" \
+    && note "attractiveness features: rebuilt to $AS_OF" \
+    || note "attractiveness features: FAILED — dashboard will flag stale/missing features"
+else
+  note "attractiveness features: SKIPPED (no evaluation session)"
+fi
+
 if [ "$GATE_GO" -eq 1 ]; then
   if [ "$H7_EXIT_READY" -eq 1 ]; then
     # Step 3 — H7 watcher (alerts only; requires the linked gate receipt).
     "$UV" run python -m options_researcher.h7_watch --data-gate-receipt "$DG_RECEIPT" && note "h7_watch: ran" || crit "h7_watch: NONZERO EXIT"
 
-    # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing). The forward
-    # ledger holds only the registration event, so the append path has never run
-    # on real receipts. Prove the entry door would open BEFORE a name triggers,
-    # rather than discovering a refusal on the one day it matters.
-    PF_OUT="$("$UV" run python -m options_researcher.h7_entry_preflight \
-                --data-gate-receipt "$DG_RECEIPT" 2>&1)"
-    PF_RC=$?
-    echo "$PF_OUT"
+    # Step 3a — H7 real-entry preflight (READ-ONLY; writes nothing besides its
+    # own --out receipt below). The forward ledger holds only the
+    # registration event, so the append path has never run on real receipts.
+    # Prove the entry door would open BEFORE a name triggers, rather than
+    # discovering a refusal on the one day it matters.
+    #
+    # --out (not a shell capture): banner-pollution guard, same class as the
+    # 2026-07-23 H8 fix. This receipt is committed as durable H7 evidence
+    # (Step 8 below); capturing this process's stdout into a shell variable
+    # first would have put LumiBot v4.5.63's import-time banner line into
+    # that committed file. The module writes its own receipt directly; its
+    # normal stdout still reaches $LOG via the script-level exec redirect.
     PF_RECEIPT_DIR="reports/h7_receipts/${SCOPE_ID}/preflight"
     mkdir -p "$PF_RECEIPT_DIR"
-    printf '%s\nexit_code=%s\n' "$PF_OUT" "$PF_RC" > \
-      "${PF_RECEIPT_DIR}/${AS_OF}.txt"
+    "$UV" run python -m options_researcher.h7_entry_preflight \
+                --data-gate-receipt "$DG_RECEIPT" \
+                --out "${PF_RECEIPT_DIR}/${AS_OF}.txt"
+    PF_RC=$?
     if [ "$PF_RC" -eq 0 ]; then
       note "h7 entry preflight: real entry path REACHABLE"
     else
@@ -220,9 +272,21 @@ if [ "$GATE_GO" -eq 1 ]; then
     --write-receipt "reports/h6_forward/${AS_OF}.json" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"
 
   # Step 4b — H5 LEAPS entry-trigger watch (alert-only; never auto-enters).
+  # Reads the attractiveness feature store rebuilt above, which is why that
+  # rebuild now runs ahead of the GATE_GO block instead of after it.
+  #
+  # --out (not `| tee`): banner-pollution guard, same class as the
+  # 2026-07-23 H8 fix. `| tee "$EW_OUT"` would have captured LumiBot
+  # v4.5.63's import-time banner line into the persisted FIRE-signal receipt
+  # `grep -q "FIRE"` reads below -- and in zsh (no `setopt PIPE_FAIL`), `if
+  # cmd | tee file; then` checks tee's exit status, not cmd's, so a real
+  # entry_watch failure could have been silently swallowed by a
+  # successful tee. The module now writes its own report file directly;
+  # its normal stdout still reaches $LOG via the script-level exec
+  # redirect, and $? below is entry_watch's own exit code.
   EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
   mkdir -p reports/h5
-  if "$UV" run python -m options_researcher.entry_watch | tee "$EW_OUT"; then
+  if "$UV" run python -m options_researcher.entry_watch --out "$EW_OUT"; then
     if grep -q "FIRE" "$EW_OUT"; then
       crit "H5 ENTRY TRIGGER FIRE — read $EW_OUT and evaluate per H5 CORE rules"
     else
@@ -242,34 +306,12 @@ if [ "$GATE_GO" -eq 1 ]; then
   # Step 5b — H10a/b watcher + observation append (forward paper, no orders).
   # H10's --as-of is a requested RUN date and evaluates the prior completed
   # session, so pass RUN_DATE (not the already-resolved session in AS_OF).
+  # Reads underlying OHLCV via the QM refresh above (data/underlying_ohlcv.py),
+  # which is why that refresh now runs ahead of this block instead of after it.
   if "$UV" run python -c 'import options_researcher.h10_watch' 2>/dev/null; then
     "$UV" run python -m options_researcher.h10_watch --as-of "$RUN_DATE" && note "h10_watch: ran" || note "h10_watch: NONZERO EXIT"
     "$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" && note "h10_observe: appended" || note "h10_observe: NONZERO EXIT"
   fi
-fi
-
-# QM dashboard context requires the exact completed session. Refresh only
-# missing/stale OHLCV names, then fail visibly if Yahoo cannot supply AS_OF.
-# The attractiveness dashboard still rebuilds: its QM list will show three
-# DATA BLOCKED slots while the unchanged mechanical list remains available.
-if [ -n "$AS_OF" ]; then
-  "$UV" run python -m options_researcher.qm_dashboard --refresh-ohlcv --as-of "$AS_OF" \
-    && note "QM OHLCV: exact-session current to $AS_OF" \
-    || note "QM OHLCV: FAILED/STALE — QM Top 3 will show DATA BLOCKED"
-else
-  note "QM OHLCV: SKIPPED (no evaluation session) — QM Top 3 will show DATA BLOCKED"
-fi
-
-# Attractiveness feature store — separate from the H6 manifested store
-# (.tmp/research/attractiveness vs .tmp/research; a shared path corrupted the
-# H6 AMZN manifest 2026-07-16). Rebuild to the evaluation session so the
-# dashboard's IV-ranks are never silently stale at BACKTEST_END.
-if [ -n "$AS_OF" ]; then
-  "$UV" run python -c "from options_researcher.features import build_all; build_all('$AS_OF')" \
-    && note "attractiveness features: rebuilt to $AS_OF" \
-    || note "attractiveness features: FAILED — dashboard will flag stale/missing features"
-else
-  note "attractiveness features: SKIPPED (no evaluation session)"
 fi
 
 # Dashboards rebuild regardless of gate state — they display cached truth
@@ -300,7 +342,7 @@ fi
 # ---------------------------------------------------------------------------
 git add -- ledger/facts.log ledger/h7_forward \
            reports/h7_receipts reports/h7_data_gate reports/h5 reports/h6_forward \
-           reports/h8_forward reports/h10 reports/ritual 2>/dev/null
+           reports/h8_forward reports/h10 reports/ritual reports/intraday_capture 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}

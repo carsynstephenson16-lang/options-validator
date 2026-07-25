@@ -45,5 +45,43 @@ class H7DailyExitOrderTests(unittest.TestCase):
                 self.assertNotIn(forbidden, source)
 
 
+class RitualRefreshBeforeConsumerOrderTests(unittest.TestCase):
+    """Regression guard for the 2026-07-24 ordering bug: H10 and H5 entry_watch
+    each ran before the store they read was refreshed for the day, producing a
+    permanently-mislabeled H10 receipt (all names logged SKIPPED reason=DATA)
+    and a stale-IV-rank refusal in H5 entry_watch. See the 2026-07-24 07:10
+    production log and facts.log H10_RITUAL_ORDER_FIX.
+    """
+
+    def test_qm_ohlcv_refresh_precedes_h10_watch_and_observe(self):
+        source = RITUAL.read_text(encoding="utf-8")
+
+        # h10_watch/h10_observe read underlying OHLCV via
+        # data/underlying_ohlcv.py (options_researcher/h10_watch.py
+        # _load_adjusted/_load_raw), which the QM OHLCV refresh step writes.
+        refresh = 'options_researcher.qm_dashboard --refresh-ohlcv --as-of "$AS_OF"'
+        h10_watch = "options_researcher.h10_watch --as-of"
+        h10_observe = "options_researcher.h10_observe --as-of"
+
+        self.assertIn(refresh, source)
+        self.assertIn(h10_watch, source)
+        self.assertIn(h10_observe, source)
+        self.assertLess(source.index(refresh), source.index(h10_watch))
+        self.assertLess(source.index(refresh), source.index(h10_observe))
+
+    def test_attractiveness_features_rebuild_precedes_entry_watch(self):
+        source = RITUAL.read_text(encoding="utf-8")
+
+        # entry_watch reads IV-rank via options_researcher/features.py
+        # load_features(), which reads the store this build_all() call writes
+        # (options_researcher/entry_watch.py _gather -> features.load_features).
+        rebuild = "from options_researcher.features import build_all; build_all("
+        entry_watch = "options_researcher.entry_watch"
+
+        self.assertIn(rebuild, source)
+        self.assertIn(entry_watch, source)
+        self.assertLess(source.index(rebuild), source.index(entry_watch))
+
+
 if __name__ == "__main__":
     unittest.main()
