@@ -1048,4 +1048,64 @@ repo-scale corner survives as Badge B in the briefs.
 - **Review date:** next quarterly audit, or immediately when any un-park
   gate above fires.
 
+## Intraday volume periodicity / RVOL scanner signal (parked 2026-07-25)
 
+- **What:** the QuantConnect-researched idea (research post 21066) of using
+  intraday equity volume periodicity — relative volume vs. the name's own
+  time-of-day profile, or spectral "periodicity strength" — as a scanner
+  input.
+- **Decision (2026-07-25, four-file research workflow on
+  `feature/strategy-enhancement`):** RESEARCH-VALID, IMPLEMENTATION-REJECTED.
+  Failed decision gates: (1) no free live intraday equity-volume source with
+  full-market coverage exists — ThetaData stock entitlement is FREE/EOD-only
+  (live probe receipt `reports/live_probe/2026-07-24.json` shows
+  PERMISSION_DENIED), QuantConnect data is paid + non-exportable at every
+  live/local layer, Yahoo scraping is ToS-prohibited, and the only $0
+  real-time feed (Alpaca IEX) carries ~3–6% of consolidated volume; (5) no
+  source ties the signal to options selection — the one defensible link is
+  execution timing, which a 5-snapshot/day scanner cannot use; (6) the
+  feature layer is EOD-grain, so this needs a whole new continuous pipeline.
+- **Un-park gates:** owner pays for the ThetaData stock VALUE+ tier (or an
+  equivalent full-market intraday feed), AND an options-selection mechanism
+  is articulated and pre-registered first. An IEX-slice build additionally
+  requires a representativeness study (IEX-vs-consolidated intraday shape)
+  before any profile is trusted.
+- **Full evidence:** `.research/01_periodicity.md` (hypothesis, formulas,
+  leakage modes), `.research/02_licensing.md` (11-provider audit),
+  `.research/decision.md` (gate-by-gate).
+
+## OI change context line — v1 UN-PARKED 2026-07-25 (ratified); v2 percentile+NOTABLE still parked
+
+- **Status update 2026-07-25 (same day, later session):** the owner ratified
+  the adjudicated values (window 252 / min-obs 126 / notable ≥0.95 / min
+  base 100) after the adversarial review in
+  `.research/06_ratification_review.md` returned REVISE. **v1 (signed delta
+  line + UNKNOWN taxonomy) is un-parked and implemented** per the ratified
+  revision in `.research/05_lead_candidate_brief.md` (Claude subagent
+  implemented under main-session review — Codex unavailable until
+  2026-07-28, owner-directed substitution).
+- **Still parked (v2):** the percentile + NOTABLE display. Gate: a
+  pre-registered descriptive calibration study over the selected-contract
+  path history (06 §13) — the exact-contract reading was rejected on
+  measured coverage (8/20 samples reach 126 obs; 2/20 have zero).
+- **What (original idea):** a neutral per-card display line showing the
+  chosen contract's 1-day open-interest change and its percentile vs.
+  trailing history. Zero new data: historical OI is in every cached chain
+  and live `option_snapshot_open_interest` is probe-confirmed entitled.
+  ("Build-up" wording retired — directional flavor; the line is an
+  activity fact only.)
+
+## IV skew steepness (OTM-put skew slope) badge (parked 2026-07-25)
+
+- **What:** slope of IV across strikes at fixed tenor (e.g. 0.20-delta put
+  IV minus ATM IV) — the strike-axis complement to the RQ2 B1 tenor-slope
+  badge. Runner-up in `.research/03_strategy_candidates.md` (24/30).
+- **Why parked:** strongest peer-reviewed mechanism of the batch (Xing,
+  Zhang & Zhao 2010, JFQA — steeper single-name smirks predicted lower
+  future equity returns), and zero new data; but it needs a frozen
+  strike/delta/tenor convention chosen BEFORE any results are seen, plus an
+  explicit small-universe external-validity memo (a many-hundred-stock
+  cross-sectional finding applied to a 15-name thematic board), following
+  the N3-1 "owner-nod one-page spec" path.
+- **Gate before building:** owner-approved one-page spec freezing the
+  skew definition; then the standard RQ2 badge pipeline.
