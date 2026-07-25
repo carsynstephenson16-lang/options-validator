@@ -132,6 +132,39 @@ dividends CSV as owner-spot-check-pending and label the line accordingly.
 Wording-only honesty bundle, spec fully written in the briefs doc. Ship
 first if Codex wants a warm-up.
 
+### Packet P6 — Ritual signal taxonomy: BROKEN vs declined-to-enter — size S
+(source: hard audit 2026-07-25, finding 10a)
+
+**Verified current behavior:** `tools/daily_ritual.sh` marks CRITICAL — and
+exits 1 / notifies "[BROKEN]" — when the capture receipt reports a
+hypothesis REFUSED, even when the refusal is the fail-closed design working
+(e.g. H7 preflight refusing on a source-unhealthy registered name). Friday
+2026-07-24's BROKEN was exactly this. Alarm fatigue: the owner cannot
+distinguish "no entry today (expected)" from "pipeline failed."
+
+**Required behavior:** three-way summary taxonomy: OK / DEGRADED (a
+hypothesis declined or was fail-closed banned — expected states, exit 0,
+yellow notification) / BROKEN (a step crashed, a receipt could not be
+written, evidence could not commit — exit 1, red). The per-hypothesis lines
+keep their exact wording; only the roll-up classification and exit code
+change. Preserve: FIRE still promotes to CRITICAL (review-forcing by
+design). Tests: extend the ritual-receipt/banner test files; every existing
+CRITICAL case must be re-classified in the test, not silently dropped.
+
+### Packet P7 — Intraday-capture per-snapshot durability — size XS-S
+(source: hard audit 2026-07-25, finding item 7)
+
+**Verified current behavior:** `intraday_capture.py`/`.sh` never commit;
+Friday-afternoon receipts sit untracked in ops until Monday's ritual —
+a weekend disk failure loses up to ~72h of forward snapshots.
+
+**Required behavior:** after each successful snapshot, `git add
+reports/intraday_capture reports/live_probe && git commit` (fail-soft,
+message pattern `evidence(intraday): <session_tag> <date>`) — commit only,
+no push (the ritual's morning push and restic remain the durability chain;
+an optional push is owner's call). Branch guard already ensures main.
+Tests: shell-level dry-run guard; no commit on failed/skipped snapshots.
+
 ---
 
 ## WAVE 2 — owner-sequenced (specs already exist; do not start until Wave 1 merges)

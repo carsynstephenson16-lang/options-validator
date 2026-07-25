@@ -14,7 +14,8 @@
     "wiki",
     "ledger",
     "options_researcher",
-    "tests"
+    "tests",
+    "config.py"
   ],
   "denied_segments": [
     ".env",
@@ -38,10 +39,33 @@
     ".html"
   ],
   "source_classes": {
-    "registered_hypothesis": ["ledger/", "docs/superpowers/specs/", "docs/h7-forward-operations.md"],
-    "frozen_parameters": ["config.py", "options_researcher/config.py", "options_researcher/h7_scope.py", "options_researcher/h7_window_registration.py"],
-    "derived_backtest": ["reports/", "options_researcher/h4_backtest.py"],
-    "exploratory_notebook": ["research/", "wiki/", "docs/research/"],
-    "workflow": ["options_researcher/", "tests/", "docs/superpowers/plans/", "README.md", "AGENTS.md", "CLAUDE.md"]
+    "registered_hypothesis": [
+      "ledger/",
+      "docs/superpowers/specs/",
+      "docs/h7-forward-operations.md"
+    ],
+    "frozen_parameters": [
+      "config.py",
+      "options_researcher/config.py",
+      "options_researcher/h7_scope.py",
+      "options_researcher/h7_window_registration.py"
+    ],
+    "derived_backtest": [
+      "reports/",
+      "options_researcher/h4_backtest.py"
+    ],
+    "exploratory_notebook": [
+      "research/",
+      "wiki/",
+      "docs/research/"
+    ],
+    "workflow": [
+      "options_researcher/",
+      "tests/",
+      "docs/superpowers/plans/",
+      "README.md",
+      "AGENTS.md",
+      "CLAUDE.md"
+    ]
   }
 }
