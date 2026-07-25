@@ -125,6 +125,17 @@ BS_DIVIDEND_STALENESS_RULE = (
 MIN_OPEN_INTEREST    = 100
 MAX_SPREAD_PCT       = 0.10           # skip contracts wider than 10% bid-ask
 
+# --- OI-change context line (owner-ratified 2026-07-25; see
+# .research/05_lead_candidate_brief.md "RATIFIED REVISION") ---
+# Neutral activity fact only: never touches grades, scores, ranking, or
+# selection. v1 uses the delta + UNKNOWN taxonomy; the percentile/NOTABLE
+# constants are frozen research settings, INACTIVE until v2 calibration.
+OI_CHANGE_MIN_BASE = 100          # ACTIVE in v1: prior-session OI below this -> LOW_BASE (UNKNOWN)
+OI_CHANGE_MAX_PRIOR_GAP_DAYS = 4  # ACTIVE in v1: calendar-day gap D vs prior session above this -> STALE_PRIOR_CHAIN
+OI_CHANGE_PCTL_WINDOW = 252       # frozen research setting; INACTIVE until v2 calibration study
+OI_CHANGE_PCT_MIN_OBS = 126       # frozen research setting; INACTIVE until v2 calibration study
+OI_CHANGE_NOTABLE_PCTL = 0.95     # frozen research setting; INACTIVE until v2 calibration study
+
 # ---------------------------------------------------------------------------
 # SHARED STRATEGY HORIZON
 # ---------------------------------------------------------------------------

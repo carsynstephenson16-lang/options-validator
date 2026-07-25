@@ -860,6 +860,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict]]:
     from options_researcher.features import load_features
     from options_researcher.fomc import load_fomc
     from options_researcher.h7_earnings import load_assertions
+    from options_researcher.oi_change import attach_oi_change
     from options_researcher.portfolio import HOLDINGS_PATH, load_holdings, load_positions
     from options_researcher.technicals import (
         technical_snapshot,
@@ -925,6 +926,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict]]:
                 cc_card_rows=cc_card_rows, pmcc_card_rows=pmcc_card_rows,
                 leaps_card_rows=leaps_card_rows,
                 long_call_card_rows=long_call_card_rows,
+                attach_oi_change=attach_oi_change,
                 date_cls=date_cls, pd=pd, config=config)
         except FileNotFoundError as exc:
             _block(symbol, "INPUT_MISSING", str(exc), day)
@@ -944,8 +946,8 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                    load_features, load_fomc, apply_cycle_badges,
                    technical_snapshot, technical_summary_line, ladder_cards,
                    put_card_rows, cc_card_rows, pmcc_card_rows,
-                   leaps_card_rows, long_call_card_rows, date_cls, pd,
-                   config) -> tuple[dict, float]:
+                   leaps_card_rows, long_call_card_rows, attach_oi_change,
+                   date_cls, pd, config) -> tuple[dict, float]:
     """Build one symbol's section (extracted so _gather_all can isolate
     per-symbol failures). Dependencies are passed in to keep the lazy-import
     pattern of the caller."""
@@ -989,6 +991,9 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                              iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                              earnings_dates=earnings,
                              fomc_dates=fomcs)
+    # Neutral OI-change context, strictly AFTER ranking (board-invariant).
+    attach_oi_change(put_cards, right="P", chain_day=chain,
+                     symbol=symbol, day=day)
     groups: list[dict] = [
         {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
          "cards": put_cards,
@@ -998,16 +1003,19 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
     lot = holdings.loc[holdings["symbol"] == symbol]
     held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
     if held_shares >= 100:
+        cc_cards = ladder_cards(
+            cc_card_rows, symbol, chain, day,
+            rank_key="annualized_yield",
+            higher_is_better=True, close=close,
+            cost_basis=float(lot.iloc[0]["cost_basis"]),
+            iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+            earnings_dates=earnings,
+            fomc_dates=fomcs)
+        attach_oi_change(cc_cards, right="C", chain_day=chain,
+                         symbol=symbol, day=day)
         groups.append({"kind": "cc",
                        "title": "SELL A COVERED CALL? (rent out your shares)",
-                       "cards": ladder_cards(
-                           cc_card_rows, symbol, chain, day,
-                           rank_key="annualized_yield",
-                           higher_is_better=True, close=close,
-                           cost_basis=float(lot.iloc[0]["cost_basis"]),
-                           iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
-                           earnings_dates=earnings,
-                           fomc_dates=fomcs),
+                       "cards": cc_cards,
                        "empty": None})
     elif held_shares > 0:
         groups.append({"kind": "cc",
@@ -1026,6 +1034,9 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
             leaps_strike=lk, leaps_premium=lp,
             close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
             earnings_dates=earnings, fomc_dates=fomcs)
+        # Card's own strike/expiry are the SHORT call it displays (pmcc_card_rows).
+        attach_oi_change(pmcc_cards, right="C", chain_day=chain,
+                         symbol=symbol, day=day)
         groups.append({"kind": "pmcc",
                        "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
                        "leaps_strike": lk, "leaps_premium": lp,
@@ -1038,6 +1049,8 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
     if symbol in config.H4_THESIS_NAMES:
         leaps_cards = leaps_card_rows(symbol, chain, day, close=close,
                                       iv_rank=iv_rank, bucket_room=bucket_room)
+        attach_oi_change(leaps_cards, right="C", chain_day=chain,
+                         symbol=symbol, day=day)
         groups.append({"kind": "leaps",
                        "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
                        "preview": False, "cards": leaps_cards, "empty": None})
@@ -1052,6 +1065,8 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                 leaps_strike=lk, leaps_premium=lp,
                 close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
                 earnings_dates=earnings, fomc_dates=fomcs)
+            attach_oi_change(preview_pmcc, right="C", chain_day=chain,
+                             symbol=symbol, day=day)
             groups.append({
                 "kind": "pmcc", "preview": True,
                 "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
@@ -1066,6 +1081,8 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                               rank_key="breakeven_move",
                               higher_is_better=False, close=close,
                               iv_rank=iv_rank)
+    attach_oi_change(long_calls, right="C", chain_day=chain,
+                     symbol=symbol, day=day)
     groups.append({"kind": "long_call", "preview": True,
                    "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
                    "cards": long_calls,
@@ -1802,6 +1819,10 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
         parts.append(f'<div class="notice watch">! '
                      f'{_esc(_PREVIEW_WARNING)}</div>')
     parts.append(_risk_line(card))
+    if card.get("oi_change_line"):
+        # Neutral positioning context (activity fact); reuses the plain label
+        # class -- no color coupling to sign, never a grade.
+        parts.append(f'<div class="label oi-line">{_esc(card["oi_change_line"])}</div>')
     if tech_note:
         parts.append(f'<div class="tech-line">{_esc(tech_note)}</div>')
     parts.append(_bbb_table(card.get("bbb", [])))
