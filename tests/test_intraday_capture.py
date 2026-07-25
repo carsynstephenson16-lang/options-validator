@@ -9,6 +9,7 @@ import glob
 import inspect
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -845,10 +846,117 @@ class SolverIvCalibrationGateTests(unittest.TestCase):
                 }
                 (Path(tmp) / "2026-07-01.json").write_text(json.dumps(older))
                 (Path(tmp) / "2026-07-24.json").write_text(json.dumps(newer))
-                # newest (lexicographically-last filename) is 2026-07-24,
-                # which passes CEG, not VST.
+                # "newer" has the later (or tied, tie-break-by-filename)
+                # run_at_utc AND the lexicographically-later filename, so
+                # both the pre-fix and post-fix selection rules agree here
+                # -- this test alone can't distinguish them (see
+                # LoadLatestCalibrationReceiptTests below for a fixture
+                # where filename order and run_at_utc order actively
+                # disagree, which is the real 2026-07-24 production bug).
+                # 2026-07-24.json passes CEG, not VST.
                 self.assertFalse(ic.solver_iv_calibration_gate("VST"))
                 self.assertTrue(ic.solver_iv_calibration_gate("CEG"))
+
+
+# ---------------------------------------------------------------------------
+# _load_latest_calibration_receipt selection (fix for the 2026-07-24
+# production incident: filename-lexicographic sort masked a real
+# retrospective-mode PASS behind a same-day strict-mode all-FAIL receipt)
+# ---------------------------------------------------------------------------
+
+class LoadLatestCalibrationReceiptTests(unittest.TestCase):
+    def test_both_same_day_receipts_retrospective_with_later_run_at_utc_governs(self):
+        # Mirrors the real production fixture: "2026-07-24.json" (strict,
+        # all-fail, run 14:54 UTC) and "2026-07-24-retrospective.json"
+        # (retrospective_official, 14/15 pass, run 15:28 UTC -- LATER in
+        # time but LEXICOGRAPHICALLY EARLIER as a filename, since "-"
+        # sorts before "."). The parsed-run_at_utc selection must pick the
+        # retrospective receipt and its names splice.
+        with tempfile.TemporaryDirectory() as tmp:
+            # config_hash() hashes ALL uppercase config constants, including
+            # IV_CALIBRATION_RECEIPT_DIR itself -- compute it INSIDE the
+            # patched config state so the gate's later re-hash matches (see
+            # SolverIvCaptureIntegrationTests.test_solver_success_and_gate_
+            # pass_splices_rank for the same discipline).
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                current_hash = config_hash()
+                strict = {
+                    "run_at_utc": "2026-07-24T14:54:20.993776+00:00",
+                    "inputs_mode": None, "config_hash": current_hash,
+                    "names_passed": [],
+                }
+                retro = {
+                    "run_at_utc": "2026-07-24T15:28:17.508115+00:00",
+                    "inputs_mode": "retrospective_official",
+                    "config_hash": current_hash,
+                    "names_passed": ["VST", "CEG"],
+                }
+                (Path(tmp) / "2026-07-24.json").write_text(json.dumps(strict))
+                (Path(tmp) / "2026-07-24-retrospective.json").write_text(
+                    json.dumps(retro))
+                # Filename order alone would put the plain file last (it
+                # sorts lexicographically after the "-retrospective" file),
+                # which is exactly the bug: prove that's true of this
+                # fixture too.
+                self.assertEqual(
+                    sorted(["2026-07-24.json",
+                           "2026-07-24-retrospective.json"])[-1],
+                    "2026-07-24.json")
+                receipt, path = ic._load_latest_calibration_receipt(tmp)
+                self.assertEqual(receipt["names_passed"], ["VST", "CEG"])
+                self.assertEqual(path.name, "2026-07-24-retrospective.json")
+                self.assertTrue(ic.solver_iv_calibration_gate("VST"))
+                self.assertTrue(ic.solver_iv_calibration_gate("CEG"))
+
+    def test_strict_only_fixture_strict_governs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            strict = {
+                "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                "config_hash": config_hash(), "names_passed": ["VST"],
+            }
+            (Path(tmp) / "2026-07-24.json").write_text(json.dumps(strict))
+            receipt, path = ic._load_latest_calibration_receipt(tmp)
+            self.assertEqual(receipt["names_passed"], ["VST"])
+            self.assertEqual(path.name, "2026-07-24.json")
+
+    def test_malformed_receipt_file_is_skipped_valid_ones_still_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
+                current_hash = config_hash()
+                good = {
+                    "run_at_utc": "2026-07-24T15:28:17.508115+00:00",
+                    "config_hash": current_hash, "names_passed": ["VST"],
+                }
+                # Not valid JSON at all.
+                (Path(tmp) / "2026-07-24-broken.json").write_text(
+                    "{not valid json")
+                # Valid JSON, but run_at_utc doesn't parse as a timestamp.
+                (Path(tmp) / "2026-07-24-badtime.json").write_text(json.dumps(
+                    {"run_at_utc": "not-a-real-timestamp",
+                     "config_hash": current_hash, "names_passed": ["CEG"]}))
+                # Valid JSON, but not an object at all.
+                (Path(tmp) / "2026-07-24-notdict.json").write_text(json.dumps(
+                    ["not", "a", "dict"]))
+                (Path(tmp) / "2026-07-24-good.json").write_text(json.dumps(good))
+                receipt, path = ic._load_latest_calibration_receipt(tmp)
+                self.assertEqual(receipt["names_passed"], ["VST"])
+                self.assertEqual(path.name, "2026-07-24-good.json")
+                self.assertTrue(ic.solver_iv_calibration_gate("VST"))
+                self.assertFalse(ic.solver_iv_calibration_gate("CEG"))
+
+    def test_only_malformed_files_present_yields_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "2026-07-24-broken.json").write_text("{not valid json")
+            receipt, path = ic._load_latest_calibration_receipt(tmp)
+            self.assertIsNone(receipt)
+            self.assertIsNone(path)
+
+    def test_missing_dir_yields_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "does_not_exist"
+            receipt, path = ic._load_latest_calibration_receipt(missing)
+            self.assertIsNone(receipt)
+            self.assertIsNone(path)
 
 
 # ---------------------------------------------------------------------------
@@ -903,6 +1011,13 @@ class SolverIvCaptureIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(row["iv_rank_preview"])
         self.assertIsNone(row["iv_label"])
         self.assertIsNone(row["greeks_note"])
+        # Splice provenance (2026-07-24 fix): the top-level block names
+        # exactly which calibration receipt authorized the splice.
+        self.assertEqual(receipt["iv_rank_calibration"], {
+            "receipt_path": str(Path(calib_dir) / "2026-07-24.json"),
+            "inputs_mode": "strict",  # calibration_receipt has no key -> default
+            "run_at_utc": calibration_receipt["run_at_utc"],
+        })
 
     def test_solver_success_no_receipt_nulls_rank_with_label(self):
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
@@ -922,6 +1037,8 @@ class SolverIvCaptureIntegrationTests(unittest.TestCase):
         self.assertIsNone(row["iv_rank_preview"])
         self.assertEqual(row["iv_label"], "solver-derived, not rank-comparable")
         self.assertIsNone(row["greeks_note"])
+        # No name spliced (gate failed -- no receipt at all) -- no provenance.
+        self.assertIsNone(receipt["iv_rank_calibration"])
 
     def test_solver_failure_records_specific_reason_string(self):
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
@@ -937,6 +1054,8 @@ class SolverIvCaptureIntegrationTests(unittest.TestCase):
         self.assertIsNone(row["iv_rank_preview"])
         self.assertIn("solver: no rate curve coverage", row["greeks_note"])
         self.assertIn("not entitled", row["greeks_note"])
+        # Solver itself failed -- nothing to splice, no provenance.
+        self.assertIsNone(receipt["iv_rank_calibration"])
 
     def test_greeks_success_path_is_unaffected_by_solver_wiring(self):
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0})  # greeks OK
@@ -948,6 +1067,41 @@ class SolverIvCaptureIntegrationTests(unittest.TestCase):
         self.assertEqual(row["atm_iv"], 0.30)
         self.assertIsNone(row["iv_label"])
         self.assertIsNone(row["greeks_note"])
+        # The greeks-endpoint path never touches the solver/calibration
+        # machinery at all -- no provenance to record.
+        self.assertIsNone(receipt["iv_rank_calibration"])
+
+    def test_provenance_reports_the_actual_inputs_mode_not_a_default(self):
+        # A retrospective-mode receipt's own "inputs_mode" must appear
+        # verbatim in the provenance block, not the "strict" default that
+        # only applies when the key is genuinely absent.
+        client = FakeClient(spots={"VST": 150.0, "CEG": 90.0},
+                            greeks_raises={"VST", "CEG"})
+        history = [0.20 + 0.001 * i for i in range(150)]
+        with tempfile.TemporaryDirectory() as calib_dir:
+            with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", calib_dir):
+                calibration_receipt = {
+                    "run_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "inputs_mode": "retrospective_official",
+                    "config_hash": config_hash(),
+                    "names_passed": ["VST", "CEG"],
+                }
+                (Path(calib_dir) / "2026-07-24-retrospective.json").write_text(
+                    json.dumps(calibration_receipt))
+                with mock.patch.object(ic.data_rates, "risk_free_rate",
+                                       return_value=SimpleNamespace(rate=0.04)), \
+                     mock.patch.object(ic.data_rates, "dividend_yield",
+                                       return_value=SimpleNamespace(yield_rate=0.0)), \
+                     mock.patch.object(lq, "_load_iv_history", return_value=history):
+                    rc, receipt = self._run(client)
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["iv_rank_calibration"]["inputs_mode"],
+                         "retrospective_official")
+        self.assertEqual(receipt["iv_rank_calibration"]["run_at_utc"],
+                         calibration_receipt["run_at_utc"])
+        self.assertEqual(
+            receipt["iv_rank_calibration"]["receipt_path"],
+            str(Path(calib_dir) / "2026-07-24-retrospective.json"))
 
 
 # ---------------------------------------------------------------------------
@@ -1067,6 +1221,103 @@ class WrapperBannerPollutionGuardTests(unittest.TestCase):
         # The old blind `case "$CAP_RC" in 2) ... RECEIPT CONFLICT` pattern
         # must be gone.
         self.assertNotIn('2) crit "intraday_capture', source)
+
+
+# ---------------------------------------------------------------------------
+# Zero-coverage WARN, not a plain OK (today's 13:00 DNS outage looked like
+# ">>> intraday_capture (midday): OK -- coverage: 0/15 names captured";
+# an outage gap is a legitimate, non-fatal descriptive-dataset gap -- NOT
+# CRITICAL -- but must be visibly not-OK, not indistinguishable from a
+# genuinely healthy run.)
+# ---------------------------------------------------------------------------
+
+class WrapperZeroCoverageWarnStaticTests(unittest.TestCase):
+    def test_zero_coverage_branch_present_and_not_critical(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn(
+            "grep -Eq '^coverage: 0/[0-9]+ '", source)
+        self.assertIn(
+            'note "intraday_capture (${TAG}): WARN -- zero coverage '
+            '(provider unreachable?) -- ${COVERAGE_LINE}"', source)
+        # The WARN branch calls note(), never crit() -- zero coverage alone
+        # must not flip the run to CRITICAL/BROKEN.
+        warn_idx = source.index("WARN -- zero coverage")
+        line_start = source.rfind("\n", 0, warn_idx) + 1
+        line_end = source.index("\n", warn_idx)
+        self.assertTrue(source[line_start:line_end].lstrip().startswith("note "))
+
+    def test_nonzero_coverage_still_reaches_plain_ok(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn(
+            'note "intraday_capture (${TAG}): OK -- ${COVERAGE_LINE}"', source)
+
+
+class WrapperZeroCoverageWarnLiveTests(unittest.TestCase):
+    """Executes the ACTUAL coverage-labeling block sliced verbatim out of
+    tools/intraday_capture.sh (between the `if [ "$CAP_RC" -eq 0 ]; then`
+    marker and its matching `fi`) in a real bash subprocess, with CAP_OUT/
+    CAP_RC/TAG set to fixture values and a stub note()/crit(). This is the
+    live counterpart to the static checks above -- proves the actual
+    conditional logic branches correctly, not just that certain strings
+    are present somewhere in the file."""
+
+    def _extract_block(self) -> str:
+        source = WRAPPER.read_text(encoding="utf-8")
+        start = source.index('if [ "$CAP_RC" -eq 0 ]; then')
+        end = source.index("\nfi\n", start) + len("\nfi")
+        return source[start:end]
+
+    def _run_block(self, cap_out: str, cap_rc: int) -> str:
+        block = self._extract_block()
+        # shlex.quote (not Python's repr!) -- a real embedded newline stays
+        # a literal newline inside bash single quotes, whereas repr() would
+        # emit the two-character escape "\n", which bash single quotes
+        # do NOT interpret, silently breaking grep's line-anchored '^...'.
+        quoted_cap_out = shlex.quote(cap_out)
+        # Plain concatenation, NOT an f-string: `block` is real bash source
+        # containing literal "${...}" parameter expansions, which an
+        # f-string would misparse as Python replacement fields.
+        script = "\n".join([
+            "set -u",
+            'SUMMARY=""',
+            'note() { SUMMARY="${SUMMARY}$1\\n"; }',
+            'crit() { SUMMARY="${SUMMARY}CRITICAL: $1\\n"; }',
+            'TAG="midday"',
+            "CAP_OUT=" + quoted_cap_out,
+            "CAP_RC=" + str(cap_rc),
+            block,
+            'printf "%b" "$SUMMARY"',
+            "",
+        ])
+        completed = subprocess.run(
+            ["/bin/bash", "-c", script], capture_output=True, text=True,
+            timeout=30)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        return completed.stdout
+
+    def test_zero_of_fifteen_produces_warn_not_ok(self):
+        out = self._run_block(
+            "receipt=reports/intraday_capture/2026-07-24/midday.json\n"
+            "coverage: 0/15 names captured", 0)
+        self.assertIn("WARN -- zero coverage", out)
+        self.assertNotIn("CRITICAL", out)
+        self.assertNotIn(": OK -- coverage: 0/15", out)
+
+    def test_nonzero_coverage_still_produces_plain_ok(self):
+        out = self._run_block(
+            "receipt=reports/intraday_capture/2026-07-24/midday.json\n"
+            "coverage: 14/15 names captured", 0)
+        self.assertIn(": OK -- coverage: 14/15 names captured", out)
+        self.assertNotIn("WARN", out)
+        self.assertNotIn("CRITICAL", out)
+
+    def test_full_coverage_produces_plain_ok(self):
+        out = self._run_block(
+            "receipt=reports/intraday_capture/2026-07-24/midday.json\n"
+            "coverage: 15/15 names captured", 0)
+        self.assertIn(": OK -- coverage: 15/15 names captured", out)
+        self.assertNotIn("WARN", out)
+        self.assertNotIn("CRITICAL", out)
 
 
 class TagDerivationBannerLiveTests(unittest.TestCase):

@@ -100,7 +100,17 @@ echo "$CAP_OUT"
 # module's own printed lines (main() always prints one of these), and only
 # fall back to a generic label when nothing recognized is present.
 if [ "$CAP_RC" -eq 0 ]; then
-  note "intraday_capture (${TAG}): OK -- $(echo "$CAP_OUT" | grep -m1 '^coverage:')"
+  COVERAGE_LINE="$(echo "$CAP_OUT" | grep -m1 '^coverage:')"
+  # Zero coverage (e.g. today's 13:00 DNS outage) previously printed a
+  # plain "OK -- coverage: 0/15 names captured" line -- indistinguishable
+  # from a genuinely healthy run at a glance. A provider outage is a
+  # legitimate gap in a descriptive dataset (not fatal, so NOT CRITICAL),
+  # but it must be visibly not-OK: WARN, not OK.
+  if echo "$COVERAGE_LINE" | grep -Eq '^coverage: 0/[0-9]+ '; then
+    note "intraday_capture (${TAG}): WARN -- zero coverage (provider unreachable?) -- ${COVERAGE_LINE}"
+  else
+    note "intraday_capture (${TAG}): OK -- ${COVERAGE_LINE}"
+  fi
 elif echo "$CAP_OUT" | grep -q '^intraday_capture refused:'; then
   crit "intraday_capture (${TAG}): REFUSED (exit ${CAP_RC}) -- $(echo "$CAP_OUT" | grep -m1 '^intraday_capture refused:')"
 elif echo "$CAP_OUT" | grep -q '^intraday_capture receipt CONFLICT'; then

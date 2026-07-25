@@ -73,6 +73,17 @@ consequences baked into the design below, not an afterthought:
      "solver: expired", "solver: no dividend data for {symbol}",
      "solver: no rate curve coverage", "solver: no quotes at selected
      contract", or "solver: no spot available" (see _solver_atm_iv).
+     _load_latest_calibration_receipt selects the newest calibration
+     receipt by each file's PARSED run_at_utc, never by filename sort
+     (fixed 2026-07-24: a same-day strict-mode all-fail receipt and a
+     same-day retrospective-mode mostly-pass receipt name themselves
+     YYYY-MM-DD[-retrospective].json, and ASCII "-" sorts before "." --
+     a lexicographic sort masked a real 14/15-pass retrospective receipt
+     behind a same-day all-fail strict one in production). Whenever a
+     splice happens for at least one name, the capture receipt records a
+     top-level "iv_rank_calibration" provenance block ({"receipt_path",
+     "inputs_mode", "run_at_utc"}) naming exactly which calibration
+     evidence authorized it; the block is null when no name spliced.
 
 Reuses rather than reinvents: live_quotes' session-gate machinery,
 column-resolution helpers (_pick_col via the adapter), _assemble_chain_frame,
@@ -396,50 +407,103 @@ def _solver_atm_iv(chain_like: pd.DataFrame, spot: float, symbol: str,
 
 
 def _load_latest_calibration_receipt(receipt_dir: str | Path | None = None
-                                     ) -> dict | None:
-    """Newest reports/iv_solver_calibration receipt, or None. Mirrors
-    live_quotes.load_latest_probe's convention exactly: receipts are named
-    by run date (YYYY-MM-DD.json), so a lexicographic filename sort is also
-    a chronological sort."""
+                                     ) -> tuple[dict | None, Path | None]:
+    """(receipt, path) for the newest reports/iv_solver_calibration
+    receipt, or (None, None). "Newest" is decided by each file's OWN
+    PARSED run_at_utc field, never by filename -- a same-day strict-mode
+    receipt (all-fail) and a same-day retrospective-mode receipt (mostly
+    pass) both name themselves by run DATE (YYYY-MM-DD[-retrospective
+    ].json), so a lexicographic filename sort is NOT a reliable
+    chronological sort: ASCII "-" (0x2D) sorts before "." (0x2E), so
+    "2026-07-24-retrospective.json" sorts AFTER "2026-07-24.json" even
+    when it names_passed and the plain file doesn't -- fine -- but the
+    reverse (plain file run LATER than the retrospective one) sorts the
+    same way despite being chronologically backwards. That exact
+    situation masked a real 14/15-pass retrospective receipt behind a
+    same-day all-fail strict receipt in production on 2026-07-24. Every
+    *.json file in the directory is considered; a file that is not valid
+    JSON, is not a JSON object, or has an unparseable/missing run_at_utc
+    is skipped, never raised. Ties (equal parsed run_at_utc) break
+    deterministically by filename -- the lexicographically-last name
+    wins, since `names` is iterated in ascending sorted order and later
+    files overwrite the running best on `>=`."""
     d = Path(receipt_dir if receipt_dir is not None
              else config.IV_CALIBRATION_RECEIPT_DIR)
     try:
         names = sorted(n for n in os.listdir(d) if n.endswith(".json"))
     except FileNotFoundError:
-        return None
-    if not names:
-        return None
-    with open(d / names[-1], encoding="utf-8") as fh:
-        return json.load(fh)
+        return None, None
+    best_receipt: dict | None = None
+    best_path: Path | None = None
+    best_ts = None
+    for name in names:
+        path = d / name
+        try:
+            with open(path, encoding="utf-8") as fh:
+                receipt = json.load(fh)
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            continue
+        if not isinstance(receipt, dict):
+            continue
+        try:
+            ts = pd.Timestamp(receipt.get("run_at_utc"))
+        except (TypeError, ValueError):
+            continue
+        if pd.isna(ts):
+            continue
+        if best_ts is None or ts >= best_ts:
+            best_receipt, best_path, best_ts = receipt, path, ts
+    return best_receipt, best_path
+
+
+def _solver_iv_calibration_check(symbol: str
+                                 ) -> tuple[bool, dict | None, Path | None]:
+    """(passed, receipt, receipt_path). Fail-closed to (False, receipt-or-
+    None, path-or-None) in every error case -- missing receipt, stale
+    receipt, hash mismatch, a names_failed symbol, or any unexpected
+    receipt shape; never raises (mirrors solver_iv_calibration_gate's own
+    contract). Exists separately from solver_iv_calibration_gate so a
+    caller that needs to know WHICH receipt authorized a splice (for
+    provenance) doesn't have to re-load and re-parse it a second time."""
+    try:
+        receipt, path = _load_latest_calibration_receipt()
+        if receipt is None:
+            return False, None, None
+        age = pd.Timestamp(datetime.now(timezone.utc)) - pd.Timestamp(
+            receipt.get("run_at_utc"))
+        if pd.isna(age) or age > pd.Timedelta(days=config.IV_CALIBRATION_MAX_AGE_DAYS):
+            return False, receipt, path
+        if receipt.get("config_hash") != config_hash():
+            return False, receipt, path
+        passed = symbol in (receipt.get("names_passed") or [])
+        return passed, receipt, path
+    except Exception:
+        return False, None, None
 
 
 def solver_iv_calibration_gate(symbol: str) -> bool:
-    """True only if the newest calibration receipt exists, is younger than
+    """True only if the newest calibration receipt (by parsed run_at_utc --
+    see _load_latest_calibration_receipt) exists, is younger than
     config.IV_CALIBRATION_MAX_AGE_DAYS, its config_hash matches the CURRENT
     config/code (a change since calibration invalidates it), and `symbol`
     is in its names_passed list. Fail-closed in every other case -- missing
     receipt, stale receipt, hash mismatch, a names_failed symbol, or any
-    unexpected receipt shape all return False; this NEVER raises."""
-    try:
-        receipt = _load_latest_calibration_receipt()
-        if receipt is None:
-            return False
-        age = pd.Timestamp(datetime.now(timezone.utc)) - pd.Timestamp(
-            receipt.get("run_at_utc"))
-        if pd.isna(age) or age > pd.Timedelta(days=config.IV_CALIBRATION_MAX_AGE_DAYS):
-            return False
-        if receipt.get("config_hash") != config_hash():
-            return False
-        return symbol in (receipt.get("names_passed") or [])
-    except Exception:
-        return False
+    unexpected receipt shape all return False; this NEVER raises. Thin
+    bool-only wrapper around _solver_iv_calibration_check; _capture_symbol
+    calls the latter directly so it can also record which receipt
+    authorized a splice."""
+    passed, _receipt, _path = _solver_iv_calibration_check(symbol)
+    return passed
 
 
 def _capture_symbol(client, symbol: str, spot_row: dict | None,
-                    today: date, ny_iso: str) -> tuple[dict, pd.DataFrame | None]:
+                    today: date, ny_iso: str
+                    ) -> tuple[dict, pd.DataFrame | None, dict | None]:
     """One name's descriptive capture row + its full nearest-monthly chain
-    frame (or None on failure). Lets exceptions propagate -- the caller
-    wraps this per symbol so one name's failure never aborts the board.
+    frame (or None on failure) + the calibration receipt provenance (or
+    None) that authorized an iv_rank_preview splice for THIS symbol, if
+    one happened. Lets exceptions propagate -- the caller wraps this per
+    symbol so one name's failure never aborts the board.
 
     The entitled core (expirations, option_snapshot_quote bid/ask,
     open_interest) always runs. Greeks (ATM IV / IV-rank preview) are a
@@ -454,7 +518,7 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
     if monthly is None:
         summary["status"] = "unavailable"
         summary["note"] = "no monthly expiry in the 15-60 DTE band"
-        return summary, None
+        return summary, None, None
 
     # Entitled core: bid/ask chain (no greeks) + open interest.
     q = client.option_snapshot_quote(symbol, expiration=monthly)
@@ -506,6 +570,7 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
     greeks_note = None
     iv_source = None
     iv_label = None
+    calibration_used: dict | None = None
     try:
         g = client.option_snapshot_greeks_all(symbol, expiration=monthly)
         gf = lq._assemble_chain_frame(g, f"{symbol} greeks {monthly}", with_greeks=True)
@@ -545,9 +610,18 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
         if solved_iv is not None:
             atm_iv = solved_iv
             iv_source = "bs_solver"
-            if solver_iv_calibration_gate(symbol):
+            gate_passed, calib_receipt, calib_path = (
+                _solver_iv_calibration_check(symbol))
+            if gate_passed:
                 ivr = lq._finite_or_none(
                     lq.iv_rank_preview(lq._load_iv_history(symbol), atm_iv))
+                calibration_used = {
+                    "receipt_path": str(calib_path) if calib_path else None,
+                    "inputs_mode": (calib_receipt.get("inputs_mode", "strict")
+                                    if calib_receipt else "strict"),
+                    "run_at_utc": (calib_receipt.get("run_at_utc")
+                                   if calib_receipt else None),
+                }
             else:
                 ivr = None
                 iv_label = "solver-derived, not rank-comparable"
@@ -568,7 +642,7 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
         "min_spread_pct_observed": min(spreads) if spreads else None,
         "open_interest_asof": oi_asof,
     })
-    return summary, chain_frame
+    return summary, chain_frame, calibration_used
 
 
 # ---------------------------------------------------------------------------
@@ -652,19 +726,28 @@ def capture(session_tag: str, *, force: bool = False, client=None,
         spots_error = f"{type(exc).__name__}: {exc}"
 
     names: dict[str, dict] = {}
+    iv_rank_calibration: dict | None = None
     for sym in universe:
         try:
             row = None if spots_error is not None else spots.get(sym)
-            summary, chain_frame = _capture_symbol(client, sym, row, today, ny_iso)
+            summary, chain_frame, calib_used = _capture_symbol(
+                client, sym, row, today, ny_iso)
             if spots_error is not None:
                 # More specific than the generic per-symbol "missing from
                 # batched stock snapshot" note _capture_symbol set: the
                 # WHOLE batch call raised, not just this one symbol's row.
                 summary["spot_note"] = f"stock snapshot batch failed: {spots_error}"
         except Exception as exc:
-            summary, chain_frame = (
+            summary, chain_frame, calib_used = (
                 {"symbol": sym, "status": "unavailable",
-                 "note": f"{type(exc).__name__}: {exc}"}, None)
+                 "note": f"{type(exc).__name__}: {exc}"}, None, None)
+        if calib_used is not None:
+            # Every splice this run draws on the SAME newest-by-run_at_utc
+            # calibration receipt (one _load_latest_calibration_receipt
+            # call per symbol, same directory, same wall clock), so later
+            # symbols just re-confirm the same provenance -- overwriting is
+            # a no-op in practice, not a "last symbol wins" ambiguity.
+            iv_rank_calibration = calib_used
         if chain_frame is not None and not chain_frame.empty:
             path = chain_cache_path(sym, today, now_ny, cache_dir=cache_dir)
             atomic_parquet_write(chain_frame, path)
@@ -684,6 +767,7 @@ def capture(session_tag: str, *, force: bool = False, client=None,
         "probe_receipt_path": probe_receipt_path,
         "probe_healed_this_run": bool(healed),
         "config_hash": config_hash(),
+        "iv_rank_calibration": iv_rank_calibration,
         "names": names,
     }
     out_path = Path(receipt_dir) / today.isoformat() / f"{session_tag}.json"
