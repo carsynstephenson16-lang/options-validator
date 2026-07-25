@@ -19,11 +19,16 @@ StartCalendarInterval jobs at their scheduled fidelity on a sleeping laptop.
 
 ## Before 07:10 Monday (owner checklist)
 
-1. **Start the ThetaData terminal** the usual way. Evidence this matters:
-   Friday 2026-07-24 midday capture failed all 15 names with gRPC
-   `StatusCode.UNAVAILABLE` (terminal unreachable) while midmorning and
-   preclose were 15/15 ok. The adapter targets `http://127.0.0.1:25503`
-   (`.env.example`).
+1. **Nothing to start for data.** Correction (2026-07-25, late review): the
+   active data path authenticates with `THETADATA_API_KEY` from `.env`
+   directly against ThetaData's remote MDDS — **no local ThetaTerminal
+   process, no port** (`tools/daily_ritual.sh:56-61`,
+   `data/thetadata_adapter.py:137-149`; the 127.0.0.1:25503 entry in
+   `.env.example` is the legacy path). The ritual preflights the key
+   loudly. Friday's midday capture failure (all 15 names gRPC
+   `StatusCode.UNAVAILABLE`) was a transient remote/network outage —
+   midmorning and preclose the same day were 15/15 ok; such blips
+   self-heal on later runs.
 2. Machine awake / lid open before 07:10.
 3. Internet reachable generally: the QM OHLCV refresh step pulls from
    Yahoo (not ThetaData) — if Yahoo is unreachable, H10 skips DATA for the

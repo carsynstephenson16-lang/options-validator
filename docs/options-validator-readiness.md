@@ -142,11 +142,12 @@ currently 2026-07-15, dashboard already warns when stale).
 
 1. **Machine asleep at 07:10** → launchd misses the window; recovery is the
    documented manual re-run.
-2. **ThetaData terminal not running** → topup/captures fail with gRPC
-   UNAVAILABLE (observed Friday midday); fail-soft/fail-visible, recovered
-   by later runs; terminal-up is an owner checklist item. Subscription
-   currently active; terminal-session end ~2026-07-28 per project memory —
-   verify renewal before Tuesday.
+2. **ThetaData remote outage** → topup/captures fail with gRPC UNAVAILABLE
+   (observed Friday midday, recovered same day); fail-soft/fail-visible.
+   Correction 2026-07-25: the active adapter path is keyed HTTP against
+   the remote MDDS — no local terminal process is required
+   (`daily_ritual.sh:56-61`). Subscription confirmed through 2026-11-30
+   (ledger fact THETADATA_RENEWAL_EXECUTED).
 3. **H7 earnings bans around 07-29/07-30**: MSFT/AMZN/TEM are gate=BANNED
    (earnings proximity) — correct registered behavior, expect fewer
    entry-eligible names next week.

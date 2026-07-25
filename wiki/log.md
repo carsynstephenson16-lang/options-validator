@@ -8,3 +8,13 @@ Chronological, append-only record of wiki operations. Each entry starts with
 
 Added `wiki/raw/llm-wiki.md` as the immutable source pattern and created the
 initial `wiki/index.md` / `wiki/log.md` scaffold for future derived pages.
+
+
+## [2026-07-25] ingest | RAG health
+
+RAG health indexed 409 sources and 8831 chunks; 0 source failures were reported.
+
+
+## [2026-07-25] ingest | RAG health
+
+RAG health indexed 409 sources and 8831 chunks; 0 source failures were reported.
