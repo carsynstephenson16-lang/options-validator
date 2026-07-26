@@ -8,6 +8,7 @@ from data.cache_runner import session_close_utc
 from options_researcher import h7_event_ledger as el
 from options_researcher import h7_forward_book as book
 from options_researcher import h7_forward_scoring as scoring
+from options_researcher import h7_scoring_identity as scoring_identity
 from options_researcher import h7_window_registration as wr
 
 
@@ -118,6 +119,17 @@ class BuilderTests(unittest.TestCase):
         # H7_MAX_HOLD_BUFFER_D is part of the frozen Stage-4/5/6 surface for
         # payload legibility (config_hash already covers integrity).
         self.assertIn("H7_MAX_HOLD_BUFFER_D", p["frozen"]["stage456_parameters"])
+        registered_identity = scoring_identity.registered_scoring_identity(
+            p["frozen"]
+        )
+        self.assertEqual(
+            p["frozen"]["scoring_identity_contract"],
+            scoring_identity.SCORING_IDENTITY_CONTRACT,
+        )
+        self.assertEqual(
+            p["frozen"]["scoring_identity_hash"],
+            registered_identity.identity_hash,
+        )
         self.assertEqual(p["frozen"]["verdict_mapping"],
                          {"SURVIVED": "ci_above_zero", "REJECTED": "ci_below_zero",
                           "INCONCLUSIVE": "insufficient_or_no_edge"})

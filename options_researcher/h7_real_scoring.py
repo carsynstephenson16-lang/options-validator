@@ -23,6 +23,12 @@ from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_forward_scoring as frozen_scoring
 from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE
 from options_researcher.h7_scope import scope_identity
+from options_researcher.h7_scoring_identity import (
+    FROZEN_SCORER_MODULE,
+    ScoringIdentityError,
+    registered_scoring_identity,
+    runtime_scoring_identity,
+)
 from options_researcher.h7_watch import evaluation_session as watcher_evaluation_session
 from research.experiments import json_safe
 from research.hashing import (
@@ -41,13 +47,27 @@ from strategies.h7_backtest import EXIT_PRIORITY, primary_exit_reason
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FACTS_PATH = REPO_ROOT / "ledger" / "facts.log"
 DEFAULT_ARTIFACT_ROOT = REPO_ROOT / "reports" / "h7_forward_scoring"
-SPEC_PATH = (
+BASE_SPEC_PATH = (
     REPO_ROOT
     / "docs"
     / "superpowers"
     / "specs"
     / "2026-07-22-h7-real-exit-scoring-SPEC.md"
 )
+AMENDMENT_SPEC_PATH = (
+    REPO_ROOT
+    / "docs"
+    / "superpowers"
+    / "specs"
+    / "2026-07-25-h7-real-exit-scoring-amendment-v1_3.md"
+)
+# Compatibility name for callers that need the currently active delta document.
+SPEC_PATH = AMENDMENT_SPEC_PATH
+PINNED_BASE_SPEC_SHA256 = (
+    "c66d0e395ecc3ae77d5c554bd978e87fa305080cb61423015da513dd29065a75"
+)
+AMENDMENT_FACT_TAG = "H7_EXIT_SCORING_SPEC_AMENDMENT_V1_3"
+AMENDMENT_PROVENANCE = "owner-delegated standing 2026-07-25"
 REVIEW_PASS_TAG = "H7_REAL_EXIT_SCORING_INDEPENDENT_REVIEW_PASS"
 OWNER_PASS_TAG = "H7_REAL_EXIT_SCORING_OWNER_PASS"
 
@@ -73,9 +93,14 @@ class RealScoringSession:
     scope_hash: str
     included: tuple[str, ...]
     excluded: tuple[tuple[str, str], ...]
+    scoring_identity_contract: str
+    scoring_identity_hash: str
+    scoring_identity_surface: str
+    registered_config_hash: str
     artifact_path: Path
     facts_path: Path
-    spec_sha256: str
+    base_spec_sha256: str
+    amendment_spec_sha256: str
     _authority_token: object
 
 
@@ -105,6 +130,25 @@ def _utc_now(now: datetime | None) -> datetime:
     return stamp
 
 
+def _config_provenance_hash(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(char not in "0123456789abcdef" for char in value)
+    ):
+        raise RealScoringRefused(f"{label} must be a lowercase SHA-256 value")
+    return value
+
+
+def _verified_spec_chain() -> tuple[str, str]:
+    base_hash = sha256_file(BASE_SPEC_PATH)
+    if base_hash != PINNED_BASE_SPEC_SHA256:
+        raise RealScoringRefused(
+            "base scoring SPEC changed from its amendment-pinned SHA-256"
+        )
+    return base_hash, sha256_file(AMENDMENT_SPEC_PATH)
+
+
 def _registration(base: Path) -> tuple[ledger.StoredEvent, list[ledger.StoredEvent]]:
     try:
         verification = ledger.verify(base)
@@ -126,8 +170,6 @@ def _registered_identity(registration: ledger.StoredEvent) -> dict:
         start = window["start_decision_session"]
         end = window["final_decision_session"]
         frozen = payload["frozen"]
-        scorer = frozen["scorer"]
-        stage = frozen["stage456_parameters"]
         universe = payload["universe"]
         included = universe["included"]
         excluded = universe["excluded"]
@@ -166,32 +208,30 @@ def _registered_identity(registration: ledger.StoredEvent) -> dict:
         excluded_pairs.append((row["symbol"], row["reason"]))
     if set(included) & {symbol for symbol, _ in excluded_pairs}:
         raise RealScoringRefused("registered cohort both includes and excludes a name")
-    expected = {
-        "config_hash": config_hash(),
-        "cost_model_hash": cost_model_hash(),
-        "module": "options_researcher.h7_forward_scoring",
-        "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
-        "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
-        "forward_contracts": config.H7_FORWARD_CONTRACTS,
-    }
-    actual = {
-        "config_hash": frozen.get("config_hash"),
-        "cost_model_hash": frozen.get("cost_model_hash"),
-        "module": scorer.get("module"),
-        "bootstrap_samples": scorer.get("bootstrap_samples"),
-        "min_losses_for_verdict": scorer.get("min_losses_for_verdict"),
-        "forward_contracts": stage.get("H7_FORWARD_CONTRACTS"),
-    }
-    if actual != expected:
-        raise RealScoringRefused(
-            f"registered scorer/config/cost identity changed: {actual!r} != {expected!r}"
+    try:
+        registered_scoring = registered_scoring_identity(frozen)
+        runtime_scoring = runtime_scoring_identity(
+            cost_model_hash_value=cost_model_hash()
         )
+    except ScoringIdentityError as exc:
+        raise _refuse("window registration scoring identity is malformed", exc) from exc
+    if registered_scoring != runtime_scoring:
+        raise RealScoringRefused(
+            "registered scoring identity changed: "
+            f"{registered_scoring.identity_hash} != "
+            f"{runtime_scoring.identity_hash}"
+        )
+    registered_config_hash = _config_provenance_hash(
+        frozen.get("config_hash"), "registered config hash provenance"
+    )
     return {
         "window_start": start,
         "window_end": end,
         "scope": scope,
         "included": tuple(included),
         "excluded": tuple(excluded_pairs),
+        "scoring_identity": registered_scoring,
+        "registered_config_hash": registered_config_hash,
     }
 
 
@@ -206,6 +246,8 @@ def open_real_scoring_session(
     registration, _ = _registration(base)
     identity = _registered_identity(registration)
     scope = identity["scope"]
+    scoring_identity = identity["scoring_identity"]
+    base_spec_sha256, amendment_spec_sha256 = _verified_spec_chain()
     end = str(identity["window_end"])
     return RealScoringSession(
         base_dir=base,
@@ -217,9 +259,14 @@ def open_real_scoring_session(
         scope_hash=str(scope["scope_hash"]),
         included=identity["included"],
         excluded=identity["excluded"],
+        scoring_identity_contract=scoring_identity.contract,
+        scoring_identity_hash=scoring_identity.identity_hash,
+        scoring_identity_surface=scoring_identity.canonical_surface,
+        registered_config_hash=identity["registered_config_hash"],
         artifact_path=Path(artifact_root) / str(scope["scope_id"]) / f"{end}.json",
         facts_path=Path(facts_path),
-        spec_sha256=sha256_file(SPEC_PATH),
+        base_spec_sha256=base_spec_sha256,
+        amendment_spec_sha256=amendment_spec_sha256,
         _authority_token=_REAL_SCORING_AUTHORITY_TOKEN,
     )
 
@@ -234,6 +281,7 @@ def _revalidate(session: RealScoringSession) -> list[ledger.StoredEvent]:
         )
     registration, events = _registration(session.base_dir)
     identity = _registered_identity(registration)
+    base_spec_sha256, amendment_spec_sha256 = _verified_spec_chain()
     if (
         registration.event_id != session.registration_event_id
         or registration.record_hash != session.registration_record_hash
@@ -241,7 +289,15 @@ def _revalidate(session: RealScoringSession) -> list[ledger.StoredEvent]:
         or identity["window_end"] != session.window_end
         or identity["included"] != session.included
         or identity["excluded"] != session.excluded
-        or sha256_file(SPEC_PATH) != session.spec_sha256
+        or identity["scoring_identity"].contract
+        != session.scoring_identity_contract
+        or identity["scoring_identity"].identity_hash
+        != session.scoring_identity_hash
+        or identity["scoring_identity"].canonical_surface
+        != session.scoring_identity_surface
+        or identity["registered_config_hash"] != session.registered_config_hash
+        or base_spec_sha256 != session.base_spec_sha256
+        or amendment_spec_sha256 != session.amendment_spec_sha256
     ):
         raise RealScoringRefused("real scoring registration or spec identity changed")
     return events
@@ -1638,26 +1694,91 @@ def _require_review_passes(session: RealScoringSession) -> None:
         lines = session.facts_path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
         raise _refuse("review facts are unavailable", exc) from exc
+    spec_chain_tokens = (
+        f"base_spec_sha256={session.base_spec_sha256}",
+        f"amendment_spec_sha256={session.amendment_spec_sha256}",
+    )
     required = (
         (
+            AMENDMENT_FACT_TAG,
+            (
+                f"contract={session.scoring_identity_contract}",
+                *spec_chain_tokens,
+                f"provenance={AMENDMENT_PROVENANCE}",
+            ),
+        ),
+        (
             REVIEW_PASS_TAG,
-            ("verdict=PASS", f"spec_sha256={session.spec_sha256}"),
+            (
+                "verdict=PASS",
+                f"spec_sha256={session.amendment_spec_sha256}",
+                *spec_chain_tokens,
+            ),
         ),
         (
             OWNER_PASS_TAG,
             (
                 "owner=carsyn",
                 "verdict=PASS",
-                f"spec_sha256={session.spec_sha256}",
+                f"spec_sha256={session.amendment_spec_sha256}",
+                *spec_chain_tokens,
             ),
         ),
     )
     for tag, tokens in required:
-        matches = [line for line in lines if f"\t{tag}" in line]
+        matches = [
+            line
+            for line in lines
+            if (
+                (fact := line.split("\t", 1)[-1]) == tag
+                or fact.startswith(f"{tag} ")
+            )
+        ]
         if not matches or any(token not in matches[-1] for token in tokens):
             raise RealScoringRefused(
                 f"finalization requires current {tag} fact with {tokens!r}"
             )
+        if tag == AMENDMENT_FACT_TAG and not matches[-1].endswith(
+            f"provenance={AMENDMENT_PROVENANCE}"
+        ):
+            raise RealScoringRefused(
+                "finalization requires the exact amendment provenance"
+            )
+
+
+def _runtime_config_provenance(
+    session: RealScoringSession, existing_receipt: dict | None
+) -> str:
+    if existing_receipt is None:
+        return _config_provenance_hash(
+            config_hash(), "runtime config hash provenance"
+        )
+    provenance = existing_receipt.get("config_provenance")
+    expected_keys = {
+        "authority",
+        "registered_config_hash",
+        "runtime_config_hash",
+    }
+    if (
+        not isinstance(provenance, dict)
+        or set(provenance) != expected_keys
+        or provenance.get("authority") is not False
+    ):
+        raise RealScoringRefused(
+            "existing score config provenance is malformed or authoritative"
+        )
+    registered = _config_provenance_hash(
+        provenance.get("registered_config_hash"),
+        "existing registered config provenance",
+    )
+    if registered != session.registered_config_hash:
+        raise RealScoringRefused(
+            "existing score config provenance changed its registered hash"
+        )
+    return _config_provenance_hash(
+        provenance.get("runtime_config_hash"),
+        "existing runtime config provenance",
+    )
 
 
 def _receipt_payload(
@@ -1666,6 +1787,7 @@ def _receipt_payload(
     result: dict,
     input_head: str,
     finalized_at: str,
+    runtime_config_hash: str,
 ) -> dict:
     return {
         "evaluation_session": session.window_end,
@@ -1680,12 +1802,18 @@ def _receipt_payload(
         },
         "input_ledger_head": input_head,
         "scorer": {
-            "module": "options_researcher.h7_forward_scoring",
-            "config_hash": config_hash(),
+            "module": FROZEN_SCORER_MODULE,
+            "scoring_identity_contract": session.scoring_identity_contract,
+            "scoring_identity_hash": session.scoring_identity_hash,
             "cost_model_hash": cost_model_hash(),
             "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
             "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
             "forward_contracts": config.H7_FORWARD_CONTRACTS,
+        },
+        "config_provenance": {
+            "authority": False,
+            "registered_config_hash": session.registered_config_hash,
+            "runtime_config_hash": runtime_config_hash,
         },
         "cohort": {
             "included": list(session.included),
@@ -1696,7 +1824,16 @@ def _receipt_payload(
         },
         "finalized_at_utc": finalized_at,
         "owner_acknowledgement": "carsyn",
-        "spec_sha256": session.spec_sha256,
+        "spec_sha256": session.amendment_spec_sha256,
+        "spec_chain": {
+            "contract": session.scoring_identity_contract,
+            "base_spec_path": str(BASE_SPEC_PATH.relative_to(REPO_ROOT)),
+            "base_spec_sha256": session.base_spec_sha256,
+            "amendment_spec_path": str(
+                AMENDMENT_SPEC_PATH.relative_to(REPO_ROOT)
+            ),
+            "amendment_spec_sha256": session.amendment_spec_sha256,
+        },
         "result": result,
         "disclosures": {
             "survived": (
@@ -1750,6 +1887,7 @@ def finalize_real_score(
             )
         except (OSError, ValueError, KeyError) as exc:
             raise _refuse("existing score artifact is invalid", exc) from exc
+    runtime_config_hash = _runtime_config_provenance(session, existing_receipt)
     if existing_event is not None:
         if events[-1].event_id != existing_event.event_id:
             raise RealScoringRefused("events were appended after the one final score")
@@ -1780,6 +1918,7 @@ def finalize_real_score(
             result=result,
             input_head=input_head,
             finalized_at=finalized_at,
+            runtime_config_hash=runtime_config_hash,
         ),
     )
     if existing_receipt is not None and canonical_json(existing_receipt) != canonical_json(
