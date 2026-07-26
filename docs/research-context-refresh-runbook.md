@@ -114,9 +114,31 @@ triggers for asking for a refresh:
 - After any session where the Top-3 membership rotated.
 - Any time the board shows the stale-research banners and that bothers you.
 
-If the owner ever wants this automated (e.g. a scheduled weekday agent after
-the 07:10 ritual), that is a NEW automation and needs an explicit owner
-decision — record it as an amendment to the v2 spec first.
+**This is now automated.** Per the spec amendment *"2026-07-25
+(owner-directed): scheduled research refresh"* in
+`docs/superpowers/specs/2026-07-16-attractiveness-v2-technicals-context-
+design.md`, a LaunchAgent (label `com.carsyn.options-validator.research-
+refresh`, template checked in at `tools/launchd/com.carsyn.options-
+validator.research-refresh.plist`, installed by copy to
+`~/Library/LaunchAgents/`) runs `tools/research_refresh.sh` Mon–Fri at 07:40
+ET and 16:45 ET, plus Sat 09:00 ET as a weekend catch-up. Each run converges
+data freshness (topup → attractiveness features → QM OHLCV, all no-ops when
+already current), then invokes a headless Sonnet session
+(`claude -p "/research-refresh" --model sonnet --max-budget-usd 8`, an
+$8/run hard dollar cap) that follows this same refresh procedure end to end,
+then rebuilds the dashboard and independently verifies the stale banners are
+gone before writing a receipt — it never trusts the agent's own "OK." Logs
+land in `.tmp/research_refresh/` (`<stamp>.log`, `claude_<stamp>.out`,
+`launchd.out`/`launchd.err`); success receipts are
+`.tmp/research_refresh/receipt_<as-of>_<slot>.json`. The run never
+auto-commits — a human or session still commits the resulting context file.
+Kill-switch: `touch .research-refresh-off` at the repo root makes the script
+exit 0 immediately without doing anything; remove the file to re-enable.
+
+The manual procedure above remains the fallback whenever the automation is
+off (kill-switch present) or a scheduled run goes red — a missed or failed
+run just means the board falls back to its honest stale banners, which is
+the correct failure mode, never invented content.
 
 *Provenance: runbook written 2026-07-25 by Claude (Fable) after the first
 post-7/16 refresh; procedure mirrors the spec's amended §3.*
