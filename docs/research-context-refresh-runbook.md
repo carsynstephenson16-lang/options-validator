@@ -5,9 +5,10 @@ evidence" blocks on the Top-3 hero cards, the per-symbol "Company context,
 catalysts & sources" blurbs, and the "Market context" backdrop — comes from a
 dated JSON file: `reports/attractiveness_context/<data-as-of>.json`. Per the
 governing spec (`docs/superpowers/specs/2026-07-16-attractiveness-v2-
-technicals-context-design.md` §3, amended 2026-07-16), this layer is
-**ON-DEMAND**: the 07:10 daily ritual rebuilds the deterministic board with no
-LLM in the loop, and agent research runs **only when the owner asks for it**.
+technicals-context-design.md` §3), this layer was originally ON-DEMAND
+(owner-ask-only, amended 2026-07-16) and is **scheduled since the
+owner-directed 2026-07-25 amendment** — see the Cadence section. The 07:10
+daily ritual still rebuilds the deterministic board with no LLM in the loop.
 
 **Why it goes stale (by design).** Three separate honesty mechanisms fire as
 the file ages:
