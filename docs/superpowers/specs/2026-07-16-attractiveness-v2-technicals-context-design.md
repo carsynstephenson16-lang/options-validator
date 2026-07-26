@@ -73,6 +73,31 @@ context for this date" banner — never invented. Every rendered narrative
 carries the LLM-asserted provenance label. tests stay offline: renderer
 tested with injected JSON fixtures.
 
+*Amended 2026-07-25 (owner-directed): scheduled research refresh.* The
+owner directed in-session on 2026-07-25 ("make it not be stale on monday
+i want it to run llm research … i dont want to have to ask for a
+refresh") that §3's "agent research runs only when the owner asks for
+it" is replaced by a standing schedule. Cadence: Mon–Fri 07:40 ET
+(post-ritual premarket) and 16:45 ET (post-close), plus Sat 09:00 ET (a
+weekend catch-up that also converges chain/feature freshness), via
+LaunchAgent `com.carsyn.options-validator.research-refresh` running
+`tools/research_refresh.sh`. Each run first converges data freshness
+(topup → attractiveness features → QM OHLCV — all no-ops when current),
+then runs a headless Sonnet session (skill `research-refresh`) that
+produces `reports/attractiveness_context/<data-as-of>.json` through the
+unchanged `top3_context` validation, then rebuilds the dashboard and
+verifies the stale-research banners are gone. Unchanged invariants: the
+research layer stays advisory-only and LLM-asserted-labeled; it cannot
+add, remove, or reorder candidates; the deterministic 07:10 ritual is
+untouched; a failed refresh degrades to the board's honest stale
+banners, never to invented content. Controls: kill-switch file
+`.research-refresh-off` at the repo root; per-run dollar cap via
+`claude --max-budget-usd`; no runtime auto-commit (context files are
+committed by humans/sessions, avoiding unattended commits on whatever
+branch the checkout has). Provenance: owner-directed 2026-07-25,
+recorded by the implementing agent; veto or change by further
+append-only amendment.
+
 ### 4. Top 3 picks (all lanes, all universe names — owner choice)
 
 Transparent two-stage:
