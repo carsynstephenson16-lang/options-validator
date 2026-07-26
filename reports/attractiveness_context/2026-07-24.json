@@ -1,0 +1,286 @@
+{
+ "as_of": "2026-07-24",
+ "provenance": "LLM-asserted (Claude subagents, web research 2026-07-25)",
+ "researched_on": "2026-07-25",
+ "market": {
+  "summary": "The S&P 500 closed at 7,411.98 on Friday 2026-07-24, up just 3.68 points (+0.05%), while the Nasdaq Composite fell 161.87 points (-0.64%) to 24,975.82; the Dow Jones Industrial Average rose 235.60 points (+0.46%) to 51,947.25. All three major indexes posted losses for the week, with the Nasdaq down about 2%, after Thursday's selloff wiped roughly $800 billion off the combined market value of the 'Magnificent Seven' megacap tech stocks on AI-capex jitters. Friday's session mixed a ~4% drop in oil prices and an eight-month-high S&P Global US business-activity reading against new Trump-administration tariffs on nearly all US imports taking effect (with some energy-product exemptions) and Intel falling nearly 8% despite beating earnings. The next FOMC meeting is scheduled for July 28-29, 2026, per the Federal Reserve's official calendar, landing the week before both the AMZN Aug-7 option expiration and Vistra's Aug-7 earnings report.",
+  "regime": "mixed",
+  "notes": [
+   "All three major US indexes closed the week lower, with the Nasdaq Composite down about 2% on AI-infrastructure-spending anxiety.",
+   "Thursday 2026-07-23 saw the 'Magnificent Seven' megacap tech stocks collectively lose about $800 billion in market value.",
+   "Friday 2026-07-24 showed index divergence: the Dow rose 0.46% and the S&P 500 was roughly flat (+0.05%) while the Nasdaq slipped a further 0.64%, and Intel fell nearly 8% despite beating earnings estimates.",
+   "New broad-based US import tariffs took effect Friday (with some energy-product exemptions) even as oil prices fell about 4% that day and a US business-activity index hit an eight-month high.",
+   "The next FOMC meeting is July 28-29, 2026 (federalreserve.gov), which falls before/around the Aug-7 dates relevant to both the VST earnings print and the AMZN put expiration."
+  ]
+ },
+ "market_sources": [
+  "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+  "https://finance.yahoo.com/markets/live/stock-market-today-friday-july-24-dow-sp-500-nasdaq-081854465.html"
+ ],
+ "symbols": {
+  "NVDA": {
+   "news_summary": "NVDA's most recent headline is a $500-billion-plus strategic partnership announced July 24, 2026 with South Korea's SK Group, spanning a 2-gigawatt Vera Rubin DSX AI-factory build by SK Telecom and a long-term HBM memory supply/co-development deal with SK hynix. This follows a string of July 2026 AI-infrastructure partnership announcements across Japan and Korea (Noetra, NAVER/Brookfield, KAIST). NVIDIA's next quarterly earnings report will not occur until August 26, 2026, so no earnings catalyst falls inside the life of this option. The nearest scheduled macro catalyst in the holding window is the July 28-29, 2026 FOMC meeting.",
+   "sentiment": "bull",
+   "catalysts": [
+    {
+     "date": "2026-08-26",
+     "what": "NVIDIA Q2 FY2027 earnings conference call",
+     "source": "https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx",
+     "confirmed": true
+    },
+    {
+     "date": "2026-07-24",
+     "what": "SK Group and NVIDIA announce $500B+ strategic partnership (AI factories + HBM memory)",
+     "source": "https://nvidianews.nvidia.com/news/sk-group-and-nvidia-expand-strategic-partnership-across-ai-factories-and-next-generation-memory",
+     "confirmed": true
+    },
+    {
+     "date": "2026-07-28",
+     "what": "FOMC meeting (July 28-29, 2026), rate decision at 2pm ET on the 29th",
+     "source": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+     "confirmed": true
+    }
+   ],
+   "move_thesis": "NVDA's next earnings report falls after this option's 2026-08-07 expiration, so no earnings-driven IV event is in play; the main scheduled catalysts before expiration are the July 28-29 FOMC decision and any follow-through news flow from the just-announced SK Group AI-infrastructure partnership.",
+   "sources": [
+    "https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx",
+    "https://nvidianews.nvidia.com/news/latest",
+    "https://nvidianews.nvidia.com/news/sk-group-and-nvidia-expand-strategic-partnership-across-ai-factories-and-next-generation-memory",
+    "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
+   ]
+  },
+  "NOW": {
+   "news_summary": "ServiceNow has been in a deep, controversial drawdown -- roughly 50% below its July-2025 52-week high near $210 -- on a Wall Street narrative that generative-AI agents could erode demand for its workflow-automation subscriptions. On 2026-07-22 (after market close) the company reported Q2 2026 results that beat estimates (total revenue $3.99B, +24% YoY; non-GAAP EPS $0.90) and raised full-year subscription guidance, yet shares still fell roughly 6.5% in that day's regular session on valuation/margin/growth-deceleration worries before partially rebounding after hours and rallying further the next session. As of Friday 2026-07-24 close, shares were trading in the high-$90s (sources disagreed on exact cents, roughly $97-99), noticeably below this card's $103 strike -- flagging that the reviewed long call is now modestly out-of-the-money rather than at/near the money.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-07-01",
+     "what": "ServiceNow announced it would report Q2 2026 financial results after market close on 2026-07-22",
+     "source": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-to-Announce-Second-Quarter-2026-Financial-Results-on-July-22/default.aspx",
+     "confirmed": true
+    },
+    {
+     "date": "2026-07-22",
+     "what": "ServiceNow reported Q2 2026 results after market close: revenue beat ($3.99B, +24% YoY), non-GAAP EPS beat ($0.90), raised full-year subscription revenue guidance, ServiceNow AI crossed $1B in annual contract value",
+     "source": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+     "confirmed": true
+    }
+   ],
+   "move_thesis": "With Q2 earnings already reported and no further scheduled ServiceNow earnings or IR events before 2026-08-07, price action over the next two weeks is more likely to be driven by continued sell-side digestion of the beat-and-raise-but-decelerating guidance (Q3 subscription growth guided to ~20% YoY vs Q2's 24.5%) and the ongoing AI-disruption narrative than by a fresh company event; the position also needs a further multi-percent rally just to bring NOW back up to the $103 strike.",
+   "sources": [
+    "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-to-Announce-Second-Quarter-2026-Financial-Results-on-July-22/default.aspx",
+    "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+    "https://investor.servicenow.com/events-and-presentations/events/default.aspx",
+    "https://www.investing.com/news/transcripts/earnings-call-transcript-servicenow-beats-q2-2026-forecasts-shares-rebound-after-hours-93CH-4807190",
+    "https://stockanalysis.com/stocks/now/"
+   ]
+  },
+  "PLTR": {
+   "news_summary": "Palantir has been on a strong run into late July 2026, driven by an accelerating AI/government business: Q1 2026 revenue grew 85% year-over-year to $1.633 billion and the company raised FY2026 revenue guidance to 71% growth. The U.S. Army named Palantir Foundry the data-layer baseline for its flagship NGC2 modernization program (June 22, 2026), and Palantir extended its Nvidia relationship with a Nemotron model-deployment engine for sovereign government environments (June 29, 2026), alongside other commercial deals -- pushing PLTR shares up roughly 7-9% on July 1, 2026 as the company's market cap topped $300 billion. Shares have since eased back into the low-$120s by July 24, 2026, with attention turning to Palantir's own Q2 2026 earnings, reported as scheduled for Monday, August 3, 2026 after market close -- four days before this card's option expiration.",
+   "sentiment": "bull",
+   "catalysts": [
+    {
+     "date": "2026-08-03",
+     "what": "Palantir Q2 2026 (quarter ended June 30, 2026) earnings release after market close, webcast at 5:00 PM ET (date from a press-release aggregator; not yet verified on investors.palantir.com)",
+     "source": "https://www.stocktitan.net/news/PLTR/palantir-announces-date-of-second-quarter-2026-earnings-release-and-pb0p9gl5pf2d.html",
+     "confirmed": false
+    },
+    {
+     "date": "2026-06-22",
+     "what": "U.S. Army confirmed Palantir Foundry as the cloud data-layer baseline for its NGC2 command-and-control modernization program",
+     "source": "https://finance.yahoo.com/technology/ai/articles/palantir-secures-foundational-role-ngc2-200500839.html",
+     "confirmed": false
+    }
+   ],
+   "move_thesis": "The main move risk before 2026-08-07 is Palantir's own Q2 2026 earnings report, due Monday August 3 after the close, which falls inside the option's remaining life; results relative to Q1's raised 71% FY26 growth guidance could move the stock in either direction, and elevated pre-earnings implied volatility typically compresses sharply right after the print regardless of direction.",
+   "sources": [
+    "https://www.stocktitan.net/news/PLTR/palantir-announces-date-of-second-quarter-2026-earnings-release-and-pb0p9gl5pf2d.html",
+    "https://finance.yahoo.com/technology/ai/articles/palantir-secures-foundational-role-ngc2-200500839.html",
+    "https://finance.yahoo.com/markets/stocks/articles/palantir-technologies-pltr-shares-skyrocket-021700934.html",
+    "https://www.sec.gov/Archives/edgar/data/0001321655/000132165526000026/a2026q1ex991pressrelease.htm"
+   ]
+  },
+  "VST": {
+   "news_summary": "Vistra (VST) closed at $163.38 on 2026-07-24, down 3.31% that day amid the broader tech/AI-capex-driven selloff. The company continues to position itself as a core power supplier to AI data centers, having signed a 20-year, ~2.18 GW (plus 433 MW of uprates) nuclear power-purchase agreement with Meta on 2026-01-09 covering its Perry, Davis-Besse, and Beaver Valley plants. On 2026-07-14, Vistra cleared about 10,924 MW in PJM's 2028/2029 capacity auction at the auction's $325/MW-day price cap across seven zones, reinforcing multi-year capacity-revenue visibility (PJM's own release confirms the auction cleared at that $325/MW-day cap system-wide). Vistra is reported to be scheduled to report Q2 2026 earnings on Friday, 2026-08-07, via a 10 a.m. ET conference call (date not yet verified on Vistra's own IR site).",
+   "sentiment": "bull",
+   "catalysts": [
+    {
+     "date": "2026-08-07",
+     "what": "Vistra reports Q2 2026 financial and operating results, 10 a.m. ET conference call and webcast (date from a press-release aggregator; not yet verified on investor.vistra.com)",
+     "source": "https://www.stocktitan.net/news/VST/vistra-to-report-second-quarter-results-on-aug-7-27cmv7htv7is.html",
+     "confirmed": false
+    },
+    {
+     "date": "2026-07-14",
+     "what": "Vistra cleared ~10,924 MW in PJM's 2028/2029 Base Residual Auction at the $325/MW-day price cap across 7 zones",
+     "source": "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/",
+     "confirmed": true
+    },
+    {
+     "date": "2026-01-09",
+     "what": "Vistra and Meta announced 20-year nuclear PPAs for ~2.18 GW (plus 433 MW of uprates) from the Perry, Davis-Besse, and Beaver Valley plants to support AI data-center demand",
+     "source": "https://about.fb.com/news/2026/01/meta-nuclear-energy-projects-power-american-ai-leadership/",
+     "confirmed": true
+    }
+   ],
+   "move_thesis": "At the 2026-07-24 close of $163.38, VST sits roughly 17% above the $135 strike, giving the cash-secured put a sizeable equity cushion through 2026-11-20; the main risks inside that window are a single Aug-7 earnings print and continued spillover from this week's sector-wide AI-capex selloff, set against a structurally bullish backdrop of cleared PJM capacity revenue and nuclear PPAs tied to AI data-center demand.",
+   "sources": [
+    "https://www.stocktitan.net/news/VST/vistra-to-report-second-quarter-results-on-aug-7-27cmv7htv7is.html",
+    "https://www.stocktitan.net/sec-filings/VST/8-k-vistra-corp-reports-material-event-0d0a92e1903c.html",
+    "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/",
+    "https://about.fb.com/news/2026/01/meta-nuclear-energy-projects-power-american-ai-leadership/",
+    "https://world-nuclear-news.org/articles/meta-announces-landmark-agreements-for-new-nuclear",
+    "https://stockanalysis.com/stocks/vst/"
+   ]
+  },
+  "AMZN": {
+   "news_summary": "Amazon (AMZN) closed at $232.11 on 2026-07-24, down 0.66% that day, caught up in the week's broader AI-capex-fear selloff across megacap tech. Amazon confirmed via its IR newsroom that it will hold its Q2 2026 earnings conference call on Thursday, 2026-07-30 at 2:00 p.m. PT/5:00 p.m. ET \u2014 a date that falls inside the $215 put's 2026-08-07 expiration window. Ahead of that print, Street consensus per financial press is roughly $196.5B revenue (+17.3% YoY) and ~$1.81-1.82 EPS, with AWS growth estimates of 31-33% YoY; the dominant tension flagged by analysts is that Amazon's ~$200B 2026 capex commitment (mostly AI infrastructure, data centers, and custom chips) has driven trailing-12-month free cash flow down to about $1.2B from roughly $25.9B a year earlier, even as BofA reiterates a Buy rating with a $310 price target.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-07-30",
+     "what": "Amazon reports Q2 2026 earnings via conference call at 2:00 p.m. PT/5:00 p.m. ET \u2014 falls inside the $215 put's 2026-08-07 expiration window, creating live earnings-gap risk for this specific contract",
+     "source": "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report",
+     "confirmed": true
+    },
+    {
+     "date": null,
+     "what": "Amazon's ~$200B 2026 capex commitment (mostly AI infrastructure) has driven trailing-12-month free cash flow down to ~$1.2B from ~$25.9B a year ago, the central bear-case flashpoint ahead of earnings",
+     "source": "https://www.investing.com/news/stock-market-news/amazon-capex-outlook-ahead-of-july-30-earnings-and-the-ai-infrastructure-race-93CH-4812069",
+     "confirmed": false
+    },
+    {
+     "date": null,
+     "what": "Analyst consensus ahead of Q2 print: ~$196.5B revenue (+17.3% YoY), ~$1.81-1.82 EPS, AWS growth ~31-33% YoY; these are forward estimates, not reported results",
+     "source": "https://www.investing.com/news/stock-market-news/amazon-capex-outlook-ahead-of-july-30-earnings-and-the-ai-infrastructure-race-93CH-4812069",
+     "confirmed": false
+    }
+   ],
+   "move_thesis": "AMZN at $232.11 (2026-07-24 close) sits about 7% above the $215 strike, but unlike the VST horizon, the Jul-30 earnings print lands squarely inside this put's Aug-7 expiration \u2014 a beat that eases the live capex/free-cash-flow concern likely leaves the put comfortably OTM, while a capex-driven disappointment (the same narrative that hit megacap tech this week) is the scenario that could push the stock toward or through $215 before expiration.",
+   "sources": [
+    "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report",
+    "https://www.investing.com/news/stock-market-news/amazon-capex-outlook-ahead-of-july-30-earnings-and-the-ai-infrastructure-race-93CH-4812069",
+    "https://stockanalysis.com/stocks/amzn/"
+   ]
+  }
+ },
+ "annotations": {
+  "NVDA:long_call:2026-08-07:212.50": {
+   "research_as_of_utc": "2026-07-26T02:19:18.103346Z",
+   "market_as_of_date": "2026-07-24",
+   "claims": [
+    {
+     "id": "nvda-q2-fy27-earnings-after-expiration",
+     "text": "NVIDIA's Q2 fiscal-year-2027 earnings conference call is officially scheduled for August 26, 2026 at 2:00 PM PT, per NVIDIA's investor relations site. This is 19 days after the 2026-08-07 expiration of the reviewed call option, so the option will not be exposed to an earnings-day price gap or IV crush/expansion event.",
+     "classification": "fact",
+     "source_url": "https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx",
+     "unknown_rationale": null,
+     "source_tier": "issuer_ir",
+     "fact_date": "2026-08-26",
+     "date_certainty": "confirmed",
+     "countercase": "Because earnings fall after expiration, the option gets no pre-earnings IV expansion or binary catalyst working in its favor, so absent other news the position may simply bleed premium to theta with no scheduled event to reward the bet."
+    },
+    {
+     "id": "sk-group-nvidia-500b-partnership",
+     "text": "On 2026-07-24, NVIDIA and South Korea's SK Group announced a $500-billion-plus strategic partnership spanning a 2-gigawatt Vera Rubin DSX AI-factory build by SK Telecom and a long-term SK hynix HBM memory supply/co-development agreement, per NVIDIA's own newsroom.",
+     "classification": "fact",
+     "source_url": "https://nvidianews.nvidia.com/news/sk-group-and-nvidia-expand-strategic-partnership-across-ai-factories-and-next-generation-memory",
+     "unknown_rationale": null,
+     "source_tier": "issuer_ir",
+     "fact_date": "2026-07-24",
+     "date_certainty": "confirmed",
+     "countercase": "The deal is a multi-year letter-of-intent for infrastructure delivering starting 2027, not near-term revenue or guidance, so it may already be priced in and could trigger a sell-the-news pullback in the two weeks before 2026-08-07 rather than sustained upside."
+    },
+    {
+     "id": "fomc-meeting-july-28-29-2026",
+     "text": "The Federal Reserve's next FOMC meeting is scheduled for July 28-29, 2026, with the policy decision released at 2:00 PM ET on the 29th, per the Federal Reserve's own meeting calendar. This falls inside the roughly two-week holding window before the option's 2026-08-07 expiration.",
+     "classification": "fact",
+     "source_url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+     "unknown_rationale": null,
+     "source_tier": "regulator",
+     "fact_date": "2026-07-29",
+     "date_certainty": "confirmed",
+     "countercase": "A hawkish tone or delayed-cut signal at this meeting could pressure high-multiple AI/growth names broadly, including NVDA, independent of any NVDA-specific news, which would hurt a long call regardless of the company's own fundamentals."
+    }
+   ]
+  },
+  "NOW:long_call:2026-08-07:103.00": {
+   "research_as_of_utc": "2026-07-26T02:19:18.103346Z",
+   "market_as_of_date": "2026-07-24",
+   "claims": [
+    {
+     "id": "q2-earnings-already-reported",
+     "text": "ServiceNow announced on 2026-07-01 that it would report Q2 2026 results after market close on 2026-07-22, and it did report those results after the close that day -- meaning the quarterly earnings event already occurred three days before this 2026-07-25 review and does NOT fall inside the 2026-08-07 holding window as the research brief hypothesized it might.",
+     "classification": "fact",
+     "source_url": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+     "unknown_rationale": null,
+     "source_tier": "issuer_ir",
+     "fact_date": "2026-07-22",
+     "date_certainty": "confirmed",
+     "countercase": "Because the earnings catalyst has already fired, a call bought now gets none of the pre-earnings IV expansion or event-day gap risk that a call bought before 7/22 would have had -- this removes rather than adds a two-week upside catalyst before 2026-08-07."
+    },
+    {
+     "id": "q2-beat-and-raise-with-decelerating-guide",
+     "text": "ServiceNow's Q2 2026 results (reported 2026-07-22) beat estimates with total revenue of $3.987B (+24% YoY) and non-GAAP EPS of $0.90, raised full-year 2026 subscription revenue guidance to $15.76-15.78B, and reported ServiceNow AI crossed $1B in annual contract value -- but Q3 guidance implies subscription growth decelerating to roughly 20% YoY from Q2's 24.5%.",
+     "classification": "fact",
+     "source_url": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+     "unknown_rationale": null,
+     "source_tier": "issuer_ir",
+     "fact_date": "2026-07-22",
+     "date_certainty": "confirmed",
+     "countercase": "A beat-and-raise quarter paired with decelerating forward growth guidance can be read bearishly for a growth-priced stock, so this 'material event' could just as easily cap upside into 2026-08-07 as fuel further gains."
+    },
+    {
+     "id": "post-earnings-whipsaw-volatility",
+     "text": "NOW shares fell about 6.47% in the regular session on 2026-07-22 (closing near $95.46) despite the earnings beat, then recovered about 4.75% after hours that same day -- a large two-way intraday swing indicating the stock is currently in an elevated realized-volatility regime around its own earnings reaction, even with no further scheduled company catalyst before 2026-08-07.",
+     "classification": "fact",
+     "source_url": "https://www.investing.com/news/transcripts/earnings-call-transcript-servicenow-beats-q2-2026-forecasts-shares-rebound-after-hours-93CH-4807190",
+     "unknown_rationale": null,
+     "source_tier": "secondary",
+     "fact_date": "2026-07-22",
+     "date_certainty": "estimated",
+     "countercase": "This volatility already fired around an earnings event that has now passed; with the catalyst spent and no new one scheduled, realized volatility could compress rather than continue over the remaining two weeks, which would work against a long call's time-decay economics."
+    }
+   ]
+  },
+  "PLTR:long_call:2026-08-07:129.00": {
+   "research_as_of_utc": "2026-07-26T02:19:18.103346Z",
+   "market_as_of_date": "2026-07-24",
+   "claims": [
+    {
+     "id": "pltr-q2-earnings-date-aug3",
+     "text": "Palantir announced it will release Q2 2026 (quarter ended June 30, 2026) financial results on Monday, August 3, 2026, after U.S. market close, with a webcast at 5:00 PM ET; the announcement was published July 13, 2026 with Palantir Technologies Inc. cited as the source.",
+     "classification": "fact",
+     "source_url": "https://www.stocktitan.net/news/PLTR/palantir-announces-date-of-second-quarter-2026-earnings-release-and-pb0p9gl5pf2d.html",
+     "unknown_rationale": null,
+     "source_tier": "secondary",
+     "fact_date": "2026-08-03",
+     "date_certainty": "estimated",
+     "countercase": "If Q2 results (due after-close Aug 3) disappoint relative to Q1's raised 71% FY26 guidance, or if the post-earnings IV crush outpaces any favorable move, the long call could lose significant value in the days before its Aug 7 expiration."
+    },
+    {
+     "id": "pltr-recent-ngc2-contract-win",
+     "text": "The most recent major PLTR catalyst as of July 24, 2026 is the U.S. Army's June 22, 2026 confirmation that Palantir Foundry is the data-layer baseline for the Army's top-priority NGC2 modernization program; combined with a June 29, 2026 Nvidia Nemotron sovereign-AI deployment announcement, this contributed to PLTR shares rising roughly 7.7% on July 1, 2026.",
+     "classification": "fact",
+     "source_url": "https://finance.yahoo.com/technology/ai/articles/palantir-secures-foundational-role-ngc2-200500839.html",
+     "unknown_rationale": null,
+     "source_tier": "secondary",
+     "fact_date": "2026-06-22",
+     "date_certainty": "estimated",
+     "countercase": "This news is already several weeks old and priced in by July 24; it says nothing about the separate, larger binary risk of the August 3 earnings print landing inside the holding window, and government-contract narratives can reverse on procurement delays or budget headlines."
+    },
+    {
+     "id": "earnings-inside-holding-window",
+     "text": "Because Palantir's Q2 2026 earnings are scheduled for Monday, August 3, 2026 (after close) and this card's call option expires Friday, August 7, 2026, the roughly two-week hold spans the earnings event -- the position would carry earnings-related gap and implied-volatility-crush risk into its final days before expiration.",
+     "classification": "derived_calculation",
+     "source_url": null,
+     "unknown_rationale": "Computed from the Aug 3, 2026 earnings date (claim pltr-q2-earnings-date-aug3) and the card's stated Aug 7, 2026 option expiration; simple date arithmetic, not an independently sourced fact.",
+     "source_tier": "unknown",
+     "fact_date": "2026-08-03",
+     "date_certainty": "estimated",
+     "countercase": "If Palantir's commentary or metrics leak/are anticipated before Aug 3, implied volatility could already be priced in ahead of the print, reducing incremental crush risk at the event itself -- or a beat-and-raise could still fail to move the stock if expectations were already elevated, capping upside for the long call regardless of earnings direction."
+    }
+   ]
+  }
+ }
+}
