@@ -763,16 +763,21 @@ def _all_display_data_as_of(
     return min(dates) if dates else "no cached data"
 
 
-def assemble(*, symbol_sections: list[dict] | None = None,
-             rv21_by_symbol: dict[str, float] | None = None,
-             blocked: list[dict] | None = None) -> dict:
+def assemble(
+    *,
+    symbol_sections: list[dict] | None = None,
+    rv21_by_symbol: dict[str, float] | None = None,
+    blocked: list[dict] | None = None,
+    hypothesis_evidence_by_symbol: Mapping[str, object] | None = None,
+) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
 
     The arguments default to the real project state (see _gather_all);
     inject them to unit-test without touching disk or the network.
     ``blocked`` carries the machine-readable per-symbol failure records
     (fail-visible: they render on the page, never disappear)."""
-    if symbol_sections is None:
+    real_assembly = symbol_sections is None
+    if real_assembly:
         symbol_sections, rv21_by_symbol, blocked = _gather_all()
     rv21_by_symbol = rv21_by_symbol or {}
     blocked = blocked or []
@@ -857,6 +862,31 @@ def assemble(*, symbol_sections: list[dict] | None = None,
         if bool(rec.get("display_only")) or rec.get("symbol") in display_only_names:
             out_rec["display_only"] = True
         out_blocked.append(out_rec)
+
+    if hypothesis_evidence_by_symbol is None and real_assembly:
+        from pathlib import Path
+
+        from options_researcher.hypothesis_evidence import (
+            gather_hypothesis_evidence,
+        )
+
+        evidence_symbols = [
+            str(record["symbol"])
+            for record in [*out_symbols, *out_blocked]
+            if isinstance(record.get("symbol"), str)
+        ]
+        hypothesis_evidence_by_symbol = gather_hypothesis_evidence(
+            evidence_symbols,
+            root=Path(__file__).resolve().parents[1],
+        )
+    if hypothesis_evidence_by_symbol is not None:
+        for record in [*out_symbols, *out_blocked]:
+            symbol = record.get("symbol")
+            if isinstance(symbol, str):
+                evidence = hypothesis_evidence_by_symbol.get(symbol)
+                if evidence is not None:
+                    record["hypothesis_evidence"] = evidence
+
     canonical_symbols = [
         sec for sec in out_symbols if not sec.get("display_only")
     ]
@@ -1657,6 +1687,72 @@ _STYLE = """
   }
   .research-details > summary { color: var(--good); }
   .gate-details > summary { color: var(--info); }
+  .hypothesis-evidence {
+    border-top: 1px solid var(--line);
+    margin-top: 20px;
+    padding-top: 14px;
+  }
+  .hypothesis-evidence > summary {
+    color: var(--brand);
+    font-weight: 800;
+  }
+  .evidence-grid {
+    display: grid;
+    gap: 9px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 12px;
+  }
+  .evidence-row {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    min-width: 0;
+    padding: 10px;
+  }
+  .evidence-row-head {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+  .evidence-membership, .evidence-dates, .evidence-detail {
+    color: var(--muted);
+    font-size: 0.74rem;
+    margin-top: 5px;
+  }
+  .evidence-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 7px;
+  }
+  .evidence-chip {
+    background: var(--unknown-bg);
+    border: 1px solid var(--unknown-line);
+    border-radius: 999px;
+    color: var(--unknown);
+    font-size: 0.68rem;
+    padding: 3px 7px;
+  }
+  .evidence-sources {
+    color: var(--muted);
+    font-size: 0.7rem;
+    margin: 7px 0 0;
+    overflow-wrap: anywhere;
+    padding-left: 18px;
+  }
+  .intraday-evidence {
+    border-top: 1px dashed var(--line);
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .intraday-evidence h4 {
+    color: var(--info);
+    font-size: 0.76rem;
+    letter-spacing: 0.04em;
+    margin: 0 0 8px;
+    text-transform: uppercase;
+  }
   .page-footer {
     color: var(--muted);
     font-size: 0.72rem;
@@ -1679,6 +1775,7 @@ _STYLE = """
     .symbol-panel { padding: 0; }
     .symbol-header { padding: 16px; }
     .symbol-body { padding: 15px; }
+    .evidence-grid { grid-template-columns: 1fr; }
     .symbol-stats { width: 100%; }
     .symbol-stat { flex: 1; min-width: 0; }
     th, td { padding: 6px 4px; }
@@ -2512,6 +2609,96 @@ def _pinned_html(data: dict) -> str:
             f'<div class="hero-grid">{cards}</div></section>')
 
 
+def _evidence_attr(value: object, name: str, default: object = None) -> object:
+    if isinstance(value, Mapping):
+        return value.get(name, default)
+    return getattr(value, name, default)
+
+
+def _evidence_row_html(row: object) -> str:
+    family = str(_evidence_attr(row, "family", "?"))
+    membership = str(_evidence_attr(row, "membership", "UNKNOWN"))
+    family_state = str(_evidence_attr(row, "family_state", "UNKNOWN"))
+    detail = str(_evidence_attr(row, "detail", ""))
+    evaluation_session = _evidence_attr(row, "evaluation_session")
+    run_date = _evidence_attr(row, "run_date")
+    raw_states = _evidence_attr(row, "symbol_states", ())
+    raw_states = (
+        raw_states if isinstance(raw_states, (list, tuple)) else ()
+    )
+    state_chips = "".join(
+        '<span class="evidence-chip">'
+        f'<strong>{_esc(str(_evidence_attr(state, "label", "raw")))}</strong> '
+        f'{_esc(str(_evidence_attr(state, "state", "UNKNOWN")))}</span>'
+        for state in raw_states
+    )
+    dates = []
+    if evaluation_session:
+        dates.append(f"evaluation {evaluation_session}")
+    if run_date:
+        dates.append(f"run {run_date}")
+    date_html = (
+        f'<div class="evidence-dates">{_esc(" · ".join(dates))}</div>'
+        if dates
+        else ""
+    )
+    sources = _evidence_attr(row, "sources", ())
+    sources = sources if isinstance(sources, (list, tuple)) else ()
+    source_items = "".join(
+        "<li>"
+        f'{_esc(str(_evidence_attr(source, "kind", "source")))}: '
+        f'<code>{_esc(str(_evidence_attr(source, "path", "?")))}</code> '
+        f'({_esc(str(_evidence_attr(source, "date", "?")))})'
+        "</li>"
+        for source in sources
+    )
+    sources_html = (
+        f'<ul class="evidence-sources">{source_items}</ul>'
+        if source_items
+        else ""
+    )
+    detail_html = (
+        f'<div class="evidence-detail">{_esc(detail)}</div>'
+        if detail
+        else ""
+    )
+    return (
+        '<div class="evidence-row">'
+        '<div class="evidence-row-head">'
+        f'<strong>{_esc(family)}</strong>'
+        f'<span class="status-badge unknown">Ritual '
+        f"{_esc(family_state)}</span></div>"
+        f'<div class="evidence-membership">{_esc(membership)}</div>'
+        f'<div class="evidence-chips">{state_chips}</div>'
+        f"{date_html}{detail_html}{sources_html}</div>"
+    )
+
+
+def _hypothesis_panel_html(evidence: object | None) -> str:
+    """Escaped display-only evidence; never consumed by ranking or policy."""
+    if evidence is None:
+        return ""
+    rows = _evidence_attr(evidence, "hypotheses", ())
+    rows = rows if isinstance(rows, (list, tuple)) else ()
+    intraday = _evidence_attr(evidence, "intraday")
+    hypothesis_rows = "".join(_evidence_row_html(row) for row in rows)
+    intraday_html = (
+        '<div class="intraday-evidence">'
+        '<h4>Intraday context — descriptive only</h4>'
+        f"{_evidence_row_html(intraday)}</div>"
+        if intraday is not None
+        else ""
+    )
+    if not hypothesis_rows and not intraday_html:
+        return ""
+    return (
+        '<details class="hypothesis-evidence">'
+        '<summary>Hypothesis evidence</summary>'
+        '<div class="evidence-grid">'
+        f"{hypothesis_rows}</div>{intraday_html}</details>"
+    )
+
+
 def _blocked_html(blocked: list[dict]) -> str:
     """Fail-visible strip: every symbol that could not be analyzed, with its
     machine-readable reason. A missing symbol must never just disappear."""
@@ -2526,12 +2713,15 @@ def _blocked_html(blocked: list[dict]) -> str:
             if rec.get("display_only")
             else ""
         )
+        evidence = _hypothesis_panel_html(
+            rec.get("hypothesis_evidence")
+        )
         rows += (
             f'<li><strong>{_esc(str(rec.get("symbol", "?")))}</strong>'
             f"{display_only} · "
             f'{_esc(str(rec.get("reason_code", "?")))} · '
             f'{_esc(str(rec.get("detail", "")))} · '
-            f'last known data: {_esc(str(last))}</li>'
+            f'last known data: {_esc(str(last))}{evidence}</li>'
         )
     return ('<section class="panel"><div class="eyebrow">DATA BLOCKED</div>'
             '<div class="notice watch">! These symbols are in the display '
@@ -2609,7 +2799,8 @@ def render(
             f'<div class="symbol-stat"><span>IV rank</span><strong>'
             f"{sec['iv_rank']:.2f}</strong></div>{display_date_stat}</div></div>"
             f'<div class="symbol-body">{stale_html}{tech_html}'
-            f"{_symbol_context_html(sec['symbol'], context)}{rank_note}{groups}</div>"
+            f"{_symbol_context_html(sec['symbol'], context)}{rank_note}{groups}"
+            f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
             "</section>"
         )
     data_as_of = data.get("data_as_of") or "no cached data"

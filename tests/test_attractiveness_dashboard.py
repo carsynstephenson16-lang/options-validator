@@ -3,6 +3,58 @@ import math
 import unittest
 
 from options_researcher import attractiveness_dashboard as ad
+from options_researcher.hypothesis_evidence import (
+    EvidenceRow,
+    EvidenceSource,
+    EvidenceState,
+    SymbolEvidence,
+)
+
+
+def _evidence(symbol: str) -> SymbolEvidence:
+    return SymbolEvidence(
+        symbol=symbol,
+        hypotheses=(
+            EvidenceRow(
+                family="H5<script>",
+                membership="tracked <owner>",
+                family_state="NO_SIGNAL",
+                symbol_states=(
+                    EvidenceState("entry<label>", "WAIT & WATCH"),
+                ),
+                evaluation_session="2026-07-24",
+                run_date="2026-07-25",
+                sources=(
+                    EvidenceSource(
+                        "entry_watch",
+                        "reports/h5/<unsafe>.txt",
+                        "2026-07-24",
+                    ),
+                ),
+                detail="NO RECEIPT H5 — expected daily <unsafe>",
+                expected_daily=True,
+                descriptive_only=False,
+            ),
+        ),
+        intraday=EvidenceRow(
+            family="INTRADAY",
+            membership="descriptive-only capture",
+            family_state="ok",
+            symbol_states=(EvidenceState("capture", "ok"),),
+            evaluation_session=None,
+            run_date="2026-07-24",
+            sources=(
+                EvidenceSource(
+                    "intraday",
+                    "reports/intraday_capture/2026-07-24/preclose.json",
+                    "2026-07-24",
+                ),
+            ),
+            detail="solver-derived, not rank-comparable",
+            expected_daily=False,
+            descriptive_only=True,
+        ),
+    )
 
 
 class PriceLadderTests(unittest.TestCase):
@@ -1067,6 +1119,82 @@ class BlockedSectionsTests(unittest.TestCase):
         self.assertTrue(data["blocked"][0]["display_only"])
         html = ad.render(data)
         self.assertEqual(html.count(ad.DISPLAY_ONLY_LABEL), 2)
+
+
+class HypothesisEvidencePanelTests(unittest.TestCase):
+    def test_panel_escapes_all_values_and_keeps_intraday_separate(self):
+        data = ad.assemble(
+            symbol_sections=[_v2_section()],
+            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11},
+            hypothesis_evidence_by_symbol={"MSFT": _evidence("MSFT")},
+        )
+
+        html = ad.render(data)
+
+        self.assertIn('<details class="hypothesis-evidence">', html)
+        self.assertIn("Hypothesis evidence", html)
+        self.assertIn("Intraday context — descriptive only", html)
+        self.assertIn("H5&lt;script&gt;", html)
+        self.assertIn("tracked &lt;owner&gt;", html)
+        self.assertIn("entry&lt;label&gt;", html)
+        self.assertIn("WAIT &amp; WATCH", html)
+        self.assertIn("reports/h5/&lt;unsafe&gt;.txt", html)
+        self.assertNotIn("<script>", html)
+
+    def test_evidence_is_inside_a_blocked_symbol_row(self):
+        data = ad.assemble(
+            symbol_sections=[],
+            rv21_by_symbol={},
+            blocked=[{
+                "symbol": "CLSK",
+                "reason_code": "NO_CACHED_CHAINS",
+                "detail": "no chain parquet",
+                "last_known_date": None,
+                "unexpected": False,
+            }],
+            hypothesis_evidence_by_symbol={"CLSK": _evidence("CLSK")},
+        )
+
+        html = ad.render(data)
+        blocked_start = html.index('<div class="eyebrow">DATA BLOCKED</div>')
+        evidence_start = html.index(
+            '<details class="hypothesis-evidence">', blocked_start
+        )
+        blocked_end = html.index("</section>", blocked_start)
+        self.assertLess(evidence_start, blocked_end)
+
+    def test_evidence_cannot_change_top3_order_or_card_grades(self):
+        import json
+
+        baseline = ad.assemble(
+            symbol_sections=[_v2_section()],
+            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11},
+        )
+        evidenced = ad.assemble(
+            symbol_sections=[_v2_section()],
+            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11},
+            hypothesis_evidence_by_symbol={"MSFT": _evidence("MSFT")},
+        )
+
+        baseline_bytes = json.dumps(
+            ad.select_top_picks(baseline),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        evidenced_bytes = json.dumps(
+            ad.select_top_picks(evidenced),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        self.assertEqual(evidenced_bytes, baseline_bytes)
+        self.assertEqual(
+            [section["symbol"] for section in evidenced["symbols"]],
+            [section["symbol"] for section in baseline["symbols"]],
+        )
+        baseline_card = baseline["symbols"][0]["groups"][0]["cards"][0]
+        evidenced_card = evidenced["symbols"][0]["groups"][0]["cards"][0]
+        self.assertEqual(evidenced_card["grades"], baseline_card["grades"])
+        self.assertNotIn("hypothesis_evidence", evidenced_card)
 
 
 class LoadContextTests(unittest.TestCase):
