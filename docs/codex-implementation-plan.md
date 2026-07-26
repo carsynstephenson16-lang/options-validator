@@ -10,12 +10,25 @@ capture receipt; log evidence 2026-07-24_0710.log) — and the owner's
 directive is the reprioritization nod.
 
 Standing constraints for every packet: research-only repo (never places
-orders); every number from config.py; owner types frozen values; unittest
-offline; ruff/pyright/CI green before merge; fail-visible over silent;
-vocabulary discipline; board-ordering/Top-3 invariance tests are merge
-blockers for anything touching the scanner. Verify all Lumibot/ThetaData
-signatures against installed packages. Fable reviews every Codex result
-before merge.
+orders); every number from config.py; owner types frozen values and NEW
+registrations; unittest offline; ruff/pyright/CI green before merge;
+fail-visible over silent; vocabulary discipline; board-ordering/Top-3
+invariance tests are merge blockers for anything touching the scanner.
+Verify all Lumibot/ThetaData signatures against installed packages. Fable
+reviews every Codex result before merge.
+
+**Amendment-recording delegation (owner-directed 2026-07-25):** amendments
+to already-registered specs (e.g. H7_EXIT_SCORING_SPEC_AMENDMENT_V1_3) are
+NOT an owner act: Codex drafts the amendment text → independent adversarial
+review → Fable sign-off → Codex records it (ledger fact + spec doc) with
+the provenance label "owner-delegated standing 2026-07-25". Verified
+context for V1_3: the ledger already carries V1_1 and V1_2; the seq-0
+frozen payload's cost_model_hash matches current while the whole-repo
+config_hash has drifted through legitimate post-registration constants —
+the amendment scopes the scoring identity to the registered surface
+(stage456_parameters + scorer fields + cost_model_hash), demoting global
+hashes to non-authoritative provenance. Scoring remains BUILD-ONLY behind
+the owner's fresh PASS; ledger events and receipts are never rewritten.
 
 ---
 

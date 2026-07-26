@@ -27,7 +27,16 @@ changes, update `.cursorrules` and `AGENTS.md` together so they don't drift.
 
 Claude Code sessions ORCHESTRATE: research, specs, Codex briefs, review,
 verification, and owner decision packages. Codex implements code from the
-briefs. The owner types every frozen number, registration, and ratification.
+briefs. The owner types every frozen number and new registration.
+*Amended 2026-07-25 (owner-directed):* **amendments to already-registered
+specs are no longer an owner act** — the implementing agent may draft and
+record them (ledger fact + spec doc) once the amendment text has passed an
+independent adversarial review and Fable's sign-off, and every recorded
+amendment carries the provenance label "owner-delegated standing
+2026-07-25". New hypothesis registrations, frozen numbers, and verdict
+ratifications remain owner-typed. The owner retains veto: a vetoed
+amendment is corrected by a further append-only amendment, never by
+rewriting.
 Delegate heavy reading and routine lifting to subagents (Sonnet for research
 and scouting, Opus for adversarial review); reserve the main session for
 judgment, synthesis, and integrity checks. Claude writes code directly only
