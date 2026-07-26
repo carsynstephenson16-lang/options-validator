@@ -32,6 +32,34 @@ successful outcome. Sources: `README.md`, `CLAUDE.md`, `.cursorrules`,
   gitleaks).
 - `main` == `origin/main` == ops checkout (`~/options-validator-ops`).
 
+## P1/P2 implementation checkpoint (feature branch, 2026-07-25)
+
+- **H7 safety prerequisite:** isolated commit `d8acdfe` replaces the
+  whole-repo runtime config-hash gate with registered
+  `h7_scoring_identity/v1` (complete stage/scorer fields plus cost hash).
+  Global hashes remain non-authoritative provenance. Historical events and
+  receipts are unchanged. The amendment fact and merge remain gated on
+  Fable sign-off; real scoring remains BUILD-ONLY/INACTIVE and separately
+  requires a fresh review-bound owner PASS.
+- **P2:** isolated commit `6c8941e` keeps the registered H7 scope at exactly
+  15 while displaying NBIS, AMAT, and CLSK as explicitly DISPLAY-ONLY. The
+  extras cannot enter either Top-3, change gap reasons, or block QM. Their
+  EOD top-up/feature lane is note-only and cannot change the ritual exit
+  code or any H7 step. Intraday capture remains pinned to the canonical 15.
+  Spent RQ1 reconstruction reads its symbols from its immutable report,
+  never from live config.
+- **P1:** the board now gathers typed read-only H5/H6/H7/H8/H10 evidence per
+  name and renders an escaped accordion below normal and DATA_BLOCKED rows.
+  Ritual summary states remain separate from verbatim raw symbol/lane
+  states; intraday appears only as a descriptive context row. Evidence is
+  attached after card assembly and cannot affect grades, ordering, policy,
+  or picks.
+- **Verification:** 289 combined H7/P1/P2 regressions and all 2,046 offline
+  unit tests pass. Ruff is clean; Pyright reports 0 errors/0 warnings; shell
+  syntax and `git diff --check` pass. Independent adversarial P1 review is
+  PASS. The generated board has 18 names, 18 evidence accordions, three exact
+  DISPLAY-ONLY labels, and preserved raw/source-path evidence.
+
 ## Current system map (condensed; Verified)
 
 - **Data**: ThetaData terminal → `data/thetadata_adapter.py` → per-day
@@ -60,8 +88,9 @@ successful outcome. Sources: `README.md`, `CLAUDE.md`, `.cursorrules`,
 
 ## The attractiveness system, explained
 
-**Plain English (owner-facing).** Every morning the scanner looks at each
-name on the board and asks: if you sold a put today (a promise to buy the
+**Plain English (owner-facing).** Every morning the scanner looks at the 15
+canonical names plus three display-only research names and asks: if you sold
+a put today (a promise to buy the
 stock at a lower price, and you're paid up front for making that promise),
 or sold a covered call against shares you own, or bought a LEAPS (a very
 long-dated call option), how does today's pricing look? Each candidate
@@ -74,7 +103,10 @@ day's best-graded candidates. It is a describing tool, not a predicting
 tool: nothing in it forecasts, and nothing in it places orders. Since
 2026-07-25 each card also carries a neutral line showing how the contract's
 open interest (the count of contracts outstanding) changed since the prior
-session — context only, never a grade.
+session — context only, never a grade. A per-name accordion shows the latest
+registered-hypothesis evidence and its source paths; it is also context only.
+NBIS, AMAT, and CLSK carry the exact DISPLAY-ONLY label and are excluded from
+the mechanical and QM pick pools.
 
 **Technical.** Card builders per role
 (`options_researcher/attractiveness.py:142-401`) select contracts by delta
@@ -120,6 +152,10 @@ pushed → `RITUAL STATUS: OK`.
   `docs/dashboard-architecture.md`.
 - Earlier same review-session (already merged + CI green): OI-change line
   v1 (owner-ratified), `.research/` decision workflow artifacts.
+- P1/P2 feature branch: three display-only names, isolated display refresh,
+  report-pinned RQ1 reconstruction, canonical-15 intraday pin, and typed
+  hypothesis-evidence accordions. The three extra feature files were built
+  from the landed cache backfill. Merge is intentionally pending Fable.
 
 ## Backlog
 
@@ -154,6 +190,10 @@ currently 2026-07-15, dashboard already warns when stale).
 4. Monday's clean-run expectation is inference from verified fixes, not a
    completed Monday run; the first true proof is Monday's log.
 5. `index.html` banner quirk (P1 above) can mislead a glance at freshness.
+6. NBIS/AMAT/CLSK earnings remain UNKNOWN until canonical coverage exists.
+   No dividend rows were invented. The existing IV calibration is stale, so
+   it is not labeled current; intraday solver preview remains fail-closed
+   wherever calibration coverage is absent.
 
 ## Final verdict
 
