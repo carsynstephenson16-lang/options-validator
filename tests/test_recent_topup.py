@@ -90,6 +90,12 @@ class ScopeTests(unittest.TestCase):
             ],
         )
 
+    def test_display_extra_scope_is_explicit_and_excludes_h7_names(self):
+        self.assertEqual(
+            recent_topup.scope_symbols("display-extra"),
+            ["NBIS", "AMAT", "CLSK"],
+        )
+
     def test_unknown_scope_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "unknown top-up scope"):
             recent_topup.scope_symbols("everything")

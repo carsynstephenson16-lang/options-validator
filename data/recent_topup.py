@@ -18,9 +18,10 @@ controlling session after review, exactly like data/underlying_closes.
 fetch_underlying_eod. Tests cover only the pure day-selection and audit logic.
 
 Run from the repo root:
-    python data/recent_topup.py --dry-run               # H5 core, no network
-    python data/recent_topup.py --scope h7 --dry-run    # H7 12-name inventory
-    python data/recent_topup.py --scope h7 --refresh-closes  # owner-authorized
+    python data/recent_topup.py --dry-run
+    python data/recent_topup.py --scope h7 --dry-run
+    python data/recent_topup.py --scope display-extra --dry-run
+    python data/recent_topup.py --scope h7 --refresh-closes
 """
 from __future__ import annotations
 
@@ -44,8 +45,9 @@ def scope_symbols(scope: str) -> list[str]:
     """Return a canonical, owner-scoped top-up universe.
 
     The default/core scope preserves the original four-name H5 behavior.
-    H7 is explicit because it is a larger paid-data operation and must never
-    happen merely because a caller omitted an argument.
+    H7 and the display-only extras are explicit because each is a larger paid-
+    data operation and must never happen merely because a caller omitted an
+    argument. The display-extra scope does not amend or extend H7.
     """
     if scope == "core":
         return list(config.UNIVERSE)
@@ -53,6 +55,8 @@ def scope_symbols(scope: str) -> list[str]:
         from options_researcher.h7_scope import watch_universe
 
         return list(dict.fromkeys(watch_universe()))
+    if scope == "display-extra":
+        return list(config.ATTRACTIVENESS_EXTRA_NAMES)
     raise ValueError(f"unknown top-up scope: {scope!r}")
 
 
@@ -243,9 +247,11 @@ def main(argv=None) -> int:
     import argparse
     p = argparse.ArgumentParser(description="Top up recent EOD chains for the "
                                 "selected forward scope (blind cache + audit).")
-    p.add_argument("--scope", choices=("core", "h7"), default="core",
+    p.add_argument("--scope", choices=("core", "h7", "display-extra"),
+                   default="core",
                    help="core = existing four-name H5 scope (default); "
-                        "h7 = exact 12-name H7 forward scope")
+                        "h7 = exact 15-name H7 forward scope; display-extra = "
+                        "explicit NBIS/AMAT/CLSK display-only scope")
     p.add_argument("--dry-run", action="store_true",
                    help="list missing recent days and exit (no network)")
     p.add_argument("--no-audit", action="store_true",

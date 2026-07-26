@@ -1,5 +1,6 @@
 """Tests for the one-run, descriptive RQ1 rank-quality runner."""
 
+import json
 import tempfile
 import unittest
 from datetime import date, datetime, timezone
@@ -54,6 +55,20 @@ class PureMetricTests(unittest.TestCase):
 
 
 class CausalBoardTests(unittest.TestCase):
+    @staticmethod
+    def _write_spent_report(path: Path, symbols: list[str]) -> None:
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": "rq1_rank_quality_v1",
+                    "hypothesis_id": "RQ1",
+                    "registration_seq": rq1_runner.REGISTRATION_SEQ,
+                    "results": {"symbols": symbols},
+                }
+            ),
+            encoding="utf-8",
+        )
+
     def test_earnings_are_selected_from_the_board_day_information_set(self):
         assertions = [
             {
@@ -173,37 +188,86 @@ class CausalBoardTests(unittest.TestCase):
                 }
             ]
 
-        def reconstruct(chain_paths, features):
-            with (
-                patch("glob.glob", return_value=chain_paths),
-                patch.object(config, "ATTRACTIVENESS_UNIVERSE", ["AAA"]),
-                patch.object(config, "STUDY_ERA_START", {"AAA": day}),
-                patch.object(config, "BACKTEST_END", later_day),
-                patch("data.underlying_closes.load_closes", return_value=closes),
-                patch("data.underlying_closes.load_closes_adjusted", return_value=closes),
-                patch("options_researcher.features.load_features", return_value=features),
-                patch(
-                    "options_researcher.h7_earnings.load_assertions",
-                    return_value=[future_known_assertion],
-                ),
-                patch("options_researcher.fomc.load_fomc", return_value=[]),
-                patch(
-                    "options_researcher.attractiveness.ladder_cards", side_effect=fake_ladder_cards
-                ),
-                patch("options_researcher.attractiveness.put_card_rows", object()),
-                patch("options_researcher.attractiveness.long_call_card_rows", object()),
-                patch("options_researcher.rq1_runner.pd.read_parquet", return_value=pd.DataFrame()),
-            ):
-                return rq1_runner._default_rows()
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "rq1-v1.json"
+            self._write_spent_report(report_path, ["AAA"])
 
-        full_day_row = next(
-            row for row in reconstruct(full_paths, full_features) if row["date"] == day
-        )
-        truncated_day_row = reconstruct(full_paths[:1], full_features.iloc[:1])[0]
+            def reconstruct(chain_paths, features):
+                with (
+                    patch("glob.glob", return_value=chain_paths),
+                    patch.object(config, "ATTRACTIVENESS_UNIVERSE", ["ZZZ"]),
+                    patch.object(config, "STUDY_ERA_START", {"AAA": day}),
+                    patch.object(config, "BACKTEST_END", later_day),
+                    patch("data.underlying_closes.load_closes", return_value=closes),
+                    patch(
+                        "data.underlying_closes.load_closes_adjusted",
+                        return_value=closes,
+                    ),
+                    patch(
+                        "options_researcher.features.load_features",
+                        return_value=features,
+                    ),
+                    patch(
+                        "options_researcher.h7_earnings.load_assertions",
+                        return_value=[future_known_assertion],
+                    ),
+                    patch("options_researcher.fomc.load_fomc", return_value=[]),
+                    patch(
+                        "options_researcher.attractiveness.ladder_cards",
+                        side_effect=fake_ladder_cards,
+                    ),
+                    patch("options_researcher.attractiveness.put_card_rows", object()),
+                    patch(
+                        "options_researcher.attractiveness.long_call_card_rows",
+                        object(),
+                    ),
+                    patch(
+                        "options_researcher.rq1_runner.pd.read_parquet",
+                        return_value=pd.DataFrame(),
+                    ),
+                ):
+                    return rq1_runner._default_rows(report_path=report_path)
+
+            full_day_row = next(
+                row for row in reconstruct(full_paths, full_features)
+                if row["date"] == day
+            )
+            truncated_day_row = reconstruct(
+                full_paths[:1], full_features.iloc[:1]
+            )[0]
 
         self.assertEqual(full_day_row, truncated_day_row)
         self.assertTrue(
-            all(not earnings for board_day, earnings in observed_earnings if board_day == day)
+            all(
+                not earnings
+                for board_day, earnings in observed_earnings
+                if board_day == day
+            )
+        )
+
+    def test_reconstruction_uses_spent_report_not_live_display_universe(self):
+        import config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "rq1-v1.json"
+            self._write_spent_report(report_path, ["AAA", "BBB"])
+            patterns: list[str] = []
+
+            with (
+                patch.object(config, "ATTRACTIVENESS_UNIVERSE", ["ZZZ"]),
+                patch(
+                    "glob.glob",
+                    side_effect=lambda pattern: patterns.append(pattern) or [],
+                ),
+            ):
+                self.assertEqual(
+                    rq1_runner._default_rows(report_path=report_path),
+                    [],
+                )
+
+        self.assertEqual(
+            patterns,
+            [".cache/chains/AAA_*.parquet", ".cache/chains/BBB_*.parquet"],
         )
 
     def test_reconstruction_logs_counted_skipped_board_days(self):
@@ -213,22 +277,43 @@ class CausalBoardTests(unittest.TestCase):
         day = "2026-01-02"
         features = pd.DataFrame({"atm_iv": [0.20]}, index=pd.Index([day], name="date"))
         closes = pd.Series([100.0], index=[day])
-        with (
-            patch("glob.glob", return_value=[f"/fixture/.cache/chains/AAA_{day}.parquet"]),
-            patch.object(config, "ATTRACTIVENESS_UNIVERSE", ["AAA"]),
-            patch.object(config, "STUDY_ERA_START", {"AAA": day}),
-            patch.object(config, "BACKTEST_END", day),
-            patch("data.underlying_closes.load_closes", return_value=closes),
-            patch("data.underlying_closes.load_closes_adjusted", return_value=closes),
-            patch("options_researcher.features.load_features", return_value=features),
-            patch("options_researcher.h7_earnings.load_assertions", return_value=[]),
-            patch("options_researcher.fomc.load_fomc", return_value=[]),
-            patch(
-                "options_researcher.rq1_runner.pd.read_parquet", side_effect=KeyError("bad chain")
-            ),
-        ):
-            with self.assertLogs("options_researcher.rq1_runner", level="WARNING") as logs:
-                self.assertEqual(rq1_runner._default_rows(), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            report_path = Path(tmp) / "rq1-v1.json"
+            self._write_spent_report(report_path, ["AAA"])
+            with (
+                patch(
+                    "glob.glob",
+                    return_value=[f"/fixture/.cache/chains/AAA_{day}.parquet"],
+                ),
+                patch.object(config, "ATTRACTIVENESS_UNIVERSE", ["ZZZ"]),
+                patch.object(config, "STUDY_ERA_START", {"AAA": day}),
+                patch.object(config, "BACKTEST_END", day),
+                patch("data.underlying_closes.load_closes", return_value=closes),
+                patch(
+                    "data.underlying_closes.load_closes_adjusted",
+                    return_value=closes,
+                ),
+                patch(
+                    "options_researcher.features.load_features",
+                    return_value=features,
+                ),
+                patch(
+                    "options_researcher.h7_earnings.load_assertions",
+                    return_value=[],
+                ),
+                patch("options_researcher.fomc.load_fomc", return_value=[]),
+                patch(
+                    "options_researcher.rq1_runner.pd.read_parquet",
+                    side_effect=KeyError("bad chain"),
+                ),
+            ):
+                with self.assertLogs(
+                    "options_researcher.rq1_runner", level="WARNING"
+                ) as logs:
+                    self.assertEqual(
+                        rq1_runner._default_rows(report_path=report_path),
+                        [],
+                    )
 
         self.assertTrue(
             any(

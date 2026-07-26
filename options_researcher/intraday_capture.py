@@ -5,9 +5,10 @@ DESCRIPTIVE / ALERT-DISPLAY ONLY. This module has ZERO verdict authority: it
 never imports options_researcher.entry_watch, never writes data/positions/
 or ledger/, and never renders the verdict vocabulary owned by entry_watch's
 trigger grading or the attractiveness dashboard's badges (mirrored by
-tests/test_intraday_capture.py's vocabulary test). It snapshots
-config.ATTRACTIVENESS_UNIVERSE (all 15 scope names) several times per
-trading day: spot (bid/mid/ask from the stock feed, or a put-call-parity
+tests/test_intraday_capture.py's vocabulary test). It snapshots the canonical
+15-name H7 scope from options_researcher.h7_scope.watch_universe several times
+per trading day; display-only attractiveness extras never trigger paid capture.
+It records spot (bid/mid/ask from the stock feed, or a put-call-parity
 mid-only fallback when that feed is not entitled -- see "ENTITLEMENT
 REALITY" below), nearest-monthly ATM IV, an intraday IV-rank PREVIEW (via
 live_quotes.iv_rank_preview against the trailing EOD atm_iv history --
@@ -120,6 +121,7 @@ from options_researcher import live_quotes as lq
 from options_researcher.black_scholes import delta as bs_delta
 from options_researcher.black_scholes import implied_vol
 from options_researcher.chains import atm_row
+from options_researcher.h7_scope import watch_universe
 from research.hashing import config_hash
 
 NY_TZ = "America/New_York"
@@ -690,7 +692,7 @@ def capture(session_tag: str, *, force: bool = False, client=None,
         now_ny = datetime.now(ZoneInfo(NY_TZ))
     now_utc = now_ny.astimezone(timezone.utc)
     universe = (list(universe) if universe is not None
-               else list(config.ATTRACTIVENESS_UNIVERSE))
+                else list(watch_universe()))
 
     if not lq.in_regular_session(now_ny):
         print(f"intraday_capture refused: {now_ny.isoformat()} ET is "

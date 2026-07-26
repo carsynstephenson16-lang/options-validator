@@ -321,6 +321,35 @@ class DataAsOfBannerTests(unittest.TestCase):
         html = ad.render(d)
         self.assertIn("<strong>Market close</strong> no cached data", html)
 
+    def test_stale_display_extra_has_separate_visible_date(self):
+        def section(symbol, as_of):
+            return {
+                "symbol": symbol,
+                "as_of": as_of,
+                "close": 100.0,
+                "iv_rank": 0.5,
+                "groups": [{
+                    "kind": "put",
+                    "title": "SELL A PUT?",
+                    "cards": [],
+                    "empty": "none this cycle",
+                }],
+            }
+
+        data = ad.assemble(
+            symbol_sections=[
+                section("MSFT", "2026-07-24"),
+                section("CLSK", "2026-07-01"),
+            ],
+            rv21_by_symbol={},
+        )
+
+        self.assertEqual(data["data_as_of"], "2026-07-24")
+        self.assertEqual(data["display_data_as_of"], "2026-07-01")
+        html = ad.render(data)
+        self.assertIn("<strong>Market close</strong> 2026-07-24", html)
+        self.assertIn("<strong>All display data</strong> 2026-07-01", html)
+
 
 class BbbRowsTests(unittest.TestCase):
     # rv21 = sqrt(12) * 0.10 -> monthly_move = 0.10 exactly.
@@ -573,6 +602,39 @@ class SelectTopPicksTests(unittest.TestCase):
             self.assertIn(key, p)
         self.assertIsInstance(p["card"], dict)
 
+    def test_perfect_display_extra_cannot_change_mechanical_picks_or_gaps(self):
+        import copy
+
+        baseline = self._data()
+        expected_picks = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_top_picks(baseline)
+        ]
+        expected_gaps = ad._top3_gap_reasons(baseline)
+        extra = copy.deepcopy(baseline["symbols"][0])
+        extra["symbol"] = "CLSK"
+        extra["display_only"] = True
+        for group in extra["groups"]:
+            for card in group["cards"]:
+                card["grades"] = {
+                    "fits_cap": "GREEN",
+                    "yield": "GREEN",
+                    "liquidity": "GREEN",
+                }
+                card["rank_leader"] = True
+                card["breakeven_move"] = 0.0
+                card["annualized_yield"] = 99.0
+        with_extra = copy.deepcopy(baseline)
+        with_extra["symbols"].insert(0, extra)
+
+        actual_picks = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_top_picks(with_extra)
+        ]
+        self.assertEqual(actual_picks, expected_picks)
+        self.assertEqual(ad._top3_gap_reasons(with_extra), expected_gaps)
+        self.assertNotIn("CLSK", {symbol for symbol, _, _ in actual_picks})
+
 
 class SelectQmTopPicksTests(unittest.TestCase):
     @staticmethod
@@ -725,6 +787,40 @@ class SelectQmTopPicksTests(unittest.TestCase):
         del context["symbols"]["AAA"]
         picks = ad.select_qm_top_picks(data, context)
         self.assertEqual(picks, [])
+
+    def test_perfect_display_extra_cannot_block_or_change_qm_picks(self):
+        import copy
+
+        data = SelectTopPicksTests()._data()
+        data["data_as_of"] = "2026-07-01"
+        context = self._context()
+        expected = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_qm_top_picks(data, context)
+        ]
+        extra = copy.deepcopy(data["symbols"][0])
+        extra["symbol"] = "NBIS"
+        extra["display_only"] = True
+        for group in extra["groups"]:
+            for card in group["cards"]:
+                card["grades"] = {
+                    "fits_cap": "GREEN",
+                    "yield": "GREEN",
+                    "liquidity": "GREEN",
+                }
+                card["rank_leader"] = True
+                card["breakeven_move"] = 0.0
+                card["annualized_yield"] = 99.0
+        data["symbols"].insert(0, extra)
+
+        enriched = ad.enrich_qm_context_with_candidates(data, context)
+        self.assertNotIn("NBIS", enriched["symbols"])
+        actual = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_qm_top_picks(data, enriched)
+        ]
+        self.assertEqual(actual, expected)
+        self.assertNotIn("NBIS", {symbol for symbol, _, _ in actual})
 
 
 class StrategySectionRankingTests(unittest.TestCase):
@@ -940,6 +1036,37 @@ class BlockedSectionsTests(unittest.TestCase):
         self.assertEqual(ad._run_exit_code([]), 0)
         self.assertEqual(ad._run_exit_code([self._BLOCKED[0]]), 0)
         self.assertEqual(ad._run_exit_code(self._BLOCKED), 1)
+
+    def test_display_only_chip_is_pinned_on_success_and_blocked_rows(self):
+        section = {
+            "symbol": "AMAT",
+            "as_of": "2026-07-24",
+            "close": 200.0,
+            "iv_rank": 0.5,
+            "groups": [{
+                "kind": "put",
+                "title": "SELL A PUT?",
+                "cards": [],
+                "empty": "none this cycle",
+            }],
+        }
+        blocked = [{
+            "symbol": "CLSK",
+            "reason_code": "NO_CACHED_CHAINS",
+            "detail": "no chain parquet",
+            "last_known_date": None,
+            "unexpected": False,
+        }]
+        data = ad.assemble(
+            symbol_sections=[section],
+            rv21_by_symbol={},
+            blocked=blocked,
+        )
+
+        self.assertTrue(data["symbols"][0]["display_only"])
+        self.assertTrue(data["blocked"][0]["display_only"])
+        html = ad.render(data)
+        self.assertEqual(html.count(ad.DISPLAY_ONLY_LABEL), 2)
 
 
 class LoadContextTests(unittest.TestCase):

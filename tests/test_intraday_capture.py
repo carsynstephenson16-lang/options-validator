@@ -436,6 +436,47 @@ class CaptureIntegrationTests(unittest.TestCase):
         self.assertEqual(receipt["names"]["VST"]["atm_iv"], 0.30)
         self.assertEqual(receipt["names"]["VST"]["spot_source"], "stock_snapshot")
 
+    def test_default_capture_is_pinned_to_canonical_h7_scope(self):
+        canonical_h7 = [
+            "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO",
+            "IREN", "USAR", "ET", "VST", "CEG", "MSFT", "AMZN",
+        ]
+        display_extras = ["NBIS", "AMAT", "CLSK"]
+        probe = _probe(NOW_NY.astimezone(timezone.utc))
+        cache_dir, receipt_dir = _tmp_dirs()
+
+        def fake_capture_symbol(_client, symbol, _spot_row, _today, _ny_iso):
+            return {"symbol": symbol, "status": "unavailable"}, None, None
+
+        with (
+            mock.patch.object(
+                config,
+                "ATTRACTIVENESS_UNIVERSE",
+                canonical_h7 + display_extras,
+            ),
+            mock.patch.object(ic, "watch_universe", return_value=canonical_h7),
+            mock.patch.object(
+                ic,
+                "ensure_probe_ok",
+                return_value=(probe, False, True, "ok"),
+            ),
+            mock.patch.object(ic, "_stock_spots", return_value={}),
+            mock.patch.object(ic, "_capture_symbol", side_effect=fake_capture_symbol),
+        ):
+            rc, receipt = ic.capture(
+                "midmorning",
+                client=object(),
+                now_ny=NOW_NY,
+                cache_dir=cache_dir,
+                receipt_dir=receipt_dir,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertIsNotNone(receipt)
+        assert receipt is not None
+        self.assertEqual(receipt["universe"], canonical_h7)
+        self.assertTrue(set(display_extras).isdisjoint(receipt["names"]))
+
     def test_per_name_degradation_does_not_abort_the_board(self):
         # option_snapshot_quote is part of the entitled CORE (unlike
         # greeks) -- a failure there is a genuine per-name hard abort.
