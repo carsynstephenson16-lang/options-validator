@@ -82,6 +82,47 @@ class RitualRefreshBeforeConsumerOrderTests(unittest.TestCase):
         self.assertIn(entry_watch, source)
         self.assertLess(source.index(rebuild), source.index(entry_watch))
 
+    def test_display_extra_refresh_is_note_only_and_outside_h7_gate(self):
+        source = RITUAL.read_text(encoding="utf-8")
+
+        protected_topup = "data/recent_topup.py --scope h7 --refresh-closes"
+        display_topup = (
+            "data/recent_topup.py --scope display-extra --refresh-closes"
+        )
+        gate_block = 'if [ "$GATE_GO" -eq 1 ]; then'
+        display_step = source.index(
+            "# Step 0b — display-only extras top-up"
+        )
+        source_health = source.index("# Step 1 — source health")
+        display_segment = source[display_step:source_health]
+
+        self.assertIn(protected_topup, source)
+        self.assertIn(display_topup, display_segment)
+        self.assertLess(source.index(protected_topup), display_step)
+        self.assertLess(display_step, source.index(gate_block))
+        self.assertNotIn("crit ", display_segment)
+        self.assertNotIn("CRITICAL=", display_segment)
+        self.assertIn('note "display-extra topup:', display_segment)
+
+    def test_canonical_and_display_extra_feature_builds_are_isolated(self):
+        source = RITUAL.read_text(encoding="utf-8")
+        canonical = (
+            "build_all('$AS_OF', symbols=watch_universe())"
+        )
+        display = (
+            "build_all('$AS_OF', symbols=ATTRACTIVENESS_EXTRA_NAMES)"
+        )
+        gate_block = source.index('if [ "$GATE_GO" -eq 1 ]; then')
+
+        self.assertIn(canonical, source)
+        self.assertIn(display, source)
+        self.assertLess(source.index(canonical), source.index(display))
+        self.assertLess(source.index(display), gate_block)
+        self.assertIn(
+            'note "display-extra features: FAILED (non-blocking;',
+            source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -634,15 +634,15 @@ PICK_PINNED_SYMBOLS = ["VST", "AMZN"]
 # ~1 quarter (91d) + reporting slack. LLM-asserted, presentation layer.
 EARNINGS_COVERAGE_DAYS = 98
 
-# Attractiveness-dashboard display universe (presentation layer ONLY —
-# owner-directed expansion 2026-07-16). DERIVED from the already-authorized
-# H7 forward scope, never a new list of its own: adding a ticker here
-# requires adding it to the H7 scope first (owner amendment). Must equal
-# options_researcher.h7_scope.watch_universe() exactly — a unittest pins the
-# equality. UNIVERSE above is untouched and still owns every backtest path.
+# Attractiveness-dashboard display universe (presentation layer ONLY).
+# The canonical H7 forward scope remains the exact 15-name prefix. The explicit
+# extras are display/top-up names only: they do not amend H7, enter H7 capture,
+# or change any H7 hash, cohort, writer, or verdict path. UNIVERSE above remains
+# untouched and still owns every backtest path.
+ATTRACTIVENESS_EXTRA_NAMES = ["NBIS", "AMAT", "CLSK"]
 ATTRACTIVENESS_UNIVERSE = [
     _s for _s in H7_WATCHLIST + H7_CORE_LONG_ONLY if _s not in H7_EXCLUDED
-]
+] + ATTRACTIVENESS_EXTRA_NAMES
 
 # ---------------------------------------------------------------------------
 # --- LIVE MISSION-CONTROL DASHBOARD (presentation/plumbing layer ONLY) ---
@@ -715,8 +715,8 @@ CARD3_MAX_OPEN_PER_NAME = 1          # max 1 open position per name
 # INTRADAY CAPTURE -- descriptive-only option-board snapshots (owner-directed
 # 2026-07-24; module: options_researcher/intraday_capture.py). ALERTS/DISPLAY
 # ONLY: zero verdict authority, never trades, never touches entry_watch or
-# the ledger. Universe = ATTRACTIVENESS_UNIVERSE (all 15 scope names) --
-# imported by the module, never copied into a second list here.
+# the ledger. Its paid-data default is the canonical H7 15-name scope from
+# h7_scope.watch_universe(); display-only extras are deliberately excluded.
 # ---------------------------------------------------------------------------
 # session_tag -> scheduled ET wall-clock time ("HH:MM", 24h). The first four
 # are OWNER-TYPED 2026-07-24 (open auction / post-auction open / mid-morning /

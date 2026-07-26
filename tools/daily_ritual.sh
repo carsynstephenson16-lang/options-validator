@@ -78,6 +78,20 @@ else
   fi
 fi
 
+# Step 0b — display-only extras top-up. This lane is presentation support,
+# not H7 evidence: it is deliberately outside every H7 gate/protected branch,
+# emits summary notes only, and can never change CRITICAL or the ritual exit
+# code. A failure leaves the extras visibly stale/blocked on the board.
+if [ "$KEY_OK" -eq 1 ] && "$UV" run python data/recent_topup.py --scope display-extra --refresh-closes; then
+  note "display-extra topup: OK (closes refreshed)"
+else
+  if [ "$KEY_OK" -eq 1 ]; then
+    note "display-extra topup: FAILED (non-blocking; display-only data may be stale)"
+  else
+    note "display-extra topup: SKIPPED (no API key; display-only data may be stale)"
+  fi
+fi
+
 # Step 1 — source health (run AND record; per-name ban, never blocks board).
 # One-door repair (e64e5e9) receipt chain: the gate must LINK the health
 # receipt, and the watcher refuses without a linked gate receipt — so thread
@@ -228,11 +242,15 @@ fi
 # Step 4b's entry_watch (which reads this same store) never reads yesterday's
 # IV-rank against today's close.
 if [ -n "$AS_OF" ]; then
-  "$UV" run python -c "from options_researcher.features import build_all; build_all('$AS_OF')" \
+  "$UV" run python -c "from options_researcher.features import build_all; from options_researcher.h7_scope import watch_universe; build_all('$AS_OF', symbols=watch_universe())" \
     && note "attractiveness features: rebuilt to $AS_OF" \
     || note "attractiveness features: FAILED — dashboard will flag stale/missing features"
+  "$UV" run python -c "from config import ATTRACTIVENESS_EXTRA_NAMES; from options_researcher.features import build_all; build_all('$AS_OF', symbols=ATTRACTIVENESS_EXTRA_NAMES)" \
+    && note "display-extra features: rebuilt to $AS_OF" \
+    || note "display-extra features: FAILED (non-blocking; extras will stay visibly stale/blocked)"
 else
   note "attractiveness features: SKIPPED (no evaluation session)"
+  note "display-extra features: SKIPPED (no evaluation session; non-blocking)"
 fi
 
 if [ "$GATE_GO" -eq 1 ]; then
