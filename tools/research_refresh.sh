@@ -32,8 +32,10 @@ if [ "$HOUR" -lt 12 ]; then SLOT="premarket"; else SLOT="postclose"; fi
   || echo "WARN: h7 topup failed — continuing on cached data"
 "$UV" run python data/recent_topup.py --scope display-extra --refresh-closes \
   || echo "WARN: display-extra topup failed — continuing"
+# Anchored sed (^-anchored so a LumiBot/dotenv banner line can never match)
+# extracts data_as_of from the single JSON line -- see test_shell_banner_guard.
 AS_OF="$("$UV" run python -m tools.research_context_assemble --print-ids 2>/dev/null \
-  | tail -1 | "$UV" run python -c 'import json,sys; print(json.load(sys.stdin)["data_as_of"])')"
+  | sed -n 's/^{"data_as_of": "\([0-9-]*\)".*/\1/p' | tail -1)"
 if [ -z "$AS_OF" ]; then
   echo "CRITICAL: could not resolve board data_as_of"; exit 1
 fi
