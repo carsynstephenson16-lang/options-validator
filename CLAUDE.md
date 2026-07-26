@@ -66,6 +66,7 @@ uv run python -m options_researcher.dashboard    # writes .tmp/dashboard/index.h
 uv run python -m options_researcher.live_dashboard --serve  # 127.0.0.1 live-preview server (two lanes: OFFICIAL H5 vs LIVE PREVIEW; FIRE stays with entry_watch)
 uv run python -m options_researcher.live_quotes --probe  # one-shot live schema probe (regular session ONLY; required before the live lane turns on)
 uv run python -m options_researcher.attractiveness_dashboard  # writes .tmp/dashboard/attractiveness.html
+uv run python -m tools.research_context_assemble --verify  # research-context freshness check; tools/research_refresh.sh runs the scheduled LLM refresh (kill-switch: .research-refresh-off)
 uv run python -m options_researcher.robustness --help  # registered research-only walk-forward/null/stability experiments
 ```
 
