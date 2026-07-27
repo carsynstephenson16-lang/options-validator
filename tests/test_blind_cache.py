@@ -13,6 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 from data import thetadata_adapter
+from data.atomic_io import stage_parquet_write
 from research import facts
 
 OOS_DATE = "2023-06-01"       # inside the extended OOS window
@@ -234,6 +235,68 @@ class BlindCacheTests(unittest.TestCase):
 
         self.assertEqual(result["attestation_status"], "REPAIRED_ATTESTATION")
         self.assertEqual(len(facts.read_facts(self.ledger_dir)), 1)
+
+    def test_recorded_staged_file_recovers_without_provider_call(self):
+        path = thetadata_adapter._cache_path("SPY", OOS_DATE)
+        greeks, oi = _frames()
+        chain = thetadata_adapter._merge_chain_frames(greeks, oi)
+        staged = stage_parquet_write(chain, path)
+        sha256 = hashlib.sha256(staged.read_bytes()).hexdigest()
+        meta = {
+            "symbol": "SPY",
+            "date": OOS_DATE,
+            "rows": len(chain),
+            "columns": list(chain.columns),
+            "sha256": sha256,
+            "path": str(path),
+            "identity": f"SPY:{OOS_DATE}:{sha256}",
+        }
+        thetadata_adapter._write_attestation(
+            meta,
+            status="PENDING_FILE",
+            staged_path=staged,
+        )
+        self._forbid_network()
+
+        result = thetadata_adapter.blind_cache_chain(
+            "SPY", OOS_DATE, ledger_dir=self.ledger_dir
+        )
+
+        self.assertTrue(path.is_file())
+        self.assertFalse(staged.exists())
+        self.assertEqual(result["attestation_status"], "REPAIRED_ATTESTATION")
+        self.assertEqual(result["sha256"], sha256)
+        self.assertEqual(len(facts.read_facts(self.ledger_dir)), 1)
+
+    def test_missing_recorded_staged_bytes_refuse_without_network(self):
+        path = thetadata_adapter._cache_path("SPY", OOS_DATE)
+        staged = path.with_name(f".{path.name}.123.tmp")
+        meta = {
+            "symbol": "SPY",
+            "date": OOS_DATE,
+            "rows": 3,
+            "columns": thetadata_adapter.CHAIN_COLUMNS,
+            "sha256": "a" * 64,
+            "path": str(path),
+            "identity": f"SPY:{OOS_DATE}:{'a' * 64}",
+        }
+        thetadata_adapter._write_attestation(
+            meta,
+            status="PENDING_FILE",
+            staged_path=staged,
+        )
+        self._forbid_network()
+
+        with self.assertRaisesRegex(
+            thetadata_adapter.CacheProvenanceError,
+            "recorded staged cache bytes are missing",
+        ):
+            thetadata_adapter.blind_cache_chain(
+                "SPY", OOS_DATE, ledger_dir=self.ledger_dir
+            )
+
+        self.assertFalse(path.exists())
+        self.assertEqual(facts.read_facts(self.ledger_dir), [])
 
     def test_existing_fact_hash_mismatch_refuses(self):
         first = thetadata_adapter.blind_cache_chain(
