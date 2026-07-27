@@ -137,21 +137,28 @@ def latest_complete_session(
 
     cache = Path(thetadata_adapter.CACHE_DIR if cache_dir is None else cache_dir)
     facts_by_key = load_blind_cache_facts(Path(facts_path))
-    per_symbol_sessions: list[set[str]] = []
+    per_symbol_paths: dict[str, dict[str, Path]] = {}
     for symbol in symbols:
-        matched: set[str] = set()
+        paths: dict[str, Path] = {}
         for path in cache.glob(f"{symbol}_*.parquet"):
             session = path.stem[len(symbol) + 1:]
-            fact = facts_by_key.get((symbol, session))
-            if fact is not None and fact["sha256"] == _sha256(path):
-                matched.add(session)
-        if not matched:
+            paths[session] = path
+        if not paths:
             return None
-        per_symbol_sessions.append(matched)
-    if not per_symbol_sessions:
+        per_symbol_paths[symbol] = paths
+    if not per_symbol_paths:
         return None
-    common = set.intersection(*per_symbol_sessions)
-    return max(common) if common else None
+    common = set.intersection(
+        *(set(paths) for paths in per_symbol_paths.values())
+    )
+    for session in sorted(common, reverse=True):
+        if all(
+            (fact := facts_by_key.get((symbol, session))) is not None
+            and fact["sha256"] == _sha256(per_symbol_paths[symbol][session])
+            for symbol in symbols
+        ):
+            return session
+    return None
 
 
 def verify_cohort_provenance(
