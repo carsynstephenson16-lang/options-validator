@@ -43,7 +43,12 @@ import numpy as np
 import pandas as pd
 
 import config
-from data.atomic_io import atomic_parquet_write, atomic_text_write
+from data.atomic_io import (
+    atomic_parquet_write,
+    atomic_text_write,
+    publish_staged_file,
+    stage_parquet_write,
+)
 
 CACHE_DIR = Path(os.environ.get("OPTIONS_CACHE_DIR", ".cache/chains"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -464,7 +469,12 @@ def _attestation_path(symbol: str, date: str) -> Path:
     return CACHE_DIR / ".attestations" / f"{symbol}_{date}.json"
 
 
-def _write_attestation(meta: dict, *, status: str) -> None:
+def _write_attestation(
+    meta: dict,
+    *,
+    status: str,
+    staged_path: Path | None = None,
+) -> None:
     payload = {
         "schema": "blind-cache-attestation/v1",
         "status": status,
@@ -472,30 +482,102 @@ def _write_attestation(meta: dict, *, status: str) -> None:
             "symbol", "date", "rows", "columns", "sha256", "path", "identity"
         )},
     }
+    if staged_path is not None:
+        payload["staged_path"] = str(staged_path)
     atomic_text_write(
         json.dumps(payload, sort_keys=True, indent=2) + "\n",
         _attestation_path(meta["symbol"], meta["date"]),
     )
 
 
-def _pending_attestation_matches(meta: dict) -> bool:
-    path = _attestation_path(meta["symbol"], meta["date"])
+def _read_attestation(symbol: str, date: str) -> dict | None:
+    path = _attestation_path(symbol, date)
     if not path.exists():
-        return False
+        return None
     try:
         payload = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise CacheProvenanceError(
             f"malformed blind-cache attestation: {path}"
         ) from exc
+    if not isinstance(payload, dict):
+        raise CacheProvenanceError(
+            f"malformed blind-cache attestation: {path}"
+        )
+    return payload
+
+
+def _pending_attestation_matches(meta: dict) -> bool:
+    payload = _read_attestation(meta["symbol"], meta["date"])
+    if payload is None:
+        return False
     expected = {
         "schema": "blind-cache-attestation/v1",
-        "status": "PENDING_FACT",
         **{key: meta[key] for key in (
             "symbol", "date", "rows", "columns", "sha256", "path", "identity"
         )},
     }
-    return payload == expected
+    if payload.get("status") == "PENDING_FACT":
+        return payload == {"status": "PENDING_FACT", **expected}
+    if payload.get("status") == "PENDING_FILE":
+        staged_path = payload.get("staged_path")
+        if not isinstance(staged_path, str) or not staged_path:
+            return False
+        return payload == {
+            "status": "PENDING_FILE",
+            **expected,
+            "staged_path": staged_path,
+        }
+    return False
+
+
+def _recover_staged_cache(symbol: str, date: str, cached: Path) -> bool:
+    """Publish bytes durably staged by an interrupted authoritative run."""
+    payload = _read_attestation(symbol, date)
+    if payload is None or payload.get("status") != "PENDING_FILE":
+        return False
+    staged_value = payload.get("staged_path")
+    if not isinstance(staged_value, str) or not staged_value:
+        raise CacheProvenanceError(
+            f"invalid staged path in blind-cache attestation for {symbol} @ {date}"
+        )
+    staged = Path(staged_value)
+    if (
+        staged.parent.resolve() != cached.parent.resolve()
+        or not staged.name.startswith(f".{cached.name}.")
+        or not staged.name.endswith(".tmp")
+    ):
+        raise CacheProvenanceError(
+            f"non-canonical staged path in blind-cache attestation: {staged}"
+        )
+    if not staged.is_file():
+        raise CacheProvenanceError(
+            f"recorded staged cache bytes are missing for {symbol} @ {date}: "
+            f"{staged}"
+        )
+    rows, columns = _parquet_metadata_without_values(staged)
+    sha256 = hashlib.sha256(staged.read_bytes()).hexdigest()
+    identity = f"{symbol}:{date}:{sha256}"
+    expected = {
+        "schema": "blind-cache-attestation/v1",
+        "status": "PENDING_FILE",
+        "symbol": symbol,
+        "date": date,
+        "rows": rows,
+        "columns": columns,
+        "sha256": sha256,
+        "path": str(cached),
+        "identity": identity,
+        "staged_path": str(staged),
+    }
+    if payload != expected:
+        raise CacheProvenanceError(
+            f"staged cache bytes do not match attestation for {symbol} @ {date}"
+        )
+    _require_cache_publisher()
+    publish_staged_file(staged, cached)
+    _write_attestation(expected, status="PENDING_FACT")
+    return True
 
 
 def blind_cache_chain(
@@ -529,13 +611,36 @@ def blind_cache_chain(
         )
     cached = _cache_path(symbol, date)
     already_cached = cached.exists()
+    if not already_cached and _recover_staged_cache(symbol, date, cached):
+        already_cached = True
     if already_cached:
         rows, columns = _parquet_metadata_without_values(cached)
     else:
         _require_cache_publisher()
         chain, _dropped = _fetch_merged_chain(symbol, date)
-        atomic_parquet_write(chain, cached)
-        rows, columns = len(chain), list(chain.columns)
+        staged = stage_parquet_write(chain, cached)
+        rows, columns = _parquet_metadata_without_values(staged)
+        sha256 = hashlib.sha256(staged.read_bytes()).hexdigest()
+        staged_meta = {
+            "symbol": symbol,
+            "date": date,
+            "rows": rows,
+            "columns": columns,
+            "sha256": sha256,
+            "path": str(cached),
+            "identity": f"{symbol}:{date}:{sha256}",
+        }
+        try:
+            _write_attestation(
+                staged_meta,
+                status="PENDING_FILE",
+                staged_path=staged,
+            )
+        except BaseException:
+            staged.unlink(missing_ok=True)
+            raise
+        publish_staged_file(staged, cached)
+        _write_attestation(staged_meta, status="PENDING_FACT")
         del chain  # values must not outlive the write
 
     sha256 = hashlib.sha256(cached.read_bytes()).hexdigest()
