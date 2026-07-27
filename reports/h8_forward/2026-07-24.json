@@ -1,0 +1,17 @@
+{
+  "entries": [],
+  "errors": [
+    "PLTR: invalid H6 feature manifest .tmp/research/PLTR_features.manifest.json: identity",
+    "AMZN: invalid H6 feature manifest .tmp/research/AMZN_features.manifest.json: identity"
+  ],
+  "evaluation_session": "2026-07-24",
+  "exits": [],
+  "known_as_of_utc": "2026-07-24T20:00:00+00:00",
+  "mode": "FORWARD_PAPER_ONLY",
+  "orders_enabled": false,
+  "shared_cap": {
+    "cap": 2000,
+    "headroom": 1079.35,
+    "used": 920.65
+  }
+}

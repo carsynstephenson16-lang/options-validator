@@ -1,0 +1,59 @@
+{
+  "probed_at_utc": "2026-07-24T15:00:15.020024+00:00",
+  "ny_date": "2026-07-24",
+  "thetadata_version": "1.0.9",
+  "stock_entitled": false,
+  "probe_symbol": "VST",
+  "monthly_expiration": "2026-08-21",
+  "endpoints": {
+    "stock_snapshot_quote": {
+      "ok": false,
+      "columns": null,
+      "error": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscript"
+    },
+    "option_list_expirations": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "expiration"
+      ],
+      "error": null
+    },
+    "option_snapshot_quote": {
+      "ok": true,
+      "columns": [
+        "timestamp",
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "bid_size",
+        "bid_exchange",
+        "bid",
+        "bid_condition",
+        "ask_size",
+        "ask_exchange",
+        "ask",
+        "ask_condition"
+      ],
+      "error": null
+    },
+    "option_snapshot_greeks_all": {
+      "ok": false,
+      "columns": null,
+      "error": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STAND"
+    },
+    "option_snapshot_open_interest": {
+      "ok": true,
+      "columns": [
+        "timestamp",
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "open_interest"
+      ],
+      "error": null
+    }
+  }
+}

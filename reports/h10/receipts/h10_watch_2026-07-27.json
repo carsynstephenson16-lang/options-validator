@@ -1,0 +1,139 @@
+{
+  "as_of": "2026-07-27",
+  "book_action_required": false,
+  "evaluation_session": "2026-07-24",
+  "evaluations": [
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "CRWV"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "TEM"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "PLTR"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "NOW"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "SMCI"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "NVDA"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "AMD"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "AVGO"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "IREN"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "USAR"
+    },
+    {
+      "admitted_contracts": 0,
+      "book_action_required": false,
+      "candidate_contract": null,
+      "reason": null,
+      "signals": {
+        "H10a": false,
+        "H10b": false
+      },
+      "status": "NO_SIGNAL",
+      "symbol": "ET"
+    }
+  ]
+}
