@@ -12,9 +12,9 @@
       "status": "NO_SIGNAL"
     },
     "H6": {
-      "detail": "stale",
-      "evidence": null,
-      "status": "MISSING"
+      "detail": "no signal",
+      "evidence": "reports/h6_forward/2026-07-24.json",
+      "status": "NO_SIGNAL"
     },
     "H7": {
       "detail": "no signal",
@@ -22,9 +22,9 @@
       "status": "NO_SIGNAL"
     },
     "H8": {
-      "detail": "watcher errors",
+      "detail": "no signal",
       "evidence": "reports/h8_forward/2026-07-24.json",
-      "status": "REFUSED"
+      "status": "NO_SIGNAL"
     }
   },
   "run_date": "2026-07-27"
