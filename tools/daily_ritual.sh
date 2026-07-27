@@ -52,6 +52,16 @@ if [ "$RITUAL_BRANCH" != "main" ]; then
   /usr/bin/osascript -e "display notification \"on '${RITUAL_BRANCH}', not main -- ritual refused\" with title \"[BROKEN] options-validator daily ritual\" subtitle \"repo: ${REPO}\"" 2>/dev/null
   exit 1
 fi
+if [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null)" != "$(git -C "$REPO" rev-parse origin/main 2>/dev/null)" ]; then
+  crit "main is not exactly aligned with origin/main -- refusing cache publisher authority"
+  echo "=== summary ==="
+  printf "%b" "$SUMMARY"
+  exit 1
+fi
+# Single-writer cache authority. data/thetadata_adapter.py independently
+# verifies this role, repository root, main branch, and origin/main identity
+# before any OOS cache or BLIND_CACHE fact mutation.
+export OPTIONS_VALIDATOR_CACHE_ROLE=publisher
 
 # Preflight — ThetaData auth. PATH C (data/thetadata_adapter.py) uses a direct
 # API key over HTTP against the remote MDDS: NO local ThetaTerminal process,
@@ -66,15 +76,18 @@ else
   note "ThetaData API key: NOT RESOLVED from .env — top-up cannot fetch; board will be STALE"
 fi
 
-# Step 0 — recent-day top-up (fetches yesterday's finalized EOD via the keyed
-# HTTP adapter; skips cleanly if the key is absent or the subscription lapsed).
-if [ "$KEY_OK" -eq 1 ] && "$UV" run python data/recent_topup.py --scope h7 --refresh-closes; then
+# Step 0 — recent-day top-up plus whole-cohort provenance preflight. This runs
+# even without an API key: a complete cache/fact cohort is network-free, while
+# a genuinely missing day fails loudly when acquisition cannot authenticate.
+H7_DATA_READY=0
+if "$UV" run python data/recent_topup.py --scope h7 --refresh-closes; then
+  H7_DATA_READY=1
   note "topup: OK (closes refreshed)"
 else
   if [ "$KEY_OK" -eq 1 ]; then
-    note "topup: FAILED (fetch error — see traceback above; API key resolved OK) — running on cached data"
+    crit "topup/provenance preflight: FAILED (see traceback; API key resolved) — H6/H8 and entry watchers blocked"
   else
-    note "topup: SKIPPED (no API key) — running on cached data"
+    crit "topup/provenance preflight: FAILED (no API key for missing data) — H6/H8 and entry watchers blocked"
   fi
 fi
 
@@ -106,6 +119,13 @@ if [ -z "$AS_OF" ]; then
 fi
 if [ -z "$SCOPE_ID" ]; then
   crit "H7 scope identity: FAILED to resolve — receipt reuse unavailable"
+fi
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -m options_researcher.ritual_status \
+    --root "$REPO" --as-of "$AS_OF" --run-date "$RUN_DATE" \
+    --status RUNNING --log-path "$LOG" \
+    && note "ritual status: RUNNING marker published" \
+    || crit "ritual status: could not invalidate prior terminal status"
 fi
 EXPECTED_SH_RECEIPT="reports/h7_receipts/${SCOPE_ID}/source_health/${AS_OF}.json"
 EXPECTED_DG_RECEIPT="reports/h7_data_gate/${SCOPE_ID}/receipts/${AS_OF}.json"
@@ -167,6 +187,10 @@ if [ -n "$DG_RECEIPT" ] && [ -f "$DG_RECEIPT" ]; then
   else
     crit "data-gate receipt has unexpected verdict: $DG_VERDICT"
   fi
+fi
+if [ "$H7_DATA_READY" -ne 1 ]; then
+  GATE_GO=0
+  note "registered entry watchers: BLOCKED by upstream cache/provenance preflight"
 fi
 note "evaluation session: ${AS_OF}"
 
@@ -286,9 +310,9 @@ if [ "$GATE_GO" -eq 1 ]; then
   fi
 
   # Step 4 — H6 leg (exact-session; features rebuild is mandatory after topup).
-  "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || note "h6_features: NONZERO EXIT"
+  "$UV" run python -m options_researcher.h6_features --as-of "$AS_OF" && note "h6_features: rebuilt" || crit "h6_features: NONZERO EXIT"
   "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" \
-    --write-receipt "reports/h6_forward/${AS_OF}.json" && note "h6_watch: ran" || note "h6_watch: NONZERO EXIT"
+    --write-receipt "reports/h6_forward/${AS_OF}.json" && note "h6_watch: ran" || crit "h6_watch: NONZERO EXIT"
 
   # Step 4b — H5 LEAPS entry-trigger watch (alert-only; never auto-enters).
   # Reads the attractiveness feature store rebuilt above, which is why that
@@ -319,7 +343,7 @@ if [ "$GATE_GO" -eq 1 ]; then
   if "$UV" run python -c 'import options_researcher.h8_watch' 2>/dev/null; then
     mkdir -p reports/h8_forward
     "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" --json --out \
-      "reports/h8_forward/${AS_OF}.json" && note "h8_watch: ran" || note "h8_watch: NONZERO EXIT"
+      "reports/h8_forward/${AS_OF}.json" && note "h8_watch: ran" || crit "h8_watch: NONZERO EXIT"
   fi
 
   # Step 5b — H10a/b watcher + observation append (forward paper, no orders).
@@ -349,6 +373,23 @@ else
   crit "capture receipt: REFUSED — evaluation session unavailable"
 fi
 
+# Publish the enclosing ritual's terminal state separately from the per-lane
+# capture receipt. Downstream LLM research requires this exact-session status
+# to be OK and hash-bound to the capture receipt; all-NO_SIGNAL lanes alone do
+# not prove that exit management or another deterministic step succeeded.
+if [ -n "$AS_OF" ]; then
+  if [ "$CRITICAL" -eq 1 ]; then
+    RITUAL_TERMINAL_STATUS="BROKEN"
+  else
+    RITUAL_TERMINAL_STATUS="OK"
+  fi
+  "$UV" run python -m options_researcher.ritual_status \
+    --root "$REPO" --as-of "$AS_OF" --run-date "$RUN_DATE" \
+    --status "$RITUAL_TERMINAL_STATUS" --log-path "$LOG" \
+    && note "ritual status receipt: $RITUAL_TERMINAL_STATUS" \
+    || crit "ritual status receipt: FAILED — downstream research remains blocked"
+fi
+
 # ---------------------------------------------------------------------------
 # Step 8 — DURABILITY (added 2026-07-21, the day after Stage-8 activation).
 # The live forward window's evidence must not exist only in this working tree:
@@ -362,7 +403,7 @@ fi
 git add -- ledger/facts.log ledger/h7_forward \
            reports/h7_receipts reports/h7_data_gate reports/h5 reports/h6_forward \
            reports/h8_forward reports/h10 reports/ritual reports/intraday_capture \
-           reports/live_probe 2>/dev/null
+           reports/live_probe reports/cache_runs 2>/dev/null
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "data(h7): daily ritual evidence ${RUN_DATE}

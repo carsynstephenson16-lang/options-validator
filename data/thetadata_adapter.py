@@ -30,8 +30,11 @@ still a holdout look (spec, Unit 4).
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
+import subprocess
 import threading
 from datetime import date as Date
 from pathlib import Path
@@ -40,7 +43,7 @@ import numpy as np
 import pandas as pd
 
 import config
-from data.atomic_io import atomic_parquet_write
+from data.atomic_io import atomic_parquet_write, atomic_text_write
 
 CACHE_DIR = Path(os.environ.get("OPTIONS_CACHE_DIR", ".cache/chains"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -61,6 +64,14 @@ _SYMBOL_RE = re.compile(r"^[A-Z0-9._-]+$")
 class OOSDataTouchError(ValueError):
     """A data probe tried to open post-IN_SAMPLE_END market data outside the
     OOS reveal gate. This is an integrity refusal, not a transport error."""
+
+
+class CacheWriteRefused(PermissionError):
+    """A non-authoritative checkout attempted to mutate the shared cache."""
+
+
+class CacheProvenanceError(RuntimeError):
+    """Cached bytes and their content-bound acquisition evidence disagree."""
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -335,7 +346,14 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
     cached = _cache_path(symbol, date)
     if cached.exists():
         return validate_chain_schema(pd.read_parquet(cached))
+    if date > config.IN_SAMPLE_END:
+        raise FileNotFoundError(
+            f"no cached OOS chain for {symbol} @ {date}; OOS consumers are "
+            "cache-only and acquisition must use blind_cache_chain from the "
+            "authoritative ops publisher"
+        )
 
+    _require_cache_publisher()
     chain, dropped = _fetch_merged_chain(symbol, date)
     if dropped:
         print(f"{symbol} @ {date}: dropped {dropped} contracts "
@@ -385,6 +403,7 @@ def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False,
 
 BLIND_CACHE_METADATA_KEYS = (
     "symbol", "date", "rows", "columns", "sha256", "path", "already_cached",
+    "attestation_status", "identity",
 )
 
 
@@ -398,7 +417,94 @@ def _parquet_metadata_without_values(path: Path):
     return int(f.metadata.num_rows), list(f.schema_arrow.names)
 
 
-def blind_cache_chain(symbol: str, date: str, *, ledger_dir="ledger") -> dict:
+def _require_cache_publisher() -> None:
+    """Require the single authoritative cache writer.
+
+    The environment role is necessary but not sufficient: writes are allowed
+    only from the repository root on a main checkout exactly aligned with
+    origin/main. Tests replace this guard explicitly and remain isolated in
+    temporary cache/ledger directories.
+    """
+    if os.environ.get("OPTIONS_VALIDATOR_CACHE_ROLE", "consumer") != "publisher":
+        raise CacheWriteRefused(
+            "cache mutation refused: set OPTIONS_VALIDATOR_CACHE_ROLE=publisher "
+            "only in the authoritative ops checkout"
+        )
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ("git", *args),
+            cwd=Path.cwd(),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+            raise CacheWriteRefused(
+                f"cache mutation refused: git {' '.join(args)} failed"
+            )
+        return result.stdout.strip()
+
+    root = Path(git("rev-parse", "--show-toplevel")).resolve()
+    if Path.cwd().resolve() != root:
+        raise CacheWriteRefused(
+            f"cache mutation refused: run from repository root {root}"
+        )
+    if git("rev-parse", "--abbrev-ref", "HEAD") != "main":
+        raise CacheWriteRefused(
+            "cache mutation refused: authoritative publisher must be on main"
+        )
+    if git("rev-parse", "HEAD") != git("rev-parse", "origin/main"):
+        raise CacheWriteRefused(
+            "cache mutation refused: main must exactly match origin/main"
+        )
+
+
+def _attestation_path(symbol: str, date: str) -> Path:
+    return CACHE_DIR / ".attestations" / f"{symbol}_{date}.json"
+
+
+def _write_attestation(meta: dict, *, status: str) -> None:
+    payload = {
+        "schema": "blind-cache-attestation/v1",
+        "status": status,
+        **{key: meta[key] for key in (
+            "symbol", "date", "rows", "columns", "sha256", "path", "identity"
+        )},
+    }
+    atomic_text_write(
+        json.dumps(payload, sort_keys=True, indent=2) + "\n",
+        _attestation_path(meta["symbol"], meta["date"]),
+    )
+
+
+def _pending_attestation_matches(meta: dict) -> bool:
+    path = _attestation_path(meta["symbol"], meta["date"])
+    if not path.exists():
+        return False
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CacheProvenanceError(
+            f"malformed blind-cache attestation: {path}"
+        ) from exc
+    expected = {
+        "schema": "blind-cache-attestation/v1",
+        "status": "PENDING_FACT",
+        **{key: meta[key] for key in (
+            "symbol", "date", "rows", "columns", "sha256", "path", "identity"
+        )},
+    }
+    return payload == expected
+
+
+def blind_cache_chain(
+    symbol: str,
+    date: str,
+    *,
+    ledger_dir="ledger",
+    approved_sha256: str | None = None,
+) -> dict:
     """Fetch-and-cache a post-IN_SAMPLE_END chain WITHOUT surfacing its values.
 
     The OOS holdout may be cached during the paid data month so the eventual
@@ -406,9 +512,11 @@ def blind_cache_chain(symbol: str, date: str, *, ledger_dir="ledger") -> dict:
     a stealth look. This path therefore: (1) refuses in-sample dates (use
     get_eod_chain); (2) writes the parquet to the same cache location the
     reveal path reads; (3) returns ONLY safe metadata (BLIND_CACHE_METADATA_KEYS
-    -- no prices, greeks, or aggregates thereof); (4) appends an auditable
-    facts event on EVERY invocation. Reading the cached values remains gated
-    by get_eod_chain's OOS guard / the reveal path (allow_oos=True).
+    -- no prices, greeks, or aggregates thereof); (4) idempotently binds the
+    bytes to an auditable facts event. Existing bytes without a matching fact
+    are repaired only from a durable pending attestation or an explicitly
+    approved incident hash. Reading cached values remains gated by
+    get_eod_chain's OOS guard / the reveal path (allow_oos=True).
     """
     from research import facts
 
@@ -424,12 +532,14 @@ def blind_cache_chain(symbol: str, date: str, *, ledger_dir="ledger") -> dict:
     if already_cached:
         rows, columns = _parquet_metadata_without_values(cached)
     else:
+        _require_cache_publisher()
         chain, _dropped = _fetch_merged_chain(symbol, date)
         atomic_parquet_write(chain, cached)
         rows, columns = len(chain), list(chain.columns)
         del chain  # values must not outlive the write
 
-    sha256 = __import__("hashlib").sha256(cached.read_bytes()).hexdigest()
+    sha256 = hashlib.sha256(cached.read_bytes()).hexdigest()
+    identity = f"{symbol}:{date}:{sha256}"
     meta = {
         "symbol": symbol,
         "date": date,
@@ -438,13 +548,50 @@ def blind_cache_chain(symbol: str, date: str, *, ledger_dir="ledger") -> dict:
         "sha256": sha256,
         "path": str(cached),
         "already_cached": already_cached,
+        "attestation_status": "",
+        "identity": identity,
     }
+
+    from data.cache_provenance import load_blind_cache_facts
+
+    fact = load_blind_cache_facts(
+        Path(ledger_dir) / "facts.log"
+    ).get((symbol, date))
+    if fact is not None:
+        if fact["sha256"] != sha256:
+            raise CacheProvenanceError(
+                f"BLIND_CACHE sha256 mismatch for {symbol} @ {date}: "
+                f"fact={fact['sha256']} file={sha256}"
+            )
+        meta["attestation_status"] = "VERIFIED_NOOP"
+        return meta
+
+    approved = approved_sha256 is not None
+    if approved and approved_sha256 != sha256:
+        raise CacheProvenanceError(
+            f"approved repair sha256 mismatch for {symbol} @ {date}: "
+            f"approved={approved_sha256} file={sha256}"
+        )
+    recoverable_pending = already_cached and _pending_attestation_matches(meta)
+    if already_cached and not approved and not recoverable_pending:
+        raise CacheProvenanceError(
+            f"orphaned cache file for {symbol} @ {date}: no matching "
+            "BLIND_CACHE fact, durable pending attestation, or approved "
+            "incident hash"
+        )
+
+    _require_cache_publisher()
+    _write_attestation(meta, status="PENDING_FACT")
     facts.append_fact(
         "BLIND_CACHE "
         f"symbol={symbol} date={date} rows={rows} sha256={sha256} "
         f"already_cached={str(already_cached).lower()} path={cached}",
         base_dir=ledger_dir,
     )
+    meta["attestation_status"] = (
+        "REPAIRED_ATTESTATION" if already_cached else "FETCHED_ATTESTED"
+    )
+    _write_attestation(meta, status="COMPLETE")
     return meta
 
 
