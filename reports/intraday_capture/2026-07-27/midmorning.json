@@ -1,0 +1,436 @@
+{
+  "captured_at_et": "2026-07-27T11:00:19.405671-04:00",
+  "captured_at_utc": "2026-07-27T15:00:19.405671+00:00",
+  "config_hash": "c17273abc915248436a70bef5d92e10eb274790e92b2d41d65c3f5e68c39ed6e",
+  "force": false,
+  "iv_rank_calibration": null,
+  "names": {
+    "AMD": {
+      "atm_iv": 0.8679110809406302,
+      "chain_cache_path": ".cache/intraday/AMD_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 65,
+        "P": 43
+      },
+      "chain_contracts_total": {
+        "C": 152,
+        "P": 152
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.009731856299823973,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 490.675,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "AMD"
+    },
+    "AMZN": {
+      "atm_iv": 0.455789433030645,
+      "chain_cache_path": ".cache/intraday/AMZN_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 44,
+        "P": 30
+      },
+      "chain_contracts_total": {
+        "C": 69,
+        "P": 69
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.012539184952978106,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 234.15,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "AMZN"
+    },
+    "AVGO": {
+      "atm_iv": 0.5200600009356712,
+      "chain_cache_path": ".cache/intraday/AVGO_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 30,
+        "P": 25
+      },
+      "chain_contracts_total": {
+        "C": 93,
+        "P": 93
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.009081081081081015,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 384.8,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "AVGO"
+    },
+    "CEG": {
+      "atm_iv": 0.5498029153271096,
+      "chain_cache_path": ".cache/intraday/CEG_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 2,
+        "P": 4
+      },
+      "chain_contracts_total": {
+        "C": 78,
+        "P": 78
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.01606425702811245,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 270.95,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "CEG"
+    },
+    "CRWV": {
+      "atm_iv": 1.1402272172956802,
+      "chain_cache_path": ".cache/intraday/CRWV_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 19,
+        "P": 33
+      },
+      "chain_contracts_total": {
+        "C": 69,
+        "P": 69
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.01864467551093578,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 71.35,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "CRWV"
+    },
+    "ET": {
+      "atm_iv": 0.21105083890438656,
+      "chain_cache_path": ".cache/intraday/ET_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 2,
+        "P": 1
+      },
+      "chain_contracts_total": {
+        "C": 34,
+        "P": 34
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.05263157894736847,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 19.805,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "ET"
+    },
+    "IREN": {
+      "atm_iv": 1.3219312741409897,
+      "chain_cache_path": ".cache/intraday/IREN_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 26,
+        "P": 41
+      },
+      "chain_contracts_total": {
+        "C": 63,
+        "P": 63
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.01492982979994028,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 35.95,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "IREN"
+    },
+    "MSFT": {
+      "atm_iv": 0.46495461156295237,
+      "chain_cache_path": ".cache/intraday/MSFT_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 50,
+        "P": 43
+      },
+      "chain_contracts_total": {
+        "C": 109,
+        "P": 109
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.007556368068251122,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 390.225,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "MSFT"
+    },
+    "NOW": {
+      "atm_iv": 0.6074211255148216,
+      "chain_cache_path": ".cache/intraday/NOW_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 25,
+        "P": 22
+      },
+      "chain_contracts_total": {
+        "C": 63,
+        "P": 63
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.02710027100271003,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 103.2,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "NOW"
+    },
+    "NVDA": {
+      "atm_iv": 0.42763712203855114,
+      "chain_cache_path": ".cache/intraday/NVDA_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 48,
+        "P": 33
+      },
+      "chain_contracts_total": {
+        "C": 105,
+        "P": 105
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.0043572984749454405,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 200.45,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "NVDA"
+    },
+    "PLTR": {
+      "atm_iv": 0.7116026976024746,
+      "chain_cache_path": ".cache/intraday/PLTR_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 42,
+        "P": 32
+      },
+      "chain_contracts_total": {
+        "C": 90,
+        "P": 90
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.003888987095633808,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 127.45,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "PLTR"
+    },
+    "SMCI": {
+      "atm_iv": 1.046059498814765,
+      "chain_cache_path": ".cache/intraday/SMCI_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 15,
+        "P": 30
+      },
+      "chain_contracts_total": {
+        "C": 71,
+        "P": 71
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.024590163934426246,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 29.395,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "SMCI"
+    },
+    "TEM": {
+      "atm_iv": 0.8378573103770381,
+      "chain_cache_path": ".cache/intraday/TEM_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 1,
+        "P": 4
+      },
+      "chain_contracts_total": {
+        "C": 41,
+        "P": 41
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.05181347150259067,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 42.955,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "TEM"
+    },
+    "USAR": {
+      "atm_iv": 1.00575057508287,
+      "chain_cache_path": ".cache/intraday/USAR_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 0,
+        "P": 4
+      },
+      "chain_contracts_total": {
+        "C": 36,
+        "P": 36
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.06334841628959269,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 14.715,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "USAR"
+    },
+    "VST": {
+      "atm_iv": 0.5795950334953262,
+      "chain_cache_path": ".cache/intraday/VST_2026-07-27T1100.parquet",
+      "chain_contracts_admitted": {
+        "C": 7,
+        "P": 6
+      },
+      "chain_contracts_total": {
+        "C": 53,
+        "P": 53
+      },
+      "greeks_note": null,
+      "iv_label": "solver-derived, not rank-comparable",
+      "iv_rank_preview": null,
+      "iv_source": "bs_solver",
+      "min_spread_pct_observed": 0.023363216517250807,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-27",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 158.45,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "VST"
+    }
+  },
+  "probe_healed_this_run": false,
+  "probe_receipt_path": "reports/live_probe/2026-07-24.json",
+  "receipt_kind": "intraday_capture/v1",
+  "scheduled_et": "11:00",
+  "session_tag": "midmorning",
+  "universe": [
+    "CRWV",
+    "TEM",
+    "PLTR",
+    "NOW",
+    "SMCI",
+    "NVDA",
+    "AMD",
+    "AVGO",
+    "IREN",
+    "USAR",
+    "ET",
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN"
+  ]
+}
