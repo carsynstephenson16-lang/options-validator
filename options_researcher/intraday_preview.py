@@ -14,6 +14,7 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 import config
+from options_researcher.h7_scope import watch_universe
 from research.hashing import config_hash
 
 NY = ZoneInfo("America/New_York")
@@ -101,7 +102,7 @@ def _validate_receipt(
         raise ValueError("capture timestamp is in the future")
 
     universe = receipt.get("universe")
-    expected_universe = list(config.ATTRACTIVENESS_UNIVERSE)
+    expected_universe = list(watch_universe())
     if universe != expected_universe:
         raise ValueError("receipt universe does not match display universe")
     names = receipt.get("names")

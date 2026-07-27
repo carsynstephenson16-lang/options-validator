@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import config
 from options_researcher import intraday_preview
+from options_researcher.h7_scope import watch_universe
 from research.hashing import config_hash
 
 NY = ZoneInfo("America/New_York")
@@ -27,7 +28,7 @@ def _receipt(now_ny: datetime, tag: str, *, force: bool = False) -> dict:
             "iv_rank_preview": None,
             "iv_label": "solver-derived, not rank-comparable",
         }
-        for index, symbol in enumerate(config.ATTRACTIVENESS_UNIVERSE)
+        for index, symbol in enumerate(watch_universe())
     }
     return {
         "receipt_kind": "intraday_capture/v1",
@@ -36,7 +37,7 @@ def _receipt(now_ny: datetime, tag: str, *, force: bool = False) -> dict:
         "captured_at_et": now_ny.isoformat(),
         "captured_at_utc": captured_utc.isoformat(),
         "force": force,
-        "universe": list(config.ATTRACTIVENESS_UNIVERSE),
+        "universe": list(watch_universe()),
         "config_hash": config_hash(),
         "names": names,
     }
@@ -162,13 +163,26 @@ class FallbackTests(unittest.TestCase):
         self.assertTrue(payload["freshness"]["descriptive_only"])
         self.assertEqual(payload["freshness"]["session_tag"], "midday")
         self.assertEqual(
-            set(payload["symbols"]), set(config.ATTRACTIVENESS_UNIVERSE)
+            set(payload["symbols"]), set(watch_universe())
         )
         vst = payload["symbols"]["VST"]
         self.assertEqual(vst["status"], "ok")
         self.assertEqual(vst["spot_source"], "option-parity estimate")
         for forbidden in ("trigger", "armed", "gates", "verdict"):
             self.assertNotIn(forbidden, vst)
+
+    def test_display_only_extras_do_not_expand_paid_capture_scope(self):
+        payload = intraday_preview.refresh_with_receipt_fallback(
+            live_refresh=_off_payload,
+            now_ny=self.now,
+            receipt_dir=self.root,
+        )
+
+        self.assertTrue(
+            set(config.ATTRACTIVENESS_EXTRA_NAMES).isdisjoint(
+                payload["symbols"]
+            )
+        )
 
     def test_healthy_direct_adapter_remains_preferred(self):
         primary = {
