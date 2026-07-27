@@ -98,6 +98,32 @@ branch the checkout has). Provenance: owner-directed 2026-07-25,
 recorded by the implementing agent; veto or change by further
 append-only amendment.
 
+*Hardening amendment 2026-07-27 (implementation safety correction).* The
+research refresh is a consumer of the daily ritual, not a second data
+producer. It no longer runs topups, feature builders, or QM refreshes. Before
+any LLM invocation it must read an explicitly configured authoritative ritual
+checkout and prove that `capture_receipt_<data-as-of>.json` has the exact
+market session, the current `America/New_York` run date, successful
+`CAPTURED|NO_SIGNAL` statuses for H5/H6/H7/H8/H10, and readable evidence for
+each status. Those statuses are necessary but not sufficient: the checkout
+must also expose `run_status_<data-as-of>.json` with schema
+`daily_ritual/run_status/v1`, global status `OK`, a full ritual code SHA, and a
+binding to the exact capture-receipt path and SHA. A later broken rerun replaces
+the mutable latest status and therefore blocks research. Any failure returns
+`UPSTREAM_BLOCKED` before research spend.
+
+Successful research uses the `attractiveness_research/v2` contract. The
+producer copies and hashes every source packet, records the exact deterministic
+candidate IDs, pinned symbols, UTC and ET generation timestamps, producer
+commit/source hashes, and ritual receipt/evidence hashes. It deterministically
+renders `reports/<market-as-of>-attractiveness-research-context.md` from the
+machine JSON and publishes the manifest last as the commit marker. Verification
+fails closed on byte drift, missing candidate or required-symbol coverage,
+temporal mismatch, source-link mismatch, or a missing/confirmed/non-PJM
+`PJM_BRA_NEXT` entry for either VST or CEG. Critic freshness is the immutable
+`run_id` plus context SHA-256 pair, never filesystem mtime. This amendment does
+not authorize enabling or changing a LaunchAgent.
+
 ### 4. Top 3 picks (all lanes, all universe names — owner choice)
 
 Transparent two-stage:
