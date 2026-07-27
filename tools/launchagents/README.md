@@ -1,4 +1,36 @@
-# Intraday capture LaunchAgent
+# Dashboard and intraday LaunchAgents
+
+## Live dashboard
+
+`com.carsyn.options-validator.live-dashboard.plist` keeps the read-only
+localhost dashboard running on `127.0.0.1:8765` from the **ops** checkout.
+It uses `--no-open`, so launchd restarts do not open extra browser tabs.
+
+Before installing, confirm the ops checkout is clean, on `main`, and contains
+the tested dashboard code. Then:
+
+```bash
+mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/live_dashboard
+cp tools/launchagents/com.carsyn.options-validator.live-dashboard.plist \
+   ~/Library/LaunchAgents/
+launchctl bootstrap gui/$UID \
+   ~/Library/LaunchAgents/com.carsyn.options-validator.live-dashboard.plist
+launchctl enable gui/$UID/com.carsyn.options-validator.live-dashboard
+```
+
+Verify both the managed process and the freshness payload:
+
+```bash
+launchctl print gui/$UID/com.carsyn.options-validator.live-dashboard
+curl -fsS http://127.0.0.1:8765/live.json
+```
+
+The direct live adapter remains preferred when its entitlement/schema probe
+is healthy. Otherwise, the server reads the newest strictly validated,
+same-day `intraday_capture/v1` receipt. Receipt-backed rows are descriptive
+only: they cannot emit H5 trigger, gate, armed, or verdict fields.
+
+## Intraday capture
 
 `com.carsyn.options-validator.intraday-capture.plist` is a **template only**.
 It is not installed by any Claude Code session — deployment is a separate

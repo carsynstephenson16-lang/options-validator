@@ -238,6 +238,14 @@ class BuildPayloadTests(unittest.TestCase):
         self.assertEqual(payload["official"], _OFFICIAL_ROWS)
         self.assertNotIn("official_error", payload)
         self.assertEqual(payload["live"]["symbols"]["VST"]["status"], "ok")
+        self.assertEqual(
+            payload["freshness"]["official_eod"],
+            {"status": "COMPLETE", "as_of": "2026-07-15"},
+        )
+        self.assertEqual(
+            payload["freshness"]["intraday"]["captured_at_utc"],
+            "2026-07-16T15:00:00+00:00",
+        )
 
     def test_explicit_rows_bypass_gather(self):
         with mock.patch("options_researcher.entry_watch._gather",
@@ -255,6 +263,7 @@ class InjectLivePanelTests(unittest.TestCase):
         self.assertIn('id="live-panel"', out)
         self.assertIn("<script>", out)
         self.assertIn("<p>STATIC</p>", out)
+        self.assertIn('id="lv-freshness"', out)
         self.assertLess(out.index('id="live-panel"'), out.rindex("</body>"))
         self.assertLess(out.index("<script>"), out.rindex("</body>"))
 
@@ -395,6 +404,60 @@ class LiveDashboardServerTests(unittest.TestCase):
         self.assertIn('id="live-panel"', text)
         self.assertLess(text.index('id="live-panel"'), text.rindex("</body>"))
 
+    def test_root_regenerates_html_from_current_local_state(self):
+        rendered = ["<html><body>first</body></html>"]
+        server = live_dashboard.LiveDashboardServer(
+            refresh_fn=_live_payload,
+            port=0,
+            html_provider=lambda: rendered[-1],
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            rendered.append("<html><body>second</body></html>")
+            conn = http.client.HTTPConnection(
+                "127.0.0.1", server.port, timeout=5
+            )
+            try:
+                conn.request("GET", "/")
+                body = conn.getresponse().read().decode("utf-8")
+            finally:
+                conn.close()
+            self.assertIn("second", body)
+            self.assertNotIn(">first<", body)
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
+    def test_root_refresh_failure_serves_last_good_html(self):
+        calls = [0]
+
+        def provider():
+            calls[0] += 1
+            if calls[0] > 1:
+                raise OSError("local cache unavailable")
+            return "<html><body>last-good</body></html>"
+
+        server = live_dashboard.LiveDashboardServer(
+            refresh_fn=_live_payload, port=0, html_provider=provider
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            conn = http.client.HTTPConnection(
+                "127.0.0.1", server.port, timeout=5
+            )
+            try:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    conn.request("GET", "/")
+                    body = conn.getresponse().read().decode("utf-8")
+            finally:
+                conn.close()
+            self.assertIn("last-good", body)
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
     def test_live_json_carries_both_lanes(self):
         with mock.patch("options_researcher.entry_watch._gather",
                         return_value=list(_OFFICIAL_ROWS)):
@@ -470,6 +533,32 @@ class MainTests(unittest.TestCase):
         out = buf.getvalue()
         self.assertIn("options_researcher.dashboard", out)
         self.assertIn("--serve", out)
+
+    def test_no_open_serves_without_opening_browser(self):
+        server = mock.Mock()
+        server.port = 8765
+        server.serve_forever.side_effect = KeyboardInterrupt
+        with (
+            mock.patch(
+                "options_researcher.live_quotes.load_latest_probe",
+                return_value={},
+            ),
+            mock.patch(
+                "options_researcher.live_quotes.probe_ok",
+                return_value=(False, "not entitled"),
+            ),
+            mock.patch.object(
+                live_dashboard, "LiveDashboardServer", return_value=server
+            ),
+            mock.patch.object(live_dashboard.webbrowser, "open") as open_browser,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            rc = live_dashboard.main(
+                ["--serve", "--port", "8765", "--no-open"]
+            )
+        self.assertEqual(rc, 0)
+        open_browser.assert_not_called()
+        server.shutdown.assert_called_once_with()
 
 
 if __name__ == "__main__":

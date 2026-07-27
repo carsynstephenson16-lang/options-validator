@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Managed localhost dashboard service. It reads official completed-session
+  state and descriptive intraday receipts from the ops checkout. It never
+  places orders and never writes research evidence.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.carsyn.options-validator.live-dashboard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/carsynstephenson/options-validator-ops/.venv/bin/python</string>
+    <string>-m</string>
+    <string>options_researcher.live_dashboard</string>
+    <string>--serve</string>
+    <string>--port</string>
+    <string>8765</string>
+    <string>--no-open</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/carsynstephenson/options-validator-ops</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/live_dashboard/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/live_dashboard/launchd.err.log</string>
+</dict>
+</plist>
