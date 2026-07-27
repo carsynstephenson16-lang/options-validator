@@ -24,6 +24,8 @@ Run from the repo root:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -88,7 +90,13 @@ def topup_days(last_cached: str, today: str, *, trading_days_fn=None) -> list[st
 
 
 def latest_cached_date(symbols, *, cache_dir=None) -> str | None:
-    """The cohort's last fully-cached trading day = the MIN over symbols of
+    """Legacy file-presence inventory.
+
+    This helper remains for read-only historical diagnostics. Operational
+    freshness must use :func:`latest_complete_session`, which also verifies
+    the content-bound acquisition fact.
+
+    The cohort's last file-present trading day = the MIN over symbols of
     each symbol's newest cached chain date. None if any symbol has no cache
     (so a never-cached name is never silently skipped). ISO dates sort
     lexicographically, so string max/min is correct."""
@@ -100,6 +108,199 @@ def latest_cached_date(symbols, *, cache_dir=None) -> str | None:
             return None
         per_symbol_latest.append(max(dates))
     return min(per_symbol_latest) if per_symbol_latest else None
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def latest_complete_session(
+    symbols,
+    *,
+    cache_dir=None,
+    facts_path: Path | str = Path("ledger/facts.log"),
+) -> str | None:
+    """Latest cohort session with a file and matching canonical fact.
+
+    The result is the newest session in the intersection of all per-symbol
+    content-bound sessions. Taking the minimum of each symbol's newest session
+    is insufficient: another symbol can have a gap on that exact date.
+    Orphaned or mismatched newer files are ignored here and become explicit
+    tasks in ``run_topup``; the publisher then refuses them unless a reviewed
+    recovery manifest or durable pending attestation exists.
+    """
+    from data.cache_provenance import load_blind_cache_facts
+
+    cache = Path(thetadata_adapter.CACHE_DIR if cache_dir is None else cache_dir)
+    facts_by_key = load_blind_cache_facts(Path(facts_path))
+    per_symbol_sessions: list[set[str]] = []
+    for symbol in symbols:
+        matched: set[str] = set()
+        for path in cache.glob(f"{symbol}_*.parquet"):
+            session = path.stem[len(symbol) + 1:]
+            fact = facts_by_key.get((symbol, session))
+            if fact is not None and fact["sha256"] == _sha256(path):
+                matched.add(session)
+        if not matched:
+            return None
+        per_symbol_sessions.append(matched)
+    if not per_symbol_sessions:
+        return None
+    common = set.intersection(*per_symbol_sessions)
+    return max(common) if common else None
+
+
+def verify_cohort_provenance(
+    symbols,
+    session: str,
+    *,
+    cache_dir=None,
+    facts_path: Path | str = Path("ledger/facts.log"),
+) -> dict:
+    """Fail closed unless every symbol has matching session bytes and fact."""
+    from data.cache_provenance import load_blind_cache_facts
+
+    cache = Path(thetadata_adapter.CACHE_DIR if cache_dir is None else cache_dir)
+    facts_by_key = load_blind_cache_facts(Path(facts_path))
+    errors: list[str] = []
+    identities: dict[str, str] = {}
+    for symbol in symbols:
+        path = cache / f"{symbol}_{session}.parquet"
+        if not path.is_file():
+            errors.append(f"{symbol}@{session}: missing cache file {path}")
+            continue
+        sha256 = _sha256(path)
+        fact = facts_by_key.get((symbol, session))
+        if fact is None:
+            errors.append(f"{symbol}@{session}: missing BLIND_CACHE fact")
+        elif fact["sha256"] != sha256:
+            errors.append(
+                f"{symbol}@{session}: BLIND_CACHE sha256 mismatch "
+                f"fact={fact['sha256']} file={sha256}"
+            )
+        else:
+            identities[symbol] = f"{symbol}:{session}:{sha256}"
+    if errors:
+        raise RuntimeError(
+            "cohort provenance preflight failed:\n- " + "\n- ".join(errors)
+        )
+    return {
+        "session": session,
+        "symbols": list(symbols),
+        "identities": identities,
+        "status": "VERIFIED",
+    }
+
+
+def repair_from_manifest(
+    manifest_path: Path | str,
+    *,
+    symbols,
+    as_of: str,
+    ledger_dir: str = "ledger",
+) -> dict:
+    """Network-free, all-or-nothing preflight for an approved orphan repair."""
+    path = Path(manifest_path)
+    payload = json.loads(path.read_text())
+    if payload.get("schema") != "cache_recovery/v1":
+        raise ValueError("repair manifest schema must be cache_recovery/v1")
+    review = payload.get("review")
+    if (
+        not isinstance(review, dict)
+        or review.get("status") != "approved_for_operational_recovery"
+    ):
+        raise ValueError(
+            "repair manifest must be reviewed and approved for operational recovery"
+        )
+    manifest_session = payload.get("session", payload.get("evaluation_session"))
+    if manifest_session != as_of:
+        raise ValueError(
+            f"repair manifest session {manifest_session!r} != {as_of!r}"
+        )
+    expected_symbols = list(symbols)
+    raw_entries = payload.get("entries", payload.get("files"))
+    if not isinstance(raw_entries, list) or len(raw_entries) != len(expected_symbols):
+        raise ValueError("repair manifest must contain exactly one entry per symbol")
+    manifest_symbols = payload.get("symbols")
+    if manifest_symbols is None:
+        manifest_symbols = [
+            entry.get("symbol") for entry in raw_entries
+            if isinstance(entry, dict)
+        ]
+    if manifest_symbols != expected_symbols:
+        raise ValueError("repair manifest symbols do not match selected scope/order")
+    entries = {entry.get("symbol"): entry for entry in raw_entries
+               if isinstance(entry, dict)}
+    if set(entries) != set(expected_symbols):
+        raise ValueError("repair manifest entry symbols do not match selected scope")
+
+    preflight: dict[str, dict] = {}
+    mtimes: dict[str, int] = {}
+    for symbol in expected_symbols:
+        entry = entries[symbol]
+        expected_path = thetadata_adapter._cache_path(symbol, as_of)
+        if Path(entry.get("path", "")).resolve() != expected_path.resolve():
+            raise ValueError(f"{symbol}: repair manifest path is not canonical")
+        if not expected_path.is_file():
+            raise FileNotFoundError(f"{symbol}: missing cache file {expected_path}")
+        actual_sha = _sha256(expected_path)
+        if actual_sha != entry.get("sha256"):
+            raise RuntimeError(
+                f"{symbol}: repair manifest sha256 mismatch "
+                f"expected={entry.get('sha256')} actual={actual_sha}"
+            )
+        rows, columns = thetadata_adapter._parquet_metadata_without_values(
+            expected_path
+        )
+        declared_columns = entry.get("columns")
+        columns_match = (
+            len(columns) == declared_columns
+            if isinstance(declared_columns, int)
+            else columns == declared_columns
+        )
+        if rows != entry.get("rows") or not columns_match:
+            raise RuntimeError(f"{symbol}: repair manifest parquet metadata mismatch")
+        mtimes[symbol] = expected_path.stat().st_mtime_ns
+        preflight[symbol] = entry
+
+    results = []
+    for symbol in expected_symbols:
+        result = thetadata_adapter.blind_cache_chain(
+            symbol,
+            as_of,
+            ledger_dir=ledger_dir,
+            approved_sha256=preflight[symbol]["sha256"],
+        )
+        if result["already_cached"] is not True:
+            raise RuntimeError(f"{symbol}: repair unexpectedly used fetch path")
+        if result["attestation_status"] not in {
+            "REPAIRED_ATTESTATION", "VERIFIED_NOOP"
+        }:
+            raise RuntimeError(
+                f"{symbol}: unexpected repair status "
+                f"{result['attestation_status']}"
+            )
+        cache_path = thetadata_adapter._cache_path(symbol, as_of)
+        if cache_path.stat().st_mtime_ns != mtimes[symbol]:
+            raise RuntimeError(f"{symbol}: repair changed cache mtime")
+        results.append(result)
+
+    verified = verify_cohort_provenance(
+        expected_symbols,
+        as_of,
+        facts_path=Path(ledger_dir) / "facts.log",
+    )
+    return {
+        "schema": "cache_recovery_result/v1",
+        "manifest": str(path),
+        "session": as_of,
+        "results": results,
+        "verification": verified,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -176,8 +377,16 @@ def audit_day(symbol: str, date: str, *, cache_dir=None) -> dict:
 # data/underlying_closes.fetch_underlying_eod.
 # --------------------------------------------------------------------------
 
-def run_topup(symbols=None, *, today=None, ledger_dir: str = "ledger",
-              dry_run: bool = False, do_audit: bool = True) -> dict:
+def run_topup(
+    symbols=None,
+    *,
+    today=None,
+    ledger_dir: str = "ledger",
+    dry_run: bool = False,
+    do_audit: bool = True,
+    trading_days_fn=None,
+    manifest_path: Path | None = None,
+) -> dict:
     import datetime as _dt
     from zoneinfo import ZoneInfo as _ZoneInfo
 
@@ -188,26 +397,57 @@ def run_topup(symbols=None, *, today=None, ledger_dir: str = "ledger",
     symbols = list(config.UNIVERSE) if symbols is None else list(symbols)
     today = today or _dt.datetime.now(_ZoneInfo("America/New_York")).date().isoformat()
 
-    last = latest_cached_date(symbols)
+    facts_path = Path(ledger_dir) / "facts.log"
+    last = latest_complete_session(symbols, facts_path=facts_path)
     if last is None:
         raise RuntimeError(
-            "at least one symbol has no cached chains -- run data/cache_runner.py "
-            "to build the base cache before topping up recent days.")
-    days = topup_days(last, today)
+            "at least one symbol has no cache session with matching BLIND_CACHE "
+            "provenance -- run the provenance preflight/approved recovery before "
+            "topping up recent days.")
+    days = topup_days(last, today, trading_days_fn=trading_days_fn)
 
-    print(f"last cached (cohort): {last}   today (excluded): {today}")
+    print(f"last complete (cohort): {last}   today (excluded): {today}")
     print(f"missing recent trading days: {days or '(none -- cache is current)'}")
-    if dry_run or not days:
+    if dry_run:
         return {"last_cached": last, "today": today, "days": days, "dry_run": dry_run}
+    if not days:
+        verified = verify_cohort_provenance(
+            symbols,
+            last,
+            facts_path=facts_path,
+        )
+        return {
+            "last_cached": last,
+            "today": today,
+            "days": days,
+            "dry_run": False,
+            "provenance": verified,
+        }
 
     def fetch_one(symbol, day):
-        blind_cache_chain(symbol, day, ledger_dir=ledger_dir)
+        return blind_cache_chain(symbol, day, ledger_dir=ledger_dir)
 
-    summary = _run_window(days, symbols, fetch_one, ledger_dir)
+    summary = _run_window(
+        days,
+        symbols,
+        fetch_one,
+        ledger_dir,
+        inspect_existing=True,
+        manifest_path=manifest_path,
+    )
     summary.update({"last_cached": last, "today": today, "days": days,
                     "dry_run": False})
-    print(f"pull: fetched={summary['fetched']} cached={summary['skipped_cached']} "
-          f"gaps={summary['gaps']}")
+    print(
+        f"pull: fetched={summary['fetched']} repaired={summary['repaired']} "
+        f"verified={summary['verified']} gaps={summary['gaps']}"
+    )
+
+    if days:
+        verify_cohort_provenance(
+            symbols,
+            days[-1],
+            facts_path=facts_path,
+        )
 
     verdicts = {}
     if do_audit:
@@ -231,6 +471,7 @@ def run_topup(symbols=None, *, today=None, ledger_dir: str = "ledger",
     facts.append_fact(
         f"DATA_PULL_TOPUP {today}: recent-days chain top-up "
         f"({'/'.join(symbols)}) days={days} fetched={summary['fetched']} "
+        f"repaired={summary['repaired']} verified={summary['verified']} "
         f"gaps={summary['gaps']} audit={summary.get('audit_verdict', 'skipped')}. "
         "Blind-cache path, no reveal; config boundaries unchanged; today excluded "
         "(EOD not final).",
@@ -253,10 +494,33 @@ def main(argv=None) -> int:
     p.add_argument("--refresh-closes", action="store_true",
                    help="also refresh independent Yahoo closes for the exact "
                         "selected scope (network; ignored during --dry-run)")
+    p.add_argument("--as-of",
+                   help="exact completed session for --repair-manifest")
+    p.add_argument("--repair-manifest", type=Path,
+                   help="reviewed cache_recovery/v1 manifest; network-free")
     args = p.parse_args(argv)
     symbols = scope_symbols(args.scope)
-    result = run_topup(symbols=symbols, dry_run=args.dry_run,
-                       do_audit=not args.no_audit)
+    if args.repair_manifest:
+        if not args.as_of:
+            p.error("--repair-manifest requires --as-of YYYY-MM-DD")
+        if args.dry_run or args.refresh_closes:
+            p.error("--repair-manifest cannot be combined with network options")
+        result = repair_from_manifest(
+            args.repair_manifest,
+            symbols=symbols,
+            as_of=args.as_of,
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if args.as_of:
+        p.error("--as-of is only valid with --repair-manifest")
+    result = run_topup(
+        symbols=symbols,
+        dry_run=args.dry_run,
+        do_audit=not args.no_audit,
+        manifest_path=Path("reports/cache_runs")
+        / f"recent_topup_{args.scope}.json",
+    )
     if (args.refresh_closes and not args.dry_run
             and result.get("audit_verdict") != "BLOCK"):
         closes = refresh_closes(symbols, today=result["today"])

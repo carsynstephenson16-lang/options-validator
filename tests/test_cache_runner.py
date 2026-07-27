@@ -7,6 +7,7 @@ tests/test_smoke.py). CACHE_DIR is redirected via thetadata_adapter so
 cache_runner._cache_path (the same function object, reading the same module
 global at call time) resolves under a tempdir.
 """
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -89,6 +90,8 @@ class CacheInSampleTests(_CacheRunnerTestCase):
         self.assertNotIn(("SPY", "2022-12-28"), calls)
         self.assertEqual(result, {
             "fetched": 5,
+            "repaired": 0,
+            "verified": 0,
             "skipped_cached": 1,
             "gaps": 0,
             "total_days": 3,
@@ -111,6 +114,8 @@ class CacheInSampleTests(_CacheRunnerTestCase):
 
         self.assertEqual(result, {
             "fetched": 0,
+            "repaired": 0,
+            "verified": 0,
             "skipped_cached": 0,
             "gaps": 1,
             "total_days": 1,
@@ -173,7 +178,7 @@ class CacheInSampleTests(_CacheRunnerTestCase):
 
 
 class CacheOosBlindTests(_CacheRunnerTestCase):
-    def test_fetches_missing_skips_cached_and_returns_exact_counts(self):
+    def test_fetches_missing_and_verifies_cached_with_exact_counts(self):
         days = ["2023-01-03", "2023-01-04"]
         symbols = ["SPY", "QQQ"]
         cache_runner.trading_days = lambda start, end: days
@@ -183,19 +188,30 @@ class CacheOosBlindTests(_CacheRunnerTestCase):
 
         def fake_blind_cache_chain(symbol, date, *, ledger_dir="ledger"):
             calls.append((symbol, date, ledger_dir))
-            return {"symbol": symbol, "date": date}
+            status = (
+                "VERIFIED_NOOP"
+                if thetadata_adapter._cache_path(symbol, date).exists()
+                else "FETCHED_ATTESTED"
+            )
+            return {
+                "symbol": symbol,
+                "date": date,
+                "attestation_status": status,
+            }
 
         cache_runner.blind_cache_chain = fake_blind_cache_chain
 
         result = cache_runner.cache_oos_blind(symbols, ledger_dir=self.ledger_dir)
 
-        self.assertEqual(len(calls), 3)
-        self.assertNotIn(("QQQ", "2023-01-03", self.ledger_dir), calls)
+        self.assertEqual(len(calls), 4)
+        self.assertIn(("QQQ", "2023-01-03", self.ledger_dir), calls)
         for call in calls:
             self.assertEqual(call[2], self.ledger_dir)
         self.assertEqual(result, {
             "fetched": 3,
-            "skipped_cached": 1,
+            "repaired": 0,
+            "verified": 1,
+            "skipped_cached": 0,
             "gaps": 0,
             "total_days": 2,
             "symbols": 2,
@@ -217,20 +233,23 @@ class CacheOosBlindTests(_CacheRunnerTestCase):
         cache_runner.cache_oos_blind(["SPY"], ledger_dir=self.ledger_dir)
         # no assertion error raised => get_eod_chain was never invoked
 
-    def test_skips_existing_cache_file_without_calling_blind_cache_chain(self):
+    def test_existing_cache_file_is_verified_by_blind_cache_chain(self):
         cache_runner.trading_days = lambda start, end: ["2023-01-03"]
         self._touch_cache_file("SPY", "2023-01-03")
 
-        def raiser(symbol, date, *, ledger_dir="ledger"):
-            raise AssertionError(
-                "must not call blind_cache_chain for an already-cached file"
-            )
+        calls = []
 
-        cache_runner.blind_cache_chain = raiser
+        def verifier(symbol, date, *, ledger_dir="ledger"):
+            calls.append((symbol, date))
+            return {"attestation_status": "VERIFIED_NOOP"}
+
+        cache_runner.blind_cache_chain = verifier
 
         result = cache_runner.cache_oos_blind(["SPY"], ledger_dir=self.ledger_dir)
 
-        self.assertEqual(result["skipped_cached"], 1)
+        self.assertEqual(calls, [("SPY", "2023-01-03")])
+        self.assertEqual(result["verified"], 1)
+        self.assertEqual(result["skipped_cached"], 0)
         self.assertEqual(result["fetched"], 0)
 
     def test_gap_runtime_error_is_logged_as_a_fact_and_counted_not_raised(self):
@@ -247,6 +266,8 @@ class CacheOosBlindTests(_CacheRunnerTestCase):
 
         self.assertEqual(result["gaps"], 1)
         self.assertEqual(result["fetched"], 0)
+        self.assertEqual(result["repaired"], 0)
+        self.assertEqual(result["verified"], 0)
         lines = facts.read_facts(self.ledger_dir)
         self.assertEqual(len(lines), 1)
         for token in ("CACHE_GAP", "symbol=SPY", "date=2023-01-03",
@@ -263,6 +284,31 @@ class CacheOosBlindTests(_CacheRunnerTestCase):
 
         with self.assertRaises(RuntimeError):
             cache_runner.cache_oos_blind(["SPY"], ledger_dir=self.ledger_dir)
+
+    def test_provenance_mismatch_is_durable_typed_refusal(self):
+        cache_runner.trading_days = lambda start, end: ["2023-01-03"]
+        manifest = Path(self._tmp.name) / "cache-run.json"
+
+        def mismatched(symbol, date, *, ledger_dir="ledger"):
+            raise thetadata_adapter.CacheProvenanceError("hash mismatch")
+
+        cache_runner.blind_cache_chain = mismatched
+
+        with self.assertRaisesRegex(
+            thetadata_adapter.CacheProvenanceError, "hash mismatch"
+        ):
+            cache_runner.cache_oos_blind(
+                ["SPY"],
+                ledger_dir=self.ledger_dir,
+                manifest_path=manifest,
+            )
+
+        payload = json.loads(manifest.read_text())
+        self.assertEqual(payload["status"], "FAILED")
+        self.assertEqual(
+            payload["tasks"]["SPY@2023-01-03"],
+            "MISMATCH_REFUSED",
+        )
 
     def test_drops_in_sample_end_and_earlier_days_from_the_window(self):
         # deliberately include config.IN_SAMPLE_END plus later days; the

@@ -1,10 +1,11 @@
 """Blind-cache mode (pre-registration decision doc, section 4): post-
 IN_SAMPLE_END chains may be fetched and written to parquet during the paid
 month, but their VALUES must never surface before the OOS reveal. Only safe
-metadata escapes (symbol, date, row count, schema names, file hash), every
-invocation appends an auditable facts event, and reading the cached values
-stays gated by the existing OOS reveal path."""
+metadata escapes (symbol, date, row count, schema names, file hash and
+attestation state), writes are single-publisher/idempotent, and reading the
+cached values stays gated by the existing OOS reveal path."""
 import hashlib
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,7 +46,9 @@ class BlindCacheTests(unittest.TestCase):
 
         self._old_fetch_raw = thetadata_adapter._fetch_raw
         self._old_client = thetadata_adapter._client
+        self._old_publisher_guard = thetadata_adapter._require_cache_publisher
         self.fetch_calls = []
+        thetadata_adapter._require_cache_publisher = lambda: None
 
         def fake_fetch_raw(symbol, date):
             self.fetch_calls.append((symbol, date))
@@ -61,6 +64,7 @@ class BlindCacheTests(unittest.TestCase):
     def tearDown(self):
         thetadata_adapter._fetch_raw = self._old_fetch_raw
         thetadata_adapter._client = self._old_client
+        thetadata_adapter._require_cache_publisher = self._old_publisher_guard
         thetadata_adapter.CACHE_DIR = self._old_cache
         self._tmp.cleanup()
 
@@ -96,7 +100,7 @@ class BlindCacheTests(unittest.TestCase):
         for value in meta.values():
             self.assertNotIsInstance(value, (pd.DataFrame, pd.Series))
 
-    def test_every_invocation_appends_an_auditable_fact(self):
+    def test_first_invocation_appends_an_auditable_fact(self):
         meta = thetadata_adapter.blind_cache_chain(
             "SPY", OOS_DATE, ledger_dir=self.ledger_dir)
 
@@ -150,7 +154,114 @@ class BlindCacheTests(unittest.TestCase):
         self.assertEqual(second["rows"], first["rows"])
         self.assertEqual(second["sha256"], first["sha256"])
         self.assertEqual(second["columns"], first["columns"])
-        self.assertEqual(len(facts.read_facts(self.ledger_dir)), 2)
+        self.assertEqual(second["attestation_status"], "VERIFIED_NOOP")
+        self.assertEqual(len(facts.read_facts(self.ledger_dir)), 1)
+
+    def test_consumer_cannot_fetch_or_append(self):
+        thetadata_adapter._require_cache_publisher = self._old_publisher_guard
+        old_role = os.environ.pop("OPTIONS_VALIDATOR_CACHE_ROLE", None)
+        try:
+            with self.assertRaisesRegex(
+                thetadata_adapter.CacheWriteRefused, "cache mutation refused"
+            ):
+                thetadata_adapter.blind_cache_chain(
+                    "SPY", OOS_DATE, ledger_dir=self.ledger_dir
+                )
+        finally:
+            if old_role is not None:
+                os.environ["OPTIONS_VALIDATOR_CACHE_ROLE"] = old_role
+        self.assertFalse(thetadata_adapter._cache_path("SPY", OOS_DATE).exists())
+        self.assertEqual(facts.read_facts(self.ledger_dir), [])
+
+    def test_arbitrary_orphan_refuses_without_network(self):
+        path = thetadata_adapter._cache_path("SPY", OOS_DATE)
+        greeks, oi = _frames()
+        chain = thetadata_adapter._merge_chain_frames(greeks, oi)
+        chain.to_parquet(path, index=False)
+        self._forbid_network()
+
+        with self.assertRaisesRegex(
+            thetadata_adapter.CacheProvenanceError, "orphaned cache file"
+        ):
+            thetadata_adapter.blind_cache_chain(
+                "SPY", OOS_DATE, ledger_dir=self.ledger_dir
+            )
+        self.assertEqual(facts.read_facts(self.ledger_dir), [])
+
+    def test_approved_orphan_repairs_without_network_or_mtime_change(self):
+        path = thetadata_adapter._cache_path("SPY", OOS_DATE)
+        greeks, oi = _frames()
+        chain = thetadata_adapter._merge_chain_frames(greeks, oi)
+        chain.to_parquet(path, index=False)
+        approved = hashlib.sha256(path.read_bytes()).hexdigest()
+        before_mtime = path.stat().st_mtime_ns
+        self._forbid_network()
+
+        result = thetadata_adapter.blind_cache_chain(
+            "SPY",
+            OOS_DATE,
+            ledger_dir=self.ledger_dir,
+            approved_sha256=approved,
+        )
+
+        self.assertEqual(result["attestation_status"], "REPAIRED_ATTESTATION")
+        self.assertEqual(path.stat().st_mtime_ns, before_mtime)
+        self.assertEqual(len(facts.read_facts(self.ledger_dir)), 1)
+
+    def test_recorded_pending_attestation_recovers_after_interruption(self):
+        path = thetadata_adapter._cache_path("SPY", OOS_DATE)
+        greeks, oi = _frames()
+        chain = thetadata_adapter._merge_chain_frames(greeks, oi)
+        chain.to_parquet(path, index=False)
+        sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+        meta = {
+            "symbol": "SPY",
+            "date": OOS_DATE,
+            "rows": len(chain),
+            "columns": list(chain.columns),
+            "sha256": sha256,
+            "path": str(path),
+            "already_cached": True,
+            "attestation_status": "",
+            "identity": f"SPY:{OOS_DATE}:{sha256}",
+        }
+        thetadata_adapter._write_attestation(meta, status="PENDING_FACT")
+        self._forbid_network()
+
+        result = thetadata_adapter.blind_cache_chain(
+            "SPY", OOS_DATE, ledger_dir=self.ledger_dir
+        )
+
+        self.assertEqual(result["attestation_status"], "REPAIRED_ATTESTATION")
+        self.assertEqual(len(facts.read_facts(self.ledger_dir)), 1)
+
+    def test_existing_fact_hash_mismatch_refuses(self):
+        first = thetadata_adapter.blind_cache_chain(
+            "SPY", OOS_DATE, ledger_dir=self.ledger_dir
+        )
+        facts.append_fact(
+            "BLIND_CACHE symbol=SPY date=2023-06-01 rows=3 "
+            f"sha256={'0' * 64} already_cached=true path=ignored",
+            base_dir=self.ledger_dir,
+        )
+        self._forbid_network()
+
+        with self.assertRaisesRegex(
+            thetadata_adapter.CacheProvenanceError, "sha256 mismatch"
+        ):
+            thetadata_adapter.blind_cache_chain(
+                "SPY",
+                OOS_DATE,
+                ledger_dir=self.ledger_dir,
+                approved_sha256=first["sha256"],
+            )
+
+    def test_oos_consumer_never_fetches_on_cache_miss(self):
+        self._forbid_network()
+        with self.assertRaisesRegex(FileNotFoundError, "cache-only"):
+            thetadata_adapter.get_eod_chain(
+                "SPY", OOS_DATE, allow_oos=True
+            )
 
 
 if __name__ == "__main__":
