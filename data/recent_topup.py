@@ -244,6 +244,16 @@ def repair_from_manifest(
                if isinstance(entry, dict)}
     if set(entries) != set(expected_symbols):
         raise ValueError("repair manifest entry symbols do not match selected scope")
+    parquet_schema = payload.get("parquet_schema")
+    declared_schema_columns = (
+        parquet_schema.get("columns")
+        if isinstance(parquet_schema, dict)
+        else None
+    )
+    if declared_schema_columns is not None and not isinstance(
+        declared_schema_columns, list
+    ):
+        raise ValueError("repair manifest parquet_schema.columns must be a list")
 
     preflight: dict[str, dict] = {}
     mtimes: dict[str, int] = {}
@@ -269,9 +279,25 @@ def repair_from_manifest(
             if isinstance(declared_columns, int)
             else columns == declared_columns
         )
-        if rows != entry.get("rows") or not columns_match:
+        if declared_schema_columns is not None:
+            columns_match = columns_match and columns == declared_schema_columns
+        stat = expected_path.stat()
+        size_match = (
+            entry.get("size_bytes") is None
+            or entry.get("size_bytes") == stat.st_size
+        )
+        mtime_match = (
+            entry.get("mtime_ns") is None
+            or entry.get("mtime_ns") == stat.st_mtime_ns
+        )
+        if (
+            rows != entry.get("rows")
+            or not columns_match
+            or not size_match
+            or not mtime_match
+        ):
             raise RuntimeError(f"{symbol}: repair manifest parquet metadata mismatch")
-        mtimes[symbol] = expected_path.stat().st_mtime_ns
+        mtimes[symbol] = stat.st_mtime_ns
         preflight[symbol] = entry
 
     results = []

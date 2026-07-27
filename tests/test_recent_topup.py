@@ -210,7 +210,12 @@ class RepairManifestTests(unittest.TestCase):
         payload["evaluation_session"] = payload.pop("session")
         payload["files"] = payload.pop("entries")
         payload.pop("symbols")
+        payload["parquet_schema"] = {
+            "columns": payload["files"][0]["columns"]
+        }
         payload["files"][0]["columns"] = len(payload["files"][0]["columns"])
+        payload["files"][0]["size_bytes"] = cache_path.stat().st_size
+        payload["files"][0]["mtime_ns"] = cache_path.stat().st_mtime_ns
         manifest.write_text(json.dumps(payload))
 
         result = recent_topup.repair_from_manifest(
