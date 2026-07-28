@@ -194,6 +194,22 @@ class ProducerPlistTest(unittest.TestCase):
         self.assertEqual(environment["RESEARCH_REFRESH_MAX_FAILURES"], "2")
         self.assertEqual(environment["RESEARCH_REFRESH_MONTHLY_BUDGET_USD"], "200.00")
 
+    def test_durable_final_manifest_is_checked_before_llm_invocation(self):
+        root = Path(__file__).resolve().parents[1]
+        script = (
+            root / "tools/research_refresh.sh"
+        ).read_text(encoding="utf-8")
+
+        duplicate_gate = script.index(
+            "SKIP: verified final research for ${AS_OF} already binds"
+        )
+        llm_invocation = script.index('"$CLAUDE" -p "/research-refresh"')
+        self.assertLess(duplicate_gate, llm_invocation)
+        self.assertIn(
+            '--verify --bundle-only --ritual-root "$RITUAL_ROOT"',
+            script[:llm_invocation],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
