@@ -30,12 +30,14 @@ still a holdout look (spec, Unit 4).
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import re
 import subprocess
 import threading
+from contextlib import contextmanager
 from datetime import date as Date
 from pathlib import Path
 
@@ -465,6 +467,25 @@ def _require_cache_publisher() -> None:
         )
 
 
+@contextmanager
+def _cache_publisher_transaction():
+    """Serialize the complete cache-bytes/fact/attestation transaction."""
+    _require_cache_publisher()
+    lock_dir = CACHE_DIR / ".attestations"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_fd = os.open(
+        lock_dir / "publisher.lock",
+        os.O_CREAT | os.O_RDWR,
+        0o600,
+    )
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
+
+
 def _attestation_path(symbol: str, date: str) -> Path:
     return CACHE_DIR / ".attestations" / f"{symbol}_{date}.json"
 
@@ -600,8 +621,6 @@ def blind_cache_chain(
     approved incident hash. Reading cached values remains gated by
     get_eod_chain's OOS guard / the reveal path (allow_oos=True).
     """
-    from research import facts
-
     symbol = _normalize_symbol(symbol)
     date = _normalize_date(date)
     if date <= config.IN_SAMPLE_END:
@@ -609,6 +628,25 @@ def blind_cache_chain(
             f"{symbol} @ {date} is in-sample (<= {config.IN_SAMPLE_END}); "
             "blind caching is only for the OOS holdout -- use get_eod_chain."
         )
+    with _cache_publisher_transaction():
+        return _blind_cache_chain_locked(
+            symbol,
+            date,
+            ledger_dir=ledger_dir,
+            approved_sha256=approved_sha256,
+        )
+
+
+def _blind_cache_chain_locked(
+    symbol: str,
+    date: str,
+    *,
+    ledger_dir="ledger",
+    approved_sha256: str | None = None,
+) -> dict:
+    """Run one cache transaction while the cross-process lock is held."""
+    from research import facts
+
     cached = _cache_path(symbol, date)
     already_cached = cached.exists()
     if not already_cached and _recover_staged_cache(symbol, date, cached):

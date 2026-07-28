@@ -5,6 +5,7 @@ metadata escapes (symbol, date, row count, schema names, file hash and
 attestation state), writes are single-publisher/idempotent, and reading the
 cached values stays gated by the existing OOS reveal path."""
 import hashlib
+import multiprocessing
 import os
 import tempfile
 import unittest
@@ -14,6 +15,7 @@ import pandas as pd
 
 from data import thetadata_adapter
 from data.atomic_io import stage_parquet_write
+from data.cache_provenance import load_blind_cache_facts
 from research import facts
 
 OOS_DATE = "2023-06-01"       # inside the extended OOS window
@@ -34,6 +36,36 @@ def _frames(n=3):
                            "implied_vol": [0.25] * n})
     oi = pd.DataFrame({**base, "open_interest": [500] * n})
     return greeks, oi
+
+
+def _concurrent_publisher(
+    cache_dir: str,
+    ledger_dir: str,
+    label: str,
+    start,
+    results,
+) -> None:
+    """Process target for the real cross-process publisher-lock regression."""
+    thetadata_adapter.CACHE_DIR = Path(cache_dir)
+    thetadata_adapter._require_cache_publisher = lambda: None
+    greeks, oi = _frames()
+    if label == "B":
+        greeks = greeks.copy()
+        oi = oi.copy()
+        greeks["strike"] = greeks["strike"] + 100
+        oi["strike"] = oi["strike"] + 100
+    thetadata_adapter._fetch_raw = lambda _symbol, _date: (greeks, oi)
+    start.wait(10)
+    try:
+        result = thetadata_adapter.blind_cache_chain(
+            "SPY",
+            OOS_DATE,
+            ledger_dir=ledger_dir,
+        )
+    except BaseException as exc:
+        results.put(("ERROR", f"{type(exc).__name__}: {exc}"))
+        return
+    results.put((result["attestation_status"], result["sha256"]))
 
 
 class BlindCacheTests(unittest.TestCase):
@@ -157,6 +189,52 @@ class BlindCacheTests(unittest.TestCase):
         self.assertEqual(second["columns"], first["columns"])
         self.assertEqual(second["attestation_status"], "VERIFIED_NOOP")
         self.assertEqual(len(facts.read_facts(self.ledger_dir)), 1)
+
+    def test_two_process_publishers_leave_one_canonical_fact_and_hash(self):
+        context = multiprocessing.get_context("fork")
+        start = context.Event()
+        results = context.Queue()
+        processes = [
+            context.Process(
+                target=_concurrent_publisher,
+                args=(
+                    str(thetadata_adapter.CACHE_DIR),
+                    self.ledger_dir,
+                    label,
+                    start,
+                    results,
+                ),
+            )
+            for label in ("A", "B")
+        ]
+        for process in processes:
+            process.start()
+        start.set()
+        for process in processes:
+            process.join(15)
+            if process.is_alive():
+                process.terminate()
+                process.join()
+        self.assertEqual([process.exitcode for process in processes], [0, 0])
+
+        outcomes = [results.get(timeout=2), results.get(timeout=2)]
+        self.assertEqual(
+            sorted(status for status, _sha256 in outcomes),
+            ["FETCHED_ATTESTED", "VERIFIED_NOOP"],
+        )
+        path = thetadata_adapter._cache_path("SPY", OOS_DATE)
+        file_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+        canonical = load_blind_cache_facts(
+            Path(self.ledger_dir) / "facts.log"
+        )[("SPY", OOS_DATE)]
+        self.assertEqual(canonical["sha256"], file_sha256)
+        self.assertEqual(
+            sum(
+                "BLIND_CACHE symbol=SPY date=2023-06-01" in line
+                for line in facts.read_facts(self.ledger_dir)
+            ),
+            1,
+        )
 
     def test_consumer_cannot_fetch_or_append(self):
         thetadata_adapter._require_cache_publisher = self._old_publisher_guard
