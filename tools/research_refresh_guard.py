@@ -50,6 +50,10 @@ class MonthlyBudgetExhausted(GuardError):
     """The next maximum-cost reservation would exceed the monthly ceiling."""
 
 
+class ActiveAttempt(GuardError):
+    """Another non-stale paid attempt already owns the producer single-flight."""
+
+
 def _parse_now(value: str | None) -> datetime:
     if value is None:
         return datetime.now(NEW_YORK)
@@ -257,12 +261,14 @@ def reserve_attempt(
         if json.dumps(state, sort_keys=True) != state_before_reconcile:
             _save_state(state, state_path, now_et=now_et)
         attempts = _attempts(state)
-        existing = next(
-            (attempt for attempt in attempts if attempt.get("attempt_id") == attempt_id),
-            None,
-        )
-        if existing is not None:
-            return "ALREADY_RESERVED"
+        active = [attempt for attempt in attempts if attempt.get("status") == "RESERVED"]
+        if active:
+            active_id = str(active[0].get("attempt_id"))
+            if active_id == attempt_id:
+                raise ActiveAttempt(f"attempt {attempt_id} is already reserved")
+            raise ActiveAttempt(f"attempt {active_id} is still active")
+        if any(attempt.get("attempt_id") == attempt_id for attempt in attempts):
+            raise GuardError("attempt_id was already finalized and cannot be reused")
         consecutive = state.get("consecutive_failures")
         if not isinstance(consecutive, int) or isinstance(consecutive, bool):
             raise GuardError("guard state consecutive_failures is invalid")
@@ -297,12 +303,15 @@ def record_outcome(
     succeeded: bool,
     now_et: datetime,
     failure_class: str | None = None,
+    published_success: bool = False,
 ) -> str:
     """Durably close one reservation without logging raw command output."""
     if not succeeded and failure_class not in FAILURE_CLASSES:
         raise GuardError("failure_class is not an approved non-secret classification")
     if succeeded and failure_class is not None:
         raise GuardError("successful outcome cannot carry failure_class")
+    if published_success and not succeeded:
+        raise GuardError("published_success requires a successful outcome")
     with _locked_state(state_dir) as (state, state_path):
         attempts = _attempts(state)
         matches = [attempt for attempt in attempts if attempt.get("attempt_id") == attempt_id]
@@ -312,11 +321,26 @@ def record_outcome(
         desired = "SUCCEEDED" if succeeded else "FAILED"
         current = attempt.get("status")
         if current == desired:
+            if published_success and "published_success_at_utc" not in attempt:
+                attempt["published_success_at_utc"] = _utc_text(now_et)
+                _save_state(state, state_path, now_et=now_et)
+                return "RECONCILED_PUBLISHED"
             return "ALREADY_RECORDED"
+        if published_success and current == "STALE_FAILED":
+            attempt["status"] = "SUCCEEDED"
+            attempt["completed_at_utc"] = _utc_text(now_et)
+            attempt["published_success_at_utc"] = _utc_text(now_et)
+            attempt["reconciled_from"] = "STALE_FAILED"
+            attempt.pop("failure_class", None)
+            _recompute_consecutive_failures(state)
+            _save_state(state, state_path, now_et=now_et)
+            return "RECONCILED_PUBLISHED"
         if current != "RESERVED":
             raise GuardError(f"attempt is already finalized as {current}")
         attempt["status"] = desired
         attempt["completed_at_utc"] = _utc_text(now_et)
+        if published_success:
+            attempt["published_success_at_utc"] = _utc_text(now_et)
         if failure_class is not None:
             attempt["failure_class"] = failure_class
         _recompute_consecutive_failures(state)
@@ -377,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
     result_group = outcome.add_mutually_exclusive_group(required=True)
     result_group.add_argument("--success", action="store_true")
     result_group.add_argument("--failure-class", choices=sorted(FAILURE_CLASSES))
+    outcome.add_argument("--published-success", action="store_true")
 
     reset = commands.add_parser("reset-failures")
     reset.add_argument("--state-dir")
@@ -407,6 +432,7 @@ def main(argv: list[str] | None = None) -> int:
                 succeeded=args.success,
                 now_et=now_et,
                 failure_class=args.failure_class,
+                published_success=args.published_success,
             )
             print(f"GUARD_{status}")
         else:
@@ -421,6 +447,9 @@ def main(argv: list[str] | None = None) -> int:
     except MonthlyBudgetExhausted as error:
         print(f"MONTHLY_BUDGET_EXHAUSTED: {error}")
         return 6
+    except ActiveAttempt as error:
+        print(f"SINGLE_FLIGHT_ACTIVE: {error}")
+        return 8
     except GuardError as error:
         print(f"GUARD_STATE_REJECTED: {error}")
         return 7

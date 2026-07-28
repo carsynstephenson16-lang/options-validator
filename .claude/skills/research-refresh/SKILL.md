@@ -12,7 +12,8 @@ any hypothesis receipt, threshold, gate, ranking, or verdict.
 `RESEARCH_RITUAL_ROOT` must identify the authoritative checkout that ran the
 daily ritual. `RESEARCH_RUN_DATE` is interpreted in `America/New_York`.
 `RESEARCH_STARTED_AT` is supplied by the outer producer before this session
-starts and is part of the durable run lineage.
+starts. `RESEARCH_REFRESH_ATTEMPT_ID` identifies its reserved paid attempt.
+Both are required durable lineage.
 
 ## Procedure
 
@@ -99,9 +100,10 @@ starts and is part of the durable run lineage.
    `uv run python -m tools.research_context_assemble --assemble --inputs <run_dir>`
 
    The producer copies the exact packets into the durable run directory, binds
-   `uv.lock`, records distinct UTC/ET research start and finish timestamps,
-   renders `reports/<data_as_of>-attractiveness-research-context.md` from JSON,
-   and writes only
+   `uv.lock` and the reserved producer attempt ID, records distinct UTC/ET
+   research start and finish timestamps, renders
+   `reports/<data_as_of>-attractiveness-research-context.md` from JSON, and
+   writes only
    `reports/attractiveness_research/<data_as_of>/manifest.pending.json`.
    `manifest.json` is not published here. A repeated byte-identical finalized
    input identity returns `NO_NEW_INPUT` without rewriting timestamps or
