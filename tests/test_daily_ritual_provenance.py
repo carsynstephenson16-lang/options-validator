@@ -44,6 +44,29 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertIn('crit "h6_watch: NONZERO EXIT"', source)
         self.assertIn('crit "h8_watch: NONZERO EXIT"', source)
 
+    def test_h5_rerun_failure_is_critical_before_terminal_publish(self):
+        source = RITUAL.read_text()
+        failure = 'crit "h5 entry watch: NONZERO EXIT"'
+        terminal = source.index('if [ "$CRITICAL" -eq 1 ]; then')
+        self.assertIn(failure, source)
+        self.assertLess(source.index(failure), terminal)
+        self.assertNotIn('note "WARNING: h5 entry watch failed to run"', source)
+
+    def test_h10_rerun_failures_are_critical_before_terminal_publish(self):
+        source = RITUAL.read_text()
+        terminal = source.index('if [ "$CRITICAL" -eq 1 ]; then')
+        failures = (
+            'crit "h10_watch: NONZERO EXIT"',
+            'crit "h10_observe: NONZERO EXIT"',
+            'crit "h10_watch: module unavailable"',
+        )
+        for failure in failures:
+            with self.subTest(failure=failure):
+                self.assertIn(failure, source)
+                self.assertLess(source.index(failure), terminal)
+        self.assertNotIn('note "h10_watch: NONZERO EXIT"', source)
+        self.assertNotIn('note "h10_observe: NONZERO EXIT"', source)
+
     def test_ritual_terminal_status_is_separate_from_capture_receipt(self):
         source = RITUAL.read_text()
         running = source.index("--status RUNNING")

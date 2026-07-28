@@ -336,7 +336,7 @@ if [ "$GATE_GO" -eq 1 ]; then
       note "h5 entry watch: WAIT (no trigger fired)"
     fi
   else
-    note "WARNING: h5 entry watch failed to run"
+    crit "h5 entry watch: NONZERO EXIT"
   fi
 
   # Step 5 — H8 watcher, only once its tooling exists (registered lanes only).
@@ -352,8 +352,10 @@ if [ "$GATE_GO" -eq 1 ]; then
   # Reads underlying OHLCV via the QM refresh above (data/underlying_ohlcv.py),
   # which is why that refresh now runs ahead of this block instead of after it.
   if "$UV" run python -c 'import options_researcher.h10_watch' 2>/dev/null; then
-    "$UV" run python -m options_researcher.h10_watch --as-of "$RUN_DATE" && note "h10_watch: ran" || note "h10_watch: NONZERO EXIT"
-    "$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" && note "h10_observe: appended" || note "h10_observe: NONZERO EXIT"
+    "$UV" run python -m options_researcher.h10_watch --as-of "$RUN_DATE" && note "h10_watch: ran" || crit "h10_watch: NONZERO EXIT"
+    "$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" && note "h10_observe: appended" || crit "h10_observe: NONZERO EXIT"
+  else
+    crit "h10_watch: module unavailable"
   fi
 fi
 
