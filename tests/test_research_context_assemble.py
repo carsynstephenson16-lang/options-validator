@@ -18,6 +18,7 @@ from options_researcher.attractiveness_research_v2 import (
     PJM_CATALYST_ID,
     ResearchArtifactError,
     UpstreamBlocked,
+    finalize_bundle,
     load_successful_ritual,
     publish_bundle,
     render_markdown,
@@ -29,10 +30,32 @@ from tools.research_context_assemble import check_dashboard_html
 AS_OF = "2026-07-24"
 RUN_DATE = "2026-07-27"
 CANDIDATE_ID = "NVDA:long_call:2026-08-07:212.50"
-GENERATED_AT = datetime(2026, 7, 27, 15, 30, tzinfo=ZoneInfo("America/New_York"))
+STARTED_AT = datetime(2026, 7, 27, 15, 0, tzinfo=ZoneInfo("America/New_York"))
+FINISHED_AT = datetime(2026, 7, 27, 15, 30, tzinfo=ZoneInfo("America/New_York"))
+VERIFIED_AT = datetime(2026, 7, 27, 15, 31, tzinfo=ZoneInfo("America/New_York"))
 CODE_SHA = "a" * 40
 SOURCE_SHA = "b" * 64
 RITUAL_CODE_SHA = "c" * 40
+
+
+def _source(
+    url: str,
+    source_tier: str,
+    *,
+    published_at: str | None = "2026-07-01T12:00:00-04:00",
+    retrieved_at_utc: str = "2026-07-27T19:15:00Z",
+) -> dict[str, object]:
+    return {
+        "url": url,
+        "source_tier": source_tier,
+        "published_at": published_at,
+        "publication_time_unknown_rationale": (
+            "The canonical page does not expose a publication timestamp."
+            if published_at is None
+            else None
+        ),
+        "retrieved_at_utc": retrieved_at_utc,
+    }
 
 
 def _claim(symbol: str) -> dict[str, object]:
@@ -61,7 +84,7 @@ def _packet(symbol: str, *, pjm: bool = False) -> dict[str, object]:
             "confirmed": True,
         }
     ]
-    sources = [claim["source_url"]]
+    sources = [_source(str(claim["source_url"]), "issuer_ir")]
     if pjm:
         pjm_source = "https://www.pjm.com/markets-and-operations/rpm"
         catalysts.append(
@@ -73,7 +96,7 @@ def _packet(symbol: str, *, pjm: bool = False) -> dict[str, object]:
                 "confirmed": False,
             }
         )
-        sources.append(pjm_source)
+        sources.append(_source(pjm_source, "market_operator", published_at=None))
     return {
         "symbol": symbol,
         "news_summary": f"{symbol} dated context.",
@@ -131,6 +154,7 @@ def _write_successful_ritual(root: Path) -> None:
 
 def _write_packets(root: Path) -> Path:
     packet_dir = root / "inputs"
+    fed_url = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
     _write_json(
         packet_dir / "market.json",
         {
@@ -140,7 +164,7 @@ def _write_packets(root: Path) -> Path:
                 "notes": ["Descriptive only."],
             },
             "symbols": {},
-            "market_sources": ["https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"],
+            "market_sources": [_source(fed_url, "regulator")],
         },
     )
     for symbol in ("NVDA", "AMZN", "VST", "CEG"):
@@ -202,12 +226,25 @@ class BundleTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        (self.root / "uv.lock").write_text("lock-v1\n", encoding="utf-8")
         self.ritual_root = self.root / "ritual-root"
         _write_successful_ritual(self.ritual_root)
         self.inputs = _write_packets(self.root)
 
     def tearDown(self):
         self.temp.cleanup()
+
+    @property
+    def final_manifest(self) -> Path:
+        return self.root / "reports/attractiveness_research" / AS_OF / "manifest.json"
+
+    @property
+    def pending_manifest(self) -> Path:
+        return self.root / "reports/attractiveness_research" / AS_OF / "manifest.pending.json"
+
+    @property
+    def previous_manifest(self) -> Path:
+        return self.root / "reports/attractiveness_research" / AS_OF / "manifest.previous.json"
 
     def publish(self, **overrides):
         kwargs = {
@@ -218,45 +255,75 @@ class BundleTest(unittest.TestCase):
             "inputs_dir": self.inputs,
             "ritual_root": self.ritual_root,
             "run_date": RUN_DATE,
-            "generated_at": GENERATED_AT,
+            "started_at": STARTED_AT,
+            "finished_at": FINISHED_AT,
             "producer_code_sha": CODE_SHA,
             "producer_source_sha": SOURCE_SHA,
         }
         kwargs.update(overrides)
         return publish_bundle(**kwargs)
 
-    def verify(self):
+    def verify(self, *, pending: bool = False):
         return verify_bundle(
             root=self.root,
             as_of=AS_OF,
             candidate_ids=[CANDIDATE_ID],
             pinned_symbols=["AMZN"],
             ritual_root=self.ritual_root,
+            pending=pending,
         )
 
-    def test_publish_and_verify_manifest_lineage(self):
+    def write_clean_dashboard(self) -> Path:
+        path = self.root / ".tmp/dashboard/attractiveness.html"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Research evidence complete", encoding="utf-8")
+        return path
+
+    def finalize(self):
+        self.write_clean_dashboard()
+        return finalize_bundle(
+            root=self.root,
+            as_of=AS_OF,
+            candidate_ids=[CANDIDATE_ID],
+            pinned_symbols=["AMZN"],
+            ritual_root=self.ritual_root,
+            verified_at=VERIFIED_AT,
+        )
+
+    def test_pending_then_final_manifest_lineage(self):
         result = self.publish()
-        self.assertEqual(result.status, "PUBLISHED")
-        manifest = self.verify()
-        self.assertEqual(manifest["schema_version"], "attractiveness_research/v2")
-        self.assertEqual(manifest["run_id"], result.run_id)
-        self.assertEqual(manifest["candidate_ids"], [CANDIDATE_ID])
-        self.assertEqual(manifest["market_as_of_date"], AS_OF)
+        self.assertEqual(result.status, "PENDING_DASHBOARD")
+        self.assertTrue(self.pending_manifest.is_file())
+        self.assertFalse(self.final_manifest.exists())
+        pending = self.verify(pending=True)
+        self.assertEqual(pending["publication_status"], "PENDING_DASHBOARD")
+
+        manifest = self.finalize()
+        self.assertEqual(manifest["publication_status"], "FINAL")
+        self.assertFalse(self.pending_manifest.exists())
+        verified = self.verify()
+        self.assertEqual(verified["run_id"], result.run_id)
+        self.assertEqual(verified["candidate_ids"], [CANDIDATE_ID])
+        self.assertEqual(verified["market_as_of_date"], AS_OF)
 
     def test_duplicate_input_returns_no_new_input_without_rewrite(self):
         first = self.publish()
+        self.finalize()
         report_before = first.report_path.read_bytes()
-        manifest_before = first.manifest_path.read_bytes()
+        manifest_before = self.final_manifest.read_bytes()
         second = self.publish(
-            generated_at=datetime(2026, 7, 27, 16, 45, tzinfo=ZoneInfo("America/New_York"))
+            started_at=datetime(2026, 7, 28, 7, 40, tzinfo=ZoneInfo("America/New_York")),
+            finished_at=datetime(2026, 7, 28, 8, 10, tzinfo=ZoneInfo("America/New_York")),
         )
         self.assertEqual(second.status, "NO_NEW_INPUT")
         self.assertEqual(second.run_id, first.run_id)
         self.assertEqual(first.report_path.read_bytes(), report_before)
-        self.assertEqual(first.manifest_path.read_bytes(), manifest_before)
+        self.assertEqual(self.final_manifest.read_bytes(), manifest_before)
+        self.assertFalse(self.pending_manifest.exists())
 
     def test_duplicate_gate_does_not_hide_corrupted_outputs(self):
         first = self.publish()
+        self.finalize()
         first.context_path.write_text("{}\n", encoding="utf-8")
         with self.assertRaisesRegex(ResearchArtifactError, "context sha256 mismatch"):
             self.publish()
@@ -270,7 +337,7 @@ class BundleTest(unittest.TestCase):
         )
         result.report_path.write_text("tampered\n", encoding="utf-8")
         with self.assertRaisesRegex(ResearchArtifactError, "markdown sha256 mismatch"):
-            self.verify()
+            self.verify(pending=True)
 
     def test_candidate_packet_coverage_is_exact(self):
         (self.inputs / "nvda.json").unlink()
@@ -280,10 +347,53 @@ class BundleTest(unittest.TestCase):
     def test_claim_source_must_be_in_symbol_sources(self):
         path = self.inputs / "nvda.json"
         packet = json.loads(path.read_text(encoding="utf-8"))
-        packet["sources"] = ["https://investor.nvda.example/different"]
+        packet["sources"] = [_source("https://investor.nvda.example/different", "issuer_ir")]
         _write_json(path, packet)
         with self.assertRaisesRegex(ResearchArtifactError, "absent from symbol sources"):
             self.publish()
+
+    def test_claim_source_tier_must_match_source_metadata(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["claims"][0]["source_tier"] = "sec_filing"
+        _write_json(path, packet)
+        with self.assertRaisesRegex(ResearchArtifactError, "source_tier differs"):
+            self.publish()
+
+    def test_source_retrieval_must_be_inside_run_window(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["retrieved_at_utc"] = "2026-07-27T18:59:59Z"
+        _write_json(path, packet)
+        with self.assertRaisesRegex(ResearchArtifactError, "outside research start/finish"):
+            self.publish()
+
+    def test_unknown_publication_time_requires_rationale(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["published_at"] = None
+        packet["sources"][0]["publication_time_unknown_rationale"] = None
+        _write_json(path, packet)
+        with self.assertRaisesRegex(ResearchArtifactError, "requires a rationale"):
+            self.publish()
+
+    def test_manifest_has_explicit_source_metadata_and_usage(self):
+        self.publish()
+        manifest = self.verify(pending=True)
+        self.assertGreater(len(manifest["sources"]), 1)
+        for source in manifest["sources"]:
+            self.assertEqual(
+                set(source),
+                {
+                    "url",
+                    "source_tier",
+                    "published_at",
+                    "publication_time_unknown_rationale",
+                    "retrieved_at_utc",
+                    "used_by",
+                },
+            )
+            self.assertTrue(source["used_by"])
 
     def test_pjm_required_for_vst_and_ceg(self):
         path = self.inputs / "vst.json"
@@ -311,9 +421,9 @@ class BundleTest(unittest.TestCase):
         packet = json.loads(path.read_text(encoding="utf-8"))
         old_source = "https://www.pjm.com/markets-and-operations/rpm"
         new_source = "https://example.com/pjm-calendar"
-        packet["sources"] = [
-            new_source if source == old_source else source for source in packet["sources"]
-        ]
+        for source in packet["sources"]:
+            if source["url"] == old_source:
+                source["url"] = new_source
         for catalyst in packet["catalysts"]:
             if catalyst.get("id") == PJM_CATALYST_ID:
                 catalyst["source"] = new_source
@@ -324,7 +434,7 @@ class BundleTest(unittest.TestCase):
     def test_temporal_parity_is_enforced(self):
         result = self.publish()
         context = json.loads(result.context_path.read_text(encoding="utf-8"))
-        context["research_generated_at_et"] = "2026-07-27T16:30:00-04:00"
+        context["research_finished_at_et"] = "2026-07-27T16:30:00-04:00"
         with self.assertRaisesRegex(ResearchArtifactError, "different instants"):
             validate_context(
                 context,
@@ -332,17 +442,46 @@ class BundleTest(unittest.TestCase):
                 pinned_symbols=["AMZN"],
             )
 
+    def test_uv_lock_is_bound_and_tamper_is_rejected(self):
+        self.publish()
+        manifest = self.verify(pending=True)
+        self.assertEqual(
+            manifest["uv_lock_sha256"],
+            hashlib.sha256((self.root / "uv.lock").read_bytes()).hexdigest(),
+        )
+        (self.root / "uv.lock").write_text("lock-v2\n", encoding="utf-8")
+        with self.assertRaisesRegex(ResearchArtifactError, "uv_lock_sha256 mismatch"):
+            self.verify(pending=True)
+
     def test_packet_hash_tamper_is_rejected(self):
-        result = self.publish()
-        manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+        self.publish()
+        manifest = self.verify(pending=True)
         packet_path = self.root / manifest["input_packets"]["nvda.json"]["path"]
         packet_path.write_text("{}\n", encoding="utf-8")
         with self.assertRaisesRegex(ResearchArtifactError, "input packet nvda.json sha256"):
-            self.verify()
+            self.verify(pending=True)
+
+    def test_stale_dashboard_refuses_final_manifest(self):
+        self.publish()
+        path = self.root / ".tmp/dashboard/attractiveness.html"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Research evidence stale", encoding="utf-8")
+        with self.assertRaisesRegex(ResearchArtifactError, "stale markers"):
+            finalize_bundle(
+                root=self.root,
+                as_of=AS_OF,
+                candidate_ids=[CANDIDATE_ID],
+                pinned_symbols=["AMZN"],
+                ritual_root=self.ritual_root,
+                verified_at=VERIFIED_AT,
+            )
+        self.assertFalse(self.final_manifest.exists())
+        self.assertTrue(self.pending_manifest.exists())
 
     def test_manifest_is_commit_marker_for_partial_publication(self):
-        first = self.publish()
-        prior_manifest = first.manifest_path.read_bytes()
+        self.publish()
+        self.finalize()
+        prior_manifest = self.final_manifest.read_bytes()
         packet = json.loads((self.inputs / "nvda.json").read_text(encoding="utf-8"))
         packet["news_summary"] = "A changed, still sourced summary."
         _write_json(self.inputs / "nvda.json", packet)
@@ -359,55 +498,88 @@ class BundleTest(unittest.TestCase):
         with mock.patch.object(module, "atomic_text_write", side_effect=fail_on_report):
             with self.assertRaisesRegex(OSError, "simulated"):
                 self.publish()
-        self.assertEqual(first.manifest_path.read_bytes(), prior_manifest)
+        self.assertFalse(self.final_manifest.exists())
+        self.assertEqual(self.previous_manifest.read_bytes(), prior_manifest)
         with self.assertRaises(ResearchArtifactError):
             self.verify()
 
 
 class ShellPreflightTest(unittest.TestCase):
-    def test_blocked_preflight_never_invokes_llm(self):
+    def run_script(
+        self,
+        temp: Path,
+        *,
+        ritual_status: str,
+        now_et: str,
+        manual_override: bool = False,
+    ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
         uv = shutil.which("uv")
         zsh = shutil.which("zsh")
         if uv is None or zsh is None:
             self.skipTest("uv and zsh are required")
+        ritual_root = temp / "ritual"
+        _write_successful_ritual(ritual_root)
+        _write_run_status(ritual_root, status=ritual_status)
+        log_dir = temp / "logs"
+        invoked = temp / "llm-invoked"
+        fake_claude = temp / "claude"
+        fake_claude.write_text(
+            f"#!/bin/zsh\n/usr/bin/touch '{invoked}'\n",
+            encoding="utf-8",
+        )
+        fake_claude.chmod(0o755)
+        env = os.environ.copy()
+        env.update(
+            {
+                "RESEARCH_REFRESH_UV": uv,
+                "RESEARCH_REFRESH_CLAUDE": str(fake_claude),
+                "RESEARCH_REFRESH_LOG_DIR": str(log_dir),
+                "RESEARCH_REFRESH_STATE_DIR": str(temp / "state"),
+                "RESEARCH_REFRESH_TEST_OVERRIDE": "1",
+                "RESEARCH_REFRESH_NOW_ET": now_et,
+                "RESEARCH_RITUAL_ROOT": str(ritual_root),
+                "RESEARCH_MARKET_AS_OF": AS_OF,
+                "RESEARCH_RUN_DATE": RUN_DATE,
+            }
+        )
+        if manual_override:
+            env["RESEARCH_REFRESH_MANUAL_OVERRIDE"] = "1"
+        script = Path(__file__).resolve().parents[1] / "tools/research_refresh.sh"
+        result = subprocess.run(
+            [zsh, str(script)],
+            cwd=Path(__file__).resolve().parents[1],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return result, invoked, log_dir
+
+    def test_blocked_preflight_never_invokes_llm(self):
         with tempfile.TemporaryDirectory() as directory:
-            temp = Path(directory)
-            ritual_root = temp / "ritual"
-            _write_successful_ritual(ritual_root)
-            _write_run_status(ritual_root, status="BROKEN")
-            log_dir = temp / "logs"
-            invoked = temp / "llm-invoked"
-            fake_claude = temp / "claude"
-            fake_claude.write_text(
-                f"#!/bin/zsh\n/usr/bin/touch '{invoked}'\n",
-                encoding="utf-8",
-            )
-            fake_claude.chmod(0o755)
-            env = os.environ.copy()
-            env.update(
-                {
-                    "RESEARCH_REFRESH_UV": uv,
-                    "RESEARCH_REFRESH_CLAUDE": str(fake_claude),
-                    "RESEARCH_REFRESH_LOG_DIR": str(log_dir),
-                    "RESEARCH_RITUAL_ROOT": str(ritual_root),
-                    "RESEARCH_MARKET_AS_OF": AS_OF,
-                    "RESEARCH_RUN_DATE": RUN_DATE,
-                }
-            )
-            script = Path(__file__).resolve().parents[1] / "tools/research_refresh.sh"
-            result = subprocess.run(
-                [zsh, str(script)],
-                cwd=Path(__file__).resolve().parents[1],
-                env=env,
-                text=True,
-                capture_output=True,
-                check=False,
+            result, invoked, log_dir = self.run_script(
+                Path(directory),
+                ritual_status="BROKEN",
+                now_et="2026-07-27T07:40:00-04:00",
             )
             self.assertEqual(result.returncode, 3)
             self.assertFalse(invoked.exists())
             logs = list(log_dir.glob("*.log"))
             self.assertEqual(len(logs), 1)
             self.assertIn("UPSTREAM_BLOCKED", logs[0].read_text(encoding="utf-8"))
+
+    def test_schedule_blocked_never_invokes_llm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, invoked, log_dir = self.run_script(
+                Path(directory),
+                ritual_status="OK",
+                now_et="2026-07-25T07:40:00-04:00",
+            )
+            self.assertEqual(result.returncode, 4)
+            self.assertFalse(invoked.exists())
+            logs = list(log_dir.glob("*.log"))
+            self.assertEqual(len(logs), 1)
+            self.assertIn("SCHEDULE_BLOCKED", logs[0].read_text(encoding="utf-8"))
 
 
 class CheckHtmlTest(unittest.TestCase):

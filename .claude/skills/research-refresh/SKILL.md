@@ -11,6 +11,8 @@ any hypothesis receipt, threshold, gate, ranking, or verdict.
 
 `RESEARCH_RITUAL_ROOT` must identify the authoritative checkout that ran the
 daily ritual. `RESEARCH_RUN_DATE` is interpreted in `America/New_York`.
+`RESEARCH_STARTED_AT` is supplied by the outer producer before this session
+starts and is part of the durable run lineage.
 
 ## Procedure
 
@@ -57,13 +59,23 @@ daily ritual. `RESEARCH_RUN_DATE` is interpreted in `America/New_York`.
 
    `{"id", "text", "classification", "source_url", "unknown_rationale", "source_tier", "fact_date", "date_certainty", "countercase"}`
 
+   Source metadata object:
+
+   `{"url", "source_tier", "published_at", "publication_time_unknown_rationale", "retrieved_at_utc"}`
+
+   `published_at` must be a timezone-aware source publication timestamp. If the
+   canonical page exposes no timestamp, use null and provide a specific
+   `publication_time_unknown_rationale`. `retrieved_at_utc` must be the actual
+   UTC fetch time during this research run. Do not backfill either field.
+
    Every candidate packet needs at least one claim backed by a primary tier:
    `issuer_ir`, `sec_filing`, `regulator`, or `market_operator`. Every claim and
-   catalyst URL must also appear in that symbol packet's `sources` list.
+   catalyst URL must have one matching metadata object in that symbol's
+   `sources`, with the same `source_tier`.
 
    Market packet:
 
-   `{"market": {"summary", "regime", "notes"}, "symbols": {}, "market_sources": [urls]}`
+   `{"market": {"summary", "regime", "notes"}, "symbols": {}, "market_sources": [source_metadata_objects]}`
 
 5. Apply these source and calendar rules without exception:
 
@@ -76,35 +88,42 @@ daily ritual. `RESEARCH_RUN_DATE` is interpreted in `America/New_York`.
      `unknown_rationale`; never fill a gap from memory.
    - VST and CEG must each include exactly one next-auction catalyst with
      `"id": "PJM_BRA_NEXT"`, `"confirmed": false`, and a direct official
-     `pjm.com` source URL. Keep the date null until PJM publishes the exact
-     schedule.
+     `pjm.com` source whose tier is `market_operator`. Keep the date null until
+     PJM publishes the exact schedule.
    - Match catalyst timing to the exact option expiration in each candidate ID.
      Treat theta, IV, liquidity, and spread effects as risks unless the packet
      contains measured canonical evidence.
 
-6. Assemble and validate the bundle:
+6. Assemble the untrusted pending bundle:
 
    `uv run python -m tools.research_context_assemble --assemble --inputs <run_dir>`
 
-   The producer copies the exact packets into the durable lineage directory,
+   The producer copies the exact packets into the durable run directory, binds
+   `uv.lock`, records distinct UTC/ET research start and finish timestamps,
    renders `reports/<data_as_of>-attractiveness-research-context.md` from JSON,
-   and publishes
-   `reports/attractiveness_research/<data_as_of>/manifest.json` last. A repeated
-   byte-identical input identity returns `NO_NEW_INPUT` without rewriting
-   timestamps or artifacts.
+   and writes only
+   `reports/attractiveness_research/<data_as_of>/manifest.pending.json`.
+   `manifest.json` is not published here. A repeated byte-identical finalized
+   input identity returns `NO_NEW_INPUT` without rewriting timestamps or
+   artifacts.
 
-7. Rebuild and verify:
+7. Verify the pending bundle, render, finalize, and verify the final marker:
 
-   `uv run python -m tools.research_context_assemble --verify --bundle-only`
+   `uv run python -m tools.research_context_assemble --verify --pending --bundle-only`
 
    `uv run python -m options_researcher.attractiveness_dashboard`
 
+   `uv run python -m tools.research_context_assemble --finalize`
+
    `uv run python -m tools.research_context_assemble --verify`
 
-   Verification re-hashes the ritual receipt, underlying ritual evidence,
-   mutable latest ritual-run status, copied source packets, machine context,
-   and Markdown; checks exact live candidate coverage, ET/UTC temporal parity,
-   source linkage, and both `PJM_BRA_NEXT` entries.
+   Finalization refuses stale/incomplete dashboard markers. Only a clean render
+   may atomically publish `manifest.json` with `publication_status: FINAL` and
+   dashboard verification evidence. Verification re-hashes the ritual receipt,
+   underlying ritual evidence, mutable latest ritual-run status, `uv.lock`,
+   copied packets, machine context, and Markdown; checks exact live candidate
+   coverage, ET/UTC temporal parity, source metadata/linkage, and both
+   `PJM_BRA_NEXT` entries.
 
 8. Final output is exactly one line:
 
