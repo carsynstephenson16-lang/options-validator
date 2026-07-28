@@ -96,6 +96,9 @@ evade the ceiling. State and lock permissions are owner-only, and only approved
 failure classes are recorded; command output, environment values, prompts, and
 secrets are never written to guard state.
 
+Only one non-stale reservation may exist. A concurrent shell, including a
+duplicate attempt ID, exits `SINGLE_FLIGHT_ACTIVE` before invoking the LLM.
+
 After investigating and correcting the cause of repeated failures, an operator
 may explicitly close only the failure circuit:
 
@@ -126,6 +129,7 @@ The manifest binds:
 - exact candidate IDs and pinned symbols
 - distinct research start and finish timestamps in ET and UTC
 - producer commit and producer-source hashes
+- the exact durable paid-attempt ID
 - `uv.lock` SHA-256
 - ritual status, capture receipt, and underlying evidence hashes
 - run-specific immutable source-packet hashes
@@ -145,6 +149,12 @@ Publication is two-phase:
 When immutable inputs match an already verified final manifest, the producer
 returns `NO_NEW_INPUT` and leaves the existing context, Markdown, timestamps,
 packets, and final manifest byte-for-byte unchanged.
+
+The final manifest's paid-attempt ID is reconciled to `SUCCEEDED` before a
+valid-final shortcut. If the process crashes after final publication but before
+the slot receipt, the next invocation verifies the final manifest, reconciles
+that exact reservation (including a prior stale classification), recreates the
+receipt atomically, and exits before reserving or invoking another LLM.
 
 Manual contract sequence:
 
@@ -204,6 +214,8 @@ task interface after owner approval.
 - `FAILURE_CIRCUIT_OPEN`: two consecutive paid attempts failed; investigate,
   then reset explicitly.
 - `MONTHLY_BUDGET_EXHAUSTED`: worst-case reservations reached the monthly cap.
+- `SINGLE_FLIGHT_ACTIVE`: another non-stale paid attempt already owns the
+  producer.
 - `RESEARCH_ARTIFACT_REJECTED`: source, timestamp, lineage, output, or
   dashboard verification failed.
 

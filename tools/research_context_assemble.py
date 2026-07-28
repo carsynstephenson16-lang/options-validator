@@ -23,6 +23,7 @@ from options_researcher.attractiveness_research_v2 import (
     publish_bundle,
     verify_bundle,
 )
+from tools.research_refresh_guard import GuardError, record_outcome
 
 
 def _live_board() -> tuple[dict, str, list[str], list[str]]:
@@ -76,6 +77,44 @@ def _started_at(value: str | None) -> datetime:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ResearchArtifactError("research start timestamp must be timezone-aware")
     return parsed
+
+
+def _attempt_id(value: str | None) -> str:
+    resolved = value or os.environ.get("RESEARCH_REFRESH_ATTEMPT_ID")
+    if (
+        not resolved
+        or any(character.isspace() for character in resolved)
+    ):
+        raise ResearchArtifactError(
+            "RESEARCH_REFRESH_ATTEMPT_ID or --attempt-id is required"
+        )
+    return resolved
+
+
+def reconcile_final_attempt(
+    manifest: dict[str, object],
+    *,
+    guard_state_dir: Path,
+    now_et: datetime | None = None,
+) -> str:
+    """Close the paid attempt bound to an already verified final manifest."""
+    if manifest.get("publication_status") != "FINAL":
+        raise ResearchArtifactError("only a final manifest can reconcile a paid attempt")
+    producer_attempt_id = manifest.get("producer_attempt_id")
+    if not isinstance(producer_attempt_id, str):
+        raise ResearchArtifactError("final manifest lacks producer_attempt_id")
+    try:
+        return record_outcome(
+            guard_state_dir.expanduser().resolve(),
+            attempt_id=producer_attempt_id,
+            succeeded=True,
+            published_success=True,
+            now_et=now_et or datetime.now(NEW_YORK),
+        )
+    except GuardError as error:
+        raise ResearchArtifactError(
+            f"published attempt reconciliation failed: {error}"
+        ) from error
 
 
 def _cmd_print_ids() -> None:
@@ -134,6 +173,7 @@ def _cmd_assemble(
     ritual_root: str | None,
     run_date: str | None,
     started_at: str | None,
+    attempt_id: str | None,
 ) -> None:
     root = Path(".").resolve()
     _data, as_of, candidate_ids, pinned_symbols = _live_board()
@@ -146,6 +186,7 @@ def _cmd_assemble(
         ritual_root=_ritual_root(ritual_root),
         run_date=_run_date(run_date),
         started_at=_started_at(started_at),
+        producer_attempt_id=_attempt_id(attempt_id),
     )
     print(
         f"{result.status} run_id={result.run_id} as_of={as_of} "
@@ -160,12 +201,22 @@ def _cmd_verify(
     receipt_out: str | None = None,
     bundle_only: bool = False,
     pending: bool = False,
+    reconcile_published_attempt: bool = False,
+    guard_state_dir: str | None = None,
 ) -> None:
     root = Path(".").resolve()
     _data, as_of, candidate_ids, pinned_symbols = _live_board()
     if pending and receipt_out:
         raise ResearchArtifactError(
             "pending bundle cannot produce a verified receipt"
+        )
+    if reconcile_published_attempt and pending:
+        raise ResearchArtifactError(
+            "pending bundle cannot reconcile a published attempt"
+        )
+    if reconcile_published_attempt and not guard_state_dir:
+        raise ResearchArtifactError(
+            "--reconcile-published-attempt requires --guard-state-dir"
         )
     manifest = verify_bundle(
         root=root,
@@ -175,6 +226,11 @@ def _cmd_verify(
         ritual_root=_ritual_root(ritual_root),
         pending=pending,
     )
+    if reconcile_published_attempt:
+        reconcile_final_attempt(
+            manifest,
+            guard_state_dir=Path(str(guard_state_dir)),
+        )
     if not bundle_only:
         html_path = root / ".tmp/dashboard/attractiveness.html"
         if not html_path.is_file():
@@ -194,6 +250,7 @@ def _cmd_verify(
                 {
                     "schema_version": manifest["schema_version"],
                     "run_id": manifest["run_id"],
+                    "producer_attempt_id": manifest["producer_attempt_id"],
                     "market_as_of_date": as_of,
                     "context_sha256": output["sha256"],
                     "ritual_run_status_sha256": ritual["run_status_sha256"],
@@ -235,6 +292,7 @@ def _cmd_finalize(
                 {
                     "schema_version": manifest["schema_version"],
                     "run_id": manifest["run_id"],
+                    "producer_attempt_id": manifest["producer_attempt_id"],
                     "market_as_of_date": as_of,
                     "context_sha256": output["sha256"],
                     "ritual_run_status_sha256": ritual["run_status_sha256"],
@@ -265,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ritual-root", help="authoritative daily-ritual checkout")
     parser.add_argument("--run-date", help="America/New_York ritual run date")
     parser.add_argument("--started-at", help="timezone-aware research start timestamp")
+    parser.add_argument("--attempt-id", help="durable paid-attempt identifier")
     parser.add_argument("--receipt-out", help="atomic JSON receipt path for --verify")
     parser.add_argument(
         "--bundle-only",
@@ -272,6 +331,15 @@ def main(argv: list[str] | None = None) -> int:
         help="verify v2 lineage before rendering the dashboard",
     )
     parser.add_argument("--pending", action="store_true", help="verify pending manifest")
+    parser.add_argument(
+        "--reconcile-published-attempt",
+        action="store_true",
+        help="mark the verified final manifest's paid attempt successful",
+    )
+    parser.add_argument(
+        "--guard-state-dir",
+        help="durable guard state used with --reconcile-published-attempt",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -294,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
                 ritual_root=args.ritual_root,
                 run_date=args.run_date,
                 started_at=args.started_at,
+                attempt_id=args.attempt_id,
             )
         elif args.verify:
             _cmd_verify(
@@ -301,6 +370,8 @@ def main(argv: list[str] | None = None) -> int:
                 receipt_out=args.receipt_out,
                 bundle_only=args.bundle_only,
                 pending=args.pending,
+                reconcile_published_attempt=args.reconcile_published_attempt,
+                guard_state_dir=args.guard_state_dir,
             )
         else:
             _cmd_finalize(

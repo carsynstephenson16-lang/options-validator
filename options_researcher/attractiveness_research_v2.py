@@ -176,6 +176,16 @@ def validate_source_url(value: object, *, where: str) -> str:
     return value
 
 
+def _require_attempt_id(value: object, *, where: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(character.isspace() for character in value)
+    ):
+        raise ResearchArtifactError(f"{where}: invalid producer attempt id")
+    return value
+
+
 def _clean_sources(
     owner: str,
     value: object,
@@ -554,12 +564,17 @@ def build_context(
     started_at: datetime,
     finished_at: datetime,
     run_id: str,
+    producer_attempt_id: str,
     ritual_binding: RitualBinding,
     input_packet_sha256: Mapping[str, str],
     uv_lock_sha256: str,
 ) -> dict[str, object]:
     """Build a fully covered v2 context without changing candidate membership."""
     market_as_of = _require_date(as_of, where="market_as_of_date")
+    attempt_id = _require_attempt_id(
+        producer_attempt_id,
+        where="producer_attempt_id",
+    )
     time_fields = _time_fields(started_at, finished_at)
     started_utc = _utc_timestamp(
         time_fields["research_started_at_utc"], where="research_started_at_utc"
@@ -678,6 +693,7 @@ def build_context(
         ),
         "lineage": {
             "run_id": run_id,
+            "producer_attempt_id": attempt_id,
             "ritual_run_status_sha256": ritual_binding.run_status_sha256,
             "ritual_receipt_sha256": ritual_binding.receipt_sha256,
             "input_packet_sha256": dict(sorted(input_packet_sha256.items())),
@@ -1030,6 +1046,7 @@ def publish_bundle(
     ritual_root: Path,
     run_date: str,
     started_at: datetime,
+    producer_attempt_id: str,
     finished_at: datetime | None = None,
     producer_code_sha: str | None = None,
     producer_source_sha: str | None = None,
@@ -1040,6 +1057,10 @@ def publish_bundle(
     ritual_binding = load_successful_ritual(ritual_root, as_of=as_of, run_date=run_date)
     code_sha = producer_code_sha or _producer_code_sha(root)
     source_sha = producer_source_sha or _producer_source_sha(root)
+    attempt_id = _require_attempt_id(
+        producer_attempt_id,
+        where="producer_attempt_id",
+    )
     uv_lock_path = root / "uv.lock"
     if not uv_lock_path.is_file():
         raise ResearchArtifactError("uv.lock is missing")
@@ -1125,6 +1146,7 @@ def publish_bundle(
         started_at=started_at,
         finished_at=completed_at,
         run_id=run_id,
+        producer_attempt_id=attempt_id,
         ritual_binding=ritual_binding,
         input_packet_sha256=packet_hashes,
         uv_lock_sha256=uv_lock_sha,
@@ -1144,6 +1166,7 @@ def publish_bundle(
         "schema_version": SCHEMA_VERSION,
         "publication_status": "PENDING_DASHBOARD",
         "run_id": run_id,
+        "producer_attempt_id": attempt_id,
         "market_as_of_date": as_of,
         "research_started_at_utc": context["research_started_at_utc"],
         "research_started_at_et": context["research_started_at_et"],
@@ -1262,6 +1285,10 @@ def verify_bundle(
     )
     if context.get("run_id") != manifest.get("run_id"):
         raise ResearchArtifactError("context run_id does not match manifest")
+    producer_attempt_id = _require_attempt_id(
+        manifest.get("producer_attempt_id"),
+        where="manifest producer_attempt_id",
+    )
     for field in (
         "research_started_at_utc",
         "research_started_at_et",
@@ -1273,6 +1300,8 @@ def verify_bundle(
     lineage = context.get("lineage")
     if not isinstance(lineage, dict):
         raise ResearchArtifactError("context lineage is missing")
+    if lineage.get("producer_attempt_id") != producer_attempt_id:
+        raise ResearchArtifactError("context producer attempt does not match manifest")
 
     expected_report = render_markdown(context).encode("utf-8")
     if report_path.read_bytes() != expected_report:

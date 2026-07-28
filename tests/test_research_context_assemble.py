@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import unittest
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 from zoneinfo import ZoneInfo
@@ -25,7 +26,11 @@ from options_researcher.attractiveness_research_v2 import (
     validate_context,
     verify_bundle,
 )
-from tools.research_context_assemble import check_dashboard_html
+from tools.research_context_assemble import (
+    check_dashboard_html,
+    reconcile_final_attempt,
+)
+from tools.research_refresh_guard import reserve_attempt
 
 AS_OF = "2026-07-24"
 RUN_DATE = "2026-07-27"
@@ -36,6 +41,7 @@ VERIFIED_AT = datetime(2026, 7, 27, 15, 31, tzinfo=ZoneInfo("America/New_York"))
 CODE_SHA = "a" * 40
 SOURCE_SHA = "b" * 64
 RITUAL_CODE_SHA = "c" * 40
+ATTEMPT_ID = "research-2026-07-27-074000"
 
 
 def _source(
@@ -256,6 +262,7 @@ class BundleTest(unittest.TestCase):
             "ritual_root": self.ritual_root,
             "run_date": RUN_DATE,
             "started_at": STARTED_AT,
+            "producer_attempt_id": ATTEMPT_ID,
             "finished_at": FINISHED_AT,
             "producer_code_sha": CODE_SHA,
             "producer_source_sha": SOURCE_SHA,
@@ -303,6 +310,13 @@ class BundleTest(unittest.TestCase):
         self.assertFalse(self.pending_manifest.exists())
         verified = self.verify()
         self.assertEqual(verified["run_id"], result.run_id)
+        self.assertEqual(verified["producer_attempt_id"], ATTEMPT_ID)
+        self.assertEqual(
+            json.loads(result.context_path.read_text(encoding="utf-8"))["lineage"][
+                "producer_attempt_id"
+            ],
+            ATTEMPT_ID,
+        )
         self.assertEqual(verified["candidate_ids"], [CANDIDATE_ID])
         self.assertEqual(verified["market_as_of_date"], AS_OF)
 
@@ -313,13 +327,60 @@ class BundleTest(unittest.TestCase):
         manifest_before = self.final_manifest.read_bytes()
         second = self.publish(
             started_at=datetime(2026, 7, 28, 7, 40, tzinfo=ZoneInfo("America/New_York")),
+            producer_attempt_id="research-2026-07-28-074000",
             finished_at=datetime(2026, 7, 28, 8, 10, tzinfo=ZoneInfo("America/New_York")),
         )
         self.assertEqual(second.status, "NO_NEW_INPUT")
         self.assertEqual(second.run_id, first.run_id)
         self.assertEqual(first.report_path.read_bytes(), report_before)
         self.assertEqual(self.final_manifest.read_bytes(), manifest_before)
+        self.assertEqual(
+            json.loads(self.final_manifest.read_text(encoding="utf-8"))[
+                "producer_attempt_id"
+            ],
+            ATTEMPT_ID,
+        )
         self.assertFalse(self.pending_manifest.exists())
+
+    def test_crash_after_final_is_reconciled_before_next_reservation(self):
+        state_dir = self.root / "guard-state"
+        reserve_attempt(
+            state_dir,
+            attempt_id=ATTEMPT_ID,
+            now_et=STARTED_AT,
+        )
+        self.publish()
+        self.finalize()
+
+        manifest = self.verify()
+        reconcile_final_attempt(
+            manifest,
+            guard_state_dir=state_dir,
+            now_et=datetime(2026, 7, 28, 7, 39, tzinfo=ZoneInfo("America/New_York")),
+        )
+        self.assertEqual(
+            reserve_attempt(
+                state_dir,
+                attempt_id="research-2026-07-28-074000",
+                now_et=datetime(
+                    2026,
+                    7,
+                    28,
+                    7,
+                    40,
+                    tzinfo=ZoneInfo("America/New_York"),
+                ),
+                attempt_budget_usd=Decimal("8.00"),
+                monthly_budget_usd=Decimal("200.00"),
+                max_failures=2,
+                stale_minutes=120,
+            ),
+            "RESERVED",
+        )
+        state = json.loads((state_dir / "guard_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["attempts"][0]["status"], "SUCCEEDED")
+        self.assertIn("published_success_at_utc", state["attempts"][0])
+        self.assertNotEqual(state["attempts"][0]["status"], "STALE_FAILED")
 
     def test_duplicate_gate_does_not_hide_corrupted_outputs(self):
         first = self.publish()
@@ -580,6 +641,34 @@ class ShellPreflightTest(unittest.TestCase):
             logs = list(log_dir.glob("*.log"))
             self.assertEqual(len(logs), 1)
             self.assertIn("SCHEDULE_BLOCKED", logs[0].read_text(encoding="utf-8"))
+
+    def test_active_attempt_blocks_concurrent_shell_before_llm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            reserve_attempt(
+                temp / "state",
+                attempt_id="already-running",
+                now_et=datetime(
+                    2026,
+                    7,
+                    27,
+                    7,
+                    39,
+                    tzinfo=ZoneInfo("America/New_York"),
+                ),
+            )
+            result, invoked, log_dir = self.run_script(
+                temp,
+                ritual_status="OK",
+                now_et="2026-07-27T07:40:00-04:00",
+            )
+            self.assertEqual(result.returncode, 8)
+            self.assertFalse(invoked.exists())
+            logs = list(log_dir.glob("*.log"))
+            self.assertEqual(len(logs), 1)
+            log = logs[0].read_text(encoding="utf-8")
+            self.assertIn("SINGLE_FLIGHT_ACTIVE", log)
+            self.assertIn("LLM invocation was not attempted", log)
 
 
 class CheckHtmlTest(unittest.TestCase):

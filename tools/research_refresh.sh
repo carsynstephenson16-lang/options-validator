@@ -102,6 +102,39 @@ if [ -f "$RECEIPT" ]; then
   echo "INFO: prior slot receipt has different ritual lineage; refreshing"
 fi
 
+FINAL_MANIFEST="$REPO/reports/attractiveness_research/$AS_OF/manifest.json"
+if [ -f "$FINAL_MANIFEST" ]; then
+  RECOVERY_META="$LOGDIR/recovery_${STAMP}.json"
+  if "$UV" run python -m tools.research_context_assemble \
+    --verify --bundle-only --ritual-root "$RITUAL_ROOT"; then
+    "$UV" run python -m tools.research_context_assemble \
+      --verify --bundle-only --ritual-root "$RITUAL_ROOT" \
+      --reconcile-published-attempt --guard-state-dir "$STATE_DIR" \
+      --receipt-out "$RECOVERY_META" \
+      || {
+        echo "CRITICAL: final manifest is valid but its paid attempt could not be reconciled"
+        exit 1
+      }
+    RECOVERY_RUN_ID="$(sed -n 's/.*"run_id":"\([^"]*\)".*/\1/p' "$RECOVERY_META" | tail -1)"
+    RECOVERY_ATTEMPT_ID="$(sed -n 's/.*"producer_attempt_id":"\([^"]*\)".*/\1/p' "$RECOVERY_META" | tail -1)"
+    RECOVERY_CONTEXT_SHA="$(sed -n 's/.*"context_sha256":"\([^"]*\)".*/\1/p' "$RECOVERY_META" | tail -1)"
+    RECOVERY_STATUS_SHA="$(sed -n 's/.*"ritual_run_status_sha256":"\([^"]*\)".*/\1/p' "$RECOVERY_META" | tail -1)"
+    RECOVERY_RECEIPT_SHA="$(sed -n 's/.*"ritual_receipt_sha256":"\([^"]*\)".*/\1/p' "$RECOVERY_META" | tail -1)"
+    if [ -z "$RECOVERY_RUN_ID" ] || [ -z "$RECOVERY_ATTEMPT_ID" ] || [ -z "$RECOVERY_CONTEXT_SHA" ] || [ -z "$RECOVERY_STATUS_SHA" ] || [ -z "$RECOVERY_RECEIPT_SHA" ]; then
+      echo "CRITICAL: recovered final receipt metadata is incomplete"
+      exit 1
+    fi
+    RECOVERY_RECEIPT_TMP="$RECEIPT.${STAMP}.recovery.tmp"
+    printf '%s\n' \
+      "{\"schema_version\":\"attractiveness_research/v2\",\"as_of\":\"${AS_OF}\",\"slot\":\"${SLOT}\",\"run_id\":\"${RECOVERY_RUN_ID}\",\"producer_attempt_id\":\"${RECOVERY_ATTEMPT_ID}\",\"context_sha256\":\"${RECOVERY_CONTEXT_SHA}\",\"ritual_run_status_sha256\":\"${RECOVERY_STATUS_SHA}\",\"ritual_receipt_sha256\":\"${RECOVERY_RECEIPT_SHA}\",\"status\":\"ok\"}" \
+      > "$RECOVERY_RECEIPT_TMP"
+    mv "$RECOVERY_RECEIPT_TMP" "$RECEIPT"
+    echo "RECOVERED: valid final manifest reconciled before LLM invocation"
+    exit 0
+  fi
+  echo "INFO: existing final manifest is not valid for the current board and ritual"
+fi
+
 ATTEMPT_ID="${AS_OF}_${STAMP}"
 "$UV" run python -m tools.research_refresh_guard reserve \
   --state-dir "$STATE_DIR" \
@@ -131,6 +164,7 @@ if [ -n "$NOW_ET" ]; then
 else
   export RESEARCH_STARTED_AT="$(TZ=UTC date +%Y-%m-%dT%H:%M:%SZ)"
 fi
+export RESEARCH_REFRESH_ATTEMPT_ID="$ATTEMPT_ID"
 "$CLAUDE" -p "/research-refresh" \
   --model sonnet \
   --max-budget-usd "$ATTEMPT_BUDGET_USD" \
@@ -148,6 +182,7 @@ VERIFY_META="$LOGDIR/verify_${STAMP}.json"
 if [ -f "$FINAL_MANIFEST" ]; then
   "$UV" run python -m tools.research_context_assemble \
     --verify --bundle-only --ritual-root "$RITUAL_ROOT" \
+    --reconcile-published-attempt --guard-state-dir "$STATE_DIR" \
     --receipt-out "$VERIFY_META" \
     || {
       record_failure "BUNDLE_VERIFY"
@@ -169,36 +204,47 @@ else
       exit 1
     }
   "$UV" run python -m tools.research_context_assemble \
-    --finalize --ritual-root "$RITUAL_ROOT" --receipt-out "$VERIFY_META"
+    --finalize --ritual-root "$RITUAL_ROOT"
   VERIFY_RC=$?
   if [ "$VERIFY_RC" -ne 0 ]; then
     record_failure "FINAL_VERIFY"
     echo "CRITICAL: dashboard verification failed — no final manifest was published"
     exit 1
   fi
+  "$UV" run python -m tools.research_context_assemble \
+    --verify --bundle-only --ritual-root "$RITUAL_ROOT" \
+    --reconcile-published-attempt --guard-state-dir "$STATE_DIR" \
+    --receipt-out "$VERIFY_META" \
+    || {
+      echo "CRITICAL: final manifest published but paid-attempt reconciliation failed"
+      exit 1
+    }
 fi
 
 RUN_ID="$(sed -n 's/.*"run_id":"\([^"]*\)".*/\1/p' "$VERIFY_META" | tail -1)"
+PRODUCER_ATTEMPT_ID="$(sed -n 's/.*"producer_attempt_id":"\([^"]*\)".*/\1/p' "$VERIFY_META" | tail -1)"
 CONTEXT_SHA="$(sed -n 's/.*"context_sha256":"\([^"]*\)".*/\1/p' "$VERIFY_META" | tail -1)"
 RITUAL_STATUS_SHA="$(sed -n 's/.*"ritual_run_status_sha256":"\([^"]*\)".*/\1/p' "$VERIFY_META" | tail -1)"
 RITUAL_RECEIPT_SHA="$(sed -n 's/.*"ritual_receipt_sha256":"\([^"]*\)".*/\1/p' "$VERIFY_META" | tail -1)"
-if [ -z "$RUN_ID" ] || [ -z "$CONTEXT_SHA" ] || [ -z "$RITUAL_STATUS_SHA" ] || [ -z "$RITUAL_RECEIPT_SHA" ]; then
+if [ -z "$RUN_ID" ] || [ -z "$PRODUCER_ATTEMPT_ID" ] || [ -z "$CONTEXT_SHA" ] || [ -z "$RITUAL_STATUS_SHA" ] || [ -z "$RITUAL_RECEIPT_SHA" ]; then
   record_failure "FINAL_VERIFY"
   echo "CRITICAL: verified receipt metadata is incomplete"
   exit 1
 fi
-"$UV" run python -m tools.research_refresh_guard record \
-  --state-dir "$STATE_DIR" \
-  --attempt-id "$ATTEMPT_ID" \
-  --success \
-  "${NOW_ARGS[@]}" \
-  || {
-    echo "CRITICAL: could not persist successful circuit-breaker outcome"
-    exit 1
-  }
+if [ "$PRODUCER_ATTEMPT_ID" != "$ATTEMPT_ID" ]; then
+  "$UV" run python -m tools.research_refresh_guard record \
+    --state-dir "$STATE_DIR" \
+    --attempt-id "$ATTEMPT_ID" \
+    --success \
+    "${NOW_ARGS[@]}" \
+    || {
+      echo "CRITICAL: could not close the current paid attempt"
+      exit 1
+    }
+fi
 RECEIPT_TMP="$RECEIPT.${STAMP}.tmp"
 printf '%s\n' \
-  "{\"schema_version\":\"attractiveness_research/v2\",\"as_of\":\"${AS_OF}\",\"slot\":\"${SLOT}\",\"run_id\":\"${RUN_ID}\",\"context_sha256\":\"${CONTEXT_SHA}\",\"ritual_run_status_sha256\":\"${RITUAL_STATUS_SHA}\",\"ritual_receipt_sha256\":\"${RITUAL_RECEIPT_SHA}\",\"status\":\"ok\"}" \
+  "{\"schema_version\":\"attractiveness_research/v2\",\"as_of\":\"${AS_OF}\",\"slot\":\"${SLOT}\",\"run_id\":\"${RUN_ID}\",\"producer_attempt_id\":\"${PRODUCER_ATTEMPT_ID}\",\"context_sha256\":\"${CONTEXT_SHA}\",\"ritual_run_status_sha256\":\"${RITUAL_STATUS_SHA}\",\"ritual_receipt_sha256\":\"${RITUAL_RECEIPT_SHA}\",\"status\":\"ok\"}" \
   > "$RECEIPT_TMP"
 mv "$RECEIPT_TMP" "$RECEIPT"
 echo "RESULT: OK ${AS_OF} ${SLOT} run_id=${RUN_ID}"

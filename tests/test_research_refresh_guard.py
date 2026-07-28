@@ -6,6 +6,8 @@ import io
 import json
 import os
 import plistlib
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -16,6 +18,7 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 from tools.research_refresh_guard import (
+    ActiveAttempt,
     CircuitOpen,
     MonthlyBudgetExhausted,
     main,
@@ -89,12 +92,19 @@ class DurableGuardTest(unittest.TestCase):
         path = self.state_dir / "guard_state.json"
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def test_same_attempt_is_idempotent_and_not_double_reserved(self):
+    def test_same_active_attempt_is_single_flight_blocked(self):
         self.assertEqual(self.reserve("a", _at(27, 7, 40)), "RESERVED")
-        self.assertEqual(self.reserve("a", _at(27, 7, 41)), "ALREADY_RESERVED")
+        with self.assertRaisesRegex(ActiveAttempt, "already reserved"):
+            self.reserve("a", _at(27, 7, 41))
         attempts = self.state()["attempts"]
         self.assertEqual(len(attempts), 1)
         self.assertEqual(attempts[0]["reserved_usd"], "8.00")
+
+    def test_different_active_attempt_is_single_flight_blocked(self):
+        self.reserve("a", _at(27, 7, 40))
+        with self.assertRaisesRegex(ActiveAttempt, "a is still active"):
+            self.reserve("b", _at(27, 7, 41))
+        self.assertEqual(len(self.state()["attempts"]), 1)
 
     def test_two_paid_failures_open_circuit_before_third_attempt(self):
         self.reserve("a", _at(27, 7, 40))
@@ -132,6 +142,23 @@ class DurableGuardTest(unittest.TestCase):
         self.assertEqual(attempt["status"], "STALE_FAILED")
         self.assertEqual(attempt["failure_class"], "STALE_RESERVATION")
 
+    def test_verified_publication_reconciles_stale_failure_to_success(self):
+        self.reserve("published", _at(27, 7, 40), max_failures=10)
+        self.reserve("later", _at(28, 7, 40), max_failures=10)
+        self.assertEqual(self.state()["attempts"][0]["status"], "STALE_FAILED")
+        status = record_outcome(
+            self.state_dir,
+            attempt_id="published",
+            succeeded=True,
+            published_success=True,
+            now_et=_at(28, 7, 41),
+        )
+        self.assertEqual(status, "RECONCILED_PUBLISHED")
+        attempt = self.state()["attempts"][0]
+        self.assertEqual(attempt["status"], "SUCCEEDED")
+        self.assertEqual(attempt["reconciled_from"], "STALE_FAILED")
+        self.assertNotIn("failure_class", attempt)
+
     def test_explicit_reset_preserves_budget_history(self):
         self.reserve("a", _at(27, 7, 40))
         self.record_failure("a", _at(27, 7, 41))
@@ -163,6 +190,53 @@ class DurableGuardTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(output.getvalue().strip(), "GUARD_RESERVED")
         self.assertNotIn("do-not-print", output.getvalue())
+
+    def test_cli_returns_nonzero_when_an_attempt_is_active(self):
+        self.reserve("active", _at(27, 7, 40))
+        output = io.StringIO()
+        with redirect_stdout(output):
+            rc = main(
+                [
+                    "reserve",
+                    "--state-dir",
+                    str(self.state_dir),
+                    "--attempt-id",
+                    "duplicate-shell",
+                    "--now",
+                    "2026-07-27T07:41:00-04:00",
+                ]
+            )
+        self.assertEqual(rc, 8)
+        self.assertIn("SINGLE_FLIGHT_ACTIVE", output.getvalue())
+        self.assertEqual(len(self.state()["attempts"]), 1)
+
+    def test_concurrent_cli_reservations_have_exactly_one_winner(self):
+        base = [
+            sys.executable,
+            "-m",
+            "tools.research_refresh_guard",
+            "reserve",
+            "--state-dir",
+            str(self.state_dir),
+            "--now",
+            "2026-07-27T07:40:00-04:00",
+        ]
+        processes = [
+            subprocess.Popen(
+                [*base, "--attempt-id", attempt_id],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            for attempt_id in ("concurrent-a", "concurrent-b")
+        ]
+        results = [process.communicate(timeout=10) for process in processes]
+        return_codes = sorted(process.returncode for process in processes)
+        self.assertEqual(return_codes, [0, 8], results)
+        output = "\n".join(stdout for stdout, _stderr in results)
+        self.assertIn("GUARD_RESERVED", output)
+        self.assertIn("SINGLE_FLIGHT_ACTIVE", output)
+        self.assertEqual(len(self.state()["attempts"]), 1)
 
 
 class ProducerPlistTest(unittest.TestCase):
