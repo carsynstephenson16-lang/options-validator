@@ -30,6 +30,16 @@ the amendment scopes the scoring identity to the registered surface
 hashes to non-authoritative provenance. Scoring remains BUILD-ONLY behind
 the owner's fresh PASS; ledger events and receipts are never rewritten.
 
+**Implementation checkpoint (2026-07-25):** the V1_3 amendment and scoped
+`h7_scoring_identity/v1` runtime gate landed first in isolated commit
+`d8acdfe`. Its independent Codex review passed. The amendment fact remains
+intentionally unrecorded until Fable signs off; real scoring remains
+BUILD-ONLY/INACTIVE and still needs the separate fresh review-bound owner
+PASS. P2 landed separately in `6c8941e`; P1 follows as its own commit.
+The final combined H7/P1/P2 regression set passed 289 tests, full offline
+discovery passed 2,046 tests, and the final independent P1 adversarial review
+returned PASS.
+
 ---
 
 ## WAVE 1 — this weekend
@@ -50,13 +60,15 @@ H10 `reports/h10/receipts/`, intraday capture
 `reports/intraday_capture/<date>/`.
 
 **Required behavior:** per symbol, one collapsible panel with one row per
-hypothesis family showing: membership (e.g. "H7 registered cohort" /
-"H7 excluded EARNINGS-UNKNOWN" / "not in H6"), latest receipt date, current
-state chip (verbatim from the receipt: WAIT / ENTRY-OK / BANNED / WATCH /
-NO_SIGNAL / REFUSED / UNKNOWN), and the receipt path. Missing receipt →
-explicit "NO RECEIPT <family> — expected daily" line (fail-visible). Panel is
-display-only: attaches to section dicts AFTER assembly, never a `grades`
-key, never read by rank/score/pick functions.
+hypothesis family showing membership, ritual summary state, raw per-symbol
+and per-lane receipt states, evaluation/run dates, detail, and every source
+path. Receipt vocabulary is preserved verbatim rather than collapsed into a
+shared dashboard vocabulary. Missing completed-session evidence renders the
+exact "NO RECEIPT <family> — expected daily" line without falsely marking a
+Friday receipt stale over a weekend. Intraday is a separate "descriptive
+only" context row and never hypothesis evidence. The panel attaches to
+section dicts only after card assembly/ranking, never to a `grades` key, and
+is never read by rank/score/pick functions.
 
 **Files:** new `options_researcher/hypothesis_evidence.py` (pure gatherers:
 latest-dated-file resolution per family + per-symbol extraction); wire in
@@ -74,9 +86,16 @@ Do NOT modify: `attractiveness.py` selection/grading, `h7_*` modules,
 fail-visible line; board ordering + Top-3 byte-identical with panel on/off;
 wording pinned for state chips.
 
-**Acceptance:** panel renders for all 15 names on the real cache;
+**Acceptance:** panel renders for all 18 displayed names on the real cache;
 `uv run python -m unittest discover -s tests` exit 0; ruff/pyright clean;
 screenshots/HTML grep evidence in the report.
+
+**Landed verification:** the generated HTML contains 18 ordered symbol
+panels, 18 evidence accordions, three exact DISPLAY-ONLY labels, separate
+descriptive intraday rows, raw receipt chips, and source paths. The current
+H7 display is honestly UNKNOWN because the newest source-health receipt and
+newest watcher receipt are from different sessions; the gatherer does not
+combine them.
 
 ### Packet P2 — Display-extension universe: NBIS, AMAT, CLSK — size M
 
@@ -101,20 +120,28 @@ assert must survive); amend `test_attractiveness_universe.py` to assert
 H7 lists, (c) extras carry no H7 receipts. UI: extras' section headers carry
 a pinned "DISPLAY-ONLY — not in any registered hypothesis" chip; P1's panel
 shows "not tracked" rows for them. Earnings badges resolve UNKNOWN honestly
-(no gating rows exist). Note: `intraday_capture.py:693` iterates
-`ATTRACTIVENESS_UNIVERSE` → captures grow to 18 names (accepted; note the
-extra remote calls in the report). `features.build_all()` also follows
-automatically once chains+closes exist (backfill in flight 2026-07-25;
-DATA_BLOCKED fail-visible sections are the acceptable interim).
+(no gating rows exist). `ATTRACTIVENESS_UNIVERSE` is deliberately **not**
+the intraday-capture scope: capture stays pinned to the canonical H7 15
+because the three extras have no
+intraday consumer yet. Extras use a separate `display-extra` EOD top-up and
+feature-build lane. That lane is a summary note only, sits outside the
+branch-guarded H7 steps, and can never change the ritual exit code, H7
+health/gate/watcher/exit, or ritual exit status.
+
+The spent RQ1 reconstruction reads the symbol list recorded inside its spent
+report/receipt. It never consults `config.UNIVERSE`,
+`ATTRACTIVENESS_UNIVERSE`, or another live config constant.
 
 **Edge cases:** config_hash changes with any config.py edit — confirm the
 daily ritual re-derives health→gate same-session (it does; verify nothing
 compares against the frozen registration source_hash for daily ops).
 NBIS single-day chain file from 2026-07-15 must not masquerade as history.
 
-**Tests:** universe composition asserts; DATA_BLOCKED rendering for a
-data-less extra name; display-only chip pinned; board invariance for the
-15 originals (their ordering unchanged by adding extras).
+**Tests:** universe composition asserts; `h7_scope.scope_symbols()` still
+raises for every count other than 15; DATA_BLOCKED rendering for a data-less
+extra name; display-only chip pinned; RQ1 report-symbol isolation; intraday
+15-name pin; note-only display refresh; board invariance for the 15
+originals (their ordering unchanged by adding extras).
 
 **Acceptance:** suite exit 0; the three names render (cards or DATA_BLOCKED);
 no H7 receipt/test regression; CI green.
@@ -195,7 +222,8 @@ IV-skew badge after the owner approves
 
 ## Owner actions (nothing here is Codex's)
 
-1. Type `ATTRACTIVENESS_EXTRA_NAMES` values (P2) and the P4 label wording nod.
+1. P2 values are complete: owner ratified NBIS, AMAT, and CLSK. The P4 label
+   wording nod remains open.
 2. Run `uv run python tools/h7_refresh_earnings.py` for IREN/CRWV (and the
    other 4 unhealthy names) — that is ALL they need to go healthy; chains
    and closes are already current.

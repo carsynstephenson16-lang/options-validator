@@ -3,6 +3,58 @@ import math
 import unittest
 
 from options_researcher import attractiveness_dashboard as ad
+from options_researcher.hypothesis_evidence import (
+    EvidenceRow,
+    EvidenceSource,
+    EvidenceState,
+    SymbolEvidence,
+)
+
+
+def _evidence(symbol: str) -> SymbolEvidence:
+    return SymbolEvidence(
+        symbol=symbol,
+        hypotheses=(
+            EvidenceRow(
+                family="H5<script>",
+                membership="tracked <owner>",
+                family_state="NO_SIGNAL",
+                symbol_states=(
+                    EvidenceState("entry<label>", "WAIT & WATCH"),
+                ),
+                evaluation_session="2026-07-24",
+                run_date="2026-07-25",
+                sources=(
+                    EvidenceSource(
+                        "entry_watch",
+                        "reports/h5/<unsafe>.txt",
+                        "2026-07-24",
+                    ),
+                ),
+                detail="NO RECEIPT H5 — expected daily <unsafe>",
+                expected_daily=True,
+                descriptive_only=False,
+            ),
+        ),
+        intraday=EvidenceRow(
+            family="INTRADAY",
+            membership="descriptive-only capture",
+            family_state="ok",
+            symbol_states=(EvidenceState("capture", "ok"),),
+            evaluation_session=None,
+            run_date="2026-07-24",
+            sources=(
+                EvidenceSource(
+                    "intraday",
+                    "reports/intraday_capture/2026-07-24/preclose.json",
+                    "2026-07-24",
+                ),
+            ),
+            detail="solver-derived, not rank-comparable",
+            expected_daily=False,
+            descriptive_only=True,
+        ),
+    )
 
 
 class PriceLadderTests(unittest.TestCase):
@@ -37,6 +89,28 @@ class PriceLadderTests(unittest.TestCase):
                                 strike=95.0, breakeven=95.0)
         tag_by_price = {r["price"]: r["tag"] for r in rows}
         self.assertEqual(tag_by_price[95.0], "strike, breakeven")
+
+
+class SourceRenderingTests(unittest.TestCase):
+    def test_structured_v2_source_renders_as_clickable_url(self):
+        url = "https://investor.example.com/events"
+        rendered = ad._sources_html(
+            [
+                {
+                    "url": url,
+                    "source_tier": "issuer_ir",
+                    "published_at": "2026-07-01T12:00:00-04:00",
+                    "publication_time_unknown_rationale": None,
+                    "retrieved_at_utc": "2026-07-27T11:45:00Z",
+                }
+            ]
+        )
+        self.assertIn(f'href="{url}"', rendered)
+        self.assertNotIn("source_tier", rendered)
+
+    def test_legacy_url_string_still_renders_as_link(self):
+        url = "https://example.com/legacy"
+        self.assertIn(f'href="{url}"', ad._sources_html([url]))
 
 
 class PayoffTests(unittest.TestCase):
@@ -321,6 +395,35 @@ class DataAsOfBannerTests(unittest.TestCase):
         html = ad.render(d)
         self.assertIn("<strong>Market close</strong> no cached data", html)
 
+    def test_stale_display_extra_has_separate_visible_date(self):
+        def section(symbol, as_of):
+            return {
+                "symbol": symbol,
+                "as_of": as_of,
+                "close": 100.0,
+                "iv_rank": 0.5,
+                "groups": [{
+                    "kind": "put",
+                    "title": "SELL A PUT?",
+                    "cards": [],
+                    "empty": "none this cycle",
+                }],
+            }
+
+        data = ad.assemble(
+            symbol_sections=[
+                section("MSFT", "2026-07-24"),
+                section("CLSK", "2026-07-01"),
+            ],
+            rv21_by_symbol={},
+        )
+
+        self.assertEqual(data["data_as_of"], "2026-07-24")
+        self.assertEqual(data["display_data_as_of"], "2026-07-01")
+        html = ad.render(data)
+        self.assertIn("<strong>Market close</strong> 2026-07-24", html)
+        self.assertIn("<strong>All display data</strong> 2026-07-01", html)
+
 
 class BbbRowsTests(unittest.TestCase):
     # rv21 = sqrt(12) * 0.10 -> monthly_move = 0.10 exactly.
@@ -573,6 +676,39 @@ class SelectTopPicksTests(unittest.TestCase):
             self.assertIn(key, p)
         self.assertIsInstance(p["card"], dict)
 
+    def test_perfect_display_extra_cannot_change_mechanical_picks_or_gaps(self):
+        import copy
+
+        baseline = self._data()
+        expected_picks = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_top_picks(baseline)
+        ]
+        expected_gaps = ad._top3_gap_reasons(baseline)
+        extra = copy.deepcopy(baseline["symbols"][0])
+        extra["symbol"] = "CLSK"
+        extra["display_only"] = True
+        for group in extra["groups"]:
+            for card in group["cards"]:
+                card["grades"] = {
+                    "fits_cap": "GREEN",
+                    "yield": "GREEN",
+                    "liquidity": "GREEN",
+                }
+                card["rank_leader"] = True
+                card["breakeven_move"] = 0.0
+                card["annualized_yield"] = 99.0
+        with_extra = copy.deepcopy(baseline)
+        with_extra["symbols"].insert(0, extra)
+
+        actual_picks = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_top_picks(with_extra)
+        ]
+        self.assertEqual(actual_picks, expected_picks)
+        self.assertEqual(ad._top3_gap_reasons(with_extra), expected_gaps)
+        self.assertNotIn("CLSK", {symbol for symbol, _, _ in actual_picks})
+
 
 class SelectQmTopPicksTests(unittest.TestCase):
     @staticmethod
@@ -725,6 +861,40 @@ class SelectQmTopPicksTests(unittest.TestCase):
         del context["symbols"]["AAA"]
         picks = ad.select_qm_top_picks(data, context)
         self.assertEqual(picks, [])
+
+    def test_perfect_display_extra_cannot_block_or_change_qm_picks(self):
+        import copy
+
+        data = SelectTopPicksTests()._data()
+        data["data_as_of"] = "2026-07-01"
+        context = self._context()
+        expected = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_qm_top_picks(data, context)
+        ]
+        extra = copy.deepcopy(data["symbols"][0])
+        extra["symbol"] = "NBIS"
+        extra["display_only"] = True
+        for group in extra["groups"]:
+            for card in group["cards"]:
+                card["grades"] = {
+                    "fits_cap": "GREEN",
+                    "yield": "GREEN",
+                    "liquidity": "GREEN",
+                }
+                card["rank_leader"] = True
+                card["breakeven_move"] = 0.0
+                card["annualized_yield"] = 99.0
+        data["symbols"].insert(0, extra)
+
+        enriched = ad.enrich_qm_context_with_candidates(data, context)
+        self.assertNotIn("NBIS", enriched["symbols"])
+        actual = [
+            (pick["symbol"], pick["lane"], pick["strike"])
+            for pick in ad.select_qm_top_picks(data, enriched)
+        ]
+        self.assertEqual(actual, expected)
+        self.assertNotIn("NBIS", {symbol for symbol, _, _ in actual})
 
 
 class StrategySectionRankingTests(unittest.TestCase):
@@ -940,6 +1110,113 @@ class BlockedSectionsTests(unittest.TestCase):
         self.assertEqual(ad._run_exit_code([]), 0)
         self.assertEqual(ad._run_exit_code([self._BLOCKED[0]]), 0)
         self.assertEqual(ad._run_exit_code(self._BLOCKED), 1)
+
+    def test_display_only_chip_is_pinned_on_success_and_blocked_rows(self):
+        section = {
+            "symbol": "AMAT",
+            "as_of": "2026-07-24",
+            "close": 200.0,
+            "iv_rank": 0.5,
+            "groups": [{
+                "kind": "put",
+                "title": "SELL A PUT?",
+                "cards": [],
+                "empty": "none this cycle",
+            }],
+        }
+        blocked = [{
+            "symbol": "CLSK",
+            "reason_code": "NO_CACHED_CHAINS",
+            "detail": "no chain parquet",
+            "last_known_date": None,
+            "unexpected": False,
+        }]
+        data = ad.assemble(
+            symbol_sections=[section],
+            rv21_by_symbol={},
+            blocked=blocked,
+        )
+
+        self.assertTrue(data["symbols"][0]["display_only"])
+        self.assertTrue(data["blocked"][0]["display_only"])
+        html = ad.render(data)
+        self.assertEqual(html.count(ad.DISPLAY_ONLY_LABEL), 2)
+
+
+class HypothesisEvidencePanelTests(unittest.TestCase):
+    def test_panel_escapes_all_values_and_keeps_intraday_separate(self):
+        data = ad.assemble(
+            symbol_sections=[_v2_section()],
+            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11},
+            hypothesis_evidence_by_symbol={"MSFT": _evidence("MSFT")},
+        )
+
+        html = ad.render(data)
+
+        self.assertIn('<details class="hypothesis-evidence">', html)
+        self.assertIn("Hypothesis evidence", html)
+        self.assertIn("Intraday context — descriptive only", html)
+        self.assertIn("H5&lt;script&gt;", html)
+        self.assertIn("tracked &lt;owner&gt;", html)
+        self.assertIn("entry&lt;label&gt;", html)
+        self.assertIn("WAIT &amp; WATCH", html)
+        self.assertIn("reports/h5/&lt;unsafe&gt;.txt", html)
+        self.assertNotIn("<script>", html)
+
+    def test_evidence_is_inside_a_blocked_symbol_row(self):
+        data = ad.assemble(
+            symbol_sections=[],
+            rv21_by_symbol={},
+            blocked=[{
+                "symbol": "CLSK",
+                "reason_code": "NO_CACHED_CHAINS",
+                "detail": "no chain parquet",
+                "last_known_date": None,
+                "unexpected": False,
+            }],
+            hypothesis_evidence_by_symbol={"CLSK": _evidence("CLSK")},
+        )
+
+        html = ad.render(data)
+        blocked_start = html.index('<div class="eyebrow">DATA BLOCKED</div>')
+        evidence_start = html.index(
+            '<details class="hypothesis-evidence">', blocked_start
+        )
+        blocked_end = html.index("</section>", blocked_start)
+        self.assertLess(evidence_start, blocked_end)
+
+    def test_evidence_cannot_change_top3_order_or_card_grades(self):
+        import json
+
+        baseline = ad.assemble(
+            symbol_sections=[_v2_section()],
+            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11},
+        )
+        evidenced = ad.assemble(
+            symbol_sections=[_v2_section()],
+            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11},
+            hypothesis_evidence_by_symbol={"MSFT": _evidence("MSFT")},
+        )
+
+        baseline_bytes = json.dumps(
+            ad.select_top_picks(baseline),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        evidenced_bytes = json.dumps(
+            ad.select_top_picks(evidenced),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        self.assertEqual(evidenced_bytes, baseline_bytes)
+        self.assertEqual(
+            [section["symbol"] for section in evidenced["symbols"]],
+            [section["symbol"] for section in baseline["symbols"]],
+        )
+        baseline_card = baseline["symbols"][0]["groups"][0]["cards"][0]
+        evidenced_card = evidenced["symbols"][0]["groups"][0]["cards"][0]
+        self.assertEqual(evidenced_card["grades"], baseline_card["grades"])
+        self.assertNotIn("hypothesis_evidence", evidenced_card)
 
 
 class LoadContextTests(unittest.TestCase):

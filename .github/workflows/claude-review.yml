@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
@@ -69,7 +69,7 @@ jobs:
 
       - name: Claude review
         if: steps.auth.outputs.enabled == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Sonnet keeps token/usage cost down vs the default; the review is

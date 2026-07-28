@@ -14,8 +14,8 @@ def _sync(fd: int) -> None:
         fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
 
 
-def atomic_parquet_write(frame, path: Path) -> None:
-    """Write a parquet beside the destination, then publish it atomically."""
+def stage_parquet_write(frame, path: Path) -> Path:
+    """Durably stage a parquet beside its eventual destination."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -26,12 +26,34 @@ def atomic_parquet_write(frame, path: Path) -> None:
             _sync(fd)
         finally:
             os.close(fd)
-        os.replace(temp, path)
-        dir_fd = os.open(path.parent, os.O_RDONLY)
+        return temp
+    except BaseException:
         try:
-            _sync(dir_fd)
-        finally:
-            os.close(dir_fd)
+            temp.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def publish_staged_file(staged: Path, path: Path) -> None:
+    """Atomically publish a previously fsynced file in the same directory."""
+    staged = Path(staged)
+    path = Path(path)
+    if staged.parent.resolve() != path.parent.resolve():
+        raise ValueError("staged file must be beside its destination")
+    os.replace(staged, path)
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        _sync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def atomic_parquet_write(frame, path: Path) -> None:
+    """Write a parquet beside the destination, then publish it atomically."""
+    temp = stage_parquet_write(frame, path)
+    try:
+        publish_staged_file(temp, path)
     except BaseException:
         try:
             temp.unlink()

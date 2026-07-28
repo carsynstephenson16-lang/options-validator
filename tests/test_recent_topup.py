@@ -1,17 +1,19 @@
 """tests/test_recent_topup.py -- offline TDD coverage for data/recent_topup.py.
 
 Pure functions only (no network): topup_days picks which recent trading days
-to fetch, latest_cached_date reads the on-disk chain cache. The blind-cache
-pull itself is orchestrator-only (like data/underlying_closes.fetch_underlying_eod)
-and is exercised live by the controlling session, never by tests.
+to fetch, and freshness/repair tests use isolated cache and ledger directories
+with provider calls forbidden.
 """
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 import pandas as pd
 
-from data import recent_topup
+from data import recent_topup, thetadata_adapter
+from research import facts
 
 
 def _row(strike, right, bid, ask, oi, iv, delta, *, expiration="2026-08-21"):
@@ -71,6 +73,250 @@ class LatestCachedDateTests(unittest.TestCase):
         self.assertIsNone(got)
 
 
+class LatestCompleteSessionTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.cache_dir = self.root / "chains"
+        self.cache_dir.mkdir()
+        self.facts_path = self.root / "ledger" / "facts.log"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _file(self, symbol, session, payload=b"chain"):
+        path = self.cache_dir / f"{symbol}_{session}.parquet"
+        path.write_bytes(payload)
+        return path
+
+    def _fact(self, symbol, session, path):
+        facts.append_fact(
+            f"BLIND_CACHE symbol={symbol} date={session} rows=1 "
+            f"sha256={hashlib.sha256(path.read_bytes()).hexdigest()} "
+            f"already_cached=false path={path}",
+            base_dir=self.facts_path.parent,
+        )
+
+    def test_latest_file_without_fact_is_not_current(self):
+        older = self._file("NVDA", "2026-07-23", b"older")
+        self._fact("NVDA", "2026-07-23", older)
+        self._file("NVDA", "2026-07-24", b"orphan")
+
+        self.assertEqual(
+            recent_topup.latest_complete_session(
+                ["NVDA"],
+                cache_dir=self.cache_dir,
+                facts_path=self.facts_path,
+            ),
+            "2026-07-23",
+        )
+
+    def test_one_hash_mismatch_prevents_complete_cohort(self):
+        nvda = self._file("NVDA", "2026-07-24", b"nvda")
+        pltr = self._file("PLTR", "2026-07-24", b"pltr")
+        self._fact("NVDA", "2026-07-24", nvda)
+        self._fact("PLTR", "2026-07-24", pltr)
+        pltr.write_bytes(b"tampered")
+
+        self.assertIsNone(
+            recent_topup.latest_complete_session(
+                ["NVDA", "PLTR"],
+                cache_dir=self.cache_dir,
+                facts_path=self.facts_path,
+            )
+        )
+
+    def test_requires_an_exact_common_session_not_minimum_of_latest_dates(self):
+        nvda_24 = self._file("NVDA", "2026-07-24", b"nvda-24")
+        pltr_23 = self._file("PLTR", "2026-07-23", b"pltr-23")
+        pltr_25 = self._file("PLTR", "2026-07-25", b"pltr-25")
+        self._fact("NVDA", "2026-07-24", nvda_24)
+        self._fact("PLTR", "2026-07-23", pltr_23)
+        self._fact("PLTR", "2026-07-25", pltr_25)
+
+        self.assertIsNone(
+            recent_topup.latest_complete_session(
+                ["NVDA", "PLTR"],
+                cache_dir=self.cache_dir,
+                facts_path=self.facts_path,
+            )
+        )
+
+    def test_cohort_preflight_reports_exact_orphan(self):
+        path = self._file("NVDA", "2026-07-24")
+        with self.assertRaisesRegex(RuntimeError, "NVDA@2026-07-24"):
+            recent_topup.verify_cohort_provenance(
+                ["NVDA"],
+                "2026-07-24",
+                cache_dir=self.cache_dir,
+                facts_path=self.facts_path,
+            )
+        self.assertTrue(path.exists())
+
+
+class RepairManifestTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.cache_dir = self.root / "chains"
+        self.ledger_dir = self.root / "ledger"
+        self.cache_dir.mkdir()
+        self._old_cache = thetadata_adapter.CACHE_DIR
+        self._old_guard = thetadata_adapter._require_cache_publisher
+        self._old_fetch = thetadata_adapter._fetch_merged_chain
+        thetadata_adapter.CACHE_DIR = self.cache_dir
+        thetadata_adapter._require_cache_publisher = lambda: None
+        thetadata_adapter._fetch_merged_chain = (
+            lambda *_: (_ for _ in ()).throw(
+                AssertionError("repair must never call provider")
+            )
+        )
+
+    def tearDown(self):
+        thetadata_adapter.CACHE_DIR = self._old_cache
+        thetadata_adapter._require_cache_publisher = self._old_guard
+        thetadata_adapter._fetch_merged_chain = self._old_fetch
+        self._tmp.cleanup()
+
+    def _manifest(self, *, sha_override=None):
+        session = "2026-07-24"
+        symbol = "NVDA"
+        frame = pd.DataFrame([_row(200, "C", 5.0, 5.2, 500, 0.3, 0.5)])
+        path = thetadata_adapter._cache_path(symbol, session)
+        frame.to_parquet(path, index=False)
+        sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+        manifest = {
+            "schema": "cache_recovery/v1",
+            "incident_id": "test",
+            "review": {"status": "approved_for_operational_recovery"},
+            "session": session,
+            "symbols": [symbol],
+            "source_evidence": "fixture",
+            "entries": [{
+                "symbol": symbol,
+                "path": str(path),
+                "rows": 1,
+                "columns": list(frame.columns),
+                "sha256": sha_override or sha256,
+            }],
+        }
+        manifest_path = self.root / "repair.json"
+        manifest_path.write_text(json.dumps(manifest))
+        return manifest_path, path, sha256
+
+    def test_accepts_the_reviewed_operational_incident_manifest_shape(self):
+        manifest, cache_path, sha256 = self._manifest()
+        payload = json.loads(manifest.read_text())
+        payload["evaluation_session"] = payload.pop("session")
+        payload["files"] = payload.pop("entries")
+        payload.pop("symbols")
+        payload["parquet_schema"] = {
+            "columns": payload["files"][0]["columns"]
+        }
+        payload["files"][0]["columns"] = len(payload["files"][0]["columns"])
+        payload["files"][0]["size_bytes"] = cache_path.stat().st_size
+        payload["files"][0]["mtime_ns"] = cache_path.stat().st_mtime_ns
+        manifest.write_text(json.dumps(payload))
+
+        result = recent_topup.repair_from_manifest(
+            manifest,
+            symbols=["NVDA"],
+            as_of="2026-07-24",
+            ledger_dir=str(self.ledger_dir),
+        )
+
+        self.assertEqual(
+            result["results"][0]["attestation_status"],
+            "REPAIRED_ATTESTATION",
+        )
+        self.assertEqual(result["results"][0]["sha256"], sha256)
+        self.assertTrue(cache_path.exists())
+
+    def test_unreviewed_manifest_is_refused_before_any_fact(self):
+        manifest, _cache_path, _sha256 = self._manifest()
+        payload = json.loads(manifest.read_text())
+        payload.pop("review")
+        manifest.write_text(json.dumps(payload))
+
+        with self.assertRaisesRegex(ValueError, "reviewed and approved"):
+            recent_topup.repair_from_manifest(
+                manifest,
+                symbols=["NVDA"],
+                as_of="2026-07-24",
+                ledger_dir=str(self.ledger_dir),
+            )
+
+        self.assertEqual(facts.read_facts(self.ledger_dir), [])
+
+    def test_approved_orphan_repair_is_network_free_and_idempotent(self):
+        manifest, cache_path, sha256 = self._manifest()
+        before_mtime = cache_path.stat().st_mtime_ns
+
+        first = recent_topup.repair_from_manifest(
+            manifest,
+            symbols=["NVDA"],
+            as_of="2026-07-24",
+            ledger_dir=str(self.ledger_dir),
+        )
+        second = recent_topup.repair_from_manifest(
+            manifest,
+            symbols=["NVDA"],
+            as_of="2026-07-24",
+            ledger_dir=str(self.ledger_dir),
+        )
+
+        self.assertEqual(
+            first["results"][0]["attestation_status"],
+            "REPAIRED_ATTESTATION",
+        )
+        self.assertEqual(
+            second["results"][0]["attestation_status"], "VERIFIED_NOOP"
+        )
+        self.assertEqual(cache_path.stat().st_mtime_ns, before_mtime)
+        self.assertEqual(first["results"][0]["sha256"], sha256)
+        self.assertEqual(len(facts.read_facts(self.ledger_dir)), 1)
+
+    def test_manifest_hash_mismatch_refuses_before_any_fact(self):
+        manifest, cache_path, _sha256 = self._manifest(sha_override="0" * 64)
+        before_mtime = cache_path.stat().st_mtime_ns
+
+        with self.assertRaisesRegex(RuntimeError, "manifest sha256 mismatch"):
+            recent_topup.repair_from_manifest(
+                manifest,
+                symbols=["NVDA"],
+                as_of="2026-07-24",
+                ledger_dir=str(self.ledger_dir),
+            )
+
+        self.assertEqual(cache_path.stat().st_mtime_ns, before_mtime)
+        self.assertEqual(facts.read_facts(self.ledger_dir), [])
+
+    def test_normal_topup_refuses_unapproved_orphan_instead_of_skipping(self):
+        _manifest, _orphan, _sha256 = self._manifest()
+        frame = pd.DataFrame([_row(200, "C", 5.0, 5.2, 500, 0.3, 0.5)])
+        older = thetadata_adapter._cache_path("NVDA", "2026-07-23")
+        frame.to_parquet(older, index=False)
+        facts.append_fact(
+            "BLIND_CACHE symbol=NVDA date=2026-07-23 rows=1 "
+            f"sha256={hashlib.sha256(older.read_bytes()).hexdigest()} "
+            f"already_cached=false path={older}",
+            base_dir=self.ledger_dir,
+        )
+
+        with self.assertRaisesRegex(
+            thetadata_adapter.CacheProvenanceError, "orphaned cache file"
+        ):
+            recent_topup.run_topup(
+                symbols=["NVDA"],
+                today="2026-07-27",
+                ledger_dir=str(self.ledger_dir),
+                do_audit=False,
+                trading_days_fn=lambda _start, _end: [
+                    "2026-07-23", "2026-07-24", "2026-07-27"
+                ],
+            )
+
+
 class ScopeTests(unittest.TestCase):
     def test_core_scope_preserves_existing_four_name_default(self):
         self.assertEqual(
@@ -88,6 +334,12 @@ class ScopeTests(unittest.TestCase):
                 "CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA",
                 "AMD", "AVGO", "IREN", "USAR", "ET", "VST", "CEG", "MSFT", "AMZN",
             ],
+        )
+
+    def test_display_extra_scope_is_explicit_and_excludes_h7_names(self):
+        self.assertEqual(
+            recent_topup.scope_symbols("display-extra"),
+            ["NBIS", "AMAT", "CLSK"],
         )
 
     def test_unknown_scope_fails_closed(self):

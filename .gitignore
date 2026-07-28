@@ -45,6 +45,9 @@ results/*
 # disposable intermediates (WAT convention)
 .tmp/
 
+# scheduled research-refresh kill-switch (touch to disable the LaunchAgent run)
+.research-refresh-off
+
 # superpowers brainstorming companion scratch (mockups, not deliverables)
 .superpowers/
 node_modules/

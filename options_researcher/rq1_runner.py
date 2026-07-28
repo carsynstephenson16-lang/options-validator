@@ -418,8 +418,43 @@ def _finite_number(value: object) -> float | None:
     return number if math.isfinite(number) else None
 
 
-def _default_rows() -> list[dict[str, Any]]:
-    """Reconstruct board scores from cached chains without network access."""
+def _spent_report_symbols(
+    report_path: Path = DEFAULT_REPORT_PATH,
+) -> tuple[str, ...]:
+    """Read the immutable symbol scope recorded by the spent RQ1 report."""
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RQ1Error(f"spent RQ1 report is unreadable: {report_path}") from exc
+    if (
+        not isinstance(report, dict)
+        or report.get("schema") != "rq1_rank_quality_v1"
+        or report.get("hypothesis_id") != "RQ1"
+        or report.get("registration_seq") != REGISTRATION_SEQ
+        or not isinstance(report.get("results"), dict)
+    ):
+        raise RQ1Error(
+            f"spent RQ1 report failed scope provenance validation: {report_path}"
+        )
+    symbols = report["results"].get("symbols")
+    if not isinstance(symbols, list) or not symbols:
+        raise RQ1Error(f"spent RQ1 report has no recorded symbols: {report_path}")
+    names: list[str] = []
+    for symbol in symbols:
+        if not isinstance(symbol, str) or not symbol or symbol != symbol.upper():
+            raise RQ1Error(
+                f"spent RQ1 report has an invalid recorded symbol: {symbol!r}"
+            )
+        names.append(symbol)
+    if len(names) != len(set(names)):
+        raise RQ1Error(f"spent RQ1 report has duplicate symbols: {report_path}")
+    return tuple(names)
+
+
+def _default_rows(
+    *, report_path: Path = DEFAULT_REPORT_PATH
+) -> list[dict[str, Any]]:
+    """Reconstruct only the spent report's board scope from cached chains."""
     import glob
 
     from data.underlying_closes import load_closes, load_closes_adjusted
@@ -435,7 +470,7 @@ def _default_rows() -> list[dict[str, Any]]:
 
     rows: list[dict[str, Any]] = []
     skipped_days: Counter[str] = Counter()
-    for symbol in config.ATTRACTIVENESS_UNIVERSE:
+    for symbol in _spent_report_symbols(report_path):
         files = {
             Path(path).stem.rsplit("_", 1)[-1]: Path(path)
             for path in glob.glob(f".cache/chains/{symbol}_*.parquet")
