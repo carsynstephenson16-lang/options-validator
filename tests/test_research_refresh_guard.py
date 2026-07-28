@@ -274,14 +274,16 @@ class ProducerPlistTest(unittest.TestCase):
             root / "tools/research_refresh.sh"
         ).read_text(encoding="utf-8")
 
-        duplicate_gate = script.index(
-            "SKIP: verified final research for ${AS_OF} already binds"
-        )
+        reconcile_call = script.index('verify_reconcile_final "$RECOVERY_META"')
         llm_invocation = script.index('"$CLAUDE" -p "/research-refresh"')
-        self.assertLess(duplicate_gate, llm_invocation)
+        self.assertLess(reconcile_call, llm_invocation)
         self.assertIn(
-            '--verify --bundle-only --ritual-root "$RITUAL_ROOT"',
+            "--reconcile-published-attempt",
             script[:llm_invocation],
+        )
+        self.assertIn(
+            'write_slot_receipt "$RECOVERY_META" || exit 1',
+            script[reconcile_call:llm_invocation],
         )
 
 
