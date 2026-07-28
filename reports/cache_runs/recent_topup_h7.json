@@ -1,0 +1,30 @@
+{
+  "counts": {
+    "fetched": 15,
+    "gaps": 0,
+    "repaired": 0,
+    "skipped_cached": 0,
+    "verified": 0
+  },
+  "retry_limit": 5,
+  "schema": "h7-cache-task-manifest/v1",
+  "status": "COMPLETE",
+  "tasks": {
+    "AMD@2026-07-27": "FETCHED_ATTESTED",
+    "AMZN@2026-07-27": "FETCHED_ATTESTED",
+    "AVGO@2026-07-27": "FETCHED_ATTESTED",
+    "CEG@2026-07-27": "FETCHED_ATTESTED",
+    "CRWV@2026-07-27": "FETCHED_ATTESTED",
+    "ET@2026-07-27": "FETCHED_ATTESTED",
+    "IREN@2026-07-27": "FETCHED_ATTESTED",
+    "MSFT@2026-07-27": "FETCHED_ATTESTED",
+    "NOW@2026-07-27": "FETCHED_ATTESTED",
+    "NVDA@2026-07-27": "FETCHED_ATTESTED",
+    "PLTR@2026-07-27": "FETCHED_ATTESTED",
+    "SMCI@2026-07-27": "FETCHED_ATTESTED",
+    "TEM@2026-07-27": "FETCHED_ATTESTED",
+    "USAR@2026-07-27": "FETCHED_ATTESTED",
+    "VST@2026-07-27": "FETCHED_ATTESTED"
+  },
+  "workers": 4
+}
