@@ -18,9 +18,15 @@ files, or manifests. Do not recommend trades or change a repository verdict.
    `reports/attractiveness_research/YYYY-MM-DD/manifest.json`
 
    The filename date is `market_as_of_date`, not the research-generation date.
-4. Require `schema_version == "attractiveness_research/v2"`. Read the exact
-   `run_id`, `outputs.context.path`, `outputs.context.sha256`,
-   `outputs.markdown.path`, and the UTC/ET generation timestamps.
+   Ignore `manifest.pending.json`: it is deliberately untrusted and must never
+   be selected for criticism.
+4. Require `schema_version == "attractiveness_research/v2"` and
+   `publication_status == "FINAL"`. Require a dashboard verification block.
+   Read the exact `run_id`, `outputs.context.path`, `outputs.context.sha256`,
+   `outputs.markdown.path`, distinct UTC/ET research start and finish
+   timestamps, the `uv_lock_sha256`, and every manifest source's URL, tier,
+   publication timestamp or explicit unknown-time rationale, and UTC retrieval
+   timestamp.
 5. Re-hash the context and Markdown. If either differs from the manifest,
    return `HARD_CONTRADICTION` for broken lineage and stop. Do not audit
    uncommitted or mismatched bytes as if they were trusted input.

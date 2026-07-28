@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -26,8 +27,24 @@ NEW_YORK: Final = ZoneInfo("America/New_York")
 SUCCESSFUL_RITUAL_STATUSES: Final = frozenset({"CAPTURED", "NO_SIGNAL"})
 RITUAL_HYPOTHESES: Final = ("H5", "H6", "H7", "H8", "H10")
 PRIMARY_SOURCE_TIERS: Final = frozenset({"issuer_ir", "sec_filing", "regulator", "market_operator"})
+SOURCE_TIERS: Final = PRIMARY_SOURCE_TIERS | frozenset({"secondary"})
 PJM_SYMBOLS: Final = ("VST", "CEG")
 PJM_CATALYST_ID: Final = "PJM_BRA_NEXT"
+DASHBOARD_STALE_MARKERS: Final = (
+    "annotations are from",
+    "do not match any card",
+    "Research evidence incomplete",
+    "Research evidence stale",
+)
+SOURCE_FIELDS: Final = frozenset(
+    {
+        "url",
+        "source_tier",
+        "published_at",
+        "publication_time_unknown_rationale",
+        "retrieved_at_utc",
+    }
+)
 BANNED_HOST_FRAGMENTS: Final = (
     "reddit.",
     "youtube.",
@@ -119,6 +136,30 @@ def _parse_timestamp(value: object, *, where: str) -> datetime:
     return parsed
 
 
+def _utc_timestamp(value: object, *, where: str) -> datetime:
+    parsed = _parse_timestamp(value, where=where)
+    if parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+        raise ResearchArtifactError(f"{where}: timestamp must be UTC")
+    return parsed.astimezone(timezone.utc)
+
+
+def _time_fields(started_at: datetime, finished_at: datetime) -> dict[str, str]:
+    if started_at.tzinfo is None or started_at.utcoffset() is None:
+        raise ResearchArtifactError("started_at must be timezone-aware")
+    if finished_at.tzinfo is None or finished_at.utcoffset() is None:
+        raise ResearchArtifactError("finished_at must be timezone-aware")
+    started_utc = started_at.astimezone(timezone.utc)
+    finished_utc = finished_at.astimezone(timezone.utc)
+    if finished_utc <= started_utc:
+        raise ResearchArtifactError("research finish must be after research start")
+    return {
+        "research_started_at_utc": started_utc.isoformat().replace("+00:00", "Z"),
+        "research_started_at_et": started_at.astimezone(NEW_YORK).isoformat(),
+        "research_finished_at_utc": finished_utc.isoformat().replace("+00:00", "Z"),
+        "research_finished_at_et": finished_at.astimezone(NEW_YORK).isoformat(),
+    }
+
+
 def _host(url: str) -> str:
     return (urlparse(url).hostname or "").lower()
 
@@ -133,6 +174,81 @@ def validate_source_url(value: object, *, where: str) -> str:
     if any(fragment in host for fragment in BANNED_HOST_FRAGMENTS):
         raise ResearchArtifactError(f"{where}: banned source host {host}")
     return value
+
+
+def _clean_sources(
+    owner: str,
+    value: object,
+    *,
+    started_at_utc: datetime,
+    finished_at_utc: datetime,
+) -> list[dict[str, object]]:
+    if not isinstance(value, list) or not value:
+        raise ResearchArtifactError(f"{owner}.sources: at least one source is required")
+    cleaned: list[dict[str, object]] = []
+    urls: set[str] = set()
+    for index, raw in enumerate(value):
+        where = f"{owner}.sources[{index}]"
+        if not isinstance(raw, Mapping):
+            raise ResearchArtifactError(f"{where}: expected source metadata object")
+        unexpected = sorted(str(key) for key in raw if key not in SOURCE_FIELDS)
+        if unexpected:
+            raise ResearchArtifactError(f"{where}: unexpected field {unexpected[0]}")
+        url = validate_source_url(raw.get("url"), where=f"{where}.url")
+        if url in urls:
+            raise ResearchArtifactError(f"{where}: duplicate URL")
+        urls.add(url)
+        source_tier = raw.get("source_tier")
+        if source_tier not in SOURCE_TIERS:
+            raise ResearchArtifactError(f"{where}.source_tier: invalid value")
+        published_at = raw.get("published_at")
+        unknown_rationale = raw.get("publication_time_unknown_rationale")
+        normalized_published: str | None
+        if published_at is None:
+            if not isinstance(unknown_rationale, str) or not unknown_rationale.strip():
+                raise ResearchArtifactError(
+                    f"{where}: unknown publication time requires a rationale"
+                )
+            normalized_published = None
+            normalized_rationale: str | None = unknown_rationale.strip()
+        else:
+            published = _parse_timestamp(published_at, where=f"{where}.published_at")
+            normalized_published = published.isoformat()
+            if unknown_rationale is not None:
+                raise ResearchArtifactError(
+                    f"{where}: known publication time cannot carry an unknown rationale"
+                )
+            normalized_rationale = None
+        retrieved = _utc_timestamp(raw.get("retrieved_at_utc"), where=f"{where}.retrieved_at_utc")
+        if not started_at_utc <= retrieved <= finished_at_utc:
+            raise ResearchArtifactError(
+                f"{where}.retrieved_at_utc: outside research start/finish window"
+            )
+        if published_at is not None:
+            published = _parse_timestamp(published_at, where=f"{where}.published_at")
+            if published.astimezone(timezone.utc) > retrieved:
+                raise ResearchArtifactError(f"{where}.published_at: later than retrieval timestamp")
+        cleaned.append(
+            {
+                "url": url,
+                "source_tier": source_tier,
+                "published_at": normalized_published,
+                "publication_time_unknown_rationale": normalized_rationale,
+                "retrieved_at_utc": retrieved.isoformat().replace("+00:00", "Z"),
+            }
+        )
+    return cleaned
+
+
+def _source_index(sources: object, *, where: str) -> dict[str, Mapping[str, object]]:
+    if not isinstance(sources, list):
+        raise ResearchArtifactError(f"{where}: sources are missing")
+    indexed: dict[str, Mapping[str, object]] = {}
+    for index, source in enumerate(sources):
+        if not isinstance(source, Mapping) or not isinstance(source.get("url"), str):
+            raise ResearchArtifactError(f"{where}[{index}]: invalid source metadata")
+        indexed[str(source["url"])] = source
+    return indexed
 
 
 def _safe_relative_path(value: str, *, where: str) -> Path:
@@ -342,7 +458,13 @@ def _clean_claims(symbol: str, claims: object) -> list[dict[str, object]]:
     return cleaned
 
 
-def _clean_blurb(symbol: str, value: object) -> dict[str, object]:
+def _clean_blurb(
+    symbol: str,
+    value: object,
+    *,
+    started_at_utc: datetime,
+    finished_at_utc: datetime,
+) -> dict[str, object]:
     if not isinstance(value, Mapping):
         raise ResearchArtifactError(f"{symbol}: symbol research must be an object")
     fields = ("news_summary", "sentiment", "catalysts", "move_thesis", "sources")
@@ -355,13 +477,14 @@ def _clean_blurb(symbol: str, value: object) -> dict[str, object]:
         raise ResearchArtifactError(f"{symbol}.sentiment: invalid value")
     if not isinstance(blurb["move_thesis"], str) or not blurb["move_thesis"].strip():
         raise ResearchArtifactError(f"{symbol}.move_thesis: non-empty text is required")
-    sources = blurb.get("sources")
-    if not isinstance(sources, list) or not sources:
-        raise ResearchArtifactError(f"{symbol}.sources: at least one source is required")
-    source_set = {
-        validate_source_url(source, where=f"{symbol}.sources[{index}]")
-        for index, source in enumerate(sources)
-    }
+    sources = _clean_sources(
+        symbol,
+        blurb.get("sources"),
+        started_at_utc=started_at_utc,
+        finished_at_utc=finished_at_utc,
+    )
+    blurb["sources"] = sources
+    source_index = _source_index(sources, where=f"{symbol}.sources")
     catalysts = blurb.get("catalysts")
     if not isinstance(catalysts, list):
         raise ResearchArtifactError(f"{symbol}.catalysts: expected list")
@@ -371,7 +494,7 @@ def _clean_blurb(symbol: str, value: object) -> dict[str, object]:
         source = validate_source_url(
             catalyst.get("source"), where=f"{symbol}.catalysts[{index}].source"
         )
-        if source not in source_set:
+        if source not in source_index:
             raise ResearchArtifactError(
                 f"{symbol}.catalysts[{index}]: source is absent from symbol sources"
             )
@@ -385,6 +508,10 @@ def _clean_blurb(symbol: str, value: object) -> dict[str, object]:
             )
         if confirmed:
             _require_date(catalyst_date, where=f"{symbol}.catalysts[{index}].date")
+            if source_index[source].get("source_tier") not in PRIMARY_SOURCE_TIERS:
+                raise ResearchArtifactError(
+                    f"{symbol}.catalysts[{index}]: confirmed catalyst requires primary source"
+                )
         elif catalyst_date is not None:
             _require_date(catalyst_date, where=f"{symbol}.catalysts[{index}].date")
     return blurb
@@ -411,6 +538,11 @@ def _validate_pjm(symbol: str, blurb: Mapping[str, object]) -> None:
         raise ResearchArtifactError(
             f"{symbol}.{PJM_CATALYST_ID}: source must be an official PJM URL"
         )
+    sources = _source_index(blurb.get("sources"), where=f"{symbol}.sources")
+    if sources[source].get("source_tier") != "market_operator":
+        raise ResearchArtifactError(
+            f"{symbol}.{PJM_CATALYST_ID}: source_tier must be market_operator"
+        )
 
 
 def build_context(
@@ -419,19 +551,23 @@ def build_context(
     candidate_ids: Sequence[str],
     pinned_symbols: Sequence[str],
     inputs: Mapping[str, object],
-    generated_at: datetime,
+    started_at: datetime,
+    finished_at: datetime,
     run_id: str,
     ritual_binding: RitualBinding,
     input_packet_sha256: Mapping[str, str],
+    uv_lock_sha256: str,
 ) -> dict[str, object]:
     """Build a fully covered v2 context without changing candidate membership."""
     market_as_of = _require_date(as_of, where="market_as_of_date")
-    if generated_at.tzinfo is None or generated_at.utcoffset() is None:
-        raise ResearchArtifactError("generated_at must be timezone-aware")
-    generated_utc = generated_at.astimezone(timezone.utc)
-    generated_et = generated_at.astimezone(NEW_YORK)
-    generated_utc_text = generated_utc.isoformat().replace("+00:00", "Z")
-    generated_et_text = generated_et.isoformat()
+    time_fields = _time_fields(started_at, finished_at)
+    started_utc = _utc_timestamp(
+        time_fields["research_started_at_utc"], where="research_started_at_utc"
+    )
+    finished_utc = _utc_timestamp(
+        time_fields["research_finished_at_utc"], where="research_finished_at_utc"
+    )
+    finished_utc_text = time_fields["research_finished_at_utc"]
 
     market_packet = inputs.get("market")
     symbol_packets = inputs.get("symbol_research")
@@ -449,7 +585,7 @@ def build_context(
                 f"candidate coverage missing researcher packet for {symbol}"
             )
         annotations[candidate_id] = {
-            "research_as_of_utc": generated_utc_text,
+            "research_as_of_utc": finished_utc_text,
             "market_as_of_date": market_as_of,
             "claims": _clean_claims(symbol, packet.get("claims")),
         }
@@ -465,13 +601,23 @@ def build_context(
     for symbol, packet in symbol_packets.items():
         if not isinstance(symbol, str):
             raise ResearchArtifactError("symbol research key must be a string")
-        symbols[symbol] = _clean_blurb(symbol, packet)
+        symbols[symbol] = _clean_blurb(
+            symbol,
+            packet,
+            started_at_utc=started_utc,
+            finished_at_utc=finished_utc,
+        )
     for symbol, packet in (market_symbols or {}).items():
         if not isinstance(symbol, str):
             raise ResearchArtifactError("market symbol key must be a string")
         if symbol in symbols:
             raise ResearchArtifactError(f"{symbol}: duplicate blurb in market and symbol packet")
-        symbols[symbol] = _clean_blurb(symbol, packet)
+        symbols[symbol] = _clean_blurb(
+            symbol,
+            packet,
+            started_at_utc=started_utc,
+            finished_at_utc=finished_utc,
+        )
 
     required = required_symbols(candidate_ids, pinned_symbols)
     missing = sorted(set(required) - set(symbols))
@@ -485,13 +631,12 @@ def build_context(
     market = market_packet.get("market")
     if not isinstance(market, Mapping):
         raise ResearchArtifactError("market.market: expected object")
-    market_sources = market_packet.get("market_sources")
-    if not isinstance(market_sources, list) or not market_sources:
-        raise ResearchArtifactError("market_sources: at least one source is required")
-    cleaned_market_sources = [
-        validate_source_url(source, where=f"market_sources[{index}]")
-        for index, source in enumerate(market_sources)
-    ]
+    cleaned_market_sources = _clean_sources(
+        "market",
+        market_packet.get("market_sources"),
+        started_at_utc=started_utc,
+        finished_at_utc=finished_utc,
+    )
     if not isinstance(market.get("summary"), str) or not market["summary"].strip():
         raise ResearchArtifactError("market.summary: non-empty text is required")
     if market.get("regime") not in {"risk_on", "risk_off", "mixed"}:
@@ -504,9 +649,7 @@ def build_context(
 
     for candidate_id in candidate_ids:
         symbol = candidate_id.split(":", 1)[0]
-        symbol_source_values = symbols[symbol].get("sources")
-        assert isinstance(symbol_source_values, list)
-        symbol_sources = set(symbol_source_values)
+        symbol_sources = _source_index(symbols[symbol].get("sources"), where=f"{symbol}.sources")
         claims = annotations[candidate_id]["claims"]
         assert isinstance(claims, list)
         for index, claim in enumerate(claims):
@@ -515,15 +658,20 @@ def build_context(
                 raise ResearchArtifactError(
                     f"{symbol}.claims[{index}]: source is absent from symbol sources"
                 )
+            if source_url is not None and (
+                claim.get("source_tier") != symbol_sources[str(source_url)].get("source_tier")
+            ):
+                raise ResearchArtifactError(
+                    f"{symbol}.claims[{index}]: source_tier differs from source metadata"
+                )
 
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
         "as_of": market_as_of,
         "market_as_of_date": market_as_of,
-        "research_generated_at_utc": generated_utc_text,
-        "research_generated_at_et": generated_et_text,
-        "researched_on": generated_et.date().isoformat(),
+        **time_fields,
+        "researched_on": finished_at.astimezone(NEW_YORK).date().isoformat(),
         "provenance": (
             "LLM-asserted research; source and lineage validated, factual truth "
             "requires independent critic review"
@@ -533,6 +681,7 @@ def build_context(
             "ritual_run_status_sha256": ritual_binding.run_status_sha256,
             "ritual_receipt_sha256": ritual_binding.receipt_sha256,
             "input_packet_sha256": dict(sorted(input_packet_sha256.items())),
+            "uv_lock_sha256": uv_lock_sha256,
         },
         "candidate_ids": list(candidate_ids),
         "pinned_symbols": list(pinned_symbols),
@@ -564,21 +713,33 @@ def validate_context(
     if context.get("required_symbols") != expected_required:
         raise ResearchArtifactError("context required_symbols do not match the live board")
 
-    generated_utc = _parse_timestamp(
-        context.get("research_generated_at_utc"), where="research_generated_at_utc"
+    started_utc = _utc_timestamp(
+        context.get("research_started_at_utc"), where="research_started_at_utc"
     )
-    generated_et = _parse_timestamp(
-        context.get("research_generated_at_et"), where="research_generated_at_et"
+    started_et = _parse_timestamp(
+        context.get("research_started_at_et"), where="research_started_at_et"
     )
-    if generated_utc.utcoffset() != timezone.utc.utcoffset(generated_utc):
-        raise ResearchArtifactError("research_generated_at_utc is not UTC")
-    if generated_utc.astimezone(timezone.utc) != generated_et.astimezone(timezone.utc):
-        raise ResearchArtifactError("UTC and ET research timestamps refer to different instants")
-    if generated_et.utcoffset() != generated_et.astimezone(NEW_YORK).utcoffset():
-        raise ResearchArtifactError(
-            "research_generated_at_et does not use the America/New_York offset"
-        )
-    if generated_et.astimezone(NEW_YORK).date().isoformat() != context.get("researched_on"):
+    finished_utc = _utc_timestamp(
+        context.get("research_finished_at_utc"), where="research_finished_at_utc"
+    )
+    finished_et = _parse_timestamp(
+        context.get("research_finished_at_et"), where="research_finished_at_et"
+    )
+    for label, utc_value, et_value in (
+        ("start", started_utc, started_et),
+        ("finish", finished_utc, finished_et),
+    ):
+        if utc_value.astimezone(timezone.utc) != et_value.astimezone(timezone.utc):
+            raise ResearchArtifactError(
+                f"UTC and ET research {label} timestamps refer to different instants"
+            )
+        if et_value.utcoffset() != et_value.astimezone(NEW_YORK).utcoffset():
+            raise ResearchArtifactError(
+                f"research {label} ET timestamp does not use America/New_York offset"
+            )
+    if finished_utc <= started_utc:
+        raise ResearchArtifactError("research finish must be after research start")
+    if finished_et.astimezone(NEW_YORK).date().isoformat() != context.get("researched_on"):
         raise ResearchArtifactError("researched_on does not match the America/New_York date")
 
     annotations = context.get("annotations")
@@ -598,7 +759,7 @@ def validate_context(
             annotation.get("research_as_of_utc"),
             where=f"{candidate_id}.research_as_of_utc",
         )
-        if timestamp.astimezone(timezone.utc) != generated_utc.astimezone(timezone.utc):
+        if timestamp.astimezone(timezone.utc) != finished_utc:
             raise ResearchArtifactError(
                 f"{candidate_id}: annotation timestamp differs from run timestamp"
             )
@@ -619,15 +780,58 @@ def validate_context(
     if missing:
         raise ResearchArtifactError("context symbol coverage missing: " + ", ".join(missing))
     for symbol in expected_required:
-        blurb = _clean_blurb(symbol, symbols[symbol])
+        blurb = _clean_blurb(
+            symbol,
+            symbols[symbol],
+            started_at_utc=started_utc,
+            finished_at_utc=finished_utc,
+        )
+        source_index = _source_index(blurb.get("sources"), where=f"{symbol}.sources")
+        for candidate_id, annotation in annotations.items():
+            if not str(candidate_id).startswith(f"{symbol}:"):
+                continue
+            assert isinstance(annotation, Mapping)
+            claims = annotation.get("claims")
+            assert isinstance(claims, list)
+            for index, claim in enumerate(claims):
+                assert isinstance(claim, Mapping)
+                source_url = claim.get("source_url")
+                if source_url is None:
+                    continue
+                if source_url not in source_index:
+                    raise ResearchArtifactError(
+                        f"{symbol}.claims[{index}]: source metadata missing"
+                    )
+                if claim.get("source_tier") != source_index[str(source_url)].get("source_tier"):
+                    raise ResearchArtifactError(
+                        f"{symbol}.claims[{index}]: source_tier metadata mismatch"
+                    )
         if symbol in PJM_SYMBOLS:
             _validate_pjm(symbol, blurb)
+    _clean_sources(
+        "market",
+        context.get("market_sources"),
+        started_at_utc=started_utc,
+        finished_at_utc=finished_utc,
+    )
 
 
 def _markdown_text(value: object) -> str:
     if value is None:
         return "unknown"
     return str(value).replace("\n", " ").replace("|", "\\|")
+
+
+def _source_markdown(source: object) -> str:
+    assert isinstance(source, Mapping)
+    publication = source.get("published_at")
+    if publication is None:
+        publication = "unknown: " + str(source.get("publication_time_unknown_rationale"))
+    return (
+        f"{source.get('url')} "
+        f"(tier={source.get('source_tier')}; published_at={publication}; "
+        f"retrieved_at_utc={source.get('retrieved_at_utc')})"
+    )
 
 
 def render_markdown(context: Mapping[str, object]) -> str:
@@ -638,8 +842,10 @@ def render_markdown(context: Mapping[str, object]) -> str:
         "",
         f"- Schema: `{context['schema_version']}`",
         f"- Run ID: `{context['run_id']}`",
-        f"- Research generated (ET): `{context['research_generated_at_et']}`",
-        f"- Research generated (UTC): `{context['research_generated_at_utc']}`",
+        f"- Research started (ET): `{context['research_started_at_et']}`",
+        f"- Research started (UTC): `{context['research_started_at_utc']}`",
+        f"- Research finished (ET): `{context['research_finished_at_et']}`",
+        f"- Research finished (UTC): `{context['research_finished_at_utc']}`",
         "- Advisory only: this report cannot change candidate membership, ranking, or a trade verdict.",
         "",
         "## Candidate identity",
@@ -668,7 +874,7 @@ def render_markdown(context: Mapping[str, object]) -> str:
     market_sources = context["market_sources"]
     assert isinstance(market_sources, list)
     for source in market_sources:
-        lines.append(f"- Source: {source}")
+        lines.append(f"- Source: {_source_markdown(source)}")
 
     symbols = context["symbols"]
     assert isinstance(symbols, Mapping)
@@ -707,7 +913,7 @@ def render_markdown(context: Mapping[str, object]) -> str:
         sources = blurb.get("sources")
         assert isinstance(sources, list)
         for source in sources:
-            lines.append(f"- {source}")
+            lines.append(f"- {_source_markdown(source)}")
 
     annotations = context["annotations"]
     assert isinstance(annotations, Mapping)
@@ -737,6 +943,50 @@ def render_markdown(context: Mapping[str, object]) -> str:
     return "\n".join(lines)
 
 
+def collect_manifest_sources(context: Mapping[str, object]) -> list[dict[str, object]]:
+    """Return one deterministic manifest row per URL with every usage scope."""
+    collected: dict[str, dict[str, object]] = {}
+
+    def add(scope: str, source: object) -> None:
+        if not isinstance(source, Mapping) or not isinstance(source.get("url"), str):
+            raise ResearchArtifactError(f"{scope}: invalid source metadata")
+        url = str(source["url"])
+        metadata = {field: source.get(field) for field in sorted(SOURCE_FIELDS)}
+        prior = collected.get(url)
+        if prior is None:
+            collected[url] = {**metadata, "used_by": [scope]}
+            return
+        prior_metadata = {field: prior.get(field) for field in sorted(SOURCE_FIELDS)}
+        if prior_metadata != metadata:
+            raise ResearchArtifactError(f"{url}: inconsistent source metadata across packets")
+        used_by = prior.get("used_by")
+        assert isinstance(used_by, list)
+        if scope not in used_by:
+            used_by.append(scope)
+            used_by.sort()
+
+    market_sources = context.get("market_sources")
+    if not isinstance(market_sources, list):
+        raise ResearchArtifactError("market sources are missing")
+    for source in market_sources:
+        add("market", source)
+    symbols = context.get("symbols")
+    if not isinstance(symbols, Mapping):
+        raise ResearchArtifactError("symbol sources are missing")
+    for symbol in sorted(symbols):
+        blurb = symbols[symbol]
+        if not isinstance(blurb, Mapping) or not isinstance(blurb.get("sources"), list):
+            raise ResearchArtifactError(f"{symbol}: sources are missing")
+        for source in blurb["sources"]:
+            add(str(symbol), source)
+    return [collected[url] for url in sorted(collected)]
+
+
+def check_dashboard_html(html: str) -> list[str]:
+    """Return stale or incomplete research markers in rendered dashboard HTML."""
+    return [marker for marker in DASHBOARD_STALE_MARKERS if marker in html]
+
+
 def _producer_code_sha(root: Path) -> str:
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -760,13 +1010,14 @@ def _producer_source_sha(root: Path) -> str:
     return _sha256_bytes(canonical_json(payload).encode("utf-8"))
 
 
-def _paths(root: Path, as_of: str) -> tuple[Path, Path, Path, Path]:
+def _paths(root: Path, as_of: str) -> tuple[Path, Path, Path, Path, Path]:
     context_path = root / "reports/attractiveness_context" / f"{as_of}.json"
     report_path = root / "reports" / f"{as_of}-attractiveness-research-context.md"
     lineage_dir = root / "reports/attractiveness_research" / as_of
-    manifest_path = lineage_dir / "manifest.json"
-    packet_dir = lineage_dir / "packets"
-    return context_path, report_path, manifest_path, packet_dir
+    final_manifest = lineage_dir / "manifest.json"
+    pending_manifest = lineage_dir / "manifest.pending.json"
+    previous_manifest = lineage_dir / "manifest.previous.json"
+    return context_path, report_path, final_manifest, pending_manifest, previous_manifest
 
 
 def publish_bundle(
@@ -778,16 +1029,21 @@ def publish_bundle(
     inputs_dir: Path,
     ritual_root: Path,
     run_date: str,
-    generated_at: datetime | None = None,
+    started_at: datetime,
+    finished_at: datetime | None = None,
     producer_code_sha: str | None = None,
     producer_source_sha: str | None = None,
 ) -> PublicationResult:
-    """Publish packet copies, context, and Markdown; publish the manifest last."""
+    """Publish an untrusted pending bundle; dashboard finalization is separate."""
     inputs, packet_bytes = load_input_packets(inputs_dir)
     packet_hashes = {name: _sha256_bytes(raw) for name, raw in sorted(packet_bytes.items())}
     ritual_binding = load_successful_ritual(ritual_root, as_of=as_of, run_date=run_date)
     code_sha = producer_code_sha or _producer_code_sha(root)
     source_sha = producer_source_sha or _producer_source_sha(root)
+    uv_lock_path = root / "uv.lock"
+    if not uv_lock_path.is_file():
+        raise ResearchArtifactError("uv.lock is missing")
+    uv_lock_sha = _sha256_file(uv_lock_path)
     identity = {
         "schema_version": SCHEMA_VERSION,
         "market_as_of_date": as_of,
@@ -796,13 +1052,20 @@ def publish_bundle(
         "input_packet_sha256": packet_hashes,
         "ritual": ritual_binding.as_dict(),
         "producer_source_sha256": source_sha,
+        "uv_lock_sha256": uv_lock_sha,
     }
     identity_sha = _sha256_bytes(canonical_json(identity).encode("utf-8"))
     run_id = f"research-{as_of}-{identity_sha[:16]}"
-    context_path, report_path, manifest_path, packet_dir = _paths(root, as_of)
+    (
+        context_path,
+        report_path,
+        final_manifest,
+        pending_manifest,
+        previous_manifest,
+    ) = _paths(root, as_of)
 
-    if manifest_path.is_file():
-        prior = _load_object(manifest_path, where="existing manifest")
+    if final_manifest.is_file():
+        prior = _load_object(final_manifest, where="existing final manifest")
         if prior.get("input_identity_sha256") == identity_sha:
             verify_bundle(
                 root=root,
@@ -810,6 +1073,7 @@ def publish_bundle(
                 candidate_ids=candidate_ids,
                 pinned_symbols=pinned_symbols,
                 ritual_root=ritual_root,
+                pending=False,
             )
             outputs = prior.get("outputs")
             if isinstance(outputs, dict):
@@ -822,20 +1086,48 @@ def publish_bundle(
                             run_id=str(prior.get("run_id")),
                             context_path=context_path,
                             report_path=report_path,
-                            manifest_path=manifest_path,
+                            manifest_path=final_manifest,
                             context_sha256=context_sha,
                         )
+        final_manifest.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(final_manifest, previous_manifest)
 
-    created_at = generated_at or datetime.now(tz=NEW_YORK)
+    if pending_manifest.is_file():
+        prior_pending = _load_object(pending_manifest, where="existing pending manifest")
+        if prior_pending.get("input_identity_sha256") == identity_sha:
+            verify_bundle(
+                root=root,
+                as_of=as_of,
+                candidate_ids=candidate_ids,
+                pinned_symbols=pinned_symbols,
+                ritual_root=ritual_root,
+                pending=True,
+            )
+            outputs = prior_pending.get("outputs")
+            if isinstance(outputs, dict) and isinstance(outputs.get("context"), dict):
+                context_sha = outputs["context"].get("sha256")
+                if isinstance(context_sha, str):
+                    return PublicationResult(
+                        status="PENDING_DASHBOARD",
+                        run_id=run_id,
+                        context_path=context_path,
+                        report_path=report_path,
+                        manifest_path=pending_manifest,
+                        context_sha256=context_sha,
+                    )
+
+    completed_at = finished_at or datetime.now(tz=NEW_YORK)
     context = build_context(
         as_of=as_of,
         candidate_ids=candidate_ids,
         pinned_symbols=pinned_symbols,
         inputs=inputs,
-        generated_at=created_at,
+        started_at=started_at,
+        finished_at=completed_at,
         run_id=run_id,
         ritual_binding=ritual_binding,
         input_packet_sha256=packet_hashes,
+        uv_lock_sha256=uv_lock_sha,
     )
     validate_context(
         context,
@@ -844,15 +1136,22 @@ def publish_bundle(
     )
     context_bytes = _json_bytes(context)
     report_bytes = render_markdown(context).encode("utf-8")
+    packet_dir_relative = (
+        Path("reports/attractiveness_research") / as_of / "runs" / run_id / "packets"
+    )
 
     manifest = {
         "schema_version": SCHEMA_VERSION,
+        "publication_status": "PENDING_DASHBOARD",
         "run_id": run_id,
         "market_as_of_date": as_of,
-        "research_generated_at_utc": context["research_generated_at_utc"],
-        "research_generated_at_et": context["research_generated_at_et"],
+        "research_started_at_utc": context["research_started_at_utc"],
+        "research_started_at_et": context["research_started_at_et"],
+        "research_finished_at_utc": context["research_finished_at_utc"],
+        "research_finished_at_et": context["research_finished_at_et"],
         "producer_code_sha": code_sha,
         "producer_source_sha256": source_sha,
+        "uv_lock_sha256": uv_lock_sha,
         "candidate_ids": list(candidate_ids),
         "pinned_symbols": list(pinned_symbols),
         "required_symbols": required_symbols(candidate_ids, pinned_symbols),
@@ -860,13 +1159,12 @@ def publish_bundle(
         "input_identity_sha256": identity_sha,
         "input_packets": {
             name: {
-                "path": (
-                    Path("reports/attractiveness_research") / as_of / "packets" / name
-                ).as_posix(),
+                "path": (packet_dir_relative / name).as_posix(),
                 "sha256": packet_hashes[name],
             }
             for name in sorted(packet_hashes)
         },
+        "sources": collect_manifest_sources(context),
         "outputs": {
             "context": {
                 "path": context_path.relative_to(root).as_posix(),
@@ -880,17 +1178,17 @@ def publish_bundle(
     }
 
     for name, raw in sorted(packet_bytes.items()):
-        packet_path = packet_dir / name
+        packet_path = root / packet_dir_relative / name
         atomic_text_write(raw.decode("utf-8"), packet_path)
     atomic_text_write(context_bytes.decode("utf-8"), context_path)
     atomic_text_write(report_bytes.decode("utf-8"), report_path)
-    atomic_text_write(_json_bytes(manifest).decode("utf-8"), manifest_path)
+    atomic_text_write(_json_bytes(manifest).decode("utf-8"), pending_manifest)
     return PublicationResult(
-        status="PUBLISHED",
+        status="PENDING_DASHBOARD",
         run_id=run_id,
         context_path=context_path,
         report_path=report_path,
-        manifest_path=manifest_path,
+        manifest_path=pending_manifest,
         context_sha256=str(manifest["outputs"]["context"]["sha256"]),
     )
 
@@ -902,12 +1200,17 @@ def verify_bundle(
     candidate_ids: Sequence[str],
     pinned_symbols: Sequence[str],
     ritual_root: Path,
+    pending: bool = False,
 ) -> dict[str, object]:
-    """Verify the manifest commit marker and every byte it binds."""
-    context_path, report_path, manifest_path, _packet_dir = _paths(root, as_of)
+    """Verify either an untrusted pending bundle or the final commit marker."""
+    context_path, report_path, final_manifest, pending_manifest, _previous = _paths(root, as_of)
+    manifest_path = pending_manifest if pending else final_manifest
     manifest = _load_object(manifest_path, where="manifest")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ResearchArtifactError("manifest schema_version is not attractiveness_research/v2")
+    expected_status = "PENDING_DASHBOARD" if pending else "FINAL"
+    if manifest.get("publication_status") != expected_status:
+        raise ResearchArtifactError(f"manifest publication_status is not {expected_status}")
     if manifest.get("market_as_of_date") != as_of:
         raise ResearchArtifactError("manifest market_as_of_date mismatch")
     if manifest.get("candidate_ids") != list(candidate_ids):
@@ -930,6 +1233,12 @@ def verify_bundle(
         or any(character not in "0123456789abcdef" for character in producer_code_sha)
     ):
         raise ResearchArtifactError("manifest producer_code_sha is invalid")
+    uv_lock_sha = manifest.get("uv_lock_sha256")
+    if not isinstance(uv_lock_sha, str) or len(uv_lock_sha) != 64:
+        raise ResearchArtifactError("manifest uv_lock_sha256 is invalid")
+    uv_lock_path = root / "uv.lock"
+    if not uv_lock_path.is_file() or _sha256_file(uv_lock_path) != uv_lock_sha:
+        raise ResearchArtifactError("manifest uv_lock_sha256 mismatch")
 
     outputs = manifest.get("outputs")
     if not isinstance(outputs, dict):
@@ -953,10 +1262,14 @@ def verify_bundle(
     )
     if context.get("run_id") != manifest.get("run_id"):
         raise ResearchArtifactError("context run_id does not match manifest")
-    if context.get("research_generated_at_utc") != manifest.get("research_generated_at_utc"):
-        raise ResearchArtifactError("context UTC timestamp does not match manifest")
-    if context.get("research_generated_at_et") != manifest.get("research_generated_at_et"):
-        raise ResearchArtifactError("context ET timestamp does not match manifest")
+    for field in (
+        "research_started_at_utc",
+        "research_started_at_et",
+        "research_finished_at_utc",
+        "research_finished_at_et",
+    ):
+        if context.get(field) != manifest.get(field):
+            raise ResearchArtifactError(f"context {field} does not match manifest")
     lineage = context.get("lineage")
     if not isinstance(lineage, dict):
         raise ResearchArtifactError("context lineage is missing")
@@ -975,7 +1288,14 @@ def verify_bundle(
         packet_path_value = entry.get("path")
         if not isinstance(packet_path_value, str):
             raise ResearchArtifactError(f"manifest input packet {name} path is invalid")
-        expected_packet_path = Path("reports/attractiveness_research") / as_of / "packets" / name
+        expected_packet_path = (
+            Path("reports/attractiveness_research")
+            / as_of
+            / "runs"
+            / str(manifest.get("run_id"))
+            / "packets"
+            / name
+        )
         if packet_path_value != expected_packet_path.as_posix():
             raise ResearchArtifactError(f"manifest input packet {name} path mismatch")
         packet_path = root / expected_packet_path
@@ -987,6 +1307,8 @@ def verify_bundle(
         packet_hashes[name] = digest
     if lineage.get("input_packet_sha256") != dict(sorted(packet_hashes.items())):
         raise ResearchArtifactError("context input packet lineage mismatch")
+    if lineage.get("uv_lock_sha256") != uv_lock_sha:
+        raise ResearchArtifactError("context uv.lock lineage mismatch")
 
     ritual = manifest.get("ritual")
     if not isinstance(ritual, dict):
@@ -1010,6 +1332,7 @@ def verify_bundle(
         "input_packet_sha256": dict(sorted(packet_hashes.items())),
         "ritual": binding.as_dict(),
         "producer_source_sha256": producer_source_sha,
+        "uv_lock_sha256": uv_lock_sha,
     }
     identity_sha = _sha256_bytes(canonical_json(expected_identity).encode("utf-8"))
     if manifest.get("input_identity_sha256") != identity_sha:
@@ -1017,5 +1340,89 @@ def verify_bundle(
     expected_run_id = f"research-{as_of}-{identity_sha[:16]}"
     if manifest.get("run_id") != expected_run_id:
         raise ResearchArtifactError("manifest run_id does not match its immutable inputs")
+    if manifest.get("sources") != collect_manifest_sources(context):
+        raise ResearchArtifactError("manifest source metadata mismatch")
+
+    dashboard = manifest.get("dashboard_verification")
+    if pending:
+        if dashboard is not None:
+            raise ResearchArtifactError("pending manifest cannot claim dashboard verification")
+    else:
+        if not isinstance(dashboard, Mapping):
+            raise ResearchArtifactError("final manifest lacks dashboard verification")
+        if dashboard.get("path") != ".tmp/dashboard/attractiveness.html":
+            raise ResearchArtifactError("dashboard verification path mismatch")
+        dashboard_sha = dashboard.get("sha256")
+        if not isinstance(dashboard_sha, str) or len(dashboard_sha) != 64:
+            raise ResearchArtifactError("dashboard verification sha256 is invalid")
+        verified_utc = _utc_timestamp(
+            dashboard.get("verified_at_utc"), where="dashboard.verified_at_utc"
+        )
+        verified_et = _parse_timestamp(
+            dashboard.get("verified_at_et"), where="dashboard.verified_at_et"
+        )
+        if verified_utc != verified_et.astimezone(timezone.utc):
+            raise ResearchArtifactError("dashboard verification ET/UTC mismatch")
+        finished_utc = _utc_timestamp(
+            manifest.get("research_finished_at_utc"),
+            where="research_finished_at_utc",
+        )
+        if verified_utc < finished_utc:
+            raise ResearchArtifactError("dashboard verified before research finished")
 
     return manifest
+
+
+def finalize_bundle(
+    *,
+    root: Path,
+    as_of: str,
+    candidate_ids: Sequence[str],
+    pinned_symbols: Sequence[str],
+    ritual_root: Path,
+    verified_at: datetime | None = None,
+) -> dict[str, object]:
+    """Publish the final manifest only after the rendered dashboard passes."""
+    pending = verify_bundle(
+        root=root,
+        as_of=as_of,
+        candidate_ids=candidate_ids,
+        pinned_symbols=pinned_symbols,
+        ritual_root=ritual_root,
+        pending=True,
+    )
+    dashboard_path = root / ".tmp/dashboard/attractiveness.html"
+    if not dashboard_path.is_file():
+        raise ResearchArtifactError(f"dashboard output is missing: {dashboard_path}")
+    dashboard_bytes = dashboard_path.read_bytes()
+    try:
+        dashboard_html = dashboard_bytes.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ResearchArtifactError("dashboard output is not UTF-8") from error
+    problems = check_dashboard_html(dashboard_html)
+    if problems:
+        raise ResearchArtifactError("stale markers still present: " + "; ".join(problems))
+    finalized_at = verified_at or datetime.now(NEW_YORK)
+    if finalized_at.tzinfo is None or finalized_at.utcoffset() is None:
+        raise ResearchArtifactError("verified_at must be timezone-aware")
+    finished = _utc_timestamp(
+        pending.get("research_finished_at_utc"), where="research_finished_at_utc"
+    )
+    if finalized_at.astimezone(timezone.utc) < finished:
+        raise ResearchArtifactError("dashboard verification predates research finish")
+
+    final_manifest = dict(pending)
+    final_manifest["publication_status"] = "FINAL"
+    final_manifest["dashboard_verification"] = {
+        "path": ".tmp/dashboard/attractiveness.html",
+        "sha256": _sha256_bytes(dashboard_bytes),
+        "verified_at_utc": finalized_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "verified_at_et": finalized_at.astimezone(NEW_YORK).isoformat(),
+    }
+    _context, _report, final_path, pending_path, _previous = _paths(root, as_of)
+    atomic_text_write(_json_bytes(final_manifest).decode("utf-8"), final_path)
+    try:
+        pending_path.unlink()
+    except FileNotFoundError:
+        pass
+    return final_manifest

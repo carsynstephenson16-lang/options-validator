@@ -17,22 +17,12 @@ from options_researcher.attractiveness_research_v2 import (
     NEW_YORK,
     ResearchArtifactError,
     UpstreamBlocked,
+    check_dashboard_html,
+    finalize_bundle,
     load_successful_ritual,
     publish_bundle,
     verify_bundle,
 )
-
-STALE_MARKERS = (
-    "annotations are from",
-    "do not match any card",
-    "Research evidence incomplete",
-    "Research evidence stale",
-)
-
-
-def check_dashboard_html(html: str) -> list[str]:
-    """Return stale-research markers present in rendered HTML."""
-    return [marker for marker in STALE_MARKERS if marker in html]
 
 
 def _live_board() -> tuple[dict, str, list[str], list[str]]:
@@ -71,6 +61,21 @@ def _ritual_root(value: str | None) -> Path:
 
 def _run_date(value: str | None) -> str:
     return value or os.environ.get("RESEARCH_RUN_DATE") or datetime.now(NEW_YORK).date().isoformat()
+
+
+def _started_at(value: str | None) -> datetime:
+    raw = value or os.environ.get("RESEARCH_STARTED_AT")
+    if not raw:
+        raise ResearchArtifactError(
+            "RESEARCH_STARTED_AT or --started-at is required for run lineage"
+        )
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ResearchArtifactError("research start timestamp is invalid") from error
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ResearchArtifactError("research start timestamp must be timezone-aware")
+    return parsed
 
 
 def _cmd_print_ids() -> None:
@@ -128,6 +133,7 @@ def _cmd_assemble(
     inputs_dir: str,
     ritual_root: str | None,
     run_date: str | None,
+    started_at: str | None,
 ) -> None:
     root = Path(".").resolve()
     _data, as_of, candidate_ids, pinned_symbols = _live_board()
@@ -139,6 +145,7 @@ def _cmd_assemble(
         inputs_dir=Path(inputs_dir),
         ritual_root=_ritual_root(ritual_root),
         run_date=_run_date(run_date),
+        started_at=_started_at(started_at),
     )
     print(
         f"{result.status} run_id={result.run_id} as_of={as_of} "
@@ -152,15 +159,21 @@ def _cmd_verify(
     ritual_root: str | None,
     receipt_out: str | None = None,
     bundle_only: bool = False,
+    pending: bool = False,
 ) -> None:
     root = Path(".").resolve()
     _data, as_of, candidate_ids, pinned_symbols = _live_board()
+    if pending and receipt_out:
+        raise ResearchArtifactError(
+            "pending bundle cannot produce a verified receipt"
+        )
     manifest = verify_bundle(
         root=root,
         as_of=as_of,
         candidate_ids=candidate_ids,
         pinned_symbols=pinned_symbols,
         ritual_root=_ritual_root(ritual_root),
+        pending=pending,
     )
     if not bundle_only:
         html_path = root / ".tmp/dashboard/attractiveness.html"
@@ -196,6 +209,47 @@ def _cmd_verify(
     print(f"VERIFY_OK run_id={manifest['run_id']} as_of={as_of} context_sha256={output['sha256']}")
 
 
+def _cmd_finalize(
+    *,
+    ritual_root: str | None,
+    receipt_out: str | None = None,
+) -> None:
+    root = Path(".").resolve()
+    _data, as_of, candidate_ids, pinned_symbols = _live_board()
+    manifest = finalize_bundle(
+        root=root,
+        as_of=as_of,
+        candidate_ids=candidate_ids,
+        pinned_symbols=pinned_symbols,
+        ritual_root=_ritual_root(ritual_root),
+    )
+    outputs = manifest["outputs"]
+    assert isinstance(outputs, dict)
+    output = outputs["context"]
+    assert isinstance(output, dict)
+    ritual = manifest["ritual"]
+    assert isinstance(ritual, dict)
+    if receipt_out:
+        atomic_text_write(
+            json.dumps(
+                {
+                    "schema_version": manifest["schema_version"],
+                    "run_id": manifest["run_id"],
+                    "market_as_of_date": as_of,
+                    "context_sha256": output["sha256"],
+                    "ritual_run_status_sha256": ritual["run_status_sha256"],
+                    "ritual_receipt_sha256": ritual["receipt_sha256"],
+                    "status": "verified",
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n",
+            Path(receipt_out),
+        )
+    print(f"FINALIZED run_id={manifest['run_id']} as_of={as_of} context_sha256={output['sha256']}")
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
@@ -205,16 +259,19 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--preflight", action="store_true")
     group.add_argument("--assemble", action="store_true")
     group.add_argument("--verify", action="store_true")
+    group.add_argument("--finalize", action="store_true")
     parser.add_argument("--inputs", help="directory of researcher JSON packets")
     parser.add_argument("--as-of", help="exact market session for --preflight")
     parser.add_argument("--ritual-root", help="authoritative daily-ritual checkout")
     parser.add_argument("--run-date", help="America/New_York ritual run date")
+    parser.add_argument("--started-at", help="timezone-aware research start timestamp")
     parser.add_argument("--receipt-out", help="atomic JSON receipt path for --verify")
     parser.add_argument(
         "--bundle-only",
         action="store_true",
         help="verify v2 lineage before rendering the dashboard",
     )
+    parser.add_argument("--pending", action="store_true", help="verify pending manifest")
     args = parser.parse_args(argv)
 
     try:
@@ -236,12 +293,19 @@ def main(argv: list[str] | None = None) -> int:
                 inputs_dir=args.inputs,
                 ritual_root=args.ritual_root,
                 run_date=args.run_date,
+                started_at=args.started_at,
             )
-        else:
+        elif args.verify:
             _cmd_verify(
                 ritual_root=args.ritual_root,
                 receipt_out=args.receipt_out,
                 bundle_only=args.bundle_only,
+                pending=args.pending,
+            )
+        else:
+            _cmd_finalize(
+                ritual_root=args.ritual_root,
+                receipt_out=args.receipt_out,
             )
     except UpstreamBlocked as error:
         print(f"UPSTREAM_BLOCKED: {error}")

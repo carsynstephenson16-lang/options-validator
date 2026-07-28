@@ -2528,12 +2528,12 @@ def _market_html(context: dict | None) -> str:
     return "".join(parts)
 
 
-def _sources_html(urls: list | None) -> str:
-    """Collapsed list of research source links. http(s) URLs only; anything
-    else renders as plain text. Empty string when there are none."""
+def _sources_html(sources: list | None) -> str:
+    """Render legacy URL strings and v2 source-metadata objects as links."""
     items = []
-    for u in urls or []:
-        u = str(u)
+    for source in sources or []:
+        u = source.get("url") if isinstance(source, Mapping) else source
+        u = str(u or "")
         if u.startswith("http://") or u.startswith("https://"):
             items.append(f'<li><a href="{_esc(u)}">{_esc(u)}</a></li>')
         else:

@@ -91,6 +91,28 @@ class PriceLadderTests(unittest.TestCase):
         self.assertEqual(tag_by_price[95.0], "strike, breakeven")
 
 
+class SourceRenderingTests(unittest.TestCase):
+    def test_structured_v2_source_renders_as_clickable_url(self):
+        url = "https://investor.example.com/events"
+        rendered = ad._sources_html(
+            [
+                {
+                    "url": url,
+                    "source_tier": "issuer_ir",
+                    "published_at": "2026-07-01T12:00:00-04:00",
+                    "publication_time_unknown_rationale": None,
+                    "retrieved_at_utc": "2026-07-27T11:45:00Z",
+                }
+            ]
+        )
+        self.assertIn(f'href="{url}"', rendered)
+        self.assertNotIn("source_tier", rendered)
+
+    def test_legacy_url_string_still_renders_as_link(self):
+        url = "https://example.com/legacy"
+        self.assertIn(f'href="{url}"', ad._sources_html([url]))
+
+
 class PayoffTests(unittest.TestCase):
     def test_put_pnl(self):
         self.assertAlmostEqual(ad._put_pnl(145.0, 145.0, 212.20), 212.20, 2)
