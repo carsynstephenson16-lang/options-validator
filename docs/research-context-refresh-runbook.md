@@ -9,7 +9,8 @@ receipts, rankings, thresholds, or verdicts.
 
 The producer must use:
 
-- deployment checkout: `/Users/carsynstephenson/options-validator`
+- deployment checkout:
+  `/Users/carsynstephenson/options-validator-research`
 - authoritative ritual checkout:
   `/Users/carsynstephenson/options-validator-ops`
 - timezone semantics: `America/New_York`
@@ -59,7 +60,7 @@ operation and is intentionally not part of this runbook.
 Kill switch:
 
 ```bash
-touch /Users/carsynstephenson/options-validator/.research-refresh-off
+touch /Users/carsynstephenson/options-validator-research/.research-refresh-off
 ```
 
 Remove that file only when the producer is deliberately allowed to run.
