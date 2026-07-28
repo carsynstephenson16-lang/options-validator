@@ -17,6 +17,8 @@
     <string>America/New_York</string>
     <key>RESEARCH_RITUAL_ROOT</key>
     <string>/Users/carsynstephenson/options-validator-ops</string>
+    <key>RESEARCH_BOARD_ROOT</key>
+    <string>/Users/carsynstephenson/options-validator-ops</string>
     <key>RESEARCH_REFRESH_STATE_DIR</key>
     <string>/Users/carsynstephenson/Library/Application Support/options-validator/research-refresh</string>
     <key>RESEARCH_REFRESH_ATTEMPT_BUDGET_USD</key>

@@ -9,6 +9,7 @@ UV="${RESEARCH_REFRESH_UV:-$HOME/.local/bin/uv}"
 CLAUDE="${RESEARCH_REFRESH_CLAUDE:-$HOME/.local/bin/claude}"
 LOGDIR="${RESEARCH_REFRESH_LOG_DIR:-$REPO/.tmp/research_refresh}"
 RITUAL_ROOT="${RESEARCH_RITUAL_ROOT:-}"
+BOARD_ROOT="${RESEARCH_BOARD_ROOT:-$RITUAL_ROOT}"
 STATE_DIR="${RESEARCH_REFRESH_STATE_DIR:-$HOME/Library/Application Support/options-validator/research-refresh}"
 ATTEMPT_BUDGET_USD="${RESEARCH_REFRESH_ATTEMPT_BUDGET_USD:-8.00}"
 MONTHLY_BUDGET_USD="${RESEARCH_REFRESH_MONTHLY_BUDGET_USD:-200.00}"
@@ -51,6 +52,12 @@ if [ -z "$RITUAL_ROOT" ]; then
   echo "UPSTREAM_BLOCKED: RESEARCH_RITUAL_ROOT is not configured"
   exit 3
 fi
+if [ -z "$BOARD_ROOT" ] || [ ! -d "$BOARD_ROOT" ]; then
+  echo "UPSTREAM_BLOCKED: RESEARCH_BOARD_ROOT is not a readable checkout"
+  exit 3
+fi
+export RESEARCH_BOARD_ROOT="$BOARD_ROOT"
+export ATTRACTIVENESS_INPUT_ROOT="$BOARD_ROOT"
 
 SLOT="premarket"
 

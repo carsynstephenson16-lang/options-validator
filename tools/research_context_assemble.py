@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +27,26 @@ from options_researcher.attractiveness_research_v2 import (
 from tools.research_refresh_guard import GuardError, record_outcome
 
 
+@contextmanager
+def _board_root_cwd():
+    """Temporarily read the deterministic board from its authoritative root."""
+    configured = os.environ.get("RESEARCH_BOARD_ROOT")
+    if not configured:
+        yield Path.cwd()
+        return
+    board_root = Path(configured).expanduser().resolve()
+    if not board_root.is_dir():
+        raise UpstreamBlocked(
+            f"RESEARCH_BOARD_ROOT is not a directory: {board_root}"
+        )
+    previous = Path.cwd()
+    os.chdir(board_root)
+    try:
+        yield board_root
+    finally:
+        os.chdir(previous)
+
+
 def _live_board() -> tuple[dict, str, list[str], list[str]]:
     from options_researcher.attractiveness_dashboard import (
         assemble,
@@ -35,19 +56,20 @@ def _live_board() -> tuple[dict, str, list[str], list[str]]:
     )
     from options_researcher.qm_dashboard import load_qm_context
 
-    data = assemble()
-    as_of = data.get("data_as_of")
-    if not isinstance(as_of, str) or not as_of:
-        raise ResearchArtifactError("no data_as_of on the assembled board")
-    qm = load_qm_context(as_of)
-    candidate_ids: list[str] = []
-    for pick in select_top_picks(data, include_csp_watch=True):
-        candidate_ids.append(pick["card"]["top3_snapshot"]["candidate_id"])
-    for pick in select_qm_top_picks(data, qm, include_csp_watch=True):
-        candidate_id = pick["card"]["top3_snapshot"]["candidate_id"]
-        if candidate_id not in candidate_ids:
-            candidate_ids.append(candidate_id)
-    pinned_symbols = [pick["symbol"] for pick in pinned_picks(data)]
+    with _board_root_cwd():
+        data = assemble()
+        as_of = data.get("data_as_of")
+        if not isinstance(as_of, str) or not as_of:
+            raise ResearchArtifactError("no data_as_of on the assembled board")
+        qm = load_qm_context(as_of)
+        candidate_ids: list[str] = []
+        for pick in select_top_picks(data, include_csp_watch=True):
+            candidate_ids.append(pick["card"]["top3_snapshot"]["candidate_id"])
+        for pick in select_qm_top_picks(data, qm, include_csp_watch=True):
+            candidate_id = pick["card"]["top3_snapshot"]["candidate_id"]
+            if candidate_id not in candidate_ids:
+                candidate_ids.append(candidate_id)
+        pinned_symbols = [pick["symbol"] for pick in pinned_picks(data)]
     return data, as_of, candidate_ids, pinned_symbols
 
 

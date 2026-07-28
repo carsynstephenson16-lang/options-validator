@@ -33,11 +33,38 @@ import html as _html
 import math
 import os
 from collections.abc import Mapping
+from contextlib import contextmanager
+from pathlib import Path
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
 
 _PMCC_NOTE = "just the premium; LEAPS value not counted"
 DISPLAY_ONLY_LABEL = "DISPLAY-ONLY — not in any registered hypothesis"
+
+
+@contextmanager
+def _input_root_cwd():
+    """Read deterministic board inputs from an explicitly configured root.
+
+    Research deployments write their own reports and dashboard, but consume
+    the runtime board from the clean ops checkout.  Keep the cwd switch narrow
+    so every output path remains rooted in the deployment checkout.
+    """
+    configured = os.environ.get("ATTRACTIVENESS_INPUT_ROOT")
+    if not configured:
+        yield Path.cwd()
+        return
+    input_root = Path(configured).expanduser().resolve()
+    if not input_root.is_dir():
+        raise FileNotFoundError(
+            f"ATTRACTIVENESS_INPUT_ROOT is not a directory: {input_root}"
+        )
+    previous = Path.cwd()
+    os.chdir(input_root)
+    try:
+        yield input_root
+    finally:
+        os.chdir(previous)
 
 
 def _round_cents(x: float) -> float:
@@ -864,8 +891,6 @@ def assemble(
         out_blocked.append(out_rec)
 
     if hypothesis_evidence_by_symbol is None and real_assembly:
-        from pathlib import Path
-
         from options_researcher.hypothesis_evidence import (
             gather_hypothesis_evidence,
         )
@@ -877,7 +902,7 @@ def assemble(
         ]
         hypothesis_evidence_by_symbol = gather_hypothesis_evidence(
             evidence_symbols,
-            root=Path(__file__).resolve().parents[1],
+            root=Path.cwd(),
         )
     if hypothesis_evidence_by_symbol is not None:
         for record in [*out_symbols, *out_blocked]:
@@ -1190,7 +1215,8 @@ def sections_json(sections: list[dict] | None = None) -> str:
 
     blocked: list[dict] = []
     if sections is None:
-        sections, _, blocked = _gather_all()
+        with _input_root_cwd():
+            sections, _, blocked = _gather_all()
     _dates = {s["as_of"] for s in sections} if sections else set()
     as_of = next(iter(_dates)) if len(_dates) == 1 else None
     return json.dumps({"as_of": as_of, "sections": sections,
@@ -2855,11 +2881,12 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     """Assemble, render, write; return (abs_path, exit_code). The exit code
     is nonzero when any symbol failed unexpectedly (see _run_exit_code) so
     unattended runs never look clean over a programming failure."""
-    data = assemble(**assemble_kwargs)
-    context, warning = load_context(data.get("data_as_of") or "")
     from options_researcher.qm_dashboard import load_qm_context
 
-    qm_context = load_qm_context(data.get("data_as_of") or "")
+    with _input_root_cwd():
+        data = assemble(**assemble_kwargs)
+        qm_context = load_qm_context(data.get("data_as_of") or "")
+    context, warning = load_context(data.get("data_as_of") or "")
     out_html = render(
         data,
         context=context,

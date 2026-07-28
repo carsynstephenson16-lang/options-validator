@@ -269,6 +269,10 @@ class ProducerPlistTest(unittest.TestCase):
             environment["RESEARCH_RITUAL_ROOT"],
             "/Users/carsynstephenson/options-validator-ops",
         )
+        self.assertEqual(
+            environment["RESEARCH_BOARD_ROOT"],
+            "/Users/carsynstephenson/options-validator-ops",
+        )
         self.assertEqual(environment["RESEARCH_REFRESH_MAX_FAILURES"], "2")
         self.assertEqual(environment["RESEARCH_REFRESH_MONTHLY_BUDGET_USD"], "200.00")
 

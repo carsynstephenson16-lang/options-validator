@@ -13,6 +13,8 @@ The producer must use:
   `/Users/carsynstephenson/options-validator-research`
 - authoritative ritual checkout:
   `/Users/carsynstephenson/options-validator-ops`
+- authoritative deterministic-board input checkout:
+  `/Users/carsynstephenson/options-validator-ops`
 - timezone semantics: `America/New_York`
 
 Before any paid LLM invocation, the producer requires the exact market
@@ -45,6 +47,11 @@ The template points to the deployment checkout, never a temporary worktree,
 and sets:
 
 `RESEARCH_RITUAL_ROOT=/Users/carsynstephenson/options-validator-ops`
+
+It also sets `RESEARCH_BOARD_ROOT` to that ops checkout. The isolated research
+worktree reads exact-session cache, feature, QM, and hypothesis evidence there,
+while all generated research manifests, reports, logs, and dashboard output
+remain in `/Users/carsynstephenson/options-validator-research`.
 
 The producer LaunchAgent is intentionally left disabled and unloaded. Safe
 template validation does not enable it:

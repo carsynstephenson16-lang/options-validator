@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+import tools.research_context_assemble as research_context_assemble
 from options_researcher.attractiveness_research_v2 import (
     PJM_CATALYST_ID,
     ResearchArtifactError,
@@ -858,6 +859,54 @@ class CheckHtmlTest(unittest.TestCase):
             check_dashboard_html("all good Research evidence complete"),
             [],
         )
+
+
+class BoardRootTest(unittest.TestCase):
+    def test_live_board_reads_ops_root_and_restores_deployment_cwd(self):
+        original_cwd = Path.cwd()
+        observed: list[Path] = []
+
+        def assemble():
+            observed.append(Path.cwd())
+            return {"data_as_of": AS_OF}
+
+        def load_qm_context(_as_of):
+            observed.append(Path.cwd())
+            return {}
+
+        with tempfile.TemporaryDirectory() as temp:
+            board_root = Path(temp).resolve()
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"RESEARCH_BOARD_ROOT": str(board_root)},
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.assemble",
+                    side_effect=assemble,
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.select_top_picks",
+                    return_value=[],
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.select_qm_top_picks",
+                    return_value=[],
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.pinned_picks",
+                    return_value=[],
+                ),
+                mock.patch(
+                    "options_researcher.qm_dashboard.load_qm_context",
+                    side_effect=load_qm_context,
+                ),
+            ):
+                result = research_context_assemble._live_board()
+
+        self.assertEqual(observed, [board_root, board_root])
+        self.assertEqual(Path.cwd(), original_cwd)
+        self.assertEqual(result, ({"data_as_of": AS_OF}, AS_OF, [], []))
 
 
 if __name__ == "__main__":

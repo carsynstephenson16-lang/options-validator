@@ -1620,6 +1620,64 @@ class V2RenderTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
+    def test_main_reads_external_board_and_restores_output_cwd(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        section = {
+            "symbol": "MSFT",
+            "as_of": "2026-07-24",
+            "close": 373.02,
+            "iv_rank": 0.88,
+            "groups": [{
+                "kind": "put",
+                "title": "SELL A PUT?",
+                "cards": [],
+                "empty": "none this cycle",
+            }],
+        }
+        original_cwd = Path.cwd()
+        observed: dict[str, Path] = {}
+
+        def gather():
+            observed["board"] = Path.cwd()
+            return [section], {"MSFT": 1.1}, []
+
+        def load_context(_as_of):
+            observed["output"] = Path.cwd()
+            return None, None
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            board_root = (root / "ops").resolve()
+            board_root.mkdir()
+            output = root / "research" / "attractiveness.html"
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"ATTRACTIVENESS_INPUT_ROOT": str(board_root)},
+                ),
+                mock.patch.object(ad, "_gather_all", side_effect=gather),
+                mock.patch.object(ad, "load_context", side_effect=load_context),
+                mock.patch.object(ad, "OUTPUT_PATH", str(output)),
+                mock.patch(
+                    "options_researcher.hypothesis_evidence.gather_hypothesis_evidence",
+                    return_value={},
+                ),
+                mock.patch(
+                    "options_researcher.qm_dashboard.load_qm_context",
+                    return_value={},
+                ),
+            ):
+                path = ad.main()
+
+        self.assertEqual(observed["board"], board_root)
+        self.assertEqual(observed["output"], original_cwd)
+        self.assertEqual(Path.cwd(), original_cwd)
+        self.assertEqual(Path(path).resolve(), output.resolve())
+
     def test_main_writes_file_and_prints_path(self):
         import io
         import os
