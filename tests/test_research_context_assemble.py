@@ -573,8 +573,10 @@ class ShellPreflightTest(unittest.TestCase):
         ritual_status: str,
         now_et: str,
         manual_override: bool = False,
+        uv_override: str | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
-        uv = shutil.which("uv")
+        uv = uv_override or shutil.which("uv")
         zsh = shutil.which("zsh")
         if uv is None or zsh is None:
             self.skipTest("uv and zsh are required")
@@ -605,6 +607,8 @@ class ShellPreflightTest(unittest.TestCase):
         )
         if manual_override:
             env["RESEARCH_REFRESH_MANUAL_OVERRIDE"] = "1"
+        if extra_env:
+            env.update(extra_env)
         script = Path(__file__).resolve().parents[1] / "tools/research_refresh.sh"
         result = subprocess.run(
             [zsh, str(script)],
@@ -669,6 +673,148 @@ class ShellPreflightTest(unittest.TestCase):
             log = logs[0].read_text(encoding="utf-8")
             self.assertIn("SINGLE_FLIGHT_ACTIVE", log)
             self.assertIn("LLM invocation was not attempted", log)
+
+    def test_valid_final_reconciles_reserved_attempt_and_recreates_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            state_dir = temp / "state"
+            producer_attempt_id = "published-before-receipt"
+            reserve_attempt(
+                state_dir,
+                attempt_id=producer_attempt_id,
+                now_et=datetime(
+                    2026,
+                    7,
+                    27,
+                    7,
+                    39,
+                    tzinfo=ZoneInfo("America/New_York"),
+                ),
+            )
+            final_manifest = temp / "manifest.json"
+            _write_json(
+                final_manifest,
+                {
+                    "schema_version": "attractiveness_research/v2",
+                    "publication_status": "FINAL",
+                    "producer_attempt_id": producer_attempt_id,
+                },
+            )
+            log_dir = temp / "logs"
+            log_dir.mkdir()
+            receipt = log_dir / f"receipt_v2_{AS_OF}_premarket.json"
+            receipt.write_text('{"status":"ok","corrupted":true}\n', encoding="utf-8")
+
+            fake_uv = temp / "fake-uv"
+            fake_uv.write_text(
+                """#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+args = sys.argv[1:]
+module_index = args.index("-m")
+module = args[module_index + 1]
+module_args = args[module_index + 2:]
+source_root = os.environ["FAKE_SOURCE_ROOT"]
+if module == "tools.research_refresh_guard":
+    env = os.environ.copy()
+    env["PYTHONPATH"] = source_root
+    raise SystemExit(
+        subprocess.run(
+            [sys.executable, "-m", module, *module_args],
+            env=env,
+            check=False,
+        ).returncode
+    )
+if module != "tools.research_context_assemble":
+    raise SystemExit(99)
+if "--preflight" in module_args:
+    receipt_out = Path(module_args[module_args.index("--receipt-out") + 1])
+    receipt_out.write_text(
+        json.dumps(
+            {
+                "ritual_run_status_sha256": "status-sha",
+                "ritual_receipt_sha256": "receipt-sha",
+                "status": "OK",
+            },
+            separators=(",", ":"),
+        )
+        + "\\n",
+        encoding="utf-8",
+    )
+    raise SystemExit(0)
+if "--verify" not in module_args:
+    raise SystemExit(98)
+if "--reconcile-published-attempt" in module_args:
+    sys.path.insert(0, source_root)
+    from tools.research_refresh_guard import record_outcome
+
+    state_dir = Path(module_args[module_args.index("--guard-state-dir") + 1])
+    attempt_id = os.environ["FAKE_PRODUCER_ATTEMPT_ID"]
+    record_outcome(
+        state_dir,
+        attempt_id=attempt_id,
+        succeeded=True,
+        published_success=True,
+        now_et=datetime.fromisoformat("2026-07-27T07:40:00-04:00"),
+    )
+    receipt_out = Path(module_args[module_args.index("--receipt-out") + 1])
+    receipt_out.write_text(
+        json.dumps(
+            {
+                "schema_version": "attractiveness_research/v2",
+                "run_id": "research-2026-07-24-test",
+                "producer_attempt_id": attempt_id,
+                "context_sha256": "context-sha",
+                "ritual_run_status_sha256": "status-sha",
+                "ritual_receipt_sha256": "receipt-sha",
+                "status": "verified",
+            },
+            separators=(",", ":"),
+        )
+        + "\\n",
+        encoding="utf-8",
+    )
+raise SystemExit(0)
+""",
+                encoding="utf-8",
+            )
+            fake_uv.chmod(0o755)
+
+            result, invoked, _returned_log_dir = self.run_script(
+                temp,
+                ritual_status="OK",
+                now_et="2026-07-27T07:40:00-04:00",
+                uv_override=str(fake_uv),
+                extra_env={
+                    "FAKE_SOURCE_ROOT": str(Path(__file__).resolve().parents[1]),
+                    "FAKE_PRODUCER_ATTEMPT_ID": producer_attempt_id,
+                    "RESEARCH_REFRESH_FINAL_MANIFEST": str(final_manifest),
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(invoked.exists())
+            state = json.loads(
+                (state_dir / "guard_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(state["attempts"][0]["attempt_id"], producer_attempt_id)
+            self.assertEqual(state["attempts"][0]["status"], "SUCCEEDED")
+            self.assertIn("published_success_at_utc", state["attempts"][0])
+            recreated = json.loads(receipt.read_text(encoding="utf-8"))
+            self.assertEqual(recreated["producer_attempt_id"], producer_attempt_id)
+            self.assertEqual(recreated["status"], "ok")
+            self.assertNotIn("corrupted", recreated)
+            self.assertEqual(list(log_dir.glob("receipt_v2_*.tmp")), [])
+            logs = list(log_dir.glob("*.log"))
+            self.assertEqual(len(logs), 1)
+            self.assertIn(
+                "RECOVERED: valid final manifest reconciled before LLM invocation",
+                logs[0].read_text(encoding="utf-8"),
+            )
 
 
 class CheckHtmlTest(unittest.TestCase):
