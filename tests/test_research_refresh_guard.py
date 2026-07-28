@@ -256,8 +256,12 @@ class ProducerPlistTest(unittest.TestCase):
             payload["ProgramArguments"],
             [
                 "/bin/zsh",
-                "/Users/carsynstephenson/options-validator/tools/research_refresh.sh",
+                "/Users/carsynstephenson/options-validator-research/tools/research_refresh.sh",
             ],
+        )
+        self.assertEqual(
+            payload["WorkingDirectory"],
+            "/Users/carsynstephenson/options-validator-research",
         )
         environment = payload["EnvironmentVariables"]
         self.assertEqual(environment["TZ"], "America/New_York")

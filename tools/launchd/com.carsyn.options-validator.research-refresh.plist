@@ -7,8 +7,10 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
-    <string>/Users/carsynstephenson/options-validator/tools/research_refresh.sh</string>
+    <string>/Users/carsynstephenson/options-validator-research/tools/research_refresh.sh</string>
   </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/carsynstephenson/options-validator-research</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>TZ</key>
@@ -25,9 +27,9 @@
     <string>2</string>
   </dict>
   <key>StandardOutPath</key>
-  <string>/Users/carsynstephenson/options-validator/.tmp/research_refresh/launchd.out</string>
+  <string>/Users/carsynstephenson/options-validator-research/.tmp/research_refresh/launchd.out</string>
   <key>StandardErrorPath</key>
-  <string>/Users/carsynstephenson/options-validator/.tmp/research_refresh/launchd.err</string>
+  <string>/Users/carsynstephenson/options-validator-research/.tmp/research_refresh/launchd.err</string>
   <key>StartCalendarInterval</key>
   <array>
     <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>40</integer></dict>
