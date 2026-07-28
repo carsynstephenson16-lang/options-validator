@@ -76,20 +76,6 @@ if [ "$PREFLIGHT_RC" -ne 0 ]; then
   exit 3
 fi
 
-# The durable final manifest is the authoritative idempotency record. A prior
-# run may have finalized successfully and then crashed before writing the
-# convenience slot receipt below; verify the final bundle against the current
-# ritual binding before spending again.
-FINAL_MANIFEST="$REPO/reports/attractiveness_research/$AS_OF/manifest.json"
-EXISTING_FINAL_META="$LOGDIR/existing_final_${STAMP}.json"
-if [ -f "$FINAL_MANIFEST" ] \
-  && "$UV" run python -m tools.research_context_assemble \
-    --verify --bundle-only --ritual-root "$RITUAL_ROOT" \
-    --receipt-out "$EXISTING_FINAL_META"; then
-  echo "SKIP: verified final research for ${AS_OF} already binds the current ritual"
-  exit 0
-fi
-
 RECEIPT="$LOGDIR/receipt_v2_${AS_OF}_${SLOT}.json"
 if [ -f "$RECEIPT" ]; then
   echo "INFO: prior slot receipt exists; final manifest must still verify and reconcile"
