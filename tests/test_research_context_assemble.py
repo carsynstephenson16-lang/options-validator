@@ -575,6 +575,7 @@ class ShellPreflightTest(unittest.TestCase):
         manual_override: bool = False,
         uv_override: str | None = None,
         extra_env: dict[str, str] | None = None,
+        script_override: Path | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
         uv = uv_override or shutil.which("uv")
         zsh = shutil.which("zsh")
@@ -609,7 +610,10 @@ class ShellPreflightTest(unittest.TestCase):
             env["RESEARCH_REFRESH_MANUAL_OVERRIDE"] = "1"
         if extra_env:
             env.update(extra_env)
-        script = Path(__file__).resolve().parents[1] / "tools/research_refresh.sh"
+        script = (
+            script_override
+            or Path(__file__).resolve().parents[1] / "tools/research_refresh.sh"
+        )
         result = subprocess.run(
             [zsh, str(script)],
             cwd=Path(__file__).resolve().parents[1],
@@ -677,6 +681,13 @@ class ShellPreflightTest(unittest.TestCase):
     def test_valid_final_reconciles_reserved_attempt_and_recreates_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
+            canonical_repo = temp / "canonical-repo"
+            canonical_script = canonical_repo / "tools/research_refresh.sh"
+            canonical_script.parent.mkdir(parents=True)
+            source_script = (
+                Path(__file__).resolve().parents[1] / "tools/research_refresh.sh"
+            )
+            shutil.copy2(source_script, canonical_script)
             state_dir = temp / "state"
             producer_attempt_id = "published-before-receipt"
             reserve_attempt(
@@ -691,7 +702,12 @@ class ShellPreflightTest(unittest.TestCase):
                     tzinfo=ZoneInfo("America/New_York"),
                 ),
             )
-            final_manifest = temp / "manifest.json"
+            final_manifest = (
+                canonical_repo
+                / "reports/attractiveness_research"
+                / AS_OF
+                / "manifest.json"
+            )
             _write_json(
                 final_manifest,
                 {
@@ -793,8 +809,8 @@ raise SystemExit(0)
                 extra_env={
                     "FAKE_SOURCE_ROOT": str(Path(__file__).resolve().parents[1]),
                     "FAKE_PRODUCER_ATTEMPT_ID": producer_attempt_id,
-                    "RESEARCH_REFRESH_FINAL_MANIFEST": str(final_manifest),
                 },
+                script_override=canonical_script,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(invoked.exists())
@@ -815,6 +831,18 @@ raise SystemExit(0)
                 "RECOVERED: valid final manifest reconciled before LLM invocation",
                 logs[0].read_text(encoding="utf-8"),
             )
+
+    def test_receipt_section_has_no_pre_reconciliation_success_exit(self):
+        script = (
+            Path(__file__).resolve().parents[1] / "tools/research_refresh.sh"
+        ).read_text(encoding="utf-8")
+        receipt_section = script[
+            script.index('RECEIPT="$LOGDIR/receipt_v2_') :
+            script.index("verify_reconcile_final()")
+        ]
+        self.assertNotIn("exit 0", receipt_section)
+        self.assertNotIn("PRIOR_STATUS", receipt_section)
+        self.assertNotIn("CURRENT_RITUAL_SHA", receipt_section)
 
 
 class CheckHtmlTest(unittest.TestCase):
