@@ -921,7 +921,15 @@ specified inclusions/exclusions; ruff/pyright/unittest all green.
   record the baseline suite result and the resolved environment at packet
   start and re-check at the end — an environment shift from someone else's
   session must not be misread as a regression from this packet. Re-measure
-  the baseline yourself; do not assume the previously recorded 2109.
+  the baseline yourself rather than assuming any figure written here.
+  Measured 2026-07-29 on `feature/strategy-enhancement` with the
+  concurrent-session tree in place: **`Ran 2116 tests in 472.573s` / `OK` /
+  exit 0** (the plan's earlier 2109 was stale). Note the runtime — this
+  suite takes ~8 minutes, not seconds, so budget for it. Note also that
+  `unittest` writes its summary to **stderr** while tests print to stdout:
+  `... 2>&1 | tail` will show you buffered test output, not the result
+  line. Redirect the whole run to a file and grep for `^Ran ` / `^OK` /
+  `^FAILED`, and check the exit code — never grep a tail for "OK".
 - **Exact scope:** extend the bridge query/filters: rows with
   `admission_state` present must be `ADMITTED`; `available_at` used when
   non-null else `published_at` (each returned record labeled
