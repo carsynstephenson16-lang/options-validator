@@ -459,3 +459,49 @@ invariant. Effect: fix lands on PR #14 → mark ready → merge → Packet 3
 Confidence: high. Gap: exact exempt-column set for the events trigger is
 decided by Codex in /plan (requirement: supersession and admission-state
 transitions must remain possible; payload/timing/hash columns must not).
+
+**D30 — Packet 3 (PR #15 @ 143c77a) reviewed APPROVE_WITH_NITS ×2, merge
+conditioned on one test; Packet 6 independently confirmed SHIPPED.**
+Prior: Codex reported Packet 2 merged (with the D29 trigger fix), Packet 3
+ready as draft PR #15, and Thread B silent. Decision (three parts):
+(a) **Packet 3 merge authorized after one fix**: the duplicate-`source_id`
+guard in `market_updates/registry.py` has zero test coverage — mutation
+testing (guard deleted → full focused suite stayed green) proves it is
+unverified, while every other loader guard turned genuinely red under the
+same treatment. One test asserting `load_registry` refuses two entries
+sharing a `source_id` is required pre-merge. Everything else conformed:
+18 entries; all ten `build_providers()` classes matched by name+class;
+bans lock-tested (a widened Daloopa entry with a self-consistent hash
+turned the lock test red, then reverted); registry_version stable under
+whitespace, sensitive to entries; migration 0004 round-tripped
+0003→0004→0003→0004 against a COPY of the live store with 2,818 events /
+20 provider_runs unchanged and Packet 2's immutability trigger unaffected;
+one mechanically-required 2-call-site test edit is legitimate (a new
+required kwarg).
+(b) **Two Codex claims corrected for the record**: "focused tests: 28" is
+an assertion count, not a test count (actual: 10 in the new module, 18
+including the migration module); and the "2,818 events + 20 provider runs
+snapshot rehearsal" left no committed artifact — the substance was
+independently re-established by the reviewer's own rehearsal, but the
+claim as stated was unverifiable when made. Standing correction to Codex:
+report measured test counts and leave a rehearsal artifact (or say the
+rehearsal was transient).
+(c) **Packet 6 is DONE**: independently audited as merged to kalshi main
+at `104947d` ("feat(research): capture versioned settlement evidence"),
+2,304 tests passing (2,252 baseline + 52). Spec-correct on every checked
+item: BBB regex routes anything outside RRx/CCx/AAx (incl. Pxx) to
+UNRECOGNIZED and quarantines; ordering is issuance+BBB with a logged
+receipt-time tiebreak; all four quarantine reasons present; the freeze is
+DST-aware with the +7-day bound and 11 AM delayed review, and a frozen
+label is structurally immutable to post-expiration versions; exchange
+divergence produces a human-review artifact, never an auto-correction;
+the shadow/live isolation test was STRENGTHENED (new AST check failing on
+any unauthorized import of the Packet-6 modules); guard-protected files
+untouched. Note: an unrelated branch `codex/packet-6-execution-validation`
+is a name collision (VWAP/fee/latency work), not a second attempt.
+Evidence: scratchpad reports review-p3-conformance.md,
+review-p3-adversarial.md, status-p6-kalshi.md. Effect: Thread A → fix +
+merge #15 → Packet 4; Thread B → Packet 7. Confidence: high. Gap: the
+registry's ban preservation rests on one content-locking test; if the
+registry grows, consider a structural rule (banned entries must have
+empty purposes) rather than per-entry assertions.
