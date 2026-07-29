@@ -602,3 +602,106 @@ answer different questions — the producer's records how availability was
 merging would force one of them to lie. Tradeoff: two field names to
 learn. Effect: plan §Packet 8 exact scope and schema effects amended.
 Confidence: high. Gap: none.
+
+---
+
+**D35 — Packet 4 (PR #16) REQUEST_CHANGES; Packet 7 approved with a
+coverage caveat.** Decision: (a) PR #16 does NOT merge until two defects
+in the append-only/availability core are fixed; (b) Packet 7 (kalshi
+`0d78b16`) stands as merged, with a small follow-on (7a) to close four
+untested guards before that thread leaves the repo; (c) two Codex
+reporting claims corrected for the record.
+
+Evidence — Packet 4, two independent Sonnet-5 high-effort reviews. The
+conformance pass returned APPROVE with zero blocking items: diff surface
+exactly the 8 authorized files against the true base `e01bff2` (local
+`main` was three commits stale, which is why the base had to be corrected
+mid-review); migration correctly renumbered 0004→0005 with a linear
+revision graph; the custom-tag downgrade, availability boundary math
+(filed 2021-01-14 8-K → 2021-01-15 06:00 ET = 11:00 UTC, matching the
+test's 10:59/11:00 assertions), and DB triggers all verified by execution
+rather than reading; test counts 12/20/1595 reproduced exactly against a
+measured 1583 baseline; the committed fixture proven genuine by
+re-fetching the live SEC endpoint and matching SHA-256 and byte length.
+
+The adversarial pass returned REQUEST_CHANGES on two blocking defects,
+both inside the invariant this program exists to protect:
+1. **Append-only has a real hole.** `0005_xbrl_facts.py:19-53` puts no
+   UNIQUE constraint on the natural key (`cik`, `taxonomy`, `tag`, `unit`,
+   `period_start`, `period_end`, `accn`). A second `ingest_concept()` /
+   `append()` for the same real accession with a different value gets a
+   fresh `fact_id` and is silently accepted; the reviewer executed this
+   attack through the public API against the genuine UBER fixture and
+   `fact_asof()` then returned the forged value in preference to the real
+   one. The two application-layer checks meant to prevent it
+   (`scripts/xbrl_facts.py:468-471`, `:478-479`) both stayed GREEN when
+   deleted — i.e. unenforced at the DB layer and unverified at the test
+   layer simultaneously.
+2. **The holiday table covers only 2026.** `sec_availability.py:42-58`
+   silently treats every pre-2026 federal holiday as an ordinary EDGAR
+   business day: `filed_date_conservative_available_at(2020-01-17)`
+   computes dissemination on 2020-01-20, which was MLK Day with EDGAR
+   closed. The defect predates this PR (packet 1's module) but packet 4
+   is the first consumer to run it against real historical dates — its
+   own fixture is 2019-2021 filings.
+Mutation results: 9 of 12 guards went RED (naive-datetime refusals,
+custom-taxonomy classification, the downgrade, `availability_basis`, the
+`fact_asof` `<=` boundary, fair-access sleep, retry codes, both DB
+triggers); 3 stayed GREEN (the two above plus naive stored `available_at`
+on read). Non-blocking: `DROP TRIGGER` / `PRAGMA writable_schema` bypass
+immutability (inherent to SQLite, shared with packet 2's trigger, not
+novel); `XbrlFactStore` never acquires packet 2's single-writer lock,
+which is inert only because it does not yet share the live db file — it
+must acquire the lock before it ever does, given the venv's measured
+SQLite 3.50.4 is below this repo's own WAL-safety floor.
+
+Opposing view considered: both defects are latent rather than live —
+nothing today writes a conflicting accession, and no production query
+runs against pre-2026 filed dates. Rejected as grounds to merge and defer.
+A silent wrong answer from an availability rule is precisely the failure
+this architecture was commissioned to make impossible, and "the hole is
+there but nothing has fallen in yet" is the reasoning that lets it ship.
+Both fixes are small and local.
+
+Note on reviewer discipline, recorded because it cuts the other way: the
+adversarial reviewer initially flagged the conservative-basis function as
+accidentally optimistic, then fetched the governing SEC filing-status
+rule, disproved its own finding, and retracted it in the report. The
+direction is genuinely conservative — over-cautious by roughly one
+business day. A retracted finding is a working process, not a wasted one.
+
+Evidence — Packet 7 (kalshi `0d78b16`), one combined conformance +
+adversarial pass: APPROVE_WITH_NITS. It extends `research_capture.py`'s
+existing lineage identity rather than duplicating it, is fail-closed in
+both loaders, touches no guard-protected file, deletes no assertion
+(all four test diffs are pure insertions), and leaves the halt and
+order-placement paths alone. 2320 tests vs the 2304 parent baseline =
+exactly the 16 added. `tools/check_logging_completeness.py` re-run
+against the real production DB reproduced 1109/1109, 731/731, bucket-B 0,
+orphans 0. Two caveats: (i) the artifact `a329e4d0d1abe77c` was ALREADY
+refused before this commit by a schema_version check that fired first, so
+runtime behaviour is unchanged and only the diagnosis improved — the
+report's framing overstated it; (ii) four guards survived deletion with
+the full suite green: training-cutoff-in-future, `feature_schema_sha256`
+mismatch, `training_ids_sha256` validity, and — most importantly —
+`main.py::_serialize_source_timestamp_map`, the actual production entry
+point for the F06 timestamp fix, which passed even when mutated to drop
+every real provider timestamp, because no fixture populates
+`FusionResult.source_evidence`.
+
+Tradeoff: 7a costs a thread a short detour before it switches repos.
+Accepted — this is the second consecutive round where something was
+recorded as enforced while nothing exercised it (D29's orphaned
+`guard_payload_update` was the first), and a pattern at two occurrences
+is a process gap, not a coincidence.
+
+Effect: standing instruction added for every remaining packet — a guard
+is not done until it has been shown to fail with the guard removed, and
+"N tests passed" is never evidence that a specific guard works. Thread A:
+fix PR #16 (B1 unique key + tests, B2 holiday coverage fail-closed, B3
+writer-lock precondition) → merge → packet 5. Thread B: packet 7a (four
+tests + the two kalshi AGENTS.md lines) → packet 8 in options-validator.
+Confidence: high on both blocking defects (both demonstrated by
+execution, not argued). Gap: the holiday fix needs official per-year
+sources for every year the store will span; only 2026 is currently
+ledgered (SEC-S8).
