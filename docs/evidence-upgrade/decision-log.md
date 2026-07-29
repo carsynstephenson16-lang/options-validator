@@ -428,3 +428,34 @@ corrections, this entry. Confidence: high (all claims repo-verified).
 Gap: whether Atom-path SEC events should later derive a conservative
 interval from their accession via the submissions cache is deferred until
 a consumer needs it.
+
+**D29 — Packet 2 (PR #14 @ 04a083a) two-lane review: APPROVE_WITH_NITS ×2,
+zero blocking; merge conditioned on one small fix.**
+Prior: Codex-reported completion of amended Packet 2 (draft PR #14,
+branch feature/evidence-upgrade-packet-2, atop Packet 1 @ b3f3a4b).
+Decision: accept both review verdicts; merge is authorized (per the
+standing merge-judgment delegation: CI green — independently confirmed
+SUCCESS; suite reproduced 1,572 twice; live DB confirmed unmigrated;
+no concurrent churn on the touched files) ONCE the one real finding is
+fixed on the branch: `market_updates/storage.py:459-480
+guard_payload_update` is orphaned — called only by its own test, with no
+SQL-trigger backing on `events` (unlike `ingestion_journal`'s real
+BEFORE UPDATE/DELETE triggers), so the ADMITTED-row payload-immutability
+invariant that docs/market_updates.md states as enforced is not yet true.
+Fix = DB-level trigger blocking payload/timing-column UPDATEs on
+ADMITTED rows (state-transition and `superseded_by` columns exempt) +
+wire or retire the Python guard, before Packet 5 builds on the
+invariant. Also: three benign macro-refresh files from an unrelated
+weekly-refresh commit ride along in the branch history — declared to the
+owner in the PR body rather than rebased away; and the migration
+rehearsal exists as PR-body prose only (its 2,818-row count was
+independently corroborated against the live store; accepted as-is).
+Evidence: scratchpad reports review-p2-conformance.md,
+review-p2-adversarial.md (file:line cites; red-green checks on the new
+tests; cross-process flock reproduction). Opposing: none. Tradeoff:
+one extra commit before merge vs merging a documented-but-unenforced
+invariant. Effect: fix lands on PR #14 → mark ready → merge → Packet 3
+(Thread A); Packet 6 (kalshi, Thread B) starts in parallel immediately.
+Confidence: high. Gap: exact exempt-column set for the events trigger is
+decided by Codex in /plan (requirement: supersession and admission-state
+transitions must remain possible; payload/timing/hash columns must not).
