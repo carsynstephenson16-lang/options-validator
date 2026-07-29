@@ -591,6 +591,20 @@ lineage junction populated; high-volume test passes; suite green.
   `support-disagreement`, `stale-at-admission`,
   `corroboration-insufficient`). Conflict edges: `conflicts_with` table +
   both records quarantined reason `conflict-unresolved`.
+  **Legacy grandfathering (D32, added 2026-07-29):** migration 0002 executed
+  `UPDATE events SET admission_state='ADMITTED'` across every pre-existing
+  row while leaving `admission_reason` NULL, and journalled the rationale
+  ("rows predate admission-state enforcement and were already consumable")
+  only in `ingestion_journal` — so nothing *on the row* distinguishes
+  evidence that passed gates from evidence that predates them, and the
+  packet-8 consumer would read both as fully gated. Migration 0006 must
+  stamp `admission_reason='legacy-grandfathered'` on exactly the rows that
+  are `ADMITTED` with a NULL `admission_reason` at migration time (the 0003
+  trigger permits this: `admission_reason` is one of its three allowed
+  lifecycle columns). Do NOT re-run gates retroactively, do not change any
+  other column, and do not alter `admission_state`. Add a test asserting a
+  legacy row ends up ADMITTED + `legacy-grandfathered` while a
+  gate-admitted row carries its real reason.
   `market_updates/verify_support.py`: takes (claim text, source span),
   runs TWO judged calls with swapped presentation order via an injected
   judge callable (the real judge binding is a thin CLI for manual runs;
@@ -612,7 +626,12 @@ lineage junction populated; high-volume test passes; suite green.
 - **Expected files:** `market_updates/admission.py`,
   `market_updates/verify_support.py`, `market_updates/manifest.py` (all
   new), `market_updates/storage.py` + `service.py` (wiring), migration
-  0005 (additive: `conflicts_with` table; run-receipt count columns),
+  **0006** (additive: `conflicts_with` table; run-receipt count columns;
+  legacy-grandfathered stamp per D32) — renumbered 2026-07-29 (D31): the
+  chain in `market_updates/migrations/versions/` now reads 0001 legacy
+  baseline, 0002 EC-1 expand, 0003 admitted immutability, 0004 provider-run
+  registry version (packet 3), 0005 xbrl_facts (packet 4); confirm the head
+  revision before authoring,
   tests `tests/test_admission.py`, `tests/test_verify_support.py`,
   `tests/test_lineage_volume.py`.
 - **Implementation sequence:** failing tests per gate (one test per
@@ -621,8 +640,11 @@ lineage junction populated; high-volume test passes; suite green.
   batches + high-volume test (10,000 links; assert both directions query
   under a bounded time/row budget and memory stays flat via iterator) →
   manifest helper → wiring → suites.
-- **Schema/API effects:** migration 0005 additive.
-- **Data migration:** additive only.
+- **Schema/API effects:** migration 0006 additive.
+- **Data migration:** additive only, plus the D32 legacy stamp (an UPDATE of
+  `admission_reason` only, on rows where it is currently NULL — permitted by
+  the 0003 trigger, which allows lifecycle updates to `admission_state`,
+  `admission_reason`, and `superseded_by` on ADMITTED rows).
 - **Fixtures/tests:** as enumerated; plus: ordinal `confidence_level`
   reproduces from its logged reasons (property-style test over the reason
   set); an extractor-supplied `supported` without recorded double-order
@@ -871,23 +893,59 @@ specified inclusions/exclusions; ruff/pyright/unittest all green.
   §4.3.
 - **Repository facts to verify:** exact current query and column list in
   `market_context.py`; existing test fixture construction.
-- **Preconditions:** packets 2 and 5 merged in equity-research (field
-  semantics stable); baseline 2109 green. The working tree may contain
-  unrelated uncommitted files from concurrent sessions (observed
-  2026-07-29: modified `options_researcher/live_quotes.py` +
-  `tests/test_live_quotes.py`; untracked `data/schwab_adapter.py` +
-  `tests/test_schwab_adapter.py`) — never stage or commit them; scope
-  `git add` to this packet's files only.
+- **Preconditions (amended 2026-07-29, D33):** packet 2 merged in
+  equity-research — that is the real gate, and it is already met. Every
+  column this consumer reads exists and is populated on `main` today:
+  `available_at` is written as the conservative `public_by_ts_utc` bound on
+  SEC submissions-path rows and is deliberately NULL on Atom-feed rows
+  (`tests/test_sec_availability_wiring.py:104-153` asserts both);
+  `admission_state`, `admission_reason`, `stale_after`, and
+  `purpose_authority` all exist (migration 0002). Packet 5 adds *writers and
+  reason codes*, not columns this consumer reads, so packet 8 no longer
+  blocks on it and may run in parallel — with one carve-out: the
+  `legacy-grandfathered` label from D32 lands in packet 5's migration 0006,
+  so packet 8 must treat a NULL `admission_reason` on an ADMITTED row as
+  grandfathered-legacy and label it accordingly, which stays correct both
+  before and after that stamp exists.
+- **Working-tree hazard (refreshed 2026-07-29 — the F07 list is stale and
+  understated):** concurrent sessions have left a much larger uncommitted
+  surface. Modified: `.env.example`, `.gitignore`, `README.md`,
+  `options_researcher/intraday_capture.py`, `options_researcher/live_quotes.py`,
+  `pyproject.toml`, `tests/test_intraday_capture.py`,
+  `tests/test_live_quotes.py`, `uv.lock`. Untracked: `data/schwab_adapter.py`,
+  `data/schwab_credentials.py`, `docs/schwab-market-data-setup.md`,
+  `tools/setup_schwab.py`, `tests/test_schwab_adapter.py`, and two files
+  under `reports/`. Never stage, commit, revert, or "clean up" any of them;
+  scope every `git add` to this packet's own files by explicit path (never
+  `git add -A`/`.`). **`pyproject.toml` and `uv.lock` are both modified**, so
+  record the baseline suite result and the resolved environment at packet
+  start and re-check at the end — an environment shift from someone else's
+  session must not be misread as a regression from this packet. Re-measure
+  the baseline yourself; do not assume the previously recorded 2109.
 - **Exact scope:** extend the bridge query/filters: rows with
   `admission_state` present must be `ADMITTED`; `available_at` used when
   non-null else `published_at` (each returned record labeled
-  `availability_basis`: `available_at` | `published_at-legacy`);
+  **`gating_basis`**: `available_at` | `published_at-legacy` — renamed from
+  `availability_basis` on 2026-07-29 per D34, because the producer already
+  writes a field of that exact name into the raw payload with a *different*
+  vocabulary (`submissions-acceptance-interval`,
+  `submissions-acceptance-missing`, `submissions-acceptance-invalid`,
+  `feed-timestamp-unruled` — `providers.py:125,185-191`), and two same-named
+  fields carrying different value sets across a repo boundary is a misread
+  waiting to happen. `gating_basis` is consumer-derived: it records which
+  column this bridge actually gated on, and must never be copied from the
+  producer's payload string);
+  plus `admission_basis`: `gated` where `admission_reason` is non-null, else
+  `grandfathered-legacy` (D32 — a NULL reason on an ADMITTED row means the
+  row predates gate enforcement and was blanket-admitted by migration 0002);
   `purpose_authority` in (null→legacy-decision, `decision`);
   `stale_after` in the past ⇒ excluded unless caller passes
   `include_stale=True` (then labeled). Add conformance fixture vectors:
   a small JSON fixture (copied verbatim from the equity-research packet-5
   test fixtures — same bytes, committed here) driving both a
-  fixture-built legacy DB and an EC-1 DB.
+  fixture-built legacy DB and an EC-1 DB. If packet 5 has not merged when
+  this packet starts, author the fixture here from the packet-2 column
+  semantics and record that packet 5 must adopt the identical bytes.
 - **Out of scope:** any producer change; new data sources; dashboards.
 - **Invariants:** read-only; naive-`as_of` refusal preserved; no network.
 - **Expected files:** `options_researcher/market_context.py`,
@@ -897,8 +955,8 @@ specified inclusions/exclusions; ruff/pyright/unittest all green.
   quarantined excluded / stale excluded / stale included-labeled / legacy
   nulls / availability basis labeling) → implementation → `uv run ruff
   check .` → `uv run pyright` → full suite.
-- **Schema/API effects:** bridge return records gain
-  `availability_basis` (additive).
+- **Schema/API effects:** bridge return records gain `gating_basis` and
+  `admission_basis` (additive).
 - **Data migration:** none.
 - **Validation:** `uv run python -m unittest tests.test_market_context -v`
   (adjust to the located test path), then full suite + ruff + pyright.
@@ -936,7 +994,17 @@ registered floors; health metrics land on run receipts; suite green.
 - **Open in Cursor:** packet 4/5 modules, `research-method.md` §4,
   `source-policy.md` §8.
 - **Repository facts to verify:** available fixture data (which tickers
-  have committed companyfacts/filings to key questions against).
+  have committed companyfacts/filings to key questions against). Inventory
+  taken 2026-07-29: `tests/fixtures/market_updates/` holds
+  `company_facts.json`, `sec_submissions.json`, `sec_atom.xml`,
+  `company_rss.xml` plus macro-provider blobs, and packet 4 adds
+  `tests/fixtures/xbrl/0001543151_us-gaap_Revenues.json` (Uber) with a
+  provenance sidecar. `company_facts.json` is a full companyfacts blob and
+  is the realistic source of most answerable items. **If fewer than 8
+  questions are genuinely answerable from committed fixtures, ship fewer and
+  say so in the PR — do not invent an answer, do not add a fixture solely to
+  hit the count, and do not key a question to data the repo does not hold.**
+  A benchmark padded to a target number is worse than a short honest one.
 - **Preconditions:** packets 4–5 merged.
 - **Exact scope:** `data/golden_questions/filings.yaml` (12 items: 8
   answerable keyed to committed fixtures with `accn` + expected value;
@@ -991,9 +1059,20 @@ packet. **Depends on:** all prior packets + a cycle of real use.
 
 ## Recommended thread layout
 
-- Thread A (sequential): packets 1 → 2 → 3 → 4 → 5 → 8 → 9.
-- Thread B (parallel, may start immediately): packets 6 → 7.
-- Packet 10 is a calendar checkpoint, not a Codex thread.
+- Original layout — Thread A (sequential): packets 1 → 2 → 3 → 4 → 5 → 8 → 9.
+  Thread B (parallel): packets 6 → 7.
+- **Revised 2026-07-29 (D33), after packets 1–4 and 6–7 shipped:** thread B
+  is out of kalshi work, and packet 8's real dependency is packet 2 (met),
+  not packet 5. Remaining layout — **Thread A: 5 → 9** (both equity-research,
+  and 9 genuinely needs 5). **Thread B: 8** (options-validator, a different
+  repo, so no shared working tree and no merge contention with thread A).
+  The two threads share one contract seam — the conformance fixture bytes —
+  handled by the carve-outs written into packets 5 and 8. Packet 10 is a
+  calendar checkpoint, not a Codex thread.
+- **Never run two Codex threads against the same repository checkout.** Both
+  threads previously worked in different repos by accident of ordering; from
+  here it is a rule. Concurrent work in one tree makes every measured test
+  count unreliable, which is the one thing this program cannot tolerate.
 
 ## AGENTS.md durable additions (keep minimal)
 
@@ -1004,5 +1083,9 @@ Only after the relevant packet merges, add to the repo's AGENTS.md:
   timestamps tz-aware UTC; `recorded_at` is system-assigned."
 - kalshi: one line under Naming Conventions — "CLI product versions are
   chain-ordered by issuance+BBB; unrecognized BBB forms quarantine
-  (`storage/cli_chain.py`)."
+  (`storage/cli_chain.py`)." Plus, after packet 7 (added 2026-07-29): one
+  line — "Calibration artifacts are selected by lineage identity (code tag,
+  evaluation regime, training cutoff, feature schema, config hash), not by
+  sample count or BSS; a lineage mismatch REFUSES the artifact and never
+  substitutes one." Both packets are merged, so both lines are due now.
 - options-validator: none (bridge behavior documented in the module).

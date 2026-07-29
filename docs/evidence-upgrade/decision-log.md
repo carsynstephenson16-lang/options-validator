@@ -505,3 +505,100 @@ merge #15 → Packet 4; Thread B → Packet 7. Confidence: high. Gap: the
 registry's ban preservation rests on one content-locking test; if the
 registry grows, consider a structural rule (banned entries must have
 empty purposes) rather than per-entry assertions.
+
+---
+
+**D31 — Packet 5's migration number was already taken; renumber to 0006.**
+Prior: the plan assigned Packet 5 "migration 0005". Decision: Packet 5's
+additive migration is **0006**, and Codex must confirm the head revision
+before authoring rather than trusting the plan's number. Evidence:
+`market_updates/migrations/versions/` on
+`origin/feature/evidence-upgrade-packet-4` reads 0001 legacy baseline,
+0002 EC-1 expand, 0003 admitted immutability, 0004 provider-run registry
+version (packet 3), 0005 xbrl_facts (packet 4); the plan was written
+before packets 3 and 4 chose their numbers. Opposing: alembic revision IDs
+are strings, so a collision surfaces as a broken `down_revision` chain
+(two heads) rather than silent corruption — arguably self-correcting.
+Rejected as a reason to leave it: it wastes a Codex cycle, and a
+two-heads error discovered late tends to get "fixed" in a hurry.
+Tradeoff: the plan's number will itself go stale if another packet lands
+first — mitigated by the confirm-the-head instruction. Effect: plan
+§Packet 5 expected-files and schema-effects amended. Confidence: high
+(read the versions directory directly). Gap: none.
+
+---
+
+**D32 — Legacy rows are blanket-ADMITTED with no row-level marker.**
+Prior: the plan assumed `admission_state` distinguishes gated from
+ungated evidence. Decision: Packet 5's migration stamps
+`admission_reason='legacy-grandfathered'` on rows that are `ADMITTED`
+with a NULL `admission_reason`; Packet 8's consumer labels a NULL reason
+on an ADMITTED row as `grandfathered-legacy` rather than gate-passed.
+Gates are NOT re-run retroactively. Evidence:
+`0002_ec1_expand.py:161` executes `UPDATE events SET
+admission_state='ADMITTED'` across every pre-existing row; the rationale
+("rows predate admission-state enforcement and were already consumable")
+is journalled into `ingestion_journal` only, and `admission_reason` is
+left NULL — so nothing *on the row* separates evidence that passed gates
+from evidence that predates them, and the packet-8 consumer would read
+both as fully gated. Opposing: re-running admission over history would be
+more principled — every row would then carry a real verdict. Rejected for
+now: it would retroactively quarantine an unknown fraction of live
+history behind gates designed for forward ingestion, against this
+program's own rule that stored history is never rewritten. Tradeoff: a
+consumer that ignores `admission_basis` still reads grandfathered rows as
+admitted — the label only helps a consumer that looks; accepted because
+mass quarantine is worse and this stays owner-reversible. Effect: plan
+§Packet 5 and §Packet 8 exact scope amended; no trigger change needed
+(the 0003 trigger already permits updating `admission_reason` on ADMITTED
+rows). Confidence: high on the mechanism; medium on the choice not to
+backfill — a judgment call the owner can reverse. Gap: whether any
+consumer outside this program relies on legacy rows reading as ADMITTED.
+
+---
+
+**D33 — Packet 8 does not block on Packet 5; threads rebalanced.**
+Prior: the plan made Packet 8 depend on packets 2 *and* 5, and put it at
+the tail of Thread A. Decision: Packet 8 starts immediately in parallel;
+remaining layout is Thread A 5 → 9 (equity-research), Thread B 8
+(options-validator). Standing rule added: never run two Codex threads
+against the same repository checkout. Evidence: every column Packet 8
+reads is live on `main` today — `available_at` is written as the
+conservative `public_by_ts_utc` bound for SEC submissions-path rows and
+deliberately NULL for Atom-feed rows
+(`tests/test_sec_availability_wiring.py:104-153` asserts both;
+`docs/market_updates.md:139-146` documents it), and `admission_state`,
+`admission_reason`, `stale_after`, `purpose_authority` all exist from
+migration 0002. Packet 5 adds writers and reason codes, not columns this
+consumer reads. Opposing: the original dependency existed to stop the
+consumer hardening against semantics that might still move — partially
+upheld, since the D32 legacy stamp *is* a moving seam; handled by having
+Packet 8 derive `admission_basis` from a NULL reason, which is correct
+both before and after the stamp lands. Tradeoff: the conformance fixture
+must stay byte-identical across two repos while either thread might
+author it first — handled by naming the authoring side in both packet
+texts. Effect: Thread B is not idle after kalshi, and the highest-value
+consumer fix ships sooner — the bridge still gates on `published_at`,
+which is raw SEC acceptance time, a live look-ahead exposure over ~2,557
+rows (D28). Confidence: high on the column facts; medium on the
+parallelism being conflict-free. Gap: none blocking.
+
+
+---
+
+**D34 — `availability_basis` collides across the repo boundary.**
+Prior: the plan had Packet 8's consumer emit a field named
+`availability_basis` with values `available_at` | `published_at-legacy`.
+Decision: rename the consumer-side label to `gating_basis`, and derive it
+in the consumer — never copy the producer's payload string. Evidence:
+`market_updates/providers.py:125,185-191` already writes
+`availability_basis` into the raw payload with a disjoint vocabulary
+(`submissions-acceptance-interval`, `submissions-acceptance-missing`,
+`submissions-acceptance-invalid`, `feed-timestamp-unruled`), and Packet 4
+adds a fifth value `filed-date-conservative`. Opposing: one name for one
+concept is cleaner, and the vocabularies could be merged. Rejected: they
+answer different questions — the producer's records how availability was
+*derived*, the consumer's records which column was actually *gated on*;
+merging would force one of them to lie. Tradeoff: two field names to
+learn. Effect: plan §Packet 8 exact scope and schema effects amended.
+Confidence: high. Gap: none.
