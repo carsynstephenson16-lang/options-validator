@@ -79,10 +79,31 @@ of what was *actually inspected*, not assumed:
    unexplained (likely environment-dependent discovery); packets gate on
    a freshly recorded baseline, so it cannot mask a regression.
 
+## Addendum — Codex /plan preflight round (2026-07-29, after first verdict)
+
+Codex (GPT-5.6 Sol, Packet 1 preflight) returned NOT_READY with two
+factual objections. Both were verified by two fresh Sonnet-5 inspections
+and judged CORRECT: (1) `edgar_fetch.py` has no per-filing metadata
+object — the original Packet 1 edit target did not exist; (2)
+`market_updates/providers.py:172` already uses raw acceptance time as
+`published_at`, which the options-validator bridge gates on over ~2,557
+real rows — a live look-ahead exposure this program must fix rather than
+a missing-capture gap. Root cause on our side: a correct file-scoped
+grep ("zero acceptance hits in edgar_fetch.py") was over-generalized to
+"anywhere" by the audit, and this report's original check #16 repeated
+the same scoped evidence without catching the generalization. Packet 1
+was rescoped (pure rule module in `market_updates/`), the wiring moved to
+Packet 2, and the record amended (decision-log D06 superseded, D28
+added; architecture §1 finding 1 and §6.1 corrected). The Codex
+recommendation to retroactively replace `published_at` semantics was
+partially adopted: gating moves to `available_at` going forward;
+stored history is never rewritten.
+
 ## Final readiness verdict
 
-**READY_FOR_CODEX.** Zero blocking findings; all seven correctable
-findings fixed and re-recorded (decision-log D27); every release-blocking
-check on the mandated list passed with named evidence. Recommended start:
-Thread A Packet 1 (equity-research SEC availability) and Thread B
-Packet 6 (kalshi CLI version chain) may begin in parallel.
+**READY_FOR_CODEX** (re-affirmed after the preflight round and the D28
+amendments). Zero blocking findings outstanding; Packet 1 as amended is
+implementable against verified repository reality. Recommended start:
+Thread A Packet 1 (amended) on the existing
+`feature/evidence-upgrade-packet-1` branch, and Thread B Packet 6
+(kalshi) in parallel.

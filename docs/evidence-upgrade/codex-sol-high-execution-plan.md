@@ -56,13 +56,34 @@ Baselines (verified 2026-07-29 — re-verify at packet start):
 
 ## Packet 1 — SEC availability rule module + acceptance-time capture (equity-research)
 
-**Goal:** A pure, versioned rule module that converts an EDGAR acceptance
-datetime into `filing_date` and a conservative `earliest_public_ts_utc`,
-plus additive capture of `acceptanceDateTime` in the EDGAR fetcher.
+*(Amended 2026-07-29 after Codex /plan preflight — see decision-log D28.
+The original packet wrongly told Codex to write acceptance keys into
+"per-filing metadata edgar_fetch.py already persists"; no such object
+exists in that script. Verified reality: `edgar_fetch.py` writes only
+filing documents, symlinks, an append-only `_fetch_log.txt`, and raw
+`_companyfacts.json` — while `data/_sec_submissions/<CIK10>.json` (written
+by `scripts/validation_gate.py`, present for 33/57 tickers) already caches
+SEC's raw submissions JSON including per-filing `acceptanceDateTime`
+arrays, and `market_updates/providers.py:162-183` already parses
+`acceptanceDateTime` and uses `acceptance or filing_date` as
+`published_at` (test-pinned at `tests/test_market_updates.py:64`). So no
+new acceptance capture is needed anywhere; the work is the RULE MODULE
+(this packet) and the interval WIRING in the store (moved to Packet 2).)*
 
-**Context:** `scripts/edgar_fetch.py` currently records only `filingDate`
-(day granularity); no acceptance time is fetched anywhere (verified by
-grep — zero "acceptance" hits). The governing rule is EDGAR Filer Manual
+**Goal:** A pure, versioned rule module `market_updates/sec_availability.py`
+that converts an EDGAR acceptance datetime + submission type into
+`filing_date`, `earliest_public_ts_utc` (optimistic lower bound), and
+`public_by_ts_utc` (conservative gating bound). No persistence, no
+fetcher changes, no schema changes in this packet.
+
+**Context:** `market_updates` SEC events currently carry raw acceptance
+time as `published_at` (`providers.py:172`), and options-validator's
+bridge gates on `published_at <= as_of`
+(`options_researcher/market_context.py:87`) — so as-of reads of SEC
+events today gate on raw acceptance time, which invariant 8 prohibits
+treating as public availability. This module is the versioned rule that
+Packet 2 wires into the provider to fix that going forward. The governing
+rule is EDGAR Filer Manual
 Vol. II v77 §3.2 (wording identical back through v70): transmission
 ≤ 17:30 ET on an EDGAR business day → same-day filing date; after 17:30 ET
 → next business day 06:00 ET filing date AND no dissemination until the
@@ -77,33 +98,39 @@ acceptance-to-public latency anywhere; the "2 minutes" figure circulating
 online is absent from the actual PDS spec and is banned from this
 codebase.
 
-**Constraints:** Pure functions only in the rule module — no network, no
-I/O. All zone math via `zoneinfo.ZoneInfo("America/New_York")`; never a
-fixed UTC offset. `tzdata` pinned in dev requirements. Additive changes
-only to `edgar_fetch.py` — existing filenames, keys, and outputs must not
-change. No lint config may be added to this repo in this packet.
+**Constraints:** Pure functions only — no network, no I/O, no imports
+beyond stdlib. The module lives at `market_updates/sec_availability.py`
+(`market_updates/` is a real package with normal dotted imports;
+`scripts/` is not a package and uses a `sys.path.insert` idiom — placing
+the module in the package keeps the Packet-2 wiring a clean import). All
+zone math via `zoneinfo.ZoneInfo("America/New_York")`; never a fixed UTC
+offset. `tzdata` pinned in dev requirements. Do NOT touch
+`scripts/edgar_fetch.py`, `market_updates/providers.py`, or any storage/
+schema code in this packet. No lint config may be added to this repo.
 
 **Done when:** the new module passes the full boundary-test matrix below;
-`edgar_fetch.py` records acceptance datetimes additively; full suite ≥
-1544 tests OK; no test touches the network.
+full suite ≥ baseline (record it at start; last observed 1544–1546) OK;
+no test touches the network; no file outside the module, its test, and
+`requirements-dev.txt` is modified.
 
 - **Repos / working directory:** `/Users/carsynstephenson/equity-research`.
-- **Open in Cursor:** `scripts/edgar_fetch.py`, `tests/` (pick the closest
-  existing test module for conventions, e.g. `tests/test_macro_refresh.py`
-  for the injectable-urlopen mock pattern), `AGENTS.md` (SOURCE HIERARCHY
-  + CITATION FORMAT sections), `requirements-dev.txt`,
-  `docs/evidence-upgrade/final-architecture.md` §6.1.
-- **Repository facts to verify before editing:** (a) `edgar_fetch.py`
-  fetches `submissions.json` per CIK and has no acceptance handling;
-  (b) SEC fair-access behavior exists (hard-fail on placeholder
-  `SEC_EDGAR_USER_EMAIL`, ~0.15s sleep, retry on 408/429/5xx) and must not
-  be weakened; (c) tests run with `.venv/bin/python -m unittest discover
-  -s tests` and pass 1544 at baseline.
+- **Open in Cursor:** `market_updates/providers.py` (read-only context:
+  lines 160-185, the acceptance→published_at path this rule will later
+  govern), `tests/test_market_updates.py` (test conventions),
+  `requirements-dev.txt`, `docs/evidence-upgrade/final-architecture.md`
+  §6.1, `docs/evidence-upgrade/decision-log.md` D05/D28.
+- **Repository facts to verify before editing:** (a)
+  `market_updates/providers.py` parses `acceptanceDateTime` (~line 162)
+  and computes `published = _date_or_now(acceptance or filing_date,
+  retrieved_at)` (~line 172); (b) `market_updates/` is a package
+  (normal imports) and no `market_updates/sec_availability.py` exists
+  yet; (c) tests run with `.venv/bin/python -m unittest discover -s
+  tests` — record the baseline count you observe.
 - **Preconditions:** clean working tree (`data/pick_dashboard/
   timeline_ledger.json` may show a pre-existing local modification —
   leave it untouched); baseline suite green.
 - **Exact scope:**
-  1. Create `scripts/sec_availability.py`:
+  1. Create `market_updates/sec_availability.py`:
      - `RULE_VERSION = "EDGAR-FilerManual-v77-2026-03-16"`.
      - `EXCEPTION_FORMS: frozenset[str]` with the 24 types above,
        transcribed verbatim (normalize case/whitespace on comparison).
@@ -127,26 +154,26 @@ change. No lint config may be added to this repo in this packet.
        after-hours non-exception) — the conservative bound that
        look-ahead-sensitive consumers gate on (it becomes `available_at`
        for `sec.filing_event` claims).
-  2. Modify `scripts/edgar_fetch.py` additively: when the submissions
-     JSON exposes `acceptanceDateTime`, write it (verbatim string + parsed
-     UTC ISO) into the per-filing metadata the script already persists,
-     without renaming any existing field or file.
-- **Out of scope:** any schema/database work (packet 2); XBRL endpoints
-  (packet 4); registry (packet 3); backfilling old filings; touching
-  `scripts/validation_gate.py` (frozen).
+- **Out of scope:** ANY edit to `scripts/edgar_fetch.py` (it has no
+  per-filing metadata object; a sidecar was considered and REJECTED —
+  acceptance data is already durably cached in
+  `data/_sec_submissions/<CIK10>.json` where present); any edit to
+  `market_updates/providers.py`/`models.py`/`normalizer.py`/`storage.py`
+  (interval wiring is Packet 2); any schema/database work (packet 2);
+  XBRL endpoints (packet 4); registry (packet 3); backfilling old
+  filings; touching `scripts/validation_gate.py` (frozen); retroactive
+  changes to `published_at` semantics or stored rows (append-only —
+  legacy rows get labeled at the consumer in Packet 8, never rewritten).
 - **Invariants:** raw acceptance time is never presented as exact public
-  availability; no naive datetimes; fair-access code untouched; additive
-  output only.
-- **Expected files changed:** `scripts/sec_availability.py` (new),
-  `scripts/edgar_fetch.py` (small additive edit),
+  availability; no naive datetimes; pure module only.
+- **Expected files changed:** `market_updates/sec_availability.py` (new),
   `tests/test_sec_availability.py` (new), `requirements-dev.txt`
-  (add pinned `tzdata`).
+  (add pinned `tzdata`). Nothing else.
 - **Implementation sequence:** write the failing boundary tests first →
   run them (expect import failure) → implement the module → make tests
-  pass → additive fetcher edit + one test with a recorded submissions
-  fixture containing `acceptanceDateTime` → focused tests → full suite.
-- **Schema/API effects:** new module API as above; per-filing metadata
-  gains two additive keys.
+  pass → focused tests → full suite.
+- **Schema/API effects:** new pure-module API only; no schema, no
+  persistence, no behavior change anywhere else.
 - **Data migration:** none.
 - **Fixtures and tests (the required matrix — implement every row):**
   winter (EST) 17:29 ET → same day; winter 17:31 ET non-exception → next
@@ -173,10 +200,10 @@ change. No lint config may be added to this repo in this packet.
 - **Review checklist:** no fixed UTC offsets anywhere; exception list
   matches the verbatim 24-string list above (check the list, not a
   count); no "2 minutes" or any latency constant; `earliest_public`
-  never used as `available_at`; no network in tests; fetcher output
-  backward-compatible.
+  never used as `available_at`; no network in tests; diff touches only
+  the three expected files.
 - **Evidence references:** `source-ledger.csv` SEC-S1..SEC-S9, SEC-S12;
-  decision-log D05, D06.
+  decision-log D05, D06 (as amended), D28.
 
 ---
 
@@ -197,7 +224,13 @@ at `<provider>_<item_id>.json.gz` with skip-if-exists — a changed payload
 for the same id is silently never re-archived (confirmed data-loss bug).
 The DB lives under `market_updates/.local/` (gitignored) in WAL mode.
 SQLite's WAL-Reset corruption bug affects versions < 3.51.3 under
-concurrent multi-writer WAL.
+concurrent multi-writer WAL. Additionally (verified 2026-07-29, D28):
+`providers.py:172` sets `published = _date_or_now(acceptance or
+filing_date, retrieved_at)` for SEC submissions events — raw acceptance
+time flows into `published_at`, which the options-validator bridge gates
+on; the local store already holds ~2,557 such rows. This packet wires the
+Packet-1 rule module into the SEC provider so `available_at` carries the
+conservative bound going forward (legacy rows untouched — append-only).
 
 **Constraints:** Expand-phase only: every column additive and nullable
 (or defaulted); no existing reader/writer breaks. Dual-write the raw
@@ -207,13 +240,18 @@ old path is a later contract phase, not this packet. The consumer bridge
 against a migrated DB.
 
 **Done when:** `alembic upgrade head` on a copy of a real DB passes the
-reconciliation checks; dual-write verified by tests; full suite ≥1544 OK.
+reconciliation checks; dual-write verified by tests; new SEC submissions
+events carry the availability interval with `available_at =
+public_by_ts_utc` while Atom-path and legacy rows are labeled, not
+guessed; full suite ≥ recorded baseline OK.
 
 - **Repos / working directory:** `/Users/carsynstephenson/equity-research`.
 - **Open in Cursor:** `market_updates/storage.py`,
   `market_updates/service.py`, `market_updates/models.py`,
-  `market_updates/normalizer.py`, `docs/market_updates.md`,
-  `docs/evidence-upgrade/final-architecture.md` §4, §10.
+  `market_updates/normalizer.py`, `market_updates/providers.py`
+  (lines 150-290), `market_updates/sec_availability.py` (from Packet 1),
+  `docs/market_updates.md`,
+  `docs/evidence-upgrade/final-architecture.md` §4, §6.1, §10.
 - **Repository facts to verify:** exact current DDL of `events`,
   `source_items`, `provider_state`, `provider_runs`; how
   `schema_version` is written; where `RawPayloadArchive` is constructed;
@@ -278,17 +316,40 @@ reconciliation checks; dual-write verified by tests; full suite ≥1544 OK.
      Tests: version-gate unit test (monkeypatched version tuples incl.
      both backports); lock-contention test (two write sessions, second
      raises).
+  7. SEC availability-interval wiring (uses Packet 1's
+     `market_updates/sec_availability.py`): `models.py` gains optional
+     fields `acceptance_ts_utc`, `earliest_public_ts_utc`,
+     `public_by_ts_utc`, `availability_rule_version` on
+     `RawSourceItem`/`MarketEvent` (+ `event_to_dict`);
+     `providers.py::parse_sec_submissions` computes the interval from
+     `acceptanceDateTime` + form type and sets them; `normalizer.py`
+     passes them through; `storage.py` persists them (columns are part of
+     migration 0002) and sets `available_at = public_by_ts_utc` for
+     submissions-path SEC events going forward. `published_at` semantics
+     are UNCHANGED (provider-asserted timestamp; append-only history —
+     existing rows are never rewritten; consumers label legacy rows per
+     Packet 8). The Atom-feed path (`_feed_entries`) has no
+     acceptanceDateTime: leave its `available_at` null with reason
+     `availability_basis="feed-timestamp-unruled"` recorded in the
+     payload — never guess an interval for it. Tests: submissions-path
+     event carries the interval and `available_at == public_by_ts_utc`
+     (both an in-window and an after-hours fixture); Atom-path event has
+     null `available_at` + the reason; existing pinned tests
+     (`tests/test_market_updates.py:56,72,151,236`) stay green unmodified.
 - **Out of scope:** registry (3), XBRL (4), admission gates (5), any
   consumer changes, removing the legacy archive path, kalshi/
-  options-validator files.
+  options-validator files, retroactive edits to existing rows'
+  `published_at`/`available_at`, and ANY edit to `scripts/edgar_fetch.py`.
 - **Invariants:** append-only discipline (no in-place payload rewrites);
   naive datetimes refused; consumer bridge untouched and still green.
 - **Expected files changed:** `market_updates/migrations/*` (new),
   `market_updates/storage.py`, `market_updates/service.py`,
-  `market_updates/models.py`, `requirements-dev.txt`,
+  `market_updates/models.py`, `market_updates/providers.py`,
+  `market_updates/normalizer.py`, `requirements-dev.txt`,
   `docs/market_updates.md` (schema section), new tests
   `tests/test_market_updates_migrations.py`,
-  `tests/test_raw_archive_content_addressing.py`.
+  `tests/test_raw_archive_content_addressing.py`,
+  `tests/test_sec_availability_wiring.py`.
 - **Implementation sequence:** failing tests for the changed-payload bug
   and for `recorded_at` system-assignment → baseline migration → expand
   migration → storage/service changes → migration rehearsal on the copied
@@ -432,7 +493,9 @@ restating filing's availability; suite green.
 
 - **Working directory:** `/Users/carsynstephenson/equity-research`.
 - **Open in Cursor:** `scripts/edgar_fetch.py` (fair-access + caching
-  conventions), `scripts/sec_availability.py` (packet 1),
+  conventions), `market_updates/sec_availability.py` (packet 1; scripts/
+  is not a package — import it by adding the repo root to `sys.path`,
+  matching the existing scripts idiom),
   `market_updates/storage.py` + `registry.py` (packets 2–3),
   `final-architecture.md` §4, §6.1; `source-policy.md` §2.
 - **Repository facts to verify:** where companyfacts JSON is cached today

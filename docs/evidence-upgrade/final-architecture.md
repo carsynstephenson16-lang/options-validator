@@ -72,9 +72,20 @@ reports):
 
 Verified gaps the architecture must close:
 
-1. equity-research `scripts/edgar_fetch.py` captures only `filingDate`,
-   never `acceptanceDateTime` — sub-day point-in-time precision does not
-   exist there today.
+1. *(Corrected 2026-07-29, decision-log D28 — the original finding here
+   over-generalized a file-scoped grep.)* Acceptance timestamps ARE
+   already captured in equity-research: `data/_sec_submissions/<CIK10>.json`
+   caches SEC's raw submissions JSON including per-filing
+   `acceptanceDateTime` (written by `scripts/validation_gate.py`), and
+   `market_updates/providers.py:172` uses `acceptance or filing_date` as
+   `published_at`. The REAL gap is semantic: raw acceptance time flows
+   into `published_at`, and the options-validator bridge gates on
+   `published_at <= as_of` (`market_context.py:87`) over a store that
+   already holds ~2,557 such SEC rows — i.e. as-of reads gate on raw
+   acceptance time today, which invariant 8 prohibits treating as public
+   availability. `scripts/edgar_fetch.py` itself persists no per-filing
+   metadata object (documents + append-only text log only) and stays
+   untouched.
 2. equity-research raw payload archive is id-keyed with skip-if-exists —
    a changed payload for the same source item id is silently never
    re-archived; not content-addressed.
@@ -340,6 +351,13 @@ Jul 2024; EDGAR hours & holiday calendar; details + citations in
     logs, labeled as such — never cited to SEC.
 - Raw SEC acceptance time is never used as exact public availability
   (invariant 8 upheld — it is the *input* to the rule, not the output).
+  Wiring note (2026-07-29): the market_updates SEC submissions provider
+  currently sets `published_at` from raw acceptance time — a pre-existing
+  violation of this rule at the consumer boundary. Fix: going forward the
+  provider computes the interval and `available_at = public_by_ts_utc`
+  (packet 2); `published_at` keeps its provider-asserted meaning and
+  history is never rewritten; consumers label legacy rows
+  (`availability_basis="published_at-legacy"`, packet 8).
 - `rule_version` + `tzdata_version` stored on every row; rule changes are
   new versions (none found v70→v77).
 - Required tests: winter (EST), summer (EDT), the 17:30/22:00 boundaries,

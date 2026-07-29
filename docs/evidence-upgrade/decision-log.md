@@ -98,12 +98,19 @@ Confidence: high. Gap: dissemination latency remains officially
 unquantified (recorded gap; conservative bound stands until an internal
 SLO is measured).
 
-**D06 — Capture `acceptanceDateTime` in equity-research.**
-Prior: implied by correction area 2. Decision: extend `edgar_fetch.py` to
-record acceptance datetimes (additive). Evidence: audit finding —
-`edgar_fetch.py` captures only `filingDate`; zero "acceptance" hits
-(equity-research audit §10). Opposing: none. Tradeoff: none material.
-Effect: packet 1. Confidence: high (repo-verified gap). Gap: none.
+**D06 — Capture `acceptanceDateTime` in equity-research.** *(SUPERSEDED
+by D28, 2026-07-29 — kept for the record.)*
+Prior: implied by correction area 2. Decision (original): extend
+`edgar_fetch.py` to record acceptance datetimes (additive). Evidence
+(original): audit finding — `edgar_fetch.py` captures only `filingDate`;
+zero "acceptance" hits in that file. What was wrong: the file-scoped grep
+was generalized to "nowhere in the repo." Verified reality (Codex
+preflight + two Sonnet verifications): acceptance data already exists in
+`data/_sec_submissions/<CIK10>.json` (raw SEC JSON, written by
+`validation_gate.py`) and is already parsed by
+`market_updates/providers.py:162-183`, where it becomes `published_at`.
+`edgar_fetch.py` has no per-filing metadata object to extend. Superseding
+decision: see D28.
 
 **D07 — Numeric financial facts must come from SEC structured endpoints
 with `accn` recorded; scraped values capped at `display_only`.**
@@ -382,3 +389,42 @@ seven edits above. Confidence: high. Gap: the verifier's F04 advice to
 re-scan the ledger for further count errors was followed for stated
 counts referenced by the deliverables; counts inside narrative research
 reports (non-deliverables) were not re-audited line-by-line.
+
+**D28 — Packet 1 rescoped after Codex /plan preflight (NOT_READY) +
+two-agent verification; acceptance-as-published_at exposure confirmed
+live.**
+Prior: D06/Packet 1 as originally written (additive `edgar_fetch.py`
+metadata edit). Decision: Codex's refusal was correct and its claims
+verified by two independent Sonnet-5 inspections: (a) `edgar_fetch.py`
+persists only filing documents, symlinks, an append-only free-text
+`_fetch_log.txt`, and raw `_companyfacts.json` — no per-filing metadata
+object exists to receive new keys (its own docstring at :346-349 falsely
+claiming validation_gate parses the fetch log is a separate stale-doc
+defect, noted, not fixed here); (b) `data/_sec_submissions/<CIK10>.json`
+already caches per-filing `acceptanceDateTime` verbatim (33/57 tickers,
+on-demand); (c) `market_updates/providers.py:172` sets
+`published = acceptance or filing_date or retrieved_at` (test-pinned),
+the Atom path uses feed timestamps, and the real local store holds ~2,557
+SEC rows with acceptance-shaped `published_at` that
+`options_researcher/market_context.py:87` gates on — a live, pre-existing
+invariant-8 exposure. Rescope: Packet 1 = pure rule module
+`market_updates/sec_availability.py` + tests ONLY (module homed in the
+package because `market_updates/` uses normal imports while `scripts/` is
+a non-package with a sys.path idiom); the interval wiring
+(models/providers/normalizer/storage; `available_at = public_by_ts_utc`
+going forward; Atom path labeled unruled; `published_at` untouched) moves
+into Packet 2 with the schema it needs. A new `edgar_fetch.py` sidecar
+was REJECTED (data already durably cached; a new overwrite/append
+contract would be invention without a consumer). Codex's suggestion to
+"replace raw-acceptance published_at semantics" was PARTIALLY adopted:
+gating moves to `available_at`; `published_at` itself keeps its
+provider-asserted meaning and stored history is never rewritten
+(append-only; legacy rows labeled at the consumer, packet 8). Evidence:
+scratchpad reports `verify-edgar-persistence.md`,
+`verify-acceptance-flow.md` (file:line cites throughout). Opposing: none
+found. Tradeoff: Packet 2 grows by one scope item; Packet 1 shrinks to
+pure code. Effect: Packet 1/2/4 amendments + architecture §1/§6.1
+corrections, this entry. Confidence: high (all claims repo-verified).
+Gap: whether Atom-path SEC events should later derive a conservative
+interval from their accession via the submissions cache is deferred until
+a consumer needs it.
