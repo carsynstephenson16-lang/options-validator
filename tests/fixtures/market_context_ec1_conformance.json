@@ -1,0 +1,106 @@
+{
+  "schema_version": "ec1-market-context-conformance/v1",
+  "as_of": "2026-07-20T16:00:00+00:00",
+  "lookback_days": 7,
+  "ticker": "VST",
+  "legacy_events": [
+    {
+      "event_id": "legacy-current",
+      "published_at": "2026-07-19T15:00:00+00:00"
+    },
+    {
+      "event_id": "legacy-future",
+      "published_at": "2026-07-20T17:00:00+00:00"
+    }
+  ],
+  "ec1_events": [
+    {
+      "event_id": "gated-current",
+      "published_at": "2026-07-19T15:00:00+00:00",
+      "available_at": "2026-07-20T15:30:00+00:00",
+      "admission_state": "ADMITTED",
+      "admission_reason": "temporal-safe",
+      "stale_after": "2026-07-21T16:00:00+00:00",
+      "purpose_authority": "decision"
+    },
+    {
+      "event_id": "not-yet-available",
+      "published_at": "2026-07-19T12:00:00+00:00",
+      "available_at": "2026-07-20T16:30:00+00:00",
+      "admission_state": "ADMITTED",
+      "admission_reason": "temporal-safe",
+      "stale_after": "2026-07-21T16:00:00+00:00",
+      "purpose_authority": "decision"
+    },
+    {
+      "event_id": "quarantined",
+      "published_at": "2026-07-19T12:00:00+00:00",
+      "available_at": "2026-07-20T15:00:00+00:00",
+      "admission_state": "QUARANTINED",
+      "admission_reason": "lookahead-violation",
+      "stale_after": "2026-07-21T16:00:00+00:00",
+      "purpose_authority": "decision"
+    },
+    {
+      "event_id": "display-only",
+      "published_at": "2026-07-19T12:00:00+00:00",
+      "available_at": "2026-07-20T14:00:00+00:00",
+      "admission_state": "ADMITTED",
+      "admission_reason": "display-authorized",
+      "stale_after": "2026-07-21T16:00:00+00:00",
+      "purpose_authority": "display_only"
+    },
+    {
+      "event_id": "stale",
+      "published_at": "2026-07-19T12:00:00+00:00",
+      "available_at": "2026-07-20T13:00:00+00:00",
+      "admission_state": "ADMITTED",
+      "admission_reason": "temporal-safe",
+      "stale_after": "2026-07-20T15:00:00+00:00",
+      "purpose_authority": "decision"
+    },
+    {
+      "event_id": "grandfathered",
+      "published_at": "2026-07-19T14:00:00+00:00",
+      "available_at": null,
+      "admission_state": "ADMITTED",
+      "admission_reason": null,
+      "stale_after": null,
+      "purpose_authority": null
+    },
+    {
+      "event_id": "available-in-window",
+      "published_at": "2026-07-01T12:00:00+00:00",
+      "available_at": "2026-07-20T14:30:00+00:00",
+      "admission_state": "ADMITTED",
+      "admission_reason": "temporal-safe",
+      "stale_after": "2026-07-21T16:00:00+00:00",
+      "purpose_authority": "decision"
+    },
+    {
+      "event_id": "available-before-window",
+      "published_at": "2026-07-10T12:00:00+00:00",
+      "available_at": "2026-07-10T13:00:00+00:00",
+      "admission_state": "ADMITTED",
+      "admission_reason": "temporal-safe",
+      "stale_after": "2026-07-21T16:00:00+00:00",
+      "purpose_authority": "decision"
+    }
+  ],
+  "expected": {
+    "legacy_default_ids": [
+      "legacy-current"
+    ],
+    "ec1_default_ids": [
+      "gated-current",
+      "available-in-window",
+      "grandfathered"
+    ],
+    "ec1_include_stale_ids": [
+      "gated-current",
+      "available-in-window",
+      "stale",
+      "grandfathered"
+    ]
+  }
+}
