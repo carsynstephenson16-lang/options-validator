@@ -934,3 +934,51 @@ Method note: the first brief was written without running the matrix it
 specified. Reachability is now checked before any matrix is specified, which
 is the same lesson as D37 one level up — verify the thing you are about to
 ask for, not the thing you are looking at.
+
+**D39 — Packet 5A merged; the automated review lane has never run on this
+program.** Decision: (a) 5A stands as merged (PR #17); (b) the Claude PR
+Review workflow's `ready_for_review` trigger gap is fixed now, the expired
+OAuth token and the required-check decision are owner actions; (c) 5B and 5C
+remain the open scope.
+
+Evidence — 5A verified independently rather than accepted. Suite reproduced at
+exactly 1871 passed + 630 subtests on merged `main`; single alembic head
+`0007_admission_gates`. The audit's one medium finding — invalid GDELT
+timestamps labelled EXACT from retrieval time, fixed in `1630b35` — was
+re-derived by mutation: reverting the `bounded_at_retrieval` branch to
+`exact_temporal_provenance` turns
+`test_invalid_gdelt_seendate_cannot_become_exact_retrieval_time` red, and
+restoring returns 12 passed / 36 subtests. The fix is real, and it is the
+exact failure mode D38's two-clock split was written to prevent, caught by the
+guard rather than by inspection.
+
+Evidence — the review lane, and it is the more serious finding. `gh run list`
+over the review workflow shows: EC-1 packets 1, 2, 3 and 4 each ran on
+`pull_request` and concluded **skipped**; packet 5 ran on `pull_request` three
+times and concluded **failure**. Two independent causes. (i) The job's `if`
+skips drafts, but `ready_for_review` was absent from the `types:` list, so a
+PR opened as a draft is skipped at `opened` and never re-evaluated when marked
+ready. (ii) `CLAUDE_CODE_OAUTH_TOKEN` exists but was set 2026-07-16 and has
+since expired, which is precisely the failure the workflow's own header
+comment predicts. Net: **no EC-1 packet has ever been seen by the automated
+review lane**, and packet 5 merged with that check red.
+
+A first diagnosis blaming an empty `ANTHROPIC_API_KEY` in the job env was
+wrong and is retracted: the workflow authenticates by Max/Pro subscription
+OAuth, so an empty API key is by design and not the cause.
+
+This is the fifth occurrence of the program's signature pattern — recorded as
+enforced, exercised by nothing. D29's orphaned `guard_payload_update`, D35's
+four untested guards, D36's inert verify-support gate, D37/D38's unreachable
+policies, and now the CI control whose entire purpose is catching that class
+of defect. The pattern has never once been a coincidence.
+
+Effect: trigger gap fixed and pushed (`2758b94`). Two owner actions remain —
+re-run `claude setup-token` and update the secret, and decide whether the
+review lane becomes a required check, since packet 5 demonstrated that an
+advisory red review does not stop a merge. Recorded limitation carried from
+the audit: rule snapshot hashes cover normalized retained statements rather
+than downloaded source bytes, disclosed in the source ledger. An unrelated
+pre-existing `uv.lock` change remains uncommitted and was not merged.
+Confidence: high — every claim above was reproduced by command in this
+session.
