@@ -705,3 +705,89 @@ Confidence: high on both blocking defects (both demonstrated by
 execution, not argued). Gap: the holiday fix needs official per-year
 sources for every year the store will span; only 2026 is currently
 ledgered (SEC-S8).
+
+**D36 — Packet 5 (PR #17) REQUEST_CHANGES on a live mass-quarantine defect;
+CI collection gap closed first; Packet 7a verified; Packet 8 merge-ready.**
+Decision: (a) PR #17 does NOT merge until the freshness-window defect is
+fixed and the missing horizon fails loud; (b) equity-research CI switched to
+`pytest` and pushed BEFORE opening PR #17, so this is the first packet PR
+gated by the whole suite; (c) Packet 7a stands verified by independent
+mutation; (d) Packet 8 cherry-picked clean onto options-validator `main` as
+PR #16, all checks green, awaiting owner merge.
+
+Evidence — Packet 5, one independent adversarial pass re-deriving every
+claim by execution rather than reading the implementer's report. The
+guard-removal claims hold: all eight gates go red when individually
+neutralized (authority 2 failed, missing availability 2, unversioned rule 1,
+lookahead 1, extraction/drift 2, stale-at-admission 2, corroboration 1,
+verify-support 4), returning to 18 passed / 485 subtests on restore. Two
+defects the protocol structurally cannot catch survived it.
+
+B1, blocking: `ClaimTypePolicy.freshness_window` is never set anywhere in the
+codebase, so `stale_after()` returns None for every non-`immutable` class
+(`admission.py:94-95`), and `admit()` reads None as expired
+(`admission.py:297-308`). Measured over all eight registered claim types,
+`earnings.date`, `macro.series`, `market.quote` and `news.discovery` return
+QUARANTINED / stale-at-admission unconditionally; mapped onto
+`_INGESTION_ROUTES`, that is 7 of 12 live routes — bea, bls, eia, fred,
+treasury_fiscal_data, twelve_data, gdelt. `storage.py:410` is the production
+path. This is NOT latent: `admission_enabled` defaults to True
+(`config.py:215-219`). Root cause is a semantic collision — the producer
+returns None for "no horizon defined", the consumer reads it as "expired".
+The 1858-test suite is green because every gate test builds an `immutable`
+`BASIC_POLICY` with a synthetic `claim.basic` claim type that is not in
+`CLAIM_TYPE_POLICIES`; the registered policies are never run through
+`admit()` by any test.
+
+B2, blocking as a process matter: `requires_support=True` occurs exactly once
+in the repository, in `tests/test_admission.py:44`. All eight registered
+policies set it False, so the support gate and all of `verify_support.py` are
+unreachable in production. Third consecutive round of the D29/D35 pattern —
+recorded as enforced, exercised by nothing real.
+
+Found sound in Packet 5: migration `0007` correctly numbered on
+`0006_xbrl_fact_natural_key` (superseding D31, whose `0006` was taken by
+Packet 4's review fix) with a single-head chain; legacy rows stamped
+`legacy-grandfathered` before the non-null triggers install, with the row
+count journaled; `conflicts_with` carries a canonical-order CHECK making
+mirrored duplicates unrepresentable; `downgrade()` reverses only the label
+transform it made.
+
+Evidence — the CI collection gap. `unittest discover` imported but never
+collected six pytest-native modules totalling 209 tests. Fixed on
+equity-research `main` (`pytest`, green at 1832 in 3m04s, inside the
+15-minute budget) and pushed before PR #17 opened, so the ordering win is
+real rather than promised. Pushing also required unbreaking the fresh-clone
+dead-citation gate: the Schwab README pointer was written as
+`options-validator/docs/schwab-market-data-setup.md`, and `CITATION_PATH_RE`
+is unanchored, so it matched the `docs/...` substring and read a
+cross-repository reference as a repo-relative citation. Reworded the pointer;
+the guard was left exactly as strict as it was. options-validator was
+checked for the same gap and does not have it — zero module-level bare
+`test_` functions, no fixtures or parametrize, pytest not a dependency, so
+`unittest discover` is a complete gate there.
+
+Evidence — Packet 7a (kalshi `8ee715a`). Verified independently rather than
+accepted: the F06 guard D35 singled out as passing while mutated now fails
+when `_serialize_source_timestamp_map` is neutralized (1 failed / 12 passed)
+and passes on restore (13 passed), because the new test finally populates
+`FusionResult.source_evidence`. The two AGENTS.md lines are present.
+
+Tradeoff on B1: fixing it needs per-class freshness windows, which are frozen
+numbers and therefore owner-typed under the standing rule; the implementation
+must not pick them. Accepted, because the alternative is an implementer
+choosing decision-eligibility horizons by default. The interim requirement is
+that a non-`immutable` class with no window must refuse loudly at
+construction or config load instead of silently quarantining data.
+
+Effect: PR #17 blocked pending B1 fix + a table-driven test over every entry
+in `CLAIM_TYPE_POLICIES` + an owner-typed window table; B2 needs either
+wiring or an explicit amendment naming the packet that wires it. Packet 8
+(options-validator PR #16, `024ccd8`) is green and merge-ready and should
+land BEFORE Packet 5, so B1 is caught by behaviour rather than inspection —
+its gating is correct, which is exactly why an unfixed Packet 5 would present
+as "the board quietly stopped receiving new evidence" rather than an error.
+Confidence: high on both defects, demonstrated by execution. Gap: the kalshi
+repository is 70 commits ahead of and 2 behind its origin, so Packets 6, 7
+and 7a exist only locally; reconciling that push is an owner decision, not
+recorded here as done.
