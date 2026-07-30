@@ -14,11 +14,7 @@ its verdict?" — plus the absolute rule that this is never a live-order bot.
 
 @.cursorrules
 
-The import above is the authoritative wording. Headlines: no look-ahead;
-fills at quote mid or worse plus slippage haircut; commissions plus
-half-spread on both legs; liquidity gates on both legs; verdicts gate on
-LOSSES (not trades or win rate); every strategy number comes from
-`config.py`; skip-and-log data gaps instead of papering over them.
+The import above is the authoritative wording.
 
 `AGENTS.md` is the Codex-facing twin of these rules. When a guardrail
 changes, update `.cursorrules` and `AGENTS.md` together so they don't drift.
@@ -46,10 +42,7 @@ for docs, briefs, and trivial mechanical fixes — not strategy or ledger code.
 
 ```bash
 uv sync --frozen                                 # Python 3.12; uv.lock is source of truth
-uv run python -m unittest discover -s tests      # full suite (~6 s, offline); exit code is the verdict
-uv run ruff check .                              # lint (CI-enforced)
-uv run pyright                                   # types; only pyrightconfig.json "include" paths
-uv run pre-commit run --all-files                # ruff --fix, pyright, hygiene hooks
+uv run python -m unittest discover -s tests      # full suite (offline); exit code is the verdict
 uv run python tools/score_backtest.py --symbols MSFT,AMZN --json
 uv run python options_researcher/profile_tradability.py
 uv run python analysis/feasibility.py
@@ -76,14 +69,9 @@ the ThetaData terminal or subscription needs owner sign-off first.
 
 ## Layout
 
-- `config.py` — every strategy/risk number (UNIVERSE, sleeve, gates). No magic numbers elsewhere.
-- `options_researcher/` — research layer: profiling, studies, attractiveness, portfolio, dashboard.
-- `harness/`, `strategies/`, `tools/` — offline Lumibot backtest path and scoreboard CLI.
-- `analysis/`, `metrics.py` — feasibility and shared metrics.
 - `ledger/` — append-only research ledger (`facts.log`, trials). Never rewrite or delete entries.
 - `data/` — parquet chain cache; `data/positions/positions.csv` and `data/positions/holdings.csv` drive the paper book.
 - `reports/`, `docs/superpowers/` — dated findings, frozen specs, and pre-registrations.
-- `tests/` — unittest suite. `.tmp/`, `results/`, `.cache/` are disposable and gitignored.
 
 ## Research integrity
 
@@ -106,66 +94,23 @@ the ThetaData terminal or subscription needs owner sign-off first.
 
 ## Optional public-web research fetchers
 
-`uv sync --extra web-fetchers` installs Trafilatura for post-capture text
-extraction, Crawl4AI for a public JavaScript-rendered page, and Scrapling as a
-last-resort public-page fetcher. These are manual research utilities only:
-never call them from tests, strategy code, or a trigger path; never use them to
-bypass source terms, rate limits, logins, paywalls, or bot walls; and retain the
-source URL and capture time. They do not replace primary filings, canonical
-data providers, or the project cache, and cannot change a hypothesis verdict.
+`.cursorrules` (imported above) carries the binding rules: manual research
+utilities only, never from tests or a trigger path, never to bypass source
+terms, and they cannot change a hypothesis verdict.
 
-### Which fetch tool, in order (measured 2026-07-17, not assumed)
-
-These fetchers are **not** a substitute for WebSearch: neither can discover an
-unknown URL from a question. They replace WebFetch once a URL is known.
-
-1. **WebSearch** — discovery only (you don't have the URL yet). No substitute.
-2. **WebFetch** — default once the URL is known and a short answer suffices.
-   It fetches *and summarizes*: it returned one sentence for a page whose body
-   is ~10.5k chars. Never treat its output as verbatim source text.
-3. **Trafilatura** — use when WebFetch is not good enough, which for this repo
-   is often: **WebFetch gets HTTP 403 from SEC EDGAR** (SEC requires a
-   descriptive User-Agent and WebFetch cannot set one), while Trafilatura with
-   a UA configured via `use_config()` returns 200. Earnings-date discipline
-   runs on SEC/IR primary sources, so this is the tool for quoting a filing,
-   an IR page, or any table verbatim (`include_tables=True` recovered a full
-   8-K list cleanly). Set a real identifying UA — spoofing a browser UA to
-   evade a block is the banned behavior above, not this.
-4. **Crawl4AI** — last resort, only after confirming the content is absent from
-   the raw HTML (i.e. genuinely JS-rendered). Costs a ~171 MB browser download
-   on first use (`crawl4ai-setup`) plus ~3 s/page, and its default
-   `PruningContentFilter` silently reduced a real page to 9 characters — check
-   output length before trusting it.
-5. **Scrapling** — untested here; per above, last-resort static fetching.
-
-Firecrawl is out of credits (since 2026-07-09) — do not reach for it.
+For *which* fetcher to reach for once a URL is known — including the measured
+SEC EDGAR 403 gotcha and the Crawl4AI content-loss trap — use the
+`web-fetch-order` skill.
 
 ## Conventions and pitfalls
 
-- Ruff: double quotes, 100 cols, py312, rules E4/E7/E9/F/I (`pyproject.toml`).
 - Verify Lumibot/ThetaData call signatures against the installed packages;
   do not trust remembered APIs. If a capability is missing, stop and report.
-- ThetaData EOD marks can be missing even when intraday quotes exist — skip
-  the day and log it rather than substituting an intraday snapshot.
 - `.claude/` is intentionally gitignored (local-only settings); this file is
   the tracked Claude entry point.
 - Root-level dated notes (`/2026-*.md`, `Untitled*.md`) are gitignored
   Obsidian scratch — never commit them.
 - Secrets live in `.env` (gitignored; `.env.example` is the template).
-- CI (`.github/workflows/ci.yml`) runs ruff, pyright, unittest, and gitleaks
-  on PRs and on pushes to `main` and `phase-1a-research-integrity`.
-
-## Obsidian LLM Wiki
-
-This repo is an Obsidian vault. The maintained wiki layer is `wiki/`, with
-immutable raw source material under `wiki/raw/`. Read `wiki/index.md` before
-wiki-oriented work, and append every ingest, filed query result, or lint pass
-to `wiki/log.md`.
-
-The wiki is derived operator memory, not the source of truth. For strategy
-verdicts, market data, configuration, and reproducibility, defer to `ledger/`,
-`data/`, `reports/`, `docs/superpowers/`, tests, and committed source files.
-If the wiki conflicts with canonical evidence, correct the wiki.
 
 ## Claim discipline (always on)
 
@@ -182,14 +127,6 @@ Never cite blogs, Reddit, YouTube, or forums for assignment, margin, fills, or
 fees when an official source exists. If sources conflict, say so instead of
 picking one silently.
 
-## Vocabulary discipline (always on)
-
-Banned words about backtest results: "proven," "confirmed," "edge found,"
-"works," "guaranteed."
-
-Allowed: "survived this test," "not yet rejected," "rejected," "consistent
-with zero edge."
-
 ## Project boundary (always on)
 
 This repo is a validator. It never places orders, never connects to a live
@@ -198,10 +135,5 @@ attempt to work around the hook, and treat a hook block as correct by default.
 
 ## Scope guard (always on)
 
-The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
-forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
-arc, with its historical diagnostic permanently retired. Before adding any new
-capability, ticker, strategy, or tool, answer in one sentence: "Does this move
-one of the live hypotheses toward its declared verdict?" If no, write the idea
-into `ideas-parking-lot.md` and continue. Parked ideas are not rejected ideas;
-they're just not now.
+`.cursorrules` (imported above) carries the scope-guard test verbatim. The one
+thing it does not say: parked ideas are not rejected ideas; they're just not now.
