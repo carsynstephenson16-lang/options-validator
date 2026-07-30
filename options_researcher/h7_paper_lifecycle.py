@@ -17,6 +17,7 @@ import math
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from weakref import WeakValueDictionary
 
 import pandas as pd
 
@@ -62,9 +63,12 @@ class RealStoreSession:
     data_gate_config_hash: str
     data_gate_source_hash: str
     included_symbols: tuple[str, ...]
+    operation: str = "decision"
+    requested_run_date: str = ""
 
 
 _REAL_EXIT_AUTHORITY_TOKEN = object()
+_ISSUED_REAL_STORE_SESSIONS: WeakValueDictionary[int, RealStoreSession] = WeakValueDictionary()
 
 
 @dataclass(frozen=True)
@@ -164,11 +168,33 @@ def _synthetic_base(base_dir) -> Path:
     return base
 
 
+def _issue_real_store_session(session: RealStoreSession) -> RealStoreSession:
+    """Register one factory-created, process-local entry capability."""
+    _ISSUED_REAL_STORE_SESSIONS[id(session)] = session
+    return session
+
+
+def _require_real_store_session(session: RealStoreSession) -> RealStoreSession:
+    """Refuse directly constructed or copied real-store capabilities."""
+    if _ISSUED_REAL_STORE_SESSIONS.get(id(session)) is not session:
+        raise ActivationBoundaryError(
+            "forged RealStoreSession cannot authorize a real-store transition"
+        )
+    return session
+
+
 def _resolve_base(base_dir) -> Path:
     """Permit only the explicit session key to select a real entry store."""
     if isinstance(base_dir, RealStoreSession):
-        return Path(base_dir.base_dir)
+        return Path(_require_real_store_session(base_dir).base_dir)
     return _synthetic_base(base_dir)
+
+
+def _require_entry_operation(base_dir, expected: str) -> None:
+    if isinstance(base_dir, RealStoreSession) and base_dir.operation != expected:
+        raise LifecycleValidationError(
+            f"RealStoreSession operation must be {expected!r}, got {base_dir.operation!r}"
+        )
 
 
 def _operational_decision_session(base_dir, source_session: str) -> str:
@@ -428,6 +454,7 @@ def record_entry_intent(
 ) -> TransitionResult:
     """Record a board-resolved T intent with frozen contract identity."""
     base = _resolve_base(base_dir)
+    _require_entry_operation(base_dir, "decision")
     operational_decision = _operational_decision_session(base_dir, decision_session)
     _, write_clock = _record_after_session_close(operational_decision, clock)
     events = event_ledger.read_events(base)
@@ -617,6 +644,7 @@ def _validated_approval(
 def record_owner_approval(*, base_dir, entry_intent_id: str, clock=None) -> TransitionResult:
     """Record approval before T+1 close; late approval mechanically skips."""
     base = _resolve_base(base_dir)
+    _require_entry_operation(base_dir, "decision")
     events = event_ledger.read_events(base)
     intent = _require_event(events, entry_intent_id, "entry_intent")
     if (
@@ -820,6 +848,7 @@ def process_entry_fill(
 ) -> TransitionResult:
     """Resolve an approved intent exactly once at its T+1 EOD quotes."""
     base = _resolve_base(base_dir)
+    _require_entry_operation(base_dir, "fill")
     events = event_ledger.read_events(base)
     intent = _require_event(events, entry_intent_id, "entry_intent")
     terminal = _terminal_for_intent(events, entry_intent_id)

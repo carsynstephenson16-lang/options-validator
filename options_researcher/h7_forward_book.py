@@ -15,6 +15,7 @@ from pathlib import Path
 import config
 from data.cache_runner import session_close_utc, trading_days
 from options_researcher import h7_event_ledger as ledger
+from options_researcher import h7_paper_lifecycle as lifecycle
 from options_researcher.h7_board import resolve_board
 from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
@@ -121,7 +122,7 @@ def _synthetic_base(base_dir) -> Path:
 def _resolve_base(base_dir) -> Path:
     """Allow only an explicit real-session key to read/write the live book."""
     if isinstance(base_dir, RealStoreSession):
-        return Path(base_dir.base_dir)
+        return Path(lifecycle._require_real_store_session(base_dir).base_dir)
     return _synthetic_base(base_dir)
 
 
@@ -720,6 +721,10 @@ def record_board_resolution(
 ) -> BoardResolutionResult:
     """Resolve candidates against the ledger-derived global book."""
     base = _resolve_base(base_dir)
+    if isinstance(base_dir, RealStoreSession) and base_dir.operation != "decision":
+        raise BookValidationError(
+            "RealStoreSession operation must be 'decision' for board resolution"
+        )
     session = _session(evaluation_session)
     if isinstance(base_dir, RealStoreSession):
         if base_dir.evaluation_session != session:

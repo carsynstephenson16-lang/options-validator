@@ -14,7 +14,7 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from data.cache_runner import session_close_utc
 from data.underlying_closes import load_closes_adjusted
@@ -80,6 +80,54 @@ def _source_symbol_map(source: dict, names: list[str]) -> dict[str, dict]:
     return symbols
 
 
+def _session_binding(
+    decision_session: str,
+    operation: Literal["decision", "fill"],
+) -> tuple[str, str]:
+    """Return the only source session and run date valid for one operation."""
+    if operation == "decision":
+        source = evaluation_session(date.fromisoformat(decision_session)).isoformat()
+        return source, decision_session
+    if operation == "fill":
+        source = lifecycle._next_session(decision_session)
+        return source, lifecycle._next_session(source)
+    raise SessionRefused("operation must be 'decision' or 'fill'")
+
+
+def _require_session_binding(session: RealStoreSession) -> None:
+    lifecycle._require_real_store_session(session)
+    if session.operation not in {"decision", "fill"}:
+        raise SessionRefused("session operation is invalid")
+    expected_source, expected_requested = _session_binding(
+        session.decision_session,
+        session.operation,
+    )
+    if session.evaluation_session != expected_source:
+        raise SessionRefused(
+            f"{session.operation} operation requires source session "
+            f"{expected_source}, got {session.evaluation_session}"
+        )
+    if session.requested_run_date != expected_requested:
+        raise SessionRefused(
+            f"{session.operation} operation requires requested run date "
+            f"{expected_requested}, got {session.requested_run_date}"
+        )
+
+
+def _require_operation(session: RealStoreSession, expected: str) -> None:
+    _require_session_binding(session)
+    if session.operation != expected:
+        raise SessionRefused(f"session operation must be {expected!r}, got {session.operation!r}")
+
+
+def _require_receipt_run_date(receipt: dict, expected: str, label: str) -> None:
+    if receipt.get("requested_run_date") != expected:
+        raise SessionRefused(
+            f"{label} requested run date does not match session "
+            f"({receipt.get('requested_run_date')!r} != {expected!r})"
+        )
+
+
 def open_real_session(
     *,
     data_gate_receipt_path: Path,
@@ -87,6 +135,7 @@ def open_real_session(
     source_evaluation_session: str | None = None,
     symbol: str | None = None,
     base_dir: Path = REAL_FORWARD_STORE,
+    operation: Literal["decision", "fill"] = "decision",
 ) -> RealStoreSession:
     """Open a real entry session from one validated immutable receipt chain.
 
@@ -95,11 +144,17 @@ def open_real_session(
     it uses the watcher-compatible preceding completed session.
     """
     decision = _iso_session(decision_session, "decision_session")
+    expected_source, requested_run_date = _session_binding(decision, operation)
     source_evaluation = (
-        evaluation_session(date.fromisoformat(decision)).isoformat()
+        expected_source
         if source_evaluation_session is None
         else _iso_session(source_evaluation_session, "source_evaluation_session")
     )
+    if source_evaluation != expected_source:
+        raise SessionRefused(
+            f"{operation} operation requires source session "
+            f"{expected_source}, got {source_evaluation}"
+        )
     base = Path(base_dir)
     try:
         cohort = load_registered_cohort(base_dir=base)
@@ -132,6 +187,8 @@ def open_real_session(
         source = load_receipt(source_path, expected_type="source_health")
     except (OSError, ValueError, KeyError) as exc:
         raise _refuse("linked source-health receipt is unavailable", exc) from exc
+    _require_receipt_run_date(gate, requested_run_date, "data-gate receipt")
+    _require_receipt_run_date(source, requested_run_date, "source-health receipt")
     symbols = _source_symbol_map(source, names)
     entry_names = list(cohort.included)
     unhealthy = sorted(
@@ -153,18 +210,22 @@ def open_real_session(
                 f"{symbol} is entry-banned by source health (gate={state.get('gate')!r})"
             )
 
-    return RealStoreSession(
-        base_dir=base,
-        activation_event_id=cohort.event_id,
-        decision_session=decision,
-        evaluation_session=source_evaluation,
-        data_gate_receipt_path=gate_path,
-        source_health_receipt_path=source_path,
-        data_gate_receipt_hash=str(gate["receipt_hash"]),
-        source_health_receipt_hash=str(source["receipt_hash"]),
-        data_gate_config_hash=str(gate["config_hash"]),
-        data_gate_source_hash=str(gate["source_hash"]),
-        included_symbols=cohort.included,
+    return lifecycle._issue_real_store_session(
+        RealStoreSession(
+            base_dir=base,
+            activation_event_id=cohort.event_id,
+            decision_session=decision,
+            evaluation_session=source_evaluation,
+            data_gate_receipt_path=gate_path,
+            source_health_receipt_path=source_path,
+            data_gate_receipt_hash=str(gate["receipt_hash"]),
+            source_health_receipt_hash=str(source["receipt_hash"]),
+            data_gate_config_hash=str(gate["config_hash"]),
+            data_gate_source_hash=str(gate["source_hash"]),
+            included_symbols=cohort.included,
+            operation=operation,
+            requested_run_date=requested_run_date,
+        )
     )
 
 
@@ -185,6 +246,7 @@ def record_session_evidence(session: RealStoreSession, *, symbol: str) -> Sessio
     """Publish a validated receipt chain as typed, idempotent ledger evidence."""
     if not isinstance(session, RealStoreSession):
         raise SessionRefused("receipt publication requires a RealStoreSession")
+    _require_session_binding(session)
     if symbol not in session.included_symbols:
         raise SessionRefused(f"{symbol} is outside the frozen registered cohort")
     names = watch_universe()
@@ -202,6 +264,16 @@ def record_session_evidence(session: RealStoreSession, *, symbol: str) -> Sessio
         or source.get("receipt_hash") != session.source_health_receipt_hash
     ):
         raise SessionRefused("session receipt identity changed before publication")
+    _require_receipt_run_date(
+        gate,
+        session.requested_run_date,
+        "data-gate receipt",
+    )
+    _require_receipt_run_date(
+        source,
+        session.requested_run_date,
+        "source-health receipt",
+    )
     symbols = _source_symbol_map(source, names)
     healthy_symbols = sorted(
         name for name in session.included_symbols if symbols[name].get("healthy") is True
@@ -304,12 +376,18 @@ def _receipt_input(watcher: dict, label: str) -> dict:
 
 def _watcher_receipt_for_session(*, path: Path, session: RealStoreSession) -> dict:
     """Validate the receipt that produced the only eligible entry action."""
+    _require_session_binding(session)
     try:
         watcher = load_receipt(Path(path), expected_type="watcher_decision")
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         raise _refuse("watcher decision receipt is unavailable", exc) from exc
     if watcher.get("evaluation_session") != session.evaluation_session:
         raise SessionRefused("watcher decision receipt has the wrong source session")
+    _require_receipt_run_date(
+        watcher,
+        session.requested_run_date,
+        "watcher receipt",
+    )
     if watcher.get("scope") != scope_identity():
         raise SessionRefused("watcher decision receipt does not cover the official scope")
     if watcher.get("data_gate_receipt_hash") != session.data_gate_receipt_hash:
@@ -411,6 +489,7 @@ def propose_entry(
     *, session: RealStoreSession, symbol: str, lane: str, watcher_receipt_path: Path
 ) -> TransitionResult:
     """Append the one receipt-derived entry intent for a board-approved action."""
+    _require_operation(session, "decision")
     if lane not in ledger.LANES:
         raise SessionRefused("lane must be a, b, or c")
     if symbol not in session.included_symbols:
@@ -453,6 +532,7 @@ def fill_entry(
     watcher_receipt_path: Path,
 ) -> TransitionResult:
     """Append a T+1 paper fill using the exact receipt-bound cache inputs."""
+    _require_operation(session, "fill")
     if symbol not in session.included_symbols:
         raise SessionRefused(f"{symbol} is outside the frozen registered cohort")
     watcher = _watcher_receipt_for_session(path=watcher_receipt_path, session=session)
@@ -573,6 +653,7 @@ def main(argv: list[str] | None = None) -> int:
             decision_session=args.decision_session,
             source_evaluation_session=args.source_evaluation_session,
             symbol=symbol,
+            operation="fill" if args.command == "fill" else "decision",
         )
         if args.command == "status":
             print(
@@ -607,6 +688,7 @@ def main(argv: list[str] | None = None) -> int:
                 decision_session=args.decision_session,
                 source_evaluation_session=args.source_evaluation_session,
                 symbol=intent_symbol,
+                operation="fill",
             )
             result, exit_report = fill_entry_and_observe_exit(
                 session=session,
