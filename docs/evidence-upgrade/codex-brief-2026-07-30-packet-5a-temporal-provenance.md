@@ -1,177 +1,229 @@
-# Codex brief — Packet 5A: temporal provenance for every registered route
+# Codex brief — Packet 5A: temporal provenance at the parser layer
 
-**Target model:** Codex-tuned GPT-5.x ("Sol"), API `reasoning.effort = "xhigh"`.
-**Authored:** 2026-07-30. **Blocks:** everything downstream — 5B, 5C, PR #17.
-**Grounding:** OpenAI *Codex prompting guide* and *GPT-5.1 prompting guide*,
-fetched 2026-07-30 (Official-source). Same harness settings as the packet 5
-fix brief: `xhigh`, low global verbosity overridden high for code,
-`parallel_tool_calls` on, first-class `apply_patch`, and **no prompting for an
-upfront plan or mid-rollout status** (the migration note warns it causes early
-termination). `AGENTS.md` is auto-injected root-to-leaf, so this brief does not
-restate the repo guardrails.
+**Revision 2, 2026-07-30.** Revision 1 was REQUEST_CHANGES'd for four factual
+defects and one sequencing contradiction; all five are corrected below and the
+verification that drove each is cited. Do not use revision 1.
+
+**Target model:** Codex-tuned GPT-5.x ("Sol"), `reasoning.effort = "xhigh"`.
+**Grounding:** OpenAI *Codex prompting guide* / *GPT-5.1 prompting guide*
+(Official-source, fetched 2026-07-30). Harness: low global verbosity overridden
+high for code, `parallel_tool_calls` on, first-class `apply_patch`, **no
+prompting for an upfront plan or mid-rollout status**. `AGENTS.md` auto-injects;
+this brief does not restate repo guardrails.
 
 ---
 
-## Why this packet exists
+## What changed from revision 1, and why
 
-D37: with the proposed freshness windows applied, all seven affected routes
-still fail at `temporal-missing-availability` — the windows unblock zero
-routes. `public_by_ts_utc` and `availability_rule_version` are populated in
-exactly one place, `providers.py:206-207`, inside the SEC submissions parser.
-Every other provider leaves them `None` (`models.py:105-106`), and that gate
-fires before the staleness gate. **Repo-verified.**
+**1. Scope cut: 5A is parser-layer only.** Revision 1 demanded a production
+admission matrix over every route while also preserving the rule that
+non-immutable policies raise. Those are contradictory. Measured:
+
+```
+sec_edgar    (immutable)    -> QUARANTINED / temporal-missing-availability
+fred         (slow)         -> RAISES ValueError: no freshness_window
+twelve_data  (fast)         -> RAISES ValueError: no freshness_window
+gdelt        (event_driven) -> RAISES ValueError: no freshness_window
+```
+
+Six of seven routes cannot reach the temporal gate at all until 5C supplies
+windows. **The full admission matrix is therefore 5C's deliverable, not 5A's.**
+5A owns provider/parser → provenance. (My earlier reproduction only reached the
+temporal gate because it injected windows via `replace()` — an artifact of the
+harness, not something the production path can do.)
+
+**2. The SEC inventory was wrong.** Only the structured `sec_edgar`
+submissions parser populates the interval (`providers.py:206-207`).
+`sec_edgar_atom` and `sec_companyfacts` populate **neither** field —
+verified by reading both construction sites. Revision 1 called all three
+"already implemented."
+
+**3. FRED is not a free win.** The provider requests
+`series_id, api_key, file_type=json, sort_order=desc, limit=2`
+(`providers.py:457-458`) — **no `output_type`, no real-time period**. FRED
+defaults real-time periods to today, so the returned `realtime_start`
+describes the *query's* information set, not the observation's original
+release. The no-API-key CSV fallback (`fredgraph.csv?id=`) carries **no
+real-time field at all**. Initial-release data needs a vintage/ALFRED-style
+query (`output_type=4`). **Official-source: FRED real-time period docs.**
+
+**4. Twelve Data is not a free win.** `/quote` is called with no `interval`
+(`providers.py:678`), so it defaults to a daily bar, and the parser reads
+`row["close"]` — a bar close, not a tick. `datetime` is the bar's *opening*
+time. The rule needs the timestamp corresponding to the actual quoted price
+(`timestamp` / `last_quote_at`, market state) plus the exchange timezone.
+**Official-source: Twelve Data /quote docs.**
+
+**5. The blanket ban on retrieval time was wrong, and conflated two clocks.**
+Retrieval time is a legitimate *conservative* anti-lookahead bound: a replay
+before first capture demonstrably could not see the record, so capture time
+never overstates availability. What retrieval must never do is reset
+*freshness*. Revision 1's absolute ban would have stranded routes that have a
+sound bound available. Corrected model below.
+
+---
+
+## The two clocks — the core of this packet
+
+These are different questions and must be different fields.
+
+| Field | Question it answers | May retrieval time supply it? |
+|---|---|---|
+| `available_at` | "When can we *prove* the system could have seen this?" | **Yes**, as a conservative upper bound, labeled `observed-at-retrieval` |
+| `freshness_anchor` | "When was this fact actually observed/released/quoted at source?" | **Never.** Re-fetching an old record must not make it fresh. |
+
+Collapsing them is what makes a repeatedly-fetched stale quote look current
+while a genuinely fresh release looks stale.
 
 ---
 
 ## 1. The prompt
 
 ````text
-Give every registered ingestion route a versioned availability rule, so that
-admission can evaluate temporal safety instead of refusing for lack of inputs.
-Work on branch `feature/evidence-upgrade-packet-5` in its existing worktree.
+Give every registered ingestion route typed temporal provenance at the
+provider/parser layer. Do not touch admission-gate sequencing or freshness
+policy; those are 5C. Work on branch `feature/evidence-upgrade-packet-5`.
 
 <solution_persistence>
-- You are an autonomous senior engineer: gather context, implement, test, and
-  refine end-to-end in this turn.
-- Do not stop at analysis or a partial route. Carry every route through
-  implementation, the matrix test, and verification.
-- Bias to action, with ONE exception defined in <do_not_invent_availability>.
+- Autonomous senior engineer: gather context, implement, test, refine
+  end-to-end in this turn.
+- Do not stop at analysis or a partial route. Every route gets a typed
+  outcome, including the routes whose honest outcome is "unresolved".
+- Bias to action, with the exception in <unresolved_is_a_valid_outcome>.
 </solution_persistence>
 
 <context_gathering>
-The defect and its location are established. Do not re-derive D37.
-- One parallel batch: `market_updates/providers.py`,
-  `market_updates/sec_availability.py`, `market_updates/models.py`,
-  `market_updates/storage.py`, `market_updates/service.py`,
-  `market_updates/normalizer.py`.
-- Early stop: you can name each route's temporal signal from the inventory
-  below. Confirm it against the code; do not go looking for more.
-- Escalate once if a cited line has drifted: re-locate by symbol with `rg`.
+The defect and its location are established; do not re-derive D37.
+- One parallel batch: `market_updates/providers.py`, `sec_availability.py`,
+  `models.py`, `normalizer.py`, `storage.py`, `service.py`.
+- Early stop: you can name each route's temporal signal from the contracts
+  below. Confirm against code; do not go looking for more.
 </context_gathering>
 
-## The reference implementation to generalize
+## Deliverable 1 — a provenance result type
 
-`market_updates/sec_availability.py` already does this correctly for SEC. It
-returns a `SecAvailability` carrying `acceptance_ts_utc`, `filing_date`,
-`earliest_public_ts_utc`, `public_by_ts_utc`, `rule_version`, and
-`tzdata_version`, with `RULE_VERSION = "EDGAR-FilerManual-v77-2026-03-16"` —
-a version string naming the governing document and its date. Its docstring
-records the discipline to preserve: `earliest_public_ts_utc` is an optimistic
-lower bound, and look-ahead-sensitive consumers must gate on the conservative
-`public_by_ts_utc`.
+Introduce one typed result that every route's rule returns. It must be able to
+express all three real outcomes, not just success:
 
-Generalize that shape. Every route gets a rule that returns a bounded interval
-plus a `rule_version` naming the governing source and its date. Do not
-special-case SEC out of the new abstraction; it should become one
-implementation of it.
+- EXACT       — a source-supplied time for the actual event (release, quote,
+                acceptance). Carries `freshness_anchor`.
+- BOUNDED     — no source time available, but first immutable capture time is
+                a provable conservative bound. Sets `available_at` only,
+                with `availability_basis = "observed-at-retrieval"`, and
+                leaves `freshness_anchor` unset. MUST NOT be treated as
+                freshness.
+- UNRESOLVED  — neither available. Carries a specific machine-readable reason.
 
-## Measured per-route inventory — what each source actually gives you
+<unresolved_is_a_valid_outcome>
+A route that cannot prove when its data became public SHOULD end UNRESOLVED
+with a precise reason. That is the system working. Do not manufacture an
+EXACT time from a retrieval timestamp, and do not use BOUNDED to populate
+`freshness_anchor`. A partial matrix with truthful statuses is a complete
+deliverable; a fully-resolved matrix built on retrieval time is a failure that
+would pass every test.
+</unresolved_is_a_valid_outcome>
 
-All Repo-verified today. `published_at` is what the provider currently sets.
+Persist the outcome in a structured field — `availability_basis`, status, and
+reason on the record (or an explicit journal payload), not as prose inside the
+rule. `availability_basis` already exists as a payload convention in the SEC
+parser (`providers.py:185-191`); extend that pattern rather than inventing a
+parallel one.
 
-| Route | `published_at` today | Real availability signal | Where it is |
-|---|---|---|---|
-| `sec_edgar`, `sec_edgar_atom` | filing timestamp | acceptance + form rule | already implemented |
-| `sec_companyfacts` | — | same SEC rule | already implemented |
-| `fred` | **observation date** (`providers.py:431`) | `realtime_start` | **already captured in payload** (`providers.py:435`) |
-| `twelve_data` | **fetch time `now`** (`providers.py:699`) | exchange `datetime` on the row | **already captured in payload** (`payload=row`) |
-| `bls` | **observation date** (`providers.py:528`) | official release timestamp | NOT captured — needs new capture or release calendar |
-| `bea` | **observation period** (`providers.py:573`) | official release timestamp | NOT captured |
-| `eia` | **observation period** (`providers.py:617`) | official release timestamp | NOT captured |
-| `treasury_fiscal_data` | **record date** (`providers.py:654`) | publication/business-day rule | NOT captured |
-| `gdelt` | article date | GDELT `seendate` | check `parse_gdelt_articles` |
-| `company_ir` | feed entry date | feed `published`/`updated` | check `providers.py:353` |
-| `federal_reserve` | feed entry date | feed `published`/`updated` | check `providers.py:427` |
+## Deliverable 2 — rule identity, separate from evidence metadata
 
-Two of these are free wins: FRED and Twelve Data already carry the correct
-signal in the payload and simply do not use it. FRED's `realtime_start` is the
-vintage — the moment the observation first became available — which is the
-whole reason a quarterly observation dated April 1 can arrive in July.
+Every rule carries, as its own typed object:
 
-<do_not_invent_availability>
-The naive way to make the matrix pass is to default `available_at` to
-`retrieved_at` or `utc_now()` when a source has no availability signal. DO NOT
-DO THIS under any circumstance. It fabricates temporal provenance, and because
-`recorded_at >= available_at` would then always hold, it would silently defeat
-the look-ahead gate this entire architecture exists to enforce. NO LOOK-AHEAD
-is a non-negotiable repo guardrail.
+  rule_id, rule_version, governing_source_url, governing_effective_date,
+  captured_at, source_snapshot_hash, coverage_horizon
 
-Where a source genuinely has no availability signal, the correct outcome is
-that the route stays refused — but with a precise, per-route reason recorded
-in the rule, not the generic `temporal-missing-availability`. A route that
-cannot yet prove when its data became public SHOULD be quarantined. That is
-the system working.
+A document *retrieval date* must not become the rule version.
+`sec_availability.RULE_VERSION = "EDGAR-FilerManual-v77-2026-03-16"` names the
+governing document and its effective date — follow that shape, and add the
+remaining fields around it.
 
-Report which routes you gave real rules and which remain honestly unresolved.
-A partial matrix with truthful reasons is a success; a full matrix built on
-`retrieved_at` is a failure that would pass every test.
-</do_not_invent_availability>
+`coverage_horizon` is fail-closed: a rule asked about a period its governing
+calendar does not cover must raise, exactly as
+`EdgarHolidayCalendarCoverageError` already does. Silent extrapolation past a
+published calendar is the same defect class as a missing window.
 
-## Where official timing is needed
+## Deliverable 3 — per-route contracts (corrected)
 
-For `bls`, `bea`, `eia`, and `treasury_fiscal_data`, the availability rule
-depends on official release timing. Use the agency's own published release
-calendar or documentation as the governing source, cite the URL and capture
-date in the `rule_version` string exactly as the SEC rule does, and record it
-in `docs/evidence-upgrade/source-ledger.csv`. Do not cite blogs, aggregators,
-or model recall. If an official calendar cannot be obtained for a source,
-that source falls under <do_not_invent_availability> — leave it refused with a
-named reason and say so.
+| Route | Contract |
+|---|---|
+| `sec_edgar` | Already correct. Preserve `sec_availability.py`'s internals **behind the shared interface**; do not refactor its working logic. |
+| `sec_edgar_atom` | Inherit provenance by accession from the canonical submissions record. If the accession is absent, remain **discovery-only** — not EXACT. |
+| `sec_companyfacts` | Cannot use the submissions acceptance rule: the aggregate record has no accession and no acceptance timestamp. Use Packet 4's conservative XBRL filing-date rule, or UNRESOLVED. |
+| `fred` | Default query returns the *current vintage*; `realtime_start` is the query's information set, not first publication. EXACT requires a vintage/ALFRED-style query (`output_type=4`). The CSV fallback has no real-time field → UNRESOLVED or BOUNDED. |
+| `twelve_data` | `/quote` defaults to a daily bar; `datetime` is the bar open, and the parsed price is `close`. Use the timestamp corresponding to the quoted price (`timestamp` / `last_quote_at`), plus exchange timezone and market state. |
+| `bls`, `bea`, `eia`, `treasury_fiscal_data` | Official release calendars, revision-aware (below). Fail-closed on coverage. |
+| `gdelt` | `seendate` from `parse_gdelt_articles`. Discovery purpose only. |
+| `company_ir`, `federal_reserve` | Feed `published`/`updated`; a feed timestamp is issuer-controlled, so BOUNDED may be the honest answer. |
 
-## Required: the end-to-end route matrix
+## Deliverable 4 — revision-aware macro treatment
 
-This is the deliverable that would have caught the defect, and it matters more
-than any individual rule.
+A release calendar alone cannot timestamp a *revised* value. Each macro
+observation must distinguish:
 
-Add a test that walks **every** entry in `_INGESTION_ROUTES`
-(`service.py:50`), drives a representative record through the production
-admission path, and asserts the resulting `(state, reason)` per route. It must
-read the FIRST gate that refuses, not the gate under study. Include routes you
-expect to be refused, with their expected reason — the matrix records reality,
-it does not assert success.
+- initial release — first publication of that observation
+- revision — a later restatement of the same period
+- current-vintage retrieval — what the source says today
 
-Existing tests build a synthetic `claim.basic` policy and a fixture registry
-(`tests/test_admission.py:38-45`); that is exactly how B1 and B4 both hid.
-This matrix must use the registered routes, the registered policies, and the
-real registry.
+An observation's `freshness_anchor` is the release that produced *that value*,
+not the series' most recent release. Model this explicitly; do not let a
+revision inherit the initial release time or vice versa.
+
+## Deliverable 5 — the matrix, at the parser layer
+
+Add an **offline** test that runs every registered route's real parser against
+a committed provider fixture and asserts the resulting provenance status,
+basis, and reason.
+
+- Use actual parser fixtures, NOT hand-constructed `RawSourceItem` objects.
+  Hand-built records are how B1 and B4 both hid: they encode the author's
+  belief about the data instead of the data.
+- Assert the honest outcome per route, including UNRESOLVED ones.
+- No network. Offline is a hard repo constraint.
+
+Explicitly out of scope: the production admission matrix. Six of seven
+non-SEC routes raise before reaching the temporal gate until 5C sets windows.
+Do not add windows to make a matrix runnable, and do not modify
+`tests/test_admission.py:240-248`'s expectation that non-immutable policies
+raise. If your work makes it fail, stop and report.
 
 ## Definition of done — evidence, not assertions
 
-1. Guard red/green for every rule you add: neutralize it, show the suite goes
-   RED, restore, show GREEN. Name the failing test and the counts. (D35)
-2. Print the full route matrix in your final report — route, state, reason,
-   and whether the rule is real or honestly unresolved.
-3. Full suite `python -m pytest tests`; report the count against the 1858 +
-   586 subtests baseline. That worktree's `.venv` is stale and has no `pip`;
-   repair it from `requirements-dev.txt` or use a venv satisfying
-   `requirements.txt`, and say which.
-4. `python -m compileall -q scripts`.
-5. `python scripts/integrity_check.py --checks dead-citations` → 0 FAIL, 0
-   WARN. `CITATION_PATH_RE` is unanchored, so prose containing a `docs/...`
-   path for a file outside this repo will redden it. Do not loosen the guard.
-6. `git diff --check`; `pyproject.toml` and `uv.lock` hashes unchanged or
-   explained; alembic single head.
-7. Do not change `tests/test_admission.py:240-248`'s expectation that
-   non-immutable policies raise. That belongs to 5C, not here. If your work
-   makes it fail, stop and report rather than editing it.
+1. Guard red/green per rule: neutralize, show RED, restore, show GREEN. Name
+   the failing test and counts. (D35)
+2. Print the full parser-layer matrix in the final report: route, status,
+   basis, reason, and whether the rule is EXACT, BOUNDED, or UNRESOLVED.
+3. `python -m pytest tests` against the 1858 + 586-subtest baseline. That
+   worktree's `.venv` is stale and has no `pip`; repair from
+   `requirements-dev.txt` or use a venv satisfying `requirements.txt`, and say
+   which.
+4. `compileall -q scripts`; `integrity_check.py --checks dead-citations`
+   0 FAIL/0 WARN (note: `CITATION_PATH_RE` is unanchored — a `docs/...` path
+   for a file outside this repo will redden it; do not loosen the guard);
+   `git diff --check`; lock hashes unchanged or explained; alembic single head.
+5. Every governing calendar or doc cited gets its URL and capture date
+   recorded in `docs/evidence-upgrade/source-ledger.csv`. Official sources
+   only — no aggregators, no model recall.
 
 ## Editing constraints
 
-- ASCII by default; `apply_patch` for single-file edits.
-- The worktree is shared with concurrent sessions. NEVER revert changes you
-  did not make; ignore unrelated modified files; if files change under you
-  mid-task, stop and report.
+- ASCII default; `apply_patch` for single-file edits.
+- Shared worktree: NEVER revert changes you did not make; ignore unrelated
+  modified files; if files change under you mid-task, stop and report.
 - Never `git reset --hard` or `git checkout --`. Do not amend a commit.
 - Do not touch `ledger/` or any append-only artifact.
 
 <final_answer_formatting>
-- Lead with what changed and why, then the route matrix, then the red/green
-  table. No "Summary:" preamble.
-- Reference files as `path:line`. No large diffs or before/after pairs.
-- At most two short snippets, only where a path reference is ambiguous.
-- Reconcile every intention as Done, Blocked (one sentence + the exact
-  question), or Cancelled. Nothing left in progress.
-- High verbosity inside the code; low verbosity in the final message.
+- Lead with what changed and why, then the matrix, then red/green. No
+  "Summary:" preamble.
+- `path:line` references; no large diffs or before/after pairs; at most two
+  short snippets.
+- Reconcile every intention as Done, Blocked (one sentence + exact question),
+  or Cancelled. Nothing left in progress.
+- High verbosity in code; low verbosity in the final message.
 </final_answer_formatting>
 ````
 
@@ -181,16 +233,28 @@ real registry.
 
 | Conflict | Resolution |
 |---|---|
-| Official: "bias to action … complete a working version." Repo: NO LOOK-AHEAD. | `<do_not_invent_availability>` names the specific completion the model would otherwise reach for (`retrieved_at`) and forbids it, then redefines success so a partial matrix with truthful reasons *is* a complete deliverable. Without this, "make the matrix pass" and "never fabricate provenance" point in opposite directions. |
-| Official: "cover the root cause, not a narrow slice." Repo: packet boundaries. | The brief names what belongs to 5C (the non-immutable-raises test) and instructs the model to stop and report rather than fix it, so comprehensiveness does not silently absorb the next packet. |
-| Official: "make reasonable assumptions." Repo: claim discipline — official sources only for timing. | Assumptions are permitted for code shape, forbidden for release timing; the fallback is an honest refusal, not a guess. |
+| Official "bias to action / complete a working version" vs NO LOOK-AHEAD | Revision 1 banned retrieval time outright, which was too blunt. Now the licence is precise: retrieval time is permitted as `BOUNDED`/`observed-at-retrieval` for `available_at`, forbidden for `freshness_anchor`, and `UNRESOLVED` is defined as a successful outcome so "complete" never requires fabrication. |
+| Official "cover the root cause, not a narrow slice" vs packet boundaries | The admission matrix and the non-immutable-raises test are named as 5C's, with the measured proof that they cannot run here — so comprehensiveness cannot silently absorb the next packet. |
+| Official "make reasonable assumptions" vs claim discipline | Assumptions permitted for code shape; forbidden for release timing and vintage semantics, where the fallback is `UNRESOLVED`. |
 
-The official "tight error handling — no broad catches, no success-shaped
-fallbacks" is again the exact shape of the fix, so the brief uses that
-vocabulary deliberately.
+## 3. Carry-forward to 5B (typed earnings claims)
 
-## 3. If the round underperforms
+Four lessons this round produced, to apply before 5B is written:
 
-Use the official metaprompt (end of turn), generate the revision two or three
-times, and keep only what recurs across runs — single-run suggestions overfit
-to the one situation. Any surviving change gets an eval before adoption.
+1. **Check reachability before specifying any matrix.** Run the thing end-to-end
+   and read the first failure. Revision 1 specified a matrix that could not
+   execute; one command would have caught it.
+2. **Never call a payload field a "free win" without reading the request that
+   produced it.** Both FRED and Twelve Data had the right *field name* and the
+   wrong *semantics*, decided by query parameters the brief never examined.
+3. **Separate identity from metadata.** 5B's earnings claim needs the same
+   discipline: `(symbol, fiscal_period)` identity distinct from status,
+   evidence IDs, and supersession — and a retrieval date is never a version.
+4. **Typed states beat booleans.** EXACT/BOUNDED/UNRESOLVED here; for 5B,
+   an explicit status machine (expected / confirmed / revised / superseded /
+   conflicted / passed) rather than a nullable date.
+
+## 4. If the round underperforms
+
+Official metaprompt at end of turn; generate the revision two or three times
+and keep only what recurs; eval any surviving change before adopting it.

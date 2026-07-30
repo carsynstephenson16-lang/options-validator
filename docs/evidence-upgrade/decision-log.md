@@ -867,3 +867,70 @@ the failure being looked for. Checking the gate you know is broken hides every
 gate upstream of it. This joins "delete the guard and confirm red" (D35) and
 "drive the registered config table, not a fixture that resembles it" (D36) as
 a standing check.
+
+**D38 — `available_at` and `freshness_anchor` split into two clocks; 5A
+rescoped to the parser layer; three provider contracts corrected.** Decision:
+(a) temporal provenance carries two distinct fields, not one; (b) 5A owns
+provider/parser provenance only — the production admission matrix moves to 5C;
+(c) the SEC, FRED and Twelve Data contracts recorded in the first 5A brief
+were wrong and are corrected here; (d) retrieval time is permitted as a
+labelled conservative availability bound and forbidden as a freshness anchor.
+
+Evidence — the sequencing contradiction, measured. The first 5A brief demanded
+a production admission matrix over every route while preserving the rule that
+non-immutable policies raise. With no windows set, `fred`, `twelve_data` and
+`gdelt` raise `ValueError` at record construction and never reach the temporal
+gate; only `sec_edgar` (immutable) reaches it and returns
+QUARANTINED / temporal-missing-availability. Six of seven routes are therefore
+unreachable until 5C supplies windows, and the matrix as specified could not
+execute. The earlier D37 reproduction reached the gate only because the
+harness injected windows via `replace()` — an artifact the production path
+cannot reproduce.
+
+Evidence — three corrected contracts, all Repo-verified. (i) Only the
+structured `sec_edgar` submissions parser populates the availability interval;
+`sec_edgar_atom` and `sec_companyfacts` populate neither field. Atom should
+inherit provenance by accession from the canonical submissions record or stay
+discovery-only; companyfacts has no accession or acceptance timestamp on its
+aggregate record and must use Packet 4's conservative XBRL filing-date rule or
+remain unresolved. (ii) FRED is queried with `series_id, api_key,
+file_type=json, sort_order=desc, limit=2` — no `output_type`, no real-time
+period — so the returned `realtime_start` describes the query's current
+information set rather than first publication, and the no-API-key
+`fredgraph.csv` fallback carries no real-time field at all; initial-release
+data requires a vintage/ALFRED-style query. (iii) Twelve Data `/quote` is
+called with no `interval` and the parser reads `row["close"]`, so `datetime`
+is a daily bar's opening time, not the quoted price's timestamp. Both were
+described as "free wins, already captured in payload" in the first brief;
+both had the right field name and the wrong semantics, decided by query
+parameters the brief never examined.
+
+D37's "absolute ban on retrieval time" is superseded. It conflated two clocks.
+Retrieval time never overstates availability — a replay before first capture
+demonstrably could not see the record — so it is a legitimate conservative
+bound for `available_at` when labelled `observed-at-retrieval`. What it must
+never do is reset freshness. Collapsing the two is what makes a repeatedly
+fetched stale quote look current while a genuinely fresh release looks stale.
+Effect: provenance now returns a typed EXACT / BOUNDED / UNRESOLVED result,
+UNRESOLVED is an explicitly successful outcome, and rule identity (`rule_id`,
+`rule_version`, `governing_source_url`, `governing_effective_date`,
+`captured_at`, `source_snapshot_hash`, `coverage_horizon`) is kept separate
+from evidence metadata — a document retrieval date is not a rule version.
+Calendar coverage is fail-closed, following `EdgarHolidayCalendarCoverageError`.
+
+Also required and recorded: macro rules must distinguish initial release,
+revision, and current-vintage retrieval, because a release calendar alone
+cannot timestamp a revised value; and the 5A matrix must run real parser
+fixtures rather than hand-constructed `RawSourceItem` objects, since
+hand-built records encode the author's belief about the data instead of the
+data — the mechanism by which B1 and B4 both hid.
+
+Tradeoff: 5A ships narrower and the end-to-end proof slips to 5C. Accepted.
+The alternative was a brief whose central deliverable cannot execute, which
+would have consumed a full implementation round to discover.
+Confidence: high — the contradiction and all three contract corrections were
+reproduced by execution or by reading the construction sites in this session.
+Method note: the first brief was written without running the matrix it
+specified. Reachability is now checked before any matrix is specified, which
+is the same lesson as D37 one level up — verify the thing you are about to
+ask for, not the thing you are looking at.
