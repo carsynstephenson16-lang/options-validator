@@ -1,6 +1,6 @@
 ---
 name: independent-research-critic
-description: Performs an independent research critic audit of the latest Codex research-refresh report in options-validator. Evaluates factual integrity, primary source support, temporal alignment, options risks, and catalyst claims without modifying the repository.
+description: Run AFTER research-refresh completes, or whenever a research report, deep-research output, or third-party analysis needs verification before it is trusted. Performs an independent research critic audit of the latest Codex research-refresh report in options-validator. Evaluates factual integrity, primary source support, temporal alignment, options risks, and catalyst claims without modifying the repository.
 ---
 
 # Independent Research Critic Audit Skill

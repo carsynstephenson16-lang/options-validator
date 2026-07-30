@@ -65,3 +65,5 @@ is provenance-labeled LLM-asserted. Work from the repo root.
    `RESEARCH_REFRESH RESULT: OK as_of=<date> annotations=<n>/<n>` or
    `RESEARCH_REFRESH RESULT: FAILED <one-line reason>`. Do not commit;
    the context file is committed by humans/sessions.
+
+When this refresh completes, offer to run independent-research-critic on the new report.
