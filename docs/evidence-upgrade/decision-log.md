@@ -982,3 +982,67 @@ than downloaded source bytes, disclosed in the source ledger. An unrelated
 pre-existing `uv.lock` change remains uncommitted and was not merged.
 Confidence: high — every claim above was reproduced by command in this
 session.
+
+**D40 — Packet 5B: status determination fixed and proved; PR #18 open; the
+managed review lane still has not reviewed anything.** Decision: (a) 5B's
+blocking defect is fixed and mutation-proved; (b) `feature/evidence-upgrade-packet-5b`
+is pushed and PR #18 is open with CI green; (c) **5B does NOT merge**, because
+the review obligation is unmet; (d) 5C does not begin until 5B merges.
+
+The defect. `_status()` (`market_updates/earnings.py`) had no ambiguity
+handling and a fall-through default of `CONFIRMED`, so any document that
+failed to match a keyword — including one that explicitly negated it —
+produced a confident `confirmed` claim. Measured on the pre-fix parser, six
+probe documents all returned `confirmed`: "has not confirmed", "not yet
+confirmed", a hedged "confirmed … subject to change", "will not report", a
+bare mention carrying no status language, and a self-contradictory document
+asserting both future and past tense. This is the same class as D37/D38 —
+unsupported evidence acquiring authority — but at the producer layer.
+
+The fix. `EarningsClaimStatus.UNDETERMINED`, plus negation-aware token
+matching, hedging detection, and mutually-exclusive tense detection, with no
+fall-through default. `UNDETERMINED` is a truthful producer result, not an
+extraction failure: the claim, date, fiscal period and evidence are still
+produced, and the evidence row is still stored and still evaluated for
+corroboration — status determination and corroboration stay separate axes.
+What it does not get is authority. Against an existing claim it leaves
+`expected_date`, `status`, `known_as_of`, `current_event_id` and `supersedes`
+untouched, not even to declare a conflict; the event row still records
+`undetermined` while the claim row keeps what its last determinate evidence
+established. It is origin-only in the state machine.
+
+Evidence — guard red/green, baseline 20 passed / 76 subtests: fall-through
+default restored to `CONFIRMED` → 11 failed; hedge guard removed → 7 failed;
+contradictory-tense guard removed → 2 failed; negation-awareness blinded → 7
+failed; store no-state-change branch removed → 8 failed; restored → green.
+Full suite **1891 passed / 706 subtests** (baseline on merged `main` 1871 /
+630), reproduced twice; single alembic head `0008_typed_earnings_claims`;
+`integrity_check.py --checks dead-citations` 0 FAIL / 0 WARN.
+
+**Mutation B initially SURVIVED — the sixth occurrence of the signature
+pattern, this time inside the fix's own regression set.** Every hedged probe
+was also caught by the negation guard or the fall-through, so the hedge guard
+was enforced-but-unexercised and a green suite said nothing about it. The
+tentative probe now carries an un-negated "confirmed" alongside "subject to
+change", which only the hedge guard can catch. D36's rule found it: guard
+removal proves a gate fires when reached, and nothing else does.
+
+Two corrections to the state this session inherited. (i) Rotating
+`CLAUDE_CODE_OAUTH_TOKEN` is NOT the next action: `ddec4ac` deliberately
+deleted the self-hosted workflow as superseded by the managed Code Review
+service, so the token matters only if that workflow is restored. (ii) Local
+`gh` authentication was reported invalid; it is valid (`repo`, `workflow`
+scopes), which is how #18 was opened.
+
+**The blocker, measured.** The managed Code Review service posted nothing on
+PR #18 across ~7 minutes of polling — zero reviews, zero issue comments, zero
+review comments — and it has never posted on this repository: PRs #13–#17
+carry no Claude-authored review or comment (only `chatgpt-codex-connector[bot]`
+on #17). The only check on #18 is GitHub Actions `test`, which passed. So the
+finding of D39 stands unchanged in substance: **no EC-1 packet has ever been
+seen by an automated review lane**, and deleting the broken self-hosted
+workflow did not replace it with a working one — it removed the evidence that
+it was broken. Owner action required: either enable/verify the managed service
+at claude.ai/admin-settings/claude-code for this repo, or restore the deleted
+workflow with a fresh `claude setup-token` secret. Confidence: high — every
+claim above was reproduced by command in this session.
