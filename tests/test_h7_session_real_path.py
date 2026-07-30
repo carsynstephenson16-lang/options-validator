@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -28,6 +29,7 @@ from research.receipts import input_files, load_receipt, make_receipt
 DECISION = "2026-07-20"  # operator decision date, inside the window
 EVALUATION = "2026-07-17"  # prior completed source-data session
 FILL = "2026-07-21"  # T+1 recorded quote session
+FILL_REQUESTED = "2026-07-22"  # first run date after the T+1 close
 INCLUDED = ("AMD", "AMZN", "CEG", "ET", "MSFT", "NOW", "PLTR", "TEM", "VST")
 SOURCE_HASH = "c" * 64
 
@@ -156,8 +158,13 @@ class RealSessionCase(unittest.TestCase):
         unhealthy: tuple[str, ...] = (),
         source_names: tuple[str, ...] | None = None,
         symbols_override: dict | None = None,
+        source_requested_run_date: str | None = None,
+        gate_requested_run_date: str | None = None,
     ) -> Path:
         source_path, gate_path = self._paths(evaluation)
+        default_requested = DECISION if evaluation == EVALUATION else FILL_REQUESTED
+        source_requested = source_requested_run_date or default_requested
+        gate_requested = gate_requested_run_date or default_requested
         unhealthy_set = set(unhealthy)
         source_names = source_names or tuple(self.scope["symbols"])
         source_symbol_map = symbols_override or {
@@ -184,7 +191,7 @@ class RealSessionCase(unittest.TestCase):
             "source_health",
             {
                 "evaluation_session": evaluation,
-                "requested_run_date": DECISION,
+                "requested_run_date": source_requested,
                 "known_as_of_utc": f"{evaluation}T20:00:00+00:00",
                 "scope": self.scope,
                 "healthy_count": len(source_symbol_map) - len(source_unhealthy),
@@ -202,7 +209,7 @@ class RealSessionCase(unittest.TestCase):
             "data_gate",
             {
                 "evaluation_session": evaluation,
-                "requested_run_date": DECISION,
+                "requested_run_date": gate_requested,
                 "scope": self.scope,
                 "whole_universe_verdict": verdict,
                 "go_count": len(self.scope["symbols"]) if verdict == "GO" else 0,
@@ -233,7 +240,14 @@ class RealSessionCase(unittest.TestCase):
         kwargs.update(over)
         return open_real_session(**kwargs)
 
-    def _write_watcher_receipt(self, evaluation: str, gate_path: Path, *, actionable: bool) -> Path:
+    def _write_watcher_receipt(
+        self,
+        evaluation: str,
+        gate_path: Path,
+        *,
+        actionable: bool,
+        requested_run_date: str | None = None,
+    ) -> Path:
         bindings: dict[str, Path] = {}
         for symbol in self.scope["symbols"]:
             close = self.root / f"close-{evaluation}-{symbol}.cache"
@@ -260,7 +274,9 @@ class RealSessionCase(unittest.TestCase):
             "watcher_decision",
             {
                 "evaluation_session": evaluation,
-                "requested_run_date": DECISION,
+                "requested_run_date": (
+                    requested_run_date or (DECISION if evaluation == EVALUATION else FILL_REQUESTED)
+                ),
                 "scope": self.scope,
                 "data_gate_receipt_hash": gate["receipt_hash"],
                 "source_health_receipt_hash": gate["source_health_receipt_hash"],
@@ -278,6 +294,52 @@ class RealSessionCase(unittest.TestCase):
 
 
 class TestSessionRefusals(RealSessionCase):
+    def _forged_session(self) -> lifecycle.RealStoreSession:
+        genuine = self.open()
+        return lifecycle.RealStoreSession(
+            base_dir=genuine.base_dir,
+            activation_event_id=genuine.activation_event_id,
+            decision_session=genuine.decision_session,
+            evaluation_session=genuine.evaluation_session,
+            data_gate_receipt_path=genuine.data_gate_receipt_path,
+            source_health_receipt_path=genuine.source_health_receipt_path,
+            data_gate_receipt_hash=genuine.data_gate_receipt_hash,
+            source_health_receipt_hash=genuine.source_health_receipt_hash,
+            data_gate_config_hash=genuine.data_gate_config_hash,
+            data_gate_source_hash=genuine.data_gate_source_hash,
+            included_symbols=genuine.included_symbols,
+        )
+
+    def test_forged_session_cannot_publish_receipt_evidence(self):
+        with self.assertRaises(lifecycle.ActivationBoundaryError):
+            session_module.record_session_evidence(
+                self._forged_session(),
+                symbol="AMD",
+            )
+
+    def test_forged_session_cannot_reach_entry_lifecycle(self):
+        with self.assertRaises(lifecycle.ActivationBoundaryError):
+            lifecycle.record_owner_approval(
+                base_dir=self._forged_session(),
+                entry_intent_id="s4.entry_intent:forged",
+            )
+
+    def test_forged_session_cannot_reach_forward_book(self):
+        with self.assertRaises(lifecycle.ActivationBoundaryError):
+            book.derive_book(
+                base_dir=self._forged_session(),
+                evaluation_session=EVALUATION,
+            )
+
+    def test_copied_factory_session_loses_authority(self):
+        copied = replace(self.open(), decision_session="2026-07-21")
+
+        with self.assertRaises(lifecycle.ActivationBoundaryError):
+            lifecycle.record_owner_approval(
+                base_dir=copied,
+                entry_intent_id="s4.entry_intent:forged",
+            )
+
     def test_refuses_missing_activation_or_receipt_linkage(self):
         with self.assertRaises(SessionRefused):
             self.open(base_dir=self.root / "empty")
@@ -327,6 +389,53 @@ class TestSessionRefusals(RealSessionCase):
         session = self.open(symbol="AMD")
         self.assertEqual(session.decision_session, DECISION)
         self.assertEqual(session.evaluation_session, EVALUATION)
+
+    def test_refuses_source_session_not_bound_to_decision_operation(self):
+        stale_evaluation = "2026-07-16"
+        stale_gate = self._write_receipts(
+            stale_evaluation,
+            source_requested_run_date=DECISION,
+            gate_requested_run_date=DECISION,
+        )
+
+        with self.assertRaisesRegex(SessionRefused, "decision operation requires"):
+            self.open(
+                data_gate_receipt_path=stale_gate,
+                source_evaluation_session=stale_evaluation,
+            )
+
+    def test_refuses_gate_requested_for_another_run_date(self):
+        self._write_receipts(
+            EVALUATION,
+            gate_requested_run_date="2026-07-21",
+        )
+
+        with self.assertRaisesRegex(SessionRefused, "requested run date"):
+            self.open()
+
+    def test_refuses_source_health_requested_for_another_run_date(self):
+        self._write_receipts(
+            EVALUATION,
+            source_requested_run_date="2026-07-21",
+        )
+
+        with self.assertRaisesRegex(SessionRefused, "requested run date"):
+            self.open()
+
+    def test_refuses_watcher_requested_for_another_run_date(self):
+        opened = self.open(symbol="AMD")
+        watcher = self._write_watcher_receipt(
+            EVALUATION,
+            self._paths(EVALUATION)[1],
+            actionable=True,
+            requested_run_date="2026-07-21",
+        )
+
+        with self.assertRaisesRegex(SessionRefused, "requested run date"):
+            session_module._watcher_receipt_for_session(
+                path=watcher,
+                session=opened,
+            )
 
     def _grace_shaped_assertions(self, evaluation: str) -> list[dict]:
         """Real v3-gating-store-shaped fixtures: NOW reported 7 days before
@@ -464,6 +573,7 @@ class TestEntryOnlyRealPath(RealSessionCase):
             data_gate_receipt_path=fill_gate,
             source_evaluation_session=FILL,
             symbol="AMD",
+            operation="fill",
         )
         fill_watcher = self._write_watcher_receipt(FILL, fill_gate, actionable=False)
         with patch.object(session_module, "load_range", return_value={FILL: _chain()}):
