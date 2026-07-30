@@ -1,0 +1,68 @@
+{
+  "probed_at_utc": "2026-07-29T15:55:05.741628+00:00",
+  "ny_date": "2026-07-29",
+  "provider": "schwab",
+  "provider_version": "1.5.1",
+  "stock_entitled": true,
+  "probe_symbol": "VST",
+  "monthly_expiration": "2026-08-21",
+  "endpoints": {
+    "stock_snapshot_quote": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "bid",
+        "ask",
+        "last",
+        "timestamp"
+      ],
+      "error": null
+    },
+    "option_list_expirations": {
+      "ok": true,
+      "columns": [
+        "expiration"
+      ],
+      "error": null
+    },
+    "option_snapshot_quote": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "bid",
+        "ask",
+        "timestamp"
+      ],
+      "error": null
+    },
+    "option_snapshot_greeks_all": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "bid",
+        "ask",
+        "delta",
+        "implied_vol",
+        "timestamp"
+      ],
+      "error": null
+    },
+    "option_snapshot_open_interest": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "open_interest"
+      ],
+      "error": null
+    }
+  }
+}
