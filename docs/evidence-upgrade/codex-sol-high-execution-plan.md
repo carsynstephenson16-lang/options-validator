@@ -605,6 +605,18 @@ lineage junction populated; high-volume test passes; suite green.
   other column, and do not alter `admission_state`. Add a test asserting a
   legacy row ends up ADMITTED + `legacy-grandfathered` while a
   gate-admitted row carries its real reason.
+  **Corollary the D32 stamp creates (D36, added 2026-07-29):** once
+  `admission_reason IS NULL` *means* "grandfathered, predates the gates",
+  the new writer must never produce an ADMITTED row with a NULL reason —
+  such a row would be silently indistinguishable from ungated legacy
+  evidence, which is the exact confusion D32 exists to remove. Every
+  admission verdict, including the passing one, must record a non-null
+  typed reason (add an `admitted` / `gates-passed` value to the reason
+  enum). Enforce it, do not merely intend it: a `CHECK` or trigger
+  rejecting `admission_state='ADMITTED' AND admission_reason IS NULL` for
+  rows inserted after migration 0007, plus a red-green test. Note the
+  ordering constraint — the constraint must not fire against the legacy
+  rows the same migration is stamping, so stamp first, then constrain.
   `market_updates/verify_support.py`: takes (claim text, source span),
   runs TWO judged calls with swapped presentation order via an injected
   judge callable (the real judge binding is a thin CLI for manual runs;
@@ -923,8 +935,18 @@ specified inclusions/exclusions; ruff/pyright/unittest all green.
   session must not be misread as a regression from this packet. Re-measure
   the baseline yourself rather than assuming any figure written here.
   Measured 2026-07-29 on `feature/strategy-enhancement` with the
-  concurrent-session tree in place: **`Ran 2116 tests in 472.573s` / `OK` /
-  exit 0** (the plan's earlier 2109 was stale). Note the runtime — this
+  concurrent-session tree in place: `Ran 2116 tests in 472.573s` / `OK` /
+  exit 0. **Corrected same day:** that 2116 was tree-contaminated — it
+  includes 7 tests from the untracked concurrent-session file
+  `tests/test_schwab_adapter.py`, which `unittest discover` picks up because
+  it is physically present. The clean-tree counts are **2109 before packet
+  8 and 2115 after** (2109 + 7 = 2116, 2115 + 7 = 2122, which reconciles
+  every figure reported by anyone this cycle). So the plan's original 2109
+  was right all along and my "stale" note was wrong. Lesson for anyone
+  measuring here: `unittest discover` counts untracked test files, so a
+  shared checkout with concurrent work cannot produce a clean absolute
+  count — **trust the delta, not the absolute**, and state which tree you
+  measured. Note the runtime — this
   suite takes ~8 minutes, not seconds, so budget for it. Note also that
   `unittest` writes its summary to **stderr** while tests print to stdout:
   `... 2>&1 | tail` will show you buffered test output, not the result

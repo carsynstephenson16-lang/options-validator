@@ -705,3 +705,132 @@ Confidence: high on both blocking defects (both demonstrated by
 execution, not argued). Gap: the holiday fix needs official per-year
 sources for every year the store will span; only 2026 is currently
 ledgered (SEC-S8).
+
+---
+
+**D36 — The D32 stamp creates a corollary the new writer must honour.**
+Decision: once `admission_reason IS NULL` *means* "grandfathered, predates
+the gates", the packet-5 writer must never produce an ADMITTED row with a
+NULL reason; every verdict including the passing one records a non-null
+typed reason (add `gates-passed` to the enum), enforced by a CHECK or
+trigger plus a red-green test, stamped before the constraint is added so
+the constraint does not fire against the rows the same migration is
+stamping. Evidence: D32 assigns meaning to the absence of a value, which
+is only safe if nothing else can produce that absence. Opposing: a code
+convention would do. Rejected — the whole point of D32 is that a silent
+absence was already misleading a consumer once. Effect: plan §Packet 5
+scope amended. Confidence: high. Gap: none.
+
+---
+
+**D37 — Packet 4 fixes VERIFIED FIXED; packets 7a and 8 approved.**
+Decision: PR #16's merge stands (both blocking defects genuinely closed);
+packet 7a and packet 8 accepted; three follow-ups opened, none blocking.
+Three independent Sonnet-5 high-effort reviews, all executing attacks
+rather than reading code.
+
+**B1 append-only hole — FIXED.** The original forged-row attack was
+rebuilt against the real UBER fixture and now raises
+`sqlite3.IntegrityError: UNIQUE constraint failed: index
+'xbrl_facts_natural_key_uq'`. The NULL question that usually defeats such
+fixes was attacked directly: `period_start` is the only nullable
+natural-key column (verified by trying NULL in all seven), the forged
+NULL-period_start row is rejected, a raw-SQL attempt to collide a literal
+`''` against the NULL sentinel is rejected, and a genuine
+different-accession restatement still appends and still flips `fact_asof`
+correctly at the availability boundary — so the fix did not achieve
+safety by breaking the feature. Migration reversible, single alembic head,
+both previously-untested guards now red-green killed.
+
+**B2 holiday calendar — FIXED.** The original failing case now yields
+`2020-01-21T11:00:00Z`, correctly skipping MLK Day 2020-01-20. Every
+holiday date 2019–2026 was independently checked against live OPM.gov,
+Wayback OPM snapshots, and all eight cited SEC EDGAR closure notices
+(curl with a descriptive UA, since WebFetch 403s sec.gov): **no
+disagreement in any year**, including the subtle 2021 Inauguration Day
+exclusion (SEC's own notice: "EDGAR Will Operate Normally on Inauguration
+Day"), Juneteenth correctly absent pre-2021, and the 2026 count
+reconfirmed at 11. Uncovered years 2018/2027 fail closed through both
+public entry points. The claimed "Dec 31 rollover bypass" was
+root-caused by deleting the specific guard line and observing
+`filed_date_conservative_available_at(2018-12-31)` silently return
+`2019-01-02` while ordinary 2018 dates still failed — a real bug, really
+fixed.
+
+**B3 writer lock — honestly disclosed, not fully solved; accepted as
+scoped.** The ownership marker is real code and does block sequential
+cross-store orderings. But the reviewer constructed a concrete TOCTOU
+without threads (check and act are separable calls): a
+`MarketUpdateStore.initialize()` can complete inside the gap between
+`XbrlFactStore`'s ownership check and its stamp, leaving one file carrying
+both schemas. Codex's own disclosure of this was accurate and did not
+overclaim — recorded as good practice. The "deletion experiment blocked by
+environment safety policy" was completed by the reviewer inside a
+disposable worktree; both guards confirmed red, then restored. Standing
+constraint reaffirmed: XBRL must take packet 2's writer lock around its
+complete write path before it ever shares the live db file.
+
+**Packet 7a — APPROVE.** All four previously-untested kalshi guards now go
+red when deleted, each with a named catching test; suite 2320 → 2324,
+delta exactly the four added. The one with real substance,
+`_serialize_source_timestamp_map`, got a genuinely DEEP test: it builds a
+real `FusionResult`, goes through `_insert_shadow_accept` (the only live
+SHADOW_MODE ACCEPT write path) into a real SQLite file, and asserts the
+exact value read back — the reviewer additionally mutated it to read a
+wrong-but-non-null field and the test still failed, proving an
+exact-value assertion rather than a truthiness check. Guard-protected
+files untouched, bot still halted (`PAPER_MODE=True`), diff 100% additive.
+
+**Packet 8 — APPROVE_WITH_NITS.** Exactly the three claimed files; no
+concurrent-session file swept in. All 11 enforcement/label paths
+mutation-killed RED and restored. D32/D34 naming honoured literally
+(`gating_basis`, `admission_basis`, consumer-derived, never copied from
+the producer payload). The motivating look-ahead case — `available_at`
+later than `published_at` with `as_of` in between — is correctly
+excluded. One real bug found: a genuinely eligible past row formatted
+with a non-UTC offset (e.g. `+09:00`) is **silently dropped**, because the
+SQL layer compares ISO timestamps as TEXT and excludes it before the
+Python-level UTC re-check can see it. The mirror case is safe (the Python
+re-check catches a truly-future row whose string sorts as past), so the
+bug fails toward returning less data and can never leak look-ahead.
+Non-blocking: the producer contract mandates UTC and no test anywhere
+exercises offset diversity. Follow-up opened.
+
+**Two measurement corrections, one of them mine.** (a) My recorded
+options-validator baseline of 2116 was tree-contaminated: `unittest
+discover` counts the untracked concurrent-session file
+`tests/test_schwab_adapter.py` (7 tests) because it is physically present.
+Clean-tree counts are 2109 before packet 8 and 2115 after; 2109+7=2116 and
+2115+7=2122 reconciles every figure reported by anyone this cycle, so the
+plan's original 2109 was correct and my "stale" note was wrong. Rule:
+in a shared checkout trust the delta, never the absolute, and always say
+which tree you measured. (b) A pre-existing equity-research hygiene gap,
+unrelated to any packet: `unittest discover` reports 1608 while `pytest`
+reports 1817 + 101 subtests, because six test files use pytest-native
+functions invisible to `unittest.TestLoader` (one file's docstring already
+says to run it under pytest). **CI runs `unittest discover`, so roughly
+209 tests never execute in CI at all.** Not a packet-4 defect; at
+packet-4 scope both runners agree exactly at 57.
+
+**Dependency drift explained and actionable.** The reported 327→275
+installed-distribution drop in options-validator is exactly 52 packages,
+every one a transitive dependency of the optional `web-fetchers` extra: a
+`uv sync` without `--extra web-fetchers` pruned them, and the lock hashes
+correctly stayed unchanged. The offline suite is unaffected (no core
+module imports them), but `trafilatura`, `crawl4ai`, and `scrapling` are
+currently `ModuleNotFoundError` in the shared venv — which breaks the
+documented SEC-EDGAR fetch route, since WebFetch gets 403 from sec.gov
+and Trafilatura is the tool that gets through. Restore with
+`uv sync --extra web-fetchers`.
+
+Effect: three follow-ups, all non-blocking — (i) packet 8 tail: normalize
+timestamps to UTC before the SQL comparison, with tests in both offset
+directions; (ii) equity-research: make CI run the ~209 pytest-only tests
+or convert them, owner-scheduled, outside this program's scope; (iii)
+kalshi: record the packet-7 corrected conclusion in the repo, since it
+currently exists only in this program's log in a different repo. Thread A
+proceeds to packet 5 (plan already drafted and reviewed, D36 added).
+Thread B proceeds to packet 9's prerequisites or the packet 8 tail.
+Confidence: high — every headline finding was reproduced by execution.
+Gap: B3's TOCTOU remains open by design; it is inert only while XBRL
+keeps a dedicated database file.
