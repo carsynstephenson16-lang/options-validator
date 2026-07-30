@@ -10,6 +10,7 @@ dependencies = [
     "pandas>=2.2,<3",
     "pyarrow>=14,<22",
     "scrapy>=2.17.0",
+    "schwab-py==1.5.1",
     "thetadata>=1.0.9",
 ]
 

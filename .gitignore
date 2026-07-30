@@ -8,6 +8,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+.secrets/
 
 # Local Claude Code agent config / permissions -- never commit
 .claude/

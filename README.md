@@ -1,5 +1,18 @@
 # Options Scanner & Research Platform — VST · CEG · MSFT · AMZN
 
+## Schwab live market data
+
+The live-preview lane supports read-only Schwab quotes and option chains.
+Historical caches, backtests, scoring, positions, receipts, and official
+verdicts remain unchanged. Setup uses one hidden macOS Keychain prompt:
+
+```bash
+uv run python tools/setup_schwab.py
+```
+
+See [docs/schwab-market-data-setup.md](docs/schwab-market-data-setup.md) for
+the short first-time authorization process and security boundaries.
+
 **Mission (owner decision 2026-07-03; clarified 2026-07-06):** research how
 the options of four AI-infrastructure names — Vistra (VST) and Constellation
 (CEG) on the nuclear/data-center power side, Microsoft (MSFT) and Amazon
