@@ -791,3 +791,79 @@ Confidence: high on both defects, demonstrated by execution. Gap: the kalshi
 repository is 70 commits ahead of and 2 behind its origin, so Packets 6, 7
 and 7a exist only locally; reconciling that push is an owner decision, not
 recorded here as done.
+
+**D37 — Freshness-window proposal WITHDRAWN; B4 (no temporal provenance
+outside SEC) found; packet 5 resequenced into 5A/5B/5C.** Decision: (a) the
+three windows are NOT frozen and must not be typed; (b) `fast=12h` and
+`slow=100d` are rejected as final policy, `event_driven=7d` provisionally
+accepted but only after temporal provenance exists; (c) packet 5's remaining
+scope splits into 5A temporal provenance, 5B typed earnings claims, 5C
+source-specific expiry, with packet 8 board authority gated on parity against
+H7's `gating_v3` store across all 15 names.
+
+Evidence — the withdrawn proposal's headline claim, "the numbers unblock six
+of seven routes", is false, reproduced independently by execution with the
+recommended windows applied and availability fields as the non-SEC providers
+actually leave them: `fred`, `bls`, `bea`, `eia`, `treasury_fiscal_data`,
+`twelve_data` all return QUARANTINED / temporal-missing-availability, and
+`gdelt` is blocked before staleness. The windows unblock zero routes.
+
+B4, blocking: `public_by_ts_utc` and `availability_rule_version` are populated
+in exactly one place — `providers.py:206-207`, inside the SEC submissions
+parser. Every other provider constructs `RawSourceItem` without them, so they
+default to None (`models.py:105-106`), and `admit()` quarantines at
+`temporal-missing-availability` (`admission.py:225-238`), a gate that fires
+before the staleness gate the windows control. B1 was masking B4: with
+`stale_after` returning None for every non-immutable class, nothing reached
+far enough down the gate order to reveal that availability was missing too.
+
+B3 restated one layer deeper: `earnings.date` is not merely blocked by the
+corroboration gate, it has no production route at all. The claim types
+actually produced are `sec.filing_event`, `sec.numeric_fact`,
+`company.publication`, `central_bank.publication`, `macro.series`,
+`market.quote`, `news.discovery`. SEC filings become `sec.filing_event`; IR
+records become `company.publication`; nothing extracts or stores a typed
+earnings date. Further: `claim_type` is written to the journal but not the
+event row, so no typed date, fiscal period, status, or corroborating evidence
+IDs are persisted — an admitted earnings row could not feed the H7 gate even
+if one existed.
+
+Two D36 claims corrected. First, "the windows are the only edit left for B1"
+is wrong: `tests/test_admission.py:240-248` asserts every non-immutable policy
+raises, so populating windows breaks that test by design and it must change in
+the same edit. Second, D36 and PR #16 both stated that the options-validator
+board excludes quarantined rows; `market_context.py` has no live consumer —
+only `tests/test_market_context.py` references it. That is implemented
+filtering, not an active end-to-end board path, and the packet 8 blast-radius
+argument was overstated on that point. Scope facts that compound it: the
+market-updates watchlist is 4 names against H7's frozen 15, and `twelve_data`
+is `enabled = false`.
+
+Accepted from the review without independent re-derivation, and flagged as
+such: FRED's clock is the observation date rather than real-time availability,
+so a quarterly observation dated 2026-04-01 but first available 2026-07-30 is
+stale on arrival under a 100-day window anchored on `published_at`; Twelve
+Data effectively uses fetch time; `corroboration_groups` is an unvalidated
+list of strings, so passing "issuer" satisfies the count without proving
+matching evidence exists; and an 8-K under Item 2.02 often republishes the
+issuer's own press release, so SEC and IR are not automatically independent
+channels. The ~91-day BEA advance-GDP interval was confirmed against the
+official calendar, so the cadence assumption was sound — it simply does not
+justify sharing one window with business-day Treasury data.
+
+Tradeoff: resequencing costs a packet boundary and delays PR #17 further.
+Accepted, because the alternative is freezing owner-typed numbers against a
+system where no route can reach the gate those numbers control — which would
+have produced a plausible, tested, entirely inert change and burned the
+owner's one-shot number-freezing authority on it.
+
+Effect: PR #17 stays blocked; no numbers typed; 5A is now the critical path.
+Confidence: high — every load-bearing claim above was reproduced by execution
+in this session.
+
+Method note, recorded because it generalizes: the defect was found by running
+every production route end-to-end and reading the FIRST failure, rather than
+the failure being looked for. Checking the gate you know is broken hides every
+gate upstream of it. This joins "delete the guard and confirm red" (D35) and
+"drive the registered config table, not a fixture that resembles it" (D36) as
+a standing check.
