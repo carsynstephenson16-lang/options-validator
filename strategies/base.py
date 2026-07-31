@@ -9,6 +9,16 @@ import math
 import config
 
 
+def adverse_buy(price, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
+    """Executable buy price: haircut adversely, then round up to one cent."""
+    return math.ceil(float(price) * (1 + haircut) * 100) / 100
+
+
+def adverse_sell(price, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
+    """Executable sell price: haircut adversely, then round down to one cent."""
+    return math.floor(float(price) * (1 - haircut) * 100) / 100
+
+
 def risk_budget() -> float:
     """Dollars of ECONOMIC max loss allowed per trade: the hard cap
     MAX_LOSS_PER_TRADE (owner decision 2026-07-02), not a sleeve fraction."""
@@ -46,8 +56,13 @@ def size_defined_risk(width: float, net_credit: float):
     return max(math.floor(risk_budget() / economic_max_loss), 0), economic_max_loss
 
 
-def entry_credit_conservative(short_bid, short_ask, long_bid, long_ask,
-                              haircut=config.SLIPPAGE_HAIRCUT):
+def entry_credit_conservative(
+    short_bid,
+    short_ask,
+    long_bid,
+    long_ask,
+    haircut=config.SLIPPAGE_HAIRCUT,
+):
     """Net credit priced at the frozen conservative fill model.
 
     With HALF_SPREAD_COST enabled, the short leg fills at bid and the long leg
@@ -79,6 +94,4 @@ def entry_credit_conservative(short_bid, short_ask, long_bid, long_ask,
     long_mid = (long_bid + long_ask) / 2.0
     short_base = short_bid if config.HALF_SPREAD_COST else short_mid
     long_base = long_ask if config.HALF_SPREAD_COST else long_mid
-    short_fill = short_base * (1 - haircut)    # receive less
-    long_fill = long_base * (1 + haircut)      # pay more
-    return short_fill - long_fill
+    return adverse_sell(short_base, haircut) - adverse_buy(long_base, haircut)

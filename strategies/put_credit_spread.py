@@ -6,6 +6,11 @@ greeks/OI/NBBO chains through the injected chain provider. Lumibot remains the
 backtest engine for event flow, quote-side fills, cash, positions, and fees via
 the offline PandasData feed.
 
+Execution is causal under BACKTEST_EXECUTION_CONVENTION: a completed day-D EOD
+chain may create an intent, but no order is submitted until the next XNYS
+session. Entry contracts are frozen on D and fill at D+1's adverse close;
+EOD-observed exits are likewise queued for the next session.
+
 Hypothesis: implied vol tends to exceed realized (the volatility risk premium),
 so selling a ~30-delta put and capping the downside with a long put $W lower
 should show positive expectancy IF it survives costs. The harness exists to test
@@ -20,6 +25,8 @@ import config
 from data import pandas_feed
 from data.thetadata_adapter import passes_liquidity
 from strategies.base import (
+    adverse_buy,
+    adverse_sell,
     capital_at_risk_per_spread,
     economic_max_loss_per_spread,
     entry_credit_conservative,
@@ -155,8 +162,22 @@ class PutCreditSpread(Strategy):
         # harness plumbing (data path + chunk gating), never selection math:
         self._chain_provider = params.get("chain_provider")
         self._tradeable = params.get("tradeable_assets")
+        self._tradeable_by_session = params.get("tradeable_assets_by_session")
+        self._trading_sessions = tuple(params.get("trading_sessions", ()))
         self._entry_cutoff = params.get("entry_cutoff")
         self._blocked_until = params.get("blocked_until")
+        if config.BACKTEST_EXECUTION_CONVENTION != "D_PLUS_1_CLOSE":
+            raise RuntimeError(
+                "unsupported BACKTEST_EXECUTION_CONVENTION: "
+                f"{config.BACKTEST_EXECUTION_CONVENTION!r}"
+            )
+        if not self._trading_sessions:
+            raise RuntimeError("harness must inject deterministic XNYS trading_sessions")
+        if self._tradeable_by_session is None:
+            raise RuntimeError(
+                "harness must inject point-in-time tradeable_assets_by_session"
+            )
+        self._pending_entries: dict[str, _PendingEntry] = {}
         self._spreads = {}
         self.closed_trades = []
 
@@ -164,8 +185,13 @@ class PutCreditSpread(Strategy):
     def on_trading_iteration(self):
         for symbol in self.symbols:
             if self._has_open_position(symbol):
-                if self._ready_to_manage(symbol):     # fills confirmed?
+                pos = self._position(symbol)
+                if pos.state == "queued_exit":
+                    self._execute_pending_exit(symbol, pos)
+                elif self._ready_to_manage(symbol):   # fills confirmed?
                     self._manage_exit(symbol)
+            elif symbol in self._pending_entries:
+                self._execute_pending_entry(symbol)
             elif self._entry_allowed():               # chunk gating only
                 self._try_enter(symbol)
 
@@ -213,11 +239,76 @@ class PutCreditSpread(Strategy):
         assert credit is not None
         assert economic_max_loss is not None
 
-        self._submit_spread(symbol, expiry, short_put, long_put, contracts, credit)
+        decision_date = self._today().isoformat()
+        execution_date = self._next_session(decision_date)
+        if execution_date is None:
+            self.log_message(f"{symbol}: no next session for entry, skip")
+            return
+        self._pending_entries[symbol] = _PendingEntry(
+            symbol=symbol,
+            expiration=expiry,
+            short_strike=float(getattr(short_put, "strike")),
+            long_strike=float(getattr(long_put, "strike")),
+            contracts=contracts,
+            signal_credit=float(credit),
+            decision_date=decision_date,
+            execution_date=execution_date,
+        )
         self.log_message(
-            f"{symbol}: SOLD {contracts}x ${self.width}-wide put spread, "
-            f"credit ${credit:.2f}, economic max loss "
-            f"${economic_max_loss:.0f}/contract")
+            f"{symbol}: queued {contracts}x ${self.width}-wide put spread "
+            f"from {decision_date} for {execution_date}; signal credit "
+            f"${credit:.2f}, economic max loss ${economic_max_loss:.0f}/contract")
+
+    def _execute_pending_entry(self, symbol):
+        pending = self._pending_entries[symbol]
+        today = self._today().isoformat()
+        if today < pending.execution_date:
+            return
+        if today != pending.execution_date:
+            self._cancel_pending_entry(symbol, "execution_session_missing")
+            return
+
+        dte = (
+            Date.fromisoformat(pending.expiration) - Date.fromisoformat(today)
+        ).days
+        lo, hi = self.dte_band
+        if not max(lo, config.DTE_MIN) <= dte <= hi:
+            self._cancel_pending_entry(symbol, "execution_dte_out_of_band")
+            return
+
+        # Do not read today's EOD chain here: ThetaData publishes it after the
+        # modeled close. The frozen D intent determines what Lumibot submits;
+        # today's feed row may price that fill but cannot gate it by quote data.
+        assets = self._spread_assets(
+            symbol,
+            pending.expiration,
+            pending.short_strike,
+            pending.long_strike,
+        )
+        if not self._assets_available(today, assets):
+            raise RuntimeError(
+                f"{symbol}: frozen entry leg(s) missing from the offline feed "
+                f"on execution session {today}: {list(assets)}"
+            )
+
+        self._submit_spread(
+            symbol,
+            pending.expiration,
+            pending.short_strike,
+            pending.long_strike,
+            pending.contracts,
+            pending.signal_credit,
+            decision_date=pending.decision_date,
+            fill_date=today,
+        )
+        del self._pending_entries[symbol]
+
+    def _cancel_pending_entry(self, symbol, reason):
+        pending = self._pending_entries.pop(symbol)
+        self.log_message(
+            f"{symbol}: cancelled {pending.decision_date} entry intent on "
+            f"{self._today().isoformat()}: {reason}"
+        )
 
     # ----- EXIT ----------------------------------------------------------
     def _manage_exit(self, symbol):
@@ -266,6 +357,10 @@ class PutCreditSpread(Strategy):
                 "offline cache reader (parameters['chain_provider'])")
         return self._chain_provider(symbol, self._today().isoformat())
 
+    def _next_session(self, iso):
+        later = [session for session in self._trading_sessions if session > iso]
+        return later[0] if later else None
+
     def _pick_expiration(self, chain, band):
         today = self._today()
         lo, hi = band
@@ -294,17 +389,44 @@ class PutCreditSpread(Strategy):
     def _liquid(self, leg):
         return passes_liquidity(leg.open_interest, leg.bid, leg.ask)
 
-    def _submit_spread(self, symbol, expiry, short, long, contracts, credit):
-        short_asset = pandas_feed.option_asset(symbol, str(expiry), short.strike)
-        long_asset = pandas_feed.option_asset(symbol, str(expiry), long.strike)
-        if self._tradeable is not None:
-            missing = [a for a in (short_asset, long_asset)
-                       if a not in self._tradeable]
-            if missing:
-                # fail LOUD: a selected leg without feed Data would leave an
-                # order pending forever -- a silent no-fill would bias results
-                raise RuntimeError(
-                    f"selected leg(s) missing from the offline feed: {missing}")
+    def _spread_assets(self, symbol, expiry, short_strike, long_strike):
+        return (
+            pandas_feed.option_asset(symbol, str(expiry), short_strike),
+            pandas_feed.option_asset(symbol, str(expiry), long_strike),
+        )
+
+    def _assets_available(self, iso, assets):
+        globally_available = self._tradeable if self._tradeable is not None else set()
+        if self._tradeable_by_session is None:
+            return False
+        session_available = self._tradeable_by_session.get(iso, set())
+        return all(
+            asset in globally_available and asset in session_available
+            for asset in assets
+        )
+
+    def _submit_spread(
+        self,
+        symbol,
+        expiry,
+        short_strike,
+        long_strike,
+        contracts,
+        credit,
+        *,
+        decision_date,
+        fill_date,
+    ):
+        short_asset, long_asset = self._spread_assets(
+            symbol, expiry, short_strike, long_strike
+        )
+        if not self._assets_available(fill_date, (short_asset, long_asset)):
+            # fail LOUD: a selected leg without same-session feed Data would
+            # leave a GTC market order pending and silently chase a later quote.
+            raise RuntimeError(
+                "selected leg(s) missing from the offline feed on "
+                f"{fill_date}: {[short_asset, long_asset]}"
+            )
         self.submit_order(self.create_order(short_asset, contracts, "sell"))
         self.submit_order(self.create_order(long_asset, contracts, "buy"))
         self._spreads[symbol] = _OpenSpread(
@@ -314,7 +436,8 @@ class PutCreditSpread(Strategy):
             long_asset=long_asset,
             contracts=contracts,
             model_credit=float(credit),
-            entry_decision_date=self._today().isoformat(),
+            entry_decision_date=decision_date,
+            entry_fill_date=fill_date,
         )
 
     def _has_open_position(self, symbol):
@@ -359,18 +482,45 @@ class PutCreditSpread(Strategy):
         srow, lrow = leg_row(pos.short_asset), leg_row(pos.long_asset)
         if srow is None or lrow is None:
             return None
-        return (float(srow.ask) * (1 + self.haircut)
-                - float(lrow.bid) * (1 - self.haircut))
+        return adverse_buy(srow.ask, self.haircut) - adverse_sell(
+            lrow.bid, self.haircut
+        )
 
     def _dte(self, pos):
         return (pos.expiration - self._today()).days
 
     def _close(self, symbol, pos, reason):
+        decision_date = self._today().isoformat()
+        execution_date = self._next_session(decision_date)
+        if execution_date is None:
+            self.log_message(f"{symbol}: no next session for {reason} exit")
+            return
+        pos.state = "queued_exit"
+        pos.exit_reason = reason
+        pos.exit_decision_date = decision_date
+        pos.exit_fill_date = execution_date
+
+    def _execute_pending_exit(self, symbol, pos):
+        today = self._today().isoformat()
+        if pos.exit_fill_date is None or today < pos.exit_fill_date:
+            return
+        assets = (pos.short_asset, pos.long_asset)
+        if not self._assets_available(today, assets):
+            next_session = self._next_session(today)
+            if next_session is None:
+                self.log_message(
+                    f"{symbol}: exit feed unavailable on {today}; no later session"
+                )
+                return
+            pos.exit_fill_date = next_session
+            self.log_message(
+                f"{symbol}: exit feed unavailable on {today}; retry {next_session}"
+            )
+            return
+        pos.exit_fill_date = today
         self.submit_order(self.create_order(pos.short_asset, pos.contracts, "buy"))
         self.submit_order(self.create_order(pos.long_asset, pos.contracts, "sell"))
         pos.state = "pending_exit"
-        pos.exit_reason = reason
-        pos.exit_decision_date = self._today().isoformat()
 
     # ----- fills -> closed-trade extraction --------------------------------
     def on_filled_order(self, position, order, price, quantity, multiplier):
@@ -399,14 +549,28 @@ class PutCreditSpread(Strategy):
         self.closed_trades.append({
             "pnl": pnl,
             "capital_at_risk": capital_at_risk_per_spread(width, pos.entry_credit) * n,
-            "entry_date": pos.entry_decision_date,
+            "entry_date": pos.entry_fill_date,
+            "entry_decision_date": pos.entry_decision_date,
             "symbol": symbol,
             "economic_max_loss":
                 economic_max_loss_per_spread(width, pos.entry_credit) * n,
             "exit_reason": pos.exit_reason,
-            "exit_date": pos.exit_decision_date,
+            "exit_decision_date": pos.exit_decision_date,
+            "exit_date": pos.exit_fill_date,
         })
         del self._spreads[symbol]
+
+
+@dataclass(frozen=True)
+class _PendingEntry:
+    symbol: str
+    expiration: str
+    short_strike: float
+    long_strike: float
+    contracts: int
+    signal_credit: float
+    decision_date: str
+    execution_date: str
 
 
 @dataclass
@@ -419,9 +583,11 @@ class _OpenSpread:
     contracts: int
     model_credit: float
     entry_decision_date: str
+    entry_fill_date: str
     state: str = "pending_entry"
     entry_credit: float | None = None
     entry_fills: dict = field(default_factory=dict)
     exit_fills: dict = field(default_factory=dict)
     exit_reason: str | None = None
     exit_decision_date: str | None = None
+    exit_fill_date: str | None = None

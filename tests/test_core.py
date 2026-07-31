@@ -10,6 +10,8 @@ from data import thetadata_adapter
 from data.thetadata_adapter import mid_price, passes_liquidity
 from metrics import scoreboard
 from strategies.base import (
+    adverse_buy,
+    adverse_sell,
     capital_at_risk_per_spread,
     economic_max_loss_per_spread,
     entry_credit_conservative,
@@ -28,10 +30,12 @@ class PricingAndSizingTests(unittest.TestCase):
     def test_conservative_credit_crosses_bid_ask_then_haircuts(self):
         credit = entry_credit_conservative(1.00, 1.20, 0.30, 0.40)
 
-        expected = 1.00 * (1 - config.SLIPPAGE_HAIRCUT) - 0.40 * (
-            1 + config.SLIPPAGE_HAIRCUT
+        expected = adverse_sell(
+            1.00, config.SLIPPAGE_HAIRCUT
+        ) - adverse_buy(
+            0.40, config.SLIPPAGE_HAIRCUT
         )
-        self.assertAlmostEqual(credit, expected)
+        self.assertEqual(credit, expected)
 
     def test_conservative_credit_rejects_invalid_quotes(self):
         with self.assertRaises(ValueError):

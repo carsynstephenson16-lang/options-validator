@@ -8,7 +8,6 @@ bars stamped 16:00 America/New_York.
 
 All fixtures are synthetic; the suite must run offline and without .cache/.
 """
-import math
 import tempfile
 import unittest
 from datetime import date
@@ -18,6 +17,7 @@ import pandas as pd
 
 import config
 from data import pandas_feed, thetadata_adapter
+from strategies.base import adverse_buy, adverse_sell
 
 
 def synth_chain(rows):
@@ -84,9 +84,9 @@ class BuildOptionDataTests(unittest.TestCase):
         row = feed[key].df.iloc[0]
         h = config.SLIPPAGE_HAIRCUT
         # bid: widened DOWN then floored to the cent (1.23*0.99=1.2177 -> 1.21)
-        self.assertAlmostEqual(row["bid"], math.floor(1.23 * (1 - h) * 100) / 100)
+        self.assertEqual(row["bid"], adverse_sell(1.23, h))
         # ask: widened UP then ceiled to the cent (1.31*1.01=1.3231 -> 1.33)
-        self.assertAlmostEqual(row["ask"], math.ceil(1.31 * (1 + h) * 100) / 100)
+        self.assertEqual(row["ask"], adverse_buy(1.31, h))
         # close = RAW mid, not widened (mark-to-market only)
         self.assertAlmostEqual(row["close"], (1.23 + 1.31) / 2)
 
@@ -102,9 +102,9 @@ class BuildOptionDataTests(unittest.TestCase):
         self.assertEqual(
             list(feed), [pandas_feed.option_asset("SPY", "2022-07-01", 395.0)])
 
-    def test_delta_band_keeps_full_series_once_included(self):
-        # in band on day 2 only -> whole series (both days) must be present,
-        # otherwise lumibot forward-fills a gap with stale quotes
+    def test_future_delta_cannot_make_contract_available_earlier(self):
+        # A day-2 delta may admit the contract from day 2 onward, but must not
+        # expose its day-1 quote to an earlier simulated decision.
         chains = {
             "2022-06-01": synth_chain([
                 ("2022-07-01", 300.0, "P", 0.01, 0.03, 500, -0.001),
@@ -116,7 +116,8 @@ class BuildOptionDataTests(unittest.TestCase):
         feed = pandas_feed.build_option_data(chains, "SPY", exp_max="2022-09-16")
         key = pandas_feed.option_asset("SPY", "2022-07-01", 300.0)
         self.assertIn(key, feed)
-        self.assertEqual(len(feed[key].df), 2)
+        self.assertEqual(len(feed[key].df), 1)
+        self.assertEqual(feed[key].df.index[0].date().isoformat(), "2022-06-02")
 
     def test_never_in_band_contract_excluded(self):
         chains = {
