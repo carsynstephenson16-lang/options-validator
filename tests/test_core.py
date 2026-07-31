@@ -30,9 +30,7 @@ class PricingAndSizingTests(unittest.TestCase):
     def test_conservative_credit_crosses_bid_ask_then_haircuts(self):
         credit = entry_credit_conservative(1.00, 1.20, 0.30, 0.40)
 
-        expected = adverse_sell(
-            1.00, config.SLIPPAGE_HAIRCUT
-        ) - adverse_buy(
+        expected = adverse_sell(1.00, config.SLIPPAGE_HAIRCUT) - adverse_buy(
             0.40, config.SLIPPAGE_HAIRCUT
         )
         self.assertEqual(credit, expected)
@@ -85,19 +83,23 @@ class LiquidityTests(unittest.TestCase):
 
 class ChainCacheTests(unittest.TestCase):
     def _valid_chain(self):
-        return pd.DataFrame([{
-            "expiration": "2022-02-18",
-            "strike": 390.0,
-            "right": "P",
-            "bid": 1.00,
-            "ask": 1.05,
-            "open_interest": 500,
-            "iv": 0.25,
-            "delta": -0.30,
-            "gamma": 0.02,
-            "theta": -0.04,
-            "vega": 0.12,
-        }])
+        return pd.DataFrame(
+            [
+                {
+                    "expiration": "2022-02-18",
+                    "strike": 390.0,
+                    "right": "P",
+                    "bid": 1.00,
+                    "ask": 1.05,
+                    "open_interest": 500,
+                    "iv": 0.25,
+                    "delta": -0.30,
+                    "gamma": 0.02,
+                    "theta": -0.04,
+                    "vega": 0.12,
+                }
+            ]
+        )
 
     def test_cache_path_rejects_unsafe_symbol_or_date(self):
         with self.assertRaises(ValueError):
@@ -123,9 +125,7 @@ class ChainCacheTests(unittest.TestCase):
             old_cache = thetadata_adapter.CACHE_DIR
             try:
                 thetadata_adapter.CACHE_DIR = Path(tmp)
-                self._valid_chain().to_parquet(
-                    thetadata_adapter._cache_path("spy", "2022-01-03")
-                )
+                self._valid_chain().to_parquet(thetadata_adapter._cache_path("spy", "2022-01-03"))
 
                 out = thetadata_adapter.get_eod_chain("SPY", "2022-01-03")
             finally:
@@ -138,7 +138,7 @@ class ChainCacheTests(unittest.TestCase):
 class ChainMergeTests(unittest.TestCase):
     """Pin the offline-testable half of the ThetaData fetch: the two bulk
     frames (greeks_eod carrying NBBO + all greeks + implied_vol, and the
-    open_interest report) must merge into a valid CHAIN_COLUMNS chain,
+    open_interest report) must merge into a valid CHAIN_COLUMNS_V2 chain,
     fail-closed on gaps, and fail loud on unexpected column names."""
 
     def _frames(self, n=3):
@@ -147,19 +147,45 @@ class ChainMergeTests(unittest.TestCase):
             "strike": [380.0 + 5 * i for i in range(n)],
             "right": ["PUT"] * n,
         }
-        greeks = pd.DataFrame({**base,
-                               "bid": [1.00 + i for i in range(n)],
-                               "ask": [1.10 + i for i in range(n)],
-                               "delta": [-0.30] * n, "gamma": [0.02] * n,
-                               "theta": [-0.04] * n, "vega": [0.12] * n,
-                               "implied_vol": [0.25] * n})
+        greeks = pd.DataFrame(
+            {
+                **base,
+                "timestamp": [
+                    pd.Timestamp(
+                        "2022-01-03 17:15:00",
+                        tz="America/New_York",
+                    )
+                ]
+                * n,
+                "bid_size": [17] * n,
+                "bid": [1.00 + i for i in range(n)],
+                "bid_condition": [50] * n,
+                "ask_size": [23] * n,
+                "ask": [1.10 + i for i in range(n)],
+                "ask_condition": [50] * n,
+                "delta": [-0.30] * n,
+                "gamma": [0.02] * n,
+                "theta": [-0.04] * n,
+                "vega": [0.12] * n,
+                "implied_vol": [0.25] * n,
+                "iv_error": [0.001] * n,
+                "underlying_timestamp": [
+                    pd.Timestamp(
+                        "2022-01-03 16:00:00",
+                        tz="America/New_York",
+                    )
+                ]
+                * n,
+                "underlying_price": [477.71] * n,
+            }
+        )
         oi = pd.DataFrame({**base, "open_interest": [500] * n})
         return greeks, oi
 
     def test_merge_produces_valid_chain_and_normalizes_rights(self):
         chain = thetadata_adapter._merge_chain_frames(*self._frames())
 
-        self.assertEqual(list(chain.columns), thetadata_adapter.CHAIN_COLUMNS)
+        self.assertEqual(list(chain.columns), thetadata_adapter.CHAIN_COLUMNS_V2)
         self.assertEqual(set(chain["right"]), {"P"})
         thetadata_adapter.validate_chain_schema(chain)
 
@@ -172,13 +198,15 @@ class ChainMergeTests(unittest.TestCase):
 
     def test_merge_keeps_last_report_per_contract(self):
         greeks, _ = self._frames(1)
-        oi = pd.DataFrame({
-            "expiration": ["2022-02-18"] * 2,
-            "strike": [380.0] * 2,
-            "right": ["PUT"] * 2,
-            "timestamp": ["2022-01-03T10:00:00", "2022-01-03T16:00:00"],
-            "open_interest": [100, 700],
-        })
+        oi = pd.DataFrame(
+            {
+                "expiration": ["2022-02-18"] * 2,
+                "strike": [380.0] * 2,
+                "right": ["PUT"] * 2,
+                "timestamp": ["2022-01-03T10:00:00", "2022-01-03T16:00:00"],
+                "open_interest": [100, 700],
+            }
+        )
 
         chain = thetadata_adapter._merge_chain_frames(greeks, oi)
 
@@ -188,22 +216,19 @@ class ChainMergeTests(unittest.TestCase):
         greeks, oi = self._frames(1)
 
         with self.assertRaisesRegex(ValueError, r"none of.*bid"):
-            thetadata_adapter._merge_chain_frames(
-                greeks.drop(columns=["bid", "ask"]), oi)
+            thetadata_adapter._merge_chain_frames(greeks.drop(columns=["bid", "ask"]), oi)
 
     def test_merge_fails_loud_when_implied_vol_missing(self):
         greeks, oi = self._frames(1)
 
         with self.assertRaisesRegex(ValueError, r"(?i)implied_vol"):
-            thetadata_adapter._merge_chain_frames(
-                greeks.drop(columns=["implied_vol"]), oi)
+            thetadata_adapter._merge_chain_frames(greeks.drop(columns=["implied_vol"]), oi)
 
     def test_merge_fails_loud_when_a_greek_column_missing(self):
         greeks, oi = self._frames(1)
 
         with self.assertRaisesRegex(ValueError, r"delta"):
-            thetadata_adapter._merge_chain_frames(
-                greeks.drop(columns=["delta"]), oi)
+            thetadata_adapter._merge_chain_frames(greeks.drop(columns=["delta"]), oi)
 
 
 class OOSTouchGuardTests(unittest.TestCase):
@@ -212,11 +237,23 @@ class OOSTouchGuardTests(unittest.TestCase):
     OOS reveal gate passes allow_oos=True."""
 
     def _valid_chain(self):
-        return pd.DataFrame([{
-            "expiration": "2023-02-17", "strike": 390.0, "right": "P",
-            "bid": 1.00, "ask": 1.05, "open_interest": 500, "iv": 0.25,
-            "delta": -0.30, "gamma": 0.02, "theta": -0.04, "vega": 0.12,
-        }])
+        return pd.DataFrame(
+            [
+                {
+                    "expiration": "2023-02-17",
+                    "strike": 390.0,
+                    "right": "P",
+                    "bid": 1.00,
+                    "ask": 1.05,
+                    "open_interest": 500,
+                    "iv": 0.25,
+                    "delta": -0.30,
+                    "gamma": 0.02,
+                    "theta": -0.04,
+                    "vega": 0.12,
+                }
+            ]
+        )
 
     def test_post_in_sample_chain_refused_without_gate(self):
         with self.assertRaises(thetadata_adapter.OOSDataTouchError):
@@ -227,18 +264,17 @@ class OOSTouchGuardTests(unittest.TestCase):
             old_cache = thetadata_adapter.CACHE_DIR
             try:
                 thetadata_adapter.CACHE_DIR = Path(tmp)
-                self._valid_chain().to_parquet(
-                    thetadata_adapter._cache_path("SPY", "2023-01-05"))
+                self._valid_chain().to_parquet(thetadata_adapter._cache_path("SPY", "2023-01-05"))
 
                 with self.assertRaises(thetadata_adapter.OOSDataTouchError):
                     thetadata_adapter.get_eod_chain("SPY", "2023-01-05")
 
-                gated = thetadata_adapter.get_eod_chain(
-                    "SPY", "2023-01-05", allow_oos=True)
+                gated = thetadata_adapter.get_eod_chain("SPY", "2023-01-05", allow_oos=True)
             finally:
                 thetadata_adapter.CACHE_DIR = old_cache
 
         self.assertEqual(len(gated), 1)
+
 
 class ScoreboardTests(unittest.TestCase):
     def test_scoreboard_requires_capital_at_risk(self):
@@ -247,8 +283,9 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_scoreboard_rejects_zero_capital_at_risk(self):
         with self.assertRaises(ValueError):
-            scoreboard([{"pnl": 12.0, "capital_at_risk": 0.0,
-                         "entry_date": "2021-01-04", "symbol": "SPY"}])
+            scoreboard(
+                [{"pnl": 12.0, "capital_at_risk": 0.0, "entry_date": "2021-01-04", "symbol": "SPY"}]
+            )
 
     def test_loss_count_gate_blocks_thin_short_vol_sample(self):
         trades = [
@@ -264,18 +301,34 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_scoreboard_rejects_is_win_contradicting_net_pnl(self):
         with self.assertRaises(ValueError):
-            scoreboard([{"pnl": -12.0, "capital_at_risk": 100.0,
-                         "entry_date": "2021-01-04", "symbol": "SPY",
-                         "is_win": True}])
+            scoreboard(
+                [
+                    {
+                        "pnl": -12.0,
+                        "capital_at_risk": 100.0,
+                        "entry_date": "2021-01-04",
+                        "symbol": "SPY",
+                        "is_win": True,
+                    }
+                ]
+            )
 
     def test_flat_trades_do_not_satisfy_loss_floor(self):
         trades = [
-            {"pnl": 40.0, "capital_at_risk": 100.0,
-             "entry_date": f"2021-{month:02d}-01", "symbol": "SPY"}
+            {
+                "pnl": 40.0,
+                "capital_at_risk": 100.0,
+                "entry_date": f"2021-{month:02d}-01",
+                "symbol": "SPY",
+            }
             for month in range(1, 7)
         ] + [
-            {"pnl": 0.0, "capital_at_risk": 100.0,
-             "entry_date": f"2022-{month:02d}-01", "symbol": "SPY"}
+            {
+                "pnl": 0.0,
+                "capital_at_risk": 100.0,
+                "entry_date": f"2022-{month:02d}-01",
+                "symbol": "SPY",
+            }
             for month in range(1, config.MIN_LOSSES_FOR_VERDICT + 1)
         ]
 
@@ -286,10 +339,20 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_scoreboard_reports_secondary_economic_max_loss_return(self):
         trades = [
-            {"pnl": 10.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
-             "entry_date": "2021-01-04", "symbol": "SPY"},
-            {"pnl": 20.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
-             "entry_date": "2021-01-11", "symbol": "SPY"},
+            {
+                "pnl": 10.0,
+                "capital_at_risk": 100.0,
+                "economic_max_loss": 110.0,
+                "entry_date": "2021-01-04",
+                "symbol": "SPY",
+            },
+            {
+                "pnl": 20.0,
+                "capital_at_risk": 100.0,
+                "economic_max_loss": 110.0,
+                "entry_date": "2021-01-11",
+                "symbol": "SPY",
+            },
         ]
 
         result = scoreboard(trades)
@@ -298,10 +361,14 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_scoreboard_rejects_partial_economic_max_loss(self):
         trades = [
-            {"pnl": 10.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
-             "entry_date": "2021-01-04", "symbol": "SPY"},
-            {"pnl": 20.0, "capital_at_risk": 100.0,
-             "entry_date": "2021-01-11", "symbol": "SPY"},
+            {
+                "pnl": 10.0,
+                "capital_at_risk": 100.0,
+                "economic_max_loss": 110.0,
+                "entry_date": "2021-01-04",
+                "symbol": "SPY",
+            },
+            {"pnl": 20.0, "capital_at_risk": 100.0, "entry_date": "2021-01-11", "symbol": "SPY"},
         ]
 
         with self.assertRaises(ValueError):
@@ -309,9 +376,17 @@ class ScoreboardTests(unittest.TestCase):
 
     def test_scoreboard_rejects_economic_max_loss_below_margin(self):
         with self.assertRaises(ValueError):
-            scoreboard([{"pnl": 12.0, "capital_at_risk": 100.0,
-                         "economic_max_loss": 99.0,
-                         "entry_date": "2021-01-04", "symbol": "SPY"}])
+            scoreboard(
+                [
+                    {
+                        "pnl": 12.0,
+                        "capital_at_risk": 100.0,
+                        "economic_max_loss": 99.0,
+                        "entry_date": "2021-01-04",
+                        "symbol": "SPY",
+                    }
+                ]
+            )
 
 
 class HonestRiskCapConfigTests(unittest.TestCase):
@@ -339,8 +414,9 @@ class HonestRiskCapConfigTests(unittest.TestCase):
         # three sweep widths ARE feasible, so the width choice belongs to the
         # IN-SAMPLE sweep, not to feasibility arithmetic.
         for width in config.A_SPREAD_WIDTH_SWEEP:
-            self.assertGreaterEqual(self._contracts_for_width(width), 1,
-                                    f"width {width} no longer fits the cap")
+            self.assertGreaterEqual(
+                self._contracts_for_width(width), 1, f"width {width} no longer fits the cap"
+            )
 
     def test_concentration_is_documented_reality(self):
         # 4 concurrent positions x $600 = $2,400 =~ 17.1% of the sleeve at

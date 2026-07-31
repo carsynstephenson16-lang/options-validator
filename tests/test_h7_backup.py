@@ -1,4 +1,5 @@
 """Offline allow-list and restore-verification tests for the H7 backup tool."""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,9 +8,18 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import pandas as pd
+
+from data.cache_schema import CHAIN_COLUMNS_V1
 from options_researcher.h7_scope import scope_identity
 from research.receipts import make_receipt, write_immutable_receipt
 from tools import h7_forward_backup as backup
+
+
+def _write_v1_chain(path: Path) -> tuple[str, int]:
+    pd.DataFrame(columns=CHAIN_COLUMNS_V1).to_parquet(path, index=False)
+    content = path.read_bytes()
+    return hashlib.sha256(content).hexdigest(), len(content)
 
 
 class BackupTests(unittest.TestCase):
@@ -22,8 +32,8 @@ class BackupTests(unittest.TestCase):
             fake = mock.Mock(return_value=mock.Mock(stdout='{"snapshot_id":"abc123"}\n'))
             with mock.patch.object(backup, "_run_restic", fake):
                 path = backup.run_backup(
-                    completed_session="2026-07-10", root=root,
-                    receipt_path=root / "backup.json")
+                    completed_session="2026-07-10", root=root, receipt_path=root / "backup.json"
+                )
             args = fake.call_args.args[0]
             self.assertNotIn("SECRET=do-not-back-up", args)
             self.assertIn("--exclude", args)
@@ -34,18 +44,25 @@ class BackupTests(unittest.TestCase):
             root = Path(temp)
             chain = root / ".cache/chains/one.parquet"
             chain.parent.mkdir(parents=True)
-            chain.write_bytes(b"chain")
+            digest, size = _write_v1_chain(chain)
             manifest = root / "data/chain_cache_manifest.txt"
             manifest.parent.mkdir(parents=True)
-            manifest.write_text(
-                f"{hashlib.sha256(b'chain').hexdigest()}  5  one.parquet\n")
+            manifest.write_text(f"{digest}  {size}  one.parquet\n")
             receipt_dir = root / "reports/h7_receipts"
-            record = {"path": ".cache/chains/one.parquet", "exists": True,
-                      "sha256": hashlib.sha256(b"chain").hexdigest()}
-            receipt = make_receipt("data_gate", {
-                "scope": scope_identity(), "whole_universe_verdict": "GO",
-                "go_count": 15, "input_files": {"chain": record},
-            })
+            record = {
+                "path": ".cache/chains/one.parquet",
+                "exists": True,
+                "sha256": digest,
+            }
+            receipt = make_receipt(
+                "data_gate",
+                {
+                    "scope": scope_identity(),
+                    "whole_universe_verdict": "GO",
+                    "go_count": 15,
+                    "input_files": {"chain": record},
+                },
+            )
             write_immutable_receipt(receipt, receipt_dir / "gate.json")
             result = backup.verify_restored_tree(root)
             self.assertTrue(result["ok"], result)
@@ -62,19 +79,26 @@ class BackupTests(unittest.TestCase):
             root = Path(temp)
             chain = root / ".cache/chains/one.parquet"
             chain.parent.mkdir(parents=True)
-            chain.write_bytes(b"chain")
+            digest, size = _write_v1_chain(chain)
             manifest = root / "data/chain_cache_manifest.txt"
             manifest.parent.mkdir(parents=True)
-            manifest.write_text(
-                f"{hashlib.sha256(b'chain').hexdigest()}  5  one.parquet\n")
+            manifest.write_text(f"{digest}  {size}  one.parquet\n")
             scope_id = scope_identity()["scope_id"]
             receipt_dir = root / "reports/h7_data_gate" / scope_id / "receipts"
-            record = {"path": ".cache/chains/one.parquet", "exists": True,
-                      "sha256": hashlib.sha256(b"chain").hexdigest()}
-            receipt = make_receipt("data_gate", {
-                "scope": scope_identity(), "whole_universe_verdict": "GO",
-                "go_count": 15, "input_files": {"chain": record},
-            })
+            record = {
+                "path": ".cache/chains/one.parquet",
+                "exists": True,
+                "sha256": digest,
+            }
+            receipt = make_receipt(
+                "data_gate",
+                {
+                    "scope": scope_identity(),
+                    "whole_universe_verdict": "GO",
+                    "go_count": 15,
+                    "input_files": {"chain": record},
+                },
+            )
             write_immutable_receipt(receipt, receipt_dir / "2026-07-17.json")
             result = backup.verify_restored_tree(root)
             self.assertTrue(result["ok"], result)

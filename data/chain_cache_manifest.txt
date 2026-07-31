@@ -1,3 +1,5 @@
+# chain-cache-manifest/v2
+# legacy-entry-defaults schema_version=1 usage=display-only
 a771fab5f6e1887d9b82b8b24f179d772b165dc6d7fd9a24f9d281bd84f2f7cd  41687  AAPL_2018-01-02.parquet
 7f1fc9e7904418d07cacee923ce646dcab3925f4b4a3742e1cf66b26affa2b45  42155  AAPL_2018-01-03.parquet
 d46358aa06456650e822ebeeef4062905184c85e73c70c8be28a81b14950440e  41636  AAPL_2018-01-04.parquet
