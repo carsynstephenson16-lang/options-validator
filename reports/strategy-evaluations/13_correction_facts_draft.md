@@ -1,119 +1,55 @@
-# 13 — Correction facts for three permanent records: DRAFT, NOT APPENDED
+# 13 — Correction fact for three permanent records: REVIEWED DRAFT, NOT APPENDED
 
-**Date:** 2026-07-30
-**Owner decision 2026-07-30:** *"Append correction facts to the ledger."*
-**Status: drafted only. Nothing has been written to `ledger/facts.log`.**
+**Updated:** 2026-07-31
+**Owner direction:** append only after the owner reads and approves the exact
+text.
+**Status:** independent adversarial review completed with
+`PASS-WITH-CHANGES`; fresh Fable review completed with `SIGN-OFF: PASS` on the
+exact payload below. Final owner approval remains open. Nothing has been
+written to `ledger/facts.log`.
 
-Two reasons this is a draft rather than an append:
+The permanent correction must be append-only and must use
+`research.facts.append_fact`. It changes descriptive metrics only; it does not
+amend a registered parameter, threshold, window, outcome, spent state, or
+reveal state.
 
-1. The owner's chosen option said explicitly *"I draft; you read before it lands."*
-2. CLAUDE.md requires that a recorded amendment pass independent adversarial
-   review before it goes in. That review has not run on this text.
+## Independently verified corrections
 
-The ledger is append-only. Wrong correction text cannot be edited out, only
-appended over — so the cost of a careless append is permanent.
+- H1 seq 0: `capital_efficiency` −4510.21% → −19.96% and
+  `return_on_economic_max_loss` −4442.93% → −19.66%.
+- H2 seq 3: `capital_efficiency` −1835.34% → −9.36% and
+  `return_on_economic_max_loss` −1823.97% → −9.31%.
+- H9: `capital_efficiency` +1387.30% → +86.71%; its
+  `return_on_economic_max_loss` remains NaN because its trades do not carry
+  `economic_max_loss`.
+- Commit `5626c3f` fixed the numeric economic-max-loss ratio to sum-over-sum
+  and defined closed-trade drawdown as zero-anchored with stable
+  `entry_date` ordering. The historical H9 receipt order produced $361.30;
+  replay under the implemented definition produces $718.50. Exit-session
+  aggregation produces $572.20, so it is not interchangeable with the
+  implemented closed-trade measure.
+- The stored H1/H2 in-sample scoreboard strings remain FAIL, but both OOS
+  holdouts remain unrevealed. H9 remains `INSUFFICIENT_SAMPLE` (4 losses vs
+  10 required), and its unresolved-gap gate did not trip (0 gaps).
+- H1/H2 drawdowns cannot be recomputed because their per-trade lists are not
+  present in the canonical repository. Their aggregate records do not prove
+  whether anchoring or ordering affected their stored values.
 
----
+## Exact reviewed correction text — owner approval required
 
-## What is wrong, and what is not
+```text
+METRIC_CORRECTION 2026-07-31 (H1 seq 0, H2 seq 3, H9). CORRECTION: the legacy scoreboard divided total P&L by mean per-trade capital, and by mean economic max loss where that field was populated, instead of the corresponding sums. Each numeric affected ratio therefore had an absolute magnitude exactly n times the sum-denominator value. The capital calculation was replaced by trade_weighted_return_on_risk in commit 88ffbb6; the numeric return_on_economic_max_loss calculation and closed-trade drawdown ordering were corrected in commit 5626c3f. Algebraic corrections from the stored aggregates, exact under the historical formulas as recorded/n: H1 seq 0 (n=226) capital_efficiency -4510.21% -> -19.96% and return_on_economic_max_loss -4442.93% -> -19.66%; H2 seq 3 (n=196) capital_efficiency -1835.34% -> -9.36% and return_on_economic_max_loss -1823.97% -> -9.31%; H9 reports/h9/receipt.json (n=16) capital_efficiency +1387.30% -> +86.71%; H9 return_on_economic_max_loss remains NaN because its trades do not record economic_max_loss. OUTCOMES UNAFFECTED: the stored H1 and H2 in-sample scoreboard verdict strings remain FAIL; their OOS holdouts remain unrevealed, so this correction asserts no final OOS verdict. H9 remains INSUFFICIENT_SAMPLE because it recorded 4 losses versus the required 10 and its unresolved-gap gate did not trip; neither corrected ratio nor drawdown feeds those gates. H9 DRAWDOWN CORRECTION: the receipt trade array is ordered by symbol then event date, not by entry date, and the historical unanchored calculation over that receipt order produced $361.30. Commit 5626c3f defines closed_trade_pnl_drawdown as zero-anchored and stably ordered by entry_date; replaying H9's 16 stored trades under that implemented definition yields $718.50. Aggregating realized P&L by exit_fill_session yields $572.20, so $718.50 is specifically the implemented entry-date-ordered closed-trade value, not a daily-NAV or generic chronological drawdown. The wrong $361.30 value is also quoted in ledger/facts.log H9_RESULT at line 17892. H1 and H2 drawdowns are not corrected because no per-trade lists are present in the canonical repository; their aggregate records cannot determine whether zero anchoring or ordering affected those values. No registered parameter, threshold, window, outcome, spent state, or reveal state is changed by this descriptive fact. Provenance: agent-drafted under owner direction 2026-07-30; independently adversarially reviewed 2026-07-31; append remains owner-gated and must use research.facts.append_fact.
+```
 
-The capital-efficiency defect divided total P&L by the **mean** capital instead
-of the **total**. That inflates the number by exactly the trade count. The same
-defect exists a second time in `return_on_economic_max_loss`, which
-`88ffbb6` did **not** fix ([`metrics.py:515-519`](../../metrics.py#L515-L519)) —
-so each record carries **two** wrong ratios, not one.
+## Append gate
 
-**The adjudicated verdicts are unaffected and stand.** `metrics.scoreboard`
-derives the verdict from the loss count, the cohort count and the confidence
-interval only ([`metrics.py:521-543`](../../metrics.py#L521-L543)); it never
-reads either ratio. H1 FAIL, H2 FAIL, H9 INSUFFICIENT_SAMPLE are all untouched.
-What is wrong is the descriptive record around them.
-
----
-
-## The numbers, recomputed
-
-Honest value = recorded value ÷ trade count, exactly.
-
-| Record | Trades | Field | Recorded | Honest |
-|---|---:|---|---:|---:|
-| **H1** `ledger/experiments.jsonl` seq 0 | 226 | `capital_efficiency` | −4,510.21% | **−19.96%** |
-| | | `return_on_economic_max_loss` | −4,442.93% | **−19.66%** |
-| **H2** `ledger/experiments.jsonl` seq 3 | 196 | `capital_efficiency` | −1,835.34% | **−9.36%** |
-| | | `return_on_economic_max_loss` | −1,823.97% | **−9.31%** |
-| **H9** `reports/h9/receipt.json` | 16 | `capital_efficiency` | +1,387.30% | **+86.71%** |
-| | | `return_on_economic_max_loss` | NaN | not affected |
-
-### H9's drawdown is additionally wrong, and by more than previously believed
-
-`10_fix_arc_owner_decisions.md` §D8 attributed it to the missing zero start.
-That is secondary. The trade list was handed to `scoreboard` **sorted
-alphabetically by ticker**, not chronologically:
-
-| Ordering | Drawdown |
-|---|---:|
-| As recorded — alphabetical, no zero start | **$361.30** |
-| Alphabetical, zero-anchored | $482.30 |
-| **Chronological by entry date** | **$718.50** |
-| Chronological by exit date | $572.20 |
-
-$361.30 reproduces exactly under the alphabetical ordering and no other.
-This figure appears in **prose** in `ledger/facts.log:17892`, not only inside a
-JSON blob, so it is the most quotable of the wrong numbers.
-
-**H1 and H2 drawdowns: not corrected here.** No per-trade list survives for
-either, so the figures cannot be recomputed. *Inference:* both recorded
-drawdowns already exceed the absolute total loss ($23,411.40 vs $23,230.80;
-$7,969.00 vs $7,658.60), which implies the equity curve peaked above zero, which
-in turn implies the missing zero start did not bind. That is reasoning, not
-measurement, and the correction text should say so rather than assert the
-figures are fine.
-
----
-
-## Draft text — for owner review, not yet appended
-
-> **METRIC_CORRECTION 2026-07-30 (H1, H2, H9).** Three permanent records carry
-> inflated capital-use ratios. Cause: `metrics.scoreboard` divided total P&L by
-> the MEAN per-trade capital instead of the SUM, inflating both
-> `capital_efficiency` and `return_on_economic_max_loss` by exactly the trade
-> count. Fixed for `capital_efficiency` in commit 88ffbb6 (renamed
-> `trade_weighted_return_on_risk`, sum denominator);
-> `return_on_economic_max_loss` remained defective at that commit and is
-> recorded here as an open defect. Corrected values, recomputed as recorded ÷ n:
-> H1 (seq 0, n=226) capital_efficiency −4510.21% → −19.96%,
-> return_on_economic_max_loss −4442.93% → −19.66%;
-> H2 (seq 3, n=196) −1835.34% → −9.36% and −1823.97% → −9.31%;
-> H9 (reports/h9/receipt.json, n=16) capital_efficiency +1387.30% → +86.71%,
-> return_on_economic_max_loss NaN (unaffected).
-> VERDICTS UNAFFECTED AND STANDING: H1 FAIL, H2 FAIL, H9 INSUFFICIENT_SAMPLE.
-> `metrics.scoreboard` derives the verdict from loss count, cohort count and the
-> confidence interval only and never reads either ratio (metrics.py:521-543).
-> ADDITIONALLY, H9's recorded max_drawdown $361.30 is wrong for a second,
-> previously unidentified reason: the trade list was passed to scoreboard sorted
-> alphabetically by symbol rather than chronologically, and `_max_drawdown` has
-> no ordering contract. Recomputed from the receipt's own trades array: $482.30
-> alphabetical zero-anchored, $718.50 chronological by entry date, $572.20
-> chronological by exit date. The recorded $361.30 reproduces only under the
-> alphabetical no-zero-start computation. The $361.30 figure is also quoted in
-> prose at ledger/facts.log:17892. H1 and H2 drawdowns are NOT corrected: no
-> per-trade list survives for either; both recorded drawdowns exceed their
-> absolute total loss, which is consistent with a positive equity peak and
-> therefore with the missing zero start not binding — inference, not
-> measurement. No registered parameter, threshold, window or verdict is amended
-> by this fact. Provenance: agent-drafted, owner-directed 2026-07-30; entry
-> mechanics disclosed.
-
----
-
-## Before this is appended
-
-- [ ] Independent adversarial review of the text (CLAUDE.md requirement)
-- [ ] Owner reads and approves the wording
-- [ ] Confirm the ledger-guard hook accepts a `METRIC_CORRECTION` prefix, or
-      choose an accepted one
-- [ ] Decide whether `return_on_economic_max_loss` gets fixed *before* the fact
-      is written, so the fact can say "fixed in <sha>" rather than "open defect"
-
-The last item is worth deciding deliberately: appending a correction that names
-a still-open defect is honest, but it means a second correction later.
+- [x] Numeric and semantic claims independently adversarially reviewed.
+- [x] Draft updated to cite the fixing commit `5626c3f`.
+- [x] Typed API accepts the `METRIC_CORRECTION` payload in an isolated
+      temporary ledger; the hook blocks direct ledger writes, not this prefix.
+- [x] Fresh Fable sign-off on this exact revision (`SIGN-OFF: PASS`, explicit
+      `--model fable`, read-only, 2026-07-31). Fable independently reproduced
+      every ratio, the $361.30/$718.50/$572.20 drawdowns, outcome gates, and
+      OOS-state claims; it required no replacement payload.
+- [ ] Owner reads and approves this exact one-line payload.
+- [ ] Append once through `research.facts.append_fact`, then verify the ledger.

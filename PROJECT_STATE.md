@@ -1,6 +1,7 @@
 # PROJECT_STATE — options-validator (CANONICAL status + roadmap)
 
-**As of:** 2026-07-31. **Checkout:** `sfix` @ `5626c3f`; `main` @ `ecdaeb9`
+**As of:** 2026-07-31. **Checkout:** `sfix` through P0.3/P0.5 implementation
+`a48a7fd`; `main` @ `ecdaeb9`
 (ops worktree; incorporated into `sfix` by merge `9cf3ee4`). This file is the
 ONE roadmap. Every plan in the supersession
 table (§8) is retired as an active path; those files remain as history.
@@ -17,23 +18,22 @@ data decision lands.
 - The Schwab live-preview lane landed on `sfix` with tests and a verified
   2026-07-29/30 probe; it is read-only by construction.
 - The 13:00 intraday recorder keeps accumulating display-only receipts.
-- Test suite: 2,232 tests passed on `sfix` @ `5626c3f`; `ruff` and `pyright`
+- Test suite: 2,236 tests passed after P0.3/P0.5; `ruff` and `pyright`
   are clean.
 
 ## 2. What is unsafe (do not build on it)
 
 Of findings F1–F6 in
-`reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`, F3–F5
-were fixed in `5626c3f`. The remaining blockers are: the $600 cap is not
-enforceable under decision-day sizing with fill-day prices (F1); `entry_date`
-changed to fill-day and feeds verdict cohorts without registration (F2); and
-`BACKTEST_EXECUTION_CONVENTION` is unregistered (F6). **No new backtest,
-promotion, or registration until P0 closes.**
+`reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`, F1–F6
+are now implemented or corrected. P0 remains open only for the owner-gated
+correction-fact append. **No new backtest, promotion, or research registration
+until P0 closes.**
 
 ## 3. What is blocked, and on what
 
-- Correction-facts append: blocked on independent review + owner approval
-  (draft: `13_correction_facts_draft.md`).
+- Correction-facts append: independent and Fable review both passed; blocked
+  only on the owner's approval of the exact payload in
+  `13_correction_facts_draft.md`.
 - Phase B / v2 rebuild of H6/H8: blocked on owner decision OD-1
   (`docs/provider-transition.md` §5) — and OD-1 expires at cancellation.
 - H7 future sessions: blocked on OD-3 (old vs new window namespace).
@@ -84,30 +84,25 @@ exist afterward. Do tasks in order within a priority; P0 before P1 before P2.
   closed-trade drawdown in stable entry-date order. The 13.64% ratio and
   shuffled-order drawdown regressions failed before the fix and passed after;
   the full suite passed.
-- **P0.3 Cap enforceability (owner decision OD-A + implementation).** Owner
-  picks the F1 mechanism: (a) re-size at fill, (b) cancel if fill-day credit
-  worse than a typed tolerance, (c) accept and disclose. Recommended default:
-  (b) — fail-closed, uses only fill-time data at fill time, no look-ahead.
-  Proof: a cap test where decision and fill quotes DIFFER (the existing suite
-  holds them equal — `test_selector_credit_equals_engine_fill_credit_for_same_quotes`);
-  measured worst-case breach across the dataset reported. Depends: P0.1.
+- **P0.3 COMPLETE — Cap enforceability.** `a48a7fd` implements owner-typed
+  OD-A: cancel beyond $0.01 adverse net-credit movement and resize only when an
+  allowed fill would exceed $600. Red/green tests cover $0.50→$0.35,
+  $0.53→$0.51, and the exact $0.53→$0.52 boundary. The 4,002-chain-day audit
+  found zero allowed-fill breaches; report 16 records the full measurement.
 - **P0.4 COMPLETE — Last-session exit crash (F3).** `5626c3f` closes a
   final-session trigger descriptively at the same session's conservative
   executable mark and records `exit_execution=terminal_conservative_mark`;
   ordinary exits remain next-session engine fills. The Dec. 30 year-boundary
   regression failed before the fix and passed after; the full suite passed.
-- **P0.5 Register the execution convention + entry_date semantics (owner
-  types).** Owner registers D+1-close (F6) and the `entry_date` = fill-day
-  redefinition (F2), or reverts the field to decision-day. Recommended:
-  keep fill-day, register it, and keep `entry_decision_date` alongside.
-  Proof: chained-ledger registration entry; config comment cites it.
-  Depends: P0.1.
-- **P0.6 Correction facts append (owner-gated).** Independent adversarial
-  review of `13_correction_facts_draft.md`, decide fix-first-or-not
-  (recommended: land P0.2 first so the fact says "fixed in <sha>"), confirm
-  the ledger hook accepts the prefix, owner approves, append via typed API.
-  Proof: fact visible at the end of `facts.log`; hook did not block; wording
-  matches the reviewed text. Depends: P0.2 recommended.
+- **P0.5 COMPLETE — Register execution convention + date semantics.** Owner
+  typed OD-B. Chained ledger seq 21 (`a540a074…`) registers D+1 close,
+  `entry_date` = fill session, retained `entry_decision_date`, and the
+  `terminal_conservative_mark` exception. Config cites the entry; ledger
+  verification is green. The record explicitly preserves H6/H7/H8 semantics.
+- **P0.6 OWNER APPROVAL PENDING — Correction facts append.** P0.2 landed;
+  independent review returned PASS-WITH-CHANGES; the corrected exact payload
+  cites `5626c3f`; fresh Fable review returned PASS; typed-API prefix smoke
+  passed. Do not append until the owner approves the exact text in report 13.
 
 ### P1 — provider transition and data continuity
 
@@ -162,9 +157,8 @@ or if any task would require touching v1 cache bytes or a one-run record.
 
 ## 9. Owner-only decisions, in one place
 
-OD-A cap mechanism (P0.3, default b); OD-B entry_date + D+1 registration
-(P0.5, default keep-and-register); OD-C correction-facts approval (P0.6,
-default fix-first then append); OD-1 v2 backfill before cancel (default:
+OD-A and OD-B are complete. OD-C review is complete and the exact correction
+text awaits owner approval before append. OD-1 v2 backfill before cancel (default:
 authorize only if Phase B wanted within ~6 months); OD-2 final EOD top-up
 (default: yes); OD-3 H7 namespace (default: new namespace); OD-4 record the
 real cancel date; OD-D evidence-upgrade review lane (enable managed Code
