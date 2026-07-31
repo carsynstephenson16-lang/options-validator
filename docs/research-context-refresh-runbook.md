@@ -1,145 +1,232 @@
-# Research-context refresh runbook (attractiveness dashboard)
+# Research-context refresh runbook
 
-**What this is.** The attractiveness board's research layer — the "Research
-evidence" blocks on the Top-3 hero cards, the per-symbol "Company context,
-catalysts & sources" blurbs, and the "Market context" backdrop — comes from a
-dated JSON file: `reports/attractiveness_context/<data-as-of>.json`. Per the
-governing spec (`docs/superpowers/specs/2026-07-16-attractiveness-v2-
-technicals-context-design.md` §3), this layer was originally ON-DEMAND
-(owner-ask-only, amended 2026-07-16) and is **scheduled since the
-owner-directed 2026-07-25 amendment** — see the Cadence section. The 07:10
-daily ritual still rebuilds the deterministic board with no LLM in the loop.
+## Scope and safety boundary
 
-**Why it goes stale (by design).** Three separate honesty mechanisms fire as
-the file ages:
+The attractiveness research refresh is an advisory consumer of the
+deterministic board and daily ritual. It never runs topups, builds features,
+refreshes QM, changes candidate membership, or changes hypothesis gates,
+receipts, rankings, thresholds, or verdicts.
 
-1. **Loader fallback banner** — `load_context()` wants an exact
-   `<as-of>.json`; otherwise it falls back to the newest older file and shows
-   "company-research annotations are from YYYY-MM-DD (stale vs data as-of …)".
-2. **Orphaned annotation notice** — annotations are keyed to exact candidates
-   (`SYMBOL:lane:expiry:strike`). The board re-derives picks whenever data
-   changes, so old keys stop matching and the board reports "N research
-   annotation(s) do not match any card on today's board".
-3. **Per-card session check** — even a matching annotation renders only when
-   its `market_as_of_date` equals the board's data as-of. Research is valid
-   for exactly one session; every other card shows "Research evidence
-   incomplete — no source-validated annotation".
+The producer must use:
 
-None of these are bugs. They are the schema doing its job: it protects
-ranking membership and provenance, **not** factual truth, and it never
-invents content to fill a gap.
+- deployment checkout:
+  `/Users/carsynstephenson/options-validator-research`
+- authoritative ritual checkout:
+  `/Users/carsynstephenson/options-validator-ops`
+- authoritative deterministic-board input checkout:
+  `/Users/carsynstephenson/options-validator-ops`
+- timezone semantics: `America/New_York`
 
-## Refresh procedure (owner-triggered; ~30–45 min with subagents)
+Before any paid LLM invocation, the producer requires the exact market
+session's `daily_ritual/run_status/v1` projection to be globally `OK`, bound by
+path and SHA-256 to its capture receipt. The required H5, H6, H7, H8, and H10
+evidence must also be readable and hashable. A globally `BROKEN` ritual blocks
+research even if individual hypothesis rows say `CAPTURED` or `NO_SIGNAL`.
 
-1. **Confirm the board's data is current first.** The research file must be
-   built against today's evaluation session. If the chain/features are stale,
-   run the data-refresh steps from `tools/daily_ritual.sh` first (topup →
-   `features.build_all` → `qm_dashboard --refresh-ohlcv`). Never write a
-   research file for a stale board.
+## Producer cadence
 
-2. **Derive the authoritative candidate IDs** (never guess strikes/expiries):
+The checked-in template is
+`tools/launchd/com.carsyn.options-validator.research-refresh.plist`.
+It has exactly two triggers on weekdays:
 
-   ```bash
-   uv run python - <<'EOF'
-   from options_researcher.attractiveness_dashboard import (
-       assemble, select_top_picks, select_qm_top_picks, pinned_picks)
-   from options_researcher.qm_dashboard import load_qm_context
-   data = assemble()
-   qm = load_qm_context(data.get("data_as_of") or "")
-   ids = {p["card"]["top3_snapshot"]["candidate_id"]
-          for p in select_top_picks(data, include_csp_watch=True)}
-   ids |= {p["card"]["top3_snapshot"]["candidate_id"]
-           for p in select_qm_top_picks(data, qm, include_csp_watch=True)}
-   print("data_as_of:", data["data_as_of"])
-   print("hero candidate ids:", sorted(ids))
-   print("pinned:", [(p["symbol"], p["pick"]["card"]["top3_snapshot"]["candidate_id"])
-                     for p in pinned_picks(data)])
-   EOF
-   ```
+- 07:40 ET: normal producer attempt
+- 08:10 ET: idempotent retry
 
-3. **Dispatch web-research subagents** (Sonnet-class; one per hero symbol,
-   plus one for market context + pinned-symbol blurbs). Non-negotiable prompt
-   rules:
-   - Verify every fact on the live web; never from model memory. Cite only
-     URLs the agent actually fetched.
-   - No blogs/Reddit/YouTube/forums. Primary tiers: `issuer_ir`,
-     `sec_filing`, `regulator`, `market_operator`; financial press is
-     `secondary`. WebFetch tends to 403 on sec.gov — prefer issuer IR pages
-     (or Trafilatura with a real UA for EDGAR).
-   - Claim schema is enforced by `options_researcher/top3_context.py`:
-     exactly one of `source_url`/`unknown_rationale`; `date_certainty:
-     "confirmed"` requires a primary tier AND a URL; `fact_date` may be null
-     only when certainty is `"unknown"`; `countercase` is mandatory.
-   - The single highest-value claim per hero card is **earnings timing vs the
-     card's expiry** (in-window earnings = the dominant risk on a 2-week
-     option).
+There is no 16:45 run and no Saturday run. A successful 07:40 receipt with the
+same ritual-status SHA makes the 08:10 trigger exit without an LLM call.
+`launchd` does not start a second instance of the same job while the first is
+still running.
 
-4. **Assemble** `reports/attractiveness_context/<data-as-of>.json`:
-   - `as_of` = the board's data as-of; `researched_on` = today;
-     `provenance` = `"LLM-asserted (Claude subagents, web research
-     YYYY-MM-DD)"`.
-   - `market{summary, regime, notes}`, `symbols{...}` (hero + pinned
-     symbols), `annotations{candidate_id: {research_as_of_utc,
-     market_as_of_date, claims[...]}}`.
-   - `market_as_of_date` MUST equal the board's data as-of, or the card
-     renders "Research evidence stale".
-   - Do NOT include `top_picks` / `legacy_top_picks_unusable` — agent-chosen
-     picks are a retired legacy input and only trigger the "ignored" notice.
+`StartCalendarInterval` follows the Mac's system timezone; the plist's `TZ`
+environment variable affects the script but does not reinterpret launchd's
+calendar. The host timezone must therefore remain `America/New_York`. If it
+does not, the script's independent weekday 07:30-08:30 ET guard fails closed
+rather than treating a wrong local trigger as premarket.
 
-5. **Validate before writing the dashboard** — round-trip the annotations
-   through the real validator with the real candidate IDs:
+The template points to the deployment checkout, never a temporary worktree,
+and sets:
 
-   ```bash
-   uv run python - <<'EOF'
-   import json
-   from options_researcher.top3_context import normalize_research_annotations
-   ctx = json.load(open("reports/attractiveness_context/<AS_OF>.json"))
-   ids = [...]  # from step 2
-   normalize_research_annotations(ids, ctx["annotations"])
-   print("annotations valid")
-   EOF
-   ```
+`RESEARCH_RITUAL_ROOT=/Users/carsynstephenson/options-validator-ops`
 
-6. **Rebuild and verify**: `uv run python -m
-   options_researcher.attractiveness_dashboard`, then check the HTML for:
-   no "annotations are from" fallback banner, no "do not match any card"
-   notice, hero cards showing "✓ Research evidence · complete", and the
-   "Research updated" chip showing today.
+It also sets `RESEARCH_BOARD_ROOT` to that ops checkout. The isolated research
+worktree reads exact-session cache, feature, QM, and hypothesis evidence there,
+while all generated research manifests, reports, logs, and dashboard output
+remain in `/Users/carsynstephenson/options-validator-research`.
 
-## Cadence
+The producer LaunchAgent is intentionally left disabled and unloaded. Safe
+template validation does not enable it:
 
-The spec deliberately keeps agents out of the automated ritual. Practical
-triggers for asking for a refresh:
+```bash
+plutil -lint tools/launchd/com.carsyn.options-validator.research-refresh.plist
+```
 
-- Before actually reading the board to consider any action.
-- After any session where the Top-3 membership rotated.
-- Any time the board shows the stale-research banners and that bothers you.
+After owner approval, copy the reviewed template to
+`~/Library/LaunchAgents/`. Enabling/loading it is a separate owner-authorized
+operation and is intentionally not part of this runbook.
 
-**This is now automated.** Per the spec amendment *"2026-07-25
-(owner-directed): scheduled research refresh"* in
-`docs/superpowers/specs/2026-07-16-attractiveness-v2-technicals-context-
-design.md`, a LaunchAgent (label `com.carsyn.options-validator.research-
-refresh`, template checked in at `tools/launchd/com.carsyn.options-
-validator.research-refresh.plist`, installed by copy to
-`~/Library/LaunchAgents/`) runs `tools/research_refresh.sh` Mon–Fri at 07:40
-ET and 16:45 ET, plus Sat 09:00 ET as a weekend catch-up. Each run converges
-data freshness (topup → attractiveness features → QM OHLCV, all no-ops when
-already current), then invokes a headless Sonnet session
-(`claude -p "/research-refresh" --model sonnet --max-budget-usd 8`, an
-$8/run hard dollar cap) that follows this same refresh procedure end to end,
-then rebuilds the dashboard and independently verifies the stale banners are
-gone before writing a receipt — it never trusts the agent's own "OK." Logs
-land in `.tmp/research_refresh/` (`<stamp>.log`, `claude_<stamp>.out`,
-`launchd.out`/`launchd.err`); success receipts are
-`.tmp/research_refresh/receipt_<as-of>_<slot>.json`. The run never
-auto-commits — a human or session still commits the resulting context file.
-Kill-switch: `touch .research-refresh-off` at the repo root makes the script
-exit 0 immediately without doing anything; remove the file to re-enable.
+Kill switch:
 
-The manual procedure above remains the fallback whenever the automation is
-off (kill-switch present) or a scheduled run goes red — a missed or failed
-run just means the board falls back to its honest stale banners, which is
-the correct failure mode, never invented content.
+```bash
+touch /Users/carsynstephenson/options-validator-research/.research-refresh-off
+```
 
-*Provenance: runbook written 2026-07-25 by Claude (Fable) after the first
-post-7/16 refresh; procedure mirrors the spec's amended §3.*
+Remove that file only when the producer is deliberately allowed to run.
+
+## Schedule and spend guards
+
+`tools/research_refresh.sh` refuses weekends and times outside weekday
+07:30-08:30 ET before ritual checks or LLM invocation. For a deliberate manual
+run outside that window:
+
+```bash
+RESEARCH_REFRESH_MANUAL_OVERRIDE=1 \
+RESEARCH_RITUAL_ROOT=/Users/carsynstephenson/options-validator-ops \
+/bin/zsh tools/research_refresh.sh
+```
+
+`RESEARCH_REFRESH_NOW_ET` is test-only and is rejected unless
+`RESEARCH_REFRESH_TEST_OVERRIDE=1`.
+
+The durable guard state lives outside the repo at:
+
+`~/Library/Application Support/options-validator/research-refresh/guard_state.json`
+
+Defaults are conservative:
+
+- maximum cost reservation per attempt: `$8.00`
+- monthly worst-case reservation ceiling: `$200.00`
+- repeated-failure circuit: opens after 2 consecutive failed paid attempts
+- abandoned reservation timeout: 120 minutes, then counted as failed
+
+The maximum cost is reserved atomically before an LLM starts. Reservations
+remain in monthly history whether the call succeeds or fails, so retries cannot
+evade the ceiling. State and lock permissions are owner-only, and only approved
+failure classes are recorded; command output, environment values, prompts, and
+secrets are never written to guard state.
+
+Only one non-stale reservation may exist. A concurrent shell, including a
+duplicate attempt ID, exits `SINGLE_FLIGHT_ACTIVE` before invoking the LLM.
+
+After investigating and correcting the cause of repeated failures, an operator
+may explicitly close only the failure circuit:
+
+```bash
+uv run python -m tools.research_refresh_guard reset-failures \
+  --state-dir "$HOME/Library/Application Support/options-validator/research-refresh"
+```
+
+This does not erase spend history or restore monthly budget.
+
+## Artifact contract
+
+Each source packet must identify every fetched source with:
+
+- `url`
+- `source_tier`
+- timezone-aware `published_at`, or null plus a non-empty
+  `publication_time_unknown_rationale`
+- actual `retrieved_at_utc` inside this run's research interval
+
+Claims and catalysts must link to matching source metadata with the same tier.
+VST and CEG each retain exactly one `PJM_BRA_NEXT` catalyst, unconfirmed and
+dated null, with an official PJM URL at tier `market_operator` until PJM
+publishes the exact schedule.
+
+The manifest binds:
+
+- exact candidate IDs and pinned symbols
+- distinct research start and finish timestamps in ET and UTC
+- producer commit and producer-source hashes
+- the exact durable paid-attempt ID
+- `uv.lock` SHA-256
+- ritual status, capture receipt, and underlying evidence hashes
+- run-specific immutable source-packet hashes
+- explicit source URL/tier/publication/retrieval metadata
+- deterministic JSON and Markdown output hashes
+
+Publication is two-phase:
+
+1. Assembly writes `manifest.pending.json` with
+   `publication_status: PENDING_DASHBOARD`. It is not trusted by consumers or
+   the independent critic.
+2. The dashboard is rebuilt and checked for all stale, incomplete, or orphaned
+   research markers. Only then is `manifest.json` atomically written with
+   `publication_status: FINAL` and the dashboard path, SHA, and verification
+   timestamps. A failed render leaves no new final marker.
+
+When immutable inputs match an already verified final manifest, the producer
+returns `NO_NEW_INPUT` and leaves the existing context, Markdown, timestamps,
+packets, and final manifest byte-for-byte unchanged.
+
+The final manifest's paid-attempt ID is reconciled to `SUCCEEDED` before a
+valid-final shortcut. If the process crashes after final publication but before
+the slot receipt, the next invocation verifies the final manifest, reconciles
+that exact reservation (including a prior stale classification), recreates the
+receipt atomically, and exits before reserving or invoking another LLM.
+
+Manual contract sequence:
+
+```bash
+uv run python -m tools.research_context_assemble --preflight \
+  --as-of <market-session> \
+  --run-date <ET-run-date> \
+  --ritual-root /Users/carsynstephenson/options-validator-ops
+
+RESEARCH_STARTED_AT=<timezone-aware-timestamp> \
+uv run python -m tools.research_context_assemble --assemble \
+  --inputs <research-packet-directory> \
+  --ritual-root /Users/carsynstephenson/options-validator-ops
+
+uv run python -m tools.research_context_assemble --verify --pending \
+  --bundle-only \
+  --ritual-root /Users/carsynstephenson/options-validator-ops
+
+uv run python -m options_researcher.attractiveness_dashboard
+
+uv run python -m tools.research_context_assemble --finalize \
+  --ritual-root /Users/carsynstephenson/options-validator-ops
+
+uv run python -m tools.research_context_assemble --verify \
+  --ritual-root /Users/carsynstephenson/options-validator-ops
+```
+
+Generated research remains uncommitted for human review.
+
+## Independent critic cadence
+
+The desired critic cadence is 08:45 ET on weekdays, after the 08:10 producer
+retry. The critic must read only a validated `FINAL` manifest and preserve the
+five finding classifications:
+
+`HARD_CONTRADICTION`, `UNSUPPORTED`, `WEAK_INFERENCE`, `UNRESOLVED`,
+`SUPPORTED`.
+
+Material assertions retain exactly these evidence labels:
+
+`Repo-verified`, `Test-verified`, `Official-source`, `Inference`,
+`Assumption`.
+
+Deployment is currently blocked. Local inspection found no Antigravity CLI or
+documented callable task API. The installed Antigravity app exposes scheduling
+only through its internal GUI-agent `schedule` and `manage_task` tools, which
+are not executable from this repository or launchd. The existing Antigravity
+task remains unchanged; no guessed command or non-executable schedule template
+is checked in. Change it to weekday 08:45 only through a verified Antigravity
+task interface after owner approval.
+
+## Failure interpretation
+
+- `SCHEDULE_BLOCKED`: outside approved weekday premarket window.
+- `UPSTREAM_BLOCKED`: exact-session ritual lineage is absent, mismatched, or
+  globally broken.
+- `FAILURE_CIRCUIT_OPEN`: two consecutive paid attempts failed; investigate,
+  then reset explicitly.
+- `MONTHLY_BUDGET_EXHAUSTED`: worst-case reservations reached the monthly cap.
+- `SINGLE_FLIGHT_ACTIVE`: another non-stale paid attempt already owns the
+  producer.
+- `RESEARCH_ARTIFACT_REJECTED`: source, timestamp, lineage, output, or
+  dashboard verification failed.
+
+All are fail-closed outcomes. The dashboard should retain its honest stale or
+incomplete research state rather than receive invented or partially verified
+content.

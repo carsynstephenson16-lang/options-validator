@@ -1,0 +1,317 @@
+{
+  "schema": "cache_recovery/v1",
+  "incident_date": "2026-07-27",
+  "evaluation_session": "2026-07-24",
+  "created_at": "2026-07-27T23:21:46Z",
+  "status": "blind_cache_recovered_with_independent_h7_blocker",
+  "completed_at": "2026-07-27T23:31:19Z",
+  "review": {
+    "status": "approved_for_operational_recovery",
+    "scope": "republish_missing_typed_provenance_for_existing_bytes_only",
+    "forbidden_actions": [
+      "provider_fetch",
+      "cache_rewrite",
+      "manual_facts_log_edit",
+      "permanent_code_change",
+      "gate_weakening"
+    ]
+  },
+  "checkout": {
+    "path": "/Users/carsynstephenson/options-validator-ops",
+    "branch": "main",
+    "head": "9d42f22dc495eee57e1a32220fe18bdde3cb0c41",
+    "origin_main": "9d42f22dc495eee57e1a32220fe18bdde3cb0c41"
+  },
+  "cache": {
+    "checkout_path": "/Users/carsynstephenson/options-validator-ops/.cache",
+    "symlink_target": "/Users/carsynstephenson/options-validator/.cache",
+    "chain_path_pattern": ".cache/chains/{symbol}_2026-07-24.parquet",
+    "source": "existing ThetaData blind-cache parquet",
+    "inspection_method": "Parquet footer metadata only; no value pages materialized",
+    "provider_fetch_allowed": false
+  },
+  "source_evidence": {
+    "original_facts_before_rollback": {
+      "path": "/Users/carsynstephenson/.codex/sessions/2026/07/25/rollout-2026-07-25T19-30-32-019f9b9d-b7d6-7823-b342-6c40c0cc99c5.jsonl",
+      "line": 1988,
+      "description": "Original typed BLIND_CACHE facts and hashes emitted before the tracked ledger rollback."
+    },
+    "current_failure_log": {
+      "path": "/Users/carsynstephenson/options-validator-ops/.tmp/daily_ritual/2026-07-27_1214.log",
+      "lines": "127-142",
+      "description": "First causal failure is missing NVDA BLIND_CACHE provenance; later H6/H8 failures are downstream."
+    },
+    "current_facts_ledger": {
+      "path": "/Users/carsynstephenson/options-validator-ops/ledger/facts.log",
+      "matching_2026_07_24_h7_blind_cache_facts_before_repair": 0
+    }
+  },
+  "parquet_schema": {
+    "applies_to_all_files": true,
+    "columns": [
+      "expiration",
+      "strike",
+      "right",
+      "bid",
+      "ask",
+      "open_interest",
+      "iv",
+      "delta",
+      "gamma",
+      "theta",
+      "vega"
+    ]
+  },
+  "preflight": {
+    "complete_scope": true,
+    "file_count": 15,
+    "all_files_present": true,
+    "all_hashes_match_original_facts": true,
+    "all_parquet_footers_readable": true,
+    "all_mtimes_recorded": true
+  },
+  "files": [
+    {
+      "symbol": "CRWV",
+      "path": ".cache/chains/CRWV_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/CRWV_2026-07-24.parquet",
+      "sha256": "58006847c169d2227f67a23a4a9b8656eabea56e67c9929309682aae44c6c994",
+      "rows": 2015,
+      "columns": 11,
+      "size_bytes": 85431,
+      "mtime_ns": 1785029428810655211
+    },
+    {
+      "symbol": "TEM",
+      "path": ".cache/chains/TEM_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/TEM_2026-07-24.parquet",
+      "sha256": "b3c725de35a075ca9cf8cf409f681bc5c5ddfa7a32cdf091cfed60b7ff8f3fd3",
+      "rows": 940,
+      "columns": 11,
+      "size_bytes": 44825,
+      "mtime_ns": 1785029448883470206
+    },
+    {
+      "symbol": "PLTR",
+      "path": ".cache/chains/PLTR_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/PLTR_2026-07-24.parquet",
+      "sha256": "20b191cee23e45346e8e7da48860a6525012596efee1bf7c9bbd93d9304def27",
+      "rows": 2398,
+      "columns": 11,
+      "size_bytes": 99265,
+      "mtime_ns": 1785029413391798321
+    },
+    {
+      "symbol": "NOW",
+      "path": ".cache/chains/NOW_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/NOW_2026-07-24.parquet",
+      "sha256": "07cdce7433008a5fe2e7795cb49afed9aadf50681079a27170e6ff56a75f3658",
+      "rows": 2066,
+      "columns": 11,
+      "size_bytes": 85537,
+      "mtime_ns": 1785029419492205360
+    },
+    {
+      "symbol": "SMCI",
+      "path": ".cache/chains/SMCI_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/SMCI_2026-07-24.parquet",
+      "sha256": "73e4177620dc1476f75bcc3b81cb3ee265336715fd017df695d18121767e3ca8",
+      "rows": 1664,
+      "columns": 11,
+      "size_bytes": 68463,
+      "mtime_ns": 1785029413914527809
+    },
+    {
+      "symbol": "NVDA",
+      "path": ".cache/chains/NVDA_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/NVDA_2026-07-24.parquet",
+      "sha256": "e837b1c1d37540c0a485aef07e430f07339778971f548c01f489091fc1fef62b",
+      "rows": 3834,
+      "columns": 11,
+      "size_bytes": 139701,
+      "mtime_ns": 1785029414833714981
+    },
+    {
+      "symbol": "AMD",
+      "path": ".cache/chains/AMD_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/AMD_2026-07-24.parquet",
+      "sha256": "d25a9cfb4d5058ef921a14496f8342878b4d3a7bae725359b5167b4aeee60dd9",
+      "rows": 6874,
+      "columns": 11,
+      "size_bytes": 250552,
+      "mtime_ns": 1785029416797350860
+    },
+    {
+      "symbol": "AVGO",
+      "path": ".cache/chains/AVGO_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/AVGO_2026-07-24.parquet",
+      "sha256": "ba91b912e7930026ac3510bf5e4f351aea4677123db5e96bdf8a5b8667d46c5d",
+      "rows": 3690,
+      "columns": 11,
+      "size_bytes": 143346,
+      "mtime_ns": 1785029424165710530
+    },
+    {
+      "symbol": "IREN",
+      "path": ".cache/chains/IREN_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/IREN_2026-07-24.parquet",
+      "sha256": "f486daf4aa4b0457d521daf9902ca3c7fddda84f780fc283c9acc59fce187569",
+      "rows": 1640,
+      "columns": 11,
+      "size_bytes": 72035,
+      "mtime_ns": 1785029420583920095
+    },
+    {
+      "symbol": "USAR",
+      "path": ".cache/chains/USAR_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/USAR_2026-07-24.parquet",
+      "sha256": "04fa3531cc0555fd959a4509d1d7f863af74945fa0ed47227beeea676b0b4960",
+      "rows": 812,
+      "columns": 11,
+      "size_bytes": 39935,
+      "mtime_ns": 1785029421004231913
+    },
+    {
+      "symbol": "ET",
+      "path": ".cache/chains/ET_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/ET_2026-07-24.parquet",
+      "sha256": "a2a1eb6e4ff49007cb70b0e19870292043356d6af932c765ddabbab90a9df188",
+      "rows": 698,
+      "columns": 11,
+      "size_bytes": 32800,
+      "mtime_ns": 1785029421550783576
+    },
+    {
+      "symbol": "VST",
+      "path": ".cache/chains/VST_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/VST_2026-07-24.parquet",
+      "sha256": "df8f5322989db10a706b35dfe31d930bdf4550ac7e8b1c22211f0bf87e755f2a",
+      "rows": 1432,
+      "columns": 11,
+      "size_bytes": 62997,
+      "mtime_ns": 1785029422134663032
+    },
+    {
+      "symbol": "CEG",
+      "path": ".cache/chains/CEG_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/CEG_2026-07-24.parquet",
+      "sha256": "0b94e08eb9742b296d96498879f40cbe820dd48080894ce56fd4957d90602ff4",
+      "rows": 1700,
+      "columns": 11,
+      "size_bytes": 74148,
+      "mtime_ns": 1785029422686390497
+    },
+    {
+      "symbol": "MSFT",
+      "path": ".cache/chains/MSFT_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/MSFT_2026-07-24.parquet",
+      "sha256": "8849ec9524e86b198dc854ea3d841a123d82bcfde7f74cbf77e6bcecda88dae0",
+      "rows": 3582,
+      "columns": 11,
+      "size_bytes": 140158,
+      "mtime_ns": 1785029423630628442
+    },
+    {
+      "symbol": "AMZN",
+      "path": ".cache/chains/AMZN_2026-07-24.parquet",
+      "resolved_path": "/Users/carsynstephenson/options-validator/.cache/chains/AMZN_2026-07-24.parquet",
+      "sha256": "cbd886fe4973087b135bcf51adc44869e672ac75a1d50f3d9c38006a2cc17f48",
+      "rows": 2532,
+      "columns": 11,
+      "size_bytes": 102913,
+      "mtime_ns": 1785029430231919333
+    }
+  ],
+  "recovery": {
+    "publisher": "data.thetadata_adapter.blind_cache_chain",
+    "ledger_dir": "ledger",
+    "required_already_cached": true,
+    "postconditions": {
+      "published_facts": 15,
+      "hashes_unchanged": true,
+      "mtimes_unchanged": true,
+      "provider_fetches": 0
+    }
+  },
+  "result": {
+    "typed_facts": {
+      "published": 15,
+      "ledger_lines": "19291-19305",
+      "already_cached_true": 15,
+      "provider_fetches": 0
+    },
+    "cache_postflight": {
+      "files_validated": 15,
+      "hashes_unchanged": true,
+      "sizes_unchanged": true,
+      "mtimes_unchanged": true
+    },
+    "focused_checks": {
+      "exit_audit": {
+        "provenance_check_9_blocks": 0,
+        "independent_blocks": [
+          {
+            "check": 2,
+            "symbol": "USAR",
+            "reason": "No listed long-call monthly in the registered 60-120 DTE interval; candidates were 2026-10-16 and 2026-11-20."
+          }
+        ]
+      },
+      "h6_feature_manifests": {
+        "evaluation_session": "2026-07-24",
+        "symbols": [
+          "NVDA",
+          "PLTR",
+          "AMZN"
+        ],
+        "verified": true
+      },
+      "h6_receipt": {
+        "path": "reports/h6_forward/2026-07-24.json",
+        "status": "NO_SIGNAL"
+      },
+      "h8_receipt": {
+        "path": "reports/h8_forward/2026-07-24.json",
+        "evaluation_session": "2026-07-24",
+        "errors": [],
+        "orders_enabled": false,
+        "status": "NO_SIGNAL"
+      },
+      "ritual_receipt": {
+        "path": "reports/ritual/capture_receipt_2026-07-24.json",
+        "H5": "NO_SIGNAL",
+        "H6": "NO_SIGNAL",
+        "H7": "NO_SIGNAL",
+        "H8": "NO_SIGNAL",
+        "H10": "NO_SIGNAL"
+      }
+    },
+    "full_daily_ritual": {
+      "attempts": 1,
+      "log": ".tmp/daily_ritual/2026-07-27_1924.log",
+      "status": "BROKEN",
+      "independent_blocker": {
+        "component": "H7 exit fill and monitor",
+        "error": "ExitSessionRefused: data-gate live source identity is stale",
+        "cause_observed_in_run": "The top-up refreshed closes after the immutable 2026-07-24 data-gate receipt already existed; the receipt was reused and H7 rejected its stale live identity.",
+        "gate_weakened": false
+      },
+      "evidence_commit": "3f1ff4cbd4937a090e052e20625e5aad465c5fa2",
+      "pushed_to_origin_main": true
+    },
+    "preserved_intraday_receipts": [
+      {
+        "path": "reports/intraday_capture/2026-07-27/midday.json",
+        "sha256": "4b70f9a5e3ee933b39bec4d603f1e32450a76ab6e2f353a949787bb0d538e264",
+        "mtime": "2026-07-27T13:00:28-0400",
+        "preserved": true
+      },
+      {
+        "path": "reports/intraday_capture/2026-07-27/preclose.json",
+        "sha256": "2734656f0287dbc823199080c6d6e12cb35783a8768fcf62e0ad81e1e58a4a9c",
+        "mtime": "2026-07-27T15:45:23-0400",
+        "preserved": true
+      }
+    ]
+  }
+}

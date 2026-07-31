@@ -235,6 +235,7 @@ BOOTSTRAP_BLOCK_EXPONENT = 1 / 3  # n^(1/3) blocking rate (Politis-White / Lahir
 BOOTSTRAP_BLOCK_CONSTANTS = [0.5, 1, 2, 4]  # mean block = round(c * n_cohorts**exp)
 COHORT_GRANULARITY       = "week"  # cross-sectional cohort key = ISO week of entry_date
 FILL_MODEL_ID            = "conservative_bid_ask_plus_haircut_v1"  # bump if fill logic changes
+BACKTEST_EXECUTION_CONVENTION = "D_PLUS_1_CLOSE"  # owner-typed 2026-07-30
 
 # ---------------------------------------------------------------------------
 # H4/H5 RISK BUCKETS (owner decisions 2026-07-04; H5 scanner-first correction

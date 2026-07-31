@@ -1,9 +1,10 @@
 """options_researcher/live_dashboard.py -- localhost live-preview dashboard server.
 
 Read-only, localhost-only, preview-only. Serves the existing mission-control
-dashboard (dashboard.assemble()/render(), regenerated once at startup) with an
+dashboard (dashboard.assemble()/render(), regenerated on each page load) with an
 injected LIVE panel whose inline script polls /live.json. Two lanes, never
-merged:
+merged. When the direct live adapter is unavailable, the preview lane may
+display the newest strictly validated same-day ``intraday_capture/v1`` receipt:
 
 - OFFICIAL H5 STATUS (completed sessions): rows verbatim from
   entry_watch._gather() on completed-session closes. This is the ONLY lane
@@ -144,6 +145,34 @@ def _json_safe(obj):
     return obj
 
 
+def _freshness_summary(live: dict, official_rows: list[dict]) -> dict:
+    date_values: set[str] = set()
+    for row in official_rows:
+        value = row.get("close_asof")
+        if isinstance(value, str) and value:
+            date_values.add(value)
+    dates = sorted(date_values)
+    if not dates:
+        official = {"status": "UNKNOWN", "as_of": None}
+    elif len(dates) == 1:
+        official = {"status": "COMPLETE", "as_of": dates[0]}
+    else:
+        official = {
+            "status": "MIXED",
+            "as_of": dates[0],
+            "latest_as_of": dates[-1],
+        }
+    intraday = live.get("freshness")
+    if not isinstance(intraday, dict):
+        intraday = {
+            "status": "UNKNOWN",
+            "source": "direct_live_adapter",
+            "descriptive_only": True,
+            "captured_at_utc": live.get("generated_at_utc"),
+        }
+    return {"official_eod": official, "intraday": intraday}
+
+
 def build_payload(live: dict, official_rows: list[dict] | None = None) -> dict:
     """Merge the live-preview payload with the OFFICIAL entry-watch rows.
     When official_rows is None, gather them fresh (offline/cheap) with the
@@ -154,6 +183,7 @@ def build_payload(live: dict, official_rows: list[dict] | None = None) -> dict:
         if err is not None:
             payload["official_error"] = err
     payload["official"] = official_rows
+    payload["freshness"] = _freshness_summary(live, official_rows)
     return payload
 
 
@@ -169,6 +199,20 @@ def build_payload(live: dict, official_rows: list[dict] | None = None) -> dict:
 # ---------------------------------------------------------------------------
 _OFFICIAL_LANE_JS = """
   // OFFICIAL lane -- the ONLY function allowed to render the word FIRE.
+  function renderFreshness(payload) {
+    var f = payload.freshness || {};
+    var eod = f.official_eod || {};
+    var intra = f.intraday || {};
+    var eodText = eod.as_of
+      ? "official EOD: " + esc(eod.as_of) + " (" + esc(eod.status) + ")"
+      : "official EOD: unavailable";
+    var intraText = intra.captured_at_et || intra.captured_at_utc;
+    intraText = intraText
+      ? "intraday: " + esc(intraText) + " (" + esc(intra.source || "?") + ")"
+      : "intraday: " + esc(intra.status || "unavailable");
+    document.getElementById("lv-freshness").innerHTML =
+      '<strong>Freshness:</strong> ' + eodText + " &nbsp;|&nbsp; " + intraText;
+  }
   function renderOfficialLane(payload) {
     var rows = payload.official || [];
     var out = "";
@@ -227,13 +271,21 @@ _LIVE_LANE_JS = """
   }
   function renderLiveLane(payload) {
     var live = payload.live || {};
+    var freshness = live.freshness || {};
     var banner = document.getElementById("lv-session-banner");
     banner.innerHTML = live.session_state === "closed"
-      ? '<div class="lv-banner">market closed &mdash; live off</div>' : "";
+      ? '<div class="lv-banner">market closed &mdash; '
+        + (freshness.captured_at_et
+           ? "showing the last descriptive snapshot"
+           : "live off") + "</div>" : "";
     var out = "";
     if (live.refresh_error) {
       out += '<div class="lv-unavail">LIVE DATA UNAVAILABLE (refresh error: '
         + esc(live.refresh_error) + ")</div>";
+    }
+    if (live.receipt_fallback && live.receipt_fallback.reason) {
+      out += '<div class="lv-unavail">INTRADAY SNAPSHOT UNAVAILABLE: '
+        + esc(live.receipt_fallback.reason) + "</div>";
     }
     var syms = live.symbols || {};
     var names = Object.keys(syms).sort();
@@ -306,18 +358,22 @@ _PANEL_TEMPLATE = """
     #live-panel .lv-dim { color: #6b7280; }
     #live-panel .lv-err { color: #ff5470; }
     #live-panel .lv-unavail { color: #ff5470; font-weight: bold; }
+    #live-panel .lv-freshness { background: #0f1422; color: #cbd5e1;
+      border: 1px solid #2a3350; border-radius: 8px; padding: 8px 12px;
+      margin-bottom: 12px; font-size: 0.9em; }
     #live-panel .lv-banner { background: #3d1620; color: #ff5470;
       font-weight: bold; border-radius: 8px; padding: 8px 12px;
       margin-bottom: 10px; }
   </style>
   <h2>LIVE PANEL</h2>
+  <div id="lv-freshness" class="lv-freshness">loading freshness&hellip;</div>
   <div id="lv-session-banner"></div>
   <div class="lv-lane">
     <h3>OFFICIAL H5 STATUS (completed sessions)</h3>
     <div id="lv-official-lane" class="lv-dim">loading&hellip;</div>
   </div>
   <div class="lv-lane">
-    <h3>LIVE PREVIEW &mdash; awaiting close</h3>
+    <h3>INTRADAY PREVIEW &mdash; descriptive only</h3>
     <div id="lv-live-lane" class="lv-dim">loading&hellip;</div>
   </div>
 </div>
@@ -340,6 +396,7 @@ __LIVE_LANE_JS__
       return resp.json();
     }).then(function (payload) {
       if (payload.poll_seconds) { pollSeconds = payload.poll_seconds; }
+      renderFreshness(payload);
       renderOfficialLane(payload);
       renderLiveLane(payload);
       schedule();
@@ -404,7 +461,11 @@ class _Handler(BaseHTTPRequestHandler):
         owner = self.server.owner  # type: ignore[attr-defined]
         path = self.path.split("?", 1)[0]
         if path == "/":
-            self._send(200, "text/html; charset=utf-8", owner.html.encode("utf-8"))
+            self._send(
+                200,
+                "text/html; charset=utf-8",
+                owner.html_payload().encode("utf-8"),
+            )
         elif path == "/live.json":
             # allow_nan=False: belt-and-braces -- live_payload() already
             # sanitizes, and a NaN slipping through must fail loudly here
@@ -421,8 +482,9 @@ class _Handler(BaseHTTPRequestHandler):
 class LiveDashboardServer:
     """ThreadingHTTPServer bound to 127.0.0.1 (never a public interface).
 
-    GET /          -> static dashboard HTML (regenerated once at startup)
-                      with the LIVE panel injected.
+    GET /          -> dashboard HTML regenerated from current local state
+                      with the LIVE panel injected. A failed regeneration
+                      serves the last good HTML from this process.
     GET /live.json -> build_payload(LiveCache.get()) plus fresh official rows.
     Anything else  -> 404. No other methods.
     """
@@ -430,7 +492,8 @@ class LiveDashboardServer:
     def __init__(self, refresh_fn, port: int | None = None, html_provider=None):
         self._cache = LiveCache(refresh_fn)
         provider = html_provider if html_provider is not None else _default_html
-        self.html = inject_live_panel(provider())
+        self._html_provider = provider
+        self._last_good_html = inject_live_panel(provider())
         bind_port = config.LIVE_DASH_PORT if port is None else port
         self._httpd = _HTTPServer(("127.0.0.1", bind_port), _Handler)
         self._httpd.owner = self
@@ -439,11 +502,26 @@ class LiveDashboardServer:
     def port(self) -> int:
         return self._httpd.server_address[1]
 
+    def html_payload(self) -> str:
+        try:
+            fresh = inject_live_panel(self._html_provider())
+        except (OSError, KeyError, ValueError, ImportError) as exc:
+            print(
+                f"WARN dashboard HTML refresh failed; serving last good: {exc}",
+                file=sys.stderr,
+            )
+            return self._last_good_html
+        self._last_good_html = fresh
+        return fresh
+
     def live_payload(self) -> dict:
         # Official rows are offline/cheap -- recomputed per request, tolerant.
         # _json_safe: NaN/inf degrade to null so one unknown field can never
         # invalidate the JSON and blank the whole panel.
-        return _json_safe(build_payload(self._cache.get()))
+        payload = _json_safe(build_payload(self._cache.get()))
+        if not isinstance(payload, dict):
+            raise TypeError("dashboard payload must remain a JSON object")
+        return payload
 
     def serve_forever(self) -> None:
         self._httpd.serve_forever()
@@ -471,6 +549,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="start the 127.0.0.1 HTTP server")
     parser.add_argument("--port", type=int, default=config.LIVE_DASH_PORT,
                         help=f"port (default {config.LIVE_DASH_PORT})")
+    parser.add_argument("--no-open", action="store_true",
+                        help="serve without opening a browser window")
     args = parser.parse_args(argv)
     if not args.serve:
         print(_USAGE)
@@ -478,18 +558,21 @@ def main(argv: list[str] | None = None) -> int:
 
     from datetime import datetime, timezone
 
-    from options_researcher import live_quotes
+    from options_researcher import intraday_preview, live_quotes
 
     probe = live_quotes.load_latest_probe()
     ok, reason = live_quotes.probe_ok(probe, datetime.now(timezone.utc))
-    state = "ON" if ok else "OFF (official lane only)"
+    state = "ON (direct adapter)" if ok else "OFF (receipt fallback available)"
     print(f"live lane {state}: {reason}")
 
-    server = LiveDashboardServer(refresh_fn=lambda: live_quotes.refresh(),
-                                 port=args.port)
+    server = LiveDashboardServer(
+        refresh_fn=intraday_preview.refresh_with_receipt_fallback,
+        port=args.port,
+    )
     url = f"http://127.0.0.1:{server.port}/"
     print(f"serving read-only dashboard at {url} (Ctrl-C to stop)")
-    webbrowser.open(url)
+    if not args.no_open:
+        webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

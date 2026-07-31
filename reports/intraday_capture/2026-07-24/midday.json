@@ -1,0 +1,105 @@
+{
+  "captured_at_et": "2026-07-24T13:00:13.938166-04:00",
+  "captured_at_utc": "2026-07-24T17:00:13.938166+00:00",
+  "config_hash": "7d9fd0f20bc44bfc58a322a28aa25f10d2cf232c5ece65857d1a3a880e6bb429",
+  "force": false,
+  "names": {
+    "AMD": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "AMD"
+    },
+    "AMZN": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "AMZN"
+    },
+    "AVGO": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "AVGO"
+    },
+    "CEG": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "CEG"
+    },
+    "CRWV": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "CRWV"
+    },
+    "ET": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "ET"
+    },
+    "IREN": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "IREN"
+    },
+    "MSFT": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "MSFT"
+    },
+    "NOW": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "NOW"
+    },
+    "NVDA": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "NVDA"
+    },
+    "PLTR": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "PLTR"
+    },
+    "SMCI": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "SMCI"
+    },
+    "TEM": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "TEM"
+    },
+    "USAR": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "USAR"
+    },
+    "VST": {
+      "note": "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.UNAVAILABLE\n\tdetails = \"errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n\tdebug_error_string = \"UNAVAILABLE:errors resolving mdds-01.thetadata.us:443: [field:hostname lookup error:address lookup failed for mdds-01.thetadata.us:443: Could not contact DNS servers]\"\n>",
+      "status": "unavailable",
+      "symbol": "VST"
+    }
+  },
+  "probe_healed_this_run": false,
+  "probe_receipt_path": "reports/live_probe/2026-07-24.json",
+  "receipt_kind": "intraday_capture/v1",
+  "scheduled_et": "13:00",
+  "session_tag": "midday",
+  "universe": [
+    "CRWV",
+    "TEM",
+    "PLTR",
+    "NOW",
+    "SMCI",
+    "NVDA",
+    "AMD",
+    "AVGO",
+    "IREN",
+    "USAR",
+    "ET",
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN"
+  ]
+}

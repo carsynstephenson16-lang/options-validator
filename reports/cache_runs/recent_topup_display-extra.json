@@ -1,0 +1,18 @@
+{
+  "counts": {
+    "fetched": 3,
+    "gaps": 0,
+    "repaired": 0,
+    "skipped_cached": 0,
+    "verified": 0
+  },
+  "retry_limit": 5,
+  "schema": "h7-cache-task-manifest/v1",
+  "status": "COMPLETE",
+  "tasks": {
+    "AMAT@2026-07-27": "FETCHED_ATTESTED",
+    "CLSK@2026-07-27": "FETCHED_ATTESTED",
+    "NBIS@2026-07-27": "FETCHED_ATTESTED"
+  },
+  "workers": 4
+}

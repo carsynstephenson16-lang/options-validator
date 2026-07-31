@@ -31,9 +31,9 @@ on. Any other exception is not a gap -- it propagates and stops the run.
 
 Rough scale: ~1258 in-sample trading days x 5 symbols =~ 6290 fetch tasks;
 ~880 OOS trading days x 5 symbols =~ 4400 blind-cache tasks. Both runs are
-resumable -- an already-cached symbol/day (_cache_path(...).exists()) is
-skipped without hitting the network, so a killed/rerun job just picks up
-where it left off.
+resumable -- in-sample files are skipped, while every OOS file is passed
+through the metadata-only idempotent publisher so its content-bound fact is
+verified without opening value pages or hitting the network.
 
 Run from the repo root:
     python data/cache_runner.py --dry-run     # counts only, no network, no facts
@@ -147,15 +147,25 @@ def _write_task_manifest(path: Path, state: dict) -> None:
 def _run_window(days: list[str], symbols: list[str], fetch_one, ledger_dir: str,
                 *, workers: int = DEFAULT_WORKERS,
                 manifest_path: Path | None = None,
-                deadline_s: float | None = None) -> dict:
-    """Shared fetch loop for both windows: skip-if-cached, fetch-or-gap,
-    progress print, exact counts. `fetch_one(symbol, day)` does the real work
-    for one symbol/day and is the only thing that differs between the two
-    public functions below."""
+                deadline_s: float | None = None,
+                inspect_existing: bool = False) -> dict:
+    """Shared fetch loop with resumable, typed task states.
+
+    In-sample callers retain the cheap skip-if-cached behavior. OOS callers
+    set ``inspect_existing`` so every existing file passes through the
+    idempotent publisher, which verifies its content-bound fact or refuses an
+    orphan/mismatch instead of silently calling filename presence "current".
+    """
     if workers < 1:
         raise ValueError("workers must be >= 1")
     tasks = [(day, symbol) for day in days for symbol in symbols]
-    counts = {"fetched": 0, "skipped_cached": 0, "gaps": 0}
+    counts = {
+        "fetched": 0,
+        "repaired": 0,
+        "verified": 0,
+        "skipped_cached": 0,
+        "gaps": 0,
+    }
     state = {
         "schema": "h7-cache-task-manifest/v1",
         "status": "RUNNING",
@@ -168,7 +178,7 @@ def _run_window(days: list[str], symbols: list[str], fetch_one, ledger_dir: str,
     started = time.monotonic()
     pending = []
     for day, symbol in tasks:
-        if _cache_path(symbol, day).exists():
+        if _cache_path(symbol, day).exists() and not inspect_existing:
             counts["skipped_cached"] += 1
             state["tasks"][f"{symbol}@{day}"] = "SKIPPED_CACHED"
         else:
@@ -185,7 +195,12 @@ def _run_window(days: list[str], symbols: list[str], fetch_one, ledger_dir: str,
             if deadline_s is not None and time.monotonic() - started > deadline_s:
                 raise TimeoutError(f"cache refresh exceeded deadline {deadline_s}s")
             try:
-                future.result()
+                result = future.result()
+            except thetadata_adapter.CacheProvenanceError:
+                state["tasks"][f"{symbol}@{day}"] = "MISMATCH_REFUSED"
+                if manifest_path:
+                    _write_task_manifest(Path(manifest_path), state)
+                raise
             except RuntimeError as exc:
                 if not _is_gap_error(exc):
                     raise
@@ -196,8 +211,19 @@ def _run_window(days: list[str], symbols: list[str], fetch_one, ledger_dir: str,
                 counts["gaps"] += 1
                 state["tasks"][f"{symbol}@{day}"] = "GAP"
             else:
-                counts["fetched"] += 1
-                state["tasks"][f"{symbol}@{day}"] = "FETCHED"
+                status = (
+                    result.get("attestation_status")
+                    if isinstance(result, dict)
+                    else None
+                )
+                if status == "REPAIRED_ATTESTATION":
+                    counts["repaired"] += 1
+                elif status == "VERIFIED_NOOP":
+                    counts["verified"] += 1
+                else:
+                    counts["fetched"] += 1
+                    status = status or "FETCHED"
+                state["tasks"][f"{symbol}@{day}"] = status
             processed = sum(value != "PENDING" for value in state["tasks"].values())
             if manifest_path:
                 _write_task_manifest(Path(manifest_path), state)
@@ -205,6 +231,8 @@ def _run_window(days: list[str], symbols: list[str], fetch_one, ledger_dir: str,
                 total = len(tasks)
                 print(
                     f"progress: {processed}/{total} fetched={counts['fetched']} "
+                    f"repaired={counts['repaired']} "
+                    f"verified={counts['verified']} "
                     f"cached={counts['skipped_cached']} gaps={counts['gaps']}"
                 )
     except BaseException:
@@ -223,6 +251,8 @@ def _run_window(days: list[str], symbols: list[str], fetch_one, ledger_dir: str,
 
     return {
         "fetched": counts["fetched"],
+        "repaired": counts["repaired"],
+        "verified": counts["verified"],
         "skipped_cached": counts["skipped_cached"],
         "gaps": counts["gaps"],
         "total_days": len(days),
@@ -261,11 +291,12 @@ def cache_oos_blind(symbols=None, *, ledger_dir: str = "ledger",
     ]
 
     def fetch_one(symbol, day):
-        blind_cache_chain(symbol, day, ledger_dir=ledger_dir)
+        return blind_cache_chain(symbol, day, ledger_dir=ledger_dir)
 
     return _run_window(days, symbols, fetch_one, ledger_dir,
                        workers=workers, manifest_path=manifest_path,
-                       deadline_s=deadline_s)
+                       deadline_s=deadline_s,
+                       inspect_existing=True)
 
 
 def dry_run() -> dict:

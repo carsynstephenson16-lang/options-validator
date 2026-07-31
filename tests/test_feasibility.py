@@ -7,6 +7,7 @@ import pandas as pd
 
 from analysis import feasibility
 from data.thetadata_adapter import OOSDataTouchError
+from strategies.base import adverse_buy, adverse_sell
 
 LIQ = 500
 
@@ -70,7 +71,10 @@ class MeasuredFeasibilityTests(unittest.TestCase):
         self.assertEqual(
             stats["skip_reasons"], {"liquidity": 1, "long_strike_missing": 1}
         )
-        self.assertAlmostEqual(stats["credit"]["median"], 0.5416)
+        self.assertEqual(
+            stats["credit"]["median"],
+            adverse_sell(1.20) - adverse_buy(0.64),
+        )
         self.assertEqual(stats["contracts"]["min"], 4)
 
     def test_refuses_oos_window_before_loading_any_cached_values(self):

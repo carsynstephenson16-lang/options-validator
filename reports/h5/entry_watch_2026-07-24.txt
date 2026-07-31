@@ -1,0 +1,3 @@
+H5 LEAPS ENTRY TRIGGER WATCH (pre-registered H5_ENTRY_TRIGGER_PREREG; this tool alerts, it never auto-enters)
+VST: WAIT  close $163.38 (as of 2026-07-24) vs trigger $160.00; IV-rank 0.50 (max 0.5) -- waiting on: close $163.38 > trigger $160.00; IV-rank 0.50 > 0.5; LEAPS fails liquidity gates
+AMZN: WAIT  close $232.11 (as of 2026-07-24) vs trigger $220.00; IV-rank 0.90 (max 0.5) -- waiting on: close $232.11 > trigger $220.00; IV-rank 0.90 > 0.5

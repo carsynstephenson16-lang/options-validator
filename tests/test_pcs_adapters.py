@@ -43,8 +43,11 @@ def bare_strategy(today: date, **params):
     s.haircut = config.SLIPPAGE_HAIRCUT
     s._chain_provider = params.get("chain_provider")
     s._tradeable = params.get("tradeable_assets")
+    s._tradeable_by_session = params.get("tradeable_assets_by_session", {})
+    s._trading_sessions = tuple(params.get("trading_sessions", ()))
     s._entry_cutoff = params.get("entry_cutoff")
     s._blocked_until = params.get("blocked_until")
+    s._pending_entries = {}
     s._spreads = {}
     s.closed_trades = []
     s.get_datetime = lambda: datetime(today.year, today.month, today.day, 16)
@@ -127,22 +130,31 @@ class FailLoudTests(unittest.TestCase):
         short = s._strike_nearest_delta(chain, "2022-07-08", 0.30)
         long = s._strike_below(chain, "2022-07-08", short, 2)
         with self.assertRaises(RuntimeError):
-            s._submit_spread("SYN", "2022-07-08", short, long, 1, 0.48)
+            s._submit_spread(
+                "SYN",
+                "2022-07-08",
+                short.strike,
+                long.strike,
+                1,
+                0.48,
+                decision_date="2022-06-01",
+                fill_date="2022-06-02",
+            )
 
 
 class EndToEndSyntheticBacktestTests(unittest.TestCase):
-    """One spread, entered 2022-06-01, profit-target exit -- through the real
+    """One spread, signalled 2022-06-01 and entered 2022-06-02 -- through real
     installed Lumibot. Hand-computed expectations:
 
-    day-1 raw quotes: short 100P 1.20/1.30, long 98P 0.60/0.64 (both pass the
+    D+1 raw quotes: short 100P 1.20/1.30, long 98P 0.60/0.64 (both pass the
     10% max-spread and MIN_OPEN_INTEREST gates)
-      model credit  = 1.20*0.99 - 0.64*1.01             = 0.5416
-      contracts     = floor(600 / ((2-0.5416)*100+2.60)) = 4
-      engine credit = floor(1.188)c - ceil(0.6464)c      = 1.18 - 0.65 = 0.53
+      model/engine credit = adverse_sell(1.20) - adverse_buy(0.64)
+                          = 1.18 - 0.65 = 0.53
+      contracts     = floor(600 / ((2-0.53)*100+2.60)) = 4
     decay-day raw quotes: short 0.20/0.24, long 0.05/0.07
-      cost-to-close = 0.24*1.01 - 0.05*0.99 = 0.1929
-      captured vs engine credit 0.53 -> 64% >= 50% -> profit_target
-      engine debit  = ceil(0.2424)c - floor(0.0495)c     = 0.25 - 0.04 = 0.21
+      cost-to-close = adverse_buy(0.24) - adverse_sell(0.05)
+                    = 0.25 - 0.04 = 0.21
+      captured vs engine credit 0.53 -> 60% >= 50% -> profit_target
       pnl = (0.53-0.21)*100*4 - 2.60*4 = 128.00 - 10.40  = 117.60
     """
 
@@ -164,6 +176,7 @@ class EndToEndSyntheticBacktestTests(unittest.TestCase):
                       for d in days}
         feed = pandas_feed.build_option_data(cls.chains, "SYN", exp_max="2022-09-16")
         assert len(feed) == 2
+        availability = pandas_feed.assets_by_session(feed)
 
         from lumibot.backtesting import PandasDataBacktesting
         from lumibot.entities import TradingFee
@@ -190,6 +203,8 @@ class EndToEndSyntheticBacktestTests(unittest.TestCase):
                 "symbols": ["SYN"],
                 "chain_provider": lambda sym, iso: cls.chains.get(iso),
                 "tradeable_assets": set(feed.keys()),
+                "tradeable_assets_by_session": availability,
+                "trading_sessions": tuple(days),
             },
         )
 
@@ -199,7 +214,10 @@ class EndToEndSyntheticBacktestTests(unittest.TestCase):
     def test_trade_dict_matches_hand_math(self):
         t = self.strat.closed_trades[0]
         self.assertEqual(t["symbol"], "SYN")
-        self.assertEqual(t["entry_date"], "2022-06-01")
+        self.assertEqual(t["entry_decision_date"], "2022-06-01")
+        self.assertEqual(t["entry_date"], "2022-06-02")
+        self.assertEqual(t["exit_decision_date"], "2022-06-03")
+        self.assertEqual(t["exit_date"], "2022-06-06")
         self.assertAlmostEqual(t["pnl"], 117.60, places=2)
         self.assertAlmostEqual(t["capital_at_risk"], (2 - 0.53) * 100 * 4, places=2)
         self.assertAlmostEqual(

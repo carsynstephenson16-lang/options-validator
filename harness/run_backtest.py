@@ -5,6 +5,10 @@ Keep this THIN: Lumibot stays the engine (fills, cash, fees); this module only
 loads cached chains, builds the per-contract feed, runs the engine, and
 collects the strategy's closed-trade dicts for metrics.scoreboard.
 
+The harness injects the deterministic XNYS session calendar and point-in-time
+feed availability. The strategy owns only intent timing; Lumibot still owns
+order execution and fill prices.
+
 Chunking (memory, not statistics): one 5-year, 9-symbol feed would need
 ~10^5 per-contract Data objects, so run() executes per-symbol, per-calendar-
 year chunks. Chunking must not change WHAT is traded:
@@ -55,6 +59,8 @@ def _run_chunk(strategy_cls, symbol: str, sim_start: str, entry_cutoff: str,
     from lumibot.backtesting import PandasDataBacktesting
     from lumibot.entities import TradingFee
 
+    from data.cache_runner import trading_days
+
     chains = pandas_feed.load_cached_chains(
         symbol, sim_start, sim_end, allow_oos=allow_oos)
     if not chains:
@@ -62,6 +68,8 @@ def _run_chunk(strategy_cls, symbol: str, sim_start: str, entry_cutoff: str,
     feed = pandas_feed.build_option_data(chains, symbol, exp_max=sim_end)
     if not feed:
         return []
+    sessions = tuple(trading_days(sim_start, sim_end))
+    available_by_session = pandas_feed.assets_by_session(feed)
 
     fee = TradingFee(per_contract_fee=config.COMMISSION_PER_CONTRACT)
     end_dt = datetime.combine(
@@ -89,15 +97,20 @@ def _run_chunk(strategy_cls, symbol: str, sim_start: str, entry_cutoff: str,
             "symbols": [symbol],
             "chain_provider": lambda sym, iso_day: chains.get(iso_day),
             "tradeable_assets": set(feed.keys()),
+            "tradeable_assets_by_session": available_by_session,
+            "trading_sessions": sessions,
             "entry_cutoff": entry_cutoff,
             "blocked_until": blocked_until,
         },
     )
-    if strat._spreads:
-        # fail LOUD: silently dropping an unresolved position would bias PnL
+    if strat._spreads or strat._pending_entries:
+        # fail LOUD: silently dropping unresolved state would bias PnL
         raise RuntimeError(
             f"{symbol} chunk {sim_start}..{sim_end} ended with unresolved "
-            f"spread state: { {s: p.state for s, p in strat._spreads.items()} }")
+            "state: "
+            f"spreads={ {s: p.state for s, p in strat._spreads.items()} }, "
+            f"pending_entries={list(strat._pending_entries)}"
+        )
     return list(strat.closed_trades)
 
 

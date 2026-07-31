@@ -57,6 +57,10 @@ uv run python -m options_researcher.h7_data_gate --source-health-receipt <path>
 uv run python -m options_researcher.h7_entry_preflight  # read-only; writes nothing
 uv run python -m options_researcher.dashboard    # writes .tmp/dashboard/index.html
 uv run python -m options_researcher.live_dashboard --serve  # display-only live lane
+uv run python -m options_researcher.live_quotes --probe  # regular-session schema probe
+uv run python -m options_researcher.attractiveness_dashboard
+uv run python -m tools.research_context_assemble --verify
+uv run python -m options_researcher.robustness --help
 ```
 
 H7 safety clauses that are easy to forget: `--source-health-receipt` is

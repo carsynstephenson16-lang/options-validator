@@ -7,12 +7,31 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
-    <string>/Users/carsynstephenson/options-validator/tools/research_refresh.sh</string>
+    <string>/Users/carsynstephenson/options-validator-research/tools/research_refresh.sh</string>
   </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/carsynstephenson/options-validator-research</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TZ</key>
+    <string>America/New_York</string>
+    <key>RESEARCH_RITUAL_ROOT</key>
+    <string>/Users/carsynstephenson/options-validator-ops</string>
+    <key>RESEARCH_BOARD_ROOT</key>
+    <string>/Users/carsynstephenson/options-validator-ops</string>
+    <key>RESEARCH_REFRESH_STATE_DIR</key>
+    <string>/Users/carsynstephenson/Library/Application Support/options-validator/research-refresh</string>
+    <key>RESEARCH_REFRESH_ATTEMPT_BUDGET_USD</key>
+    <string>8.00</string>
+    <key>RESEARCH_REFRESH_MONTHLY_BUDGET_USD</key>
+    <string>200.00</string>
+    <key>RESEARCH_REFRESH_MAX_FAILURES</key>
+    <string>2</string>
+  </dict>
   <key>StandardOutPath</key>
-  <string>/Users/carsynstephenson/options-validator/.tmp/research_refresh/launchd.out</string>
+  <string>/Users/carsynstephenson/options-validator-research/.tmp/research_refresh/launchd.out</string>
   <key>StandardErrorPath</key>
-  <string>/Users/carsynstephenson/options-validator/.tmp/research_refresh/launchd.err</string>
+  <string>/Users/carsynstephenson/options-validator-research/.tmp/research_refresh/launchd.err</string>
   <key>StartCalendarInterval</key>
   <array>
     <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>40</integer></dict>
@@ -20,12 +39,11 @@
     <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>40</integer></dict>
     <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>40</integer></dict>
     <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>40</integer></dict>
-    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>45</integer></dict>
-    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>45</integer></dict>
-    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>45</integer></dict>
-    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>45</integer></dict>
-    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>45</integer></dict>
-    <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>10</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>10</integer></dict>
   </array>
 </dict>
 </plist>

@@ -16,13 +16,14 @@ Input: a list of closed trades. Each trade is a dict with at least:
 Optionally:
     is_win           bool; if present, must agree with pnl > 0
     economic_max_loss margin + round-trip commissions; secondary diagnostic only
+    exit_date        required with entry_date for date-based capital-use metrics
 
 Run a demo:  python metrics.py
 """
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 
@@ -182,8 +183,10 @@ def _validated_arrays(trades):
     capital_at_risk = []
     economic_max_loss = []
     entry_dates = []
+    exit_dates = []
     saw_economic_max_loss = False
     missed_economic_max_loss = False
+    has_complete_exit_dates = True
 
     for idx, trade in enumerate(trades):
         missing = {"pnl", "capital_at_risk", "entry_date", "symbol"} - trade.keys()
@@ -197,6 +200,20 @@ def _validated_arrays(trades):
         except (ValueError, TypeError):
             raise ValueError(
                 f"trade {idx} has unparseable entry_date: {trade['entry_date']!r}")
+        raw_exit_date = trade.get("exit_date")
+        if raw_exit_date in (None, ""):
+            exit_date = None
+            has_complete_exit_dates = False
+        else:
+            try:
+                exit_date = _as_date(raw_exit_date)
+            except (ValueError, TypeError):
+                raise ValueError(f"trade {idx} has unparseable exit_date: {raw_exit_date!r}")
+            if exit_date < entry_date:
+                raise ValueError(
+                    f"trade {idx} exit_date precedes entry_date: "
+                    f"{raw_exit_date!r} < {trade['entry_date']!r}"
+                )
 
         pnl = float(trade["pnl"])
         car = float(trade["capital_at_risk"])
@@ -234,6 +251,7 @@ def _validated_arrays(trades):
         losses.append(pnl < 0)
         capital_at_risk.append(car)
         entry_dates.append(entry_date)
+        exit_dates.append(exit_date)
 
     if saw_economic_max_loss and missed_economic_max_loss:
         raise ValueError("economic_max_loss must be supplied on every trade or none")
@@ -245,16 +263,56 @@ def _validated_arrays(trades):
         np.array(capital_at_risk, dtype=float),
         np.array(economic_max_loss, dtype=float) if saw_economic_max_loss else None,
         entry_dates,
+        exit_dates if has_complete_exit_dates else None,
     )
 
 
 def _max_drawdown(pnls):
-    """Max drawdown ($) on the cumulative trade-by-trade equity curve."""
+    """Max drawdown ($) on the closed-trade P&L curve, anchored at zero."""
     if len(pnls) == 0:
         return 0.0
-    equity = np.cumsum(pnls)
+    equity = np.concatenate(([0.0], np.cumsum(pnls)))
     running_max = np.maximum.accumulate(equity)
     return float((running_max - equity).max())
+
+
+def _date_based_capital_metrics(pnls, capital_at_risk, entry_dates, exit_dates):
+    """Return date-resolved capital-use metrics, or None without complete dates.
+
+    Dates are inclusive because the scoreboard has dates rather than intraday
+    timestamps: a position entered and exited on the same date consumes one
+    capital day. Peak capital is the largest capital-at-risk total on any
+    reported calendar date.
+    """
+    if exit_dates is None or not exit_dates:
+        return None
+
+    exposure_days = np.array(
+        [
+            (exit_date - entry_date).days + 1
+            for entry_date, exit_date in zip(entry_dates, exit_dates)
+        ],
+        dtype=float,
+    )
+    capital_days = float(np.dot(capital_at_risk, exposure_days))
+    total_pnl = float(pnls.sum())
+
+    capital_changes = {}
+    for entry_date, exit_date, capital in zip(entry_dates, exit_dates, capital_at_risk):
+        capital_changes[entry_date] = capital_changes.get(entry_date, 0.0) + capital
+        release_date = exit_date + timedelta(days=1)
+        capital_changes[release_date] = capital_changes.get(release_date, 0.0) - capital
+
+    concurrent_capital = 0.0
+    peak_capital = 0.0
+    for change_date in sorted(capital_changes):
+        concurrent_capital += capital_changes[change_date]
+        peak_capital = max(peak_capital, concurrent_capital)
+
+    return {
+        "capital_day_efficiency": total_pnl / capital_days,
+        "peak_capital_return": float(total_pnl / peak_capital),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +496,7 @@ def dsr(sr, t, skew, kurt, *, trial_sr_variance, n_trials, mean_trial_sr=0.0) ->
 
 def scoreboard(trades, label="strategy", *, dsr_n_trials=None,
                dsr_trial_sr_variance=None, dsr_n_provenance=None):
-    pnls, wins, losses, cap, economic_max_loss, entry_dates = _validated_arrays(trades)
+    pnls, wins, losses, cap, economic_max_loss, entry_dates, exit_dates = _validated_arrays(trades)
     n = len(trades)
     n_win, n_loss = int(wins.sum()), int(losses.sum())
 
@@ -459,6 +517,7 @@ def scoreboard(trades, label="strategy", *, dsr_n_trials=None,
         if economic_max_loss is not None and economic_max_loss.mean()
         else float("nan")
     )
+    date_based_capital = _date_based_capital_metrics(pnls, cap, entry_dates, exit_dates)
     # ---- verdict gates on LOSSES and on COHORTS, not trades -----------------
     if n_loss < config.MIN_LOSSES_FOR_VERDICT:
         verdict = (f"INSUFFICIENT SAMPLE ({n_loss} losses; need "
@@ -485,13 +544,15 @@ def scoreboard(trades, label="strategy", *, dsr_n_trials=None,
         "avg_loss": float(loss_pnls.mean()) if n_loss else 0.0,
         "worst_loss": float(loss_pnls.min()) if n_loss else 0.0,
         "total_pnl": float(pnls.sum()),
-        "max_drawdown": _max_drawdown(pnls),
+        "closed_trade_pnl_drawdown": _max_drawdown(pnls),
         "sharpe_per_trade": sharpe_per_trade,
         "sortino_per_trade": (mean_r / dstd) if dstd else float("nan"),
-        "capital_efficiency": float(pnls.sum() / cap.mean()) if cap.mean() else float("nan"),
+        "trade_weighted_return_on_risk": float(pnls.sum() / cap.sum()) if cap.sum() else float("nan"),
         "return_on_economic_max_loss": economic_return,
         "verdict": verdict,
     }
+    if date_based_capital is not None:
+        result.update(date_based_capital)
 
     # ---- PSR/DSR: opt-in display/diagnostic layer only ----------------------
     # Only activates when ALL THREE dsr_* kwargs are supplied; absent any one,
@@ -536,17 +597,27 @@ def print_scoreboard(s):
     print(f"  avg win / avg loss    ${s['avg_win']:.2f} / ${s['avg_loss']:.2f}")
     print(f"  worst single loss     ${s['worst_loss']:.2f}")
     print(f"  total P&L             ${s['total_pnl']:.2f}")
-    print(f"  max drawdown          ${s['max_drawdown']:.2f}")
+    print(f"  closed-trade P&L drawdown ${s['closed_trade_pnl_drawdown']:.2f}")
     print(f"  Sharpe (per-trade)    {s['sharpe_per_trade']:.2f}   (NOT annualized)")
     print(f"  Sortino (per-trade)   {s['sortino_per_trade']:.2f}   (NOT annualized)")
-    print(f"  capital efficiency    {s['capital_efficiency']:.2%}  "
-          f"(total P&L / avg capital at risk)")
+    print(f"  trade-wtd return/risk {s['trade_weighted_return_on_risk']:.2%}  "
+          f"(total P&L / total capital at risk)")
+    if "capital_day_efficiency" in s:
+        print(f"  capital-day efficiency {s['capital_day_efficiency']:.2%}/day  "
+              f"(total P&L / capital-at-risk days)")
+        print(f"  peak-capital return   {s['peak_capital_return']:.2%}  "
+              f"(total P&L / peak concurrent capital at risk)")
+    else:
+        print("  capital-day efficiency n/a    (exit_date not supplied for every trade)")
+        print("  peak-capital return   n/a    (exit_date not supplied for every trade)")
     economic = s["return_on_economic_max_loss"]
     if np.isfinite(economic):
         print(f"  economic max-loss ret {economic:.2%}  "
               f"(total P&L / avg economic max loss)")
     else:
         print("  economic max-loss ret n/a    (economic_max_loss not supplied)")
+    if "dsr" in s:
+        print(f"  DSR (per-trade, exploratory)  {s['dsr']}")
     print("-" * 70)
     print(f"  VERDICT: {s['verdict']}")
     print("=" * 70)

@@ -1,0 +1,65 @@
+{
+  "entries": [
+    {
+      "candidate": {
+        "bid": 8.950000000000001,
+        "delta": 0.463,
+        "dte": 56,
+        "entry_cost": 925.65,
+        "expiration": "2026-09-18",
+        "raw_ask": 9.15,
+        "strike": 130.0,
+        "symbol": "PLTR"
+      },
+      "evaluation_session": "2026-07-24",
+      "iv_rank": 0.8888888888888888,
+      "monthly_headroom": 1079.35,
+      "monthly_risk_used": 920.65,
+      "open_h8": 0,
+      "reasons": [],
+      "status": "OUT_OF_WINDOW",
+      "symbol": "PLTR",
+      "window": {
+        "reason": "outside the T-15..T-8 entry window",
+        "report": "2026-08-03",
+        "state": "OUT_OF_WINDOW"
+      }
+    },
+    {
+      "candidate": {
+        "bid": 8.950000000000001,
+        "delta": 0.4002,
+        "dte": 56,
+        "entry_cost": 925.65,
+        "expiration": "2026-09-18",
+        "raw_ask": 9.15,
+        "strike": 245.0,
+        "symbol": "AMZN"
+      },
+      "evaluation_session": "2026-07-24",
+      "iv_rank": 0.9047619047619048,
+      "monthly_headroom": 1079.35,
+      "monthly_risk_used": 920.65,
+      "open_h8": 0,
+      "reasons": [],
+      "status": "OUT_OF_WINDOW",
+      "symbol": "AMZN",
+      "window": {
+        "reason": "outside the T-15..T-8 entry window",
+        "report": "2026-07-30",
+        "state": "OUT_OF_WINDOW"
+      }
+    }
+  ],
+  "errors": [],
+  "evaluation_session": "2026-07-24",
+  "exits": [],
+  "known_as_of_utc": "2026-07-24T20:00:00+00:00",
+  "mode": "FORWARD_PAPER_ONLY",
+  "orders_enabled": false,
+  "shared_cap": {
+    "cap": 2000,
+    "headroom": 1079.35,
+    "used": 920.65
+  }
+}
