@@ -11,6 +11,7 @@ from unittest import mock
 import pandas as pd
 
 from data import thetadata_adapter
+from options_researcher import h7_data_gate, h9_census
 from tools.cache_manifest import read_manifest, write_manifest
 
 V2_PROVIDER_FIELDS = [
@@ -237,6 +238,56 @@ class ChainSchemaV2Tests(unittest.TestCase):
         entry = entries["SPY_2022-01-03.parquet"]
         self.assertEqual(entry.schema_version, 1)
         self.assertEqual(entry.usage, "display-only")
+
+    def test_h7_verdict_gate_marks_v1_display_only_and_accepts_v2(self):
+        with tempfile.TemporaryDirectory() as temp:
+            chain_dir = Path(temp)
+            v1_path = chain_dir / "SPY_2022-01-03.parquet"
+            _v1_chain().to_parquet(v1_path, index=False)
+
+            v1_record, v1_codes = h7_data_gate._evaluate_chain(
+                "SPY",
+                "2022-01-03",
+                chain_dir,
+            )
+
+            greeks, open_interest = _provider_frames()
+            thetadata_adapter._merge_chain_frames(
+                greeks,
+                open_interest,
+            ).to_parquet(v1_path, index=False)
+            v2_record, v2_codes = h7_data_gate._evaluate_chain(
+                "SPY",
+                "2022-01-03",
+                chain_dir,
+            )
+
+        self.assertEqual(v1_record["schema_version"], 1)
+        self.assertEqual(v1_record["usage"], "display-only")
+        self.assertIn("CHAIN_SCHEMA_V1_DISPLAY_ONLY", v1_codes)
+        self.assertEqual(v2_record["schema_version"], 2)
+        self.assertEqual(v2_record["usage"], "verdict-eligible")
+        self.assertNotIn("CHAIN_SCHEMA_V1_DISPLAY_ONLY", v2_codes)
+
+    def test_h9_verdict_loader_explicitly_requires_v2(self):
+        with mock.patch.object(
+            h9_census,
+            "load_cached_chain",
+            return_value=_v1_chain(),
+        ) as loader:
+            h9_census._entry_chain(
+                "SPY",
+                "2022-01-03",
+                Path("/fixture/chains"),
+            )
+
+        loader.assert_called_once_with(
+            "SPY",
+            "2022-01-03",
+            allow_oos=True,
+            cache_dir=Path("/fixture/chains"),
+            verdict_bearing=True,
+        )
 
 
 if __name__ == "__main__":

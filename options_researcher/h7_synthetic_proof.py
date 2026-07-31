@@ -104,6 +104,21 @@ def _chain(*, bid: float = 4.9, ask: float = 5.0) -> pd.DataFrame:
                 "gamma": 0.02,
                 "theta": -0.03,
                 "vega": 0.10,
+                "timestamp": pd.Timestamp(
+                    f"{DECISION_SESSION} 17:15:00",
+                    tz="America/New_York",
+                ),
+                "bid_size": 17,
+                "bid_condition": 50,
+                "ask_size": 23,
+                "ask_condition": 50,
+                "iv_error": 0.001,
+                "underlying_timestamp": pd.Timestamp(
+                    f"{DECISION_SESSION} 16:00:00",
+                    tz="America/New_York",
+                ),
+                "underlying_price": 100.0,
+                "thetadata_client_version": "1.0.9",
             }
         ]
     )

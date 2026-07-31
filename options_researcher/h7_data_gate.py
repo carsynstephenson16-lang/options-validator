@@ -5,8 +5,9 @@ exact-session data set present locally for a decision, BEFORE any watcher
 output is read? GO requires EVERY name to have both a split-adjusted close
 AND an EOD option chain for the EXACT evaluation session (the last completed
 XNYS session strictly before the requested date), each structurally clean.
-Anything else -- a missing file, a stale snapshot, a schema gap, an
-audit BLOCK -- is a fail-closed NO_GO for the whole universe.
+Chain partitions must be schema v2 and verdict-eligible; legacy v1 partitions
+remain display-only. Anything else -- a missing file, a stale snapshot, a
+schema gap, an audit BLOCK -- is a fail-closed NO_GO for the whole universe.
 
 READ-ONLY w.r.t. every market-data store. This module reads cached parquet
 DIRECTLY and never fetches: it imports no ThetaData client and calls no
@@ -37,6 +38,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from data.cache_schema import CHAIN_SCHEMA_VERSION_V1, chain_schema_metadata
 from data.recent_topup import audit_chain
 from data.thetadata_adapter import CHAIN_COLUMNS, NUMERIC_CHAIN_COLUMNS
 from data.underlying_closes import adjusted_from_raw
@@ -64,6 +66,7 @@ CHAIN_SESSION_MISSING = "CHAIN_SESSION_MISSING"
 CHAIN_STALE = "CHAIN_STALE"
 CHAIN_EMPTY = "CHAIN_EMPTY"
 CHAIN_SCHEMA_MISSING = "CHAIN_SCHEMA_MISSING"
+CHAIN_SCHEMA_V1_DISPLAY_ONLY = "CHAIN_SCHEMA_V1_DISPLAY_ONLY"
 CHAIN_NONFINITE = "CHAIN_NONFINITE"
 CHAIN_DUPLICATE_CONTRACT = "CHAIN_DUPLICATE_CONTRACT"
 CHAIN_NEGATIVE_LIQUIDITY_FIELD = "CHAIN_NEGATIVE_LIQUIDITY_FIELD"
@@ -199,6 +202,7 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
         "newest_date_at_or_before_session":
             (at_or_before[-1] if at_or_before else None),
         "row_count": None, "columns": None, "missing_required_columns": None,
+        "schema_version": None, "usage": None,
         "null_by_numeric_column": None, "nonfinite_by_numeric_column": None,
         "duplicate_contract_count": None, "negative_bid_count": None,
         "negative_ask_count": None, "negative_open_interest_count": None,
@@ -220,6 +224,16 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
     rec["missing_required_columns"] = missing
     if missing:
         codes.append(CHAIN_SCHEMA_MISSING)
+    else:
+        try:
+            schema = chain_schema_metadata(df.columns)
+        except ValueError:
+            codes.append(CHAIN_SCHEMA_MISSING)
+        else:
+            rec["schema_version"] = schema.schema_version
+            rec["usage"] = schema.usage
+            if schema.schema_version == CHAIN_SCHEMA_VERSION_V1:
+                codes.append(CHAIN_SCHEMA_V1_DISPLAY_ONLY)
     # Store-integrity guard, symmetric with the closes date/close guard: a
     # present column with a malformed stored dtype/domain is an integrity
     # failure (exit 2) regardless of row count. Run it BEFORE the empty-chain
