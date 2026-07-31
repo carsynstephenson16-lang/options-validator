@@ -1,7 +1,8 @@
 # PROJECT_STATE — options-validator (CANONICAL status + roadmap)
 
-**As of:** 2026-07-31. **Checkout:** `sfix` @ `40a6b21`; `main` @ `ecdaeb9`
-(ops worktree). This file is the ONE roadmap. Every plan in the supersession
+**As of:** 2026-07-31. **Checkout:** `sfix` @ `5626c3f`; `main` @ `ecdaeb9`
+(ops worktree; incorporated into `sfix` by merge `9cf3ee4`). This file is the
+ONE roadmap. Every plan in the supersession
 table (§8) is retired as an active path; those files remain as history.
 Update this file whenever a registration, verdict, branch reconciliation, or
 data decision lands.
@@ -16,19 +17,18 @@ data decision lands.
 - The Schwab live-preview lane landed on `sfix` with tests and a verified
   2026-07-29/30 probe; it is read-only by construction.
 - The 13:00 intraday recorder keeps accumulating display-only receipts.
-- Test suite: 2,131 tests passed on `main` @ `88ffbb6` (report 12 §0). Not
-  re-run since; treat as of that commit.
+- Test suite: 2,232 tests passed on `sfix` @ `5626c3f`; `ruff` and `pyright`
+  are clean.
 
 ## 2. What is unsafe (do not build on it)
 
-Findings F1–F6 in `reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`:
-the $600 cap is no longer enforceable under decision-day sizing with fill-day
-prices (F1); `entry_date` silently changed to fill-day and feeds verdict
-cohorts (F2); an exit trigger on a chunk's last session crashes the year-end
-guard (F3); `return_on_economic_max_loss` still divides by the mean (F4);
-`_max_drawdown` has no ordering contract (F5); `BACKTEST_EXECUTION_CONVENTION`
-is unregistered (F6). **No new backtest, promotion, or registration until P0
-closes.**
+Of findings F1–F6 in
+`reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`, F3–F5
+were fixed in `5626c3f`. The remaining blockers are: the $600 cap is not
+enforceable under decision-day sizing with fill-day prices (F1); `entry_date`
+changed to fill-day and feeds verdict cohorts without registration (F2); and
+`BACKTEST_EXECUTION_CONVENTION` is unregistered (F6). **No new backtest,
+promotion, or registration until P0 closes.**
 
 ## 3. What is blocked, and on what
 
@@ -40,10 +40,9 @@ closes.**
 - Evidence-upgrade program: paused at packet 5B; its blocker is that no
   automated review lane has ever run on this repo (PR #18 measured silent —
   `docs/evidence-upgrade/decision-log.md` D40). Owner console action required.
-- Branch truth: `main` and `sfix` have diverged (39 vs 43 commits since merge
-  base `3f2d19f`); the engine fixes live only on `main`, the Schwab lane and
-  evidence-upgrade docs only on `sfix`; `88ffbb6` and `ecdaeb9` exist only
-  locally.
+- Branch truth: `main` was merged into `sfix` at `9cf3ee4`; `sfix` contains
+  `88ffbb6` and `ecdaeb9` and is pushed through `5626c3f`. No completed P0 fix
+  is local-only.
 
 ## 4. Overbuilt or duplicated (consolidation targets, not deletions)
 
@@ -77,21 +76,14 @@ exist afterward. Do tasks in order within a priority; P0 before P1 before P2.
 
 ### P0 — correctness and governance gates (block all further research)
 
-- **P0.1 Reconcile branches (NEXT TASK — owner at keyboard, ~30 min).**
-  Decide the single line of development (recommended: merge `main` into
-  `sfix`, or fast-forward a new consolidation point that contains both
-  `88ffbb6`/`ecdaeb9` and the Schwab/evidence-upgrade work), then push so no
-  fix exists only on this machine. Proof: `git branch --contains 88ffbb6`
-  lists the working branch; `git log origin/<branch>..<branch>` is empty;
-  full suite green. Depends on: nothing. (This session made no git changes —
-  prohibited in a docs pass.)
-- **P0.2 Fix the twin ratio + drawdown ordering (metrics.py).** Change
-  `return_on_economic_max_loss` to a sum denominator; give `_max_drawdown` an
-  explicit chronological-ordering contract (sort by entry date inside
-  `scoreboard` or assert sorted input); update the 27.27% assertion in
-  `tests/test_core.py` (line 297 on `main`, 293 on `sfix`) — it certifies the
-  wrong answer; honest value 13.64%. Proof:
-  new unit tests for both defects red→green; suite green. Depends: P0.1.
+- **P0.1 COMPLETE — Reconcile branches.** `main` was merged into `sfix` at
+  `9cf3ee4` and pushed. `sfix` contains `88ffbb6` and `ecdaeb9`; the full suite
+  passed before the merge commit.
+- **P0.2 COMPLETE — Fix the twin ratio + drawdown ordering.** `5626c3f`
+  changed `return_on_economic_max_loss` to sum-over-sum and computes
+  closed-trade drawdown in stable entry-date order. The 13.64% ratio and
+  shuffled-order drawdown regressions failed before the fix and passed after;
+  the full suite passed.
 - **P0.3 Cap enforceability (owner decision OD-A + implementation).** Owner
   picks the F1 mechanism: (a) re-size at fill, (b) cancel if fill-day credit
   worse than a typed tolerance, (c) accept and disclose. Recommended default:
@@ -99,11 +91,11 @@ exist afterward. Do tasks in order within a priority; P0 before P1 before P2.
   Proof: a cap test where decision and fill quotes DIFFER (the existing suite
   holds them equal — `test_selector_credit_equals_engine_fill_credit_for_same_quotes`);
   measured worst-case breach across the dataset reported. Depends: P0.1.
-- **P0.4 Last-session exit crash (F3).** Resolve a triggered exit on a
-  chunk's final session (close same-session at the conservative mark, or
-  carry with an explicit recorded skip) — and record when a trade is dropped
-  at the holdout seam. Proof: year-boundary regression test red→green.
-  Depends: P0.1.
+- **P0.4 COMPLETE — Last-session exit crash (F3).** `5626c3f` closes a
+  final-session trigger descriptively at the same session's conservative
+  executable mark and records `exit_execution=terminal_conservative_mark`;
+  ordinary exits remain next-session engine fills. The Dec. 30 year-boundary
+  regression failed before the fix and passed after; the full suite passed.
 - **P0.5 Register the execution convention + entry_date semantics (owner
   types).** Owner registers D+1-close (F6) and the `entry_date` = fill-day
   redefinition (F2), or reverts the field to decision-day. Recommended:
