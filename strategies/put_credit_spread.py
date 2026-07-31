@@ -8,7 +8,8 @@ the offline PandasData feed.
 
 Execution is causal under BACKTEST_EXECUTION_CONVENTION: a completed day-D EOD
 chain may create an intent, but no order is submitted until the next XNYS
-session. Entry contracts are frozen on D and fill at D+1's adverse close;
+session. Entry legs and maximum quantity are frozen on D; D+1's adverse close
+may cancel the intent or reduce quantity under the registered cap gate.
 EOD-observed exits are likewise queued for the next session. If an exit
 triggers on the final available session, the position is closed descriptively
 at that session's conservative executable mark and labeled as such; submitting
@@ -174,6 +175,19 @@ class PutCreditSpread(Strategy):
                 "unsupported BACKTEST_EXECUTION_CONVENTION: "
                 f"{config.BACKTEST_EXECUTION_CONVENTION!r}"
             )
+        if config.BACKTEST_ENTRY_DATE_SEMANTICS != "FILL_SESSION":
+            raise RuntimeError(
+                "unsupported BACKTEST_ENTRY_DATE_SEMANTICS: "
+                f"{config.BACKTEST_ENTRY_DATE_SEMANTICS!r}"
+            )
+        if (
+            config.BACKTEST_TERMINAL_EXIT_CONVENTION
+            != "terminal_conservative_mark"
+        ):
+            raise RuntimeError(
+                "unsupported BACKTEST_TERMINAL_EXIT_CONVENTION: "
+                f"{config.BACKTEST_TERMINAL_EXIT_CONVENTION!r}"
+            )
         if not self._trading_sessions:
             raise RuntimeError("harness must inject deterministic XNYS trading_sessions")
         if self._tradeable_by_session is None:
@@ -183,6 +197,7 @@ class PutCreditSpread(Strategy):
         self._pending_entries: dict[str, _PendingEntry] = {}
         self._spreads = {}
         self.closed_trades = []
+        self.cancelled_entries = []
 
     # ----- main loop -----------------------------------------------------
     def on_trading_iteration(self):
@@ -279,9 +294,6 @@ class PutCreditSpread(Strategy):
             self._cancel_pending_entry(symbol, "execution_dte_out_of_band")
             return
 
-        # Do not read today's EOD chain here: ThetaData publishes it after the
-        # modeled close. The frozen D intent determines what Lumibot submits;
-        # today's feed row may price that fill but cannot gate it by quote data.
         assets = self._spread_assets(
             symbol,
             pending.expiration,
@@ -294,12 +306,40 @@ class PutCreditSpread(Strategy):
                 f"on execution session {today}: {list(assets)}"
             )
 
+        # This models a day-D standing net-credit limit: the D+1 close decides
+        # only whether the already-frozen intent could fill, never what to buy.
+        # If it remains inside the owner-typed tolerance, reduce quantity only
+        # as needed to keep realized economic max loss <= the hard dollar cap.
+        execution_credit = self._frozen_entry_credit(symbol, pending)
+        if execution_credit is None:
+            raise RuntimeError(
+                f"{symbol}: frozen entry quotes missing on execution session {today}"
+            )
+        execution_credit = round(execution_credit, 2)
+        minimum_credit = round(
+            pending.signal_credit - config.A_ENTRY_CREDIT_TOLERANCE,
+            2,
+        )
+        if execution_credit < minimum_credit:
+            self._cancel_pending_entry(symbol, "fill_credit_below_tolerance")
+            return
+        fill_contracts, _ = size_defined_risk(self.width, execution_credit)
+        contracts = min(pending.contracts, fill_contracts)
+        if contracts <= 0:
+            self._cancel_pending_entry(symbol, "fill_risk_budget_too_small")
+            return
+        if contracts < pending.contracts:
+            self.log_message(
+                f"{symbol}: resized {pending.contracts}x to {contracts}x on "
+                f"{today} to preserve the hard dollar cap"
+            )
+
         self._submit_spread(
             symbol,
             pending.expiration,
             pending.short_strike,
             pending.long_strike,
-            pending.contracts,
+            contracts,
             pending.signal_credit,
             decision_date=pending.decision_date,
             fill_date=today,
@@ -308,6 +348,15 @@ class PutCreditSpread(Strategy):
 
     def _cancel_pending_entry(self, symbol, reason):
         pending = self._pending_entries.pop(symbol)
+        self.cancelled_entries.append(
+            {
+                "symbol": symbol,
+                "decision_date": pending.decision_date,
+                "cancellation_date": self._today().isoformat(),
+                "reason": reason,
+                "signal_credit": pending.signal_credit,
+            }
+        )
         self.log_message(
             f"{symbol}: cancelled {pending.decision_date} entry intent on "
             f"{self._today().isoformat()}: {reason}"
@@ -406,6 +455,32 @@ class PutCreditSpread(Strategy):
         return all(
             asset in globally_available and asset in session_available
             for asset in assets
+        )
+
+    def _frozen_entry_credit(self, symbol, pending):
+        """D+1 executable credit for the exact day-D frozen legs."""
+        chain = self._get_eod_chain(symbol)
+        if chain is None:
+            return None
+
+        def leg_row(strike):
+            rows = chain[
+                (chain["right"] == "P")
+                & (chain["expiration"] == pending.expiration)
+                & (chain["strike"] == strike)
+            ]
+            return None if rows.empty else rows.iloc[0]
+
+        short_row = leg_row(pending.short_strike)
+        long_row = leg_row(pending.long_strike)
+        if short_row is None or long_row is None:
+            return None
+        return entry_credit_conservative(
+            short_row.bid,
+            short_row.ask,
+            long_row.bid,
+            long_row.ask,
+            self.haircut,
         )
 
     def _submit_spread(
@@ -509,7 +584,7 @@ class PutCreditSpread(Strategy):
             pos.exit_reason = reason
             pos.exit_decision_date = decision_date
             pos.exit_fill_date = decision_date
-            pos.exit_execution = "terminal_conservative_mark"
+            pos.exit_execution = config.BACKTEST_TERMINAL_EXIT_CONVENTION
             pos.exit_fills = {
                 pos.short_asset: terminal_fills[0],
                 pos.long_asset: terminal_fills[1],

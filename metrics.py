@@ -616,7 +616,7 @@ def print_scoreboard(s):
     economic = s["return_on_economic_max_loss"]
     if np.isfinite(economic):
         print(f"  economic max-loss ret {economic:.2%}  "
-              f"(total P&L / avg economic max loss)")
+              f"(total P&L / total economic max loss)")
     else:
         print("  economic max-loss ret n/a    (economic_max_loss not supplied)")
     if "dsr" in s:
