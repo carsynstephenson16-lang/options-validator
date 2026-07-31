@@ -9,7 +9,10 @@ the offline PandasData feed.
 Execution is causal under BACKTEST_EXECUTION_CONVENTION: a completed day-D EOD
 chain may create an intent, but no order is submitted until the next XNYS
 session. Entry contracts are frozen on D and fill at D+1's adverse close;
-EOD-observed exits are likewise queued for the next session.
+EOD-observed exits are likewise queued for the next session. If an exit
+triggers on the final available session, the position is closed descriptively
+at that session's conservative executable mark and labeled as such; submitting
+an asynchronous order with no later engine iteration would leave it unresolved.
 
 Hypothesis: implied vol tends to exceed realized (the volatility risk premium),
 so selling a ~30-delta put and capping the downside with a long put $W lower
@@ -464,10 +467,8 @@ class PutCreditSpread(Strategy):
             return False
         return pos.state == "open"
 
-    def _spread_mark(self, symbol, pos):
-        """Conservative cost-to-close: buy the short leg back at ask*(1+h),
-        sell the long leg at bid*(1-h). None when today's chain or a leg row
-        is missing (caller holds)."""
+    def _spread_exit_fills(self, symbol, pos):
+        """Return conservative short-buy and long-sell prices for today."""
         chain = self._get_eod_chain(symbol)
         if chain is None:
             return None
@@ -482,9 +483,15 @@ class PutCreditSpread(Strategy):
         srow, lrow = leg_row(pos.short_asset), leg_row(pos.long_asset)
         if srow is None or lrow is None:
             return None
-        return adverse_buy(srow.ask, self.haircut) - adverse_sell(
-            lrow.bid, self.haircut
+        return (
+            adverse_buy(srow.ask, self.haircut),
+            adverse_sell(lrow.bid, self.haircut),
         )
+
+    def _spread_mark(self, symbol, pos):
+        """Conservative cost-to-close, or None without both leg quotes."""
+        fills = self._spread_exit_fills(symbol, pos)
+        return None if fills is None else fills[0] - fills[1]
 
     def _dte(self, pos):
         return (pos.expiration - self._today()).days
@@ -493,12 +500,27 @@ class PutCreditSpread(Strategy):
         decision_date = self._today().isoformat()
         execution_date = self._next_session(decision_date)
         if execution_date is None:
-            self.log_message(f"{symbol}: no next session for {reason} exit")
+            terminal_fills = self._spread_exit_fills(symbol, pos)
+            if terminal_fills is None:
+                self.log_message(
+                    f"{symbol}: no next session or terminal mark for {reason} exit"
+                )
+                return
+            pos.exit_reason = reason
+            pos.exit_decision_date = decision_date
+            pos.exit_fill_date = decision_date
+            pos.exit_execution = "terminal_conservative_mark"
+            pos.exit_fills = {
+                pos.short_asset: terminal_fills[0],
+                pos.long_asset: terminal_fills[1],
+            }
+            self._finalize_trade(symbol, pos)
             return
         pos.state = "queued_exit"
         pos.exit_reason = reason
         pos.exit_decision_date = decision_date
         pos.exit_fill_date = execution_date
+        pos.exit_execution = "next_session_engine_fill"
 
     def _execute_pending_exit(self, symbol, pos):
         today = self._today().isoformat()
@@ -538,8 +560,7 @@ class PutCreditSpread(Strategy):
                 return
 
     def _finalize_trade(self, symbol, pos):
-        """Emit the metrics.scoreboard trade dict from ENGINE fills (net of
-        the frozen commission model) and release the symbol."""
+        """Emit a scored trade from labeled exit fills and release the symbol."""
         exit_debit = (pos.exit_fills[pos.short_asset]
                       - pos.exit_fills[pos.long_asset])
         n = pos.contracts
@@ -557,6 +578,7 @@ class PutCreditSpread(Strategy):
             "exit_reason": pos.exit_reason,
             "exit_decision_date": pos.exit_decision_date,
             "exit_date": pos.exit_fill_date,
+            "exit_execution": pos.exit_execution,
         })
         del self._spreads[symbol]
 
@@ -591,3 +613,4 @@ class _OpenSpread:
     exit_reason: str | None = None
     exit_decision_date: str | None = None
     exit_fill_date: str | None = None
+    exit_execution: str | None = None

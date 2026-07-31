@@ -25,8 +25,8 @@ def _chain(
     *,
     short_delta: float = -0.30,
     long_delta: float = -0.25,
+    expiration: str = "2022-07-08",
 ):
-    expiration = "2022-07-08"
     return pd.DataFrame(
         [
             {
@@ -81,7 +81,11 @@ def _run_cached_backtest(
         ):
             chains = pandas_feed.load_cached_chains("SYN", sessions[0], sessions[-1])
 
-    feed = pandas_feed.build_option_data(chains, "SYN", exp_max="2022-09-16")
+    exp_max = max(
+        str(frame["expiration"].max())
+        for frame in chains.values()
+    )
+    feed = pandas_feed.build_option_data(chains, "SYN", exp_max=exp_max)
     available_by_session = pandas_feed.assets_by_session(feed)
 
     from lumibot.backtesting import PandasDataBacktesting
@@ -229,6 +233,31 @@ class CausalExitFillTests(unittest.TestCase):
         self.assertAlmostEqual(trade["pnl"], 97.60, places=2)
         self.assertEqual(trade["exit_decision_date"], "2022-06-03")
         self.assertEqual(trade["exit_date"], "2022-06-06")
+
+    def test_final_session_trigger_records_terminal_conservative_mark(self):
+        expiration = "2023-02-03"
+        entry = _chain(1.20, 1.30, 0.60, 0.64, expiration=expiration)
+        trigger = _chain(0.20, 0.24, 0.05, 0.07, expiration=expiration)
+
+        strategy = _run_cached_backtest(
+            {
+                "2022-12-28": entry,
+                "2022-12-29": entry,
+                "2022-12-30": trigger,
+            },
+            datetime(2022, 12, 31),
+        )
+
+        self.assertEqual(strategy._spreads, {})
+        self.assertEqual(len(strategy.closed_trades), 1)
+        trade = strategy.closed_trades[0]
+        self.assertEqual(trade["exit_decision_date"], "2022-12-30")
+        self.assertEqual(trade["exit_date"], "2022-12-30")
+        self.assertAlmostEqual(trade["pnl"], 117.60, places=2)
+        self.assertEqual(
+            trade["exit_execution"],
+            "terminal_conservative_mark",
+        )
 
 
 if __name__ == "__main__":

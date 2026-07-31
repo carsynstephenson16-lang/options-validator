@@ -294,7 +294,7 @@ class ScoreboardTests(unittest.TestCase):
 
         result = scoreboard(trades)
 
-        self.assertAlmostEqual(result["return_on_economic_max_loss"], 30.0 / 110.0)
+        self.assertAlmostEqual(result["return_on_economic_max_loss"], 30.0 / 220.0)
 
     def test_scoreboard_rejects_partial_economic_max_loss(self):
         trades = [

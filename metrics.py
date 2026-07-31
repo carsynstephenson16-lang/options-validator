@@ -513,10 +513,13 @@ def scoreboard(trades, label="strategy", *, dsr_n_trials=None,
     downside = rets[rets < 0]
     dstd = float(downside.std(ddof=1)) if len(downside) > 1 else 0.0
     economic_return = (
-        float(pnls.sum() / economic_max_loss.mean())
-        if economic_max_loss is not None and economic_max_loss.mean()
+        float(pnls.sum() / economic_max_loss.sum())
+        if economic_max_loss is not None and economic_max_loss.sum()
         else float("nan")
     )
+    chronological_pnls = pnls[
+        sorted(range(n), key=lambda index: entry_dates[index])
+    ]
     date_based_capital = _date_based_capital_metrics(pnls, cap, entry_dates, exit_dates)
     # ---- verdict gates on LOSSES and on COHORTS, not trades -----------------
     if n_loss < config.MIN_LOSSES_FOR_VERDICT:
@@ -544,7 +547,7 @@ def scoreboard(trades, label="strategy", *, dsr_n_trials=None,
         "avg_loss": float(loss_pnls.mean()) if n_loss else 0.0,
         "worst_loss": float(loss_pnls.min()) if n_loss else 0.0,
         "total_pnl": float(pnls.sum()),
-        "closed_trade_pnl_drawdown": _max_drawdown(pnls),
+        "closed_trade_pnl_drawdown": _max_drawdown(chronological_pnls),
         "sharpe_per_trade": sharpe_per_trade,
         "sortino_per_trade": (mean_r / dstd) if dstd else float("nan"),
         "trade_weighted_return_on_risk": float(pnls.sum() / cap.sum()) if cap.sum() else float("nan"),

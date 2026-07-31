@@ -62,6 +62,18 @@ class CapitalFamilyTests(unittest.TestCase):
 
         self.assertEqual(result["closed_trade_pnl_drawdown"], 25.0)
 
+    def test_closed_trade_drawdown_is_chronological_by_entry_date(self):
+        shuffled = [
+            _trade(-50.0, "2024-01-03"),
+            _trade(100.0, "2024-01-01"),
+            _trade(-80.0, "2024-01-02"),
+        ]
+
+        result = scoreboard(shuffled)
+
+        # Chronological P&L is +100, -80, -50: peak 100 to trough -30.
+        self.assertEqual(result["closed_trade_pnl_drawdown"], 130.0)
+
     def test_time_based_metrics_are_omitted_without_all_exit_dates(self):
         result = scoreboard(
             [
