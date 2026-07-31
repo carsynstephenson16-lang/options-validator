@@ -146,8 +146,9 @@ If live data access is unavailable, return a blocker instead of guessing.
 Do not turn this repo into a live trading bot: no live order placement.
 Do not use "proven," "confirmed," "edge found," "works," or "guaranteed" about backtest results. Use "survived this test," "not yet rejected," "rejected," or "consistent with zero edge."
 The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
-forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
-arc, with its historical diagnostic permanently retired. Before adding a new
+forward-paper hypotheses; task sequencing lives in `PROJECT_STATE.md` (the
+canonical roadmap — its P0 gate binds), and H7's historical diagnostic is
+permanently retired. Before adding a new
 capability, ticker, strategy, or tool, answer: "Does this move one of the live
 hypotheses toward its declared verdict?" If no, write it into
 `ideas-parking-lot.md` and continue.

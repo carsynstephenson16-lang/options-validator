@@ -11,7 +11,11 @@ __pycache__/
 .secrets/
 
 # Local Claude Code agent config / permissions -- never commit
-.claude/
+# (rules/ and skills/ are shared instruction files and ARE tracked;
+#  settings, hooks registration, and other state stay local-only)
+.claude/*
+!.claude/rules/
+!.claude/skills/
 !ov/.claude/
 !ov/.claude/**
 ov/.claude/**/__pycache__/
