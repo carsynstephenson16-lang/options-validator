@@ -27,13 +27,14 @@ question that actually matters: **would I have panicked and quit?**
 
 ---
 
-## 2. Two separate defects. Only the first is being fixed now.
+## 2. Closed-trade ordering is fixed; daily marks remain absent
 
-### Defect A — trade ordering (fixing now, Option 3 part one)
+### Closed defect A — trade ordering
 
-`metrics._max_drawdown` walks the P&L list in whatever order it was handed
-([`metrics.py:270-276`](../../../metrics.py#L270-L276)). `scoreboard` does not
-sort. H9's receipt handed it a list sorted alphabetically by ticker.
+Commit `5626c3f` made `closed_trade_pnl_drawdown` zero-anchored and stably
+ordered by `entry_date`. A shuffle-invariance regression now pins that
+definition. H9's receipt had supplied an alphabetically ordered trade list,
+which explains the obsolete stored value below.
 
 Measured consequence on the H9 record:
 
@@ -47,16 +48,10 @@ Measured consequence on the H9 record:
 The recorded figure reproduces exactly under the alphabetical ordering and no
 other, which establishes the cause.
 
-**Scope of the fix:** sort by realisation order before accumulating, keep the
-`closed_trade_pnl_drawdown` name so no reader mistakes it for an equity curve,
-and add a test that a permuted trade list yields an identical drawdown.
-
-**Open sub-question (needs a decision when this is implemented):** entry date or
-exit date? Money is realised at exit, so exit order is the more defensible
-"account balance over time" proxy. Entry order gives the larger, more
-conservative number here ($718.50 vs $572.20). This is a convention, not a
-number — but it changes a published figure, so it should be stated explicitly
-rather than defaulted.
+**Implemented convention:** entry-date order, retained under the explicit name
+`closed_trade_pnl_drawdown`. It is a completed-trade path statistic, not daily
+NAV. The append-only `METRIC_CORRECTION` fact records $718.50 for H9 under this
+definition and preserves $572.20 as the distinct exit-session aggregation.
 
 ### Defect B — no daily marks at all (this spec)
 

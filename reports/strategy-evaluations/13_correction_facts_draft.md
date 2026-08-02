@@ -1,12 +1,12 @@
-# 13 — Correction fact for three permanent records: REVIEWED DRAFT, NOT APPENDED
+# 13 — Correction fact for three permanent records: APPROVED, APPENDED ONCE
 
 **Updated:** 2026-07-31
 **Owner direction:** append only after the owner reads and approves the exact
 text.
-**Status:** independent adversarial review completed with
-`PASS-WITH-CHANGES`; fresh Fable review completed with `SIGN-OFF: PASS` on the
-exact payload below. Final owner approval remains open. Nothing has been
-written to `ledger/facts.log`.
+**Status:** owner approved the exact payload on 2026-07-31. It was appended
+exactly once through `research.facts.append_fact` at
+`2026-08-01T00:20:49.515344+00:00` with payload SHA-256
+`c489eb179e230aa9554408066957feb17112fad47b151448f28d50a431bd10e8`.
 
 The permanent correction must be append-only and must use
 `research.facts.append_fact`. It changes descriptive metrics only; it does not
@@ -51,5 +51,5 @@ METRIC_CORRECTION 2026-07-31 (H1 seq 0, H2 seq 3, H9). CORRECTION: the legacy sc
       `--model fable`, read-only, 2026-07-31). Fable independently reproduced
       every ratio, the $361.30/$718.50/$572.20 drawdowns, outcome gates, and
       OOS-state claims; it required no replacement payload.
-- [ ] Owner reads and approves this exact one-line payload.
-- [ ] Append once through `research.facts.append_fact`, then verify the ledger.
+- [x] Owner read and approved this exact one-line payload.
+- [x] Appended once through `research.facts.append_fact`; duplicate count is one.
