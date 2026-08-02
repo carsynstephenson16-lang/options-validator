@@ -325,6 +325,35 @@ class TestSourceHealthLinkRequired(GateBase):
                 source_health_receipt_path=self.source_health_path,
             )
 
+    def test_sparse_result_cannot_build_durable_receipt(self):
+        result = gate.evaluate(
+            REQ,
+            close_dir=self.close_dir,
+            chain_dir=self.chain_dir,
+        )
+        result["universe"] = []
+        result["symbols"] = {}
+        with self.assertRaisesRegex(ValueError, "scope closure"):
+            gate.build_receipt(
+                result,
+                source_health_receipt=self.source_health,
+                source_health_receipt_path=self.source_health_path,
+            )
+
+    def test_claimed_counts_are_recomputed_before_receipt_build(self):
+        result = gate.evaluate(
+            REQ,
+            close_dir=self.close_dir,
+            chain_dir=self.chain_dir,
+        )
+        result["go_count"] -= 1
+        with self.assertRaisesRegex(ValueError, "counts/verdict"):
+            gate.build_receipt(
+                result,
+                source_health_receipt=self.source_health,
+                source_health_receipt_path=self.source_health_path,
+            )
+
     def test_omitted_source_health_receipt_is_exit_2_and_writes_nothing(self):
         rc = gate.main(
             [

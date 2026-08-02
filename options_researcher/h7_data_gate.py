@@ -41,7 +41,6 @@ import pandas as pd
 
 from data.cache_schema import (
     CHAIN_SCHEMA_VERSION_V1,
-    V2_FULL_AUDIT_SCHEMA,
     CacheAuditReceiptError,
     chain_schema_metadata,
     validate_v2_audit_receipt,
@@ -455,6 +454,74 @@ def evaluate_synthetic_fixture(
     )
 
 
+def _validate_result_scope_closure(result: dict) -> list[str]:
+    """Recompute the complete official-scope result before serialization."""
+    expected_scope = scope_identity()
+    expected_symbols = list(expected_scope["symbols"])
+    records = result.get("symbols")
+    if (
+        result.get("scope") != expected_scope
+        or result.get("universe") != expected_symbols
+        or not isinstance(records, dict)
+        or set(records) != set(expected_symbols)
+    ):
+        raise ValueError("data-gate result failed official scope closure")
+
+    requested_run_date = result.get("requested_run_date")
+    evaluation_session = result.get("evaluation_session")
+    causal_cutoff_utc = result.get("causal_cutoff_utc")
+    go_count = 0
+    for symbol in expected_symbols:
+        record = records[symbol]
+        if (
+            not isinstance(record, dict)
+            or record.get("symbol") != symbol
+            or record.get("requested_run_date") != requested_run_date
+            or record.get("evaluation_session") != evaluation_session
+            or record.get("causal_cutoff_utc") != causal_cutoff_utc
+        ):
+            raise ValueError(f"data-gate result failed scope closure for {symbol}")
+        verdict = record.get("verdict")
+        if verdict not in {"GO", "NO_GO"}:
+            raise ValueError(f"data-gate result has invalid verdict for {symbol}")
+        close_path = record.get("close", {}).get("path")
+        chain_path = record.get("chain", {}).get("expected_path")
+        if (
+            not isinstance(close_path, str)
+            or Path(close_path).name != f"{symbol}.parquet"
+            or not isinstance(chain_path, str)
+            or Path(chain_path).name != f"{symbol}_{evaluation_session}.parquet"
+        ):
+            raise ValueError(f"data-gate result has invalid input paths for {symbol}")
+        if verdict == "GO":
+            if not Path(close_path).is_file() or not Path(chain_path).is_file():
+                raise ValueError(f"{symbol} GO lacks complete exact-session inputs")
+            try:
+                actual_binding = validate_v2_audit_receipt(
+                    Path(chain_path).parent,
+                    Path(chain_path),
+                    symbol=symbol,
+                    session=evaluation_session,
+                    consumer_scope="H7",
+                )
+            except CacheAuditReceiptError as exc:
+                raise ValueError(f"{symbol} GO lacks a real H7 full-audit binding") from exc
+            claimed_binding = record["chain"].get("audit_receipt")
+            if claimed_binding != {"valid": True, **actual_binding}:
+                raise ValueError(f"{symbol} GO lacks a real H7 full-audit binding")
+            go_count += 1
+
+    no_go_count = len(expected_symbols) - go_count
+    whole_universe_verdict = "GO" if no_go_count == 0 else "NO_GO"
+    if (
+        result.get("go_count") != go_count
+        or result.get("no_go_count") != no_go_count
+        or result.get("whole_universe_verdict") != whole_universe_verdict
+    ):
+        raise ValueError("data-gate result counts/verdict failed scope closure")
+    return expected_symbols
+
+
 def build_receipt(
     result: dict, *, source_health_receipt: dict, source_health_receipt_path: Path
 ) -> dict:
@@ -467,17 +534,7 @@ def build_receipt(
     """
     if result.get("evidence_mode") != REAL_H7_EVIDENCE_MODE:
         raise ValueError("synthetic data-gate evaluation cannot create a durable receipt")
-    for symbol, record in result.get("symbols", {}).items():
-        if record.get("verdict") != "GO":
-            continue
-        binding = record.get("chain", {}).get("audit_receipt", {})
-        if (
-            binding.get("valid") is not True
-            or binding.get("schema") != V2_FULL_AUDIT_SCHEMA
-            or binding.get("consumer_scope") != "H7"
-            or binding.get("verdict") not in {"PASS", "PASS WITH WARNINGS"}
-        ):
-            raise ValueError(f"{symbol} GO lacks a real H7 full-audit binding")
+    expected_symbols = _validate_result_scope_closure(result)
     if source_health_receipt is None or source_health_receipt_path is None:
         raise ValueError(
             "data gate requires a linked source_health receipt; refusing to "
@@ -496,6 +553,7 @@ def build_receipt(
         "evaluation_session": result["evaluation_session"],
         "requested_run_date": result["requested_run_date"],
         "scope": result["scope"],
+        "universe": expected_symbols,
         "whole_universe_verdict": result["whole_universe_verdict"],
         "go_count": result["go_count"],
         "no_go_count": result["no_go_count"],
@@ -505,7 +563,7 @@ def build_receipt(
                 input_files(
                     {
                         f"{kind}:{symbol}": Path(result["symbols"][symbol][section][path_key])
-                        for symbol in result["universe"]
+                        for symbol in expected_symbols
                         for kind, section, path_key in (
                             ("close", "close", "path"),
                             ("chain", "chain", "expected_path"),
