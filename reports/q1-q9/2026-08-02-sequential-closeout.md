@@ -86,3 +86,26 @@ Fresh verification:
 Independent audit conclusion: the recorded Q5 identity is present exactly once
 and its payload is byte-for-byte the value recorded by `PROJECT_STATE.md`. No
 ledger or fact mutation was made.
+
+## Q6 - Canonical cache manifest
+
+Status: **COMPLETE**
+
+Fresh verification:
+
+- `uv run --offline python tools/cache_manifest.py verify`, run read-only
+  against the canonical checkout's ignored cache, returned `verify: OK`.
+- The manifest contains 31,366 entries and the cache contains exactly 31,366
+  regular files; the verifier checked size and SHA-256 for every intersecting
+  file and found no missing, extra, or mismatched bytes.
+- Before and after verification, `data/chain_cache_manifest.txt` SHA-256 was
+  `1ddd114dc153e94be73ae3a697881dc3c4f7d4f94a3a72319ca580d83bd91679`.
+- The verifier source was inspected: the `verify` branch only lists and reads
+  local files, checks sizes, and hashes bytes. It imports no acquisition client
+  and performs no provider or network operation. The separate mutating
+  `generate` branch was not selected.
+- Canonical tracked status was unchanged before and after. Its sole existing
+  `wiki/log.md` modification is unrelated owner WIP and was not touched.
+
+Independent audit conclusion: canonical cache bytes still match their committed
+manifest exactly, and this checkpoint ran no acquisition or mutation path.
