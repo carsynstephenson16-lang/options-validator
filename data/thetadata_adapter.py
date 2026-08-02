@@ -24,6 +24,10 @@ greeks/OI/NBBO chain values, and data/pandas_feed.py turns cached chains into
 per-contract Lumibot PandasData objects for quote-side fills. ThetaData is not
 called from the backtest loop.
 
+Acquisition was owner-disabled effective 2026-07-31. Cache hits and the
+explicit ``load_cached_chain`` reader remain available; every cache miss and
+client-construction path now raises before authentication or mutation.
+
 Integrity: any date after config.IN_SAMPLE_END is refused unless the caller is
 the OOS reveal path (allow_oos=True) -- "just printing a chain" after 2022 is
 still a holdout look (spec, Unit 4).
@@ -45,6 +49,7 @@ import numpy as np
 import pandas as pd
 
 import config
+from data import provider_policy
 from data.atomic_io import (
     atomic_parquet_write,
     atomic_text_write,
@@ -157,6 +162,7 @@ def _client():
     performs a synchronous auth request against the remote MDDS -- importing
     the `thetadata` package here (not at module load) keeps this module's
     import cheap and network-free."""
+    provider_policy.require_thetadata_acquisition("ThetaClient construction")
     global _client_singleton
     client = getattr(_client_local, "client", None)
     if client is None and threading.current_thread() is threading.main_thread():
@@ -360,6 +366,9 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
             "authoritative ops publisher"
         )
 
+    provider_policy.require_thetadata_acquisition(
+        f"EOD chain fetch for {symbol} @ {date}"
+    )
     _require_cache_publisher()
     chain, dropped = _fetch_merged_chain(symbol, date)
     if dropped:
@@ -621,6 +630,7 @@ def blind_cache_chain(
     approved incident hash. Reading cached values remains gated by
     get_eod_chain's OOS guard / the reveal path (allow_oos=True).
     """
+    provider_policy.require_thetadata_acquisition("blind EOD chain acquisition")
     symbol = _normalize_symbol(symbol)
     date = _normalize_date(date)
     if date <= config.IN_SAMPLE_END:

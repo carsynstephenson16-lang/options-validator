@@ -47,3 +47,8 @@ during sourcing; sources used: `README.md`, `docs/options-validator-readiness.md
 ## [2026-07-25] ingest | RAG health
 
 RAG health indexed 413 sources and 8910 chunks; 0 source failures were reported.
+
+
+## [2026-07-29] ingest | RAG health
+
+RAG health indexed 427 sources and 9119 chunks; 0 source failures were reported.

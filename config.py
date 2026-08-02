@@ -87,7 +87,6 @@ RQ1_RV_ANNUALIZATION_SESSIONS = 252
 # ---------------------------------------------------------------------------
 # DATA & COSTS
 # ---------------------------------------------------------------------------
-DATA_PROVIDER        = "thetadata"    # swappable: select the Lumibot datasource
 COMMISSION_PER_CONTRACT = 0.65        # per contract, per leg, each way
 SLIPPAGE_HAIRCUT     = 0.01           # extra adverse fraction applied beyond mid
 HALF_SPREAD_COST     = True           # assume crossing half the bid-ask per leg
@@ -234,7 +233,14 @@ OOS_LOOK_BUDGET          = 3      # global cap on distinct hypotheses that may r
 BOOTSTRAP_BLOCK_EXPONENT = 1 / 3  # n^(1/3) blocking rate (Politis-White / Lahiri)
 BOOTSTRAP_BLOCK_CONSTANTS = [0.5, 1, 2, 4]  # mean block = round(c * n_cohorts**exp)
 COHORT_GRANULARITY       = "week"  # cross-sectional cohort key = ISO week of entry_date
-FILL_MODEL_ID            = "conservative_bid_ask_plus_haircut_v1"  # bump if fill logic changes
+FILL_MODEL_ID = "conservative_bid_ask_plus_haircut_v1"
+# Owner-typed 2026-07-31; chained ledger seq 21, record a540a074df29704b.
+# The D+1 executable quote can reject or reduce a frozen day-D intent, but it
+# never reselects legs, direction, expiry, or entry date.
+BACKTEST_EXECUTION_CONVENTION = "D_PLUS_1_CLOSE"
+BACKTEST_ENTRY_DATE_SEMANTICS = "FILL_SESSION"
+BACKTEST_TERMINAL_EXIT_CONVENTION = "terminal_conservative_mark"
+A_ENTRY_CREDIT_TOLERANCE = 0.01  # net option credit, dollars per share
 
 # ---------------------------------------------------------------------------
 # H4/H5 RISK BUCKETS (owner decisions 2026-07-04; H5 scanner-first correction

@@ -62,8 +62,10 @@ def _probe(now_utc, **over):
                                                       "right", "open_interest"],
                                           "error": None},
     }
+    provider = lq._configured_provider()
     p = {"probed_at_utc": now_utc.isoformat(), "ny_date": TODAY.isoformat(),
-         "thetadata_version": lq._installed_thetadata_version(),
+         "provider": provider,
+         "provider_version": lq._installed_provider_version(provider),
          "stock_entitled": True, "probe_symbol": lq.PROBE_SYMBOL,
          "monthly_expiration": MONTHLY_EXP.isoformat(), "endpoints": endpoints}
     p.update(over)
@@ -336,7 +338,7 @@ class ProbeAutoHealTests(unittest.TestCase):
     def test_still_bad_after_heal_reports_not_ok(self):
         now_utc = NOW_NY.astimezone(timezone.utc)
         stale = _probe(now_utc - timedelta(days=30))
-        still_bad = _probe(now_utc, thetadata_version="0.0.0-wrong")
+        still_bad = _probe(now_utc, provider_version="0.0.0-wrong")
         with mock.patch.object(lq, "load_latest_probe",
                                lambda dir=lq.PROBE_DIR: stale), \
              mock.patch.object(lq, "run_probe", return_value=still_bad):
@@ -344,7 +346,7 @@ class ProbeAutoHealTests(unittest.TestCase):
                 object(), NOW_NY, now_utc)
         self.assertTrue(healed)
         self.assertFalse(ok)
-        self.assertIn("thetadata", reason)
+        self.assertIn(lq._configured_provider(), reason)
 
 
 # ---------------------------------------------------------------------------
@@ -387,10 +389,12 @@ class CaptureProbeOkTests(unittest.TestCase):
 
     def test_fails_on_version_mismatch_same_as_live_quotes(self):
         now_utc = NOW_NY.astimezone(timezone.utc)
-        probe = _probe_realistic_entitlement(now_utc, thetadata_version="0.0.0-wrong")
+        probe = _probe_realistic_entitlement(
+            now_utc, provider_version="0.0.0-wrong"
+        )
         ok, reason = ic.capture_probe_ok(probe, now_utc)
         self.assertFalse(ok)
-        self.assertIn("thetadata", reason)
+        self.assertIn(lq._configured_provider(), reason)
 
 
 # ---------------------------------------------------------------------------
@@ -652,7 +656,7 @@ class ProbeAutoHealIntegrationTests(unittest.TestCase):
         now_utc = NOW_NY.astimezone(timezone.utc)
         client = FakeClient(spots={"VST": 150.0, "CEG": 90.0})
         stale = _probe(now_utc - timedelta(days=30))
-        still_bad = _probe(now_utc, thetadata_version="wrong-version")
+        still_bad = _probe(now_utc, provider_version="wrong-version")
         cache_dir, receipt_dir = _tmp_dirs()
         with mock.patch.object(lq, "load_latest_probe",
                                lambda dir=lq.PROBE_DIR: stale), \

@@ -22,7 +22,15 @@ def _write_json(path: Path, payload: object) -> None:
 def _write_complete_artifacts(root: Path) -> None:
     h5 = root / "reports/h5" / f"entry_watch_{AS_OF}.txt"
     h5.parent.mkdir(parents=True, exist_ok=True)
-    h5.write_text("VST: FIRE\n", encoding="utf-8")
+    h5.write_text(
+        "H5 LEAPS ENTRY TRIGGER WATCH "
+        f"evaluation_session={AS_OF}\n"
+        f"VST: FIRE close $100.00 (as of {AS_OF}); "
+        f"feature as of {AS_OF}; chain as of {AS_OF}\n"
+        f"AMZN: WAIT close $230.00 (as of {AS_OF}); "
+        f"feature as of {AS_OF}; chain as of {AS_OF}\n",
+        encoding="utf-8",
+    )
 
     _write_json(
         root / "reports/h6_forward" / f"{AS_OF}.json",
@@ -155,6 +163,61 @@ class RitualReceiptTests(unittest.TestCase):
         result = receipt["hypotheses"]["H10"]
         self.assertEqual(result["status"], "REFUSED")
         self.assertEqual(result["detail"], "session mismatch")
+
+    def test_h5_session_mismatch_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_complete_artifacts(root)
+            artifact = root / "reports/h5" / f"entry_watch_{AS_OF}.txt"
+            artifact.write_text(
+                artifact.read_text(encoding="utf-8").replace(AS_OF, STALE_AS_OF),
+                encoding="utf-8",
+            )
+            rc, receipt = _run(root)
+
+        self.assertEqual(rc, 1)
+        result = receipt["hypotheses"]["H5"]
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertEqual(result["detail"], "session mismatch")
+
+    def test_h5_data_gap_is_refused_not_no_signal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_complete_artifacts(root)
+            artifact = root / "reports/h5" / f"entry_watch_{AS_OF}.txt"
+            artifact.write_text(
+                "H5 LEAPS ENTRY TRIGGER WATCH "
+                f"evaluation_session={AS_OF}\n"
+                f"VST: DATA_GAP (needs exact session {AS_OF})\n"
+                f"AMZN: WAIT close $230.00 (as of {AS_OF}); "
+                f"feature as of {AS_OF}; chain as of {AS_OF}\n",
+                encoding="utf-8",
+            )
+            rc, receipt = _run(root)
+
+        self.assertEqual(rc, 1)
+        result = receipt["hypotheses"]["H5"]
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertEqual(result["detail"], "data gap")
+
+    def test_h5_omitted_tracked_name_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_complete_artifacts(root)
+            artifact = root / "reports/h5" / f"entry_watch_{AS_OF}.txt"
+            artifact.write_text(
+                "H5 LEAPS ENTRY TRIGGER WATCH "
+                f"evaluation_session={AS_OF}\n"
+                f"VST: WAIT close $170.00 (as of {AS_OF}); "
+                f"feature as of {AS_OF}; chain as of {AS_OF}\n",
+                encoding="utf-8",
+            )
+            rc, receipt = _run(root)
+
+        self.assertEqual(rc, 1)
+        result = receipt["hypotheses"]["H5"]
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertEqual(result["detail"], "tracked-name coverage mismatch")
 
     def test_empty_or_unparseable_json_is_missing(self):
         for malformed in ("", "{"):

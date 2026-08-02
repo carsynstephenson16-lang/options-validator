@@ -1,6 +1,6 @@
 ---
 name: independent-research-critic
-description: Independently audit the newest attractiveness_research/v2 bundle by run_id and context SHA, without modifying research or trading state.
+description: Use when asked to audit, criticize, fact-check, or adversarially review the newest attractiveness_research/v2 bundle or its manifest/claims, or when a critic receipt is requested. Read-only — never modifies research or trading state.
 ---
 
 # Independent Research Critic Audit

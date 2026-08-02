@@ -220,11 +220,23 @@ def capture_probe_ok(probe: dict | None, now_utc) -> tuple[bool, str]:
         return False, ("no schema probe recorded -- run "
                        "`python -m options_researcher.live_quotes --probe` "
                        "during a regular session")
-    installed = lq._installed_thetadata_version()
-    recorded = probe.get("thetadata_version")
+    configured = lq._configured_provider()
+    recorded_provider = probe.get("provider", "thetadata")
+    if recorded_provider != configured:
+        return False, (
+            f"probe recorded provider={recorded_provider} but configured "
+            f"provider={configured} -- re-probe before trusting columns"
+        )
+    installed = lq._installed_provider_version(configured)
+    recorded = probe.get(
+        "provider_version",
+        probe.get("thetadata_version"),  # backward-compatible old probes
+    )
     if recorded != installed:
-        return False, (f"probe recorded thetadata=={recorded} but {installed} "
-                       "is installed -- re-probe before trusting columns")
+        return False, (
+            f"probe recorded {configured}=={recorded} but {installed} is "
+            "installed -- re-probe before trusting columns"
+        )
     try:
         age = pd.Timestamp(now_utc) - pd.Timestamp(probe.get("probed_at_utc"))
     except (TypeError, ValueError):
@@ -714,8 +726,7 @@ def capture(session_tag: str, *, force: bool = False, client=None,
         return 1, None
 
     if client is None:
-        from data.thetadata_adapter import _client
-        client = _client()
+        client = lq._live_client()
 
     today = now_ny.date()
     ny_iso = today.isoformat()

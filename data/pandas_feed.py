@@ -14,15 +14,16 @@ Fill-model integrity (frozen, FILL_MODEL_ID):
   * close = RAW quote mid. It is the engine's mark-to-market/settlement price
     only; the quote-first fill path means it never prices a fill while bid/ask
     exist.
-  * Bars are stamped 16:00 America/New_York: lumibot ingests option marks only
-    inside 09:30-16:00 sim time, and the EOD report is a 16:00 snapshot.
+  * Bars are stamped 16:00 America/New_York because Lumibot ingests option
+    marks only inside 09:30-16:00 sim time. The date labels the quote session;
+    ThetaData generates the EOD report around 17:15 ET, so strategies must not
+    submit an order using that report until the next session.
 
-Contract inclusion: a put enters the feed if |delta| ever reaches
-[DELTA_MIN, DELTA_MAX] inside the window; once included its FULL series is
-kept (a partial series would let lumibot forward-fill stale quotes into the
-gap). The band is generous plumbing, not a tunable: legs are selected from
-the RAW chain, and the strategy fails loud if a selected leg has no feed
-Data, so a band miss can abort a run but can never bias one.
+Contract inclusion is point-in-time: a contract enters the feed on the first
+session when |delta| reaches its configured band, and its series begins on
+that session. Later deltas can never expose an earlier quote. Once admitted,
+all later rows are kept so Lumibot cannot forward-fill across an intentionally
+removed out-of-band row.
 """
 from __future__ import annotations
 
@@ -34,6 +35,7 @@ import pandas as pd
 
 import config
 from data import thetadata_adapter
+from strategies.base import adverse_buy, adverse_sell
 
 try:  # keep the module importable (and unit-testable) before lumibot exists
     from lumibot.entities import Asset, Data
@@ -48,21 +50,6 @@ BAR_HOUR = 16
 DELTA_MIN, DELTA_MAX = config.FEED_PUT_DELTA_BAND
 CALL_DELTA_MIN, CALL_DELTA_MAX = config.FEED_CALL_DELTA_BAND
 _RIGHT_BANDS = {"P": (DELTA_MIN, DELTA_MAX), "C": (CALL_DELTA_MIN, CALL_DELTA_MAX)}
-
-
-def adverse_buy(ask, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
-    """THE canonical executable BUY price (7b-2R finding 5): ask plus
-    haircut, rounded UP to the cent -- exactly the price the pre-widened
-    feed charges a market buy. Decide layer, T+1 revalidation, exit marks
-    and P&L must all price buys through here, so no threshold can pass on
-    unrounded math and then fill a cent worse in the engine."""
-    return math.ceil(float(ask) * (1 + haircut) * 100) / 100
-
-
-def adverse_sell(bid, haircut: float = config.SLIPPAGE_HAIRCUT) -> float:
-    """Canonical executable SELL price: bid minus haircut, rounded DOWN."""
-    return math.floor(float(bid) * (1 - haircut) * 100) / 100
-
 
 def quote_valid(bid, ask) -> bool:
     """A usable book: finite, two-sided, uncrossed (7b-2R finding 5 --
@@ -149,9 +136,11 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
                       delta_max: float | None = None,
                       rights: tuple[str, ...] = ("P",)) -> dict:
     """Per-contract Lumibot Data for every contract of the requested rights
-    in `chains` expiring on or before `exp_max` whose |delta| ever enters the
-    right's inclusion band. Defaults (puts only, put band) reproduce the H1
-    feed byte-for-byte; H7 passes rights=("C", "P")."""
+    in `chains` expiring on or before `exp_max`.
+
+    A contract's series begins on its first point-in-time delta-band admission;
+    later rows are retained even if delta subsequently leaves the band.
+    """
     frames = []
     for iso_day, chain in chains.items():
         rows = chain[chain["right"].isin(rights)]
@@ -167,13 +156,17 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
 
     feed: dict = {}
     for (exp, strike, right), grp in rows.groupby(["expiration", "strike", "right"]):
+        grp = grp.sort_values("day")
         lo, hi = _RIGHT_BANDS[right]
         if delta_min is not None or delta_max is not None:
             lo = delta_min if delta_min is not None else lo
             hi = delta_max if delta_max is not None else hi
-        if not grp["delta"].abs().between(lo, hi).any():
+        eligible_days = grp.loc[
+            grp["delta"].abs().between(lo, hi), "day"
+        ]
+        if eligible_days.empty:
             continue
-        grp = grp.sort_values("day")
+        grp = grp[grp["day"] >= eligible_days.iloc[0]]
         idx = pd.DatetimeIndex(
             [pd.Timestamp(f"{d} {BAR_HOUR}:00", tz=NY_TZ) for d in grp["day"]])
         bid = grp["bid"].to_numpy(dtype=float)
@@ -189,3 +182,18 @@ def build_option_data(chains: dict[str, pd.DataFrame], symbol: str, *,
         asset = option_asset(symbol, str(exp), float(strike), right=right)
         feed[asset] = Data(asset, df, timestep="day", quote=_usd())
     return feed
+
+
+def assets_by_session(feed: dict) -> dict[str, set[object]]:
+    """Assets with an actual feed row on each quote session.
+
+    Global membership is insufficient after point-in-time admission: a Data
+    object can exist because of a later eligible row while remaining
+    unavailable on an earlier planned execution session.
+    """
+    available: dict[str, set[object]] = {}
+    for asset, data in feed.items():
+        for timestamp in data.df.index:
+            iso = timestamp.date().isoformat()
+            available.setdefault(iso, set()).add(asset)
+    return available

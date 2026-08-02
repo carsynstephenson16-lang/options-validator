@@ -1,6 +1,6 @@
 ---
 name: repo-health-review
-description: On-demand, read-only review of the repo's code health that PROPOSES improvements but changes nothing. Use only when Carsyn explicitly asks for a repo review, health check, or "what should I improve." Never run automatically. Never edit files as part of this skill.
+description: On-demand, read-only review of the repo's code health that PROPOSES improvements but changes nothing. Use only when Carsyn explicitly asks for a repo review, health check, or "what should I improve." Never run automatically. Never edit files as part of this skill. It also fires when the request arrives as a role assignment ('acting as a senior configuration auditor / repository health engineer / staff engineer, review this repo') or names the config artifacts (CLAUDE.md, AGENTS.md, .claude/rules, settings.json, hooks, skills).
 ---
 
 # Repo Health Review

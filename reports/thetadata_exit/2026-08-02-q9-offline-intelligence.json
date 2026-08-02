@@ -1,0 +1,674 @@
+{
+ "blocks": [],
+ "consumer_map": [
+  {
+   "authority": "registered alert; replay emits no FIRE",
+   "consumer": "H5",
+   "cutoff": "exact-session; missing input is DATA_GAP",
+   "path": "options_researcher/entry_watch.py",
+   "replay_probe": "long_call_carry._leaps_candidate on manifested in-sample chain",
+   "required": "exact-session chain, close, and IV-rank feature row"
+  },
+  {
+   "authority": "registered paper lane; replay emits no decision",
+   "consumer": "H6",
+   "cutoff": "exact-session; no latest fallback",
+   "path": "options_researcher/h6_watch.py",
+   "replay_probe": "h6_watch._validated_chain",
+   "required": "exact-session chain plus manifest-bound feature inputs"
+  },
+  {
+   "authority": "registered forward lane; replay cannot authorize Stage 8",
+   "consumer": "H7",
+   "cutoff": "exact-session with reason-coded NO_GO",
+   "path": "options_researcher/h7_data_gate.py",
+   "replay_probe": "h7_data_gate._evaluate_chain",
+   "required": "exact-session chain and independent close"
+  },
+  {
+   "authority": "registered paper lane; replay emits no decision",
+   "consumer": "H8",
+   "cutoff": "exact-session; no latest fallback",
+   "path": "options_researcher/h8_watch.py",
+   "replay_probe": "h8_watch._validated_chain",
+   "required": "exact-session chain plus manifest-bound feature inputs"
+  },
+  {
+   "authority": "descriptive only",
+   "consumer": "features",
+   "cutoff": "bounded caller-supplied sessions; gaps remain absent",
+   "path": "options_researcher/features.py",
+   "replay_probe": "features.build_daily_features",
+   "required": "cached chain and same-session close"
+  },
+  {
+   "authority": "structural replay only; no backtest is run",
+   "consumer": "backtest feed",
+   "cutoff": "manifested in-sample session only in Q9 replay",
+   "path": "data/pandas_feed.py",
+   "replay_probe": "pandas_feed.load_cached_chains",
+   "required": "cached EOD chain"
+  },
+  {
+   "authority": "NOT AUDITED / DATA-GATED",
+   "consumer": "options flow",
+   "cutoff": "no synthetic substitution",
+   "path": "data/options_flow/* and options_researcher/flow/*",
+   "replay_probe": "none: real .cache/options_flow input is absent",
+   "required": "real trades, strict-prior NBBO, prior-known OI, and context"
+  }
+ ],
+ "created_at_utc": "2026-08-02T01:43:56.229824+00:00",
+ "flow_readiness_receipt_hash": "06e169bc451db81d969fcef4e564ca40a4457e3cecf4f4a5866ebfceb1bdc98a",
+ "flow_status": "NOT AUDITED / DATA-GATED",
+ "goal": "offline EOD intelligence readiness without provider calls or flow fabrication",
+ "inventory": {
+  "chain_dir": ".cache/chains",
+  "classification_path": "data/cache_file_classifications.json",
+  "classification_sha256": "f5a4531094e83f5b770b49a659b7d01f29fdbb66d7fa326f07027009c57f2708",
+  "classified_noncanonical_files": [
+   {
+    "canonical_path": "SPY_2022-12-30.parquet",
+    "classification": "NONCANONICAL_ALTERNATE_SNAPSHOT",
+    "path": "dolthub/SPY_2022-12-30.parquet",
+    "reason": "Separately sourced 158-row snapshot with reduced coverage; preserved for provenance but excluded from the canonical top-level cache.",
+    "sha256": "cd6f4f4333ef4d66cc4b1e10b917f7c36389785696c05f55b5aed3cd320d8f64",
+    "size": 13744
+   }
+  ],
+  "counts": {
+   "all_cache_files": 31386,
+   "all_parquet_files": 31367,
+   "classified_noncanonical_parquet_files": 1,
+   "nested_parquet_files": 0,
+   "nested_rows": 0,
+   "parquet_files": 31366,
+   "rows": 79519407,
+   "schema_variants": 1,
+   "sidecar_files": 19,
+   "symbols": 26,
+   "top_level_parquet_files": 31366,
+   "top_level_rows": 79519407
+  },
+  "coverage": {
+   "AAPL": {
+    "exchange_sessions_in_span": 2134,
+    "first_session": "2018-01-02",
+    "last_session": "2026-06-30",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2134
+   },
+   "AMAT": {
+    "exchange_sessions_in_span": 391,
+    "first_session": "2025-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 391
+   },
+   "AMD": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2152
+   },
+   "AMZN": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2152
+   },
+   "AVGO": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2152
+   },
+   "CEG": {
+    "exchange_sessions_in_span": 1118,
+    "first_session": "2022-02-09",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1118
+   },
+   "CLSK": {
+    "exchange_sessions_in_span": 391,
+    "first_session": "2025-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 391
+   },
+   "CRWD": {
+    "exchange_sessions_in_span": 1,
+    "first_session": "2026-07-15",
+    "last_session": "2026-07-15",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1
+   },
+   "CRWV": {
+    "exchange_sessions_in_span": 330,
+    "first_session": "2025-04-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 330
+   },
+   "ET": {
+    "exchange_sessions_in_span": 1949,
+    "first_session": "2018-10-22",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1949
+   },
+   "HYLN": {
+    "exchange_sessions_in_span": 29,
+    "first_session": "2026-05-26",
+    "last_session": "2026-07-07",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 29
+   },
+   "IBEX": {
+    "exchange_sessions_in_span": 1,
+    "first_session": "2026-07-15",
+    "last_session": "2026-07-15",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1
+   },
+   "IREN": {
+    "exchange_sessions_in_span": 1063,
+    "first_session": "2022-04-29",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1063
+   },
+   "MSFT": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2152
+   },
+   "NBIS": {
+    "exchange_sessions_in_span": 434,
+    "first_session": "2024-10-30",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 434
+   },
+   "NOW": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2152
+   },
+   "NVDA": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2152
+   },
+   "PLTR": {
+    "exchange_sessions_in_span": 1457,
+    "first_session": "2020-10-06",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1457
+   },
+   "QQQ": {
+    "exchange_sessions_in_span": 2134,
+    "first_session": "2018-01-02",
+    "last_session": "2026-06-30",
+    "missing_session_count": 1,
+    "missing_session_examples": [
+     "2023-12-27"
+    ],
+    "observed_sessions": 2133
+   },
+   "SMCI": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 263,
+    "missing_session_examples": [
+     "2018-08-23",
+     "2019-04-22",
+     "2019-04-23",
+     "2019-04-24",
+     "2019-04-25",
+     "2019-04-26",
+     "2019-04-29",
+     "2019-04-30",
+     "2019-05-01",
+     "2019-05-02",
+     "2019-05-03",
+     "2019-05-06",
+     "2019-05-07",
+     "2019-05-08",
+     "2019-05-09",
+     "2019-05-10",
+     "2019-05-13",
+     "2019-05-14",
+     "2019-05-15",
+     "2019-05-16"
+    ],
+    "observed_sessions": 1889
+   },
+   "SPY": {
+    "exchange_sessions_in_span": 2134,
+    "first_session": "2018-01-02",
+    "last_session": "2026-06-30",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2134
+   },
+   "TEM": {
+    "exchange_sessions_in_span": 519,
+    "first_session": "2024-07-01",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 519
+   },
+   "UNH": {
+    "exchange_sessions_in_span": 1,
+    "first_session": "2026-07-15",
+    "last_session": "2026-07-15",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1
+   },
+   "USAR": {
+    "exchange_sessions_in_span": 327,
+    "first_session": "2025-04-07",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 327
+   },
+   "VST": {
+    "exchange_sessions_in_span": 2152,
+    "first_session": "2018-01-02",
+    "last_session": "2026-07-27",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 2152
+   },
+   "ZS": {
+    "exchange_sessions_in_span": 1,
+    "first_session": "2026-07-15",
+    "last_session": "2026-07-15",
+    "missing_session_count": 0,
+    "missing_session_examples": [],
+    "observed_sessions": 1
+   }
+  },
+  "data_audited": {
+   "first_session": "2018-01-02",
+   "last_session": "2026-07-27",
+   "rows": 79519407,
+   "tickers": [
+    "AAPL",
+    "AMAT",
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CLSK",
+    "CRWD",
+    "CRWV",
+    "ET",
+    "HYLN",
+    "IBEX",
+    "IREN",
+    "MSFT",
+    "NBIS",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "QQQ",
+    "SMCI",
+    "SPY",
+    "TEM",
+    "UNH",
+    "USAR",
+    "VST",
+    "ZS"
+   ]
+  },
+  "findings": {
+   "classification_problems": [],
+   "duplicate_symbol_sessions": [],
+   "malformed_files": [],
+   "manifest_problems": [],
+   "nested_files": [],
+   "null_issues": [],
+   "provenance_mismatches": [],
+   "schema_issues": [],
+   "schema_variants": [],
+   "unknown_null_statistics": [],
+   "unreadable_files": [],
+   "zero_row_files": []
+  },
+  "limitations": [
+   "metadata proves structure and recorded null counts, not economic quote quality",
+   "coverage spans are filename evidence and do not prove whole-OPRA completeness",
+   "EOD v1 has no trade volume or intraday quote timestamp fields to audit",
+   "only the replay sample receives value-level liquidity and Greek checks",
+   "post-IN_SAMPLE_END value pages were not opened"
+  ],
+  "manifest_entry_count": 31366,
+  "manifest_path": "data/chain_cache_manifest.txt",
+  "manifest_sha256": "1ddd114dc153e94be73ae3a697881dc3c4f7d4f94a3a72319ca580d83bd91679",
+  "null_counts": {
+   "ask": 0,
+   "bid": 0,
+   "delta": 0,
+   "expiration": 0,
+   "gamma": 0,
+   "iv": 0,
+   "open_interest": 0,
+   "right": 0,
+   "strike": 0,
+   "theta": 0,
+   "vega": 0
+  },
+  "required_fields": [
+   "expiration",
+   "strike",
+   "right",
+   "bid",
+   "ask",
+   "open_interest",
+   "iv",
+   "delta",
+   "gamma",
+   "theta",
+   "vega"
+  ],
+  "scan_mode": "PARQUET_METADATA_ONLY_NO_VALUE_PAGES",
+  "schema_counts": {
+   "[{\"name\":\"expiration\",\"nullable\":true,\"type\":\"string\"},{\"name\":\"strike\",\"nullable\":true,\"type\":\"double\"},{\"name\":\"right\",\"nullable\":true,\"type\":\"string\"},{\"name\":\"bid\",\"nullable\":true,\"type\":\"double\"},{\"name\":\"ask\",\"nullable\":true,\"type\":\"double\"},{\"name\":\"open_interest\",\"nullable\":true,\"type\":\"int64\"},{\"name\":\"iv\",\"nullable\":true,\"type\":\"double\"},{\"name\":\"delta\",\"nullable\":true,\"type\":\"double\"},{\"name\":\"gamma\",\"nullable\":true,\"type\":\"double\"},{\"name\":\"theta\",\"nullable\":true,\"type\":\"double\"},{\"name\":\"vega\",\"nullable\":true,\"type\":\"double\"}]": 31366
+  },
+  "sidecar_file_hashes": {
+   ".attestations/AMAT_2026-07-27.json": {
+    "sha256": "ab68eca3b469f1f1130194a9fc318d3f334526a51b5015073e18954014b5dd5b",
+    "size": 526
+   },
+   ".attestations/AMD_2026-07-27.json": {
+    "sha256": "665822180965f8684f4d24e8419069fb3fa7ffd672c906b1646a84c752bc6be3",
+    "size": 523
+   },
+   ".attestations/AMZN_2026-07-27.json": {
+    "sha256": "fb8f09f862cbffb26fa3f8ce1e24ef710567f418c7107c15dffd2a9db56c25d6",
+    "size": 526
+   },
+   ".attestations/AVGO_2026-07-27.json": {
+    "sha256": "c49eab13f72fbad3874abbcfaf13fb0728ad8bd5ffb74a92c28a1c3cba7907d8",
+    "size": 526
+   },
+   ".attestations/CEG_2026-07-27.json": {
+    "sha256": "85c23594758ba9ae0a397029795d5bbd484953ceb1eda887a214d0297b124935",
+    "size": 523
+   },
+   ".attestations/CLSK_2026-07-27.json": {
+    "sha256": "d0ccf1fded0aae4ca2dfdd11bac52c36654ba66e774b02b2731e1be12ac91f0e",
+    "size": 525
+   },
+   ".attestations/CRWV_2026-07-27.json": {
+    "sha256": "78f90abd0bda85c229845160e3d28d49890876b3d16883d377cb613b58bde087",
+    "size": 526
+   },
+   ".attestations/ET_2026-07-27.json": {
+    "sha256": "2ccc9c1c20929ab94caf91fa7e14a4188218f4432cba39e9fe9915dbe4d6bc8b",
+    "size": 519
+   },
+   ".attestations/IREN_2026-07-27.json": {
+    "sha256": "a2a0f0e0d734301e9689590ba7880c2f1ba12efb10c42f12a0e04355e7d7cd88",
+    "size": 526
+   },
+   ".attestations/MSFT_2026-07-27.json": {
+    "sha256": "44872fe04c5ffe3b227be60dcd68230cffa71cef99b054de2cdacf141cfc7ed0",
+    "size": 526
+   },
+   ".attestations/NBIS_2026-07-27.json": {
+    "sha256": "05cc37ccc837cf33b6948e4f272eacfefe091d5e39ea2bf0649544123d884ebb",
+    "size": 526
+   },
+   ".attestations/NOW_2026-07-27.json": {
+    "sha256": "e81264fd9c5b1a5b487fdb8556b1a08859010bf4d2801c37d880e9a44894c066",
+    "size": 523
+   },
+   ".attestations/NVDA_2026-07-27.json": {
+    "sha256": "a3f518439534470d036e448da281f37c3353a8abc90b64cc6f4341669e72b5e9",
+    "size": 526
+   },
+   ".attestations/PLTR_2026-07-27.json": {
+    "sha256": "88e087c8113f3b29510c083d025a5573d90d2d0b9ba6e33c353bcc50a3144a99",
+    "size": 526
+   },
+   ".attestations/SMCI_2026-07-27.json": {
+    "sha256": "bc7746db60065317f803df39446eb55583a9fcb0bec01263265f76407431a87f",
+    "size": 526
+   },
+   ".attestations/TEM_2026-07-27.json": {
+    "sha256": "5d217ddf73f5b1fcbe9af917e07a79b835cc4fdf19010c2e033578ca41ab8532",
+    "size": 522
+   },
+   ".attestations/USAR_2026-07-27.json": {
+    "sha256": "421e6f7fa28ce972e60a0e4bb5cb95eecf24a507ca3618ad9fd63093769acb6a",
+    "size": 525
+   },
+   ".attestations/VST_2026-07-27.json": {
+    "sha256": "20660d3bfb776e99cf1700c0eb051af84cd775a7c6c2597f5f1da5fb52e84bc5",
+    "size": 523
+   },
+   ".attestations/publisher.lock": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "size": 0
+   }
+  },
+  "unmanifested_file_hashes": {},
+  "unmanifested_provenance": {},
+  "unmanifested_provenance_status_counts": {},
+  "verdict": "PASS",
+  "warnings": [
+   {
+    "check": 1,
+    "detail": "1 exchange sessions are absent inside the filename span; no continuous scope was declared",
+    "examples": [
+     "2023-12-27"
+    ],
+    "symbol": "QQQ"
+   },
+   {
+    "check": 1,
+    "detail": "263 exchange sessions are absent inside the filename span; no continuous scope was declared",
+    "examples": [
+     "2018-08-23",
+     "2019-04-22",
+     "2019-04-23",
+     "2019-04-24",
+     "2019-04-25",
+     "2019-04-26",
+     "2019-04-29",
+     "2019-04-30",
+     "2019-05-01",
+     "2019-05-02",
+     "2019-05-03",
+     "2019-05-06",
+     "2019-05-07",
+     "2019-05-08",
+     "2019-05-09",
+     "2019-05-10",
+     "2019-05-13",
+     "2019-05-14",
+     "2019-05-15",
+     "2019-05-16"
+    ],
+    "symbol": "SMCI"
+   }
+  ]
+ },
+ "ledger_note": "thetadata-offline-intelligence-readiness/1: PASS; parquet_files=31366; replay=PASS; flow=NOT AUDITED / DATA-GATED; NOT APPENDED",
+ "provider_call": false,
+ "raw_cache_mutation": false,
+ "readiness_version": "thetadata-offline-intelligence-readiness/1",
+ "receipt_hash": "e5ce38c5c58054c6b2abea207195129bb17e4aac3d0b801152d5e59a01da54ec",
+ "replay": {
+  "blocks": [],
+  "cache_after": {
+   "file_count": 31386,
+   "stat_hash": "4281ad6712543bbf22f1688370f27d6acdf8fed43b2388ebfcafb797c6f85287"
+  },
+  "cache_before": {
+   "file_count": 31386,
+   "stat_hash": "4281ad6712543bbf22f1688370f27d6acdf8fed43b2388ebfcafb797c6f85287"
+  },
+  "chain_sha256_after": "1c9467f965570f44ef98b30a0a91b5c1f44810fae7cbe8333a6dacc7b89a0ae5",
+  "chain_sha256_before": "1c9467f965570f44ef98b30a0a91b5c1f44810fae7cbe8333a6dacc7b89a0ae5",
+  "checks": [
+   {
+    "consumer": "cache-only adapter",
+    "rows": 272,
+    "source": ".cache/chains/VST_2022-12-30.parquet",
+    "status": "PASS"
+   },
+   {
+    "consumer": "backtest feed",
+    "rows": 272,
+    "sessions_loaded": [
+     "2022-12-30"
+    ],
+    "status": "PASS"
+   },
+   {
+    "consumer": "features",
+    "emitted_verdict": false,
+    "rows": 1,
+    "status": "PASS"
+   },
+   {
+    "candidate_present": true,
+    "consumer": "H5",
+    "emitted_fire": false,
+    "status": "PASS"
+   },
+   {
+    "consumer": "H6",
+    "decision": null,
+    "status": "PASS",
+    "validated_rows": 272
+   },
+   {
+    "consumer": "H7",
+    "reason_codes": [],
+    "rows": 272,
+    "stage8_authorized": false,
+    "status": "PASS"
+   },
+   {
+    "consumer": "H8",
+    "decision": null,
+    "status": "PASS",
+    "validated_rows": 272
+   }
+  ],
+  "manifest_problems_after": [],
+  "manifest_problems_before": [],
+  "mode": "NETWORK_AND_CACHE_WRITES_BLOCKED",
+  "sentinel_calls": {
+   "cache_writer": 0,
+   "options_flow_client": 0,
+   "raw_socket_connect": 0,
+   "requests_transport": 0,
+   "schwab_client": 0,
+   "thetadata_client": 0,
+   "thetadata_fetch": 0,
+   "urllib_urlopen": 0
+  },
+  "session": "2022-12-30",
+  "symbol": "VST",
+  "verdict": "PASS"
+ },
+ "source_identity": {
+  "commit": "5000f2231e8fc6860309ef322a163d2a7bbb0638",
+  "dirty": false,
+  "dirty_paths": [],
+  "missing_source_paths": [],
+  "source_hashes": {
+   "config.py": "126edfd11fb05ade9c71e31e7c48e0009f2683671db40f2ff21c23c588587d05",
+   "data/cache_file_classifications.json": "f5a4531094e83f5b770b49a659b7d01f29fdbb66d7fa326f07027009c57f2708",
+   "data/cache_provenance.py": "6444c188daa4a8bd23065ae968226b5fb41f4f1cb2c16ea3d69300972aaa9e10",
+   "data/cache_runner.py": "0b866e59c5ef3b7360a1594a5a1fa552c0991fd525bf84346c0ec878e32e7b85",
+   "data/options_flow/audit.py": "28c4ee25db7acb3f75dfdfd3d3ecc982e8d72b64a45cf81d9e4d8678167606d8",
+   "data/pandas_feed.py": "6348a6c14400f9a0564a30528b6372bd9e3b903b94c51b4824b6107a3c17e8e4",
+   "data/provider_policy.py": "a0d5a269149e99c435314e30a2030f4baee875c0e752d9cca528a0f8b841b573",
+   "data/recent_topup.py": "26f98b9433aec3a134fdbb2cc1022d63aed68d47b942888a83097a4cd7260b9b",
+   "data/schwab_adapter.py": "7fba785fb86ddfd7dd6c5a7b2da5ed94e6edd8e4b7ed7af1a99b66c9b52965dc",
+   "data/thetadata_adapter.py": "c901af8e7b7ee4041003f2b2b774108d465c390e4b42ed2b61f3b813293d546a",
+   "data/underlying_closes.py": "1f3bd53166964990b3ceb3d24ff2587b42a8e7787756b6cd9c1c81a9e149993d",
+   "options_researcher/chains.py": "858e9e5034bc30aa5d9906d9afc94c8e4fbec4a4e94c0e71c07e38b1f509e0af",
+   "options_researcher/entry_watch.py": "6d76f3a13bd98468371bc346570517ccefc86304cbe5662520f1aac6dc1ad6db",
+   "options_researcher/features.py": "7e4336282425cee817abad29c1f81d3b5d233063e728cddfed3962a731a84c7e",
+   "options_researcher/h6_watch.py": "77022ccf7eca4754662c49cdbaf04daeedd1845b7d6196a1d88a035891e334b0",
+   "options_researcher/h7_data_gate.py": "1c25c9cacfe2d36f46201ac626dddf0cea14e594f95f0397a364ad316e11a533",
+   "options_researcher/h7_scope.py": "bea034397adc2dbc44b287dd95831724bd42c34e8fd85b56c9e7060892da6bfd",
+   "options_researcher/h7_signals.py": "a0e1b2bbe6828bf659f3b4b73e99cb46a4f15c4da81604f9b8f8ef37b537d4ee",
+   "options_researcher/h8_watch.py": "81b58173d8a0f054f948ab974ac5d10d039bfa821c9ef1d2013c1ce7cf95d747",
+   "options_researcher/studies/long_call_carry.py": "7de51f87c86d5a242af53f8627416ac7daf61779efd51512ed887533d663f65a",
+   "research/hashing.py": "4519907bb3a4557eb53386f8a39174583b85e613fa2dd5e1af5fa144c1d168ee",
+   "tools/cache_manifest.py": "eab04689080ba52dba65f4ce0f55e8b1b482bb31dc333fd544a2ae8418dae641",
+   "tools/options_flow_audit.py": "1a5e6eaedde40783697a69ef3118c3781417dc1096a52c89c4afda143fc7ace4",
+   "tools/thetadata_exit_audit.py": "cc32cae82b77b2f53f2d6236a25f7bd8be034cfc086f59d464315395678e3356"
+  },
+  "source_paths": [
+   "config.py",
+   "data/cache_provenance.py",
+   "data/cache_runner.py",
+   "data/cache_file_classifications.json",
+   "data/recent_topup.py",
+   "data/thetadata_adapter.py",
+   "data/underlying_closes.py",
+   "options_researcher/chains.py",
+   "options_researcher/h7_scope.py",
+   "options_researcher/h7_signals.py",
+   "research/hashing.py",
+   "tools/thetadata_exit_audit.py",
+   "data/options_flow/audit.py",
+   "data/pandas_feed.py",
+   "data/provider_policy.py",
+   "data/schwab_adapter.py",
+   "options_researcher/entry_watch.py",
+   "options_researcher/features.py",
+   "options_researcher/h6_watch.py",
+   "options_researcher/h7_data_gate.py",
+   "options_researcher/h8_watch.py",
+   "options_researcher/studies/long_call_carry.py",
+   "tools/cache_manifest.py",
+   "tools/options_flow_audit.py"
+  ]
+ },
+ "verdict": "PASS",
+ "verdict_use": false
+}

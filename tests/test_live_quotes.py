@@ -53,9 +53,11 @@ def _probe(**over):
                                                       "right", "open_interest"],
                                           "error": None},
     }
+    provider = lq._configured_provider()
     p = {"probed_at_utc": NOW_UTC.isoformat(),
          "ny_date": TODAY.isoformat(),
-         "thetadata_version": lq._installed_thetadata_version(),
+         "provider": provider,
+         "provider_version": lq._installed_provider_version(provider),
          "stock_entitled": True,
          "endpoints": endpoints}
     p.update(over)
@@ -153,6 +155,25 @@ class FakeClient:
         if self.oi_raises:
             raise RuntimeError("boom oi")
         return _oi_frame(expiration)
+
+
+class ScheduleClient(FakeClient):
+    def __init__(self, *args, session_open=True, session_raises=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.session_open = session_open
+        self.session_raises = session_raises
+        self.calls["market_hours"] = 0
+
+    def regular_session_state(self, now_ny):
+        self.calls["market_hours"] += 1
+        if self.session_raises:
+            raise RuntimeError("market-hours unavailable")
+        return {
+            "open": self.session_open,
+            "equity_regular_open": self.session_open,
+            "option_regular_open": self.session_open,
+            "source": "schwab_market_hours",
+        }
 
 
 class ExplodingClient:
@@ -319,6 +340,88 @@ class QuoteIsFreshTests(unittest.TestCase):
         self.assertFalse(lq.quote_is_fresh(
             naive, NOW_UTC, config.LIVE_QUOTE_MAX_AGE_SECONDS))
 
+    def test_future_timestamp_beyond_clock_tolerance_fails_closed(self):
+        future = NOW_UTC + timedelta(
+            seconds=lq._FUTURE_CLOCK_TOLERANCE_SECONDS + 1
+        )
+        self.assertFalse(
+            lq.quote_is_fresh(
+                future, NOW_UTC, config.LIVE_QUOTE_MAX_AGE_SECONDS
+            )
+        )
+
+
+class ChainQualityTests(unittest.TestCase):
+    def _frame(self, **overrides):
+        row = {
+            "expiration": MONTHLY_EXP.isoformat(),
+            "strike": 150.0,
+            "right": "P",
+            "bid": 2.0,
+            "ask": 2.1,
+            "delta": -0.50,
+            "implied_vol": 0.30,
+            "timestamp": NOW_UTC,
+            "multiplier": 100,
+            "non_standard": False,
+            "chain_is_delayed": False,
+            "chain_is_truncated": False,
+            "chain_status": "SUCCESS",
+        }
+        row.update(overrides)
+        return pd.DataFrame([row])
+
+    def test_delayed_chain_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "delayed"):
+            lq._assemble_chain_frame(
+                self._frame(chain_is_delayed=True),
+                "delayed",
+                with_greeks=True,
+            )
+
+    def test_truncated_chain_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "truncated"):
+            lq._assemble_chain_frame(
+                self._frame(chain_is_truncated=True),
+                "truncated",
+                with_greeks=True,
+            )
+
+    def test_nonstandard_and_wrong_multiplier_contracts_are_rejected(self):
+        frame = pd.concat(
+            [
+                self._frame(non_standard=True),
+                self._frame(multiplier=10),
+            ],
+            ignore_index=True,
+        )
+        with self.assertRaisesRegex(RuntimeError, "no standard"):
+            lq._assemble_chain_frame(frame, "nonstandard", with_greeks=True)
+
+    def test_fresh_option_timestamp_is_required(self):
+        lq._require_fresh_option_row(
+            self._frame().iloc[0], NOW_UTC, "fresh option"
+        )
+        with self.assertRaisesRegex(RuntimeError, "stale"):
+            lq._require_fresh_option_row(
+                self._frame(
+                    timestamp=NOW_UTC
+                    - timedelta(
+                        seconds=config.LIVE_QUOTE_MAX_AGE_SECONDS + 1
+                    )
+                ).iloc[0],
+                NOW_UTC,
+                "stale option",
+            )
+
+    def test_selected_locked_option_market_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "locked"):
+            lq._require_fresh_option_row(
+                self._frame(bid=2.0, ask=2.0).iloc[0],
+                NOW_UTC,
+                "locked option",
+            )
+
 
 class BuildSymbolPreviewTests(unittest.TestCase):
     def test_all_gates_met_and_armed(self):
@@ -389,11 +492,11 @@ class BuildSymbolPreviewTests(unittest.TestCase):
                           "liquidity": "UNKNOWN"})
         self.assertFalse(row["armed"])
 
-    def test_oi_label_reads_prior_official(self):
+    def test_oi_label_does_not_claim_unverified_provider_update_semantics(self):
         row = _preview()
         self.assertEqual(row["oi_label"],
-                         f"OI as of {TODAY.isoformat()} "
-                         "(prior official report)")
+                         f"OI observed {TODAY.isoformat()} "
+                         "(provider update cadence/as-of unverified)")
 
     def test_awaiting_close_label_present(self):
         self.assertIn("awaiting close", _preview()["lane"])
@@ -430,7 +533,7 @@ class ProbeOkTests(unittest.TestCase):
         self.assertEqual(reason, "ok")
 
     def test_version_mismatch_fails(self):
-        ok, reason = lq.probe_ok(_probe(thetadata_version="0.0.1"), NOW_UTC)
+        ok, reason = lq.probe_ok(_probe(provider_version="0.0.1"), NOW_UTC)
         self.assertFalse(ok)
         self.assertIn("0.0.1", reason)
 
@@ -484,7 +587,7 @@ class RunProbeTests(unittest.TestCase):
         self.assertFalse(probe["stock_entitled"])
         rec = probe["endpoints"]["stock_snapshot_quote"]
         self.assertFalse(rec["ok"])
-        self.assertIn("PERMISSION_DENIED", rec["error"])
+        self.assertEqual(rec["error"], "RuntimeError")
         ok, _ = lq.probe_ok(probe, NOW_UTC)
         self.assertTrue(ok)
 
@@ -516,7 +619,7 @@ class RefreshTests(unittest.TestCase):
             self.assertIn("closed", payload["symbols"][sym]["note"])
 
     def test_probe_failure_turns_live_off(self):
-        bad = _probe(thetadata_version="0.0.1")
+        bad = _probe(provider_version="0.0.1")
         payload = lq.refresh(client=ExplodingClient(), now_ny=NOW_NY,
                              probe=bad)
         self.assertEqual(payload["session_state"], "open")
@@ -539,7 +642,7 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(vst["gates"]["liquidity"], "MET")
         self.assertEqual(vst["open_interest"], 500.0)
         self.assertEqual(vst["leaps"]["strike"], 140.0)
-        self.assertIn("prior official report", vst["oi_label"])
+        self.assertIn("update cadence/as-of unverified", vst["oi_label"])
         amzn = payload["symbols"]["AMZN"]
         self.assertEqual(amzn["status"], "ok")
         self.assertFalse(amzn["armed"])
@@ -586,6 +689,40 @@ class RefreshTests(unittest.TestCase):
         with _patch_features([0.5] * 200):
             payload = lq.refresh(client=fake, now_ny=NOW_NY, probe=probe)
         self.assertEqual(payload["symbols"]["VST"]["status"], "ok")
+
+    def test_future_stock_timestamp_is_unavailable(self):
+        probe = _probe()
+        probe["endpoints"]["stock_snapshot_quote"]["columns"] = [
+            "symbol", "bid", "ask", "timestamp"]
+        fake = FakeClient(
+            spots=_entitled_spots(),
+            stock_ts=NOW_UTC
+            + timedelta(seconds=lq._FUTURE_CLOCK_TOLERANCE_SECONDS + 1),
+        )
+        with _patch_features([0.5] * 200):
+            payload = lq.refresh(client=fake, now_ny=NOW_NY, probe=probe)
+        for sym in config.UNIVERSE:
+            self.assertEqual(payload["symbols"][sym]["status"], "unavailable")
+
+    def test_provider_market_hours_closed_turns_live_off(self):
+        fake = ScheduleClient(spots=_entitled_spots(), session_open=False)
+        payload = lq.refresh(client=fake, now_ny=NOW_NY, probe=_probe())
+        self.assertEqual(payload["session_state"], "closed")
+        self.assertEqual(payload["session_source"], "schwab_market_hours")
+        self.assertEqual(fake.calls["market_hours"], 1)
+        self.assertEqual(fake.calls["stock"], 0)
+        for sym in config.UNIVERSE:
+            self.assertEqual(payload["symbols"][sym]["status"], "off")
+
+    def test_provider_market_hours_failure_turns_live_off_unknown(self):
+        fake = ScheduleClient(
+            spots=_entitled_spots(), session_raises=True
+        )
+        payload = lq.refresh(client=fake, now_ny=NOW_NY, probe=_probe())
+        self.assertEqual(payload["session_state"], "unknown")
+        self.assertEqual(fake.calls["stock"], 0)
+        for sym in config.UNIVERSE:
+            self.assertEqual(payload["symbols"][sym]["status"], "off")
 
     def test_parity_fallback_path(self):
         probe = _probe(stock_entitled=False)
@@ -644,6 +781,21 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(len(fake.calls["oi"]), 1)
         self.assertEqual(len(fake.calls["greeks"]), 4)  # greeks NOT memoized
         self.assertEqual(fake.calls["stock"], 2)
+
+    def test_schwab_oi_is_observed_from_each_new_snapshot_not_daily_memo(self):
+        fake = FakeClient()
+        fake.provider_name = "schwab"
+        first, first_asof = lq._open_interest(
+            fake, "VST", LEAPS_EXP, TODAY.isoformat()
+        )
+        second, second_asof = lq._open_interest(
+            fake, "VST", LEAPS_EXP, TODAY.isoformat()
+        )
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first_asof, TODAY.isoformat())
+        self.assertEqual(second_asof, TODAY.isoformat())
+        self.assertEqual(len(fake.calls["oi"]), 2)
 
     def test_missing_features_file_reads_ivr_unknown(self):
         fake = FakeClient(spots=_entitled_spots())

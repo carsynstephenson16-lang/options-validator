@@ -127,13 +127,18 @@ def fetch_underlying_eod(symbol: str, start_iso: str, end_iso: str) -> str:
     date index -- the trading day is last_trade (tz America/New_York).
     Writes the cache and returns the path; never prints a price.
 
-    ORCHESTRATOR-ONLY: tests never call this; the controlling session runs
-    the actual pull after review.
+    RETIRED ACQUISITION PATH: the central provider policy refuses this before
+    client construction. It remains only to make historical provenance and
+    injected unit coverage readable.
     """
     from datetime import date as _date
 
+    from data import provider_policy
     from data.thetadata_adapter import _client
 
+    provider_policy.require_thetadata_acquisition(
+        "ThetaData underlying-close acquisition"
+    )
     df = _client().stock_history_eod(symbol,
                                      _date.fromisoformat(start_iso),
                                      _date.fromisoformat(end_iso))

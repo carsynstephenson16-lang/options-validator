@@ -4,12 +4,12 @@ An append-only, hash-chained record of H7 **forward-paper** events, separate
 from the research experiment ledger. Managed **only** through the typed
 Python API in `options_researcher/h7_event_ledger.py`.
 
-**This directory holds zero real events.** `events.jsonl` and `HEAD` do not
-exist yet and must not be created during Stage 3 — the first real forward
-event is prohibited until Stage 8 activation. Verifying the absent store
-prints `VALID EMPTY` (exit 0) and creates nothing.
+**Current store:** `events.jsonl` and `HEAD` exist and contain exactly one
+`window_registration` event (`seq=0`, evaluation session `2026-07-20`, head
+prefix `a1ea228c2abb`). This is registration/governance state, not a paper fill
+or strategy verdict. Verification currently prints `VALID records=1`.
 
-## Files (created only by the first authorized append, later)
+## Files
 
 - `events.jsonl` — one canonical-JSON record per line, LF-terminated,
   append-only.
@@ -127,7 +127,9 @@ The Stage-7 integrity prerequisites from the 2026-07-13 review are resolved:
 - The canonical-JSON round-trip guard has a direct hash-perfect,
   non-canonical serialization regression.
 
-The ledger remains INACTIVE. The macOS durability blocker was resolved
+The store contains only its registration event; future use remains governed by
+the current activation, provider, and namespace decisions in
+`PROJECT_STATE.md`. The macOS durability blocker was resolved
 2026-07-13: regular-file writes call portable `fsync` and then Darwin
 `F_FULLFSYNC` before success; the directory `fsync` still persists the HEAD
 rename. Full-sync failures propagate and leave a detectably incomplete store,

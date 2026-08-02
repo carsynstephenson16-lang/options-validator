@@ -1,0 +1,14 @@
+order,gate,rule,actual,status,meaning
+1,Completed-session data,Latest finished XNYS session and continuous cache,Jul 27; 330/330 sessions present,PASS,Canonical EOD signal inputs are current.
+2,Live-chain data audit,"No critical quote, schema, or strategy-contract defects","1,943 contracts; 19 expiries; 0 failed checks",PASS WITH WARNINGS,Usable descriptively; live stock is parity-derived.
+3,Official earnings source,Canonical source receipt must resolve the next report,Aug 11 official; Jul 27 receipt still UNKNOWN,OPERATIONS HOLD,Refresh the canonical source before any owner action.
+4,Five-session earnings ban,No entry within 5 XNYS sessions of report,10 sessions from Jul 28 to Aug 11,PASS TODAY,"Not yet banned, but every 60-120 DTE trade crosses earnings."
+5,Lane A drawdown,Drawdown from 252-session high >=25%,52.4%,PASS SUB-GATE,The decline is deep enough to qualify for the setup.
+6,Lane A reclaim,Close reclaims the prior 20-session high,No,FAIL,The strategy has no reversal confirmation.
+7,Lane B 60-session range,Range <=15%,94.9%,FAIL,"CRWV is moving violently, not coiling."
+8,Lane B realized-vol percentile,Percentile <=25%,63.1%,FAIL,Realized volatility is not unusually quiet.
+9,Volatility route,IV/RV <=1.15 for call debit spread,1.11 EOD; 1.14 live,ROUTE: DEBIT SPREAD,This selects a structure only; it is not an entry signal.
+10,60-120 DTE call admission,>=5 monthly calls with OI >=100 and spread <=5%,0/5 EOD; 0/5 live,FAIL,The registered long-call lane is not executable.
+11,30-45 DTE H7c put admission,>=5 monthly puts with OI >=100 and spread <=5%,0/5 EOD; 0/5 live,FAIL,The cash-secured-put lane is not executable.
+12,Portfolio limits,"1 per underlying; <=$6,000 monthly at risk",0 CRWV positions; $0 committed,PASS,"Capacity exists, but capacity is not permission."
+13,Final H7 authorization,"Source, signal, route, liquidity, and portfolio gates all pass",No lane returned an action,FAIL / NO ENTRY,Registered posture: wait for proof.

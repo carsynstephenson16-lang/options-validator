@@ -12,9 +12,10 @@ import config
 from data.pandas_feed import adverse_buy, adverse_sell
 from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_real_scoring as real_scoring
+from options_researcher import h7_scoring_identity as scoring_identity
 from options_researcher import h7_window_registration as registration
 from options_researcher.h7_scope import scope_identity
-from research.hashing import sha256_file
+from research.hashing import config_hash, sha256_file
 from research.receipts import load_receipt, make_receipt, write_immutable_receipt
 
 FINAL = "2026-10-26"
@@ -93,16 +94,25 @@ class RealScoringCase(unittest.TestCase):
         self._write_review_passes()
 
     def _write_review_passes(self):
-        spec_hash = sha256_file(real_scoring.SPEC_PATH)
+        base_spec_hash = sha256_file(real_scoring.BASE_SPEC_PATH)
+        amendment_spec_hash = sha256_file(real_scoring.AMENDMENT_SPEC_PATH)
+        chain = (
+            f"base_spec_sha256={base_spec_hash} "
+            f"amendment_spec_sha256={amendment_spec_hash}"
+        )
         self.facts.write_text(
             "\n".join(
                 [
                     "2026-10-26T22:00:00+00:00\t"
-                    f"{real_scoring.REVIEW_PASS_TAG} verdict=PASS "
-                    f"spec_sha256={spec_hash}",
+                    f"{real_scoring.AMENDMENT_FACT_TAG} "
+                    f"contract={scoring_identity.SCORING_IDENTITY_CONTRACT} "
+                    f"{chain} provenance={real_scoring.AMENDMENT_PROVENANCE}",
                     "2026-10-26T22:01:00+00:00\t"
+                    f"{real_scoring.REVIEW_PASS_TAG} verdict=PASS "
+                    f"spec_sha256={amendment_spec_hash} {chain}",
+                    "2026-10-26T22:02:00+00:00\t"
                     f"{real_scoring.OWNER_PASS_TAG} owner=carsyn verdict=PASS "
-                    f"spec_sha256={spec_hash}",
+                    f"spec_sha256={amendment_spec_hash} {chain}",
                 ]
             )
             + "\n",
@@ -552,22 +562,97 @@ class TestRealScoringAuthority(RealScoringCase):
         self.facts.write_text("", encoding="utf-8")
 
         with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, real_scoring.REVIEW_PASS_TAG
+            real_scoring.RealScoringRefused, real_scoring.AMENDMENT_FACT_TAG
         ):
             real_scoring.finalize_real_score(
                 self.open(), owner="carsyn", now=AFTER_FINAL
             )
 
-    def test_changed_config_identity_is_refused_before_scoring(self):
+    def test_amendment_fact_requires_exact_delegated_provenance(self):
+        self.facts.write_text(
+            "2026-10-26T22:00:00+00:00\t"
+            f"{real_scoring.AMENDMENT_FACT_TAG} "
+            f"contract={scoring_identity.SCORING_IDENTITY_CONTRACT} "
+            f"base_spec_sha256={sha256_file(real_scoring.BASE_SPEC_PATH)} "
+            "provenance=owner-approved\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, real_scoring.AMENDMENT_FACT_TAG
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+    def test_session_revalidates_both_spec_hashes(self):
+        session = self.open()
+        for field in ("base_spec_sha256", "amendment_spec_sha256"):
+            with (
+                self.subTest(field=field),
+                self.assertRaises(real_scoring.RealScoringRefused),
+            ):
+                real_scoring.preview_real_score(
+                    replace(session, **{field: "f" * 64}), now=AFTER_FINAL
+                )
+
+    def test_open_refuses_base_spec_hash_outside_amendment_pin(self):
+        actual_sha256_file = sha256_file
+
+        def changed_base(path):
+            if Path(path) == real_scoring.BASE_SPEC_PATH:
+                return "f" * 64
+            return actual_sha256_file(Path(path))
+
+        with (
+            patch.object(
+                real_scoring, "sha256_file", side_effect=changed_base
+            ),
+            self.assertRaisesRegex(
+                real_scoring.RealScoringRefused, "amendment-pinned"
+            ),
+        ):
+            self.open()
+
+    def test_unrelated_global_config_hash_drift_is_provenance_only(self):
+        session = self.open()
+        baseline_hash = config_hash()
+
+        with patch.object(config, "LIVE_DASH_PORT", config.LIVE_DASH_PORT + 1):
+            self.assertNotEqual(config_hash(), baseline_hash)
+            preview = real_scoring.preview_real_score(
+                session, now=AFTER_FINAL
+            )
+
+        self.assertEqual(preview["status"], "RESULT_WITHHELD")
+
+    def test_every_runtime_frozen_parameter_drift_is_refused(self):
+        for name in scoring_identity.STAGE456_PARAMETER_NAMES:
+            with self.subTest(name=name):
+                session = self.open()
+                current = getattr(config, name)
+                if isinstance(current, bool):
+                    changed = not current
+                elif isinstance(current, str):
+                    changed = f"{current}-changed"
+                elif isinstance(current, tuple):
+                    changed = (*current, "__changed__")
+                else:
+                    changed = current + 1
+                with (
+                    patch.object(config, name, changed),
+                    self.assertRaises(real_scoring.RealScoringRefused),
+                ):
+                    real_scoring.preview_real_score(session, now=AFTER_FINAL)
+
+    def test_cost_model_hash_drift_is_refused(self):
         session = self.open()
 
         with (
-            patch.object(real_scoring, "config_hash", return_value="f" * 64),
+            patch.object(real_scoring, "cost_model_hash", return_value="f" * 64),
             self.assertRaises(real_scoring.RealScoringRefused),
         ):
-            real_scoring.finalize_real_score(
-                session, owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.preview_real_score(session, now=AFTER_FINAL)
 
     def test_wrong_registered_scorer_identity_is_refused(self):
         bad = self.root / "bad-forward"
@@ -585,6 +670,30 @@ class TestRealScoringAuthority(RealScoringCase):
         )
 
         with self.assertRaises(real_scoring.RealScoringRefused):
+            real_scoring.open_real_scoring_session(
+                base_dir=bad,
+                facts_path=self.facts,
+                artifact_root=self.artifacts,
+            )
+
+    def test_malformed_registered_config_provenance_is_refused(self):
+        bad = self.root / "bad-config-provenance"
+        payload = json.loads(json.dumps(self.registration.payload))
+        payload["frozen"]["config_hash"] = "A" * 64
+        ledger.append_event(
+            _event(
+                "wr:bad-config-provenance",
+                "window_registration",
+                "2026-07-20",
+                payload=payload,
+            ),
+            base_dir=bad,
+            clock=_clock(),
+        )
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "lowercase SHA-256"
+        ):
             real_scoring.open_real_scoring_session(
                 base_dir=bad,
                 facts_path=self.facts,
@@ -622,6 +731,74 @@ class TestRealScoringPublication(RealScoringCase):
             stored.causes,
             [self.registration.event_id, "open:AMD:a", "close:AMD:a"],
         )
+
+    def test_idempotent_replay_preserves_original_config_provenance(self):
+        baseline_hash = config_hash()
+        first = real_scoring.finalize_real_score(
+            self.open(), owner="carsyn", now=AFTER_FINAL
+        )
+
+        with patch.object(config, "LIVE_DASH_PORT", config.LIVE_DASH_PORT + 1):
+            changed_hash = config_hash()
+            second = real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+        receipt = load_receipt(first.artifact_path, expected_type="window_score")
+        self.assertNotEqual(changed_hash, baseline_hash)
+        self.assertFalse(second.appended)
+        self.assertEqual(second.artifact_hash, first.artifact_hash)
+        self.assertEqual(
+            receipt["config_provenance"]["runtime_config_hash"], baseline_hash
+        )
+
+    def test_replay_refuses_invalid_original_config_provenance(self):
+        result = real_scoring.finalize_real_score(
+            self.open(), owner="carsyn", now=AFTER_FINAL
+        )
+        receipt = load_receipt(result.artifact_path, expected_type="window_score")
+        payload = {
+            key: value
+            for key, value in receipt.items()
+            if key not in {"receipt_schema", "receipt_type", "receipt_hash"}
+        }
+        payload["config_provenance"]["authority"] = True
+        tampered = make_receipt("window_score", payload)
+        result.artifact_path.write_text(
+            json.dumps(tampered, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "config provenance"
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+
+    def test_replay_refuses_noncanonical_original_runtime_provenance(self):
+        result = real_scoring.finalize_real_score(
+            self.open(), owner="carsyn", now=AFTER_FINAL
+        )
+        receipt = load_receipt(result.artifact_path, expected_type="window_score")
+        payload = {
+            key: value
+            for key, value in receipt.items()
+            if key not in {"receipt_schema", "receipt_type", "receipt_hash"}
+        }
+        payload["config_provenance"]["runtime_config_hash"] = "A" * 64
+        tampered = make_receipt("window_score", payload)
+        result.artifact_path.write_text(
+            json.dumps(tampered, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            real_scoring.RealScoringRefused, "lowercase SHA-256"
+        ):
+            real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
 
     def test_market_close_after_canonical_retry_gap_is_scorable(self):
         self._append_market_close(with_retry_gap=True)
@@ -985,6 +1162,60 @@ class TestRealScoringPublication(RealScoringCase):
             receipt["scorer"]["module"],
             "options_researcher.h7_forward_scoring",
         )
+        self.assertEqual(
+            receipt["scorer"]["scoring_identity_contract"],
+            scoring_identity.SCORING_IDENTITY_CONTRACT,
+        )
+        self.assertEqual(
+            receipt["scorer"]["scoring_identity_hash"],
+            scoring_identity.runtime_scoring_identity().identity_hash,
+        )
+        self.assertEqual(
+            receipt["config_provenance"]["registered_config_hash"],
+            self.registration.payload["frozen"]["config_hash"],
+        )
+        self.assertEqual(
+            receipt["config_provenance"]["runtime_config_hash"], config_hash()
+        )
+        self.assertIs(receipt["config_provenance"]["authority"], False)
+        self.assertEqual(
+            receipt["spec_chain"]["base_spec_sha256"],
+            sha256_file(real_scoring.BASE_SPEC_PATH),
+        )
+        self.assertEqual(
+            receipt["spec_chain"]["base_spec_sha256"],
+            real_scoring.PINNED_BASE_SPEC_SHA256,
+        )
+        self.assertEqual(
+            receipt["spec_chain"]["amendment_spec_sha256"],
+            sha256_file(real_scoring.AMENDMENT_SPEC_PATH),
+        )
+        self.assertEqual(
+            receipt["spec_sha256"],
+            receipt["spec_chain"]["amendment_spec_sha256"],
+        )
+
+    def test_current_real_store_opens_read_only(self):
+        base = real_scoring.REAL_FORWARD_STORE
+        before = {
+            path.relative_to(base).as_posix(): path.read_bytes()
+            for path in base.rglob("*")
+            if path.is_file()
+        }
+
+        session = real_scoring.open_real_scoring_session(
+            base_dir=base,
+            facts_path=self.facts,
+            artifact_root=self.artifacts,
+        )
+
+        after = {
+            path.relative_to(base).as_posix(): path.read_bytes()
+            for path in base.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(session.registration_event_id, "wr:2026-07-20:70")
+        self.assertEqual(before, after)
 
 
 if __name__ == "__main__":

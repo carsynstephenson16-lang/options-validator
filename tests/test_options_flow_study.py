@@ -1,0 +1,115 @@
+"""Offline tests for labels, placebo determinism, and walk-forward comparison."""
+
+import unittest
+
+import numpy as np
+import pandas as pd
+
+from options_researcher.flow.study import (
+    compare_walk_forward,
+    make_forward_labels,
+    seeded_sign_placebo,
+)
+
+
+class StudyTests(unittest.TestCase):
+    def test_forward_labels_use_only_future_closes(self):
+        dates = pd.bdate_range("2025-01-02", periods=25)
+        closes = pd.DataFrame(
+            {
+                "symbol": "MSFT",
+                "session": dates.strftime("%Y-%m-%d"),
+                "close": np.arange(100.0, 125.0),
+            }
+        )
+        out = make_forward_labels(closes)
+        self.assertAlmostEqual(out.iloc[0]["return_1"], 101.0 / 100.0 - 1.0)
+        self.assertTrue(pd.isna(out.iloc[-1]["return_1"]))
+        self.assertFalse(pd.isna(out.iloc[0]["future_rv21"]))
+
+    def test_seeded_placebo_is_reproducible(self):
+        values = pd.Series([1.0, 2.0, 3.0, 4.0])
+        self.assertTrue(
+            seeded_sign_placebo(values, seed=7).equals(seeded_sign_placebo(values, seed=7))
+        )
+        self.assertFalse(seeded_sign_placebo(values, seed=7).equals(values))
+
+    def test_walk_forward_accepts_purge_at_target_horizon_and_detects_flow_improvement(self):
+        dates = pd.bdate_range("2025-01-02", periods=75)
+        panel = pd.DataFrame(
+            {
+                "session": dates.strftime("%Y-%m-%d"),
+                "baseline_validator_output": np.linspace(-1.0, 1.0, len(dates)),
+                "flow_signal": np.sin(np.arange(len(dates)) / 5.0),
+            }
+        )
+        panel["target"] = panel["baseline_validator_output"] * 0.5 + panel["flow_signal"] * 0.2
+        out = compare_walk_forward(
+            panel,
+            target="target",
+            target_horizon_observations=5,
+            flow_columns=["flow_signal"],
+            train_observations=30,
+            test_observations=10,
+            step_observations=12,
+            purge_observations=5,
+            embargo_observations=2,
+        )
+        self.assertGreater(len(out), 0)
+        self.assertTrue((out["test_start"] > out["train_end"]).all())
+        self.assertTrue((out["rmse_improvement"] > 0.0).all())
+
+    def test_walk_forward_rejects_purge_shorter_than_target_horizon(self):
+        dates = pd.bdate_range("2025-01-02", periods=50)
+        panel = pd.DataFrame(
+            {
+                "session": dates.strftime("%Y-%m-%d"),
+                "baseline_validator_output": np.linspace(-1.0, 1.0, len(dates)),
+                "flow_signal": np.sin(np.arange(len(dates)) / 5.0),
+                "target": np.linspace(0.0, 1.0, len(dates)),
+            }
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "purge_observations must be at least target_horizon_observations",
+        ):
+            compare_walk_forward(
+                panel,
+                target="target",
+                target_horizon_observations=5,
+                flow_columns=["flow_signal"],
+                train_observations=30,
+                test_observations=10,
+                step_observations=12,
+                purge_observations=4,
+                embargo_observations=2,
+            )
+
+    def test_context_is_in_both_models_and_final_holdout_is_untouched(self):
+        dates = pd.bdate_range("2025-01-02", periods=110)
+        panel = pd.DataFrame(
+            {
+                "session": dates.strftime("%Y-%m-%d"),
+                "baseline_validator_output": np.linspace(-1.0, 1.0, len(dates)),
+                "iv_context": np.sin(np.arange(len(dates)) / 7.0),
+                "flow_signal": np.cos(np.arange(len(dates)) / 5.0),
+            }
+        )
+        panel["target"] = panel["baseline_validator_output"] + panel["iv_context"]
+        out = compare_walk_forward(
+            panel,
+            target="target",
+            target_horizon_observations=5,
+            flow_columns=["flow_signal"],
+            context_columns=["iv_context"],
+            train_observations=35,
+            test_observations=10,
+            step_observations=11,
+            purge_observations=5,
+            embargo_observations=1,
+            holdout_observations=42,
+        )
+        holdout_start = dates[-42].date().isoformat()
+        self.assertGreater(len(out), 0)
+        self.assertTrue((out["test_end"] < holdout_start).all())
+        self.assertLess(out["baseline_rmse"].max(), 1e-10)

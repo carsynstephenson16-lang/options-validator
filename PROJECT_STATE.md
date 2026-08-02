@@ -1,94 +1,165 @@
-# PROJECT_STATE — options-validator
+# PROJECT_STATE — options-validator (CANONICAL status + roadmap)
 
-**As of:** 2026-07-23 (evening). **Branch:** `docs/replan-2026-07-22` @ `df2957e`.
-Paste this file at the top of the next session instead of re-explaining.
-Update it whenever a registration, verdict, or data decision lands.
+**As of:** 2026-07-31. **Checkout:** `sfix` through P0.3/P0.5 implementation
+`a48a7fd`; `main` @ `ecdaeb9`
+(ops worktree; incorporated into `sfix` by merge `9cf3ee4`). This file is the
+ONE roadmap. Every plan in the supersession
+table (§8) is retired as an active path; those files remain as history.
+Update this file whenever a registration, verdict, branch reconciliation, or
+data decision lands.
 
-## What this project is (one breath)
+## 1. What still works (verified 2026-07-31)
 
-Research-only options validator. Never places orders. "No edge after costs"
-is a success. Every verdict-bearing test is pre-registered on the hash-chained
-ledger, frozen first, run once; verdicts gate on LOSSES. Codex implements from
-briefs; Claude orchestrates; the owner types every frozen number.
+- The append-only ledger records are intact on disk (H7 window: one
+  registration event, 2026-07-20; `research.cli verify` was NOT re-run this
+  session). Hooks block ledger hand-edits and live-order code.
+- The v1 chain cache (31,367 parquet files, 2018-01-02 → 2026-07-27) reads
+  offline; every existing result replays from it.
+- The Schwab live-preview lane landed on `sfix` with tests and a verified
+  2026-07-29/30 probe; it is read-only by construction.
+- The 13:00 intraday recorder keeps accumulating display-only receipts.
+- Test suite: 2,236 tests passed after P0.3/P0.5; `ruff` and `pyright`
+  are clean.
 
-## Live hypotheses and clocks
+## 2. What is unsafe (do not build on it)
 
-- **H7** forward window LIVE (seq-0, scores once ~2026-10-26); exit/scoring
-  recorders being built (replan R1–R2). **H10a/b** registered (backstops
-  2026-10-06 / 2027-01-06) — capture path being built (R3). **H5** triggers
-  2/3 met, watch manual (R4 wires it). **H6/H8** sample-gated forward books.
-- **RQ1** (seq 17): RUN 2026-07-23, one-run spent (result = ledger seq 20;
-  receipt `reports/rq1/rq1-v1.json`). Pooled Spearman rho −0.326 vs forward
-  21-session realized vol (notable, descriptive-only) and +0.086 vs forward
-  IV change (not notable); 4,886 usable name-days, MSFT/AMZN/VST/CEG. NO
-  VERDICT, no promotion. Residue EX3a open: causal-reconstruction property
-  test was never built (2026-07-23 review) — verify-the-method only; never
-  rerun the study.
-- **RQ2-v1** (seq 18) + **A2-v1** (seq 19): owner-typed freezes 2026-07-23 —
-  corner badge 75/25 earnings-GATED (near 15–45 / long 60–120 DTE); bounce
-  lens −20% / mom>0 / RV≥70th with mandatory negative-priors text; five CSP
-  exit arms incl. 50%-capture and 21-DTE; Holm α=0.10 (Romano–Wolf switch at
-  K≈10–12); adverse gate 10; 12-month backstop. UNRUN; §13.1b pins closed
-  2026-07-23 via ledger fact `RQ2_A2_PIN_ADDENDUM_V1` (10 sessions / terciles
-  / one-sided / report strictly inside near-leg life).
-- Spent forever: H1/H2, H9, Card 3, QM study. H7 historical diagnostic
-  permanently withdrawn. Sealed SPY/QQQ holdout: reveal budget 0/3.
+Of findings F1–F6 in
+`reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`, F1–F6
+are now implemented or corrected. P0 remains open only for the owner-gated
+correction-fact append. **No new backtest, promotion, or research registration
+until P0 closes.**
 
-## The 12-month program (2026-07-23 → 2027-07-23)
+## 3. What is blocked, and on what
 
-Master doc: `docs/superpowers/plans/2026-07-23-twelve-month-scanner-research-program.md`
-(26-row audit-resolution table, workstreams A–H, calendar, corrected math).
-Detail: `...-workstreams-b-d-detail.md` (19 defined-risk opportunity cards +
-earnings variance decomposition). Build order:
-`docs/superpowers/plans/2026-07-23-codex-execution-queue.md` (EX0–EX10) —
-**handed to Codex 2026-07-23.**
+- Correction-facts append: independent and Fable review both passed; blocked
+  only on the owner's approval of the exact payload in
+  `13_correction_facts_draft.md`.
+- Phase B / v2 rebuild of H6/H8: blocked on owner decision OD-1
+  (`docs/provider-transition.md` §5) — and OD-1 expires at cancellation.
+- H7 future sessions: blocked on OD-3 (old vs new window namespace).
+- Evidence-upgrade program: paused at packet 5B; its blocker is that no
+  automated review lane has ever run on this repo (PR #18 measured silent —
+  `docs/evidence-upgrade/decision-log.md` D40). Owner console action required.
+- Branch truth: `main` was merged into `sfix` at `9cf3ee4`; `sfix` contains
+  `88ffbb6` and `ecdaeb9` and is pushed through `5626c3f`. No completed P0 fix
+  is local-only.
 
-- EX1 wording-honesty fixes + EX2 recorders: no dependencies, in flight.
-- EX3 RQ1 runner: build → adversarial review → run ONCE.
-- EX4/EX5 badges, EX6 expectation lines, EX7 concentration panel:
-  display-only, byte-identical-ordering test pins mandatory.
-- EX8 A2 runner + RQ2 scoring: **unblocked 2026-07-23 — pin addendum typed
-  (`RQ2_A2_PIN_ADDENDUM_V1`).**
-- EX9 earnings-variance machinery: **CALENDAR-URGENT — August prints start
-  ~2 weeks out; missed events are unrecoverable by construction.**
+## 4. Overbuilt or duplicated (consolidation targets, not deletions)
 
-## Data state
+- Instruction sprawl: guardrails restated across `CLAUDE.md`, `.cursorrules`,
+  `AGENTS.md`; `.cursorrules` is now the single authoritative copy
+  (CLAUDE.md imports it; AGENTS.md mirrors it for Codex by design).
+- Skills in three places: `.agents/skills/` (13, tracked), `.claude/skills/`
+  (13: 12 symlinks into `.agents/skills/` + `research-refresh`; the
+  `daily-ritual` symlink was missing and was added 2026-07-31),
+  `ov/.claude/skills/` (9 duplicates in the distributable bundle).
+- Root status files: `PROJECT_STATE.md` is canonical; the 26 root-dated notes
+  are gitignored scratch by design.
+- `block_live_trading.py` logic lives untracked in `.claude/hooks/` while the
+  tracked, tested copy convention is `.agents/hooks/` (only the ledger guard
+  is there).
 
-- Chains: EOD ThetaData through 2026-07-21; 15-name universe (+legacy).
-  **Subscription confirmed only to 2026-11-30 — extension decision ~10-01 is
-  the program's existential risk.**
-- NEW 2026-07-23, all loader-verified: `data/rates/treasury_cmt.csv`
-  (forward-serving capture provenance; daily append step joins the ritual at
-  R5); `data/rates/expected_dividends.csv` (15/15 SEC/IR-sourced; owner
-  spot-check 6/6 MATCH — `reports/2026-07-23-dividend-payer-spot-check.md`;
-  NVDA now $1.00/yr after a 25× raise); QQQ+SPY closes+OHLCV 2017→2026-07-22
-  (sanctioned Yahoo path).
-- Index option chains: NOT funded (owner decision 2026-07-23) — implied-vol
-  dispersion parked; realized-vol/beta/concentration proceed on closes.
-- Alpha Vantage full-history closes now paywalled — Yahoo path is the
-  sanctioned fallback. The isolated LSE feed probe was retired 2026-07-23
-  after its measured payload failed quote, liquidity, staleness, and
-  point-in-time-history requirements; audit:
-  `reports/2026-07-23-lse-feed-assessment.md`.
+## 5. Parked or archived
 
-## Standing rules that bite
+Parked (with a written spec or decision, revisit triggers stated in each):
+daily-NAV drawdown (`docs/superpowers/specs/2026-07-30-daily-nav-drawdown.md`);
+the 1pm-capture → 2pm-entry hypothesis (report 12 §4 — new registration
+required, not an H7 retrofit); Session 4 feed-inclusion work (measured inert:
+0 of 310 trades affected); index-chain funding; LSE feed (retired). Abandoned
+if OD-1 declined: Phase B v2 backfill. Spent forever: H1/H2, H9, Card 3, QM
+study, H7 historical diagnostic.
 
-- Scanner GREEN recipe FROZEN for RQ1; all changes addition-only display
-  badges; nothing new may grade, rank, or trigger without its registration.
-- Ledger append-only via typed APIs; never hand-edit; K (versions tried) is
-  the multiple-testing denominator and must be surfaced.
-- Plain language to Carsyn always; label claims (Repo-verified / Official /
-  Inference / Assumption); banned words: proven, confirmed, works, edge
-  found, guaranteed.
-- Concurrent sessions share this checkout — re-check `git log` before
-  trusting a "clean" assumption.
+## 6. Roadmap
 
-## Next session, start here
+Every task is one focused session or less. **Completion proof** is what must
+exist afterward. Do tasks in order within a priority; P0 before P1 before P2.
 
-1. Pin addendum is DONE (fact `RQ2_A2_PIN_ADDENDUM_V1`) — EX8 is unblocked;
-   check Codex progress on EX4–EX9.
-2. Check Codex progress against the EX queue acceptance criteria; review
-   diffs adversarially (esp. the byte-identical ordering pins).
-3. ThetaData extension decision countdown (~2026-10-01).
-4. First weekly aggressive-vol report is due once EX-card builds land;
-   August earnings capture (EX9) is the calendar-critical path.
+### P0 — correctness and governance gates (block all further research)
+
+- **P0.1 COMPLETE — Reconcile branches.** `main` was merged into `sfix` at
+  `9cf3ee4` and pushed. `sfix` contains `88ffbb6` and `ecdaeb9`; the full suite
+  passed before the merge commit.
+- **P0.2 COMPLETE — Fix the twin ratio + drawdown ordering.** `5626c3f`
+  changed `return_on_economic_max_loss` to sum-over-sum and computes
+  closed-trade drawdown in stable entry-date order. The 13.64% ratio and
+  shuffled-order drawdown regressions failed before the fix and passed after;
+  the full suite passed.
+- **P0.3 COMPLETE — Cap enforceability.** `a48a7fd` implements owner-typed
+  OD-A: cancel beyond $0.01 adverse net-credit movement and resize only when an
+  allowed fill would exceed $600. Red/green tests cover $0.50→$0.35,
+  $0.53→$0.51, and the exact $0.53→$0.52 boundary. The 4,002-chain-day audit
+  found zero allowed-fill breaches; report 16 records the full measurement.
+- **P0.4 COMPLETE — Last-session exit crash (F3).** `5626c3f` closes a
+  final-session trigger descriptively at the same session's conservative
+  executable mark and records `exit_execution=terminal_conservative_mark`;
+  ordinary exits remain next-session engine fills. The Dec. 30 year-boundary
+  regression failed before the fix and passed after; the full suite passed.
+- **P0.5 COMPLETE — Register execution convention + date semantics.** Owner
+  typed OD-B. Chained ledger seq 21 (`a540a074…`) registers D+1 close,
+  `entry_date` = fill session, retained `entry_decision_date`, and the
+  `terminal_conservative_mark` exception. Config cites the entry; ledger
+  verification is green. The record explicitly preserves H6/H7/H8 semantics.
+- **P0.6 OWNER APPROVAL PENDING — Correction facts append.** P0.2 landed;
+  independent review returned PASS-WITH-CHANGES; the corrected exact payload
+  cites `5626c3f`; fresh Fable review returned PASS; typed-API prefix smoke
+  passed. Do not append until the owner approves the exact text in report 13.
+
+### P1 — provider transition and data continuity
+
+- **P1.1 Owner decides OD-1, OD-2, OD-4** (`docs/provider-transition.md` §5)
+  — these expire at cancellation. Proof: decisions recorded as facts.
+- **P1.2 Execute any approved final pulls** (per-pull approval, written call
+  count, manifest + `DATA_PULL` fact). Proof: facts + regenerated manifest.
+- **P1.3 Fail-closed wiring check.** Verify every watch/feature refuses as-of
+  dates beyond cache coverage instead of substituting; add the missing
+  refusals. Proof: targeted tests. Depends: P0.1.
+- **P1.4 Post-cancel cleanup.** Remove/flag dead ThetaData terminal config so
+  no path can attempt a call. Proof: grep-clean + suite green.
+
+### P2 — validated feature work (only after P0 and P1)
+
+- **P2.1 H7 governance (OD-3)** — new namespace registration or continuation;
+  owner-typed. **P2.2 Phase B v2 gate merge + H6/H8 artifact rebuilds from v2
+  only** (exists only if OD-1 approved; includes the direct-v2 bypass checks
+  in `h6_features/h6_watch/h8_watch/h7_exit_session` named by the handoff —
+  re-verify that list against code first). **P2.3 Session 7 same-bar
+  atomicity check** (report 10 D7a option b; keeps conservative fills;
+  SMART_LIMIT rejected). **P2.4 Evidence-upgrade resume** once the review
+  lane demonstrably posts on a PR.
+
+### P3 — parked and optional
+
+NAV-drawdown build (spec exists); 1pm-entry hypothesis registration (needs
+captured history + feasibility gate); Session 4 broader feed-inclusion work;
+skills consolidation into `.claude/skills/` (verify with `/context`);
+`block_live_trading` hook logic moved to tracked `.agents/hooks/` with tests;
+`ov/` bundle dedup; archive sweep of superseded plan docs.
+
+## 7. Stop condition
+
+Stop and convene the owner immediately if any P0 work shows a **registered
+verdict would change** (H1/H2/H9 or any live book), if a ledger verify fails,
+or if any task would require touching v1 cache bytes or a one-run record.
+
+## 8. Supersession table (retired as active plans; kept as history)
+
+| Retired plan | Where its live content went |
+|---|---|
+| `docs/superpowers/plans/2026-07-23-twelve-month-scanner-research-program.md` and `docs/superpowers/plans/2026-07-23-codex-execution-queue.md` (EX0–EX10) | Paused wholesale; nothing from it may run until P0 closes. Surviving items re-enter via this roadmap only. |
+| `README.md` "Current status" table + phase-roadmap function | Sequencing and status live HERE; README's stale figures (cache edge "2026-06-30", "suite green") should be corrected at the next landing. README "Scope status" keeps one job: the registry of which hypotheses are live. |
+| `docs/superpowers/plans/2026-07-11-h7-forward-roadmap.md` (the "active build arc" `.cursorrules` used to cite) | H7 work re-enters via P2.1/OD-3 only; `.cursorrules`/`AGENTS.md` scope-guard wording updated 2026-07-31 to point here |
+| `docs/superpowers/plans/2026-07-28-thetadata-options-flow-intelligence-plan.md` | Built on ThetaData; parked pending OD-1/OD-4 (`docs/provider-transition.md`) |
+| `docs/superpowers/2026-07-07-thetadata-cancel-checklist.md` and `THETADATA_EXIT_PLAN` references | `docs/provider-transition.md` |
+| `docs/codex-implementation-plan.md`, `docs/options-validator-readiness.md` | Historical; superseded by this file |
+| Old `PROJECT_STATE.md` (2026-07-23 snapshot) | Rewritten as this file; its data-state facts carried into §1/§3 and `docs/provider-transition.md` |
+| `docs/evidence-upgrade/*` as an active queue | Paused at packet 5B → P2.4 |
+| Handoff prompts / session reports 08–13 | Evidence record, not plans; indexed in `reports/strategy-evaluations/14_governance_rebuild_2026-07-31.md` |
+
+## 9. Owner-only decisions, in one place
+
+OD-A and OD-B are complete. OD-C review is complete and the exact correction
+text awaits owner approval before append. OD-1 v2 backfill before cancel (default:
+authorize only if Phase B wanted within ~6 months); OD-2 final EOD top-up
+(default: yes); OD-3 H7 namespace (default: new namespace); OD-4 record the
+real cancel date; OD-D evidence-upgrade review lane (enable managed Code
+Review for this repo, or restore the deleted workflow with a fresh token).

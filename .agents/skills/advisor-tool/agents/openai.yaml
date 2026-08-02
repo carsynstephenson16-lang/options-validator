@@ -1,4 +1,0 @@
-interface:
-  display_name: "Advisor Tool"
-  short_description: "Use Anthropic advisor model checkpoints"
-  default_prompt: "Use $advisor-tool to wire or audit Anthropic Advisor Tool usage."

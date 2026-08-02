@@ -157,7 +157,10 @@ class RunEndToEndSyntheticTests(unittest.TestCase):
         self.assertEqual(len(self.trades), 1)
         t = self.trades[0]
         self.assertEqual(t["symbol"], "SYN")
-        self.assertEqual(t["entry_date"], "2022-06-01")
+        self.assertEqual(t["entry_decision_date"], "2022-06-01")
+        self.assertEqual(t["entry_date"], "2022-06-02")
+        self.assertEqual(t["exit_decision_date"], "2022-06-03")
+        self.assertEqual(t["exit_date"], "2022-06-06")
         self.assertAlmostEqual(t["pnl"], 117.60, places=2)
 
     def test_trades_feed_the_scoreboard(self):

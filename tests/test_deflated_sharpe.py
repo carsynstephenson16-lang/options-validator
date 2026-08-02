@@ -28,16 +28,18 @@ PSR/DSR are diagnostics only: this file does not (and must not) assert
 anything about verdict, gating, ranking, or triggers -- see
 ScoreboardDsrIntegrationTests.test_verdict_byte_identical_with_and_without_dsr.
 """
+import io
 import math
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import date
 
 import numpy as np
 
 import config
 import metrics
-from metrics import dsr, expected_max_sr, psr, sample_moments, scoreboard
+from metrics import dsr, expected_max_sr, print_scoreboard, psr, sample_moments, scoreboard
 from research import ledger
 
 
@@ -287,6 +289,18 @@ class ScoreboardDsrIntegrationTests(unittest.TestCase):
         )
         self.assertIsInstance(result["dsr"], float)
         self.assertIsInstance(result["psr_vs_zero"], float)
+
+    def test_printed_dsr_is_labeled_exploratory(self):
+        result = scoreboard(
+            _trades(self.pnls), dsr_n_trials=21, dsr_trial_sr_variance=0.05,
+            dsr_n_provenance="p",
+        )
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            print_scoreboard(result)
+
+        self.assertIn("DSR (per-trade, exploratory)", output.getvalue())
 
 
 class LedgerBackwardCompatibilityTests(unittest.TestCase):
