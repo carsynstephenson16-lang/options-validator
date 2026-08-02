@@ -8,27 +8,27 @@
 
 **Base:** `5167d3853a87c4f11b17a18e8c65d236afad91b3`
 
-**Implementation HEAD before this report:** `1b458532e1b45ae4f506bee8bedf695444015efe`
+**Implementation HEAD after owner override:**
+`2a3e5d7174f95259088409ea85f371874cf5c532`
 
 **Push status:** not pushed
 
 ## Verdict
 
-**NOT READY as the original three-component package. READY FOR OWNER REVIEW as
-the two-component validation-only subset.**
+**READY FOR OWNER REVIEW as the three-component validation-only package.**
 
 - **VERIFIED:** Hypothesis 6.164.0 is integrated as a development-only
   dependency with deterministic Black-Scholes properties.
 - **VERIFIED:** Coverage.py 7.15.2 is integrated as a development-only
   dependency with one CI suite invocation and a baseline-derived 79% floor.
-- **BLOCKED:** QuantLib 1.43 is absent. The older C3 repository rule says it is
-  not installed until a registered American-exercise-Greeks trigger exists.
-  The approved general design did not explicitly override that later-discovered
-  rule, so implementation stopped fail-closed.
+- **VERIFIED:** QuantLib 1.43 is integrated in its own locked uv project after
+  the owner explicitly overrode C3 for this test-only use without registering a
+  hypothesis. It is absent from the root dependency graph and production code.
 - **OBSERVED:** The complete integrated root suite passes 2,295 tests.
 - **OBSERVED:** The read-only environment audit reports 35 advisory rows across
-  9 pre-existing packages. Neither new package appears in the findings, but the
-  environment-wide security gate is red and must not be described as clean.
+  9 pre-existing packages. Neither new root development package appears in the
+  findings, and the isolated QuantLib environment scan is clean, but the root
+  environment security gate is red and must not be described as clean.
 
 No production pricing, strategy, provider, cache, ledger, portfolio, research
 registration, verdict, or order source was changed.
@@ -43,14 +43,15 @@ registration, verdict, or order source was changed.
 | 3. External research | **VERIFIED** | Versions, upstream repositories, licenses, release artifacts, dependency models, global-state risks, and commercial-use terms were reviewed. |
 | 4. Selection | **VERIFIED** | Hypothesis scored 95/100, QuantLib 92/100, and Coverage.py 90/100 under the approved weighted rubric. |
 | 5. Baseline | **VERIFIED** | Authoritative root run: 2,283 tests passed in 292.001s. Coverage baseline: 79.299716% combined, 82.581501% statements, 70.386100% branches. |
-| 6. Implementation | **PARTIAL** | Hypothesis and Coverage.py landed in separate commits. QuantLib is blocked and absent. |
-| 7. Validation | **PARTIAL / RED security context** | 2,295 tests, Ruff, Pyright, lock consistency, and the 79% coverage gate pass. The environment advisory scan is red; lockfile-mode scanning is unsupported by pip-audit 2.10.1 for `uv.lock`. |
+| 6. Implementation | **VERIFIED** | Hypothesis, Coverage.py, and isolated QuantLib validation landed in separate reversible commits. |
+| 7. Validation | **VERIFIED / RED root security context** | 2,295 root tests, 11 isolated QuantLib tests, Ruff, root and isolated Pyright, both lock checks, and the 79% coverage gate pass. The pre-existing root environment advisory scan remains red; the isolated QuantLib environment scan is clean. |
 
 ## Reversible commit series
 
 From the base through the implementation HEAD:
 
 ```text
+2a3e5d7 feat(options): add isolated QuantLib validation
 1b45853 test(options): add measured branch coverage gate
 8d67a9c test(options): add Hypothesis pricing invariants
 a7ade0a docs(options): plan free validation integrations
@@ -95,9 +96,20 @@ value, and fail-closed invalid domains.
 
 ### QuantLib 1.43
 
-- No files. No dependency. No lock change. No CI step.
-- **BLOCKED** until the owner explicitly approves: `override C3 for test-only
-  QuantLib validation without registering a new hypothesis`.
+- `tools/quantlib_validation/pyproject.toml`: isolated exact dependency
+- `tools/quantlib_validation/uv.lock`: QuantLib 1.43 wheels and artifact hashes
+- `tools/quantlib_validation/adapter.py`: typed, serialized reference adapter
+- `tools/quantlib_validation/tests/test_adapter.py`: 11 analytic,
+  finite-difference, dividend, validation, determinism, and state-restoration
+  tests
+- `tools/quantlib_validation/README.md`: boundary, assumptions, execution,
+  rollback, and complete BSD-3-Clause notice
+- `.github/workflows/ci.yml`: isolated locked validation command
+
+The owner supplied the plan's exact authorization phrase on 2026-08-01:
+`override C3 for test-only QuantLib validation without registering a new
+hypothesis`. This supersedes only C3 for the isolated adapter; it does not close
+P0.6, register research, or change a model or strategy verdict.
 
 ### Explicitly unchanged
 
@@ -149,6 +161,22 @@ and local fixtures; this setting did not authorize live acquisition or orders.
 | Full Pyright | 0 | 0 errors, warnings, or information. |
 | `git diff --check` | 0 | No whitespace errors. |
 
+### QuantLib TDD and isolated gates
+
+| Check | Exit | Result |
+|---|---:|---|
+| Isolated suite before adapter | 1 | Expected red: `No module named 'tools.quantlib_validation.adapter'`. |
+| Result-assumption record before constructor wiring | 1 | Expected red: missing eight material result fields. |
+| Isolated QuantLib suite | 0 | 11 tests in 0.069s on the final verification run. |
+| QuantLib version probe | 0 | `1.43`. |
+| Focused Ruff and format check | 0 | All files pass. |
+| Narrow Pyright against isolated interpreter | 0 | 0 errors, warnings, or information. |
+| Isolated `uv lock --check` | 0 | Two packages resolve: the local validation project and QuantLib 1.43. |
+
+The complete root suite was rerun after the QuantLib commit and passed 2,295
+tests in 702.202s. QuantLib remains outside root unittest discovery and the
+root coverage denominator by design; its CI gate is separate.
+
 ## Coverage before and after
 
 | Metric | Untouched baseline | Integrated | Change |
@@ -171,7 +199,7 @@ standard than the current repository can meet.
 |---|---|---|---|
 | Hypothesis 6.164.0 | [GitHub](https://github.com/HypothesisWorks/hypothesis), [PyPI](https://pypi.org/project/hypothesis/6.164.0/) | MPL-2.0 | Free/open source and usable commercially. Used unmodified as a development dependency; no hosted service, telemetry, API key, or paid tier is required. |
 | Coverage.py 7.15.2 | [GitHub](https://github.com/nedbat/coveragepy), [PyPI](https://pypi.org/project/coverage/7.15.2/) | Apache-2.0 | Free/open source and usable commercially. Runs locally and writes only ignored local artifacts; no hosted upload or paid tier is required. |
-| QuantLib 1.43 | [GitHub](https://github.com/lballabio/QuantLib), [PyPI](https://pypi.org/project/QuantLib/1.43/) | BSD-3-Clause | Free/open source and commercially usable, but not installed because repository authorization is still blocked. |
+| QuantLib 1.43 | [GitHub](https://github.com/lballabio/QuantLib), [PyPI](https://pypi.org/project/QuantLib/1.43/) | BSD-3-Clause | Free/open source and commercially usable. Installed only in the isolated locked test project; the complete notice is retained in its README and the official wheel. |
 
 **100% free constraint:** the software integrations require no payment and can
 run entirely on the local machine. The CI edit reuses the repository's existing
@@ -185,6 +213,9 @@ local or self-hosted runner preserves a no-new-cost path if that quota matters.
 
 - **VERIFIED:** root direct dependencies added are only `hypothesis==6.164.0`
   and `coverage==7.15.2`, both in the development group.
+- **VERIFIED:** QuantLib is absent from the root dependency and lock files. Its
+  isolated lock contains only the local validation project and
+  `QuantLib==1.43`.
 - **VERIFIED:** Hypothesis adds `sortedcontainers==2.4.0`; Coverage.py adds no
   Python runtime dependency.
 - **VERIFIED:** the lock records exact versions and artifact hashes.
@@ -194,6 +225,8 @@ local or self-hosted runner preserves a no-new-cost path if that quota matters.
   comes from the reviewed upstream/PyPI project metadata.
 - **OBSERVED:** neither Hypothesis nor Coverage.py appears in the vulnerability
   findings below.
+- **OBSERVED:** the actual isolated QuantLib site-packages scan reports no known
+  vulnerabilities.
 
 ### Audit limitations and findings
 
@@ -201,7 +234,7 @@ local or self-hosted runner preserves a no-new-cost path if that quota matters.
 version does not recognize `uv.lock` in lockfile mode. That check is **BLOCKED**
 by scanner capability, not reported as green.
 
-The supported installed-environment scan,
+The authoritative root installed-environment scan,
 `pip-audit --path .venv/lib/python3.12/site-packages`, exits 1 and reports 35
 advisory rows across 9 packages:
 
@@ -224,6 +257,13 @@ sortedcontainers, and Coverage.py to the lock. Remediation requires a separate
 dependency-impact task because several fixes may be constrained by large
 transitive frameworks. No `--fix`, ignore rule, or unrelated upgrade was used.
 
+The matching scan of
+`tools/quantlib_validation/.venv/lib/python3.12/site-packages` exits 0 with
+`No known vulnerabilities found`. The plan's literal ephemeral
+`pip-audit --local --strict` commands also exit 0, but those observe the uv tool
+overlay rather than reliably proving the target project environment; the
+explicit installed-path scans above are the decision-grade evidence.
+
 ## Adversarial review
 
 - **False-positive risk:** generated floating-point examples use explicit
@@ -243,21 +283,26 @@ transitive frameworks. No `--fix`, ignore rule, or unrelated upgrade was used.
   targets; the lock also contains its source distribution. Coverage.py ships a
   C extension and a pure-Python wheel. Both have platform artifacts and hashes
   in `uv.lock`.
-- **QuantLib global state:** no risk was introduced because QuantLib is absent.
-  If later authorized, its global evaluation date must be serialized and
-  restored in `finally`, and the isolated test environment must fail loudly on
-  native-wheel problems.
+- **QuantLib global state:** adapter calls use one process-local lock and restore
+  the prior global evaluation date in `finally`; tests cover success and forced
+  native failure. The README warns that unrelated QuantLib calls in the same
+  process do not share this lock, so this remains a single-process isolated
+  validation tool rather than a production service.
+- **QuantLib oracle limits:** the comparison suite includes an independent
+  textbook vector, put-call parity, intrinsic/dominance bounds, and grid
+  convergence. QuantLib is never the only assertion proving correctness.
 - **Production behavior:** no production source changed. The work adds tests,
   development dependencies, local measurement configuration, and CI gates.
 
 ## Unsupported assumptions and remaining gaps
 
-1. **BLOCKED:** no explicit owner override of the older QuantLib C3 trigger.
-2. **OBSERVED:** the environment-wide vulnerability audit is red and needs a
+1. **OBSERVED:** the root environment-wide vulnerability audit is red and needs a
    separately scoped compatibility/remediation pass.
-3. **INFERRED:** GitHub Actions will permit the new coverage command wherever
-   the existing workflow already runs. Account quota/cost is outside this repo;
-   local execution remains free.
+2. **INFERRED:** the locked manylinux wheel and CI command are present, but the
+   GitHub-hosted Linux run was not executed from this local no-push branch.
+3. **INFERRED:** GitHub Actions will permit the new coverage and QuantLib
+   commands wherever the existing workflow already runs. Account quota/cost is
+   outside this repo; local execution remains free.
 4. **ESTIMATED:** 100 examples per property balance speed and discovery. That
    number is not evidence of exhaustive numerical proof.
 5. **BLOCKED:** Equity Research remains outside implementation because its own
@@ -295,7 +340,12 @@ git revert 9dc5f62
 
 ### QuantLib
 
-No rollback is needed because nothing was installed or changed.
+```bash
+git revert 2a3e5d7174f95259088409ea85f371874cf5c532
+```
+
+This removes the isolated project, its locked QuantLib dependency, adapter,
+tests, license notice, and CI step. It does not change root production pricing.
 
 ## Recommendation-only weekly GitHub improvement scan
 

@@ -91,7 +91,7 @@ Copyright (C) 2014, 2015 Thema Consulting SA
 Copyright (C) 2014, 2015, 2018 Matthias Groncki
 Copyright (C) 2015, 2016 Gouthaman Balaraman
 Copyright (C) 2016 Peter Caspers
-Copyright (C) 2016, 2017, 2018, 2019 Wojciech Slusarski
+Copyright (C) 2016, 2017, 2018, 2019 Wojciech Ślusarski
 Copyright (C) 2017 BN Algorithms Ltd
 Copyright (C) 2017, 2018, 2019, 2020 Matthias Lungwitz
 Copyright (C) 2018 Angus Lee
