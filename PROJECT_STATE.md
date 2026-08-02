@@ -563,15 +563,19 @@ into the next task.
   task's uncommitted doc hunks if needed.
 - **Proof:** docs-only diff with current command outputs. **One session:** yes.
 
-### Q2 / P2.5 — Optional prospective H6 amendment
+### Q2 / P2.5 — Prospective H6 amendment — REGISTERED / IN PROGRESS
 
-- **Goal/position:** revisit a design limitation only if the owner wants a new
-  H6 version. Current code is faithful to the registered rule and is not a bug.
+- **Goal/position:** implement the owner-authorized H6 hard-kill v2 only for
+  entries on or after 2026-08-03. Current code remains faithful to v1 for older
+  rows; this prospective amendment is not a correction or reinterpretation.
 - **Files:** config H6/H8 constants, `h6_watch.py`, H6/H8 tests, registration docs;
   inspect the book read-only.
 - **Allowed:** new prospective version, tests, config only as owner typed.
   **Forbidden:** editing existing rows, retrospective rescoring, H7/H9, provider calls.
-  **Prerequisite/gate:** H6-KILL owner wording.
+  **Prerequisite/gate:** satisfied by owner authorization dated 2026-08-02 and
+  chained research-ledger seq 22, record hash
+  `4c552641d5a56f96d6e2c12904e7b20467a56bd1c7804d9de18969a3bb548b04`
+  (`trial_count=23`). Implementation and verification remain open.
 - **Implementation:** TDD each cohort edge; keep old semantics available for old
   rows; add explicit version/effective-date dispatch and separate portfolio rule
   if approved.
