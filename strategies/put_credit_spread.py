@@ -198,6 +198,7 @@ class PutCreditSpread(Strategy):
         self._spreads = {}
         self.closed_trades = []
         self.cancelled_entries = []
+        self.atomicity_incidents = []
 
     # ----- main loop -----------------------------------------------------
     def on_trading_iteration(self):
@@ -483,6 +484,37 @@ class PutCreditSpread(Strategy):
             self.haircut,
         )
 
+    def _same_session_entry_unwind_prices(
+        self,
+        symbol,
+        expiry,
+        short_strike,
+        long_strike,
+        assets,
+    ):
+        """Conservative same-session prices for neutralizing either entry leg."""
+        chain = self._get_eod_chain(symbol)
+        if chain is None:
+            return None
+
+        def leg_row(strike):
+            rows = chain[
+                (chain["right"] == "P")
+                & (chain["expiration"] == str(expiry))
+                & (chain["strike"] == strike)
+            ]
+            return None if rows.empty else rows.iloc[0]
+
+        short_row = leg_row(short_strike)
+        long_row = leg_row(long_strike)
+        if short_row is None or long_row is None:
+            return None
+        short_asset, long_asset = assets
+        return {
+            short_asset: adverse_buy(short_row.ask, self.haircut),
+            long_asset: adverse_sell(long_row.bid, self.haircut),
+        }
+
     def _submit_spread(
         self,
         symbol,
@@ -505,9 +537,23 @@ class PutCreditSpread(Strategy):
                 "selected leg(s) missing from the offline feed on "
                 f"{fill_date}: {[short_asset, long_asset]}"
             )
-        self.submit_order(self.create_order(short_asset, contracts, "sell"))
-        self.submit_order(self.create_order(long_asset, contracts, "buy"))
-        self._spreads[symbol] = _OpenSpread(
+        assets = (short_asset, long_asset)
+        unwind_prices = self._same_session_entry_unwind_prices(
+            symbol,
+            expiry,
+            short_strike,
+            long_strike,
+            assets,
+        )
+        if unwind_prices is None:
+            raise RuntimeError(
+                "selected leg(s) lack exact same-session unwind quotes on "
+                f"{fill_date}: {[short_asset, long_asset]}"
+            )
+
+        short_order = self.create_order(short_asset, contracts, "sell")
+        long_order = self.create_order(long_asset, contracts, "buy")
+        pos = _OpenSpread(
             symbol=symbol,
             expiration=Date.fromisoformat(str(expiry)),
             short_asset=short_asset,
@@ -516,7 +562,18 @@ class PutCreditSpread(Strategy):
             model_credit=float(credit),
             entry_decision_date=decision_date,
             entry_fill_date=fill_date,
+            entry_unwind_prices=unwind_prices,
         )
+        # Register state before either separate order is submitted so fill and
+        # cancellation callbacks can always enforce the atomicity invariant.
+        self._spreads[symbol] = pos
+        try:
+            self.submit_order(short_order)
+            self.submit_order(long_order)
+        except Exception:
+            if symbol in self._spreads and not pos.entry_fills:
+                del self._spreads[symbol]
+            raise
 
     def _has_open_position(self, symbol):
         return symbol in self._spreads
@@ -530,6 +587,8 @@ class PutCreditSpread(Strategy):
         finalized into closed_trades."""
         pos = self._spreads[symbol]
         if pos.state == "pending_entry":
+            if pos.entry_cancelled_assets and len(pos.entry_fills) == 1:
+                self._fail_partial_entry_with_conservative_unwind(symbol, pos)
             if pos.short_asset in pos.entry_fills and pos.long_asset in pos.entry_fills:
                 pos.entry_credit = (
                     pos.entry_fills[pos.short_asset] - pos.entry_fills[pos.long_asset])
@@ -621,18 +680,115 @@ class PutCreditSpread(Strategy):
 
     # ----- fills -> closed-trade extraction --------------------------------
     def on_filled_order(self, position, order, price, quantity, multiplier):
-        for pos in self._spreads.values():
+        for symbol, pos in list(self._spreads.items()):
             if order.asset == pos.short_asset or order.asset == pos.long_asset:
                 side = str(order.side).lower()
                 if pos.state == "pending_entry":
                     expected = "sell" if order.asset == pos.short_asset else "buy"
                     if side == expected:
                         pos.entry_fills[order.asset] = float(price)
+                        pos.entry_fill_quantities[order.asset] = int(quantity)
+                        if pos.entry_cancelled_assets and len(pos.entry_fills) == 1:
+                            self._fail_partial_entry_with_conservative_unwind(
+                                symbol,
+                                pos,
+                            )
                 elif pos.state == "pending_exit":
                     expected = "buy" if order.asset == pos.short_asset else "sell"
                     if side == expected:
                         pos.exit_fills[order.asset] = float(price)
                 return
+
+    def on_partially_filled_order(
+        self,
+        position,
+        order,
+        price,
+        quantity,
+        multiplier,
+    ):
+        for symbol, pos in list(self._spreads.items()):
+            if pos.state != "pending_entry":
+                continue
+            if order.asset != pos.short_asset and order.asset != pos.long_asset:
+                continue
+            side = str(order.side).lower()
+            expected = "sell" if order.asset == pos.short_asset else "buy"
+            if side != expected:
+                return
+            pos.entry_fills[order.asset] = float(price)
+            pos.entry_fill_quantities[order.asset] = int(quantity)
+            self._fail_partial_entry_with_conservative_unwind(symbol, pos)
+
+    def on_canceled_order(self, order):
+        for symbol, pos in list(self._spreads.items()):
+            if pos.state != "pending_entry":
+                continue
+            if order.asset != pos.short_asset and order.asset != pos.long_asset:
+                continue
+            side = str(order.side).lower()
+            expected = "sell" if order.asset == pos.short_asset else "buy"
+            if side != expected:
+                return
+            pos.entry_cancelled_assets.add(order.asset)
+            if len(pos.entry_fills) == 1:
+                self._fail_partial_entry_with_conservative_unwind(symbol, pos)
+            if not pos.entry_fills and pos.entry_cancelled_assets == {
+                pos.short_asset,
+                pos.long_asset,
+            }:
+                self.cancelled_entries.append(
+                    {
+                        "symbol": symbol,
+                        "decision_date": pos.entry_decision_date,
+                        "cancellation_date": self._today().isoformat(),
+                        "reason": "entry_orders_unfilled",
+                        "signal_credit": pos.model_credit,
+                    }
+                )
+                del self._spreads[symbol]
+            return
+
+    def _fail_partial_entry_with_conservative_unwind(self, symbol, pos):
+        if len(pos.entry_fills) != 1:
+            raise RuntimeError(
+                f"{symbol}: partial entry invariant requires exactly one filled leg"
+            )
+        filled_asset, entry_price = next(iter(pos.entry_fills.items()))
+        quantity = pos.entry_fill_quantities.get(filled_asset, pos.contracts)
+        unwind_price = pos.entry_unwind_prices[filled_asset]
+        if filled_asset == pos.short_asset:
+            filled_leg = "short"
+            unwind_side = "buy"
+            gross_pnl = (entry_price - unwind_price) * 100.0 * quantity
+        else:
+            filled_leg = "long"
+            unwind_side = "sell"
+            gross_pnl = (unwind_price - entry_price) * 100.0 * quantity
+        commissions = 2.0 * config.COMMISSION_PER_CONTRACT * quantity
+        incident = {
+            "symbol": symbol,
+            "session": pos.entry_fill_date,
+            "filled_leg": filled_leg,
+            "unwind_side": unwind_side,
+            "quantity": quantity,
+            "entry_price": entry_price,
+            "unwind_price": unwind_price,
+            "gross_pnl": gross_pnl,
+            "commissions": commissions,
+            "net_pnl": gross_pnl - commissions,
+            "execution": "same_session_conservative_mark",
+        }
+        self.atomicity_incidents.append(incident)
+        del self._spreads[symbol]
+        message = (
+            f"{symbol}: partial entry fill on {pos.entry_fill_date}; "
+            f"conservatively unwound {quantity}x {filled_leg} leg at "
+            f"{unwind_price:.2f}; commissions ${commissions:.2f}; "
+            f"incident net P&L ${incident['net_pnl']:.2f}; run aborted"
+        )
+        self.log_message(message)
+        raise RuntimeError(message)
 
     def _finalize_trade(self, symbol, pos):
         """Emit a scored trade from labeled exit fills and release the symbol."""
@@ -684,6 +840,9 @@ class _OpenSpread:
     state: str = "pending_entry"
     entry_credit: float | None = None
     entry_fills: dict = field(default_factory=dict)
+    entry_fill_quantities: dict = field(default_factory=dict)
+    entry_cancelled_assets: set = field(default_factory=set)
+    entry_unwind_prices: dict = field(default_factory=dict)
     exit_fills: dict = field(default_factory=dict)
     exit_reason: str | None = None
     exit_decision_date: str | None = None
