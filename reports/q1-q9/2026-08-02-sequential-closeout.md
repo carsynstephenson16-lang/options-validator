@@ -161,3 +161,35 @@ Fresh verification:
 Independent audit conclusion: the permanent Q8 receipt reproduces exactly from
 the current immutable cache and still proves the post-atomicity hard-cap result.
 No receipt, cache, backtest, provider, or verdict mutation occurred.
+
+## Q9 - Offline Intelligence readiness
+
+Status: **COMPLETE FOR EOD / DATA-GATED FOR FLOW**
+
+Fresh verification:
+
+- `tools/thetadata_exit_audit.py --verify` returned `receipt VALID` for both
+  dated artifacts: the EOD Offline Intelligence receipt and the separate
+  options-flow readiness receipt.
+- The EOD receipt still reports `PASS`, binds receipt hash
+  `01237f2b30ba1550ce06e2ae7201bc90771dd70c5be40df7926eae69229738d8`,
+  and records zero provider calls or cache mutation.
+- The flow receipt still reports `NOT AUDITED / DATA-GATED` and binds receipt
+  hash `c3e5273e8dbcefd727ad83e4885ac7d4ee672497c9e033a20a84d1e5d6bba492`.
+  It does not manufacture empirical flow readiness from absent data.
+- `test_offline_intelligence_readiness.py` passed 12/12 tests, covering
+  deterministic metadata inventory, schema/null/duplicate/manifest failures,
+  exact noncanonical classification, provenance, zero-network replay, signed
+  receipt mutation detection, and the separate flow data gate.
+- The test process emitted a non-failing Python `ResourceWarning` for an
+  unclosed event loop after reporting `OK`; no test, receipt, or audit invariant
+  failed, and the authoritative full root suite had already passed 2,308/2,308.
+- Before and after verification, the EOD receipt file SHA-256 remained
+  `3a8d75a13588ce23622f8815b8dee836c0695a6662abeb0707080c85beab967f`,
+  the flow receipt file SHA-256 remained
+  `80c41a456b17f4056b1b343b5775d1a52e0d1a489171cb957a88c70f7373bc58`,
+  and the canonical manifest/tracked status remained unchanged.
+
+Independent audit conclusion: Q9 is genuinely ready for cache-backed EOD
+research and remains honestly blocked for empirical flow research. Verification
+made no provider call, cache/receipt mutation, verdict use, or activation.
