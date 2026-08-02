@@ -135,3 +135,29 @@ Fresh verification:
 Independent audit conclusion: ThetaData acquisition remains fail-closed at the
 sole constructor and all tested neighboring boundaries, while immutable cached
 reads remain available. No production-code change was made.
+
+## Q8 - Strategy A cap-audit receipt
+
+Status: **COMPLETE**
+
+Fresh verification:
+
+- `tools/strategy_a_cap_audit.py --verify` run on the permanent 2018-2022
+  receipt, offline and read-only against the canonical cache, returned
+  `receipt VALID`.
+- Verification recomputed every top-level receipt field from the manifest-bound
+  cache and current registered source/config identities.
+- The receipt still records 4,002 cached chain-days, 192 day-D accepted
+  candidates, 102 tolerance cancellations, 89 allowed D+1 fills, zero resizes,
+  and one unavailable exact frozen-leg fill.
+- The recomputed risk result remains zero new-policy cap breaches and a highest
+  allowed risk of $556.80. Receipt hash remains
+  `04b9fce43529210bbee14421024e065d95873098b5510f2a16fbd5977fa8e06c`.
+- Before and after verification, the receipt file SHA-256 was
+  `fb885bd5c7b2559dcfdff244b771d9a1d6092a6216c6546ccee5c078dac08004`
+  and the manifest SHA-256 was unchanged. Canonical tracked status was also
+  unchanged apart from the pre-existing owner `wiki/log.md` modification.
+
+Independent audit conclusion: the permanent Q8 receipt reproduces exactly from
+the current immutable cache and still proves the post-atomicity hard-cap result.
+No receipt, cache, backtest, provider, or verdict mutation occurred.
