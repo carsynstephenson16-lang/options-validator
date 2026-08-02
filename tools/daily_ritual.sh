@@ -343,7 +343,7 @@ if [ "$GATE_GO" -eq 1 ]; then
   # redirect, and $? below is entry_watch's own exit code.
   EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
   mkdir -p reports/h5
-  if "$UV" run python -m options_researcher.entry_watch --out "$EW_OUT"; then
+  if "$UV" run python -m options_researcher.entry_watch --as-of "$AS_OF" --out "$EW_OUT"; then
     if grep -q "FIRE" "$EW_OUT"; then
       crit "H5 ENTRY TRIGGER FIRE — read $EW_OUT and evaluate per H5 CORE rules"
     else

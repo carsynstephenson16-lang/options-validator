@@ -183,6 +183,18 @@ class TestChainFailures(GateBase):
                          ["newest_date_at_or_before_session"], self.eval_iso)
         self.assertEqual(res["symbols"]["AMD"]["verdict"], "GO")
 
+    def test_future_only_chain_is_not_substituted_beyond_edge(self):
+        (self.chain_dir / f"AMD_{self.eval_iso}.parquet").unlink()
+        nxt = [d for d in trading_days(self.eval_iso, "2026-07-31")
+               if d > self.eval_iso][0]
+        _write_chain(self.chain_dir, "AMD", nxt, _good_chain())
+        res = self._eval()
+        chain = res["symbols"]["AMD"]["chain"]
+        self.assertEqual(res["symbols"]["AMD"]["verdict"], "NO_GO")
+        self.assertIn("CHAIN_SESSION_MISSING",
+                      res["symbols"]["AMD"]["reason_codes"])
+        self.assertIsNone(chain["newest_date_at_or_before_session"])
+
     def test_missing_required_column_is_no_go(self):
         _write_chain(self.chain_dir, "AMD", self.eval_iso,
                      _good_chain().drop(columns=["vega"]))

@@ -15,6 +15,7 @@ from datetime import date
 from pathlib import Path
 from typing import Literal, TypedDict
 
+import config
 from options_researcher.h7_scope import scope_identity
 
 CaptureStatus = Literal["CAPTURED", "NO_SIGNAL", "REFUSED", "MISSING"]
@@ -104,7 +105,28 @@ def _h5(root: Path, as_of: str) -> CaptureResult:
     if failure is not None:
         return failure
     assert text is not None
-    count = len(re.findall(r"\bFIRE\b", text))
+    session = re.search(r"\bevaluation_session=(\d{4}-\d{2}-\d{2})\b", text)
+    if session is None or session.group(1) != as_of:
+        return _result("REFUSED", evidence=_evidence(root, path), detail="session mismatch")
+    rows = re.findall(r"(?m)^([A-Z0-9.-]+):\s+(WAIT|FIRE|DATA_GAP)\b(.*)$", text)
+    if len(rows) != len(config.H5_ENTRY_TRIGGERS) or {symbol for symbol, _, _ in rows} != set(
+        config.H5_ENTRY_TRIGGERS
+    ):
+        return _result(
+            "REFUSED",
+            evidence=_evidence(root, path),
+            detail="tracked-name coverage mismatch",
+        )
+    if any(status == "DATA_GAP" for _, status, _ in rows):
+        return _result("REFUSED", evidence=_evidence(root, path), detail="data gap")
+    required_asof_labels = (
+        f"(as of {as_of})",
+        f"feature as of {as_of}",
+        f"chain as of {as_of}",
+    )
+    if any(any(label not in detail for label in required_asof_labels) for _, _, detail in rows):
+        return _result("REFUSED", evidence=_evidence(root, path), detail="session mismatch")
+    count = sum(status == "FIRE" for _, status, _ in rows)
     if count:
         return _result(
             "CAPTURED",

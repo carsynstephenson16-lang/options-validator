@@ -1,5 +1,10 @@
 """tests/test_entry_watch.py"""
+import contextlib
+import tempfile
 import unittest
+from datetime import date
+from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -102,20 +107,155 @@ class MainTests(unittest.TestCase):
             ew.main(rows=self._rows())
         return buf.getvalue()
 
-    def test_main_prints_verdicts_and_staleness(self):
+    def test_main_refuses_mixed_session_rows(self):
         out = self._run_main()
         self.assertIn("VST", out)
-        self.assertIn("WAIT", out)
-        self.assertIn("FIRE", out)
-        self.assertIn("evaluate", out.lower())
-        self.assertIn("stale", out.lower())
+        self.assertNotIn("VST: FIRE", out)
+        self.assertNotIn("AMZN: FIRE", out)
+        self.assertEqual(out.count("DATA_GAP"), 2)
         self.assertIn("never auto-enters", out)
 
-    def test_main_prints_stale_iv_rank_note(self):
-        out = self._run_main()
-        self.assertIn("IV-rank is stale", out)
-        self.assertIn("2026-07-02 < close 2026-07-06", out)
-        self.assertIn("feature refresh", out)
+    def test_main_returns_nonzero_for_data_gap(self):
+        self.assertEqual(ew.main(rows=self._rows()), 1)
+
+    def test_main_exact_row_labels_all_three_inputs(self):
+        row = self._rows()[1] | {
+            "chain_asof": "2026-07-06",
+            "evaluation_session": "2026-07-06",
+        }
+        import contextlib
+        import io
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = ew.main(rows=[row])
+        output = buf.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("AMZN: FIRE", output)
+        self.assertIn("feature as of 2026-07-06", output)
+        self.assertIn("chain as of 2026-07-06", output)
+
+
+class ExactAsOfGatherTests(unittest.TestCase):
+    EVALUATION = date(2026, 7, 15)
+
+    @staticmethod
+    def _chain() -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "expiration": "2027-07-16",
+                    "strike": 140.0,
+                    "right": "C",
+                    "bid": 40.0,
+                    "ask": 41.0,
+                    "open_interest": 500,
+                    "delta": 0.70,
+                }
+            ]
+        )
+
+    def _gather(
+        self,
+        *,
+        close_days: tuple[str, ...] = ("2026-07-15",),
+        feature_days: tuple[str, ...] = ("2026-07-15",),
+        chain_days: tuple[str, ...] = ("2026-07-15",),
+        close_value: float = 100.0,
+        chain_frame: pd.DataFrame | None = None,
+    ) -> list[dict]:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            chain_dir = root / ".cache" / "chains"
+            chain_dir.mkdir(parents=True)
+            for symbol in config.H5_ENTRY_TRIGGERS:
+                for day in chain_days:
+                    (chain_dir / f"{symbol}_{day}.parquet").touch()
+            closes = pd.Series(
+                [close_value] * len(close_days),
+                index=pd.Index(close_days, name="date"),
+            )
+            features = pd.DataFrame(
+                {"iv_rank": [0.2] * len(feature_days)},
+                index=pd.Index(feature_days, name="date"),
+            )
+            with (
+                contextlib.chdir(root),
+                mock.patch("data.underlying_closes.load_closes", return_value=closes),
+                mock.patch(
+                    "options_researcher.features.load_features",
+                    return_value=features,
+                ),
+                mock.patch(
+                    "pandas.read_parquet",
+                    return_value=self._chain() if chain_frame is None else chain_frame,
+                ),
+            ):
+                return ew._gather(self.EVALUATION)
+
+    def test_exact_common_session_can_fire(self):
+        rows = self._gather()
+        self.assertTrue(rows)
+        self.assertTrue(all(row["verdict"] == "FIRE" for row in rows))
+        for row in rows:
+            self.assertEqual(row["evaluation_session"], "2026-07-15")
+            self.assertEqual(row["close_asof"], "2026-07-15")
+            self.assertEqual(row["iv_asof"], "2026-07-15")
+            self.assertEqual(row["chain_asof"], "2026-07-15")
+
+    def test_stale_close_is_data_gap_not_fire(self):
+        rows = self._gather(close_days=("2026-07-14",))
+        self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
+        self.assertTrue(all("close" in " ".join(row["data_gaps"]) for row in rows))
+
+    def test_stale_feature_is_data_gap_not_fire(self):
+        rows = self._gather(feature_days=("2026-07-14",))
+        self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
+        self.assertTrue(all("feature" in " ".join(row["data_gaps"]) for row in rows))
+
+    def test_stale_chain_is_data_gap_not_fire(self):
+        rows = self._gather(chain_days=("2026-07-14",))
+        self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
+        self.assertTrue(all("chain" in " ".join(row["data_gaps"]) for row in rows))
+
+    def test_future_inputs_are_not_substituted(self):
+        rows = self._gather(
+            close_days=("2026-07-16",),
+            feature_days=("2026-07-16",),
+            chain_days=("2026-07-16",),
+        )
+        self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
+        self.assertTrue(all(row["close_asof"] is None for row in rows))
+        self.assertTrue(all(row["iv_asof"] is None for row in rows))
+        self.assertTrue(all(row["chain_asof"] is None for row in rows))
+
+    def test_missing_files_are_data_gap_not_fire(self):
+        with (
+            mock.patch(
+                "data.underlying_closes.load_closes",
+                side_effect=FileNotFoundError("close missing"),
+            ),
+            mock.patch(
+                "options_researcher.features.load_features",
+                side_effect=FileNotFoundError("feature missing"),
+            ),
+            tempfile.TemporaryDirectory() as tmp,
+            contextlib.chdir(tmp),
+        ):
+            rows = ew._gather(self.EVALUATION)
+        self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
+        self.assertTrue(all(len(row["data_gaps"]) == 3 for row in rows))
+
+    def test_nonfinite_exact_close_is_data_gap(self):
+        rows = self._gather(close_value=float("nan"))
+        self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
+        self.assertTrue(all("non-finite" in " ".join(row["data_gaps"]) for row in rows))
+
+    def test_empty_exact_chain_is_data_gap(self):
+        rows = self._gather(chain_frame=self._chain().iloc[0:0])
+        self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
+        self.assertTrue(all("empty" in " ".join(row["data_gaps"]) for row in rows))
+
 
 
 if __name__ == "__main__":

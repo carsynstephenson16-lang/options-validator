@@ -514,6 +514,36 @@ class ScoreTests(unittest.TestCase):
 
 
 class ReceiptTests(unittest.TestCase):
+    def test_beyond_edge_does_not_substitute_prior_or_future_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            chain_dir = root / "chains"
+            chain_dir.mkdir()
+            chain().to_parquet(chain_dir / "NVDA_2026-07-10.parquet")
+            chain().to_parquet(chain_dir / "NVDA_2026-07-14.parquet")
+            with (
+                mock.patch.object(config, "H6_NAMES", ("NVDA",)),
+                mock.patch(
+                    "options_researcher.h6_watch.load_book", return_value=[]
+                ),
+                mock.patch(
+                    "options_researcher.h6_watch.load_assertions", return_value=[]
+                ),
+            ):
+                snapshot, _ = build_snapshot(
+                    AS_OF,
+                    book_path=root / "book.csv",
+                    chain_dir=chain_dir,
+                    feature_dir=root / "features",
+                    assertions_path=root / "gating.csv",
+                    raw_assertions_path=root / "raw.csv",
+                )
+
+        self.assertEqual(snapshot["entries"], [])
+        self.assertEqual(len(snapshot["errors"]), 1)
+        self.assertIn("exact chain missing", snapshot["errors"][0])
+        self.assertIn("NVDA_2026-07-13.parquet", snapshot["errors"][0])
+
     def _seed_snapshot_inputs(self, root: Path) -> tuple[dict, dict[str, Path]]:
         book_path = root / "h6_positions.csv"
         with book_path.open("w", newline="") as fh:
