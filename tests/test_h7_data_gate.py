@@ -15,6 +15,7 @@ from unittest import mock
 import pandas as pd
 
 from data.cache_runner import trading_days
+from data.cache_schema import validate_v2_synthetic_audit_receipt
 from options_researcher import h7_data_gate as gate
 from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_synthetic_proof import (
@@ -73,6 +74,13 @@ class GateBase(unittest.TestCase):
                           (self.eval_iso, 100.0)])
             _write_chain(self.chain_dir, sym, self.eval_iso, _good_chain())
         _write_synthetic_full_audit_receipt(self.chain_dir)
+        validator_patch = mock.patch.object(
+            gate,
+            "validate_v2_audit_receipt",
+            validate_v2_synthetic_audit_receipt,
+        )
+        validator_patch.start()
+        self.addCleanup(validator_patch.stop)
         scope = scope_identity(watch_universe())
         self.eval_scope_id = scope["scope_id"]
         self.source_health = make_receipt("source_health", {

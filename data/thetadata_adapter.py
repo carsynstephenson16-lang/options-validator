@@ -336,12 +336,37 @@ def _normalize_contract_keys(frame: pd.DataFrame, ctx: str) -> pd.DataFrame:
 
 
 def _merge_chain_frames(greeks: pd.DataFrame, oi: pd.DataFrame) -> pd.DataFrame:
-    """Inner-join the two per-contract frames into CHAIN_COLUMNS_V2.
+    """Inner-join provider frames into the immutable legacy v1 schema.
 
     Inner join is deliberate fail-closed behavior: a contract missing quotes,
     greeks, or open interest is untradeable under the liquidity/delta rules, so
-    it is dropped here rather than passed downstream with NaNs. The caller
-    logs the drop count."""
+    it is dropped here rather than passed downstream with NaNs. This shared
+    acquisition path intentionally remains v1; isolated v2 acquisition uses
+    ``_merge_chain_frames_v2`` below."""
+    greeks = _normalize_contract_keys(greeks, "greeks")
+    oi = _normalize_contract_keys(oi, "open_interest")
+
+    bid_col = _pick_col(greeks, ("bid", "close_bid", "bid_price"), "greeks")
+    ask_col = _pick_col(greeks, ("ask", "close_ask", "ask_price"), "greeks")
+    iv_col = _pick_col(greeks, ("implied_vol", "implied_volatility", "iv"), "greeks")
+    oi_col = _pick_col(oi, ("open_interest", "oi"), "open_interest")
+    for greek in ("delta", "gamma", "theta", "vega"):
+        _pick_col(greeks, (greek,), "greeks")
+
+    merged = (
+        greeks[_KEY_COLS + [bid_col, ask_col, "delta", "gamma", "theta", "vega", iv_col]]
+        .rename(columns={bid_col: "bid", ask_col: "ask", iv_col: "iv"})
+        .merge(
+            oi[_KEY_COLS + [oi_col]].rename(columns={oi_col: "open_interest"}),
+            on=_KEY_COLS,
+            how="inner",
+        )
+    )
+    return merged[CHAIN_COLUMNS_V1].reset_index(drop=True)
+
+
+def _merge_chain_frames_v2(greeks: pd.DataFrame, oi: pd.DataFrame) -> pd.DataFrame:
+    """Normalize provider frames for the isolated, schema-v2 backfill only."""
     greeks = _normalize_contract_keys(greeks, "greeks")
     oi = _normalize_contract_keys(oi, "open_interest")
 
@@ -441,6 +466,7 @@ def load_cached_chain(
     allow_oos: bool = False,
     cache_dir: Path | None = None,
     verdict_bearing: bool = False,
+    verdict_consumer: str | None = None,
 ) -> pd.DataFrame:
     """Cache-ONLY EOD chain read: return the validated parquet if it already
     exists locally, else raise FileNotFoundError. NEVER constructs the
@@ -485,11 +511,16 @@ def load_cached_chain(
                 "and cannot support verdict-bearing requests"
             )
         if verdict_bearing:
+            if not verdict_consumer:
+                raise CacheAuditReceiptError(
+                    "verdict-bearing v2 reads require an explicit consumer scope"
+                )
             validate_v2_audit_receipt(
                 cached.parent,
                 cached,
                 symbol=symbol,
                 session=date,
+                consumer_scope=verdict_consumer,
             )
         return chain
     raise FileNotFoundError(

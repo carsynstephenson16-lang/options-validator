@@ -24,11 +24,17 @@ export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 # backstop that makes a wrong branch fail loudly instead of silently.
 REPO="${0:A:h:h}"
 UV="$HOME/.local/bin/uv"
+PYTHON="$REPO/.venv/bin/python"
 cd "$REPO" || exit 2
+
+if [ ! -x "$PYTHON" ]; then
+  echo "ritual authority unavailable: expected installed interpreter at $PYTHON" >&2
+  exit 2
+fi
 
 RITUAL_MODE="${1:-run}"
 if [ "$RITUAL_MODE" = "status" ]; then
-  exec "$UV" run python -m data.ritual_authority status
+  exec env PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m data.ritual_authority status
 fi
 if [ "$RITUAL_MODE" != "run" ]; then
   echo "usage: tools/daily_ritual.sh [run|status]" >&2
@@ -38,7 +44,7 @@ fi
 # This gate is deliberately before mkdir/log redirection and every stateful
 # surface below. A blocked full run emits only the read-only JSON status to
 # stdout and exits; it does not create a success-shaped ritual artifact.
-"$UV" run python -m data.ritual_authority require-full
+env PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m data.ritual_authority require-full
 AUTHORITY_RC=$?
 if [ "$AUTHORITY_RC" -ne 0 ]; then
   echo "RITUAL STATUS: BLOCKED BY TRACKED AUTHORITY"

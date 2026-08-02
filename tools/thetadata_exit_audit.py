@@ -210,7 +210,10 @@ def source_identity() -> dict:
 def readiness_source_identity(paths: tuple[str, ...] = READINESS_SOURCE_PATHS) -> dict:
     """Bind Q9 to exact source bytes, including uncommitted code under test."""
     commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+        ["git", "log", "-1", "--format=%H", "--", *paths],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     status = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all", "--", *paths],

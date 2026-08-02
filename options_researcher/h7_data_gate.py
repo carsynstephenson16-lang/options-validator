@@ -35,6 +35,7 @@ import os
 import re
 from datetime import date
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 
@@ -200,7 +201,13 @@ def _validate_chain_store_fields(df: pd.DataFrame, path: Path) -> None:
             raise GateStoreError(f"chain store {path} has a non-canonical expiration; refusing")
 
 
-def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
+def _evaluate_chain(
+    symbol: str,
+    eval_iso: str,
+    chain_dir: Path,
+    *,
+    receipt_validator: Callable[..., dict] | None = None,
+) -> dict:
     expected = chain_dir / f"{symbol}_{eval_iso}.parquet"
     days = _chain_days(symbol, chain_dir)
     at_or_before = [d for d in days if d <= eval_iso]
@@ -253,11 +260,13 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
                 codes.append(CHAIN_SCHEMA_V1_DISPLAY_ONLY)
             else:
                 try:
-                    binding = validate_v2_audit_receipt(
+                    validator = receipt_validator or validate_v2_audit_receipt
+                    binding = validator(
                         chain_dir,
                         expected,
                         symbol=symbol,
                         session=eval_iso,
+                        consumer_scope="H7",
                     )
                 except CacheAuditReceiptError as exc:
                     rec["audit_receipt"] = {"valid": False, "error": str(exc)}
@@ -349,6 +358,7 @@ def evaluate(
     chain_dir: Path = DEFAULT_CHAIN_DIR,
     scope: dict | None = None,
     symbols: list[str] | tuple[str, ...] | None = None,
+    _receipt_validator: Callable[..., dict] | None = None,
 ) -> dict:
     """Pure whole-universe evaluation. Filesystem inputs are injected via
     close_dir/chain_dir so tests drive fixture caches. Raises GateStoreError
@@ -364,7 +374,12 @@ def evaluate(
     records: dict[str, dict] = {}
     for sym in sorted(names):
         close_rec, close_codes = _evaluate_close(sym, eval_iso, close_dir)
-        chain_rec, chain_codes = _evaluate_chain(sym, eval_iso, chain_dir)
+        chain_rec, chain_codes = _evaluate_chain(
+            sym,
+            eval_iso,
+            chain_dir,
+            receipt_validator=_receipt_validator,
+        )
         codes = sorted(set(close_codes) | set(chain_codes))
         verdict = "GO" if not codes else "NO_GO"
         records[sym] = {

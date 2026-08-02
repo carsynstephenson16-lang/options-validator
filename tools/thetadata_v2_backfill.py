@@ -752,7 +752,7 @@ def _capture_one(
     raw_greeks, raw_open_interest = fetched
     try:
         normalized_greeks = thetadata_adapter._normalize_contract_keys(raw_greeks, "greeks")
-        chain = thetadata_adapter._merge_chain_frames(raw_greeks, raw_open_interest)
+        chain = thetadata_adapter._merge_chain_frames_v2(raw_greeks, raw_open_interest)
         if chain.empty:
             raise ValueError("greeks and open-interest reports share no contract keys")
         dropped = len(normalized_greeks) - len(chain)
@@ -844,7 +844,24 @@ def _capture_one(
     return {"status": "FETCHED", "audit": complete["audit"]}
 
 
-def execute(output_dir: Path, *, workers: int, owner_facts: dict[str, str]) -> dict:
+def execute(
+    output_dir: Path,
+    *,
+    workers: int,
+    approval_token: str | None,
+    facts_log: Path,
+    v1_dir: Path,
+) -> dict:
+    """Execute only after the same policy and owner gates as the CLI entry point."""
+    provider_policy.require_thetadata_acquisition("completed OD-1 v2 backfill rerun")
+    if approval_token != APPROVAL_TOKEN:
+        raise BackfillRefused(f"provider execution requires exact approval token {APPROVAL_TOKEN}")
+    if not 1 <= workers <= 8:
+        raise BackfillRefused("--workers must be between 1 and 8")
+    output_dir = _safe_output_dir(output_dir, v1_dir=v1_dir)
+    if not Path(facts_log).is_file():
+        raise BackfillRefused("facts_log must name the canonical facts ledger")
+    owner_facts = _verify_owner_facts(Path(facts_log), output_dir)
     plan = scope_plan()
     sessions = trading_days(START_SESSION, END_SESSION)
     free_bytes_before = _check_disk_space(output_dir)
@@ -1016,14 +1033,20 @@ def main(argv: list[str] | None = None) -> int:
     if not 1 <= args.workers <= 8:
         raise BackfillRefused("--workers must be between 1 and 8")
     output_dir = _safe_output_dir(args.output_dir, v1_dir=args.v1_dir)
-    owner_facts = _verify_owner_facts(args.facts_log, output_dir)
+    _verify_owner_facts(args.facts_log, output_dir)
     print(pull_approval_payload(output_dir))
     print(json.dumps({**plan, "output_namespace": str(output_dir)}, sort_keys=True))
     from dotenv import load_dotenv
 
     load_dotenv(args.env_file, override=False)
     with _execution_lock(output_dir):
-        result = execute(output_dir, workers=args.workers, owner_facts=owner_facts)
+        result = execute(
+            output_dir,
+            workers=args.workers,
+            approval_token=args.approval_token,
+            facts_log=args.facts_log,
+            v1_dir=args.v1_dir,
+        )
     print(json.dumps(result, sort_keys=True, indent=2))
     return 0
 
