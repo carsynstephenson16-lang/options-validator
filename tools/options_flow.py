@@ -1,7 +1,7 @@
-"""Bounded options-flow capture and offline feature CLI.
+"""Offline options-flow planning and historical capture CLI.
 
-The default command is dry-run. Non-dry execution is intentionally explicit
-and calls only the approved symbol/date window supplied by the operator.
+The default command is dry-run. Non-dry ThetaData execution is retained as a
+historical seam but is operator-disabled before any output or provider call.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--execute",
         action="store_true",
-        help="fetch and persist data; requires explicit owner approval",
+        help="retired ThetaData fetch mode; fails closed before any write",
     )
     parser.add_argument("--symbols", type=_symbols, default=list(DEFAULT_SYMBOLS))
     parser.add_argument("--max-symbols", type=int, default=3)
@@ -65,6 +65,10 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError("--max-symbols must be positive")
     if args.start_date > args.end_date:
         raise ValueError("--start-date must not be after --end-date")
+    if getattr(args, "execute", False):
+        from data import provider_policy
+
+        provider_policy.require_thetadata_acquisition("options-flow capture")
     symbols = list(args.symbols)[: args.max_symbols]
     sessions = _trading_days(args.start_date, args.end_date)
     requests = len(symbols) * len(sessions) * 2

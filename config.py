@@ -87,7 +87,6 @@ RQ1_RV_ANNUALIZATION_SESSIONS = 252
 # ---------------------------------------------------------------------------
 # DATA & COSTS
 # ---------------------------------------------------------------------------
-DATA_PROVIDER        = "thetadata"    # swappable: select the Lumibot datasource
 COMMISSION_PER_CONTRACT = 0.65        # per contract, per leg, each way
 SLIPPAGE_HAIRCUT     = 0.01           # extra adverse fraction applied beyond mid
 HALF_SPREAD_COST     = True           # assume crossing half the bid-ask per leg

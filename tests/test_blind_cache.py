@@ -10,10 +10,11 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
-from data import thetadata_adapter
+from data import provider_policy, thetadata_adapter
 from data.atomic_io import stage_parquet_write
 from data.cache_provenance import load_blind_cache_facts
 from research import facts
@@ -46,6 +47,10 @@ def _concurrent_publisher(
     results,
 ) -> None:
     """Process target for the real cross-process publisher-lock regression."""
+    policy_patch = mock.patch.object(
+        provider_policy, "require_thetadata_acquisition", return_value=None
+    )
+    policy_patch.start()
     thetadata_adapter.CACHE_DIR = Path(cache_dir)
     thetadata_adapter._require_cache_publisher = lambda: None
     greeks, oi = _frames()
@@ -70,6 +75,10 @@ def _concurrent_publisher(
 
 class BlindCacheTests(unittest.TestCase):
     def setUp(self):
+        self._policy_patch = mock.patch.object(
+            provider_policy, "require_thetadata_acquisition", return_value=None
+        )
+        self._policy_patch.start()
         self._tmp = tempfile.TemporaryDirectory()
         tmp = Path(self._tmp.name)
         self._old_cache = thetadata_adapter.CACHE_DIR
@@ -100,6 +109,7 @@ class BlindCacheTests(unittest.TestCase):
         thetadata_adapter._require_cache_publisher = self._old_publisher_guard
         thetadata_adapter.CACHE_DIR = self._old_cache
         self._tmp.cleanup()
+        self._policy_patch.stop()
 
     def _forbid_network(self):
         def raiser(*args, **kwargs):

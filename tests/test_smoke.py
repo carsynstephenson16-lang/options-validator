@@ -6,11 +6,13 @@ built to the same CHAIN_COLUMNS schema thetadata_adapter enforces.
 """
 import tempfile
 import unittest
+from unittest import mock
 
 import pandas as pd
 
 import config
 import smoke_test
+from data import provider_policy
 from research import facts
 
 
@@ -82,7 +84,14 @@ class MainTests(unittest.TestCase):
 
         smoke_test.get_eod_chain = fake_get_eod_chain
         try:
-            with tempfile.TemporaryDirectory() as tmp:
+            with (
+                tempfile.TemporaryDirectory() as tmp,
+                mock.patch.object(
+                    provider_policy,
+                    "require_thetadata_acquisition",
+                    return_value=None,
+                ),
+            ):
                 smoke_test.main(ledger_dir=tmp)
 
                 lines = facts.read_facts(tmp)
@@ -96,7 +105,14 @@ class MainTests(unittest.TestCase):
         old_date = smoke_test.SMOKE_TEST_DATE
         smoke_test.SMOKE_TEST_DATE = "2023-01-01"
         try:
-            with tempfile.TemporaryDirectory() as tmp:
+            with (
+                tempfile.TemporaryDirectory() as tmp,
+                mock.patch.object(
+                    provider_policy,
+                    "require_thetadata_acquisition",
+                    return_value=None,
+                ),
+            ):
                 with self.assertRaises(ValueError):
                     smoke_test.main(ledger_dir=tmp)
         finally:

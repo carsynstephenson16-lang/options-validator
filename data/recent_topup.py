@@ -21,7 +21,9 @@ Run from the repo root:
     python data/recent_topup.py --dry-run
     python data/recent_topup.py --scope h7 --dry-run
     python data/recent_topup.py --scope display-extra --dry-run
-    python data/recent_topup.py --scope h7 --refresh-closes
+
+Non-dry-run ThetaData top-up is operator-disabled as of 2026-07-31. Explicit
+offline inventory and immutable cached reads remain available.
 """
 from __future__ import annotations
 
@@ -33,7 +35,10 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
-from data import thetadata_adapter  # noqa: E402
+from data import (
+    provider_policy,  # noqa: E402
+    thetadata_adapter,  # noqa: E402
+)
 
 # Strategy-selectable moneyness band (|delta|). Deep-ITM (|delta|~1) contracts
 # carry benign IV=0 solver artifacts and far-OTM tails carry wide spreads; the
@@ -424,6 +429,8 @@ def run_topup(
     trading_days_fn=None,
     manifest_path: Path | None = None,
 ) -> dict:
+    if not dry_run:
+        provider_policy.require_thetadata_acquisition("recent chain top-up")
     import datetime as _dt
     from zoneinfo import ZoneInfo as _ZoneInfo
 

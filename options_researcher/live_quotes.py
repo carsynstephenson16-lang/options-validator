@@ -242,11 +242,22 @@ def _configured_provider() -> str:
     from dotenv import load_dotenv
 
     load_dotenv()
-    provider = os.environ.get("LIVE_MARKET_DATA_PROVIDER", "thetadata")
-    provider = provider.strip().lower()
+    raw_provider = os.environ.get("LIVE_MARKET_DATA_PROVIDER")
+    if raw_provider is None or not raw_provider.strip():
+        raise RuntimeError(
+            "LIVE_MARKET_DATA_PROVIDER must be set explicitly to 'schwab'; "
+            "ThetaData acquisition is disabled and no fallback is permitted."
+        )
+    provider = raw_provider.strip().lower()
     if provider not in {"thetadata", "schwab"}:
         raise RuntimeError(
             "LIVE_MARKET_DATA_PROVIDER must be 'thetadata' or 'schwab'."
+        )
+    if provider == "thetadata":
+        from data import provider_policy
+
+        provider_policy.require_thetadata_acquisition(
+            "ThetaData live-preview selection"
         )
     return provider
 

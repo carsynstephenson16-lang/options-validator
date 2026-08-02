@@ -9,10 +9,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
-from data import recent_topup, thetadata_adapter
+from data import provider_policy, recent_topup, thetadata_adapter
 from research import facts
 
 
@@ -156,6 +157,10 @@ class LatestCompleteSessionTests(unittest.TestCase):
 
 class RepairManifestTests(unittest.TestCase):
     def setUp(self):
+        self._policy_patch = mock.patch.object(
+            provider_policy, "require_thetadata_acquisition", return_value=None
+        )
+        self._policy_patch.start()
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
         self.cache_dir = self.root / "chains"
@@ -177,6 +182,7 @@ class RepairManifestTests(unittest.TestCase):
         thetadata_adapter._require_cache_publisher = self._old_guard
         thetadata_adapter._fetch_merged_chain = self._old_fetch
         self._tmp.cleanup()
+        self._policy_patch.stop()
 
     def _manifest(self, *, sha_override=None):
         session = "2026-07-24"

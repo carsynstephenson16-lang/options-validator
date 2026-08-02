@@ -1,7 +1,7 @@
-"""Bounded ThetaData trade-quote and prior-known OI retrieval.
+"""Historical ThetaData trade-quote and prior-known OI retrieval seam.
 
-The default client reuses the repository's authenticated remote ThetaClient
-factory. Tests inject a fake client and never authenticate or make requests.
+Production default-client acquisition is disabled. Tests inject a fake client
+to preserve deterministic normalization and storage coverage without auth.
 """
 from __future__ import annotations
 
@@ -70,13 +70,15 @@ def _validate_session(session: str) -> date:
 
 
 def default_client() -> FlowClient:
-    """Return the existing lazily-authenticated remote client.
+    """Refuse the retired default remote client path.
 
-    Importing this function is network-free. Authentication occurs only when
-    a non-dry-run caller explicitly invokes it.
+    Importing this function remains network-free; the policy raises before the
+    shared client factory can authenticate.
     """
+    from data import provider_policy
     from data.thetadata_adapter import _client
 
+    provider_policy.require_thetadata_acquisition("options-flow client construction")
     return cast(FlowClient, _client())
 
 

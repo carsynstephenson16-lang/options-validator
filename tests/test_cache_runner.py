@@ -11,9 +11,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import config
-from data import cache_runner, thetadata_adapter
+from data import cache_runner, provider_policy, thetadata_adapter
 from research import facts
 
 
@@ -44,6 +45,10 @@ class _CacheRunnerTestCase(unittest.TestCase):
     """Shared tempdir/CACHE_DIR/patch-restore scaffolding."""
 
     def setUp(self):
+        self._policy_patch = mock.patch.object(
+            provider_policy, "require_thetadata_acquisition", return_value=None
+        )
+        self._policy_patch.start()
         self._tmp = tempfile.TemporaryDirectory()
         tmp = Path(self._tmp.name)
         self._old_cache_dir = thetadata_adapter.CACHE_DIR
@@ -61,6 +66,7 @@ class _CacheRunnerTestCase(unittest.TestCase):
         cache_runner.trading_days = self._old_trading_days
         thetadata_adapter.CACHE_DIR = self._old_cache_dir
         self._tmp.cleanup()
+        self._policy_patch.stop()
 
     def _touch_cache_file(self, symbol, day):
         """Create an existing cache file so _cache_path(...).exists() is True.
