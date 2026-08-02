@@ -193,3 +193,16 @@ Fresh verification:
 Independent audit conclusion: Q9 is genuinely ready for cache-backed EOD
 research and remains honestly blocked for empirical flow research. Verification
 made no provider call, cache/receipt mutation, verdict use, or activation.
+
+## Q10 - Conditional schema-v2 integration gate
+
+Status: **STOPPED / OWNER-GATED**
+
+The parked `codex/od1-v2-current` work remains outside this branch and has no
+strategy authority. Q10 requires a separate explicit owner decision before any
+minimal current-base schema-v2 port, artifact rebuild, consumer integration, or
+activation. This closeout did not merge that branch, rebuild a v2 artifact,
+alter v1 bytes, rerun H9, activate a strategy, or claim edge.
+
+The closeout branch is intentionally preserved for owner review. Advancing past
+this point would exceed the authority granted for Q1-Q9.
