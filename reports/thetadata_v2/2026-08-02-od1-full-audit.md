@@ -10,8 +10,8 @@ The full machine receipt is stored beside the ignored data at:
 
 `/Users/carsynstephenson/options-validator/.cache/chains_v2/od1-2026-08-01/_meta/full_audit.json`
 
-- Receipt SHA-256 identity: `c08106ba2cb5c540c8800925cf0f5511c99c733d944c2597de80f8b3ea77c7e3`
-- Audit-source commit: `c6e83e70e60e4d0d05931007b2621455bf9ddd3d`
+- Receipt SHA-256 identity: `689c2b02f27ecb8107062ee2912c9612472100cb727d5027f178f96b348cb1b6`
+- Audit-source commit: `313af761f737ecf19d96d0cae3bee85fc9f00da9`
 - Source identity: clean; 20 exact source hashes bound in the full receipt,
   including `data/atomic_io.py` and
   `options_researcher/h7_synthetic_proof.py`, two runtime dependencies omitted
@@ -19,12 +19,17 @@ The full machine receipt is stored beside the ignored data at:
 - Scope: 18 symbols × 256 XNYS sessions = 4,608 normalized partitions
 - Raw provider frames bound: 9,216
 - Normalized chain plus independent-close files bound: 4,626
+- Authorized consumer scope: H7 only. H9's different 45-90 DTE and delta
+  geometry is not authorized by this receipt and remains fail-closed pending a
+  separate scope-specific audit.
 - Effective blockers: 0
 - Warnings: 10,394
 
 The outer receipt hash, embedded base-audit receipt, normalized file-hash map,
 and raw-file hash map were independently recomputed after the dependency
-closure was repaired and the full audit rerun.
+closure and consumer contract were repaired. The normalized and raw hash-map
+identities are unchanged from the superseded `c08106ba...c7e3` receipt, proving
+that this contract repair did not change data bytes.
 
 ## Exact-byte quarantines
 
@@ -58,6 +63,6 @@ The focused loader tests separately refuse a quarantined partition with
 - 762 monthly-listing warnings describe strategy ineligibility or absent calendar
   monthlies, not proof of missing provider rows.
 
-The audit therefore supports safe, receipt-bound offline reads of the
-nonquarantined partitions. It does not show that any strategy has an advantage,
-or even that H7 will produce enough entries for a verdict.
+The audit therefore supports safe, receipt-bound H7 offline reads of the
+nonquarantined partitions. It does not authorize H9, show that any strategy has
+an advantage, or show that H7 will produce enough entries for a verdict.
