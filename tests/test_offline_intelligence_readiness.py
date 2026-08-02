@@ -274,6 +274,20 @@ class OfflineIntelligenceReadinessTests(unittest.TestCase):
         self.assertIsNone(report["empirical_opinion"])
         self.assertTrue(report["receipt_hash"])
 
+    def test_source_identity_ignores_unrelated_head_only_commits(self):
+        def fake_run(args, **_kwargs):
+            if args[1] == "log":
+                return mock.Mock(returncode=0, stdout="source-commit\n")
+            if args[1] == "rev-parse":
+                return mock.Mock(returncode=0, stdout="unrelated-head\n")
+            return mock.Mock(returncode=0, stdout="")
+
+        with mock.patch.object(audit.subprocess, "run", side_effect=fake_run):
+            identity = audit.readiness_source_identity(("tools/thetadata_exit_audit.py",))
+
+        self.assertEqual(identity["commit"], "source-commit")
+        self.assertFalse(identity["dirty"])
+
     def test_signed_readiness_receipt_recomputes_and_detects_mutation(self):
         report = audit.run_readiness(
             chain_dir=self.chains,
