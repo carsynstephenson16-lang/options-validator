@@ -40,14 +40,18 @@ The platform has two layers, and the separation is deliberate:
 
 ## Current status
 
+`PROJECT_STATE.md` is the canonical status and execution queue. Older roadmap
+documents remain historical evidence; they do not override its gates or task
+ordering.
+
 | Piece | State |
 |---|---|
 | Universe | `config.UNIVERSE = ["MSFT", "AMZN", "VST", "CEG"]` |
-| Chain data | Daily EOD chains cached for the full universe: MSFT/AMZN/VST 2018-01-02..2026-06-30 (~2,134 days each), CEG 2022-02-09..2026-06-30 (1,100 days, zero empty files; the 2018–2022-02 gap is pre-listing) |
+| Chain data | The verified canonical inventory contains 31,366 top-level daily EOD files, 79,519,407 rows, and 26 symbols. MSFT/AMZN/VST end on 2026-07-27 (2,152 sessions each); CEG covers 2022-02-09 through 2026-07-27 (1,118 sessions). All 33 July 24/27 additions are now manifested. One nested SPY snapshot is preserved but explicitly noncanonical. |
 | Tradability profile | `options_researcher/profile_tradability.py` — first findings below |
 | Backtest path | Offline Lumibot/PandasData harness + `tools/score_backtest.py` scoreboard CLI, wired against the real cache |
 | Feasibility | `analysis/feasibility.py` — credits measured from cached chains, not assumed |
-| Current holdings | `data/positions/holdings.csv` records 39 VST shares. `data/positions/positions.csv` is empty: no options are currently open or paper-tracked. |
+| Current holdings | `data/positions/holdings.csv` records 39 VST shares. The legacy `positions.csv` and H8 book are empty; the H6 paper book has one open NVDA call (`H6-0001`) and zero completed positions. |
 | Scanner mode | `options_researcher.attractiveness` and `options_researcher.attractiveness_dashboard` show candidates; they never add trades or mutate positions. |
 | Discipline layer | Full unittest suite green (`uv run python -m unittest discover -s tests`; exit code is the verdict — don't trust a hardcoded count) |
 | Strategy history | H1 ($2-wide SPY/QQQ put spread), H2 ($5-wide): registered, honest in-sample **FAILs**. H3R (SPY conditional-VRP): archived un-run at scope pivot. Ledger records are permanent; OOS budget 0/3 spent |
@@ -85,8 +89,8 @@ uv run python -m options_researcher.attractiveness            # which options lo
 uv run python -m options_researcher.entry_watch                # WAIT/FIRE vs the frozen entry triggers
 uv run python -m options_researcher.h7_watch                    # session-aligned H7 watcher; alerts only
 uv run python -m options_researcher.h7_source_health           # earnings provenance alive? (exit 1 on any unhealthy name)
-uv run python -m options_researcher.h7_data_gate               # Stage 2 whole-universe daily data gate (read-only; BUILD-ONLY; live = NO_GO 0/12, exit 1)
-uv run python -m options_researcher.h7_event_ledger verify     # Stage 3 forward-event ledger verifier (BUILD-ONLY; default store absent -> VALID EMPTY, exit 0)
+uv run python -m options_researcher.h7_data_gate --source-health-receipt <path>  # exact-session daily data gate; receipt required
+uv run python -m options_researcher.h7_event_ledger verify     # verifies the current one-record registration store
 uv run python tools/h7_refresh_earnings.py --help               # owner-run append-raw/promote refresher
 uv run python data/recent_topup.py --scope h7 --dry-run         # 12-name missing-session inventory; no network
 uv run python tools/thetadata_exit_audit.py --scope h7          # read-only forward-cache exit audit
@@ -127,7 +131,8 @@ required, in order:
    `config.py` drifts between hypotheses by design, and the reveal gate's
    `config_hash` check will refuse a drifted tree.
 3. **The exact data**: the parquet chain cache (`.cache/chains/`, ~2.3 GB)
-   is gitignored and re-fetchable only with a live ThetaData subscription.
+   is gitignored. ThetaData acquisition is disabled, so preserve or copy these
+   immutable bytes rather than assuming they can be downloaded again.
    `data/chain_cache_manifest.txt` freezes its per-file sha256 —
    `uv run python tools/cache_manifest.py verify` proves a (re-fetched or
    copied) cache is byte-identical to the one the records were produced
@@ -141,8 +146,8 @@ the dated reports.
 ## Capital & risk
 
 `RISK_SLEEVE` ($14k) and `MAX_LOSS_PER_TRADE` ($600 economic max loss, owner
-decision 2026-07-02) live in `config.py`. The current recorded state has **no
-open options**, so the sleeve is not committed. If the scanner later surfaces
+decision 2026-07-02) live in `config.py`. The current recorded state includes
+one open H6 NVDA paper call and no H7/H8 option position. If the scanner later surfaces
 an attractive candidate and the owner adds it, four concurrent option
 positions would put about $2,400, or 17.1% of the sleeve, at simultaneous
 risk — and these four names are **one AI-infrastructure cluster, not four
@@ -288,10 +293,10 @@ the registered decide functions, fails closed on unknown earnings or book
 errors). **Repo-verified finding:** the 2018–2026 historical diagnostic is
 PERMANENTLY WITHDRAWN as verdict-capable evidence (amendment v1.3,
 2026-07-11): historical earnings provenance cannot be causally reconstructed.
-The point-in-time forward
-paper window is H7's sole verdict-bearing path** (roadmap:
-`docs/superpowers/plans/2026-07-11-h7-forward-roadmap.md`, activation gated
-on independent review). Roadmap Stage 1 is built (2026-07-11):
+The point-in-time forward paper window is H7's sole verdict-bearing path. The
+2026-07-11 forward roadmap is historical build evidence; `PROJECT_STATE.md`
+now governs sequencing, provider/cache identity, namespace choice, and any
+future activation. Roadmap Stage 1 is built (2026-07-11):
 `options_researcher.h7_source_health` reports per-name earnings-provenance
 health over the v3 gating store, and `tools/h7_refresh_earnings.py` is the
 owner-in-the-loop append-only refresher (append-raw + promote under the
@@ -322,16 +327,18 @@ fail-closed gate (`EARNINGS-UNKNOWN` → no entry) and reported with the run —
 they no longer block the whole board. A data-gate NO_GO still blocks the run
 entirely. Aggregator-estimated dates remain non-promotable
 (`docs/superpowers/plans/2026-07-14-h7-amendment-v1.4-per-name-source-health.md`).
-Stages 3–7 are **BUILT but
-INACTIVE** with zero real events; Stages 4–7 are BUILD-ONLY and
-SYNTHETIC-ONLY, and Stage 8 (activation) is explicitly NOT OPEN and stays
-with owner + independent review. Audit receipts v1–v4
+Stages 3–7 are **BUILT but INACTIVE**. The H7 event store contains one
+`window_registration` event and no paper observation, fill, or result; that
+registration does not open Stage 8 or authorize entry. Stages 4–7 remain
+BUILD-ONLY and SYNTHETIC-ONLY, and any future namespace or activation stays
+owner-gated under `PROJECT_STATE.md`. Audit receipts v1–v4
 under `reports/h7_audit/` are preserved historical BLOCK artifacts; v4 was
 valid at its 7b-2R.2 source commit and is intentionally not regenerated after
 forward-roadmap source/config changes. A frozen retirement gate
 (`config.H7_HISTORICAL_WITHDRAWAL_HASH`) makes every historical-diagnostic
 entry point refuse before reading market data.
-Current recorded holdings: 39 VST shares and no options. Remaining for H7:
+Current recorded holdings: 39 VST shares plus one open H6 NVDA paper call; H7
+has no paper position or result. Remaining for H7:
 restore Stage 1 source health across the full 14-name watch universe,
 confirm paid daily EOD continuity,
 supply the owner-frozen window inputs, bind a clean code/config identity, then
@@ -343,8 +350,9 @@ H5_ENTRY_TRIGGER_AMENDMENT_V2 of 2026-07-15): evaluate only when close ≤
 trigger (VST $160 v2 — pre-amendment signal history under $140 is stale,
 AMZN $220) AND IV-rank ≤ 0.5 AND the LEAPS passes the liquidity gates —
 `options_researcher.entry_watch` prints the live WAIT/FIRE status. The
-ThetaData subscription ends 2026-07-29 (owner update 2026-07-13) per
-`docs/superpowers/2026-07-07-thetadata-cancel-checklist.md`.
+ThetaData acquisition is disabled. Existing cache reads remain available, but
+missing data must fail closed; see `docs/provider-transition.md` and
+`PROJECT_STATE.md`.
 
 ## Known limitations
 
