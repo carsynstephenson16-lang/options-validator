@@ -87,15 +87,17 @@ def _source_identity(root: Path = REPO_ROOT) -> dict:
         if not path.is_file():
             raise AuditBlocked(f"source binding missing required file: {relative}")
         hashes[relative] = sha256_file(path)
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
+    source_commit = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", *SOURCE_PATHS],
         cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
     return {
-        "git_commit": commit.stdout.strip() if commit.returncode == 0 else None,
+        "git_source_commit": (
+            source_commit.stdout.strip() if source_commit.returncode == 0 else None
+        ),
         "source_files": hashes,
         "source_files_hash": sha256_hex(canonical_json(hashes)),
         "config_hash": config_hash(),

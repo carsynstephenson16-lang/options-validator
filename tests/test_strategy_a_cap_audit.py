@@ -3,13 +3,16 @@
 import tempfile
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
 from unittest import mock
 
 import pandas as pd
 
 from tools.cache_manifest import write_manifest
 from tools.strategy_a_cap_audit import (
+    SOURCE_PATHS,
     AuditBlocked,
+    _source_identity,
     run_audit,
     verify_receipt,
     write_receipt,
@@ -140,6 +143,16 @@ class StrategyACapAuditTests(unittest.TestCase):
 
         self.assertTrue(ok, failures)
         self.assertEqual(failures, [])
+
+    def test_source_commit_ignores_unrelated_later_commits(self):
+        completed = CompletedProcess(args=[], returncode=0, stdout="source-commit\n", stderr="")
+        with mock.patch("tools.strategy_a_cap_audit.subprocess.run", return_value=completed) as run:
+            identity = _source_identity()
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[:5], ["git", "log", "-1", "--format=%H", "--"])
+        self.assertEqual(command[5:], list(SOURCE_PATHS))
+        self.assertEqual(identity["git_source_commit"], "source-commit")
 
 
 if __name__ == "__main__":
