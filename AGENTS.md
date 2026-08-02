@@ -24,6 +24,15 @@ Make reasonable assumptions when the missing detail does not change the core ans
 Ask one targeted question only when blocked or when the wrong assumption creates material risk.
 Do not repeat the same search, read, edit, or test loop without progress.
 
+## Skills
+
+Reusable operator skills live in `.agents/skills/<name>/SKILL.md` (the
+tracked source of truth; `.claude/skills/` holds local copies for Claude
+Code). Before starting work that a skill covers — backtest realism audits,
+data audits, ledger discipline, red-teaming results, the daily ritual —
+read the matching SKILL.md and follow it. Guardrail rules for advisor-style
+agents live in `.agents/rules/`.
+
 ## Before Editing
 
 Inspect the repository structure.
