@@ -1,0 +1,26 @@
+{
+  "receipts": {
+    "baseline-suite": {
+      "argv": [
+        "/Users/carsynstephenson/options-validator/.venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-q"
+      ],
+      "dirty_state_disclosure": "isolated worktree at the recorded Git SHA with only the uncommitted reliability integration files present",
+      "environment": {
+        "LIVE_MARKET_DATA_PROVIDER": "schwab",
+        "MPLCONFIGDIR": "/private/tmp/options-validator-mpl",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "exit_code": 0,
+      "ran_at": "2026-08-02T22:36:44Z",
+      "repository_sha": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "summary": "2302 tests passed in 176.051s"
+    }
+  },
+  "schema_version": 1
+}

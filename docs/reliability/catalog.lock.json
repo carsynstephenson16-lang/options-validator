@@ -1,0 +1,10 @@
+{
+  "advisory_boundary": "ADVISORY ONLY: this report cannot authorize trading, change research verdicts, modify evidence, enable outreach, or promote controls.",
+  "catalog_sha256": "22543bf44d3e5c690c22b3eea279c218a883032300e2a923b7e980295a94a379",
+  "catalog_version": 1,
+  "profile_schema_version": 1,
+  "report_schema_version": 1,
+  "schema_version": 1,
+  "snapshot_path": "docs/reliability/catalog.snapshot.json",
+  "standards_git_sha": "d88dcdbbbc26d919d0b2a398400767278e08027d"
+}
