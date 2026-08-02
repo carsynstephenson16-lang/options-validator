@@ -132,9 +132,7 @@ class ExitAuditTests(unittest.TestCase):
         self.assertTrue(any(item["check"] == 1 for item in report["blocks"]))
 
     def test_pre_eod_fetch_and_sha_mismatch_both_block(self):
-        facts = self._facts(
-            fetched=datetime(2026, 7, 10, 16, 30, tzinfo=NY), digest="0" * 64
-        )
+        facts = self._facts(fetched=datetime(2026, 7, 10, 16, 30, tzinfo=NY), digest="0" * 64)
         report = self._run(facts=facts)
         details = [item["detail"] for item in report["blocks"]]
         self.assertTrue(any("sha256 mismatch" in item for item in details))
@@ -149,14 +147,66 @@ class ExitAuditTests(unittest.TestCase):
             any(item["check"] == 13 and "drift=" in item["detail"] for item in report["blocks"])
         )
 
-    def test_missing_required_monthly_band_blocks(self):
+    def test_parity_can_be_diagnostic_when_v2_checks_provider_spot(self):
+        pd.DataFrame({"date": [SESSION], "close": [50.0]}).to_parquet(
+            self.closes / "AMD.parquet", index=False
+        )
+
+        report = self._run(parity_mode="diagnostic")
+
+        self.assertFalse(any(item["check"] == 13 for item in report["blocks"]))
+        self.assertTrue(
+            any(
+                item["check"] == 13 and "diagnostic parity" in item["detail"]
+                for item in report["warnings"]
+            )
+        )
+
+    def test_unlisted_calendar_monthly_is_eligibility_warning_not_capture_block(self):
         frame = _chain()
         frame = frame[frame["expiration"] == "2026-08-21"]
         frame.to_parquet(self.path, index=False)
         report = self._run(facts=self._facts())
+        self.assertFalse(any(item["check"] == 2 for item in report["blocks"]))
         self.assertTrue(
-            any(item["check"] == 2 and "long-call" in item["detail"] for item in report["blocks"])
+            any(item["check"] == 2 and "long-call" in item["detail"] for item in report["warnings"])
         )
+
+    def test_extreme_iv_outside_declared_lane_is_warning_not_block(self):
+        frame = _chain()
+        outside = (frame["expiration"] == "2026-08-21") & frame["right"].eq("C")
+        frame.loc[outside, "iv"] = 6.0
+        frame.to_parquet(self.path, index=False)
+
+        report = self._run(facts=self._facts())
+
+        self.assertFalse(any(item["check"] == "10/11" for item in report["blocks"]))
+        self.assertTrue(any(item["check"] == "10/11" for item in report["warnings"]))
+
+    def test_extreme_iv_inside_declared_lane_still_blocks(self):
+        frame = _chain()
+        inside = (frame["expiration"] == "2026-09-18") & frame["right"].eq("C")
+        frame.loc[inside, "iv"] = 6.0
+        frame.to_parquet(self.path, index=False)
+
+        report = self._run(facts=self._facts())
+
+        self.assertTrue(any(item["check"] == "10/11" for item in report["blocks"]))
+
+    def test_bad_iv_on_unselectable_deep_itm_call_is_only_a_warning(self):
+        frame = _chain()
+        bad = (
+            (frame["expiration"] == "2026-09-18")
+            & frame["right"].eq("C")
+            & frame["strike"].eq(90.0)
+        )
+        frame.loc[bad, ["iv", "delta"]] = [0.0, 1.0]
+        frame.to_parquet(self.path, index=False)
+
+        report = self._run(facts=self._facts())
+
+        self.assertFalse(any(item["check"] == "10/11" for item in report["blocks"]))
+        self.assertTrue(any(item["check"] == "10/11" for item in report["warnings"]))
 
     def test_dirty_source_identity_blocks_receipt_readiness(self):
         report = audit.run_audit(

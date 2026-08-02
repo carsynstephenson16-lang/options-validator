@@ -1,0 +1,30 @@
+{
+  "schema": "v2-partition-quarantine/v1",
+  "scope_id": "od1-v2-2026-08-01",
+  "entries": [
+    {
+      "symbol": "AMZN",
+      "session": "2025-11-24",
+      "sha256": "e344c3fdf1535a280f72af03d6794407ac2c3ef8ce256c8f30ff412d1802ff7b",
+      "size": 92027,
+      "checks": [6],
+      "reason": "Provider EOD snapshot contains 6 crossed markets; preserve bytes but exclude the whole partition from verdict use."
+    },
+    {
+      "symbol": "AVGO",
+      "session": "2025-11-24",
+      "sha256": "dc3872d2b2f4a59363372c61ce15555c34049cd719fecebd240d6b0aefa6f14f",
+      "size": 124230,
+      "checks": [6],
+      "reason": "Provider EOD snapshot contains 12 crossed markets; preserve bytes but exclude the whole partition from verdict use."
+    },
+    {
+      "symbol": "AMD",
+      "session": "2025-11-24",
+      "sha256": "3089e58c4f921f757ebc454eab2a6cea6031d23174c0b3c1d826d1f1cc33ace1",
+      "size": 119220,
+      "checks": [6],
+      "reason": "Provider EOD snapshot contains 18 crossed markets; preserve bytes but exclude the whole partition from verdict use."
+    }
+  ]
+}

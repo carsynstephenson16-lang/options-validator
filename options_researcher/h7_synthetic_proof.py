@@ -8,6 +8,7 @@ activation gate.
 
 from __future__ import annotations
 
+import json
 import shutil
 from datetime import date, datetime
 from pathlib import Path
@@ -35,6 +36,7 @@ from options_researcher.h7_paper_lifecycle import (
 )
 from options_researcher.h7_scope import watch_universe
 from options_researcher.h7_source_health import symbol_health
+from research.hashing import canonical_json, sha256_file, sha256_hex
 
 FIXTURE_ID = "h7-stage7-v1"
 BOUNDARY = "BUILD-ONLY; SYNTHETIC-ONLY; INACTIVE"
@@ -104,6 +106,21 @@ def _chain(*, bid: float = 4.9, ask: float = 5.0) -> pd.DataFrame:
                 "gamma": 0.02,
                 "theta": -0.03,
                 "vega": 0.10,
+                "timestamp": pd.Timestamp(
+                    f"{DECISION_SESSION} 17:15:00",
+                    tz="America/New_York",
+                ),
+                "bid_size": 17,
+                "bid_condition": 50,
+                "ask_size": 23,
+                "ask_condition": 50,
+                "iv_error": 0.001,
+                "underlying_timestamp": pd.Timestamp(
+                    f"{DECISION_SESSION} 16:00:00",
+                    tz="America/New_York",
+                ),
+                "underlying_price": 100.0,
+                "thetadata_client_version": "1.0.9",
             }
         ]
     )
@@ -124,7 +141,57 @@ def _write_market_fixtures(root: Path) -> tuple[Path, Path]:
         _chain().to_parquet(
             chains / f"{symbol}_{DECISION_SESSION}.parquet", index=False
         )
+    _write_synthetic_full_audit_receipt(chains)
     return closes, chains
+
+
+def _write_synthetic_full_audit_receipt(chain_dir: Path) -> Path:
+    """Write deterministic audit evidence for synthetic-only v2 fixtures."""
+    chain_dir = Path(chain_dir)
+    partitions = sorted(chain_dir.glob("*_????-??-??.parquet"))
+    parsed = [path.stem.rsplit("_", 1) for path in partitions]
+    symbols = sorted({symbol for symbol, _session in parsed})
+    sessions = sorted({session for _symbol, session in parsed})
+    file_hashes = {
+        str(path.resolve()): sha256_file(path)
+        for path in partitions
+    }
+    repo_root = Path(__file__).resolve().parents[1]
+    source_relative = "data/cache_schema.py"
+    base = {
+        "source_identity": {
+            "dirty": False,
+            "source_paths": [source_relative],
+            "source_hashes": {
+                source_relative: sha256_file(repo_root / source_relative),
+            },
+        },
+        "file_hashes": file_hashes,
+        "file_hashes_hash": sha256_hex(canonical_json(file_hashes)),
+        "blocks": [],
+        "verdict": "PASS WITH WARNINGS",
+    }
+    base_hashable = {
+        key: value for key, value in base.items() if key != "file_hashes"
+    }
+    base["receipt_hash"] = sha256_hex(canonical_json(base_hashable))
+    report = {
+        "schema": "thetadata-v2-full-audit/v1",
+        "output_namespace": str(chain_dir.resolve()),
+        "symbols": symbols,
+        "sessions": sessions,
+        "base_fourteen_check_audit": base,
+        "blocks": [],
+        "verdict": "PASS WITH WARNINGS",
+        "quarantined_partitions": [],
+    }
+    report["receipt_hash"] = sha256_hex(canonical_json(report))
+    payload = json.dumps(report, sort_keys=True, separators=(",", ":"))
+    receipt = chain_dir / "_meta" / "full_audit.json"
+    receipt.parent.mkdir(exist_ok=True)
+    if not receipt.exists() or receipt.read_text() != payload:
+        receipt.write_text(payload)
+    return receipt
 
 
 def _event(

@@ -51,9 +51,16 @@ def _entry_chain(symbol: str, iso: str, chain_dir: Path) -> pd.DataFrame:
     # Cache-ONLY (spec §1 zero new data spend): a missing chain raises
     # FileNotFoundError, which the census loop codes as `missing_entry_chain`
     # and excludes the event -- it is NEVER fetched from the paid client.
+    # H9 is verdict-bearing, so legacy v1 partitions are refused as display-only.
     # Reads resolve against the census's OWN chain_dir so presence checks and
     # content reads can never diverge (post-merge test caught the divergence).
-    return load_cached_chain(symbol, iso, allow_oos=True, cache_dir=chain_dir)
+    return load_cached_chain(
+        symbol,
+        iso,
+        allow_oos=True,
+        cache_dir=chain_dir,
+        verdict_bearing=True,
+    )
 
 
 def _closes(symbol: str, start_iso: str, end_iso: str) -> pd.Series:
