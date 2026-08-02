@@ -35,9 +35,7 @@ def evaluate_full_ritual(
     if not authority.exact_session_source_active:
         blockers.append("No approved ongoing exact-session options source is active.")
         if THETADATA_ACQUISITION_DISABLED:
-            blockers.append(
-                "ThetaData acquisition is disabled and is not an available fallback."
-            )
+            blockers.append("ThetaData acquisition is disabled and is not an available fallback.")
     if not authority.h7_active:
         blockers.append("H7 forward-paper authority is paused; no active namespace exists.")
     return RitualReadiness(ready=not blockers, blockers=tuple(blockers))
