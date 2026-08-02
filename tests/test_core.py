@@ -1,5 +1,7 @@
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import pandas as pd
@@ -8,7 +10,7 @@ import config
 from analysis.feasibility import ASSUMED_CREDIT_FRAC
 from data import thetadata_adapter
 from data.thetadata_adapter import mid_price, passes_liquidity
-from metrics import scoreboard
+from metrics import print_scoreboard, scoreboard
 from strategies.base import (
     adverse_buy,
     adverse_sell,
@@ -294,7 +296,22 @@ class ScoreboardTests(unittest.TestCase):
 
         result = scoreboard(trades)
 
-        self.assertAlmostEqual(result["return_on_economic_max_loss"], 30.0 / 110.0)
+        self.assertAlmostEqual(result["return_on_economic_max_loss"], 30.0 / 220.0)
+
+    def test_printed_economic_return_names_total_denominator(self):
+        result = scoreboard([
+            {"pnl": 10.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
+             "entry_date": "2021-01-04", "symbol": "SPY"},
+            {"pnl": 20.0, "capital_at_risk": 100.0, "economic_max_loss": 110.0,
+             "entry_date": "2021-01-11", "symbol": "SPY"},
+        ])
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            print_scoreboard(result)
+
+        self.assertIn("total P&L / total economic max loss", output.getvalue())
+        self.assertNotIn("total P&L / avg economic max loss", output.getvalue())
 
     def test_scoreboard_rejects_partial_economic_max_loss(self):
         trades = [

@@ -33,7 +33,10 @@ class ConfigKnobTests(unittest.TestCase):
         self.assertEqual(config.COHORT_GRANULARITY, "week")
 
     def test_fill_model_id_is_versioned_string(self):
-        self.assertEqual(config.FILL_MODEL_ID, "conservative_bid_ask_plus_haircut_v1")
+        self.assertEqual(
+            config.FILL_MODEL_ID,
+            "conservative_bid_ask_plus_haircut_v1",
+        )
 
 
 class SmokeTestBoundaryTests(unittest.TestCase):
@@ -56,10 +59,27 @@ class HashingTests(unittest.TestCase):
         snap = hashing.cost_model_snapshot()
         # ASSUMED_CREDIT_FRAC lives in feasibility.py, not config -- must be captured.
         self.assertEqual(snap["ASSUMED_CREDIT_FRAC"], feasibility.ASSUMED_CREDIT_FRAC)
-        for key in ("SLIPPAGE_HAIRCUT", "MAX_SPREAD_PCT", "MIN_OPEN_INTEREST",
-                    "FILL_MODEL_ID", "BOOTSTRAP_BLOCK_CONSTANTS", "COHORT_GRANULARITY",
-                    "OOS_LOOK_BUDGET"):
+        for key in (
+            "SLIPPAGE_HAIRCUT",
+            "MAX_SPREAD_PCT",
+            "MIN_OPEN_INTEREST",
+            "FILL_MODEL_ID",
+            "BOOTSTRAP_BLOCK_CONSTANTS",
+            "COHORT_GRANULARITY",
+            "OOS_LOOK_BUDGET",
+        ):
             self.assertIn(key, snap)
+
+    def test_strategy_a_execution_policy_is_not_h7_shared_cost_model(self):
+        cost_before = hashing.cost_model_hash()
+        config_before = hashing.config_hash()
+        original = config.A_ENTRY_CREDIT_TOLERANCE
+        try:
+            config.A_ENTRY_CREDIT_TOLERANCE = original + 0.01
+            self.assertEqual(hashing.cost_model_hash(), cost_before)
+            self.assertNotEqual(hashing.config_hash(), config_before)
+        finally:
+            config.A_ENTRY_CREDIT_TOLERANCE = original
 
     def test_cost_model_hash_is_deterministic(self):
         self.assertEqual(hashing.cost_model_hash(), hashing.cost_model_hash())

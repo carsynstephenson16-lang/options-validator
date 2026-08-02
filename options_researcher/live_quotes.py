@@ -10,12 +10,12 @@ it can never fire a trigger. FIRE stays with entry_watch.
 
 Design: docs/superpowers/specs/2026-07-16-live-dashboard-design.md.
 
-Schema gate: the ThetaData v3 gRPC client returns SERVER-DEFINED DataTable
-columns that cannot be known offline, so a one-shot probe (run during a
-regular session via `python -m options_researcher.live_quotes --probe`)
-records the real response columns per endpoint. probe_ok() refuses the live
-lane when the probe is missing, stale (config.LIVE_PROBE_MAX_AGE_DAYS), from
-a different installed client version, or shows a required endpoint failing.
+Schema gate: market-data providers return server-defined response columns, so
+a one-shot probe (run during a regular session via
+`python -m options_researcher.live_quotes --probe`) records the real response
+columns per endpoint. probe_ok() refuses the live lane when the probe is
+missing, stale (config.LIVE_PROBE_MAX_AGE_DAYS), from a different provider or
+installed client version, or shows a required endpoint failing.
 A stock-entitlement denial does NOT fail the probe -- it selects the
 put-call-parity fallback spot for trigger names only.
 """
@@ -79,7 +79,7 @@ REQUIRED_PROBE_ENDPOINTS = (
     "option_snapshot_greeks_all",
     "option_snapshot_open_interest",
 )
-_NOTE_MAX = 200  # exception-note truncation (plumbing, not a strategy number)
+_FUTURE_CLOCK_TOLERANCE_SECONDS = 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +134,12 @@ def quote_is_fresh(quote_ts, now, max_age_seconds) -> bool:
     now_ts = pd.Timestamp(now)
     if pd.isna(now_ts) or now_ts.tzinfo is None:
         return False
-    return (now_ts - ts).total_seconds() <= float(max_age_seconds)
+    age_seconds = (now_ts - ts).total_seconds()
+    return (
+        -_FUTURE_CLOCK_TOLERANCE_SECONDS
+        <= age_seconds
+        <= float(max_age_seconds)
+    )
 
 
 def _finite_or_none(v):
@@ -215,7 +220,8 @@ def build_symbol_preview(symbol: str, *, spot, spot_source, spot_ts,
         "gates": gates,
         "open_interest": oi_f,
         # Never label an OI figure that isn't there (fail closed).
-        "oi_label": (f"OI as of {oi_asof} (prior official report)"
+        "oi_label": (f"OI observed {oi_asof} "
+                     "(provider update cadence/as-of unverified)"
                      if oi_asof and oi_f is not None else None),
         "leaps": leaps,
     }
@@ -231,8 +237,53 @@ def _installed_thetadata_version() -> str:
     return importlib.metadata.version("thetadata")
 
 
+def _configured_provider() -> str:
+    """Configured live-preview provider; historical cache paths are unchanged."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    raw_provider = os.environ.get("LIVE_MARKET_DATA_PROVIDER")
+    if raw_provider is None or not raw_provider.strip():
+        raise RuntimeError(
+            "LIVE_MARKET_DATA_PROVIDER must be set explicitly to 'schwab'; "
+            "ThetaData acquisition is disabled and no fallback is permitted."
+        )
+    provider = raw_provider.strip().lower()
+    if provider not in {"thetadata", "schwab"}:
+        raise RuntimeError(
+            "LIVE_MARKET_DATA_PROVIDER must be 'thetadata' or 'schwab'."
+        )
+    if provider == "thetadata":
+        from data import provider_policy
+
+        provider_policy.require_thetadata_acquisition(
+            "ThetaData live-preview selection"
+        )
+    return provider
+
+
+def _installed_provider_version(provider: str) -> str:
+    if provider == "thetadata":
+        return _installed_thetadata_version()
+    import importlib.metadata
+
+    return importlib.metadata.version("schwab-py")
+
+
+def _live_client():
+    provider = _configured_provider()
+    if provider == "schwab":
+        from data.schwab_adapter import _client
+    else:
+        from data.thetadata_adapter import _client
+
+    return _client()
+
+
 def _exc_note(exc: BaseException) -> str:
-    return f"{type(exc).__name__}: {str(exc)[:_NOTE_MAX]}"
+    # OAuth/HTTP exception messages can contain request details. Persist only
+    # the exception class in dashboard/probe artifacts.
+    return type(exc).__name__
 
 
 def _coerce_expiration(v) -> date:
@@ -285,10 +336,19 @@ def run_probe(client=None, now_ny=None, out_dir: str = PROBE_DIR) -> dict:
             "run_probe refused: outside the NY regular session (probe must "
             "observe live snapshot schemas, not closed-market responses)")
     if client is None:
-        from data.thetadata_adapter import _client
-
-        client = _client()
+        client = _live_client()
+    if hasattr(client, "regular_session_state"):
+        provider_session = client.regular_session_state(now_ny)
+        if not provider_session.get("open"):
+            raise RuntimeError(
+                "run_probe refused: Schwab market-hours schedule does not show "
+                "both equity and equity-option regular sessions open"
+            )
     ny_date = now_ny.date()
+    provider = getattr(client, "provider_name", _configured_provider())
+    provider_version = getattr(
+        client, "provider_version", _installed_provider_version(provider)
+    )
 
     endpoints: dict = {}
     stock_res, _ = _endpoint_result(
@@ -320,7 +380,8 @@ def run_probe(client=None, now_ny=None, out_dir: str = PROBE_DIR) -> dict:
     probe = {
         "probed_at_utc": now_ny.astimezone(timezone.utc).isoformat(),
         "ny_date": ny_date.isoformat(),
-        "thetadata_version": _installed_thetadata_version(),
+        "provider": provider,
+        "provider_version": provider_version,
         "stock_entitled": bool(stock_res["ok"]),
         "probe_symbol": PROBE_SYMBOL,
         "monthly_expiration": monthly.isoformat() if monthly else None,
@@ -345,18 +406,30 @@ def load_latest_probe(dir: str = PROBE_DIR) -> dict | None:
 
 def probe_ok(probe: dict | None, now_utc) -> tuple[bool, str]:
     """Gate the live lane on the recorded schema probe. False when the probe
-    is missing, from a different installed thetadata version, older than
+    is missing, from a different configured provider or installed version, older than
     config.LIVE_PROBE_MAX_AGE_DAYS, or a required endpoint failed. A stock
     entitlement denial does NOT fail the probe (parity-fallback mode)."""
     if probe is None:
         return False, ("no schema probe recorded -- run "
                        "`python -m options_researcher.live_quotes --probe` "
                        "during a regular session")
-    installed = _installed_thetadata_version()
-    recorded = probe.get("thetadata_version")
+    configured = _configured_provider()
+    recorded_provider = probe.get("provider", "thetadata")
+    if recorded_provider != configured:
+        return False, (
+            f"probe recorded provider={recorded_provider} but configured "
+            f"provider={configured} -- re-probe before trusting columns"
+        )
+    installed = _installed_provider_version(configured)
+    recorded = probe.get(
+        "provider_version",
+        probe.get("thetadata_version"),  # backward-compatible old probes
+    )
     if recorded != installed:
-        return False, (f"probe recorded thetadata=={recorded} but {installed} "
-                       "is installed -- re-probe before trusting columns")
+        return False, (
+            f"probe recorded {configured}=={recorded} but {installed} is "
+            "installed -- re-probe before trusting columns"
+        )
     try:
         age = pd.Timestamp(now_utc) - pd.Timestamp(probe.get("probed_at_utc"))
     except (TypeError, ValueError):
@@ -379,12 +452,12 @@ def probe_ok(probe: dict | None, now_utc) -> tuple[bool, str]:
 # Fetch layer (thin; exercised only via injected fakes in tests)
 # ---------------------------------------------------------------------------
 
-# Per-NY-date memos: at most ONE expirations call and ONE open-interest call
-# per symbol per day (OI is reported ~06:30 ET reflecting the PRIOR close --
-# repo-verified in data/thetadata_adapter.py -- so refetching intraday buys
-# nothing). OI failures are memoized too, keeping the once-per-day contract.
+# Expirations are memoized by NY date. ThetaData OI retains its established
+# once-per-day memo. Schwab OI is read from each new live chain snapshot because
+# Schwab's intraday update cadence is undocumented; the adapter's 25-second
+# chain cache still reuses one response across Greeks and OI within a refresh.
 _EXPIRATIONS_MEMO: dict[tuple[str, str], list[date]] = {}
-_OI_MEMO: dict[tuple[str, str], tuple[dict | None, str | None]] = {}
+_OI_MEMO: dict[tuple[str, str, str], tuple[dict | None, str | None]] = {}
 
 
 def _reset_memos() -> None:
@@ -401,8 +474,16 @@ def _expirations(client, symbol: str, ny_iso: str) -> list[date]:
 
 
 def _open_interest(client, symbol: str, expiration: date, ny_iso: str):
-    """(oi_map or None, asof_iso or None), memoized per (symbol, NY date)."""
-    key = (symbol, ny_iso)
+    """Return OI plus observation date; only ThetaData is memoized by day."""
+    key = (symbol, expiration.isoformat(), ny_iso)
+    if getattr(client, "provider_name", "") == "schwab":
+        try:
+            frame = client.option_snapshot_open_interest(
+                symbol, expiration=expiration
+            )
+            return _oi_map(frame, f"{symbol} open_interest"), ny_iso
+        except Exception:
+            return None, None
     if key not in _OI_MEMO:
         try:
             frame = client.option_snapshot_open_interest(
@@ -430,7 +511,36 @@ def _assemble_chain_frame(frame: pd.DataFrame, ctx: str, *,
     """Chain-like frame (expiration/strike/right/bid/ask [+iv/delta]) from a
     snapshot response, via the adapter's _pick_col/_normalize_contract_keys
     idiom. A schema surprise raises naming the columns seen -- never guesses."""
-    norm = _normalize_contract_keys(frame, ctx)
+    raw = frame.copy()
+    raw.columns = [str(c).strip().lower() for c in raw.columns]
+    for flag, message in (
+        ("chain_is_delayed", "provider marked chain delayed"),
+        ("chain_is_truncated", "provider marked chain truncated"),
+    ):
+        if flag in raw.columns and raw[flag].map(
+            lambda value: str(value).strip().lower() in {"1", "true", "yes"}
+        ).any():
+            raise RuntimeError(f"{ctx}: {message}")
+    if "chain_status" in raw.columns:
+        statuses = {
+            str(value).strip().upper()
+            for value in raw["chain_status"]
+            if pd.notna(value)
+        }
+        if statuses and statuses != {"SUCCESS"}:
+            raise RuntimeError(f"{ctx}: provider chain status is not SUCCESS")
+    if "non_standard" in raw.columns:
+        raw = raw.loc[
+            ~raw["non_standard"].map(
+                lambda value: str(value).strip().lower() in {"1", "true", "yes"}
+            )
+        ]
+    if "multiplier" in raw.columns:
+        multiplier = pd.to_numeric(raw["multiplier"], errors="coerce")
+        raw = raw.loc[multiplier.eq(100.0)]
+    if raw.empty:
+        raise RuntimeError(f"{ctx}: no standard 100-multiplier contracts")
+    norm = _normalize_contract_keys(raw, ctx)
     rename = {_pick_col(norm, _BID_CANDIDATES, ctx): "bid",
               _pick_col(norm, _ASK_CANDIDATES, ctx): "ask"}
     numeric = ["bid", "ask"]
@@ -441,7 +551,23 @@ def _assemble_chain_frame(frame: pd.DataFrame, ctx: str, *,
     norm = norm.rename(columns=rename)
     for col in numeric:
         norm[col] = pd.to_numeric(norm[col], errors="coerce")
+    if (norm["ask"] < norm["bid"]).fillna(False).any():
+        raise RuntimeError(f"{ctx}: provider returned a crossed option market")
+    if "chain_status" in raw.columns and not {"C", "P"} <= set(norm["right"]):
+        raise RuntimeError(f"{ctx}: provider chain is missing calls or puts")
     return norm
+
+
+def _require_fresh_option_row(row, now_utc, ctx: str) -> None:
+    timestamp = row.get("timestamp") if row is not None else None
+    if not quote_is_fresh(
+        timestamp, now_utc, config.LIVE_QUOTE_MAX_AGE_SECONDS
+    ):
+        raise RuntimeError(f"{ctx}: stale, future, or missing option quote timestamp")
+    bid = _finite_or_none(row.get("bid")) if row is not None else None
+    ask = _finite_or_none(row.get("ask")) if row is not None else None
+    if bid is None or ask is None or ask <= bid:
+        raise RuntimeError(f"{ctx}: missing, crossed, or locked option market")
 
 
 def _coerce_ts(ts):
@@ -490,6 +616,12 @@ def _stock_spots(client, probe: dict, now_utc) -> dict:
         if bid is None or ask is None:
             out[sym] = (None, ts, "no finite bid/ask in stock snapshot")
             continue
+        if ask < bid:
+            out[sym] = (None, ts, "crossed stock market")
+            continue
+        if ask == bid:
+            out[sym] = (None, ts, "locked stock market")
+            continue
         if ts_required and not quote_is_fresh(
                 ts, now_utc, config.LIVE_QUOTE_MAX_AGE_SECONDS):
             out[sym] = (None, ts, "stale or missing stock quote timestamp")
@@ -536,6 +668,10 @@ def _symbol_preview_live(client, symbol: str, trigger, stock_entitled: bool,
                 g, f"{symbol} greeks {monthly}", with_greeks=True)
             row = atm_row(gf, monthly)
             if row is not None:
+                if getattr(client, "provider_name", "") == "schwab":
+                    _require_fresh_option_row(
+                        row, now_utc, f"{symbol} ATM option"
+                    )
                 iv = _finite_or_none(row["iv"])
                 atm_iv = iv if iv is not None and iv > 0 else None
         if leaps_exp is not None:
@@ -544,6 +680,10 @@ def _symbol_preview_live(client, symbol: str, trigger, stock_entitled: bool,
                 g, f"{symbol} greeks {leaps_exp}", with_greeks=True)
             leaps_row = _leaps_candidate(gf, today, config.H4_THESIS_DELTA)
             if leaps_row is not None:
+                if getattr(client, "provider_name", "") == "schwab":
+                    _require_fresh_option_row(
+                        leaps_row, now_utc, f"{symbol} LEAPS option"
+                    )
                 oi_map, oi_asof = _open_interest(client, symbol, leaps_exp, ny_iso)
                 if oi_map is not None:
                     oi = oi_map.get((leaps_row["exp_date"].isoformat(),
@@ -589,9 +729,31 @@ def refresh(client=None, now_ny=None, probe=None) -> dict:
         return payload
 
     if client is None:
-        from data.thetadata_adapter import _client
-
-        client = _client()
+        client = _live_client()
+    if hasattr(client, "regular_session_state"):
+        try:
+            provider_session = client.regular_session_state(now_ny)
+        except Exception as exc:
+            payload["session_state"] = "unknown"
+            payload["session_source"] = "schwab_market_hours"
+            payload["session_note"] = _exc_note(exc)
+            for sym in config.UNIVERSE:
+                payload["symbols"][sym] = {
+                    "symbol": sym,
+                    "status": "off",
+                    "note": "market-hours status unavailable / live off",
+                }
+            return payload
+        payload["session_source"] = provider_session.get("source")
+        if not provider_session.get("open"):
+            payload["session_state"] = "closed"
+            for sym in config.UNIVERSE:
+                payload["symbols"][sym] = {
+                    "symbol": sym,
+                    "status": "off",
+                    "note": "Schwab schedule: equity/option regular session closed",
+                }
+            return payload
     today = now_ny.date()
     ny_iso = today.isoformat()
     stock_entitled = bool(probe.get("stock_entitled"))
@@ -630,8 +792,9 @@ def refresh(client=None, now_ny=None, probe=None) -> dict:
 # ---------------------------------------------------------------------------
 
 def _print_probe_summary(probe: dict) -> None:
-    print(f"live schema probe {probe['ny_date']} "
-          f"(thetadata {probe['thetadata_version']})")
+    provider = probe.get("provider", "thetadata")
+    version = probe.get("provider_version", probe.get("thetadata_version"))
+    print(f"live schema probe {probe['ny_date']} ({provider} {version})")
     print(f"stock_entitled: {probe['stock_entitled']}")
     print(f"monthly probe expiration: {probe.get('monthly_expiration')}")
     for name, rec in probe["endpoints"].items():

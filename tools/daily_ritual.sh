@@ -105,6 +105,20 @@ else
   fi
 fi
 
+# Step 0b — display-only extras top-up. This lane is presentation support,
+# not H7 evidence: it is deliberately outside every H7 gate/protected branch,
+# emits summary notes only, and can never change CRITICAL or the ritual exit
+# code. A failure leaves the extras visibly stale/blocked on the board.
+if [ "$KEY_OK" -eq 1 ] && "$UV" run python data/recent_topup.py --scope display-extra --refresh-closes; then
+  note "display-extra topup: OK (closes refreshed)"
+else
+  if [ "$KEY_OK" -eq 1 ]; then
+    note "display-extra topup: FAILED (non-blocking; display-only data may be stale)"
+  else
+    note "display-extra topup: SKIPPED (no API key; display-only data may be stale)"
+  fi
+fi
+
 # Step 1 — source health (run AND record; per-name ban, never blocks board).
 # One-door repair (e64e5e9) receipt chain: the gate must LINK the health
 # receipt, and the watcher refuses without a linked gate receipt — so thread
@@ -329,7 +343,7 @@ if [ "$GATE_GO" -eq 1 ]; then
   # redirect, and $? below is entry_watch's own exit code.
   EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
   mkdir -p reports/h5
-  if "$UV" run python -m options_researcher.entry_watch --out "$EW_OUT"; then
+  if "$UV" run python -m options_researcher.entry_watch --as-of "$AS_OF" --out "$EW_OUT"; then
     if grep -q "FIRE" "$EW_OUT"; then
       crit "H5 ENTRY TRIGGER FIRE — read $EW_OUT and evaluate per H5 CORE rules"
     else

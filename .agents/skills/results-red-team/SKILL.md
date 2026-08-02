@@ -1,6 +1,6 @@
 ---
 name: results-red-team
-description: Attack a backtest result's STATISTICAL VALIDITY and conclusions before it is believed. Use when a backtest completes with a positive result, when a strategy is about to be promoted to the next phase, or when Carsyn asks "is this real?" Do NOT use for fill/cost/margin mechanics (that's backtest-realism-audit's job).
+description: Attack a backtest result's STATISTICAL VALIDITY and conclusions before it is believed. Use when a backtest completes with a positive result, when a strategy is about to be promoted to the next phase, or when Carsyn asks "is this real?", including batch runs that surface 'the N strategies that worked', 'which of these survive', or 'pick the winners'. It fires on multiple-comparisons and selection-effect risk, and on questions like 'is this luck?', 'did we overfit?', 'how many did we try?' Do NOT use for fill/cost/margin mechanics (that's backtest-realism-audit's job).
 ---
 
 # Results Red Team

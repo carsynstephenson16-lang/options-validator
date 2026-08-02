@@ -18,6 +18,7 @@ import config
 from options_researcher.h8_watch import (
     BOOK_FIELDS,
     BookPosition,
+    build_snapshot,
     choose_contract,
     entry_window_state,
     evaluate_entry,
@@ -520,6 +521,40 @@ class BookLoaderTests(unittest.TestCase):
 
 
 class ArtifactContractTests(unittest.TestCase):
+    def test_beyond_edge_does_not_substitute_prior_or_future_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            chain_dir = root / "chains"
+            chain_dir.mkdir()
+            chain().to_parquet(chain_dir / "PLTR_2026-07-10.parquet")
+            chain().to_parquet(chain_dir / "PLTR_2026-07-14.parquet")
+            with (
+                mock.patch.object(config, "H8_NAMES", ("PLTR",)),
+                mock.patch(
+                    "options_researcher.h8_watch.load_book", return_value=[]
+                ),
+                mock.patch(
+                    "options_researcher.h8_watch._h6_positions", return_value=[]
+                ),
+                mock.patch(
+                    "options_researcher.h8_watch.load_assertions", return_value=[]
+                ),
+            ):
+                snapshot = build_snapshot(
+                    AS_OF,
+                    h8_book_path=root / "h8.csv",
+                    h6_book_path=root / "h6.csv",
+                    chain_dir=chain_dir,
+                    feature_dir=root / "features",
+                    assertions_path=root / "gating.csv",
+                    raw_assertions_path=root / "raw.csv",
+                )
+
+        self.assertEqual(snapshot["entries"], [])
+        self.assertEqual(len(snapshot["errors"]), 1)
+        self.assertIn("exact chain missing", snapshot["errors"][0])
+        self.assertIn("PLTR_2026-07-13.parquet", snapshot["errors"][0])
+
     def test_json_defaults_to_program_written_exact_session_artifact(self):
         payload = {
             "evaluation_session": AS_OF.isoformat(),

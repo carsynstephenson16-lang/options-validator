@@ -8,8 +8,12 @@ the offline PandasData feed.
 
 Execution is causal under BACKTEST_EXECUTION_CONVENTION: a completed day-D EOD
 chain may create an intent, but no order is submitted until the next XNYS
-session. Entry contracts are frozen on D and fill at D+1's adverse close;
-EOD-observed exits are likewise queued for the next session.
+session. Entry legs and maximum quantity are frozen on D; D+1's adverse close
+may cancel the intent or reduce quantity under the registered cap gate.
+EOD-observed exits are likewise queued for the next session. If an exit
+triggers on the final available session, the position is closed descriptively
+at that session's conservative executable mark and labeled as such; submitting
+an asynchronous order with no later engine iteration would leave it unresolved.
 
 Hypothesis: implied vol tends to exceed realized (the volatility risk premium),
 so selling a ~30-delta put and capping the downside with a long put $W lower
@@ -171,6 +175,19 @@ class PutCreditSpread(Strategy):
                 "unsupported BACKTEST_EXECUTION_CONVENTION: "
                 f"{config.BACKTEST_EXECUTION_CONVENTION!r}"
             )
+        if config.BACKTEST_ENTRY_DATE_SEMANTICS != "FILL_SESSION":
+            raise RuntimeError(
+                "unsupported BACKTEST_ENTRY_DATE_SEMANTICS: "
+                f"{config.BACKTEST_ENTRY_DATE_SEMANTICS!r}"
+            )
+        if (
+            config.BACKTEST_TERMINAL_EXIT_CONVENTION
+            != "terminal_conservative_mark"
+        ):
+            raise RuntimeError(
+                "unsupported BACKTEST_TERMINAL_EXIT_CONVENTION: "
+                f"{config.BACKTEST_TERMINAL_EXIT_CONVENTION!r}"
+            )
         if not self._trading_sessions:
             raise RuntimeError("harness must inject deterministic XNYS trading_sessions")
         if self._tradeable_by_session is None:
@@ -180,6 +197,8 @@ class PutCreditSpread(Strategy):
         self._pending_entries: dict[str, _PendingEntry] = {}
         self._spreads = {}
         self.closed_trades = []
+        self.cancelled_entries = []
+        self.atomicity_incidents = []
 
     # ----- main loop -----------------------------------------------------
     def on_trading_iteration(self):
@@ -276,9 +295,6 @@ class PutCreditSpread(Strategy):
             self._cancel_pending_entry(symbol, "execution_dte_out_of_band")
             return
 
-        # Do not read today's EOD chain here: ThetaData publishes it after the
-        # modeled close. The frozen D intent determines what Lumibot submits;
-        # today's feed row may price that fill but cannot gate it by quote data.
         assets = self._spread_assets(
             symbol,
             pending.expiration,
@@ -291,12 +307,40 @@ class PutCreditSpread(Strategy):
                 f"on execution session {today}: {list(assets)}"
             )
 
+        # This models a day-D standing net-credit limit: the D+1 close decides
+        # only whether the already-frozen intent could fill, never what to buy.
+        # If it remains inside the owner-typed tolerance, reduce quantity only
+        # as needed to keep realized economic max loss <= the hard dollar cap.
+        execution_credit = self._frozen_entry_credit(symbol, pending)
+        if execution_credit is None:
+            raise RuntimeError(
+                f"{symbol}: frozen entry quotes missing on execution session {today}"
+            )
+        execution_credit = round(execution_credit, 2)
+        minimum_credit = round(
+            pending.signal_credit - config.A_ENTRY_CREDIT_TOLERANCE,
+            2,
+        )
+        if execution_credit < minimum_credit:
+            self._cancel_pending_entry(symbol, "fill_credit_below_tolerance")
+            return
+        fill_contracts, _ = size_defined_risk(self.width, execution_credit)
+        contracts = min(pending.contracts, fill_contracts)
+        if contracts <= 0:
+            self._cancel_pending_entry(symbol, "fill_risk_budget_too_small")
+            return
+        if contracts < pending.contracts:
+            self.log_message(
+                f"{symbol}: resized {pending.contracts}x to {contracts}x on "
+                f"{today} to preserve the hard dollar cap"
+            )
+
         self._submit_spread(
             symbol,
             pending.expiration,
             pending.short_strike,
             pending.long_strike,
-            pending.contracts,
+            contracts,
             pending.signal_credit,
             decision_date=pending.decision_date,
             fill_date=today,
@@ -305,6 +349,15 @@ class PutCreditSpread(Strategy):
 
     def _cancel_pending_entry(self, symbol, reason):
         pending = self._pending_entries.pop(symbol)
+        self.cancelled_entries.append(
+            {
+                "symbol": symbol,
+                "decision_date": pending.decision_date,
+                "cancellation_date": self._today().isoformat(),
+                "reason": reason,
+                "signal_credit": pending.signal_credit,
+            }
+        )
         self.log_message(
             f"{symbol}: cancelled {pending.decision_date} entry intent on "
             f"{self._today().isoformat()}: {reason}"
@@ -405,6 +458,63 @@ class PutCreditSpread(Strategy):
             for asset in assets
         )
 
+    def _frozen_entry_credit(self, symbol, pending):
+        """D+1 executable credit for the exact day-D frozen legs."""
+        chain = self._get_eod_chain(symbol)
+        if chain is None:
+            return None
+
+        def leg_row(strike):
+            rows = chain[
+                (chain["right"] == "P")
+                & (chain["expiration"] == pending.expiration)
+                & (chain["strike"] == strike)
+            ]
+            return None if rows.empty else rows.iloc[0]
+
+        short_row = leg_row(pending.short_strike)
+        long_row = leg_row(pending.long_strike)
+        if short_row is None or long_row is None:
+            return None
+        return entry_credit_conservative(
+            short_row.bid,
+            short_row.ask,
+            long_row.bid,
+            long_row.ask,
+            self.haircut,
+        )
+
+    def _same_session_entry_unwind_prices(
+        self,
+        symbol,
+        expiry,
+        short_strike,
+        long_strike,
+        assets,
+    ):
+        """Conservative same-session prices for neutralizing either entry leg."""
+        chain = self._get_eod_chain(symbol)
+        if chain is None:
+            return None
+
+        def leg_row(strike):
+            rows = chain[
+                (chain["right"] == "P")
+                & (chain["expiration"] == str(expiry))
+                & (chain["strike"] == strike)
+            ]
+            return None if rows.empty else rows.iloc[0]
+
+        short_row = leg_row(short_strike)
+        long_row = leg_row(long_strike)
+        if short_row is None or long_row is None:
+            return None
+        short_asset, long_asset = assets
+        return {
+            short_asset: adverse_buy(short_row.ask, self.haircut),
+            long_asset: adverse_sell(long_row.bid, self.haircut),
+        }
+
     def _submit_spread(
         self,
         symbol,
@@ -427,9 +537,23 @@ class PutCreditSpread(Strategy):
                 "selected leg(s) missing from the offline feed on "
                 f"{fill_date}: {[short_asset, long_asset]}"
             )
-        self.submit_order(self.create_order(short_asset, contracts, "sell"))
-        self.submit_order(self.create_order(long_asset, contracts, "buy"))
-        self._spreads[symbol] = _OpenSpread(
+        assets = (short_asset, long_asset)
+        unwind_prices = self._same_session_entry_unwind_prices(
+            symbol,
+            expiry,
+            short_strike,
+            long_strike,
+            assets,
+        )
+        if unwind_prices is None:
+            raise RuntimeError(
+                "selected leg(s) lack exact same-session unwind quotes on "
+                f"{fill_date}: {[short_asset, long_asset]}"
+            )
+
+        short_order = self.create_order(short_asset, contracts, "sell")
+        long_order = self.create_order(long_asset, contracts, "buy")
+        pos = _OpenSpread(
             symbol=symbol,
             expiration=Date.fromisoformat(str(expiry)),
             short_asset=short_asset,
@@ -438,7 +562,18 @@ class PutCreditSpread(Strategy):
             model_credit=float(credit),
             entry_decision_date=decision_date,
             entry_fill_date=fill_date,
+            entry_unwind_prices=unwind_prices,
         )
+        # Register state before either separate order is submitted so fill and
+        # cancellation callbacks can always enforce the atomicity invariant.
+        self._spreads[symbol] = pos
+        try:
+            self.submit_order(short_order)
+            self.submit_order(long_order)
+        except Exception:
+            if symbol in self._spreads and not pos.entry_fills:
+                del self._spreads[symbol]
+            raise
 
     def _has_open_position(self, symbol):
         return symbol in self._spreads
@@ -452,6 +587,8 @@ class PutCreditSpread(Strategy):
         finalized into closed_trades."""
         pos = self._spreads[symbol]
         if pos.state == "pending_entry":
+            if pos.entry_cancelled_assets and len(pos.entry_fills) == 1:
+                self._fail_partial_entry_with_conservative_unwind(symbol, pos)
             if pos.short_asset in pos.entry_fills and pos.long_asset in pos.entry_fills:
                 pos.entry_credit = (
                     pos.entry_fills[pos.short_asset] - pos.entry_fills[pos.long_asset])
@@ -464,10 +601,8 @@ class PutCreditSpread(Strategy):
             return False
         return pos.state == "open"
 
-    def _spread_mark(self, symbol, pos):
-        """Conservative cost-to-close: buy the short leg back at ask*(1+h),
-        sell the long leg at bid*(1-h). None when today's chain or a leg row
-        is missing (caller holds)."""
+    def _spread_exit_fills(self, symbol, pos):
+        """Return conservative short-buy and long-sell prices for today."""
         chain = self._get_eod_chain(symbol)
         if chain is None:
             return None
@@ -482,9 +617,15 @@ class PutCreditSpread(Strategy):
         srow, lrow = leg_row(pos.short_asset), leg_row(pos.long_asset)
         if srow is None or lrow is None:
             return None
-        return adverse_buy(srow.ask, self.haircut) - adverse_sell(
-            lrow.bid, self.haircut
+        return (
+            adverse_buy(srow.ask, self.haircut),
+            adverse_sell(lrow.bid, self.haircut),
         )
+
+    def _spread_mark(self, symbol, pos):
+        """Conservative cost-to-close, or None without both leg quotes."""
+        fills = self._spread_exit_fills(symbol, pos)
+        return None if fills is None else fills[0] - fills[1]
 
     def _dte(self, pos):
         return (pos.expiration - self._today()).days
@@ -493,12 +634,27 @@ class PutCreditSpread(Strategy):
         decision_date = self._today().isoformat()
         execution_date = self._next_session(decision_date)
         if execution_date is None:
-            self.log_message(f"{symbol}: no next session for {reason} exit")
+            terminal_fills = self._spread_exit_fills(symbol, pos)
+            if terminal_fills is None:
+                self.log_message(
+                    f"{symbol}: no next session or terminal mark for {reason} exit"
+                )
+                return
+            pos.exit_reason = reason
+            pos.exit_decision_date = decision_date
+            pos.exit_fill_date = decision_date
+            pos.exit_execution = config.BACKTEST_TERMINAL_EXIT_CONVENTION
+            pos.exit_fills = {
+                pos.short_asset: terminal_fills[0],
+                pos.long_asset: terminal_fills[1],
+            }
+            self._finalize_trade(symbol, pos)
             return
         pos.state = "queued_exit"
         pos.exit_reason = reason
         pos.exit_decision_date = decision_date
         pos.exit_fill_date = execution_date
+        pos.exit_execution = "next_session_engine_fill"
 
     def _execute_pending_exit(self, symbol, pos):
         today = self._today().isoformat()
@@ -524,22 +680,118 @@ class PutCreditSpread(Strategy):
 
     # ----- fills -> closed-trade extraction --------------------------------
     def on_filled_order(self, position, order, price, quantity, multiplier):
-        for pos in self._spreads.values():
+        for symbol, pos in list(self._spreads.items()):
             if order.asset == pos.short_asset or order.asset == pos.long_asset:
                 side = str(order.side).lower()
                 if pos.state == "pending_entry":
                     expected = "sell" if order.asset == pos.short_asset else "buy"
                     if side == expected:
                         pos.entry_fills[order.asset] = float(price)
+                        pos.entry_fill_quantities[order.asset] = int(quantity)
+                        if pos.entry_cancelled_assets and len(pos.entry_fills) == 1:
+                            self._fail_partial_entry_with_conservative_unwind(
+                                symbol,
+                                pos,
+                            )
                 elif pos.state == "pending_exit":
                     expected = "buy" if order.asset == pos.short_asset else "sell"
                     if side == expected:
                         pos.exit_fills[order.asset] = float(price)
                 return
 
+    def on_partially_filled_order(
+        self,
+        position,
+        order,
+        price,
+        quantity,
+        multiplier,
+    ):
+        for symbol, pos in list(self._spreads.items()):
+            if pos.state != "pending_entry":
+                continue
+            if order.asset != pos.short_asset and order.asset != pos.long_asset:
+                continue
+            side = str(order.side).lower()
+            expected = "sell" if order.asset == pos.short_asset else "buy"
+            if side != expected:
+                return
+            pos.entry_fills[order.asset] = float(price)
+            pos.entry_fill_quantities[order.asset] = int(quantity)
+            self._fail_partial_entry_with_conservative_unwind(symbol, pos)
+
+    def on_canceled_order(self, order):
+        for symbol, pos in list(self._spreads.items()):
+            if pos.state != "pending_entry":
+                continue
+            if order.asset != pos.short_asset and order.asset != pos.long_asset:
+                continue
+            side = str(order.side).lower()
+            expected = "sell" if order.asset == pos.short_asset else "buy"
+            if side != expected:
+                return
+            pos.entry_cancelled_assets.add(order.asset)
+            if len(pos.entry_fills) == 1:
+                self._fail_partial_entry_with_conservative_unwind(symbol, pos)
+            if not pos.entry_fills and pos.entry_cancelled_assets == {
+                pos.short_asset,
+                pos.long_asset,
+            }:
+                self.cancelled_entries.append(
+                    {
+                        "symbol": symbol,
+                        "decision_date": pos.entry_decision_date,
+                        "cancellation_date": self._today().isoformat(),
+                        "reason": "entry_orders_unfilled",
+                        "signal_credit": pos.model_credit,
+                    }
+                )
+                del self._spreads[symbol]
+            return
+
+    def _fail_partial_entry_with_conservative_unwind(self, symbol, pos):
+        if len(pos.entry_fills) != 1:
+            raise RuntimeError(
+                f"{symbol}: partial entry invariant requires exactly one filled leg"
+            )
+        filled_asset, entry_price = next(iter(pos.entry_fills.items()))
+        quantity = pos.entry_fill_quantities.get(filled_asset, pos.contracts)
+        unwind_price = pos.entry_unwind_prices[filled_asset]
+        if filled_asset == pos.short_asset:
+            filled_leg = "short"
+            unwind_side = "buy"
+            gross_pnl = (entry_price - unwind_price) * 100.0 * quantity
+        else:
+            filled_leg = "long"
+            unwind_side = "sell"
+            gross_pnl = (unwind_price - entry_price) * 100.0 * quantity
+        commissions = 2.0 * config.COMMISSION_PER_CONTRACT * quantity
+        incident = {
+            "symbol": symbol,
+            "session": pos.entry_fill_date,
+            "filled_leg": filled_leg,
+            "unwind_side": unwind_side,
+            "quantity": quantity,
+            "entry_price": entry_price,
+            "unwind_price": unwind_price,
+            "gross_pnl": gross_pnl,
+            "commissions": commissions,
+            "net_pnl": gross_pnl - commissions,
+            "execution": "same_session_conservative_mark",
+        }
+        self.atomicity_incidents.append(incident)
+        del self._spreads[symbol]
+        message = (
+            f"{symbol}: partial entry fill on {pos.entry_fill_date}; "
+            f"conservatively unwound {quantity}x {filled_leg} leg at "
+            f"{unwind_price:.2f}; commissions ${commissions:.2f}; "
+            f"incident net P&L ${incident['net_pnl']:.2f}; run aborted"
+        )
+        self.log_message(message)
+        raise RuntimeError(message)
+
     def _finalize_trade(self, symbol, pos):
-        """Emit the metrics.scoreboard trade dict from ENGINE fills (net of
-        the frozen commission model) and release the symbol."""
+        """Emit a scored trade from labeled exit fills and release the symbol."""
         exit_debit = (pos.exit_fills[pos.short_asset]
                       - pos.exit_fills[pos.long_asset])
         n = pos.contracts
@@ -557,6 +809,7 @@ class PutCreditSpread(Strategy):
             "exit_reason": pos.exit_reason,
             "exit_decision_date": pos.exit_decision_date,
             "exit_date": pos.exit_fill_date,
+            "exit_execution": pos.exit_execution,
         })
         del self._spreads[symbol]
 
@@ -587,7 +840,11 @@ class _OpenSpread:
     state: str = "pending_entry"
     entry_credit: float | None = None
     entry_fills: dict = field(default_factory=dict)
+    entry_fill_quantities: dict = field(default_factory=dict)
+    entry_cancelled_assets: set = field(default_factory=set)
+    entry_unwind_prices: dict = field(default_factory=dict)
     exit_fills: dict = field(default_factory=dict)
     exit_reason: str | None = None
     exit_decision_date: str | None = None
     exit_fill_date: str | None = None
+    exit_execution: str | None = None

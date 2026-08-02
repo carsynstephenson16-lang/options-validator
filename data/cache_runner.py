@@ -37,8 +37,10 @@ verified without opening value pages or hitting the network.
 
 Run from the repo root:
     python data/cache_runner.py --dry-run     # counts only, no network, no facts
-    python data/cache_runner.py --in-sample   # cache every in-sample EOD chain
-    python data/cache_runner.py --oos-blind   # blind-cache the OOS holdout
+
+The historical acquisition modes remain for reproducibility tests but are
+operator-disabled in production as of 2026-07-31. ``--dry-run`` remains an
+offline inventory command.
 """
 from __future__ import annotations
 
@@ -57,7 +59,10 @@ import grpc  # hard dependency of thetadata; import is offline-safe
 # shim analysis/feasibility.py and analysis/power_check.py use.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
-from data import thetadata_adapter  # noqa: E402
+from data import (
+    provider_policy,  # noqa: E402
+    thetadata_adapter,  # noqa: E402
+)
 from data.atomic_io import atomic_text_write  # noqa: E402
 from data.thetadata_adapter import _cache_path, blind_cache_chain, get_eod_chain  # noqa: E402
 from research import facts  # noqa: E402
@@ -266,6 +271,7 @@ def cache_in_sample(symbols=None, *, ledger_dir: str = "ledger",
                     deadline_s: float | None = None) -> dict:
     """Cache every in-sample EOD chain (config.BACKTEST_START ..
     config.IN_SAMPLE_END) for `symbols` (defaults to config.UNIVERSE)."""
+    provider_policy.require_thetadata_acquisition("in-sample cache runner")
     symbols = list(config.UNIVERSE) if symbols is None else list(symbols)
     days = trading_days(config.BACKTEST_START, config.IN_SAMPLE_END)
 
@@ -284,6 +290,7 @@ def cache_oos_blind(symbols=None, *, ledger_dir: str = "ledger",
     """Blind-cache the OOS holdout (config.IN_SAMPLE_END, config.BACKTEST_END]
     for `symbols` (defaults to config.UNIVERSE). Values never surface here --
     see the module docstring. Never calls get_eod_chain."""
+    provider_policy.require_thetadata_acquisition("OOS blind-cache runner")
     symbols = list(config.UNIVERSE) if symbols is None else list(symbols)
     days = [
         d for d in trading_days(config.IN_SAMPLE_END, config.BACKTEST_END)

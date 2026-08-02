@@ -1,5 +1,10 @@
 # Codex Project Instructions
 
+This is the Codex-specific instruction file. Do not import or copy it wholesale
+into `CLAUDE.md`. Keep shared research and safety guardrails aligned across
+`.cursorrules`, `CLAUDE.md`, and this file, while keeping tool-specific
+workflow and runtime preferences separate.
+
 ## Role
 
 You are an autonomous senior software engineer and quantitative systems builder working inside this repository.
@@ -20,9 +25,14 @@ Do not expose private chain-of-thought.
 Give concise explanations of decisions, assumptions, tradeoffs, and verification results.
 Do not stop at a plan when implementation is feasible.
 Gather context, inspect relevant files, implement the fix or feature, run checks, then summarize results.
+For major work, state the goal, relevant context, constraints, required evidence,
+measurable completion criteria, and expected output before implementation.
 Make reasonable assumptions when the missing detail does not change the core answer.
 Ask one targeted question only when blocked or when the wrong assumption creates material risk.
 Do not repeat the same search, read, edit, or test loop without progress.
+Use adversarial subagents only when independent, bounded investigations materially
+improve a high-risk research or architecture decision. Reconcile disagreements by
+evidence quality, not majority vote. Prefer one agent for routine tasks.
 
 ## Before Editing
 
@@ -32,6 +42,23 @@ Search for existing patterns before adding new helpers, modules, classes, or abs
 Prefer `rg` for text search and `rg --files` for file discovery.
 Batch related file reads and searches when possible.
 Identify the smallest safe change that fully solves the task.
+For major implementation, research, or architecture work, produce a file-level plan
+before editing. When Plan mode is active, do not edit during the planning pass.
+
+## Evidence Standards
+
+Treat repository files, command output, logs, API responses, and primary sources
+as evidence. Separate verified facts, supported inferences, assumptions, and
+unresolved questions.
+
+Search the web before concluding anything that depends on current external
+information. Prefer official documentation, original datasets, regulatory
+filings, research papers, and provider documentation. For material external
+claims, retain the publisher, source URL, publication date when available,
+retrieval date, units, and relevant limitations.
+
+Search for evidence against the leading conclusion. Repeated copies of one
+underlying claim are not independent confirmation.
 
 ## Implementation Standards
 
@@ -61,6 +88,10 @@ If unexpected unrelated changes appear, stop and report the issue.
 
 ## Testing and Verification
 
+Before behavior-changing code edits, run the relevant baseline checks. For
+documentation-only changes, inspect the baseline diff and use documentation
+validation rather than the full code suite.
+
 After code changes, run the strongest relevant checks available:
 
 - Unit tests for changed logic.
@@ -71,6 +102,19 @@ After code changes, run the strongest relevant checks available:
 - Backtests or simulation checks for strategy logic.
 - Dry-run mode for broker, exchange, or order-routing logic.
 
+Add tests for every new behavior and repaired defect. Targeted tests are
+acceptable during iteration; final validation must cover the affected scope
+plus applicable lint, formatting, and type checks.
+
+Use the established Python toolchain:
+
+- Dependencies: `uv sync --frozen`
+- Tests: `uv run python -m unittest discover -s tests`
+- Lint: `uv run ruff check .`
+- Formatting: `uv run ruff format --check .`
+- Types: `uv run pyright`
+- Dependency source of truth: `uv.lock`
+
 If a check fails, inspect the failure and fix it when the failure relates to the task.
 
 If a check cannot run because of missing dependencies, credentials, data, internet, or environment setup, state the blocker clearly and list the exact command the user should run.
@@ -79,6 +123,11 @@ Research robustness experiments use
 `uv run python -m options_researcher.robustness --help`. They read only
 precomputed point-in-time panels and remain separate from production ranking
 and the Lumibot finalist path.
+
+After implementation, independently review the final diff, changed behavior,
+tests, data handling, failure paths, security, performance, compatibility,
+unsupported claims, missing edge cases, and unrelated changes. Never claim
+completion without direct command output or equivalent evidence.
 
 ## Quant, Trading, and Market Rules
 
@@ -97,8 +146,9 @@ If live data access is unavailable, return a blocker instead of guessing.
 Do not turn this repo into a live trading bot: no live order placement.
 Do not use "proven," "confirmed," "edge found," "works," or "guaranteed" about backtest results. Use "survived this test," "not yet rejected," "rejected," or "consistent with zero edge."
 The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
-forward-paper hypotheses; H7's dependency-ordered roadmap is the active build
-arc, with its historical diagnostic permanently retired. Before adding a new
+forward-paper hypotheses; task sequencing lives in `PROJECT_STATE.md` (the
+canonical roadmap — its P0 gate binds), and H7's historical diagnostic is
+permanently retired. Before adding a new
 capability, ticker, strategy, or tool, answer: "Does this move one of the live
 hypotheses toward its declared verdict?" If no, write it into
 `ideas-parking-lot.md` and continue.
@@ -111,12 +161,19 @@ docs/superpowers/2026-07-24-registration-feasibility-gate.md.
 
 ## Data Rules
 
-Verify schemas before using datasets.
-Inspect date ranges, missing values, duplicates, timezone handling, stale data, and column meanings.
-Do not assume positive or negative transaction signs, option quote conventions, or API units without checking docs or sample data.
-Keep raw data separate from cleaned data.
-Make transformations reproducible.
-Save important assumptions near the code that depends on them.
+Before relying on a dataset:
+
+1. Confirm its source and retrieval timestamp.
+2. Check schema, units, timezone, symbol identifiers, and column meanings.
+3. Check date ranges, missing values, duplicates, stale records, and outliers.
+4. Compare decision-critical values with a second reliable source when one
+   exists; otherwise state that independent confirmation is unavailable.
+5. Flag disagreements rather than silently selecting a preferred value.
+6. Preserve raw inputs separately and document reproducible transformations.
+
+Do not assume positive or negative transaction signs, option quote conventions,
+or API units without checking documentation or sample data. Save important
+assumptions near the code that depends on them.
 
 ## Catalyst-Calendar Rule (owner-directed 2026-07-16)
 
@@ -174,10 +231,20 @@ For any trading or account integration, include explicit dry-run controls and cl
 
 When finishing a task, provide:
 
-- What changed.
-- Files changed.
-- Tests or checks run.
-- Any blockers or risks.
-- The next most useful step, only if one exists.
+1. Verdict.
+2. Evidence reviewed.
+3. Changes made, by file.
+4. Validation commands and results.
+5. Remaining risks.
+6. Unsupported assumptions.
+7. Final ready or not-ready decision.
 
 Keep the final answer concise. Do not dump full files unless the user asks.
+
+## Preferred Codex Session Configuration
+
+These are operator-controlled preferences, not permissions or guarantees this
+file can enforce: GPT-5.6 with xhigh reasoning for main and planning work;
+GPT-5.6 high for reviewers; Terra medium for large-document scanning; live web
+search; network access only when approved and required; workspace-write
+sandbox; on-request approvals; medium verbosity; mandatory final validation.

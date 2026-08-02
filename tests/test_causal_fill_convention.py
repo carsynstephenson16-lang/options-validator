@@ -14,6 +14,7 @@ import pandas as pd
 
 import config
 from data import pandas_feed, thetadata_adapter
+from strategies.base import economic_max_loss_per_spread
 from strategies.put_credit_spread import PutCreditSpread
 
 
@@ -25,8 +26,8 @@ def _chain(
     *,
     short_delta: float = -0.30,
     long_delta: float = -0.25,
+    expiration: str = "2022-07-08",
 ):
-    expiration = "2022-07-08"
     return pd.DataFrame(
         [
             {
@@ -81,7 +82,11 @@ def _run_cached_backtest(
         ):
             chains = pandas_feed.load_cached_chains("SYN", sessions[0], sessions[-1])
 
-    feed = pandas_feed.build_option_data(chains, "SYN", exp_max="2022-09-16")
+    exp_max = max(
+        str(frame["expiration"].max())
+        for frame in chains.values()
+    )
+    feed = pandas_feed.build_option_data(chains, "SYN", exp_max=exp_max)
     available_by_session = pandas_feed.assets_by_session(feed)
 
     from lumibot.backtesting import PandasDataBacktesting
@@ -140,11 +145,17 @@ class CausalEntryFillTests(unittest.TestCase):
             datetime(2022, 6, 7),
         )
 
-    def test_owner_froze_d_plus_1_close(self):
+    def test_owner_registered_execution_semantics(self):
         self.assertEqual(
             config.BACKTEST_EXECUTION_CONVENTION,
             "D_PLUS_1_CLOSE",
         )
+        self.assertEqual(config.BACKTEST_ENTRY_DATE_SEMANTICS, "FILL_SESSION")
+        self.assertEqual(
+            config.BACKTEST_TERMINAL_EXIT_CONVENTION,
+            "terminal_conservative_mark",
+        )
+        self.assertEqual(config.A_ENTRY_CREDIT_TOLERANCE, 0.01)
 
     def test_fill_uses_d_plus_1_quotes_not_signal_day_quotes(self):
         position = self.strategy._spreads["SYN"]
@@ -153,21 +164,67 @@ class CausalEntryFillTests(unittest.TestCase):
         self.assertNotAlmostEqual(position.entry_credit, 0.53, places=2)
         self.assertEqual(position.entry_fill_date, self.fill_day)
 
-    def test_entry_submission_does_not_read_fill_day_eod_chain(self):
+    def test_one_cent_worse_fill_resizes_only_as_needed_for_hard_cap(self):
         chains_by_day = {
             self.signal_day: _chain(1.20, 1.30, 0.60, 0.64),
-            self.fill_day: _chain(1.50, 1.60, 0.65, 0.70),
-            "2022-06-03": _chain(1.50, 1.60, 0.65, 0.70),
+            # Signal credit 0.53 -> fill credit 0.52, exactly the registered
+            # tolerance. Four contracts would risk $602.40 including costs.
+            self.fill_day: _chain(1.19, 1.30, 0.60, 0.64),
+            "2022-06-03": _chain(1.19, 1.30, 0.60, 0.64),
         }
         strategy = _run_cached_backtest(
             chains_by_day,
             datetime(2022, 6, 4),
-            forbidden_strategy_chain_days={self.fill_day},
         )
         position = strategy._spreads["SYN"]
         self.assertEqual(position.entry_decision_date, self.signal_day)
         self.assertEqual(position.entry_fill_date, self.fill_day)
-        self.assertAlmostEqual(position.entry_credit, 0.77, places=2)
+        self.assertAlmostEqual(position.entry_credit, 0.52, places=2)
+        self.assertEqual(position.contracts, 3)
+        self.assertLessEqual(
+            position.contracts
+            * economic_max_loss_per_spread(2.0, position.entry_credit),
+            config.MAX_LOSS_PER_TRADE,
+        )
+
+    def test_fill_worse_than_one_cent_cancels_frozen_intent(self):
+        chains_by_day = {
+            self.signal_day: _chain(1.20, 1.30, 0.60, 0.64),
+            # Fill credit 0.51 is two cents worse than the 0.53 signal.
+            self.fill_day: _chain(1.18, 1.30, 0.60, 0.64),
+            "2022-06-03": _chain(1.18, 1.30, 0.60, 0.64),
+        }
+
+        strategy = _run_cached_backtest(
+            chains_by_day,
+            datetime(2022, 6, 4),
+        )
+
+        self.assertEqual(strategy._spreads, {})
+        self.assertEqual(strategy._pending_entries, {})
+        self.assertEqual(
+            strategy.cancelled_entries[0]["reason"],
+            "fill_credit_below_tolerance",
+        )
+
+    def test_audit_50_to_35_credit_drift_cannot_breach_cap(self):
+        signal = _chain(1.20, 1.30, 0.63, 0.69)  # conservative credit 0.50
+        fill = _chain(1.20, 1.30, 0.78, 0.84)    # conservative credit 0.35
+
+        strategy = _run_cached_backtest(
+            {
+                self.signal_day: signal,
+                self.fill_day: fill,
+                "2022-06-03": fill,
+            },
+            datetime(2022, 6, 4),
+        )
+
+        self.assertEqual(strategy._spreads, {})
+        self.assertEqual(
+            strategy.cancelled_entries[0]["reason"],
+            "fill_credit_below_tolerance",
+        )
 
 
 class PointInTimeFeedAvailabilityTests(unittest.TestCase):
@@ -229,6 +286,31 @@ class CausalExitFillTests(unittest.TestCase):
         self.assertAlmostEqual(trade["pnl"], 97.60, places=2)
         self.assertEqual(trade["exit_decision_date"], "2022-06-03")
         self.assertEqual(trade["exit_date"], "2022-06-06")
+
+    def test_final_session_trigger_records_terminal_conservative_mark(self):
+        expiration = "2023-02-03"
+        entry = _chain(1.20, 1.30, 0.60, 0.64, expiration=expiration)
+        trigger = _chain(0.20, 0.24, 0.05, 0.07, expiration=expiration)
+
+        strategy = _run_cached_backtest(
+            {
+                "2022-12-28": entry,
+                "2022-12-29": entry,
+                "2022-12-30": trigger,
+            },
+            datetime(2022, 12, 31),
+        )
+
+        self.assertEqual(strategy._spreads, {})
+        self.assertEqual(len(strategy.closed_trades), 1)
+        trade = strategy.closed_trades[0]
+        self.assertEqual(trade["exit_decision_date"], "2022-12-30")
+        self.assertEqual(trade["exit_date"], "2022-12-30")
+        self.assertAlmostEqual(trade["pnl"], 117.60, places=2)
+        self.assertEqual(
+            trade["exit_execution"],
+            "terminal_conservative_mark",
+        )
 
 
 if __name__ == "__main__":

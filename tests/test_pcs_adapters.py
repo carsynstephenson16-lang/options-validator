@@ -10,6 +10,7 @@ All fixtures are synthetic; the suite must run offline and without .cache/.
 """
 import unittest
 from datetime import date, datetime
+from unittest import mock
 
 import pandas as pd
 
@@ -50,6 +51,8 @@ def bare_strategy(today: date, **params):
     s._pending_entries = {}
     s._spreads = {}
     s.closed_trades = []
+    s.cancelled_entries = []
+    s.atomicity_incidents = []
     s.get_datetime = lambda: datetime(today.year, today.month, today.day, 16)
     return s
 
@@ -123,6 +126,8 @@ class EntryGateTests(unittest.TestCase):
 class FailLoudTests(unittest.TestCase):
     def test_submit_spread_raises_when_leg_missing_from_feed(self):
         s = bare_strategy(date(2022, 6, 1), tradeable_assets=set())
+        s.create_order = mock.Mock()
+        s.submit_order = mock.Mock()
         chain = synth_chain([
             ("2022-07-08", 100.0, "P", 1.2, 1.3, LIQ, -0.30),
             ("2022-07-08",  98.0, "P", 0.6, 0.7, LIQ, -0.25),
@@ -140,6 +145,70 @@ class FailLoudTests(unittest.TestCase):
                 decision_date="2022-06-01",
                 fill_date="2022-06-02",
             )
+        s.create_order.assert_not_called()
+        s.submit_order.assert_not_called()
+
+    def test_one_leg_fill_is_unwound_costed_recorded_and_fails(self):
+        today = date(2022, 6, 2)
+        fill_date = today.isoformat()
+        chain = synth_chain([
+            ("2022-07-08", 100.0, "P", 1.20, 1.30, LIQ, -0.30),
+            ("2022-07-08", 98.0, "P", 0.60, 0.64, LIQ, -0.25),
+        ])
+        s = bare_strategy(
+            today,
+            chain_provider=lambda _symbol, day: chain if day == fill_date else None,
+        )
+        short_asset, long_asset = s._spread_assets(
+            "SYN", "2022-07-08", 100.0, 98.0
+        )
+        s._tradeable = {short_asset, long_asset}
+        s._tradeable_by_session = {
+            fill_date: {short_asset, long_asset},
+        }
+        created_orders = []
+
+        def create_order(asset, quantity, side):
+            order = mock.Mock(asset=asset, quantity=quantity, side=side)
+            created_orders.append(order)
+            return order
+
+        s.create_order = create_order
+        s.submit_order = mock.Mock(side_effect=lambda order: order)
+        s.log_message = mock.Mock()
+        s._submit_spread(
+            "SYN",
+            "2022-07-08",
+            100.0,
+            98.0,
+            2,
+            0.53,
+            decision_date="2022-06-01",
+            fill_date=fill_date,
+        )
+        short_order, long_order = created_orders
+        s.on_filled_order(None, short_order, 1.18, 2, 100)
+
+        with self.assertRaisesRegex(RuntimeError, "partial entry fill"):
+            s.on_canceled_order(long_order)
+
+        self.assertNotIn("SYN", s._spreads)
+        self.assertEqual(len(s.atomicity_incidents), 1)
+        incident = s.atomicity_incidents[0]
+        self.assertEqual(incident["symbol"], "SYN")
+        self.assertEqual(incident["session"], fill_date)
+        self.assertEqual(incident["filled_leg"], "short")
+        self.assertEqual(incident["unwind_side"], "buy")
+        self.assertEqual(incident["quantity"], 2)
+        self.assertAlmostEqual(incident["entry_price"], 1.18)
+        self.assertAlmostEqual(incident["unwind_price"], 1.32)
+        self.assertAlmostEqual(incident["gross_pnl"], -28.0)
+        self.assertAlmostEqual(incident["commissions"], 2.60)
+        self.assertAlmostEqual(incident["net_pnl"], -30.60)
+        self.assertEqual(
+            incident["execution"],
+            "same_session_conservative_mark",
+        )
 
 
 class EndToEndSyntheticBacktestTests(unittest.TestCase):

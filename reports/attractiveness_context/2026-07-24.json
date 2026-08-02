@@ -1,0 +1,180 @@
+{
+ "as_of": "2026-07-24",
+ "provenance": "LLM-asserted (primary public-source audit 2026-07-27)",
+ "researched_on": "2026-07-27",
+ "market": {
+  "summary": "The next scheduled macro event in the research window is the Federal Reserve's July 28-29, 2026 FOMC meeting.",
+  "regime": "mixed",
+  "notes": [
+   "This is a dated, descriptive calendar note; it does not change ranking, strategy gates, or a trade verdict."
+  ]
+ },
+ "market_sources": [
+  "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
+ ],
+ "symbols": {
+  "NVDA": {
+   "news_summary": "NVIDIA's investor-relations calendar lists its FY27 Q2 financial-results event for August 26, 2026 at 2:00 p.m. PT, after the August 7 candidate expiration.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-08-26",
+     "what": "NVIDIA FY27 Q2 financial-results event at 2:00 p.m. PT; after the August 7 candidate expiration.",
+     "source": "https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx",
+     "confirmed": true
+    }
+   ],
+   "move_thesis": "The candidate expires before the issuer-listed earnings event. This is timing context only, not a price forecast.",
+   "sources": [
+    "https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx"
+   ]
+  },
+  "NOW": {
+   "news_summary": "ServiceNow reported Q2 2026 results on July 22, before the July 24 board session.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-07-22",
+     "what": "ServiceNow reported Q2 2026 financial results.",
+     "source": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+     "confirmed": true
+    }
+   ],
+   "move_thesis": "The July 22 earnings release is already past for this board. No price or post-earnings trend claim is asserted.",
+   "sources": [
+    "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx"
+   ]
+  },
+  "PLTR": {
+   "news_summary": "Palantir's company announcement schedules Q2 2026 results for August 3 after U.S. market close, inside the August 7 candidate life.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-08-03",
+     "what": "Palantir Q2 2026 results and webcast after U.S. market close.",
+     "source": "https://www.businesswire.com/news/home/20260713475194/en/Palantir-Announces-Date-of-Second-Quarter-2026-Earnings-Release-and-Webcast",
+     "confirmed": true
+    }
+   ],
+   "move_thesis": "The issuer-announced earnings event falls inside the candidate life. This is event-timing context only.",
+   "sources": [
+    "https://www.businesswire.com/news/home/20260713475194/en/Palantir-Announces-Date-of-Second-Quarter-2026-Earnings-Release-and-Webcast"
+   ]
+  },
+  "VST": {
+   "news_summary": "Vistra plans to report Q2 2026 results on August 7 at 10:00 a.m. ET. The next PJM Base Residual Auction remains a required, unconfirmed catalyst entry.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-08-07",
+     "what": "Vistra Q2 2026 financial and operating results; conference call at 10:00 a.m. ET.",
+     "source": "https://investor.vistracorp.com/2026-07-06-Vistra-to-Report-Second-Quarter-Results-on-Aug-7%2C-2026",
+     "confirmed": true
+    },
+    {
+     "date": null,
+     "what": "PJM 2029/2030 Base Residual Auction. PJM's tariff specifies December 2026, but the current PJM capacity-market page does not publish an exact auction date.",
+     "source": "https://www.pjm.com/directory/etariff/FercDockets/8538/20241209-er25-682-000.pdf",
+     "confirmed": false
+    }
+   ],
+   "move_thesis": "Earnings and PJM auction timing are calendar context only; no directional price claim is asserted.",
+   "sources": [
+    "https://investor.vistracorp.com/2026-07-06-Vistra-to-Report-Second-Quarter-Results-on-Aug-7%2C-2026",
+    "https://www.pjm.com/directory/etariff/FercDockets/8538/20241209-er25-682-000.pdf"
+   ]
+  },
+  "AMZN": {
+   "news_summary": "Amazon's company news page schedules its Q2 2026 financial-results conference call for July 30 at 5:00 p.m. ET.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-07-30",
+     "what": "Amazon Q2 2026 financial-results conference call at 5:00 p.m. ET.",
+     "source": "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report",
+     "confirmed": true
+    }
+   ],
+   "move_thesis": "This is issuer-confirmed calendar context only; no price, implied-move, or outcome assertion is made.",
+   "sources": [
+    "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report"
+   ]
+  },
+  "CEG": {
+   "news_summary": "Constellation's investor-relations calendar lists Q2 2026 earnings for August 6 at 10:00 a.m. ET. The next PJM Base Residual Auction remains a required, unconfirmed catalyst entry.",
+   "sentiment": "neutral",
+   "catalysts": [
+    {
+     "date": "2026-08-06",
+     "what": "Constellation Q2 2026 earnings conference call at 10:00 a.m. ET.",
+     "source": "https://investors.constellationenergy.com/events-and-presentations",
+     "confirmed": true
+    },
+    {
+     "date": null,
+     "what": "PJM 2029/2030 Base Residual Auction. PJM's tariff specifies December 2026, but the current PJM capacity-market page does not publish an exact auction date.",
+     "source": "https://www.pjm.com/directory/etariff/FercDockets/8538/20241209-er25-682-000.pdf",
+     "confirmed": false
+    }
+   ],
+   "move_thesis": "Earnings and PJM auction timing are calendar context only; no directional price claim is asserted.",
+   "sources": [
+    "https://investors.constellationenergy.com/events-and-presentations",
+    "https://www.pjm.com/directory/etariff/FercDockets/8538/20241209-er25-682-000.pdf"
+   ]
+  }
+ },
+ "annotations": {
+  "NVDA:long_call:2026-08-07:212.50": {
+   "research_as_of_utc": "2026-07-27T19:07:42Z",
+   "market_as_of_date": "2026-07-24",
+   "claims": [
+    {
+     "id": "nvda-fy27q2-timing",
+     "text": "NVIDIA's investor-relations calendar lists the FY27 Q2 financial-results event for August 26, 2026 at 2:00 p.m. PT.",
+     "classification": "fact",
+     "source_url": "https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx",
+     "unknown_rationale": null,
+     "source_tier": "issuer_ir",
+     "fact_date": "2026-08-26",
+     "date_certainty": "confirmed",
+     "countercase": "The issuer event listing confirms timing, not an earnings result or stock move."
+    }
+   ]
+  },
+  "NOW:long_call:2026-08-07:103.00": {
+   "research_as_of_utc": "2026-07-27T19:07:42Z",
+   "market_as_of_date": "2026-07-24",
+   "claims": [
+    {
+     "id": "now-q2-results-released",
+     "text": "ServiceNow reported Q2 2026 financial results on July 22, 2026.",
+     "classification": "fact",
+     "source_url": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+     "unknown_rationale": null,
+     "source_tier": "issuer_ir",
+     "fact_date": "2026-07-22",
+     "date_certainty": "confirmed",
+     "countercase": "The issuer release reports results but does not establish post-release price direction."
+    }
+   ]
+  },
+  "PLTR:long_call:2026-08-07:129.00": {
+   "research_as_of_utc": "2026-07-27T19:07:42Z",
+   "market_as_of_date": "2026-07-24",
+   "claims": [
+    {
+     "id": "pltr-q2-release-timing",
+     "text": "Palantir announced that Q2 2026 results will be released on August 3, 2026 following the close of U.S. markets, with a webcast at 5:00 p.m. ET.",
+     "classification": "fact",
+     "source_url": "https://www.businesswire.com/news/home/20260713475194/en/Palantir-Announces-Date-of-Second-Quarter-2026-Earnings-Release-and-Webcast",
+     "unknown_rationale": null,
+     "source_tier": "issuer_ir",
+     "fact_date": "2026-08-03",
+     "date_certainty": "confirmed",
+     "countercase": "The company announcement confirms timing, not the earnings result or a price response."
+    }
+   ]
+  }
+ }
+}

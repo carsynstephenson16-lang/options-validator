@@ -18,6 +18,12 @@ from options_researcher.h7_paper_lifecycle import (
     ActivationBoundaryError,
 )
 from options_researcher.h7_scope import scope_identity
+from options_researcher.h7_scoring_identity import (
+    REGISTRATION_CONTRACT_FIELD,
+    REGISTRATION_HASH_FIELD,
+    STAGE456_PARAMETER_NAMES,
+    build_scoring_identity,
+)
 from research.hashing import config_hash, cost_model_hash, sha256_file
 
 # The two trim_rule values a window_registration payload may carry (Option C,
@@ -48,25 +54,6 @@ EVIDENCE_FIELDS = (
     "darwin_durability_verified",
     "pre_append_state",
 )
-# The frozen Stage 4/5/6 parameter surface that a window_registration event
-# commits to verbatim (in addition to config_hash/cost_model_hash, which
-# already cover the full config module -- these are named explicitly so the
-# payload is legible without cross-referencing config.py).
-STAGE456_PARAMETER_NAMES = (
-    "H7_FORWARD_CONTRACTS", "COMMISSION_PER_CONTRACT", "SLIPPAGE_HAIRCUT",
-    "H7_LANE_PRIORITY", "H7_LONG_DELTA_BAND", "H7_LONG_DTE_BAND",
-    "H7_SPREAD_LONG_DELTA", "H7_SPREAD_SHORT_DELTA", "H7_LONG_TP_PCT",
-    "H7_SPREAD_TP_FRAC_MAX", "H7_CLOSE_AT_DTE", "H7_DELTA_TOLERANCE",
-    "H7C_SHORT_DELTA_MAX", "H7C_DTE_BAND", "H7C_CREDIT_FLOOR_FRAC",
-    "H7C_WIDTH_FRAC_OF_SPOT", "H7C_TP_FRAC", "H7C_STOP_CREDIT_MULT",
-    "H7C_MAX_CONCURRENT", "H7C_CLOSE_AT_DTE", "H7C_CLOSE_BEFORE_EARNINGS",
-    "H7C_TIEBREAK", "H7_MONTHLY_AT_RISK", "H7_MAX_OPEN_PER_UNDERLYING",
-    "H7_ADMIT_MIN_CONTRACTS", "H7_ADMIT_MAX_SPREAD_PCT",
-    "H7_EARNINGS_BAN_SESSIONS", "H7_EARNINGS_POST_REPORT_GRACE_D",
-    "H7_MAX_HOLD_BUFFER_D", "MIN_LOSSES_FOR_VERDICT", "BOOTSTRAP_SAMPLES",
-)
-
-
 class RegistrationInputError(ValueError):
     """An owner/evidence input is missing, None, empty, or malformed."""
 
@@ -193,6 +180,21 @@ def build_window_registration_event(*, owner: dict, evidence: dict,
             f"{coverage_through}, short of window end {end}; renew coverage "
             "before registering")
 
+    registered_config_hash = config_hash()
+    registered_cost_model_hash = cost_model_hash()
+    stage456_parameters = {
+        name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES
+    }
+    scorer = {
+        "module": "options_researcher.h7_forward_scoring",
+        "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
+        "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
+    }
+    scoring_identity = build_scoring_identity(
+        stage456_parameters=stage456_parameters,
+        scorer=scorer,
+        cost_model_hash_value=registered_cost_model_hash,
+    )
     payload = {
         "owner_authorization": {field: owner[field] for field in OWNER_FIELDS},
         "review_evidence": evidence["review_evidence"],
@@ -208,16 +210,12 @@ def build_window_registration_event(*, owner: dict, evidence: dict,
         },
         "cohort_rule": "decision_session in registered window (immutable key)",
         "frozen": {
-            "config_hash": config_hash(),
-            "cost_model_hash": cost_model_hash(),
-            "stage456_parameters": {
-                name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES
-            },
-            "scorer": {
-                "module": "options_researcher.h7_forward_scoring",
-                "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
-                "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
-            },
+            "config_hash": registered_config_hash,
+            "cost_model_hash": registered_cost_model_hash,
+            "stage456_parameters": stage456_parameters,
+            "scorer": scorer,
+            REGISTRATION_CONTRACT_FIELD: scoring_identity.contract,
+            REGISTRATION_HASH_FIELD: scoring_identity.identity_hash,
             "verdict_mapping": {
                 "SURVIVED": "ci_above_zero",
                 "REJECTED": "ci_below_zero",

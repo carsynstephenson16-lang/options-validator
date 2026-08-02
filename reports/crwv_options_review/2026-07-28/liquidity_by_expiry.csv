@@ -1,0 +1,21 @@
+expiration,screen,contracts
+2026-07-31,Execution: spread <=10%,18
+2026-07-31,Strict admission: spread <=5%,2
+2026-08-07,Execution: spread <=10%,10
+2026-08-07,Strict admission: spread <=5%,1
+2026-08-14,Execution: spread <=10%,3
+2026-08-14,Strict admission: spread <=5%,0
+2026-08-21,Execution: spread <=10%,14
+2026-08-21,Strict admission: spread <=5%,5
+2026-08-28,Execution: spread <=10%,3
+2026-08-28,Strict admission: spread <=5%,0
+2026-09-04,Execution: spread <=10%,0
+2026-09-04,Strict admission: spread <=5%,0
+2026-09-18,Execution: spread <=10%,9
+2026-09-18,Strict admission: spread <=5%,5
+2026-10-16,Execution: spread <=10%,4
+2026-10-16,Strict admission: spread <=5%,0
+2026-11-20,Execution: spread <=10%,3
+2026-11-20,Strict admission: spread <=5%,0
+2026-12-18,Execution: spread <=10%,8
+2026-12-18,Strict admission: spread <=5%,4

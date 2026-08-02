@@ -82,6 +82,13 @@ class RitualRefreshBeforeConsumerOrderTests(unittest.TestCase):
         self.assertIn(entry_watch, source)
         self.assertLess(source.index(rebuild), source.index(entry_watch))
 
+    def test_entry_watch_receives_exact_ritual_session(self):
+        source = RITUAL.read_text(encoding="utf-8")
+        self.assertIn(
+            'options_researcher.entry_watch --as-of "$AS_OF" --out "$EW_OUT"',
+            source,
+        )
+
     def test_display_extra_refresh_is_note_only_and_outside_h7_gate(self):
         source = RITUAL.read_text(encoding="utf-8")
 

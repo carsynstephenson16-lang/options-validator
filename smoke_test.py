@@ -12,11 +12,13 @@ SMOKE_TEST_DATE must NEVER be moved to a date after config.IN_SAMPLE_END --
 this script only ever touches in-sample data (the adapter also guards this,
 but main() refuses first, belt-and-braces).
 
-Run from repo root:  python smoke_test.py
+The paid-provider smoke path is retired and now fails before reading or
+writing anything. ``summarize_chain`` remains available for offline tests.
 """
 import pandas as pd
 
 import config
+from data import provider_policy
 from data.thetadata_adapter import get_eod_chain, passes_liquidity
 from research import facts
 
@@ -56,6 +58,7 @@ def summarize_chain(chain: pd.DataFrame) -> dict:
 
 
 def main(ledger_dir="ledger"):
+    provider_policy.require_thetadata_acquisition("ThetaData smoke test")
     if SMOKE_TEST_DATE > config.IN_SAMPLE_END:
         raise ValueError(
             f"SMOKE_TEST_DATE={SMOKE_TEST_DATE} is after "
