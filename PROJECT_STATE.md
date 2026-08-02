@@ -119,8 +119,8 @@ options-flow study remains DATA-GATED because no real trade/quote panel exists.
 | `uv run python -m options_researcher.h7_event_ledger verify` | `VALID records=1 head=a1ea228c2abb…` | H7 store is not empty; its README is stale. |
 | P0-focused unit set | 51/51 passed | Ratio, ordering, D+1, ordinary/terminal exits, same/different quotes. |
 | Provider/H5/H6/H8/flow/cache-focused set | 184/184 passed | Present behavior is pinned; some tests pin the H6 defect rather than disprove it. |
-| Discovery audit | 2,283 tests discovered and executed under `tests/` | The current root test collection includes the manifest, cap, provider-disable, exact-session, and receipt-stability regressions. |
-| `uv run python -m unittest discover -s tests` | 2,283/2,283 passed in 944.501s | Current full root result. Logged exceptions/retries are asserted mocks/fail-closed fixtures. |
+| Discovery audit | 2,284 tests discovered and executed under `tests/` | The current root test collection includes the manifest, cap, provider-disable, exact-session, and receipt-stability regressions. |
+| `uv run python -m unittest discover -s tests` | 2,284/2,284 passed in 333.781s | Current full root result. Logged exceptions/retries are asserted mocks/fail-closed fixtures. |
 | `uv run ruff check .` | passed | Same lint command as CI. |
 | `uv run pyright` | 0 errors/warnings | Same type command as CI. |
 | `uv run ruff format --check .` | failed: 260 would reformat | Pre-existing format baseline; CI does not run this command. Do not mass-format during scoped fixes. |
