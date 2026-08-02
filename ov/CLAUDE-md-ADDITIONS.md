@@ -27,4 +27,4 @@ This repo is a validator. It never places orders, never connects to a live broke
 
 ## Scope guard (always on)
 
-Current phase: Phase 0 — get one strategy to one honest verdict. Before adding any new capability, ticker, strategy, or tool, answer in one sentence: "Does this move the current phase to a verdict?" If no, write the idea into `ideas-parking-lot.md` and continue the phase. Parked ideas are not rejected ideas; they're just not now.
+The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered forward-paper hypotheses; task sequencing lives in `PROJECT_STATE.md` (the canonical roadmap — its P0 gate binds), and H7's historical diagnostic is permanently retired. Before adding a new capability, ticker, strategy, or tool, answer: "Does this move one of the live hypotheses toward its declared verdict?" If no, write it into `ideas-parking-lot.md` and continue.

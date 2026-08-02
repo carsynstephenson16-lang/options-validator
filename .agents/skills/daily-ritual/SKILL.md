@@ -1,72 +1,78 @@
 ---
 name: daily-ritual
-description: Run the owner-frozen H7/H6 daily operating sequence in its exact gate order (topup -> source health -> data gate -> watchers). Use when Carsyn says "daily ritual", "run the board", "morning check", or asks for today's H7/H6 status. User-invoked only — never run this proactively, and never run steps out of order.
+description: Use when Carsyn says "daily ritual", "run the board", "morning check", or asks for the current H5/H6/H7/H8/H10 operating status.
 disable-model-invocation: true
 ---
 
-# Daily Ritual (H7 + H6 forward watch)
+# Daily Ritual (forward-paper operating board)
 
-Operator order is frozen by H7 amendment v1.4 (2026-07-14). The order IS the
-control: source health is recorded before the gate so the gate sees fresh
-provenance, and the watcher only runs behind a GO gate. Never reorder, never
+Operator order is frozen by H7 amendment v1.4 (2026-07-14), with the step
+order updated by H10_RITUAL_ORDER_FIX (2026-07-24, facts.log). The order IS
+the control: source health is recorded before the gate so the gate sees fresh
+provenance, and every watcher runs behind a GO gate. Never reorder, never
 skip a step because yesterday was fine.
 
-## Sequence
+## Choose the mode
 
-**Step 0 — recent-day top-up (needs ThetaData terminal; skip iff sub inactive):**
+| Request | Action |
+|---|---|
+| Current status, results, or "how about now" | Inspect the latest log, ritual-status receipt, capture receipt, and relevant ledgers. Do not run the ritual. |
+| Explicitly run the ritual, board, or morning check | Apply the provider-policy preflight below before any execution. |
 
-```bash
-uv run python data/recent_topup.py --scope h7 --refresh-closes
-```
+Never run this proactively. `tools/daily_ritual.sh` is the authoritative
+source for both order and effects; do not replace it with hand-typed steps.
 
-If closes changed (or any config changed), H6 features are stale — Step 4's
-rebuild is then mandatory, not optional.
+## Current provider-policy block
 
-**Step 1 — source health (run AND record):**
+ThetaData acquisition is owner-disabled with no environment override
+(`data/provider_policy.py`). Immutable cached reads remain allowed, but the
+current script calls the non-dry-run `data/recent_topup.py` path, which refuses
+before top-up or close refresh. Therefore the full ritual is currently
+**NOT RUNNABLE**.
 
-```bash
-uv run python -m options_researcher.h7_source_health
-```
+For an explicit run request, report this deterministic blocker and stop. Do
+not treat an API key, subscription state, or a complete cache as an override;
+do not skip top-up; and do not manually run the downstream consumers. Resume
+only after the authoritative script has been reconciled with the frozen
+provider policy through a separately reviewed change.
 
-Exit 1 = one or more names need an earnings refresh. Per amendment v1.4 this
-is a PER-NAME entry ban enforced by the watcher's fail-closed gate — it does
-NOT block the board. Do not "fix" it inline; the refresh path is the
-owner-run `tools/h7_refresh_earnings.py` append-raw/promote flow.
+## Authoritative script contract
 
-**Step 2 — data gate (HARD GATE):**
-
-```bash
-uv run python -m options_researcher.h7_data_gate
-```
-
-Exit 0 (GO) is required to proceed. A NO_GO **blocks the entire run** — stop
-here, report which names failed and why, and do not run the watcher. There is
-no override in this skill.
-
-**Step 3 — H7 watcher (alerts only):**
+When the provider-policy block has been resolved, run only:
 
 ```bash
-uv run python -m options_researcher.h7_watch
+tools/daily_ritual.sh
 ```
 
-Read-only alerts against frozen triggers. An ENTRY-OK line is information for
-the owner, never an instruction to act.
+It logs to `.tmp/daily_ritual/<stamp>.log`; read the log and report the
+summary. It is branch-guarded: it refuses to run off `main` or when `main`
+is not aligned with `origin/main`. A refusal is the system working — report
+it, do not work around it.
 
-**Step 4 — H6 leg** (both commands **require** `--as-of`; pass the same
-evaluation-session date `YYYY-MM-DD` used above — they are exact-session, not
-"default to today"):
+The script is stateful. It can append receipt-bound H7 real-paper exit events,
+append H10 observations, write receipts/reports/feature stores/dashboards,
+stage and commit allow-listed evidence, fetch/merge/push `main`, and take a
+restic snapshot. H7 exit fill/monitor runs outside the entry `GO` block so a
+data-gate refusal does not imply zero mutations. Disclose these effects; never
+describe the script or the full consumer sequence as read-only.
 
-```bash
-uv run python -m options_researcher.h6_features --as-of YYYY-MM-DD  # rebuild if closes/config changed
-uv run python -m options_researcher.h6_watch --as-of YYYY-MM-DD
-```
+It does not place broker orders or authorize entries. Watcher output is
+information for the owner, never an instruction to act.
+
+## Report contract
+
+Report the checkout/branch guard, provider-policy state, evaluation session,
+source health, data-gate verdict, H7 exit results, each watcher lane, generated
+artifacts, evidence commit/push outcome, backup outcome, terminal status, and
+log path. Distinguish `SKIPPED`, `BLOCKED`, `BROKEN`, and a normal `WAIT`.
 
 ## Hard rules
 
-- This ritual takes ZERO book actions. It reads, gates, and reports.
-  Any entry/exit decision is the owner's, recorded through the proper
-  ledger/positions flow — never by this skill.
+- Never bypass the provider freeze, branch guard, gate order, or exact-session
+  flags.
+- Never hand-step around a blocked script or claim a partial manual sequence is
+  the daily ritual.
+- Never place a live order or manually record an owner decision. Mechanical
+  real-paper exit events produced by the script are not owner entry authority.
 - Never hand-edit ledger files to make a gate pass. The gate failing IS the
   system working.
-- Report the end state honestly: per-name health, gate verdict, watcher
-  lanes, H6 eligibility. "All WAIT" is a normal, successful day.
