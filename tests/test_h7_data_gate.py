@@ -6,6 +6,7 @@ NO_GO. These tests inject tiny fixture caches via close_dir/chain_dir and
 prove no fetch path is ever touched and no input byte changes."""
 
 import hashlib
+import inspect
 import unittest
 from datetime import date
 from pathlib import Path
@@ -15,7 +16,7 @@ from unittest import mock
 import pandas as pd
 
 from data.cache_runner import trading_days
-from data.cache_schema import validate_v2_synthetic_audit_receipt
+from data.cache_schema import V2_FULL_AUDIT_SCHEMA
 from options_researcher import h7_data_gate as gate
 from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_synthetic_proof import (
@@ -89,10 +90,19 @@ class GateBase(unittest.TestCase):
             )
             _write_chain(self.chain_dir, sym, self.eval_iso, _good_chain())
         _write_synthetic_full_audit_receipt(self.chain_dir)
+
+        def fixture_validator(cache_dir, chain_path, *, symbol, session, consumer_scope):
+            return {
+                "path": str(Path(cache_dir) / "_meta" / "fixture-full-audit.json"),
+                "receipt_hash": "f" * 64,
+                "verdict": "PASS WITH WARNINGS",
+                "partition_sha256": hashlib.sha256(Path(chain_path).read_bytes()).hexdigest(),
+                "consumer_scope": consumer_scope,
+                "schema": V2_FULL_AUDIT_SCHEMA,
+            }
+
         validator_patch = mock.patch.object(
-            gate,
-            "validate_v2_audit_receipt",
-            validate_v2_synthetic_audit_receipt,
+            gate, "validate_v2_audit_receipt", side_effect=fixture_validator
         )
         validator_patch.start()
         self.addCleanup(validator_patch.stop)
@@ -295,6 +305,26 @@ class TestSourceHealthLinkRequired(GateBase):
     no source-health link). The gate must therefore refuse to write one at
     all rather than silently stamping nulls."""
 
+    def test_production_evaluate_has_no_validator_injection_seam(self):
+        self.assertNotIn("_receipt_validator", inspect.signature(gate.evaluate).parameters)
+
+    def test_go_with_non_h7_binding_cannot_build_durable_receipt(self):
+        result = gate.evaluate(
+            REQ,
+            close_dir=self.close_dir,
+            chain_dir=self.chain_dir,
+        )
+        symbol = next(
+            symbol for symbol, record in result["symbols"].items() if record["verdict"] == "GO"
+        )
+        result["symbols"][symbol]["chain"]["audit_receipt"]["consumer_scope"] = "H7-SYNTHETIC"
+        with self.assertRaisesRegex(ValueError, "real H7"):
+            gate.build_receipt(
+                result,
+                source_health_receipt=self.source_health,
+                source_health_receipt_path=self.source_health_path,
+            )
+
     def test_omitted_source_health_receipt_is_exit_2_and_writes_nothing(self):
         rc = gate.main(
             [
@@ -323,6 +353,19 @@ class TestSourceHealthLinkRequired(GateBase):
             receipt["source_hash_contract"],
             DIAGNOSTIC_SOURCE_HASH_VERSION,
         )
+
+    def test_synthetic_evaluation_cannot_build_durable_receipt(self):
+        result = gate.evaluate_synthetic_fixture(
+            REQ,
+            close_dir=self.close_dir,
+            chain_dir=self.chain_dir,
+        )
+        with self.assertRaisesRegex(ValueError, "synthetic"):
+            gate.build_receipt(
+                result,
+                source_health_receipt=self.source_health,
+                source_health_receipt_path=self.source_health_path,
+            )
 
 
 class TestCliContract(GateBase):

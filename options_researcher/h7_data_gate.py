@@ -41,9 +41,11 @@ import pandas as pd
 
 from data.cache_schema import (
     CHAIN_SCHEMA_VERSION_V1,
+    V2_FULL_AUDIT_SCHEMA,
     CacheAuditReceiptError,
     chain_schema_metadata,
     validate_v2_audit_receipt,
+    validate_v2_synthetic_audit_receipt,
 )
 from data.recent_topup import audit_chain
 from data.thetadata_adapter import CHAIN_COLUMNS, NUMERIC_CHAIN_COLUMNS
@@ -351,14 +353,19 @@ def _resolve_scope(scope: dict | None, symbols) -> tuple[list[str], dict]:
     return list(identity["symbols"]), identity
 
 
-def evaluate(
+REAL_H7_EVIDENCE_MODE = "REAL-H7-FULL-AUDIT"
+SYNTHETIC_EVIDENCE_MODE = "SYNTHETIC-ONLY"
+
+
+def _evaluate(
     requested_run_date: date,
     *,
     close_dir: Path = DEFAULT_CLOSE_DIR,
     chain_dir: Path = DEFAULT_CHAIN_DIR,
     scope: dict | None = None,
     symbols: list[str] | tuple[str, ...] | None = None,
-    _receipt_validator: Callable[..., dict] | None = None,
+    receipt_validator: Callable[..., dict],
+    evidence_mode: str,
 ) -> dict:
     """Pure whole-universe evaluation. Filesystem inputs are injected via
     close_dir/chain_dir so tests drive fixture caches. Raises GateStoreError
@@ -378,7 +385,7 @@ def evaluate(
             sym,
             eval_iso,
             chain_dir,
-            receipt_validator=_receipt_validator,
+            receipt_validator=receipt_validator,
         )
         codes = sorted(set(close_codes) | set(chain_codes))
         verdict = "GO" if not codes else "NO_GO"
@@ -395,6 +402,7 @@ def evaluate(
     go = [s for s, r in records.items() if r["verdict"] == "GO"]
     return {
         "schema_version": SCHEMA_VERSION,
+        "evidence_mode": evidence_mode,
         "scope": scope_info,
         "requested_run_date": requested_run_date.isoformat(),
         "evaluation_session": eval_iso,
@@ -407,6 +415,46 @@ def evaluate(
     }
 
 
+def evaluate(
+    requested_run_date: date,
+    *,
+    close_dir: Path = DEFAULT_CLOSE_DIR,
+    chain_dir: Path = DEFAULT_CHAIN_DIR,
+    scope: dict | None = None,
+    symbols: list[str] | tuple[str, ...] | None = None,
+) -> dict:
+    """Evaluate only production H7 evidence with the full-audit validator."""
+    return _evaluate(
+        requested_run_date,
+        close_dir=close_dir,
+        chain_dir=chain_dir,
+        scope=scope,
+        symbols=symbols,
+        receipt_validator=validate_v2_audit_receipt,
+        evidence_mode=REAL_H7_EVIDENCE_MODE,
+    )
+
+
+def evaluate_synthetic_fixture(
+    requested_run_date: date,
+    *,
+    close_dir: Path,
+    chain_dir: Path,
+    scope: dict | None = None,
+    symbols: list[str] | tuple[str, ...] | None = None,
+) -> dict:
+    """Evaluate Stage-7 fixtures; the result cannot become a durable gate receipt."""
+    return _evaluate(
+        requested_run_date,
+        close_dir=close_dir,
+        chain_dir=chain_dir,
+        scope=scope,
+        symbols=symbols,
+        receipt_validator=validate_v2_synthetic_audit_receipt,
+        evidence_mode=SYNTHETIC_EVIDENCE_MODE,
+    )
+
+
 def build_receipt(
     result: dict, *, source_health_receipt: dict, source_health_receipt_path: Path
 ) -> dict:
@@ -417,6 +465,19 @@ def build_receipt(
     ``h7_session.open_real_session`` refuses an unlinked chain -- so an
     unlinked receipt must never reach disk in the first place.
     """
+    if result.get("evidence_mode") != REAL_H7_EVIDENCE_MODE:
+        raise ValueError("synthetic data-gate evaluation cannot create a durable receipt")
+    for symbol, record in result.get("symbols", {}).items():
+        if record.get("verdict") != "GO":
+            continue
+        binding = record.get("chain", {}).get("audit_receipt", {})
+        if (
+            binding.get("valid") is not True
+            or binding.get("schema") != V2_FULL_AUDIT_SCHEMA
+            or binding.get("consumer_scope") != "H7"
+            or binding.get("verdict") not in {"PASS", "PASS WITH WARNINGS"}
+        ):
+            raise ValueError(f"{symbol} GO lacks a real H7 full-audit binding")
     if source_health_receipt is None or source_health_receipt_path is None:
         raise ValueError(
             "data gate requires a linked source_health receipt; refusing to "
@@ -431,6 +492,7 @@ def build_receipt(
         raise ValueError("source-health receipt scope does not match gate")
     source_receipt_hash = source_health_receipt.get("receipt_hash")
     payload = {
+        "evidence_mode": result["evidence_mode"],
         "evaluation_session": result["evaluation_session"],
         "requested_run_date": result["requested_run_date"],
         "scope": result["scope"],
