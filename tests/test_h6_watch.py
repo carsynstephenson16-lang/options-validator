@@ -26,6 +26,7 @@ from options_researcher.h6_watch import (
     verify_receipt,
     write_receipt,
 )
+from research.hashing import canonical_json, sha256_hex
 
 AS_OF = date(2026, 7, 13)
 KNOWN = datetime.fromisoformat("2026-07-13T22:00:00+00:00")
@@ -512,6 +513,160 @@ class ScoreTests(unittest.TestCase):
         with mock.patch.object(config, "H6_HARD_KILL_FULL_LOSS_MONTHS", 2):
             self.assertTrue(score_book(rows).hard_kill)
 
+    @staticmethod
+    def cohort_position(
+        *,
+        pid: str,
+        symbol: str,
+        entry_date: date,
+        expiration: date,
+        exit_date: date | None,
+        entry_cost: float = 500.0,
+        exit_proceeds: float | None = 0.0,
+    ) -> BookPosition:
+        return position(
+            pid=pid,
+            symbol=symbol,
+            entry_date=entry_date,
+            entry_cost=entry_cost,
+            expiration=expiration,
+            exit_date=exit_date,
+            exit_proceeds=exit_proceeds,
+            exit_reason="time_21_dte" if exit_date is not None else None,
+        )
+
+    def v2_three_month_book(self) -> list[BookPosition]:
+        return [
+            self.cohort_position(
+                pid="v2-aug",
+                symbol="NVDA",
+                entry_date=date(2026, 8, 3),
+                expiration=date(2026, 9, 18),
+                exit_date=date(2026, 8, 31),
+            ),
+            self.cohort_position(
+                pid="v2-sep",
+                symbol="PLTR",
+                entry_date=date(2026, 9, 1),
+                expiration=date(2026, 11, 20),
+                exit_date=date(2026, 11, 2),
+            ),
+            self.cohort_position(
+                pid="v2-oct",
+                symbol="AMZN",
+                entry_date=date(2026, 10, 1),
+                expiration=date(2026, 12, 18),
+                exit_date=date(2026, 11, 30),
+            ),
+        ]
+
+    def test_v2_effective_entry_date_boundary(self):
+        pre_effective = self.cohort_position(
+            pid="v1-boundary",
+            symbol="NVDA",
+            entry_date=date(2026, 7, 31),
+            expiration=date(2026, 9, 18),
+            exit_date=date(2026, 8, 31),
+        )
+        effective = dataclasses.replace(
+            pre_effective,
+            id="v2-boundary",
+            entry_date=date(2026, 8, 3),
+        )
+        with mock.patch.object(config, "H6_HARD_KILL_FULL_LOSS_MONTHS", 1):
+            self.assertFalse(score_book([pre_effective]).hard_kill)
+            self.assertTrue(score_book([effective]).hard_kill)
+
+    def test_v2_uses_entry_months_when_exit_months_shift(self):
+        score = score_book(self.v2_three_month_book())
+        self.assertEqual(score.verdict, "REJECT")
+        self.assertTrue(score.hard_kill)
+        self.assertIn("entry-month", score.reason)
+
+    def test_v2_partial_deployment_can_be_a_full_loss(self):
+        rows = self.v2_three_month_book()
+        self.assertTrue(all(row.entry_cost < 2_000.0 for row in rows))
+        self.assertTrue(score_book(rows).hard_kill)
+
+    def test_v2_positive_recovery_breaks_the_streak(self):
+        rows = self.v2_three_month_book()
+        rows[1] = dataclasses.replace(rows[1], exit_proceeds=0.01)
+        self.assertFalse(score_book(rows).hard_kill)
+
+    def test_v2_open_cohort_is_unevaluable_and_breaks_the_streak(self):
+        rows = self.v2_three_month_book()
+        rows[1] = dataclasses.replace(
+            rows[1],
+            exit_date=None,
+            exit_proceeds=None,
+            exit_reason=None,
+            exit_receipt_hash=None,
+        )
+        rows.append(
+            self.cohort_position(
+                pid="v2-sep-closed",
+                symbol="NVDA",
+                entry_date=date(2026, 9, 1),
+                expiration=date(2026, 11, 20),
+                exit_date=date(2026, 11, 2),
+            )
+        )
+        self.assertFalse(score_book(rows).hard_kill)
+
+    def test_v2_zero_deployment_gap_breaks_the_streak(self):
+        rows = [self.v2_three_month_book()[index] for index in (0, 2)]
+        with mock.patch.object(config, "H6_HARD_KILL_FULL_LOSS_MONTHS", 2):
+            self.assertFalse(score_book(rows).hard_kill)
+
+    def test_v1_rows_do_not_join_v2_entry_cohorts(self):
+        rows = self.v2_three_month_book()[:2]
+        rows.insert(
+            0,
+            self.cohort_position(
+                pid="legacy-jul",
+                symbol="AMZN",
+                entry_date=date(2026, 7, 31),
+                expiration=date(2026, 10, 16),
+                exit_date=date(2026, 9, 28),
+            ),
+        )
+        self.assertFalse(score_book(rows).hard_kill)
+
+    def test_v2_rows_do_not_join_v1_exit_months(self):
+        rows: list[BookPosition] = []
+        for prefix, entry, expiration, exit_day in (
+            (
+                "legacy-jun",
+                date(2026, 4, 1),
+                date(2026, 6, 19),
+                date(2026, 6, 1),
+            ),
+            (
+                "legacy-jul",
+                date(2026, 6, 2),
+                date(2026, 8, 21),
+                date(2026, 7, 31),
+            ),
+            (
+                "v2-aug",
+                date(2026, 8, 3),
+                date(2026, 9, 18),
+                date(2026, 8, 31),
+            ),
+        ):
+            for symbol in ("NVDA", "PLTR"):
+                rows.append(
+                    self.cohort_position(
+                        pid=f"{prefix}-{symbol}",
+                        symbol=symbol,
+                        entry_date=entry,
+                        expiration=expiration,
+                        exit_date=exit_day,
+                        entry_cost=1_000.0,
+                    )
+                )
+        self.assertFalse(score_book(rows).hard_kill)
+
 
 class ReceiptTests(unittest.TestCase):
     def test_beyond_edge_does_not_substitute_prior_or_future_chain(self):
@@ -628,6 +783,132 @@ class ReceiptTests(unittest.TestCase):
             changed.write_bytes(changed.read_bytes() + b"mutation")
             recomputed = build_receipt(snapshot, inputs)
             self.assertIn("input_files", verify_receipt(receipt, recomputed))
+
+    @staticmethod
+    def _post_effective_snapshot(snapshot: dict) -> dict:
+        return dict(snapshot, evaluation_session="2026-08-03")
+
+    @staticmethod
+    def _coerce_receipt_v1(receipt: dict) -> dict:
+        coerced = dict(receipt)
+        coerced["schema"] = "h6_exact_session_watch_receipt_v1"
+        coerced.pop("hard_kill_v2_trial_intent_record_hash", None)
+        config_snapshot = dict(coerced["config"])
+        config_snapshot.pop("H6_KILL_V2_EFFECTIVE_ENTRY_DATE", None)
+        config_snapshot.pop("H6_KILL_V2_TRIAL_INTENT_HASH", None)
+        coerced["config"] = config_snapshot
+        coerced["config_hash"] = sha256_hex(canonical_json(config_snapshot))
+        coerced["receipt_hash"] = sha256_hex(
+            canonical_json({
+                key: value
+                for key, value in coerced.items()
+                if key != "receipt_hash"
+            })
+        )
+        return coerced
+
+    def test_historical_decision_builds_and_accepts_receipt_v1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot, inputs = self._seed_snapshot_inputs(root)
+            receipt = build_receipt(snapshot, inputs)
+            self.assertEqual(
+                receipt["schema"], "h6_exact_session_watch_receipt_v1"
+            )
+            receipt_dir = root / "receipts"
+            write_receipt(receipt, receipt_dir / "historical.json")
+            candidate = next(
+                row["candidate"]
+                for row in snapshot["entries"]
+                if row["symbol"] == "NVDA"
+            )
+            recorded = position(
+                entry_date=AS_OF,
+                expiration=date.fromisoformat(candidate["expiration"]),
+                entry_cost=float(candidate["entry_cost"]),
+                entry_receipt_hash=receipt["receipt_hash"],
+            )
+            verify_book_receipts([recorded], receipt_dir=receipt_dir)
+
+    def test_post_effective_decision_requires_receipt_v2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot, inputs = self._seed_snapshot_inputs(root)
+            post_snapshot = self._post_effective_snapshot(snapshot)
+            receipt_v1 = self._coerce_receipt_v1(
+                build_receipt(post_snapshot, inputs)
+            )
+            receipt_dir = root / "receipts"
+            write_receipt(receipt_v1, receipt_dir / "post-v1.json")
+            candidate = next(
+                row["candidate"]
+                for row in post_snapshot["entries"]
+                if row["symbol"] == "NVDA"
+            )
+            recorded = position(
+                entry_date=date(2026, 8, 3),
+                expiration=date.fromisoformat(candidate["expiration"]),
+                entry_cost=float(candidate["entry_cost"]),
+                entry_receipt_hash=receipt_v1["receipt_hash"],
+            )
+            with self.assertRaisesRegex(ValueError, "receipt-v1.*2026-08-03"):
+                verify_book_receipts([recorded], receipt_dir=receipt_dir)
+
+    def test_receipt_v2_binds_both_h6_registration_hashes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot, inputs = self._seed_snapshot_inputs(Path(tmp))
+            receipt = build_receipt(
+                self._post_effective_snapshot(snapshot), inputs
+            )
+            self.assertEqual(
+                receipt["schema"], "h6_exact_session_watch_receipt_v2"
+            )
+            self.assertEqual(
+                receipt["trial_intent_record_hash"],
+                "5d813b8fe0e89f2d04fe41c9b16561e2374ff873d784a3cd9f2c91e4fe52f3cf",
+            )
+            self.assertEqual(
+                receipt["hard_kill_v2_trial_intent_record_hash"],
+                config.H6_KILL_V2_TRIAL_INTENT_HASH,
+            )
+            self.assertEqual(
+                receipt["config"]["H6_KILL_V2_EFFECTIVE_ENTRY_DATE"],
+                "2026-08-03",
+            )
+            self.assertEqual(
+                receipt["config"]["H6_KILL_V2_TRIAL_INTENT_HASH"],
+                config.H6_KILL_V2_TRIAL_INTENT_HASH,
+            )
+
+    def test_receipt_v2_refuses_rehashed_missing_amendment_provenance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot, inputs = self._seed_snapshot_inputs(root)
+            post_snapshot = self._post_effective_snapshot(snapshot)
+            receipt = build_receipt(post_snapshot, inputs)
+            receipt.pop("hard_kill_v2_trial_intent_record_hash")
+            receipt["receipt_hash"] = sha256_hex(
+                canonical_json({
+                    key: value
+                    for key, value in receipt.items()
+                    if key != "receipt_hash"
+                })
+            )
+            receipt_dir = root / "receipts"
+            write_receipt(receipt, receipt_dir / "missing-v2-hash.json")
+            candidate = next(
+                row["candidate"]
+                for row in post_snapshot["entries"]
+                if row["symbol"] == "NVDA"
+            )
+            recorded = position(
+                entry_date=date(2026, 8, 3),
+                expiration=date.fromisoformat(candidate["expiration"]),
+                entry_cost=float(candidate["entry_cost"]),
+                entry_receipt_hash=receipt["receipt_hash"],
+            )
+            with self.assertRaisesRegex(ValueError, "wrong hard-kill v2"):
+                verify_book_receipts([recorded], receipt_dir=receipt_dir)
 
     def test_receipt_write_is_idempotent_but_refuses_replacement(self):
         with tempfile.TemporaryDirectory() as tmp:

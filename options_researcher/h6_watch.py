@@ -60,7 +60,8 @@ BOOK_FIELDS = (
     "exit_receipt_hash",
 )
 EXIT_REASONS = ("take_profit", "time_21_dte")
-H6_RECEIPT_SCHEMA = "h6_exact_session_watch_receipt_v1"
+H6_RECEIPT_SCHEMA_V1 = "h6_exact_session_watch_receipt_v1"
+H6_RECEIPT_SCHEMA_V2 = "h6_exact_session_watch_receipt_v2"
 H6_TRIAL_INTENT_HASH = (
     "5d813b8fe0e89f2d04fe41c9b16561e2374ff873d784a3cd9f2c91e4fe52f3cf"
 )
@@ -704,10 +705,38 @@ def _month_after(key: tuple[int, int]) -> tuple[int, int]:
     return (year + 1, 1) if month == 12 else (year, month + 1)
 
 
-def _hard_kill(book: list[BookPosition]) -> bool:
+def _kill_v2_effective_entry_date() -> date:
+    try:
+        effective = date.fromisoformat(config.H6_KILL_V2_EFFECTIVE_ENTRY_DATE)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "H6_KILL_V2_EFFECTIVE_ENTRY_DATE must be an ISO date"
+        ) from exc
+    return effective
+
+
+def _has_consecutive_months(months: set[tuple[int, int]]) -> bool:
+    required = config.H6_HARD_KILL_FULL_LOSS_MONTHS
+    if required <= 0:
+        raise ValueError("H6_HARD_KILL_FULL_LOSS_MONTHS must be positive")
+    for first in months:
+        streak = [first]
+        for _ in range(1, required):
+            streak.append(_month_after(streak[-1]))
+        if all(month in months for month in streak):
+            return True
+    return False
+
+
+def _hard_kill_v1(book: list[BookPosition]) -> bool:
+    effective = _kill_v2_effective_entry_date()
     realized: dict[tuple[int, int], float] = {}
     for pos in book:
-        if pos.exit_date is None or pos.exit_proceeds is None:
+        if (
+            pos.entry_date >= effective
+            or pos.exit_date is None
+            or pos.exit_proceeds is None
+        ):
             continue
         key = (pos.exit_date.year, pos.exit_date.month)
         realized[key] = realized.get(key, 0.0) + (
@@ -718,16 +747,46 @@ def _hard_kill(book: list[BookPosition]) -> bool:
         for key, pnl in realized.items()
         if pnl <= -config.H6_MONTHLY_PREMIUM_AT_RISK
     }
-    required = config.H6_HARD_KILL_FULL_LOSS_MONTHS
-    if required <= 0:
-        raise ValueError("H6_HARD_KILL_FULL_LOSS_MONTHS must be positive")
-    for first in full_loss:
-        months = [first]
-        for _ in range(1, required):
-            months.append(_month_after(months[-1]))
-        if all(month in full_loss for month in months):
-            return True
-    return False
+    return _has_consecutive_months(full_loss)
+
+
+def _hard_kill_v2(book: list[BookPosition]) -> bool:
+    effective = _kill_v2_effective_entry_date()
+    cohorts: dict[tuple[int, int], list[BookPosition]] = {}
+    for pos in book:
+        if pos.entry_date < effective:
+            continue
+        key = (pos.entry_date.year, pos.entry_date.month)
+        cohorts.setdefault(key, []).append(pos)
+
+    full_loss: set[tuple[int, int]] = set()
+    for key, positions in cohorts.items():
+        if any(
+            pos.exit_date is None or pos.exit_proceeds is None
+            for pos in positions
+        ):
+            continue
+        proceeds = math.fsum(
+            float(pos.exit_proceeds)
+            for pos in positions
+            if pos.exit_proceeds is not None
+        )
+        if proceeds == 0.0:
+            full_loss.add(key)
+    return _has_consecutive_months(full_loss)
+
+
+def _hard_kill_versions(book: list[BookPosition]) -> tuple[str, ...]:
+    triggered: list[str] = []
+    if _hard_kill_v1(book):
+        triggered.append("v1")
+    if _hard_kill_v2(book):
+        triggered.append("v2")
+    return tuple(triggered)
+
+
+def _hard_kill(book: list[BookPosition]) -> bool:
+    return bool(_hard_kill_versions(book))
 
 
 def score_book(
@@ -740,15 +799,29 @@ def score_book(
         for pos in book
         if pos.exit_date is not None and pos.exit_proceeds is not None
     ]
-    if _hard_kill(completed):
+    hard_kill_versions = _hard_kill_versions(book)
+    if hard_kill_versions:
+        if hard_kill_versions == ("v1",):
+            reason = (
+                f"{config.H6_HARD_KILL_FULL_LOSS_MONTHS} consecutive exit "
+                f"months realized the full "
+                f"${config.H6_MONTHLY_PREMIUM_AT_RISK:,.0f} cap as losses "
+                "under H6 hard-kill v1"
+            )
+        elif hard_kill_versions == ("v2",):
+            reason = (
+                f"{config.H6_HARD_KILL_FULL_LOSS_MONTHS} consecutive H6 "
+                "entry-month cohorts closed with zero aggregate proceeds "
+                "under H6 hard-kill v2"
+            )
+        else:
+            reason = "both registered H6 hard-kill v1 and v2 triggered"
         return H6Score(
             len(completed),
             "REJECT",
             None,
             True,
-            f"{config.H6_HARD_KILL_FULL_LOSS_MONTHS} consecutive months "
-            f"realized the full ${config.H6_MONTHLY_PREMIUM_AT_RISK:,.0f} "
-            "cap as losses",
+            reason,
         )
     if len(completed) < config.H6_MIN_COMPLETED_POSITIONS:
         return H6Score(
@@ -822,7 +895,7 @@ def _json_safe(value) -> dict:
     return json.loads(json.dumps(value, default=_json_default, allow_nan=False))
 
 
-def h6_config_snapshot() -> dict:
+def h6_config_snapshot(evaluation_session: date | None = None) -> dict:
     """Return the explicit verdict-affecting H6 configuration surface."""
     names = (
         "H6_NAMES",
@@ -848,7 +921,27 @@ def h6_config_snapshot() -> dict:
         "BOOTSTRAP_BLOCK_EXPONENT",
         "BOOTSTRAP_BLOCK_CONSTANTS",
     )
+    if (
+        evaluation_session is not None
+        and evaluation_session >= _kill_v2_effective_entry_date()
+    ):
+        names += (
+            "H6_KILL_V2_EFFECTIVE_ENTRY_DATE",
+            "H6_KILL_V2_TRIAL_INTENT_HASH",
+        )
     return _json_safe({name: getattr(config, name) for name in names})
+
+
+def _snapshot_evaluation_session(snapshot: dict, context: str) -> date:
+    raw = snapshot.get("evaluation_session")
+    if not isinstance(raw, str):
+        raise ValueError(f"{context}: evaluation_session must be an ISO date")
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"{context}: evaluation_session must be an ISO date"
+        ) from exc
 
 
 def build_snapshot(
@@ -952,9 +1045,11 @@ def build_receipt(snapshot: dict, inputs: dict[str, Path]) -> dict:
     source_files = {
         rel: sha256_file(REPO_ROOT / rel) for rel in H6_SOURCE_PATHS
     }
-    config_snapshot = h6_config_snapshot()
+    evaluation_session = _snapshot_evaluation_session(snapshot, "H6 snapshot")
+    is_v2 = evaluation_session >= _kill_v2_effective_entry_date()
+    config_snapshot = h6_config_snapshot(evaluation_session)
     receipt = {
-        "schema": H6_RECEIPT_SCHEMA,
+        "schema": H6_RECEIPT_SCHEMA_V2 if is_v2 else H6_RECEIPT_SCHEMA_V1,
         "hypothesis_id": "H6",
         "trial_intent_record_hash": H6_TRIAL_INTENT_HASH,
         "snapshot": _json_safe(snapshot),
@@ -965,6 +1060,10 @@ def build_receipt(snapshot: dict, inputs: dict[str, Path]) -> dict:
         "source_files": source_files,
         "source_hash": sha256_hex(canonical_json(source_files)),
     }
+    if is_v2:
+        receipt["hard_kill_v2_trial_intent_record_hash"] = (
+            config.H6_KILL_V2_TRIAL_INTENT_HASH
+        )
     receipt["receipt_hash"] = sha256_hex(canonical_json(receipt))
     return receipt
 
@@ -1063,8 +1162,6 @@ def _receipt_index(receipt_dir: Path, wanted: set[str]) -> dict[str, dict]:
 
 
 def _bound_snapshot(receipt: dict, receipt_hash: str) -> dict:
-    if receipt.get("schema") != H6_RECEIPT_SCHEMA:
-        raise ValueError(f"H6 receipt {receipt_hash}: unsupported schema")
     if receipt.get("hypothesis_id") != "H6":
         raise ValueError(f"H6 receipt {receipt_hash}: wrong hypothesis_id")
     if receipt.get("trial_intent_record_hash") != H6_TRIAL_INTENT_HASH:
@@ -1076,6 +1173,36 @@ def _bound_snapshot(receipt: dict, receipt_hash: str) -> dict:
         raise ValueError(f"H6 receipt {receipt_hash}: unsafe mode identity")
     if snapshot.get("errors") != []:
         raise ValueError(f"H6 receipt {receipt_hash}: snapshot contains blockers")
+    evaluation_session = _snapshot_evaluation_session(
+        snapshot, f"H6 receipt {receipt_hash}"
+    )
+    effective = _kill_v2_effective_entry_date()
+    schema = receipt.get("schema")
+    if schema == H6_RECEIPT_SCHEMA_V1:
+        if evaluation_session >= effective:
+            raise ValueError(
+                f"H6 receipt {receipt_hash}: receipt-v1 is historical-only and "
+                f"cannot bind {evaluation_session.isoformat()}"
+            )
+        if "hard_kill_v2_trial_intent_record_hash" in receipt:
+            raise ValueError(
+                f"H6 receipt {receipt_hash}: receipt-v1 contains v2 provenance"
+            )
+    elif schema == H6_RECEIPT_SCHEMA_V2:
+        if evaluation_session < effective:
+            raise ValueError(
+                f"H6 receipt {receipt_hash}: receipt-v2 cannot bind historical "
+                f"session {evaluation_session.isoformat()}"
+            )
+        if (
+            receipt.get("hard_kill_v2_trial_intent_record_hash")
+            != config.H6_KILL_V2_TRIAL_INTENT_HASH
+        ):
+            raise ValueError(
+                f"H6 receipt {receipt_hash}: wrong hard-kill v2 registration"
+            )
+    else:
+        raise ValueError(f"H6 receipt {receipt_hash}: unsupported schema")
     return snapshot
 
 

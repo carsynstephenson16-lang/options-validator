@@ -342,6 +342,13 @@ H6_TAKE_PROFIT_PCT = 1.00
 H6_CLOSE_AT_DTE = 21
 H6_MIN_COMPLETED_POSITIONS = 8
 H6_HARD_KILL_FULL_LOSS_MONTHS = 3
+# Prospective owner-authorized amendment registered 2026-08-02 at research
+# ledger seq 22. Entries before the effective date remain under the original
+# exit-month/full-cap rule; no existing book row is reinterpreted.
+H6_KILL_V2_EFFECTIVE_ENTRY_DATE = "2026-08-03"
+H6_KILL_V2_TRIAL_INTENT_HASH = (
+    "4c552641d5a56f96d6e2c12904e7b20467a56bd1c7804d9de18969a3bb548b04"
+)
 
 # ---------------------------------------------------------------------------
 # H8 -- pre-earnings tactical long calls (REGISTERED 2026-07-15, ledger

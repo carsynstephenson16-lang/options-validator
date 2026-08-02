@@ -563,11 +563,13 @@ into the next task.
   task's uncommitted doc hunks if needed.
 - **Proof:** docs-only diff with current command outputs. **One session:** yes.
 
-### Q2 / P2.5 — Prospective H6 amendment — REGISTERED / IN PROGRESS
+### Q2 / P2.5 — Prospective H6 amendment — COMPLETE
 
-- **Goal/position:** implement the owner-authorized H6 hard-kill v2 only for
+- **Result:** the owner-authorized H6 hard-kill v2 applies only to
   entries on or after 2026-08-03. Current code remains faithful to v1 for older
-  rows; this prospective amendment is not a correction or reinterpretation.
+  rows; v2 uses H6 entry-month cohorts, treats open cohorts as unevaluable,
+  requires zero aggregate exit proceeds, and treats absent/positive-recovery
+  months as streak breaks. V1 and v2 rows cannot enter one another's calculation.
 - **Files:** config H6/H8 constants, `h6_watch.py`, H6/H8 tests, registration docs;
   inspect the book read-only.
 - **Allowed:** new prospective version, tests, config only as owner typed.
@@ -575,15 +577,27 @@ into the next task.
   **Prerequisite/gate:** satisfied by owner authorization dated 2026-08-02 and
   chained research-ledger seq 22, record hash
   `4c552641d5a56f96d6e2c12904e7b20467a56bd1c7804d9de18969a3bb548b04`
-  (`trial_count=23`). Implementation and verification remain open.
-- **Implementation:** TDD each cohort edge; keep old semantics available for old
-  rows; add explicit version/effective-date dispatch and separate portfolio rule
-  if approved.
-- **Tests/quality/evidence:** H6/H8 targeted tests; book-load validation; full
-  suite once; Ruff/Pyright; ledger/config provenance checks.
+  (`trial_count=23`).
+- **Implementation:** entry-date dispatch preserves the original exit-month/
+  full-cap rule for older rows and adds the registered zero-proceeds entry-cohort
+  rule for newer rows. Receipt-v1 remains historical-only; receipt-v2 is required
+  for decisions on/after the effective date and binds both H6 registration hashes.
+  The CSV schema, `H6Score`, eight-position bootstrap, entries, exits, costs,
+  sizing, and H8 remain unchanged.
+- **Tests/quality/evidence:** red proof had six expected v2 failures; green H6
+  39/39 and unchanged H8 40/40. The unrestricted offline root suite passed
+  2,308/2,308; Ruff passed; Pyright reported 0 errors/warnings; both ledgers
+  verified. The historical `H6-0001` v1 receipt/book loads without rewrite.
+  `FILL_MODEL_ID=conservative_bid_ask_plus_haircut_v1` and `cost_model_hash`
+  `af71c7f65984c259eed7ffc259be72535f35a792bfc0157cadaebf66ff62fa80`
+  match the clean base. CodeRabbit could not run because its CLI is not
+  installed; the credential scan was clean and the repository-native complete
+  diff/invariant review found no critical or warning defects.
 - **Failure/stop:** fail closed on ambiguous legacy rows/open cohorts; stop if
   existing book meaning or verdict changes retroactively.
-- **Proof:** red/green log, typed record, unchanged old book hash. **One session:** yes.
+- **Proof:** typed record above; unchanged H6 book SHA-256
+  `d9c65cab1a58e2ca0e571ead8c78fe408e19208c5cbbb05b189ccb67d7eab528`;
+  unchanged historical receipt SHA-256 `b113ee62655e…674c5`. **One session:** yes.
 
 ### Q3 — Strategy A same-bar atomicity — COMPLETE
 
