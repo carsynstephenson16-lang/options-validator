@@ -89,27 +89,11 @@ class RitualRefreshBeforeConsumerOrderTests(unittest.TestCase):
             source,
         )
 
-    def test_display_extra_refresh_is_note_only_and_outside_h7_gate(self):
+    def test_display_extra_provider_acquisition_is_removed(self):
         source = RITUAL.read_text(encoding="utf-8")
 
-        protected_topup = "data/recent_topup.py --scope h7 --refresh-closes"
-        display_topup = (
-            "data/recent_topup.py --scope display-extra --refresh-closes"
-        )
-        gate_block = 'if [ "$GATE_GO" -eq 1 ]; then'
-        display_step = source.index(
-            "# Step 0b — display-only extras top-up"
-        )
-        source_health = source.index("# Step 1 — source health")
-        display_segment = source[display_step:source_health]
-
-        self.assertIn(protected_topup, source)
-        self.assertIn(display_topup, display_segment)
-        self.assertLess(source.index(protected_topup), display_step)
-        self.assertLess(display_step, source.index(gate_block))
-        self.assertNotIn("crit ", display_segment)
-        self.assertNotIn("CRITICAL=", display_segment)
-        self.assertIn('note "display-extra topup:', display_segment)
+        self.assertNotIn("data/recent_topup.py", source)
+        self.assertNotIn("display-extra topup", source)
 
     def test_canonical_and_display_extra_feature_builds_are_isolated(self):
         source = RITUAL.read_text(encoding="utf-8")
