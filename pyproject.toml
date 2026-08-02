@@ -48,8 +48,30 @@ ignore = [
 quote-style = "double"
 line-ending = "lf"
 
+[tool.coverage.run]
+branch = true
+source = ["data", "harness", "options_researcher", "research", "strategies"]
+omit = [
+    "tests/*",
+    "tools/*",
+    "reports/*",
+    "results/*",
+    ".cache/*",
+    ".tmp/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 79
+
+[tool.coverage.json]
+output = "coverage.json"
+pretty_print = true
+
 [dependency-groups]
 dev = [
+    "coverage==7.15.2",
     "hypothesis==6.164.0",
     "pre-commit>=4.6.0",
     "pyright>=1.1.411",
