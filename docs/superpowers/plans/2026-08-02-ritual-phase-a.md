@@ -14,7 +14,9 @@
 - V1 cache bytes and the isolated v2 bytes remain unchanged.
 - V2 is offline analysis support only; no H6/H7/H8 rebuild, verdict, or activation.
 - H7 remains paused; `h7-forward-15-v1` remains immutable.
-- Do not run `tools/daily_ritual.sh`, deploy, push, load LaunchAgent, or touch paper books/ledgers.
+- Do not run the full `tools/daily_ritual.sh run` path, deploy, push, load
+  LaunchAgent, or touch paper books/ledgers. Read-only `status` validation is
+  allowed.
 - Preserve the root checkout's `wiki/log.md` and the ops checkout's untracked July 28 capture.
 - Produce separate local commits for v2 support and ritual hardening.
 
@@ -39,9 +41,13 @@
 
 **Interfaces:**
 - Consumes: `.cache/chains_v2/od1-2026-08-01/_meta/full_audit.json` and exact partition bytes.
-- Produces: `load_cached_chain(..., verdict_bearing: bool = False)` plus `validate_v2_audit_receipt(...)`; neither function fetches or writes.
+- Produces: `load_cached_chain(..., verdict_bearing: bool = False,
+  verdict_consumer: str | None = None)` plus
+  `validate_v2_audit_receipt(...)`; neither function fetches or writes. The
+  current receipt authorizes only the audited H7 geometry; H9 remains blocked
+  pending its own scope-specific audit.
 
-- [ ] **Step 1: Add a failing reader-contract test**
+- [x] **Step 1: Add a failing reader-contract test**
 
 ```python
 def test_loader_exposes_explicit_verdict_bearing_gate(self):
@@ -51,13 +57,13 @@ def test_loader_exposes_explicit_verdict_bearing_gate(self):
     )
 ```
 
-- [ ] **Step 2: Run the test and confirm RED**
+- [x] **Step 2: Run the test and confirm RED**
 
 Run: `/Users/carsynstephenson/options-validator/.venv/bin/python -m unittest discover -s tests -p test_cache_schema_v2.py`
 
 Expected: assertion failure because `verdict_bearing` is absent.
 
-- [ ] **Step 3: Port the exact audit-bound source set and focused tests**
+- [x] **Step 3: Port the exact audit-bound source set and focused tests**
 
 ```python
 # Reader behavior after the port:
@@ -72,13 +78,16 @@ return chain
 
 The original nine receipt-bound files and two omitted runtime dependencies must match the audited runtime before the real smoke check; the audit identity is extended to bind those dependencies. Unrelated future-ticker files are excluded.
 
-- [ ] **Step 4: Run focused tests and real read-only receipt validation**
+- [x] **Step 4: Run focused tests and real read-only receipt validation**
 
-Run the five focused unittest files, then validate `NVDA_2026-07-31.parquet` against receipt `6fd9a3ca...9578` without changing either file.
+Run the focused unittest files, then validate `NVDA_2026-07-31.parquet`
+against the clean-commit receipt. Receipt `6fd9a3ca...9578` was superseded by
+the dependency-closure repair (`c08106ba...c7e3`), which was then superseded by
+the consumer-scoped contract receipt `689c2b02...b1b6`.
 
 Expected: focused tests pass; the real partition returns `PASS WITH WARNINGS` and its bound SHA-256.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add data/atomic_io.py data/cache_schema.py data/v2_partition_quarantine.json \
@@ -110,7 +119,7 @@ git commit -m "feat(data): integrate audited v2 offline reads"
 - Consumes: immutable provider policy and tracked paused-H7/exact-session-source constants.
 - Produces: `python -m data.ritual_authority status` (read-only, exit 0) and `require-full` (exit 1 while blocked).
 
-- [ ] **Step 1: Add failing policy and shell-order tests**
+- [x] **Step 1: Add failing policy and shell-order tests**
 
 ```python
 def test_full_ritual_is_blocked_without_source_and_h7_authority(self):
@@ -125,11 +134,11 @@ def test_authority_preflight_precedes_every_mutation_surface(self):
         self.assertLess(preflight, source.index(token))
 ```
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 Expected: missing module/preflight assertions fail before production edits.
 
-- [ ] **Step 3: Implement minimal authority gate and remove acquisition assumptions**
+- [x] **Step 3: Implement minimal authority gate and remove acquisition assumptions**
 
 ```python
 CURRENT = RitualAuthority(
@@ -141,11 +150,11 @@ CURRENT = RitualAuthority(
 
 `tools/daily_ritual.sh status` prints the policy without writes. The default full path calls `require-full` before log creation and exits while blocked. Remove API-key resolution, both duplicate display top-ups, and the non-dry H7 top-up.
 
-- [ ] **Step 4: Run shell syntax, focused tests, mutation-token inspection, lint, and types**
+- [x] **Step 4: Run shell syntax, focused tests, mutation-token inspection, lint, and types**
 
 Expected: status mode succeeds read-only; require-full refuses; focused tests, Ruff, Pyright, `zsh -n`, and `git diff --check` pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add data/ritual_authority.py tools/daily_ritual.sh tests/test_daily_ritual_provenance.py tests/test_h7_daily_exit_order.py .agents/skills/daily-ritual/SKILL.md
