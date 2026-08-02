@@ -68,8 +68,37 @@ class OfflineIntelligenceReadinessTests(unittest.TestCase):
             "dirty_paths": [],
         }
 
-    def _inventory(self) -> dict:
-        return audit.inventory_cache(chain_dir=self.chains, manifest_path=self.manifest)
+    def _inventory(self, *, classification_path: Path | None = None) -> dict:
+        kwargs = {}
+        if classification_path is not None:
+            kwargs["classification_path"] = classification_path
+        return audit.inventory_cache(
+            chain_dir=self.chains,
+            manifest_path=self.manifest,
+            **kwargs,
+        )
+
+    def _classification_registry(self, nested: Path, *, sha256: str | None = None) -> Path:
+        path = self.root / "cache-file-classifications.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": "cache-file-classifications/v1",
+                    "entries": [
+                        {
+                            "path": nested.relative_to(self.chains).as_posix(),
+                            "sha256": sha256 or sha256_file(nested),
+                            "size": nested.stat().st_size,
+                            "classification": "NONCANONICAL_ALTERNATE_SNAPSHOT",
+                            "canonical_path": self.chain_path.name,
+                            "reason": "separately sourced reduced-coverage snapshot",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+        )
+        return path
 
     def test_inventory_is_deterministic_and_metadata_only(self):
         first = self._inventory()
@@ -105,6 +134,41 @@ class OfflineIntelligenceReadinessTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "BLOCK")
         self.assertEqual(report["findings"]["nested_files"], [f"legacy/{self.chain_path.name}"])
         self.assertEqual(len(report["findings"]["duplicate_symbol_sessions"]), 1)
+        self.assertIn(f"legacy/{self.chain_path.name}", report["unmanifested_file_hashes"])
+
+    def test_exact_hash_classification_excludes_known_noncanonical_nested_file(self):
+        nested_dir = self.chains / "legacy"
+        nested_dir.mkdir()
+        duplicate = nested_dir / self.chain_path.name
+        _chain().iloc[:4].to_parquet(duplicate, index=False)
+        registry = self._classification_registry(duplicate)
+
+        report = self._inventory(classification_path=registry)
+
+        self.assertEqual(report["verdict"], "PASS", report["findings"])
+        self.assertEqual(report["counts"]["parquet_files"], 1)
+        self.assertEqual(report["counts"]["all_parquet_files"], 2)
+        self.assertEqual(report["counts"]["classified_noncanonical_parquet_files"], 1)
+        self.assertEqual(report["findings"]["nested_files"], [])
+        self.assertEqual(report["findings"]["duplicate_symbol_sessions"], [])
+        self.assertNotIn(f"legacy/{self.chain_path.name}", report["unmanifested_file_hashes"])
+        self.assertEqual(
+            report["classified_noncanonical_files"][0]["path"],
+            f"legacy/{self.chain_path.name}",
+        )
+
+    def test_changed_classified_nested_file_still_blocks(self):
+        nested_dir = self.chains / "legacy"
+        nested_dir.mkdir()
+        duplicate = nested_dir / self.chain_path.name
+        _chain().iloc[:4].to_parquet(duplicate, index=False)
+        registry = self._classification_registry(duplicate, sha256="0" * 64)
+
+        report = self._inventory(classification_path=registry)
+
+        self.assertEqual(report["verdict"], "BLOCK")
+        self.assertEqual(report["findings"]["nested_files"], [f"legacy/{self.chain_path.name}"])
+        self.assertTrue(report["findings"]["classification_problems"])
         self.assertIn(f"legacy/{self.chain_path.name}", report["unmanifested_file_hashes"])
 
     def test_manifest_extra_and_malformed_line_both_surface(self):

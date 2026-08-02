@@ -1,0 +1,13 @@
+{
+  "schema": "cache-file-classifications/v1",
+  "entries": [
+    {
+      "path": "dolthub/SPY_2022-12-30.parquet",
+      "sha256": "cd6f4f4333ef4d66cc4b1e10b917f7c36389785696c05f55b5aed3cd320d8f64",
+      "size": 13744,
+      "classification": "NONCANONICAL_ALTERNATE_SNAPSHOT",
+      "canonical_path": "SPY_2022-12-30.parquet",
+      "reason": "Separately sourced 158-row snapshot with reduced coverage; preserved for provenance but excluded from the canonical top-level cache."
+    }
+  ]
+}

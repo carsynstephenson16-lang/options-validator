@@ -25,7 +25,7 @@ import sys
 import urllib.request
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable, cast
 from unittest import mock
 from zoneinfo import ZoneInfo
@@ -53,6 +53,7 @@ DEFAULT_CLOSE_DIR = Path(".cache/underlying")
 DEFAULT_FACTS_PATH = Path("ledger/facts.log")
 DEFAULT_REPORTS_DIR = Path("reports/thetadata_exit")
 DEFAULT_MANIFEST_PATH = Path("data/chain_cache_manifest.txt")
+DEFAULT_CLASSIFICATION_PATH = Path("data/cache_file_classifications.json")
 DEFAULT_FLOW_DIR = Path(".cache/options_flow")
 DEFAULT_FLOW_REPORTS_DIR = Path("reports/options_flow")
 DEFAULT_START = (date.fromisoformat(config.BACKTEST_END) + timedelta(days=1)).isoformat()
@@ -79,6 +80,7 @@ SOURCE_PATHS = (
     "config.py",
     "data/cache_provenance.py",
     "data/cache_runner.py",
+    "data/cache_file_classifications.json",
     "data/recent_topup.py",
     "data/thetadata_adapter.py",
     "data/underlying_closes.py",
@@ -268,6 +270,127 @@ def _strict_manifest(path: Path) -> tuple[dict[str, tuple[str, int]], list[str]]
     return records, problems
 
 
+def _validated_cache_classifications(
+    *,
+    classification_path: Path | None,
+    chain_dir: Path,
+    manifest: dict[str, tuple[str, int]],
+    parquet_paths: list[Path],
+) -> tuple[dict[str, dict], list[str]]:
+    """Return exact-byte nested files approved as noncanonical alternates.
+
+    A registry entry is only active when the nested file exists and its size
+    and SHA-256 match. Missing entries are harmless because these files are not
+    required inputs. Unknown or mutated nested files remain in the canonical
+    scan and therefore fail closed.
+    """
+    if classification_path is None:
+        return {}, []
+    classification_path = Path(classification_path)
+    if not classification_path.is_file():
+        return {}, [f"CLASSIFICATION_REGISTRY missing: {classification_path}"]
+    try:
+        payload = json.loads(classification_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, [f"CLASSIFICATION_REGISTRY {type(exc).__name__}: {exc}"]
+    if not isinstance(payload, dict) or payload.get("schema") != "cache-file-classifications/v1":
+        return {}, ["CLASSIFICATION_REGISTRY invalid schema"]
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return {}, ["CLASSIFICATION_REGISTRY entries must be a list"]
+
+    observed = {path.relative_to(chain_dir).as_posix(): path for path in parquet_paths}
+    validated: dict[str, dict] = {}
+    problems: list[str] = []
+    seen: set[str] = set()
+    required = {
+        "path",
+        "sha256",
+        "size",
+        "classification",
+        "canonical_path",
+        "reason",
+    }
+    for index, entry in enumerate(entries):
+        label = f"CLASSIFICATION_ENTRY[{index}]"
+        if not isinstance(entry, dict):
+            problems.append(f"{label} must be an object")
+            continue
+        missing = sorted(required - set(entry))
+        if missing:
+            problems.append(f"{label} missing fields: {missing}")
+            continue
+        relative = entry["path"]
+        if not isinstance(relative, str):
+            problems.append(f"{label} path must be a string")
+            continue
+        pure = PurePosixPath(relative)
+        if (
+            pure.is_absolute()
+            or ".." in pure.parts
+            or "\\" in relative
+            or len(pure.parts) < 2
+            or pure.as_posix() != relative
+        ):
+            problems.append(f"{label} path must be a normalized nested relative path: {relative}")
+            continue
+        if relative in seen:
+            problems.append(f"{label} duplicates path: {relative}")
+            continue
+        seen.add(relative)
+        if entry["classification"] != "NONCANONICAL_ALTERNATE_SNAPSHOT":
+            problems.append(f"{label} invalid classification: {entry['classification']}")
+            continue
+        digest = entry["sha256"]
+        size = entry["size"]
+        canonical = entry["canonical_path"]
+        reason = entry["reason"]
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            problems.append(f"{label} invalid sha256")
+            continue
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            problems.append(f"{label} invalid size")
+            continue
+        if (
+            not isinstance(canonical, str)
+            or PurePosixPath(canonical).name != canonical
+            or CACHE_FILE_RE.fullmatch(canonical) is None
+        ):
+            problems.append(f"{label} invalid canonical_path: {canonical}")
+            continue
+        if not isinstance(reason, str) or not reason.strip():
+            problems.append(f"{label} reason must be non-empty")
+            continue
+
+        path = observed.get(relative)
+        if path is None:
+            continue
+        entry_problems = []
+        if canonical not in manifest or not (chain_dir / canonical).is_file():
+            entry_problems.append(f"canonical file is not manifested and present: {canonical}")
+        if path.stat().st_size != size:
+            entry_problems.append(f"size mismatch for {relative}")
+        actual_digest = sha256_file(path)
+        if actual_digest != digest:
+            entry_problems.append(f"sha256 mismatch for {relative}")
+        if path.name != canonical:
+            entry_problems.append(
+                f"alternate filename {path.name} does not match canonical filename {canonical}"
+            )
+        if entry_problems:
+            problems.extend(f"{label} {problem}" for problem in entry_problems)
+            continue
+        validated[relative] = {
+            "path": relative,
+            "sha256": actual_digest,
+            "size": size,
+            "classification": entry["classification"],
+            "canonical_path": canonical,
+            "reason": reason.strip(),
+        }
+    return dict(sorted(validated.items())), problems
+
+
 def _cache_stat_snapshot(chain_dir: Path) -> dict:
     rows = []
     for path in sorted(
@@ -411,6 +534,7 @@ def inventory_cache(
     chain_dir: Path = DEFAULT_CHAIN_DIR,
     manifest_path: Path = DEFAULT_MANIFEST_PATH,
     facts_path: Path = DEFAULT_FACTS_PATH,
+    classification_path: Path | None = DEFAULT_CLASSIFICATION_PATH,
 ) -> dict:
     """Build a deterministic, metadata-only inventory of the immutable cache."""
     chain_dir = Path(chain_dir)
@@ -433,7 +557,18 @@ def inventory_cache(
         if chain_dir.is_dir()
         else []
     )
-    paths = [path for path in all_files if path.suffix == ".parquet"]
+    all_parquet_paths = [path for path in all_files if path.suffix == ".parquet"]
+    classifications, classification_problems = _validated_cache_classifications(
+        classification_path=classification_path,
+        chain_dir=chain_dir,
+        manifest=manifest,
+        parquet_paths=all_parquet_paths,
+    )
+    paths = [
+        path
+        for path in all_parquet_paths
+        if path.relative_to(chain_dir).as_posix() not in classifications
+    ]
     sidecar_paths = [path for path in all_files if path.suffix != ".parquet"]
     malformed_files: list[str] = []
     nested_files: list[str] = []
@@ -581,6 +716,7 @@ def inventory_cache(
         "null_issues": null_issues,
         "unknown_null_statistics": unknown_null_statistics,
         "provenance_mismatches": provenance_problems,
+        "classification_problems": classification_problems,
     }
     blocked = any(block_reasons.values())
     return {
@@ -591,7 +727,9 @@ def inventory_cache(
         "manifest_entry_count": len(manifest),
         "counts": {
             "all_cache_files": len(all_files),
+            "all_parquet_files": len(all_parquet_paths),
             "parquet_files": len(paths),
+            "classified_noncanonical_parquet_files": len(classifications),
             "top_level_parquet_files": sum(path.parent == chain_dir for path in paths),
             "nested_parquet_files": len(nested_files),
             "symbols": len(symbol_sessions),
@@ -620,6 +758,13 @@ def inventory_cache(
         "unmanifested_provenance": provenance,
         "unmanifested_provenance_status_counts": dict(sorted(provenance_status_counts.items())),
         "sidecar_file_hashes": sidecar_hashes,
+        "classification_path": str(classification_path) if classification_path else None,
+        "classification_sha256": (
+            sha256_file(Path(classification_path))
+            if classification_path and Path(classification_path).is_file()
+            else None
+        ),
+        "classified_noncanonical_files": list(classifications.values()),
         "findings": block_reasons,
         "limitations": [
             "metadata proves structure and recorded null counts, not economic quote quality",
