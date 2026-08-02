@@ -45,7 +45,8 @@ Both are required durable lineage.
 
 4. Research the market and every required symbol. Required symbols are the
    unique hero symbols from `candidate_ids`, all `pinned_symbols`, plus `VST`
-   and `CEG`. Use parallel Task subagents when available. Every factual source
+   and `CEG`. Use parallel subagents (Claude Code's Agent tool, formerly named
+   Task) when available. Every factual source
    must be fetched during this run; never cite training memory or an unfetched
    URL.
 
