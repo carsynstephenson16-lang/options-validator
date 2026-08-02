@@ -862,6 +862,12 @@ def execute(
     if not Path(facts_log).is_file():
         raise BackfillRefused("facts_log must name the canonical facts ledger")
     owner_facts = _verify_owner_facts(Path(facts_log), output_dir)
+    with _execution_lock(output_dir):
+        return _execute_locked(output_dir, workers=workers, owner_facts=owner_facts)
+
+
+def _execute_locked(output_dir: Path, *, workers: int, owner_facts: dict[str, str]) -> dict:
+    """Run the mutation body while ``execute`` holds the single-writer lock."""
     plan = scope_plan()
     sessions = trading_days(START_SESSION, END_SESSION)
     free_bytes_before = _check_disk_space(output_dir)
@@ -1039,14 +1045,13 @@ def main(argv: list[str] | None = None) -> int:
     from dotenv import load_dotenv
 
     load_dotenv(args.env_file, override=False)
-    with _execution_lock(output_dir):
-        result = execute(
-            output_dir,
-            workers=args.workers,
-            approval_token=args.approval_token,
-            facts_log=args.facts_log,
-            v1_dir=args.v1_dir,
-        )
+    result = execute(
+        output_dir,
+        workers=args.workers,
+        approval_token=args.approval_token,
+        facts_log=args.facts_log,
+        v1_dir=args.v1_dir,
+    )
     print(json.dumps(result, sort_keys=True, indent=2))
     return 0
 

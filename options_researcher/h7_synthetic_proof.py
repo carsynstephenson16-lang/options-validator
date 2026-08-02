@@ -17,10 +17,7 @@ import pandas as pd
 
 import config
 from data.cache_runner import session_close_utc
-from data.cache_schema import (
-    V2_SYNTHETIC_AUDIT_SCHEMA,
-    validate_v2_synthetic_audit_receipt,
-)
+from data.cache_schema import V2_SYNTHETIC_AUDIT_SCHEMA
 from options_researcher import h7_data_gate
 from options_researcher import h7_event_ledger as ledger
 from options_researcher.h7_forward_book import derive_book, record_board_resolution
@@ -264,22 +261,20 @@ def run_synthetic_proof(root) -> dict:
         warn_sessions=config.H7_SOURCE_HEALTH_WARN_SESSIONS,
     )
 
-    gate = h7_data_gate.evaluate(
+    gate = h7_data_gate.evaluate_synthetic_fixture(
         REQUESTED_RUN_DATE,
         close_dir=closes,
         chain_dir=chains,
-        _receipt_validator=validate_v2_synthetic_audit_receipt,
     )
     if gate["whole_universe_verdict"] != "GO":
         raise AssertionError("the Stage-2 complete fixture did not pass")
     missing_chain = chains / f"{names[0]}_{DECISION_SESSION}.parquet"
     held_chain = missing_chain.with_suffix(".held")
     missing_chain.rename(held_chain)
-    no_go = h7_data_gate.evaluate(
+    no_go = h7_data_gate.evaluate_synthetic_fixture(
         REQUESTED_RUN_DATE,
         close_dir=closes,
         chain_dir=chains,
-        _receipt_validator=validate_v2_synthetic_audit_receipt,
     )
     held_chain.rename(missing_chain)
     no_refusal_events = not event_store.exists()

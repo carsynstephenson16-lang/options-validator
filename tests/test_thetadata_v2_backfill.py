@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
 
@@ -196,6 +197,37 @@ class ScopeTests(unittest.TestCase):
                     v1_dir=Path(temp) / "chains",
                 )
             self.assertFalse(output.exists())
+
+    def test_direct_execute_acquires_single_writer_lock(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "v2"
+            v1 = root / "chains"
+            facts = root / "facts.log"
+            v1.mkdir()
+            facts.write_text("fixture\n")
+            with (
+                mock.patch.object(
+                    backfill.provider_policy,
+                    "require_thetadata_acquisition",
+                ),
+                mock.patch.object(backfill, "_verify_owner_facts", return_value={}),
+                mock.patch.object(
+                    backfill,
+                    "_execution_lock",
+                    return_value=nullcontext(),
+                ) as lock,
+                mock.patch.object(backfill, "_execute_locked", return_value={"ok": True}),
+            ):
+                result = backfill.execute(
+                    output,
+                    workers=1,
+                    approval_token=backfill.APPROVAL_TOKEN,
+                    facts_log=facts,
+                    v1_dir=v1,
+                )
+            self.assertEqual(result, {"ok": True})
+            lock.assert_called_once_with(output.resolve())
 
 
 class CaptureTests(unittest.TestCase):

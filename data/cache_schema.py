@@ -254,6 +254,7 @@ def validate_v2_audit_receipt(
     return {
         "path": str(receipt_path.resolve()),
         "receipt_hash": claimed_receipt,
+        "schema": V2_FULL_AUDIT_SCHEMA,
         "verdict": report["verdict"],
         "partition_sha256": actual_chain_hash,
         "consumer_scope": consumer_scope,
@@ -304,6 +305,7 @@ def validate_v2_synthetic_audit_receipt(
     return {
         "path": str(receipt_path.resolve()),
         "receipt_hash": report["receipt_hash"],
+        "schema": V2_SYNTHETIC_AUDIT_SCHEMA,
         "verdict": "SYNTHETIC-ONLY",
         "partition_sha256": actual,
         "consumer_scope": "H7-SYNTHETIC",
