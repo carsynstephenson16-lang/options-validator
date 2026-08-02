@@ -1,0 +1,1841 @@
+{
+  "catalog_sha256": "22543bf44d3e5c690c22b3eea279c218a883032300e2a923b7e980295a94a379",
+  "catalog_version": 1,
+  "mappings": [
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-ACTIONABLE-ALERTS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-DISTRIBUTION-SKEW-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-EARLY-VALIDATION-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-FULL-BATCH-SLICES-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-INTERPRETABLE-DISTANCE-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-MODEL-SCHEMA-ASSUMPTIONS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-SCHEMA-CONSTRAINTS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-SCHEMA-LIFECYCLE-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/windows.py",
+          "sha256": "e18a741192423832e7d8b3fc096d82dba17432af7cf42c42d19d505b5b70932a",
+          "symbol": "def assert_oos_only"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "DVM-SCORING-SERVING-SKEW-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-POINT-IN-TIME-01",
+      "notes": "Sealed windows and availability checks keep future information out of research decisions.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-SEMANTIC-DOMAINS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-SYNTHETIC-SCHEMA-TESTS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "DVM-TRAINING-SERVING-SKEW-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/experiments.py",
+          "sha256": "6851ee2ca5a68f7b001f9f41a43cead795715e39c625ae11939010cc39df78e8",
+          "symbol": "def register"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "EYT-EVALUATION-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REGISTRATION-01",
+      "notes": "Typed preregistration freezes the decision rule before results are available.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-EVALUATION-02",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-POSTTRAIN-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-POSTTRAIN-02",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-PRETRAIN-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-PRETRAIN-02",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-PRETRAIN-03",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/windows.py",
+          "sha256": "e18a741192423832e7d8b3fc096d82dba17432af7cf42c42d19d505b5b70932a",
+          "symbol": "def assert_oos_only"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "EYT-PRETRAIN-04",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-POINT-IN-TIME-01",
+      "notes": "Sealed windows and availability checks keep future information out of research decisions.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-PRETRAIN-05",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "EYT-PRETRAIN-06",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-ABSTRACTION-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "strategies/put_credit_spread.py",
+          "sha256": "89cc47586ca74f85f7a8fdb8d0227ec2eb7381a33d56e39cd8574dca38f0afed",
+          "symbol": "def select_put_credit_spread_candidate"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "HTD-ACTION-LIMITS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-COST-FILL-01",
+      "notes": "Selection and causal-fill tests enforce costs, liquidity, and bounded risk.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/experiments.py",
+          "sha256": "6851ee2ca5a68f7b001f9f41a43cead795715e39c625ae11939010cc39df78e8",
+          "symbol": "def register"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "HTD-CONFIGURATION-DIFFS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REGISTRATION-01",
+      "notes": "Typed preregistration freezes the decision rule before results are available.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-CONFIGURATION-VERIFICATION-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-CORRECTION-CASCADE-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-CULTURAL-DEBT-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-DATA-DEPENDENCY-ANALYSIS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-DATA-TESTING-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-DEAD-EXPERIMENTS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-DEBT-MEASUREMENT-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/windows.py",
+          "sha256": "e18a741192423832e7d8b3fc096d82dba17432af7cf42c42d19d505b5b70932a",
+          "symbol": "def assert_oos_only"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "HTD-DIRECT-FEEDBACK-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-POINT-IN-TIME-01",
+      "notes": "Sealed windows and availability checks keep future information out of research decisions.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-DYNAMIC-THRESHOLDS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-ENTANGLEMENT-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-GLUE-CODE-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-HIDDEN-FEEDBACK-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-LIVE-MONITORING-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-MULTIPLE-LANGUAGES-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-PIPELINE-JUNGLE-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-PLAIN-DATA-TYPES-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-PREDICTION-BIAS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-PROCESS-MANAGEMENT-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-PROTOTYPE-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/hashing.py",
+          "sha256": "4519907bb3a4557eb53386f8a39174583b85e613fa2dd5e1af5fa144c1d168ee",
+          "symbol": "def source_hash"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "HTD-REPRODUCIBILITY-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REPRODUCIBILITY-01",
+      "notes": "Code, source, configuration, cost, and data-window identities are hash bound.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-UNDECLARED-CONSUMERS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "HTD-UNDERUSED-DATA-DEPENDENCIES-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "tools/cache_manifest.py",
+          "sha256": "eab04689080ba52dba65f4ce0f55e8b1b482bb31dc333fd544a2ae8418dae641",
+          "symbol": "def verify_manifest"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "HTD-UNSTABLE-DATA-DEPENDENCIES-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-CACHE-MANIFEST-01",
+      "notes": "The immutable offline cache manifest binds every canonical research input.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "tools/cache_manifest.py",
+          "sha256": "eab04689080ba52dba65f4ce0f55e8b1b482bb31dc333fd544a2ae8418dae641",
+          "symbol": "def verify_manifest"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "HTD-UPSTREAM-PRODUCERS-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-CACHE-MANIFEST-01",
+      "notes": "The immutable offline cache manifest binds every canonical research input.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-DATA-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-DATA-02",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "strategies/put_credit_spread.py",
+          "sha256": "89cc47586ca74f85f7a8fdb8d0227ec2eb7381a33d56e39cd8574dca38f0afed",
+          "symbol": "def select_put_credit_spread_candidate"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "MLTS-DATA-03",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-COST-FILL-01",
+      "notes": "Selection and causal-fill tests enforce costs, liquidity, and bounded risk.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-DATA-04",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-DATA-05",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-DATA-06",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-DATA-07",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/hashing.py",
+          "sha256": "4519907bb3a4557eb53386f8a39174583b85e613fa2dd5e1af5fa144c1d168ee",
+          "symbol": "def source_hash"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "MLTS-INFRA-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REPRODUCIBILITY-01",
+      "notes": "Code, source, configuration, cost, and data-window identities are hash bound.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-INFRA-02",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "strategies/put_credit_spread.py",
+          "sha256": "89cc47586ca74f85f7a8fdb8d0227ec2eb7381a33d56e39cd8574dca38f0afed",
+          "symbol": "def select_put_credit_spread_candidate"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "MLTS-INFRA-03",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-COST-FILL-01",
+      "notes": "Selection and causal-fill tests enforce costs, liquidity, and bounded risk.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "strategies/put_credit_spread.py",
+          "sha256": "89cc47586ca74f85f7a8fdb8d0227ec2eb7381a33d56e39cd8574dca38f0afed",
+          "symbol": "def select_put_credit_spread_candidate"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "MLTS-INFRA-04",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-COST-FILL-01",
+      "notes": "Selection and causal-fill tests enforce costs, liquidity, and bounded risk.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-INFRA-05",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-INFRA-06",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-INFRA-07",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/experiments.py",
+          "sha256": "6851ee2ca5a68f7b001f9f41a43cead795715e39c625ae11939010cc39df78e8",
+          "symbol": "def register"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "MLTS-MODEL-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REGISTRATION-01",
+      "notes": "Typed preregistration freezes the decision rule before results are available.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MODEL-02",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MODEL-03",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MODEL-04",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MODEL-05",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MODEL-06",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MODEL-07",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "tools/cache_manifest.py",
+          "sha256": "eab04689080ba52dba65f4ce0f55e8b1b482bb31dc333fd544a2ae8418dae641",
+          "symbol": "def verify_manifest"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "MLTS-MONITOR-01",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-CACHE-MANIFEST-01",
+      "notes": "The immutable offline cache manifest binds every canonical research input.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MONITOR-02",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MONITOR-03",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "tools/cache_manifest.py",
+          "sha256": "eab04689080ba52dba65f4ce0f55e8b1b482bb31dc333fd544a2ae8418dae641",
+          "symbol": "def verify_manifest"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "MLTS-MONITOR-04",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-CACHE-MANIFEST-01",
+      "notes": "The immutable offline cache manifest binds every canonical research input.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MONITOR-05",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MONITOR-06",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "MLTS-MONITOR-07",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-001",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-002",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-003",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-004",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-005",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/hashing.py",
+          "sha256": "4519907bb3a4557eb53386f8a39174583b85e613fa2dd5e1af5fa144c1d168ee",
+          "symbol": "def source_hash"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-006",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REPRODUCIBILITY-01",
+      "notes": "Code, source, configuration, cost, and data-window identities are hash bound.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-007",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "tools/cache_manifest.py",
+          "sha256": "eab04689080ba52dba65f4ce0f55e8b1b482bb31dc333fd544a2ae8418dae641",
+          "symbol": "def verify_manifest"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-008",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-CACHE-MANIFEST-01",
+      "notes": "The immutable offline cache manifest binds every canonical research input.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-009",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-010",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-011",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-012",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-013",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-014",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-015",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/experiments.py",
+          "sha256": "6851ee2ca5a68f7b001f9f41a43cead795715e39c625ae11939010cc39df78e8",
+          "symbol": "def register"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-016",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REGISTRATION-01",
+      "notes": "Typed preregistration freezes the decision rule before results are available.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-017",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-018",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-019",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-020",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-021",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-022",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-023",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-024",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "strategies/put_credit_spread.py",
+          "sha256": "89cc47586ca74f85f7a8fdb8d0227ec2eb7381a33d56e39cd8574dca38f0afed",
+          "symbol": "def select_put_credit_spread_candidate"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-025",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-COST-FILL-01",
+      "notes": "Selection and causal-fill tests enforce costs, liquidity, and bounded risk.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-026",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-027",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-028",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/windows.py",
+          "sha256": "e18a741192423832e7d8b3fc096d82dba17432af7cf42c42d19d505b5b70932a",
+          "symbol": "def assert_oos_only"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-029",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-POINT-IN-TIME-01",
+      "notes": "Sealed windows and availability checks keep future information out of research decisions.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-030",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/windows.py",
+          "sha256": "e18a741192423832e7d8b3fc096d82dba17432af7cf42c42d19d505b5b70932a",
+          "symbol": "def assert_oos_only"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-031",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-POINT-IN-TIME-01",
+      "notes": "Sealed windows and availability checks keep future information out of research decisions.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/hashing.py",
+          "sha256": "4519907bb3a4557eb53386f8a39174583b85e613fa2dd5e1af5fa144c1d168ee",
+          "symbol": "def source_hash"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-032",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REPRODUCIBILITY-01",
+      "notes": "Code, source, configuration, cost, and data-window identities are hash bound.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/windows.py",
+          "sha256": "e18a741192423832e7d8b3fc096d82dba17432af7cf42c42d19d505b5b70932a",
+          "symbol": "def assert_oos_only"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-033",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-POINT-IN-TIME-01",
+      "notes": "Sealed windows and availability checks keep future information out of research decisions.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-034",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-035",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-036",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-037",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-038",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "existing_hard_gate",
+      "evidence": [
+        {
+          "kind": "file_symbol",
+          "path": "research/experiments.py",
+          "sha256": "6851ee2ca5a68f7b001f9f41a43cead795715e39c625ae11939010cc39df78e8",
+          "symbol": "def register"
+        },
+        {
+          "command_id": "baseline-suite",
+          "kind": "command_receipt",
+          "receipt_path": "docs/reliability/command-evidence.json",
+          "sha256": "5e3ebcbe8a3d5e6e6555caa66ecc00908c7e163f36e1e75b162110d49fa35d4b"
+        }
+      ],
+      "expires_at": null,
+      "item_id": "RML-039",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": "OV-REGISTRATION-01",
+      "notes": "Typed preregistration freezes the decision rule before results are available.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "ENFORCED"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-040",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-041",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-042",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    },
+    {
+      "enforcement": "none",
+      "evidence": [],
+      "expires_at": null,
+      "item_id": "RML-043",
+      "last_reviewed_at": "2026-08-02T22:36:44Z",
+      "local_control_id": null,
+      "notes": "Applicable item lacks repository-specific evidence in the initial profile.",
+      "owner": "options-research-governance",
+      "reviewed_at_commit": "c00044fb6bf4448c2814d7c8cf9cf43baeedf1ea",
+      "status": "GAP"
+    }
+  ],
+  "mlts_applicability": "APPLICABLE",
+  "priorities": [
+    {
+      "auditability_gain": 5,
+      "cross_project_reuse": 5,
+      "equivalent_evidence": false,
+      "implementation_effort": 3,
+      "item_ids": [
+        "HTD-DATA-DEPENDENCY-ANALYSIS-01",
+        "HTD-UNDECLARED-CONSUMERS-01"
+      ],
+      "maintenance_burden": 2,
+      "owner_decision_required": "Explicit owner approval is required before any experiment or promotion.",
+      "priority_id": "OV-SOURCE-VERDICT-LINEAGE",
+      "proposed_control": "Create one source-to-verdict dependency and consumer view.",
+      "recurrence": 4,
+      "risk_reduction": 5
+    },
+    {
+      "auditability_gain": 4,
+      "cross_project_reuse": 5,
+      "equivalent_evidence": false,
+      "implementation_effort": 3,
+      "item_ids": [
+        "HTD-UNDERUSED-DATA-DEPENDENCIES-01",
+        "RML-022"
+      ],
+      "maintenance_burden": 3,
+      "owner_decision_required": "Explicit owner approval is required before any experiment or promotion.",
+      "priority_id": "OV-DEPENDENCY-UTILITY",
+      "proposed_control": "Review incremental value and carrying cost for every feature dependency.",
+      "recurrence": 3,
+      "risk_reduction": 4
+    },
+    {
+      "auditability_gain": 5,
+      "cross_project_reuse": 5,
+      "equivalent_evidence": false,
+      "implementation_effort": 2,
+      "item_ids": [
+        "HTD-DEBT-MEASUREMENT-01",
+        "MLTS-MODEL-05",
+        "RML-014"
+      ],
+      "maintenance_burden": 2,
+      "owner_decision_required": "Explicit owner approval is required before any experiment or promotion.",
+      "priority_id": "OV-SIMPLE-BASELINE",
+      "proposed_control": "Consolidate explicit simpler-baseline evidence for each live study.",
+      "recurrence": 4,
+      "risk_reduction": 5
+    },
+    {
+      "auditability_gain": 5,
+      "cross_project_reuse": 5,
+      "equivalent_evidence": false,
+      "implementation_effort": 2,
+      "item_ids": [
+        "DVM-ACTIONABLE-ALERTS-01",
+        "HTD-LIVE-MONITORING-01"
+      ],
+      "maintenance_burden": 2,
+      "owner_decision_required": "Explicit owner approval is required before any experiment or promotion.",
+      "priority_id": "OV-STALE-MONITORING",
+      "proposed_control": "Consolidate stale evidence and monitoring coverage.",
+      "recurrence": 5,
+      "risk_reduction": 4
+    }
+  ],
+  "repository": "options-validator",
+  "schema_version": 1
+}
