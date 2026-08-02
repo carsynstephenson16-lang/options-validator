@@ -43,6 +43,11 @@ jobs:
       - name: Coverage non-regression gate
         run: uv run coverage report
 
+      - name: QuantLib reference validation
+        run: >-
+          uv run --project tools/quantlib_validation --frozen
+          python -m unittest discover -s tools/quantlib_validation/tests
+
   secrets:
     name: Secret Scan
     runs-on: ubuntu-latest
