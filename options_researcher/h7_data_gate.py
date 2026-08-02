@@ -5,8 +5,9 @@ exact-session data set present locally for a decision, BEFORE any watcher
 output is read? GO requires EVERY name to have both a split-adjusted close
 AND an EOD option chain for the EXACT evaluation session (the last completed
 XNYS session strictly before the requested date), each structurally clean.
-Anything else -- a missing file, a stale snapshot, a schema gap, an
-audit BLOCK -- is a fail-closed NO_GO for the whole universe.
+Chain partitions must be schema v2 and verdict-eligible; legacy v1 partitions
+remain display-only. Anything else -- a missing file, a stale snapshot, a
+schema gap, an audit BLOCK -- is a fail-closed NO_GO for the whole universe.
 
 READ-ONLY w.r.t. every market-data store. This module reads cached parquet
 DIRECTLY and never fetches: it imports no ThetaData client and calls no
@@ -37,6 +38,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from data.cache_schema import (
+    CHAIN_SCHEMA_VERSION_V1,
+    CacheAuditReceiptError,
+    chain_schema_metadata,
+    validate_v2_audit_receipt,
+)
 from data.recent_topup import audit_chain
 from data.thetadata_adapter import CHAIN_COLUMNS, NUMERIC_CHAIN_COLUMNS
 from data.underlying_closes import adjusted_from_raw
@@ -64,6 +71,8 @@ CHAIN_SESSION_MISSING = "CHAIN_SESSION_MISSING"
 CHAIN_STALE = "CHAIN_STALE"
 CHAIN_EMPTY = "CHAIN_EMPTY"
 CHAIN_SCHEMA_MISSING = "CHAIN_SCHEMA_MISSING"
+CHAIN_SCHEMA_V1_DISPLAY_ONLY = "CHAIN_SCHEMA_V1_DISPLAY_ONLY"
+CHAIN_V2_AUDIT_RECEIPT_INVALID = "CHAIN_V2_AUDIT_RECEIPT_INVALID"
 CHAIN_NONFINITE = "CHAIN_NONFINITE"
 CHAIN_DUPLICATE_CONTRACT = "CHAIN_DUPLICATE_CONTRACT"
 CHAIN_NEGATIVE_LIQUIDITY_FIELD = "CHAIN_NEGATIVE_LIQUIDITY_FIELD"
@@ -86,28 +95,31 @@ def _read_parquet(path: Path) -> pd.DataFrame:
     except GateStoreError:
         raise
     except Exception as exc:  # corrupt/locked/oversized -> fail the invocation
-        raise GateStoreError(f"unreadable store {path}: "
-                             f"{type(exc).__name__}: {exc}") from exc
+        raise GateStoreError(f"unreadable store {path}: {type(exc).__name__}: {exc}") from exc
 
 
 def _nonfinite(values: pd.Series) -> int:
     """Count non-finite entries (NaN or +/-inf) in a numeric-coerced series."""
     v = pd.to_numeric(values, errors="coerce")
-    return int((~v.apply(lambda x: x == x and x not in (
-        float("inf"), float("-inf")))).sum())
+    return int((~v.apply(lambda x: x == x and x not in (float("inf"), float("-inf")))).sum())
 
 
 def _evaluate_close(symbol: str, eval_iso: str, close_dir: Path) -> dict:
     path = close_dir / f"{symbol}.parquet"
-    rec: dict = {"path": str(path), "file_exists": path.exists(),
-                 "sha256": None,
-                 "session_row_exists": False,
-                 "latest_date_at_or_before_session": None,
-                 "nonfinite_count": None, "duplicate_date_count": None}
+    rec: dict = {
+        "path": str(path),
+        "file_exists": path.exists(),
+        "sha256": None,
+        "session_row_exists": False,
+        "latest_date_at_or_before_session": None,
+        "nonfinite_count": None,
+        "duplicate_date_count": None,
+    }
     codes: list[str] = []
     if not path.exists():
         return rec, [CLOSE_FILE_MISSING]
     from research.hashing import sha256_file
+
     rec["sha256"] = sha256_file(path)
     df = _read_parquet(path)
     # A present-but-malformed store (readable parquet, wrong shape) is not an
@@ -117,8 +129,8 @@ def _evaluate_close(symbol: str, eval_iso: str, close_dir: Path) -> dict:
     # so a closes store lacking date/close is treated as unreadable.
     if not {"date", "close"}.issubset(df.columns):
         raise GateStoreError(
-            f"closes store {path} missing required date/close columns; "
-            f"got {list(df.columns)}")
+            f"closes store {path} missing required date/close columns; got {list(df.columns)}"
+        )
     raw = df.copy()
     raw["date"] = raw["date"].astype(str)
     # point-in-time: never look at rows after the evaluation session
@@ -127,8 +139,7 @@ def _evaluate_close(symbol: str, eval_iso: str, close_dir: Path) -> dict:
     if at_or_before.empty:
         rec["latest_date_at_or_before_session"] = None
         return rec, [CLOSE_SESSION_MISSING]
-    series = pd.to_numeric(
-        at_or_before.set_index("date")["close"].sort_index(), errors="coerce")
+    series = pd.to_numeric(at_or_before.set_index("date")["close"].sort_index(), errors="coerce")
     adjusted = adjusted_from_raw(series, symbol)
     latest = str(adjusted.index[-1])
     rec["latest_date_at_or_before_session"] = latest
@@ -163,30 +174,30 @@ def _validate_chain_store_fields(df: pd.DataFrame, path: Path) -> None:
         if col not in df.columns:
             continue
         dtype = df[col].dtype
-        if (pd.api.types.is_bool_dtype(dtype)
-                or pd.api.types.is_complex_dtype(dtype)
-                or not pd.api.types.is_numeric_dtype(dtype)):
+        if (
+            pd.api.types.is_bool_dtype(dtype)
+            or pd.api.types.is_complex_dtype(dtype)
+            or not pd.api.types.is_numeric_dtype(dtype)
+        ):
             raise GateStoreError(
-                f"chain store {path} column {col!r} is not a real numeric "
-                f"dtype ({dtype}); refusing")
+                f"chain store {path} column {col!r} is not a real numeric dtype ({dtype}); refusing"
+            )
 
     if "right" in df.columns:
-        if any(not isinstance(value, str) or value not in {"P", "C"}
-               for value in df["right"].tolist()):
-            raise GateStoreError(
-                f"chain store {path} has invalid right values; refusing")
+        if any(
+            not isinstance(value, str) or value not in {"P", "C"} for value in df["right"].tolist()
+        ):
+            raise GateStoreError(f"chain store {path} has invalid right values; refusing")
 
     if "expiration" in df.columns:
         try:
-            expirations = [date.fromisoformat(value) for value in
-                           df["expiration"].tolist()]
+            expirations = [date.fromisoformat(value) for value in df["expiration"].tolist()]
         except (TypeError, ValueError) as exc:
-            raise GateStoreError(
-                f"chain store {path} has a non-ISO expiration; refusing") from exc
-        if any(value.isoformat() != raw for value, raw in
-               zip(expirations, df["expiration"].tolist())):
-            raise GateStoreError(
-                f"chain store {path} has a non-canonical expiration; refusing")
+            raise GateStoreError(f"chain store {path} has a non-ISO expiration; refusing") from exc
+        if any(
+            value.isoformat() != raw for value, raw in zip(expirations, df["expiration"].tolist())
+        ):
+            raise GateStoreError(f"chain store {path} has a non-canonical expiration; refusing")
 
 
 def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
@@ -194,15 +205,24 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
     days = _chain_days(symbol, chain_dir)
     at_or_before = [d for d in days if d <= eval_iso]
     rec: dict = {
-        "expected_path": str(expected), "file_exists": expected.exists(),
+        "expected_path": str(expected),
+        "file_exists": expected.exists(),
         "sha256": None,
-        "newest_date_at_or_before_session":
-            (at_or_before[-1] if at_or_before else None),
-        "row_count": None, "columns": None, "missing_required_columns": None,
-        "null_by_numeric_column": None, "nonfinite_by_numeric_column": None,
-        "duplicate_contract_count": None, "negative_bid_count": None,
-        "negative_ask_count": None, "negative_open_interest_count": None,
-        "crossed_market_count": None, "audit": None,
+        "newest_date_at_or_before_session": (at_or_before[-1] if at_or_before else None),
+        "row_count": None,
+        "columns": None,
+        "missing_required_columns": None,
+        "schema_version": None,
+        "usage": None,
+        "audit_receipt": None,
+        "null_by_numeric_column": None,
+        "nonfinite_by_numeric_column": None,
+        "duplicate_contract_count": None,
+        "negative_bid_count": None,
+        "negative_ask_count": None,
+        "negative_open_interest_count": None,
+        "crossed_market_count": None,
+        "audit": None,
     }
     codes: list[str] = []
     if not expected.exists():
@@ -212,14 +232,38 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
         return rec, codes
 
     from research.hashing import sha256_file
+
     rec["sha256"] = sha256_file(expected)
-    df = _read_parquet(expected)   # exact-session file ONLY; never a fallback
+    df = _read_parquet(expected)  # exact-session file ONLY; never a fallback
     rec["row_count"] = int(len(df))
     rec["columns"] = list(df.columns)
     missing = [c for c in CHAIN_COLUMNS if c not in df.columns]
     rec["missing_required_columns"] = missing
     if missing:
         codes.append(CHAIN_SCHEMA_MISSING)
+    else:
+        try:
+            schema = chain_schema_metadata(df.columns)
+        except ValueError:
+            codes.append(CHAIN_SCHEMA_MISSING)
+        else:
+            rec["schema_version"] = schema.schema_version
+            rec["usage"] = schema.usage
+            if schema.schema_version == CHAIN_SCHEMA_VERSION_V1:
+                codes.append(CHAIN_SCHEMA_V1_DISPLAY_ONLY)
+            else:
+                try:
+                    binding = validate_v2_audit_receipt(
+                        chain_dir,
+                        expected,
+                        symbol=symbol,
+                        session=eval_iso,
+                    )
+                except CacheAuditReceiptError as exc:
+                    rec["audit_receipt"] = {"valid": False, "error": str(exc)}
+                    codes.append(CHAIN_V2_AUDIT_RECEIPT_INVALID)
+                else:
+                    rec["audit_receipt"] = {"valid": True, **binding}
     # Store-integrity guard, symmetric with the closes date/close guard: a
     # present column with a malformed stored dtype/domain is an integrity
     # failure (exit 2) regardless of row count. Run it BEFORE the empty-chain
@@ -245,16 +289,18 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
         codes.append(CHAIN_NONFINITE)
 
     if not missing:
-        dup = df.duplicated(subset=["expiration", "strike", "right"],
-                            keep=False)
+        dup = df.duplicated(subset=["expiration", "strike", "right"], keep=False)
         rec["duplicate_contract_count"] = int(dup.sum())
         if rec["duplicate_contract_count"]:
             codes.append(CHAIN_DUPLICATE_CONTRACT)
         rec["negative_bid_count"] = int((df["bid"] < 0).sum())
         rec["negative_ask_count"] = int((df["ask"] < 0).sum())
         rec["negative_open_interest_count"] = int((df["open_interest"] < 0).sum())
-        if (rec["negative_bid_count"] or rec["negative_ask_count"]
-                or rec["negative_open_interest_count"]):
+        if (
+            rec["negative_bid_count"]
+            or rec["negative_ask_count"]
+            or rec["negative_open_interest_count"]
+        ):
             codes.append(CHAIN_NEGATIVE_LIQUIDITY_FIELD)
         rec["crossed_market_count"] = int((df["bid"] > df["ask"]).sum())
         if rec["crossed_market_count"]:
@@ -262,9 +308,13 @@ def _evaluate_chain(symbol: str, eval_iso: str, chain_dir: Path) -> dict:
         # reuse the repo's liquidity/greek audit -- no thresholds re-invented
         if not sum(nonfinite.values()):
             a = audit_chain(df)
-            rec["audit"] = {"verdict": a["verdict"], "block": a["block"],
-                            "warn": a["warn"], "rows": a["rows"],
-                            "selectable": a["selectable"]}
+            rec["audit"] = {
+                "verdict": a["verdict"],
+                "block": a["block"],
+                "warn": a["warn"],
+                "rows": a["rows"],
+                "selectable": a["selectable"],
+            }
             if a["verdict"] == "BLOCK":
                 codes.append(CHAIN_AUDIT_BLOCK)
     return rec, codes
@@ -283,16 +333,23 @@ def _resolve_scope(scope: dict | None, symbols) -> tuple[list[str], dict]:
     if not required.issubset(scope):
         raise ValueError(f"scope missing fields: {sorted(required - set(scope))}")
     identity = scope_identity(scope["symbols"])
-    if (identity["scope_id"], identity["scope_version"],
-            identity["scope_hash"]) != (
-                scope["scope_id"], scope["scope_version"], scope["scope_hash"]):
+    if (identity["scope_id"], identity["scope_version"], identity["scope_hash"]) != (
+        scope["scope_id"],
+        scope["scope_version"],
+        scope["scope_hash"],
+    ):
         raise ValueError("scope identity/hash does not match its symbols")
     return list(identity["symbols"]), identity
 
 
-def evaluate(requested_run_date: date, *, close_dir: Path = DEFAULT_CLOSE_DIR,
-             chain_dir: Path = DEFAULT_CHAIN_DIR, scope: dict | None = None,
-             symbols: list[str] | tuple[str, ...] | None = None) -> dict:
+def evaluate(
+    requested_run_date: date,
+    *,
+    close_dir: Path = DEFAULT_CLOSE_DIR,
+    chain_dir: Path = DEFAULT_CHAIN_DIR,
+    scope: dict | None = None,
+    symbols: list[str] | tuple[str, ...] | None = None,
+) -> dict:
     """Pure whole-universe evaluation. Filesystem inputs are injected via
     close_dir/chain_dir so tests drive fixture caches. Raises GateStoreError
     if a present file is unreadable (the caller maps that to exit 2)."""
@@ -335,8 +392,9 @@ def evaluate(requested_run_date: date, *, close_dir: Path = DEFAULT_CLOSE_DIR,
     }
 
 
-def build_receipt(result: dict, *, source_health_receipt: dict,
-                  source_health_receipt_path: Path) -> dict:
+def build_receipt(
+    result: dict, *, source_health_receipt: dict, source_health_receipt_path: Path
+) -> dict:
     """Bind the gate result to the current code/config and source receipt.
 
     The source-health link is MANDATORY. A gate receipt written without it is
@@ -348,14 +406,13 @@ def build_receipt(result: dict, *, source_health_receipt: dict,
         raise ValueError(
             "data gate requires a linked source_health receipt; refusing to "
             "write an unlinked receipt (it would be immutable and would "
-            "revoke this session's entry authority)")
+            "revoke this session's entry authority)"
+        )
     if source_health_receipt.get("receipt_type") != "source_health":
         raise ValueError("data gate requires a source_health receipt")
-    if (source_health_receipt.get("evaluation_session")
-            != result["evaluation_session"]):
+    if source_health_receipt.get("evaluation_session") != result["evaluation_session"]:
         raise ValueError("source-health receipt session does not match gate")
-    if source_health_receipt.get("scope", {}).get("scope_hash") != \
-            result["scope"]["scope_hash"]:
+    if source_health_receipt.get("scope", {}).get("scope_hash") != result["scope"]["scope_hash"]:
         raise ValueError("source-health receipt scope does not match gate")
     source_receipt_hash = source_health_receipt.get("receipt_hash")
     payload = {
@@ -366,15 +423,20 @@ def build_receipt(result: dict, *, source_health_receipt: dict,
         "go_count": result["go_count"],
         "no_go_count": result["no_go_count"],
         "symbols": result["symbols"],
-        "input_files": dict(sorted(input_files({
-            f"{kind}:{symbol}": Path(
-                result["symbols"][symbol][section][path_key])
-            for symbol in result["universe"]
-            for kind, section, path_key in (
-                ("close", "close", "path"),
-                ("chain", "chain", "expected_path"),
+        "input_files": dict(
+            sorted(
+                input_files(
+                    {
+                        f"{kind}:{symbol}": Path(result["symbols"][symbol][section][path_key])
+                        for symbol in result["universe"]
+                        for kind, section, path_key in (
+                            ("close", "close", "path"),
+                            ("chain", "chain", "expected_path"),
+                        )
+                    }
+                ).items()
             )
-        }).items())),
+        ),
         "source_health_receipt_hash": source_receipt_hash,
         "source_health_receipt_path": str(source_health_receipt_path),
         "config_hash": config_hash(),
@@ -388,12 +450,11 @@ def to_artifact(result: dict) -> str:
     """Deterministic serialization: sorted keys, LF, trailing newline, no
     wall-clock field. Identical inputs -> byte-identical output."""
     import json
-    return json.dumps(result, sort_keys=True, indent=1,
-                      ensure_ascii=True, allow_nan=False) + "\n"
+
+    return json.dumps(result, sort_keys=True, indent=1, ensure_ascii=True, allow_nan=False) + "\n"
 
 
-def write_artifact(result: dict, *,
-                   reports_dir: Path = DEFAULT_REPORTS_DIR) -> Path:
+def write_artifact(result: dict, *, reports_dir: Path = DEFAULT_REPORTS_DIR) -> Path:
     """Atomically create one gate artifact; identical replay is allowed."""
     reports_dir = Path(reports_dir)
     scoped_dir = reports_dir / result["scope"]["scope_id"]
@@ -419,17 +480,21 @@ def write_artifact(result: dict, *,
 
 
 def _print_summary(result: dict, artifact: Path) -> None:
-    print(f"H7 DATA GATE requested={result['requested_run_date']} "
-          f"session={result['evaluation_session']} "
-          f"cutoff={result['causal_cutoff_utc']} "
-          f"(read-only; BUILD-ONLY, not operationally authorized)")
+    print(
+        f"H7 DATA GATE requested={result['requested_run_date']} "
+        f"session={result['evaluation_session']} "
+        f"cutoff={result['causal_cutoff_utc']} "
+        f"(read-only; BUILD-ONLY, not operationally authorized)"
+    )
     for sym in result["universe"]:
         r = result["symbols"][sym]
         v = "GO" if r["verdict"] == "GO" else "NO_GO"
         print(f"{sym:>5}: {v:>5} [{','.join(r['reason_codes'])}]")
-    print(f"whole-universe {result['whole_universe_verdict']}: "
-          f"{result['go_count']}/{len(result['universe'])} GO; "
-          f"artifact {artifact}")
+    print(
+        f"whole-universe {result['whole_universe_verdict']}: "
+        f"{result['go_count']}/{len(result['universe'])} GO; "
+        f"artifact {artifact}"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -439,26 +504,30 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         description="H7 Stage 2 whole-universe daily data gate (read-only; "
-                    "exit 0 GO, 1 NO_GO, 2 invalid/unreadable)")
-    parser.add_argument("--as-of", help="requested run date YYYY-MM-DD "
-                                        "(default today America/New_York)")
+        "exit 0 GO, 1 NO_GO, 2 invalid/unreadable)"
+    )
+    parser.add_argument(
+        "--as-of", help="requested run date YYYY-MM-DD (default today America/New_York)"
+    )
     parser.add_argument("--close-dir", default=str(DEFAULT_CLOSE_DIR))
     parser.add_argument("--chain-dir", default=str(DEFAULT_CHAIN_DIR))
     parser.add_argument("--reports-dir", default=str(DEFAULT_REPORTS_DIR))
-    parser.add_argument("--scope", default=None,
-                        help="scope JSON file; defaults to official H7 scope")
-    parser.add_argument("--source-health-receipt", default=None,
-                        help="REQUIRED immutable source-health receipt for the "
-                             "same evaluation session; the gate refuses to "
-                             "write an unlinked receipt")
-    parser.add_argument("--write-receipt", default=None,
-                        help="immutable data-gate receipt path")
+    parser.add_argument(
+        "--scope", default=None, help="scope JSON file; defaults to official H7 scope"
+    )
+    parser.add_argument(
+        "--source-health-receipt",
+        default=None,
+        help="REQUIRED immutable source-health receipt for the "
+        "same evaluation session; the gate refuses to "
+        "write an unlinked receipt",
+    )
+    parser.add_argument("--write-receipt", default=None, help="immutable data-gate receipt path")
     args = parser.parse_args(argv)
 
     ny_today = datetime.now(ZoneInfo("America/New_York")).date()
     try:
-        requested = (date.fromisoformat(args.as_of) if args.as_of
-                     else ny_today)
+        requested = date.fromisoformat(args.as_of) if args.as_of else ny_today
     except ValueError:
         print(f"--as-of {args.as_of!r} is not YYYY-MM-DD; refusing.")
         return 2
@@ -466,47 +535,54 @@ def main(argv: list[str] | None = None) -> int:
         print(f"--as-of {requested} is in the future; refusing.")
         return 2
     if not args.source_health_receipt:
-        print("H7 DATA GATE ERROR -- --source-health-receipt is required "
-              "(fail closed, no artifact written). A gate receipt with no "
-              "source-health link is immutable and permanently revokes this "
-              "session's real-entry authority. Run "
-              "`python -m options_researcher.h7_source_health` first and pass "
-              "the receipt path it prints, or use tools/daily_ritual.sh, "
-              "which chains them for you.")
+        print(
+            "H7 DATA GATE ERROR -- --source-health-receipt is required "
+            "(fail closed, no artifact written). A gate receipt with no "
+            "source-health link is immutable and permanently revokes this "
+            "session's real-entry authority. Run "
+            "`python -m options_researcher.h7_source_health` first and pass "
+            "the receipt path it prints, or use tools/daily_ritual.sh, "
+            "which chains them for you."
+        )
         return 2
 
     try:
-        scope = (json.loads(Path(args.scope).read_text())
-                 if args.scope else None)
-        source_receipt = (load_receipt(Path(args.source_health_receipt),
-                                       expected_type="source_health")
-                          if args.source_health_receipt else None)
-        result = evaluate(requested, close_dir=Path(args.close_dir),
-                          chain_dir=Path(args.chain_dir), scope=scope)
+        scope = json.loads(Path(args.scope).read_text()) if args.scope else None
+        source_receipt = (
+            load_receipt(Path(args.source_health_receipt), expected_type="source_health")
+            if args.source_health_receipt
+            else None
+        )
+        result = evaluate(
+            requested, close_dir=Path(args.close_dir), chain_dir=Path(args.chain_dir), scope=scope
+        )
     except GateStoreError as exc:
-        print(f"H7 DATA GATE ERROR -- unreadable store (fail closed, no "
-              f"artifact written): {exc}")
+        print(f"H7 DATA GATE ERROR -- unreadable store (fail closed, no artifact written): {exc}")
         return 2
     except (ValueError, OSError) as exc:
-        print(f"H7 DATA GATE ERROR -- invalid invocation: "
-              f"{type(exc).__name__}: {exc}")
+        print(f"H7 DATA GATE ERROR -- invalid invocation: {type(exc).__name__}: {exc}")
         return 2
 
     try:
         receipt = build_receipt(
-            result, source_health_receipt=source_receipt,
+            result,
+            source_health_receipt=source_receipt,
             source_health_receipt_path=(
-                Path(args.source_health_receipt)
-                if args.source_health_receipt else None))
+                Path(args.source_health_receipt) if args.source_health_receipt else None
+            ),
+        )
         artifact = write_artifact(result, reports_dir=Path(args.reports_dir))
-        receipt_path = (Path(args.write_receipt) if args.write_receipt else
-                        Path(args.reports_dir) / result["scope"]["scope_id"] /
-                        "receipts" /
-                        f"{result['evaluation_session']}.json")
+        receipt_path = (
+            Path(args.write_receipt)
+            if args.write_receipt
+            else Path(args.reports_dir)
+            / result["scope"]["scope_id"]
+            / "receipts"
+            / f"{result['evaluation_session']}.json"
+        )
         write_immutable_receipt(receipt, receipt_path)
     except (OSError, ValueError) as exc:
-        print(f"H7 DATA GATE ERROR -- cannot write artifact: "
-              f"{type(exc).__name__}: {exc}")
+        print(f"H7 DATA GATE ERROR -- cannot write artifact: {type(exc).__name__}: {exc}")
         return 2
     _print_summary(result, artifact)
     print(f"immutable receipt {receipt_path}")

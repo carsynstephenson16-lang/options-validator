@@ -25,6 +25,7 @@ Run from the repo root:
 Non-dry-run ThetaData top-up is operator-disabled as of 2026-07-31. Explicit
 offline inventory and immutable cached reads remain available.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +33,8 @@ import json
 import os
 import sys
 from pathlib import Path
+
+import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
@@ -112,7 +115,7 @@ def latest_cached_date(symbols, *, cache_dir=None) -> str | None:
     cache_dir = Path(thetadata_adapter.CACHE_DIR if cache_dir is None else cache_dir)
     per_symbol_latest = []
     for symbol in symbols:
-        dates = [p.stem[len(symbol) + 1:] for p in cache_dir.glob(f"{symbol}_*.parquet")]
+        dates = [p.stem[len(symbol) + 1 :] for p in cache_dir.glob(f"{symbol}_*.parquet")]
         if not dates:
             return None
         per_symbol_latest.append(max(dates))
@@ -150,16 +153,14 @@ def latest_complete_session(
     for symbol in symbols:
         paths: dict[str, Path] = {}
         for path in cache.glob(f"{symbol}_*.parquet"):
-            session = path.stem[len(symbol) + 1:]
+            session = path.stem[len(symbol) + 1 :]
             paths[session] = path
         if not paths:
             return None
         per_symbol_paths[symbol] = paths
     if not per_symbol_paths:
         return None
-    common = set.intersection(
-        *(set(paths) for paths in per_symbol_paths.values())
-    )
+    common = set.intersection(*(set(paths) for paths in per_symbol_paths.values()))
     for session in sorted(common, reverse=True):
         if all(
             (fact := facts_by_key.get((symbol, session))) is not None
@@ -201,9 +202,7 @@ def verify_cohort_provenance(
         else:
             identities[symbol] = f"{symbol}:{session}:{sha256}"
     if errors:
-        raise RuntimeError(
-            "cohort provenance preflight failed:\n- " + "\n- ".join(errors)
-        )
+        raise RuntimeError("cohort provenance preflight failed:\n- " + "\n- ".join(errors))
     return {
         "session": session,
         "symbols": list(symbols),
@@ -225,43 +224,28 @@ def repair_from_manifest(
     if payload.get("schema") != "cache_recovery/v1":
         raise ValueError("repair manifest schema must be cache_recovery/v1")
     review = payload.get("review")
-    if (
-        not isinstance(review, dict)
-        or review.get("status") != "approved_for_operational_recovery"
-    ):
-        raise ValueError(
-            "repair manifest must be reviewed and approved for operational recovery"
-        )
+    if not isinstance(review, dict) or review.get("status") != "approved_for_operational_recovery":
+        raise ValueError("repair manifest must be reviewed and approved for operational recovery")
     manifest_session = payload.get("session", payload.get("evaluation_session"))
     if manifest_session != as_of:
-        raise ValueError(
-            f"repair manifest session {manifest_session!r} != {as_of!r}"
-        )
+        raise ValueError(f"repair manifest session {manifest_session!r} != {as_of!r}")
     expected_symbols = list(symbols)
     raw_entries = payload.get("entries", payload.get("files"))
     if not isinstance(raw_entries, list) or len(raw_entries) != len(expected_symbols):
         raise ValueError("repair manifest must contain exactly one entry per symbol")
     manifest_symbols = payload.get("symbols")
     if manifest_symbols is None:
-        manifest_symbols = [
-            entry.get("symbol") for entry in raw_entries
-            if isinstance(entry, dict)
-        ]
+        manifest_symbols = [entry.get("symbol") for entry in raw_entries if isinstance(entry, dict)]
     if manifest_symbols != expected_symbols:
         raise ValueError("repair manifest symbols do not match selected scope/order")
-    entries = {entry.get("symbol"): entry for entry in raw_entries
-               if isinstance(entry, dict)}
+    entries = {entry.get("symbol"): entry for entry in raw_entries if isinstance(entry, dict)}
     if set(entries) != set(expected_symbols):
         raise ValueError("repair manifest entry symbols do not match selected scope")
     parquet_schema = payload.get("parquet_schema")
     declared_schema_columns = (
-        parquet_schema.get("columns")
-        if isinstance(parquet_schema, dict)
-        else None
+        parquet_schema.get("columns") if isinstance(parquet_schema, dict) else None
     )
-    if declared_schema_columns is not None and not isinstance(
-        declared_schema_columns, list
-    ):
+    if declared_schema_columns is not None and not isinstance(declared_schema_columns, list):
         raise ValueError("repair manifest parquet_schema.columns must be a list")
 
     preflight: dict[str, dict] = {}
@@ -279,9 +263,7 @@ def repair_from_manifest(
                 f"{symbol}: repair manifest sha256 mismatch "
                 f"expected={entry.get('sha256')} actual={actual_sha}"
             )
-        rows, columns = thetadata_adapter._parquet_metadata_without_values(
-            expected_path
-        )
+        rows, columns = thetadata_adapter._parquet_metadata_without_values(expected_path)
         declared_columns = entry.get("columns")
         columns_match = (
             len(columns) == declared_columns
@@ -291,20 +273,9 @@ def repair_from_manifest(
         if declared_schema_columns is not None:
             columns_match = columns_match and columns == declared_schema_columns
         stat = expected_path.stat()
-        size_match = (
-            entry.get("size_bytes") is None
-            or entry.get("size_bytes") == stat.st_size
-        )
-        mtime_match = (
-            entry.get("mtime_ns") is None
-            or entry.get("mtime_ns") == stat.st_mtime_ns
-        )
-        if (
-            rows != entry.get("rows")
-            or not columns_match
-            or not size_match
-            or not mtime_match
-        ):
+        size_match = entry.get("size_bytes") is None or entry.get("size_bytes") == stat.st_size
+        mtime_match = entry.get("mtime_ns") is None or entry.get("mtime_ns") == stat.st_mtime_ns
+        if rows != entry.get("rows") or not columns_match or not size_match or not mtime_match:
             raise RuntimeError(f"{symbol}: repair manifest parquet metadata mismatch")
         mtimes[symbol] = stat.st_mtime_ns
         preflight[symbol] = entry
@@ -319,13 +290,8 @@ def repair_from_manifest(
         )
         if result["already_cached"] is not True:
             raise RuntimeError(f"{symbol}: repair unexpectedly used fetch path")
-        if result["attestation_status"] not in {
-            "REPAIRED_ATTESTATION", "VERIFIED_NOOP"
-        }:
-            raise RuntimeError(
-                f"{symbol}: unexpected repair status "
-                f"{result['attestation_status']}"
-            )
+        if result["attestation_status"] not in {"REPAIRED_ATTESTATION", "VERIFIED_NOOP"}:
+            raise RuntimeError(f"{symbol}: unexpected repair status {result['attestation_status']}")
         cache_path = thetadata_adapter._cache_path(symbol, as_of)
         if cache_path.stat().st_mtime_ns != mtimes[symbol]:
             raise RuntimeError(f"{symbol}: repair changed cache mtime")
@@ -354,21 +320,38 @@ def repair_from_manifest(
 # gate or outside the band is a warning, never a block.
 # --------------------------------------------------------------------------
 
+
 def _liquid_mask(df):
     mid = (df["bid"] + df["ask"]) / 2.0
-    ok = (df["open_interest"] >= config.MIN_OPEN_INTEREST) & (df["bid"] >= 0) \
-        & (df["ask"] > 0) & (df["ask"] >= df["bid"]) & (mid > 0)
+    ok = (
+        (df["open_interest"] >= config.MIN_OPEN_INTEREST)
+        & (df["bid"] >= 0)
+        & (df["ask"] > 0)
+        & (df["ask"] >= df["bid"])
+        & (mid > 0)
+    )
     spread = (df["ask"] - df["bid"]) / mid.where(mid > 0, 1.0)
     return ok & (spread <= config.MAX_SPREAD_PCT)
 
 
-def audit_chain(df) -> dict:
+def audit_chain(df, *, selectable_mask=None, iv_selectable_mask=None) -> dict:
     """Audit one day's option chain. Returns
     {verdict, block, warn, rows, selectable}. verdict is BLOCK if any defect
     touches a selectable contract, else PASS WITH WARNINGS if any warning,
-    else PASS."""
+    else PASS. Callers with a registered strategy lane may supply its exact
+    boolean selection mask; the default remains the generic liquid/delta
+    proxy used by acquisition-time checks that have no independent spot."""
     liquid = _liquid_mask(df)
-    selectable = liquid & df["delta"].abs().between(*SELECTABLE_ABS_DELTA)
+    selectable = (
+        liquid & df["delta"].abs().between(*SELECTABLE_ABS_DELTA)
+        if selectable_mask is None
+        else pd.Series(selectable_mask, index=df.index).fillna(False).astype(bool)
+    )
+    iv_selectable = (
+        selectable
+        if iv_selectable_mask is None
+        else pd.Series(iv_selectable_mask, index=df.index).fillna(False).astype(bool)
+    )
     bad_iv = (df["iv"] <= 0) | (df["iv"] > MAX_IV) | df["iv"].isna()
     bad_greek = (df["delta"].abs() > 1.0) | (df["gamma"] < 0) | (df["vega"] < 0)
     negative = (df["bid"] < 0) | (df["ask"] < 0) | (df["open_interest"] < 0)
@@ -376,7 +359,7 @@ def audit_chain(df) -> dict:
     dup = df.duplicated(subset=["expiration", "strike", "right"], keep=False)
 
     block, warn = [], []
-    n = int(bad_iv[selectable].sum())
+    n = int(bad_iv[iv_selectable].sum())
     if n:
         block.append(f"IV<=0/>500%/NaN on {n} selectable contracts")
     n = int(bad_greek[selectable].sum())
@@ -386,7 +369,7 @@ def audit_chain(df) -> dict:
     if n:
         block.append(f"duplicate (expiry,strike,right) on {n} selectable contracts")
 
-    n = int((bad_iv & ~selectable).sum())
+    n = int((bad_iv & ~iv_selectable).sum())
     if n:
         warn.append(f"IV<=0/>500%/NaN on {n} non-selectable rows (deep-ITM/far-OTM)")
     n = int(negative.sum())
@@ -400,14 +383,20 @@ def audit_chain(df) -> dict:
         warn.append(f"{n} duplicate rows, none selectable")
 
     verdict = "BLOCK" if block else ("PASS WITH WARNINGS" if warn else "PASS")
-    return {"verdict": verdict, "block": block, "warn": warn,
-            "rows": len(df), "selectable": int(selectable.sum())}
+    return {
+        "verdict": verdict,
+        "block": block,
+        "warn": warn,
+        "rows": len(df),
+        "selectable": int(selectable.sum()),
+    }
 
 
 def audit_day(symbol: str, date: str, *, cache_dir=None) -> dict:
     """Read a freshly-cached day's parquet and audit it. Thin I/O wrapper over
     audit_chain (the verdict logic is unit-tested there)."""
     import pandas as pd
+
     cache_dir = Path(thetadata_adapter.CACHE_DIR if cache_dir is None else cache_dir)
     df = pd.read_parquet(cache_dir / f"{symbol}_{date}.parquet")
     return {"symbol": symbol, "date": date, **audit_chain(df)}
@@ -418,6 +407,7 @@ def audit_day(symbol: str, date: str, *, cache_dir=None) -> dict:
 # after review (see module docstring). Not unit-tested -- mirrors
 # data/underlying_closes.fetch_underlying_eod.
 # --------------------------------------------------------------------------
+
 
 def run_topup(
     symbols=None,
@@ -447,7 +437,8 @@ def run_topup(
         raise RuntimeError(
             "at least one symbol has no cache session with matching BLIND_CACHE "
             "provenance -- run the provenance preflight/approved recovery before "
-            "topping up recent days.")
+            "topping up recent days."
+        )
     days = topup_days(last, today, trading_days_fn=trading_days_fn)
 
     print(f"last complete (cohort): {last}   today (excluded): {today}")
@@ -479,8 +470,7 @@ def run_topup(
         inspect_existing=True,
         manifest_path=manifest_path,
     )
-    summary.update({"last_cached": last, "today": today, "days": days,
-                    "dry_run": False})
+    summary.update({"last_cached": last, "today": today, "days": days, "dry_run": False})
     print(
         f"pull: fetched={summary['fetched']} repaired={summary['repaired']} "
         f"verified={summary['verified']} gaps={summary['gaps']}"
@@ -506,9 +496,11 @@ def run_topup(
                 if rank[a["verdict"]] > rank[worst]:
                     worst = a["verdict"]
                 mark = {"PASS": "ok", "PASS WITH WARNINGS": "warn", "BLOCK": "BLOCK"}
-                print(f"  audit {symbol} {day}: {mark[a['verdict']]} "
-                      f"(rows={a['rows']} selectable={a['selectable']})"
-                      + ("" if not a["block"] else f" -> {a['block']}"))
+                print(
+                    f"  audit {symbol} {day}: {mark[a['verdict']]} "
+                    f"(rows={a['rows']} selectable={a['selectable']})"
+                    + ("" if not a["block"] else f" -> {a['block']}")
+                )
         summary["audit_verdict"] = worst
         print(f"audit overall: {worst}")
 
@@ -526,24 +518,32 @@ def run_topup(
 
 def main(argv=None) -> int:
     import argparse
-    p = argparse.ArgumentParser(description="Top up recent EOD chains for the "
-                                "selected forward scope (blind cache + audit).")
-    p.add_argument("--scope", choices=("core", "h7", "display-extra"),
-                   default="core",
-                   help="core = existing four-name H5 scope (default); "
-                        "h7 = exact 15-name H7 forward scope; display-extra = "
-                        "explicit NBIS/AMAT/CLSK display-only scope")
-    p.add_argument("--dry-run", action="store_true",
-                   help="list missing recent days and exit (no network)")
-    p.add_argument("--no-audit", action="store_true",
-                   help="skip the post-pull offline audit")
-    p.add_argument("--refresh-closes", action="store_true",
-                   help="also refresh independent Yahoo closes for the exact "
-                        "selected scope (network; ignored during --dry-run)")
-    p.add_argument("--as-of",
-                   help="exact completed session for --repair-manifest")
-    p.add_argument("--repair-manifest", type=Path,
-                   help="reviewed cache_recovery/v1 manifest; network-free")
+
+    p = argparse.ArgumentParser(
+        description="Top up recent EOD chains for the selected forward scope (blind cache + audit)."
+    )
+    p.add_argument(
+        "--scope",
+        choices=("core", "h7", "display-extra"),
+        default="core",
+        help="core = existing four-name H5 scope (default); "
+        "h7 = exact 15-name H7 forward scope; display-extra = "
+        "explicit NBIS/AMAT/CLSK display-only scope",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="list missing recent days and exit (no network)"
+    )
+    p.add_argument("--no-audit", action="store_true", help="skip the post-pull offline audit")
+    p.add_argument(
+        "--refresh-closes",
+        action="store_true",
+        help="also refresh independent Yahoo closes for the exact "
+        "selected scope (network; ignored during --dry-run)",
+    )
+    p.add_argument("--as-of", help="exact completed session for --repair-manifest")
+    p.add_argument(
+        "--repair-manifest", type=Path, help="reviewed cache_recovery/v1 manifest; network-free"
+    )
     args = p.parse_args(argv)
     symbols = scope_symbols(args.scope)
     if args.repair_manifest:
@@ -564,11 +564,9 @@ def main(argv=None) -> int:
         symbols=symbols,
         dry_run=args.dry_run,
         do_audit=not args.no_audit,
-        manifest_path=Path("reports/cache_runs")
-        / f"recent_topup_{args.scope}.json",
+        manifest_path=Path("reports/cache_runs") / f"recent_topup_{args.scope}.json",
     )
-    if (args.refresh_closes and not args.dry_run
-            and result.get("audit_verdict") != "BLOCK"):
+    if args.refresh_closes and not args.dry_run and result.get("audit_verdict") != "BLOCK":
         closes = refresh_closes(symbols, today=result["today"])
         print(f"closes: refreshed {len(closes)}/{len(symbols)} symbols")
     return 2 if result.get("audit_verdict") == "BLOCK" else 0

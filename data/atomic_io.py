@@ -1,4 +1,5 @@
 """Durable local-file writes for cache and provenance artifacts."""
+
 from __future__ import annotations
 
 import os
@@ -14,13 +15,13 @@ def _sync(fd: int) -> None:
         fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
 
 
-def stage_parquet_write(frame, path: Path) -> Path:
+def stage_parquet_write(frame, path: Path, *, index: bool = False, **parquet_options) -> Path:
     """Durably stage a parquet beside its eventual destination."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
-        frame.to_parquet(temp, index=False)
+        frame.to_parquet(temp, index=index, **parquet_options)
         fd = os.open(temp, os.O_RDONLY)
         try:
             _sync(fd)

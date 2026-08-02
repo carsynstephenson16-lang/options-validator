@@ -17,6 +17,9 @@ import pandas as pd
 from data.cache_runner import trading_days
 from options_researcher import h7_data_gate as gate
 from options_researcher.h7_scope import scope_identity, watch_universe
+from options_researcher.h7_synthetic_proof import (
+    _write_synthetic_full_audit_receipt,
+)
 from options_researcher.h7_watch import evaluation_session
 from research.hashing import DIAGNOSTIC_SOURCE_HASH_VERSION
 from research.receipts import load_receipt, make_receipt, write_immutable_receipt
@@ -31,6 +34,15 @@ def _good_chain() -> pd.DataFrame:
         "expiration": "2026-08-21", "strike": 100.0, "right": "C",
         "bid": 5.0, "ask": 5.2, "open_interest": 500,
         "iv": 0.5, "delta": 0.55, "gamma": 0.02, "theta": -0.03, "vega": 0.10,
+        "timestamp": pd.Timestamp("2026-07-10 17:15:00", tz="America/New_York"),
+        "bid_size": 17, "bid_condition": 50,
+        "ask_size": 23, "ask_condition": 50,
+        "iv_error": 0.001,
+        "underlying_timestamp": pd.Timestamp(
+            "2026-07-10 16:00:00", tz="America/New_York"
+        ),
+        "underlying_price": 100.0,
+        "thetadata_client_version": "1.0.9",
     }])
 
 
@@ -60,6 +72,7 @@ class GateBase(unittest.TestCase):
                          [("2026-07-08", 90.0), ("2026-07-09", 95.0),
                           (self.eval_iso, 100.0)])
             _write_chain(self.chain_dir, sym, self.eval_iso, _good_chain())
+        _write_synthetic_full_audit_receipt(self.chain_dir)
         scope = scope_identity(watch_universe())
         self.eval_scope_id = scope["scope_id"]
         self.source_health = make_receipt("source_health", {
@@ -72,10 +85,12 @@ class GateBase(unittest.TestCase):
         write_immutable_receipt(self.source_health, self.source_health_path)
 
     def _eval(self):
+        _write_synthetic_full_audit_receipt(self.chain_dir)
         return gate.evaluate(REQ, close_dir=self.close_dir,
                              chain_dir=self.chain_dir)
 
     def _run(self, argv_extra=()):
+        _write_synthetic_full_audit_receipt(self.chain_dir)
         return gate.main(["--as-of", REQ.isoformat(),
                           "--close-dir", str(self.close_dir),
                           "--chain-dir", str(self.chain_dir),
@@ -421,11 +436,16 @@ class TestFailClosedBoundary(GateBase):
 
         def snapshot():
             out = {}
-            for p in sorted([*self.close_dir.iterdir(),
-                             *self.chain_dir.iterdir()]):
+            for p in sorted([*self.close_dir.rglob("*"),
+                             *self.chain_dir.rglob("*")]):
+                if not p.is_file():
+                    continue
                 st = p.stat()
-                out[p.name] = (st.st_size, st.st_mtime,
-                               hashlib.sha256(p.read_bytes()).hexdigest())
+                out[str(p.relative_to(p.parents[1]))] = (
+                    st.st_size,
+                    st.st_mtime,
+                    hashlib.sha256(p.read_bytes()).hexdigest(),
+                )
             return out
 
         before = snapshot()
