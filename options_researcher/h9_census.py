@@ -60,6 +60,7 @@ def _entry_chain(symbol: str, iso: str, chain_dir: Path) -> pd.DataFrame:
         allow_oos=True,
         cache_dir=chain_dir,
         verdict_bearing=True,
+        verdict_consumer="H9",
     )
 
 

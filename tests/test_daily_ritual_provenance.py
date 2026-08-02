@@ -1,5 +1,7 @@
 """Offline contract tests for the ritual's cache/provenance dependency gate."""
 
+import hashlib
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -7,9 +9,24 @@ RITUAL = Path(__file__).resolve().parents[1] / "tools" / "daily_ritual.sh"
 
 
 class DailyRitualProvenanceTests(unittest.TestCase):
+    @staticmethod
+    def _tree_identity(path: Path) -> tuple:
+        if not path.exists():
+            return ("missing",)
+        if path.is_file():
+            return ("file", hashlib.sha256(path.read_bytes()).hexdigest())
+        return (
+            "directory",
+            tuple(
+                (str(item.relative_to(path)), hashlib.sha256(item.read_bytes()).hexdigest())
+                for item in sorted(path.rglob("*"))
+                if item.is_file()
+            ),
+        )
+
     def test_authority_preflight_precedes_every_mutation_surface(self):
         source = RITUAL.read_text()
-        marker = '"$UV" run python -m data.ritual_authority require-full'
+        marker = '"$PYTHON" -m data.ritual_authority require-full'
         self.assertIn(marker, source)
         preflight = source.index(marker)
         for token in (
@@ -34,6 +51,31 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         require_full = source.index("data.ritual_authority require-full")
         self.assertLess(status, require_full)
         self.assertIn("data.ritual_authority status", source)
+
+    def test_authority_commands_use_installed_python_without_uv_sync(self):
+        source = RITUAL.read_text()
+        status = source.index("data.ritual_authority status")
+        require_full = source.index("data.ritual_authority require-full")
+        self.assertIn('PYTHON="$REPO/.venv/bin/python"', source)
+        self.assertIn('PYTHONDONTWRITEBYTECODE=1 "$PYTHON"', source)
+        self.assertNotIn('$UV" run python -m data.ritual_authority', source)
+        self.assertLess(status, require_full)
+
+    def test_status_preserves_log_tree_and_lockfile_bytes(self):
+        repo = RITUAL.parents[1]
+        guarded = (repo / ".tmp" / "daily_ritual", repo / "uv.lock")
+        before = tuple(self._tree_identity(path) for path in guarded)
+        result = subprocess.run(
+            ["zsh", str(RITUAL), "status"],
+            cwd=repo,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        after = tuple(self._tree_identity(path) for path in guarded)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('"ready": false', result.stdout)
+        self.assertEqual(after, before)
 
     def test_ops_publisher_requires_current_main(self):
         source = RITUAL.read_text()

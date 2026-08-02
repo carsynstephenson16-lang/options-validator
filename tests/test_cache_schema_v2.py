@@ -13,7 +13,13 @@ from unittest import mock
 import pandas as pd
 
 from data import thetadata_adapter
-from data.cache_schema import CHAIN_V2_CAPTURE_FIELDS
+from data.cache_schema import (
+    CHAIN_V2_CAPTURE_FIELDS,
+    V2_FULL_AUDIT_CONSUMER_SCOPES,
+    V2_FULL_AUDIT_SCHEMA,
+    V2_FULL_AUDIT_SCOPE_ID,
+    V2_FULL_AUDIT_SOURCE_PATHS,
+)
 
 
 def _canonical_json(value: object) -> str:
@@ -69,17 +75,26 @@ def _v2_chain() -> pd.DataFrame:
 
 
 def _write_audit_receipt(
-    cache_dir: Path, chain_path: Path, *, quarantined: bool = False
+    cache_dir: Path,
+    chain_path: Path,
+    *,
+    quarantined: bool = False,
+    source_paths: tuple[str, ...] = V2_FULL_AUDIT_SOURCE_PATHS,
+    consumer_scopes: tuple[str, ...] = V2_FULL_AUDIT_CONSUMER_SCOPES,
 ) -> None:
     repo_root = Path(thetadata_adapter.__file__).resolve().parents[1]
-    source_relative = "data/cache_schema.py"
-    source_hashes = {source_relative: _sha256_file(repo_root / source_relative)}
+    source_hashes = {
+        relative: _sha256_file(repo_root / relative) for relative in source_paths
+    }
     file_hashes = {str(chain_path.resolve()): _sha256_file(chain_path)}
+    quarantine_path = repo_root / "data" / "v2_partition_quarantine.json"
+    raw_file_hashes = {"fixture/raw.parquet": "a" * 64}
     base = {
         "source_identity": {
             "dirty": False,
-            "source_paths": [source_relative],
+            "source_paths": list(source_paths),
             "source_hashes": source_hashes,
+            "source_hashes_hash": _sha256_text(_canonical_json(source_hashes)),
         },
         "file_hashes": file_hashes,
         "file_hashes_hash": _sha256_text(_canonical_json(file_hashes)),
@@ -89,11 +104,17 @@ def _write_audit_receipt(
     base_hashable = {key: value for key, value in base.items() if key != "file_hashes"}
     base["receipt_hash"] = _sha256_text(_canonical_json(base_hashable))
     report = {
-        "schema": "thetadata-v2-full-audit/v1",
+        "schema": V2_FULL_AUDIT_SCHEMA,
+        "scope_id": V2_FULL_AUDIT_SCOPE_ID,
+        "consumer_scopes": list(consumer_scopes),
         "output_namespace": str(cache_dir.resolve()),
+        "independent_close_namespace": str((cache_dir / "closes").resolve()),
         "symbols": ["SPY"],
+        "window": {"start": "2022-01-03", "end": "2022-01-03"},
         "sessions": ["2022-01-03"],
         "base_fourteen_check_audit": base,
+        "quarantine_path": "data/v2_partition_quarantine.json",
+        "quarantine_sha256": _sha256_file(quarantine_path),
         "blocks": [],
         "verdict": "PASS WITH WARNINGS",
         "quarantined_partitions": (
@@ -101,6 +122,9 @@ def _write_audit_receipt(
             if quarantined
             else []
         ),
+        "quarantined_findings": [],
+        "raw_file_hashes": raw_file_hashes,
+        "raw_file_hashes_hash": _sha256_text(_canonical_json(raw_file_hashes)),
     }
     report["receipt_hash"] = _sha256_text(_canonical_json(report))
     receipt = cache_dir / "_meta" / "full_audit.json"
@@ -131,6 +155,7 @@ class CacheSchemaV2ContractTests(unittest.TestCase):
                     "2022-01-03",
                     cache_dir=cache_dir,
                     verdict_bearing=True,
+                    verdict_consumer="H7",
                 )
 
     def test_audited_v2_read_is_cache_only_and_hash_bound(self):
@@ -150,6 +175,7 @@ class CacheSchemaV2ContractTests(unittest.TestCase):
                     "2022-01-03",
                     cache_dir=cache_dir,
                     verdict_bearing=True,
+                    verdict_consumer="H7",
                 )
             self.assertEqual(len(loaded), 1)
 
@@ -162,6 +188,7 @@ class CacheSchemaV2ContractTests(unittest.TestCase):
                     "2022-01-03",
                     cache_dir=cache_dir,
                     verdict_bearing=True,
+                    verdict_consumer="H7",
                 )
 
     def test_quarantined_v2_partition_is_refused(self):
@@ -177,6 +204,65 @@ class CacheSchemaV2ContractTests(unittest.TestCase):
                     "2022-01-03",
                     cache_dir=cache_dir,
                     verdict_bearing=True,
+                    verdict_consumer="H7",
+                )
+
+    def test_incomplete_source_closure_is_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cache_dir = Path(temp)
+            chain_path = cache_dir / "SPY_2022-01-03.parquet"
+            _v2_chain().to_parquet(chain_path)
+            _write_audit_receipt(
+                cache_dir,
+                chain_path,
+                source_paths=("data/cache_schema.py",),
+            )
+
+            with self.assertRaisesRegex(ValueError, "source closure mismatch"):
+                thetadata_adapter.load_cached_chain(
+                    "SPY",
+                    "2022-01-03",
+                    cache_dir=cache_dir,
+                    verdict_bearing=True,
+                    verdict_consumer="H7",
+                )
+
+    def test_consumer_scope_mismatch_is_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cache_dir = Path(temp)
+            chain_path = cache_dir / "SPY_2022-01-03.parquet"
+            _v2_chain().to_parquet(chain_path)
+            _write_audit_receipt(cache_dir, chain_path)
+
+            with self.assertRaisesRegex(ValueError, "consumer scope"):
+                thetadata_adapter.load_cached_chain(
+                    "SPY",
+                    "2022-01-03",
+                    cache_dir=cache_dir,
+                    verdict_bearing=True,
+                    verdict_consumer="H9",
+                )
+
+    def test_synthetic_schema_cannot_authorize_production_read(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cache_dir = Path(temp)
+            chain_path = cache_dir / "SPY_2022-01-03.parquet"
+            _v2_chain().to_parquet(chain_path)
+            _write_audit_receipt(cache_dir, chain_path)
+            receipt = cache_dir / "_meta" / "full_audit.json"
+            payload = json.loads(receipt.read_text())
+            payload["schema"] = "thetadata-v2-synthetic-audit/v1"
+            payload.pop("receipt_hash")
+            payload["receipt_hash"] = _sha256_text(_canonical_json(payload))
+            receipt.write_text(json.dumps(payload))
+
+            with self.assertRaisesRegex(ValueError, "schema mismatch"):
+                thetadata_adapter.load_cached_chain(
+                    "SPY",
+                    "2022-01-03",
+                    cache_dir=cache_dir,
+                    verdict_bearing=True,
+                    verdict_consumer="H7",
                 )
 
 

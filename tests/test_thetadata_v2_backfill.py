@@ -184,6 +184,19 @@ class ScopeTests(unittest.TestCase):
         load_dotenv.assert_not_called()
         execute.assert_not_called()
 
+    def test_direct_execute_refuses_before_namespace_mutation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "v2"
+            with self.assertRaises(backfill.provider_policy.ProviderDisabledError):
+                backfill.execute(
+                    output,
+                    workers=1,
+                    approval_token=backfill.APPROVAL_TOKEN,
+                    facts_log=Path(temp) / "facts.log",
+                    v1_dir=Path(temp) / "chains",
+                )
+            self.assertFalse(output.exists())
+
 
 class CaptureTests(unittest.TestCase):
     def test_capture_writes_side_by_side_and_resume_makes_no_call(self):

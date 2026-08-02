@@ -17,6 +17,10 @@ import pandas as pd
 
 import config
 from data.cache_runner import session_close_utc
+from data.cache_schema import (
+    V2_SYNTHETIC_AUDIT_SCHEMA,
+    validate_v2_synthetic_audit_receipt,
+)
 from options_researcher import h7_data_gate
 from options_researcher import h7_event_ledger as ledger
 from options_researcher.h7_forward_book import derive_book, record_board_resolution
@@ -146,7 +150,7 @@ def _write_market_fixtures(root: Path) -> tuple[Path, Path]:
 
 
 def _write_synthetic_full_audit_receipt(chain_dir: Path) -> Path:
-    """Write deterministic audit evidence for synthetic-only v2 fixtures."""
+    """Write a distinct receipt that can never authorize real v2 evidence."""
     chain_dir = Path(chain_dir)
     partitions = sorted(chain_dir.glob("*_????-??-??.parquet"))
     parsed = [path.stem.rsplit("_", 1) for path in partitions]
@@ -156,38 +160,18 @@ def _write_synthetic_full_audit_receipt(chain_dir: Path) -> Path:
         str(path.resolve()): sha256_file(path)
         for path in partitions
     }
-    repo_root = Path(__file__).resolve().parents[1]
-    source_relative = "data/cache_schema.py"
-    base = {
-        "source_identity": {
-            "dirty": False,
-            "source_paths": [source_relative],
-            "source_hashes": {
-                source_relative: sha256_file(repo_root / source_relative),
-            },
-        },
-        "file_hashes": file_hashes,
-        "file_hashes_hash": sha256_hex(canonical_json(file_hashes)),
-        "blocks": [],
-        "verdict": "PASS WITH WARNINGS",
-    }
-    base_hashable = {
-        key: value for key, value in base.items() if key != "file_hashes"
-    }
-    base["receipt_hash"] = sha256_hex(canonical_json(base_hashable))
     report = {
-        "schema": "thetadata-v2-full-audit/v1",
+        "schema": V2_SYNTHETIC_AUDIT_SCHEMA,
+        "boundary": "SYNTHETIC-ONLY",
         "output_namespace": str(chain_dir.resolve()),
         "symbols": symbols,
         "sessions": sessions,
-        "base_fourteen_check_audit": base,
-        "blocks": [],
-        "verdict": "PASS WITH WARNINGS",
-        "quarantined_partitions": [],
+        "file_hashes": file_hashes,
+        "file_hashes_hash": sha256_hex(canonical_json(file_hashes)),
     }
     report["receipt_hash"] = sha256_hex(canonical_json(report))
     payload = json.dumps(report, sort_keys=True, separators=(",", ":"))
-    receipt = chain_dir / "_meta" / "full_audit.json"
+    receipt = chain_dir / "_meta" / "synthetic_audit.json"
     receipt.parent.mkdir(exist_ok=True)
     if not receipt.exists() or receipt.read_text() != payload:
         receipt.write_text(payload)
@@ -286,7 +270,10 @@ def run_synthetic_proof(root) -> dict:
     )
 
     gate = h7_data_gate.evaluate(
-        REQUESTED_RUN_DATE, close_dir=closes, chain_dir=chains
+        REQUESTED_RUN_DATE,
+        close_dir=closes,
+        chain_dir=chains,
+        _receipt_validator=validate_v2_synthetic_audit_receipt,
     )
     if gate["whole_universe_verdict"] != "GO":
         raise AssertionError("the Stage-2 complete fixture did not pass")
@@ -294,7 +281,10 @@ def run_synthetic_proof(root) -> dict:
     held_chain = missing_chain.with_suffix(".held")
     missing_chain.rename(held_chain)
     no_go = h7_data_gate.evaluate(
-        REQUESTED_RUN_DATE, close_dir=closes, chain_dir=chains
+        REQUESTED_RUN_DATE,
+        close_dir=closes,
+        chain_dir=chains,
+        _receipt_validator=validate_v2_synthetic_audit_receipt,
     )
     held_chain.rename(missing_chain)
     no_refusal_events = not event_store.exists()

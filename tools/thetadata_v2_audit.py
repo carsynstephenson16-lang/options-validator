@@ -19,6 +19,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.atomic_io import atomic_text_write  # noqa: E402
 from data.cache_runner import trading_days  # noqa: E402
+from data.cache_schema import (  # noqa: E402
+    V2_FULL_AUDIT_CONSUMER_SCOPES,
+    V2_FULL_AUDIT_SCHEMA,
+    V2_FULL_AUDIT_SOURCE_PATHS,
+)
 from research.hashing import canonical_json, sha256_file, sha256_hex  # noqa: E402
 from tools import thetadata_exit_audit as base_audit  # noqa: E402
 from tools.thetadata_v2_backfill import (  # noqa: E402
@@ -31,20 +36,11 @@ from tools.thetadata_v2_backfill import (  # noqa: E402
     _raw_path,
 )
 
-AUDIT_SCHEMA = "thetadata-v2-full-audit/v1"
+AUDIT_SCHEMA = V2_FULL_AUDIT_SCHEMA
+CONSUMER_SCOPES = V2_FULL_AUDIT_CONSUMER_SCOPES
 DEFAULT_QUARANTINE_PATH = Path("data/v2_partition_quarantine.json")
 NY = ZoneInfo("America/New_York")
-SOURCE_PATHS = (
-    *base_audit.SOURCE_PATHS,
-    "data/atomic_io.py",
-    "data/cache_schema.py",
-    "data/v2_partition_quarantine.json",
-    "options_researcher/h7_data_gate.py",
-    "options_researcher/h7_synthetic_proof.py",
-    "options_researcher/h9_census.py",
-    "tools/thetadata_v2_audit.py",
-    "tools/thetadata_v2_backfill.py",
-)
+SOURCE_PATHS = V2_FULL_AUDIT_SOURCE_PATHS
 
 
 def _load_quarantines(
@@ -416,6 +412,7 @@ def run_full_audit(
     report = {
         "schema": AUDIT_SCHEMA,
         "scope_id": SCOPE_ID,
+        "consumer_scopes": list(CONSUMER_SCOPES),
         "output_namespace": str(output_dir.resolve()),
         "independent_close_namespace": str(close_dir.resolve()),
         "symbols": list(SYMBOLS),

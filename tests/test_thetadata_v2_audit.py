@@ -20,6 +20,10 @@ SESSION = "2026-07-27"
 
 
 class V2FullAuditTests(unittest.TestCase):
+    def test_receipt_declares_exact_consumer_scope_and_source_closure(self):
+        self.assertEqual(audit.CONSUMER_SCOPES, ("H7",))
+        self.assertEqual(audit.SOURCE_PATHS, audit.V2_FULL_AUDIT_SOURCE_PATHS)
+
     def _identity(self):
         return {"commit": "test", "source_paths": [], "dirty": False, "dirty_paths": []}
 
