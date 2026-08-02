@@ -109,3 +109,29 @@ Fresh verification:
 
 Independent audit conclusion: canonical cache bytes still match their committed
 manifest exactly, and this checkpoint ran no acquisition or mutation path.
+
+## Q7 - Provider-disabled enforcement
+
+Status: **COMPLETE**
+
+Fresh verification:
+
+- `test_provider_disabled.py` passed 14/14 sentinel tests. The suite proves
+  refusal before key resolution, client construction, publisher transactions,
+  fetches, output/receipt creation, or fact appends, while a temporary cached
+  parquet chain remains readable.
+- The sentinel plus nine neighboring provider/cache/live/flow modules passed
+  296/296 tests. The historical proof's 294 count has grown by two ordinary
+  neighboring tests; no Q7 expectation regressed.
+- Static inventory found exactly one direct `ThetaClient(...)` construction,
+  at `data/thetadata_adapter.py:173`. The unconditional
+  `provider_policy.require_thetadata_acquisition(...)` call precedes singleton
+  lookup, package import, key resolution, and construction.
+- `data/provider_policy.py` keeps acquisition disabled with no environment
+  override. Cache reads are intentionally separate from that acquisition guard.
+- The audited Q7 source/tests have no diff from clean base `c00044f`; the cache
+  manifest, H6 book, and historical H6 receipt hashes remain unchanged.
+
+Independent audit conclusion: ThetaData acquisition remains fail-closed at the
+sole constructor and all tested neighboring boundaries, while immutable cached
+reads remain available. No production-code change was made.
