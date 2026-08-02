@@ -58,8 +58,8 @@
    "required": "real trades, strict-prior NBBO, prior-known OI, and context"
   }
  ],
- "created_at_utc": "2026-08-02T01:43:56.229824+00:00",
- "flow_readiness_receipt_hash": "06e169bc451db81d969fcef4e564ca40a4457e3cecf4f4a5866ebfceb1bdc98a",
+ "created_at_utc": "2026-08-02T04:41:26.889758+00:00",
+ "flow_readiness_receipt_hash": "c3e5273e8dbcefd727ad83e4885ac7d4ee672497c9e033a20a84d1e5d6bba492",
  "flow_status": "NOT AUDITED / DATA-GATED",
  "goal": "offline EOD intelligence readiness without provider calls or flow fabrication",
  "inventory": {
@@ -534,7 +534,7 @@
  "provider_call": false,
  "raw_cache_mutation": false,
  "readiness_version": "thetadata-offline-intelligence-readiness/1",
- "receipt_hash": "e5ce38c5c58054c6b2abea207195129bb17e4aac3d0b801152d5e59a01da54ec",
+ "receipt_hash": "01237f2b30ba1550ce06e2ae7201bc90771dd70c5be40df7926eae69229738d8",
  "replay": {
   "blocks": [],
   "cache_after": {
@@ -612,7 +612,7 @@
   "verdict": "PASS"
  },
  "source_identity": {
-  "commit": "5000f2231e8fc6860309ef322a163d2a7bbb0638",
+  "commit": "09ea4269f1715498da407279fe43ff58753d59fa",
   "dirty": false,
   "dirty_paths": [],
   "missing_source_paths": [],
@@ -640,7 +640,7 @@
    "research/hashing.py": "4519907bb3a4557eb53386f8a39174583b85e613fa2dd5e1af5fa144c1d168ee",
    "tools/cache_manifest.py": "eab04689080ba52dba65f4ce0f55e8b1b482bb31dc333fd544a2ae8418dae641",
    "tools/options_flow_audit.py": "1a5e6eaedde40783697a69ef3118c3781417dc1096a52c89c4afda143fc7ace4",
-   "tools/thetadata_exit_audit.py": "cc32cae82b77b2f53f2d6236a25f7bd8be034cfc086f59d464315395678e3356"
+   "tools/thetadata_exit_audit.py": "54f526e035c1fd0194304063f10b883baa32956651f3abe28ea9e2260b22c8e3"
   },
   "source_paths": [
    "config.py",
