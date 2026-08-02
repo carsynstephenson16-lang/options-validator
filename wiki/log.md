@@ -52,3 +52,10 @@ RAG health indexed 413 sources and 8910 chunks; 0 source failures were reported.
 ## [2026-07-29] ingest | RAG health
 
 RAG health indexed 427 sources and 9119 chunks; 0 source failures were reported.
+
+## [2026-08-01] lint | Align the Obsidian skill with the repo-local LLM wiki
+
+Replaced the obsolete Windows vault path and flat-note rules in the shared
+`obsidian-vault` skill with the repo-local `wiki/` contract, immutable
+`wiki/raw/` boundary, index/log workflows, worktree-aware vault resolution,
+and validation against Obsidian's registered macOS vault path.
