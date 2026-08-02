@@ -2,6 +2,12 @@
 __pycache__/
 *.py[cod]
 
+# Local test coverage artifacts
+.coverage
+.coverage.*
+coverage.json
+htmlcov/
+
 .venv/
 .python-version.local
 
