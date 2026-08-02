@@ -69,3 +69,20 @@ Fresh verification:
 Independent audit conclusion: all four hypothesis consumers still require the
 requested session exactly and fail closed beyond the available cache edge. No
 regression was reproduced, so no production-code change was made.
+
+## Q5 - Provider owner closeout fact
+
+Status: **COMPLETE**
+
+Fresh verification:
+
+- `ledger/facts.log` contains exactly one `P1_1_PROVIDER_CLOSEOUT` payload.
+- Its append timestamp is `2026-08-01T01:30:00.910690+00:00`.
+- SHA-256 over the exact payload bytes after the timestamp/tab delimiter, with
+  no line terminator, is
+  `4a793409a44b88a9915fb75bdf698a08cf584f02ec1416a8eebbcb2dc72b6f84`.
+- `ledger/facts.log` has no diff from clean base `c00044f`.
+
+Independent audit conclusion: the recorded Q5 identity is present exactly once
+and its payload is byte-for-byte the value recorded by `PROJECT_STATE.md`. No
+ledger or fact mutation was made.
