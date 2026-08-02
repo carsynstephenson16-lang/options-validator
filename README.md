@@ -100,9 +100,10 @@ uv run python -m options_researcher.attractiveness_dashboard    # interactive at
 uv run python -m options_researcher.robustness --help            # registered research-only robustness experiments
 ```
 
-`smoke_test.py` probes a single in-sample chain (cached parquet, or the
-official ThetaData client on a cache miss). Post-`IN_SAMPLE_END` values stay
-sealed for the legacy holdout machinery unless the reveal gate opens them.
+`smoke_test.py` is a retired acquisition probe and now fails closed before any
+cache read or provider construction. Existing cached parquet remains readable
+through the offline consumers. Post-`IN_SAMPLE_END` values stay sealed for the
+legacy holdout machinery unless the reveal gate opens them.
 
 ### Isolated external model checks
 
@@ -316,8 +317,9 @@ The network-free cutoff preflight
 derives the July 28 terminal session and combines the 12-name inventory,
 cache provenance, exit audit, Stage-2 gate, source health, H6 input history,
 clean source identity, and real-ledger verification. It never fetches, writes,
-opens Stage 8, or authorizes the paid pull; follow its status contract in the
-ThetaData cancellation checklist.
+opens Stage 8, or authorizes a provider pull. It is retained as historical
+pre-cancellation tooling; current provider and cache policy is canonical in
+`docs/provider-transition.md`.
 Operator order (**amendment v1.4, owner decision 2026-07-14**): run and
 record **source health**, then the **data gate must be exit 0 (whole-universe
 GO — currently 14/14)**,
@@ -338,12 +340,11 @@ forward-roadmap source/config changes. A frozen retirement gate
 (`config.H7_HISTORICAL_WITHDRAWAL_HASH`) makes every historical-diagnostic
 entry point refuse before reading market data.
 Current recorded holdings: 39 VST shares plus one open H6 NVDA paper call; H7
-has no paper position or result. Remaining for H7:
-restore Stage 1 source health across the full 14-name watch universe,
-confirm paid daily EOD continuity,
-supply the owner-frozen window inputs, bind a clean code/config identity, then
-let owner + independent review decide
-whether to open Stage 8. No tracked option by itself starts the H7 window.
+has no paper position or result. **H7 remains paused: do not restart now.** Any
+later attempt must use a new registration and namespace and satisfy the
+eight-item contract in `reports/h7_forward/2026-08-02-restart-decision.md`
+before requesting owner activation. No tracked option by itself starts an H7
+window.
 LEAPS entry triggers are pre-registered (2026-07-07 ledger
 H5_ENTRY_TRIGGER_PREREG, VST superseded by the owner-directed forward-only
 H5_ENTRY_TRIGGER_AMENDMENT_V2 of 2026-07-15): evaluate only when close ≤

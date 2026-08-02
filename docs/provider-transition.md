@@ -35,8 +35,8 @@ rather than storing them. Enforced as instruction via
 ## 2. Capability and impact matrix
 
 Legend for "after cancel": UNCHANGED (works from local data), DEGRADED
-(works with a stated loss), STOPS (fail-closed blocker), OWNER (needs an
-owner decision first).
+(works with a stated loss), STOPS (fail-closed blocker), PAUSED (an owner
+decision closed the current path without activation).
 
 | Capability | ThetaData role today | Cached support | Schwab support in repo | After cancel | Safe fallback / replacement | Evidence |
 |---|---|---|---|---|---|---|
@@ -50,18 +50,18 @@ owner decision first).
 | Live dashboard display | Was ThetaData | n/a | Yes (two-lane design; live lane on Schwab) | UNCHANGED | — | commit 54b0e76 |
 | Live entry authority | None | None | **None — by design.** Adapter is allowlisted read-only; `SCHWAB_TRADING_ENABLED=false` enforced in code | UNCHANGED (still zero) | Never changes without a new registration | setup doc "Security" |
 | H5 paper book marking | EOD marks | Cache + Yahoo closes | Live quotes could display marks, not record official ones | DEGRADED after cache edge | Fail closed past coverage | PROJECT_STATE data notes |
-| H6 / H8 forward evaluators | EOD chain freshness | Through 2026-07-27 | No historical substitute | DEGRADED → STOPS as as-of passes cache edge | OD-2 decides a final top-up | README H6 section |
-| H7 forward window (registered 2026-07-20) | Daily source-health + gate inputs | Earnings assertions + cached chains | Live lane only | OWNER — governance already unresolved (v1 receipt; registration-only window) | OD-3 below | `ledger/h7_forward/events.jsonl` (1 event) |
+| H6 / H8 forward evaluators | EOD chain freshness | Through 2026-07-27 | No historical substitute | DEGRADED → STOPS as as-of passes cache edge | OD-2 declined the final top-up; fail closed beyond exact cached coverage | README H6 section |
+| H7 forward window (registered 2026-07-20) | Daily source-health + gate inputs | Earnings assertions + cached chains | Live lane only | PAUSED — do not restart now; the old namespace remains registration-only | Any later restart needs a new registration and namespace under the eight-item contract | `ledger/h7_forward/events.jsonl` (1 event); `reports/h7_forward/2026-08-02-restart-decision.md` |
 | H9 | Spent | Receipt + census on disk | n/a | UNCHANGED — one allowed run already used; never refetched | — | `reports/h9/receipt.json` |
 | Isolated v2 capture (18 symbols × 256 sessions) | Completed under a later bounded approval | 4,608 partitions; full audit passes with three exact-byte quarantines | Impossible to extend historically through Schwab | FROZEN / UNMERGED | Keep branch parked unless the owner explicitly authorizes integration | `reports/thetadata_v2/2026-08-02-od1-full-audit.md` on `codex/od1-v2-current` |
 | Feature-artifact rebuilds from v2 | Would depend on integrating the audited v2 path | None authorized | None | PARKED | Do not rebuild H6/H7/H8 or claim strategy evidence from the isolated branch | H7 restart decision; isolated branch report |
 | Reproducibility after cancel | — | Everything already cached replays offline | — | UNCHANGED for existing results | Tests and backtests are offline by rule | CLAUDE.md commands note |
 | Provenance / citations | v1 discards provider provenance (report 09 C4) | v1 limitation is permanent for v1 files | Schwab captures carry entitlement context | DEGRADED (v1 stays provenance-poor forever) | v2-only for future gates if Phase B proceeds | report 09 |
 
-**The one-sentence version:** cancellation freezes the historical world at the
-cache edge (2026-07-27) forever; Schwab keeps the live display lane alive and
-nothing else; anything that needs new historical option data either happens
-before cancel day or never.
+**The one-sentence version:** the canonical historical world is frozen at the
+2026-07-27 cache edge; Schwab keeps the live display lane alive and nothing
+else, while any feature needing new historical option data remains fail-closed
+unless a separately authorized source and registration are supplied.
 
 ## 3. Reconciling the v2 capture with cancellation
 

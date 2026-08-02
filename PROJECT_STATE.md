@@ -116,7 +116,7 @@ options-flow study remains DATA-GATED because no real trade/quote panel exists.
 | Check | Result | Interpretation |
 |---|---|---|
 | `uv run python -m research.cli verify` | `ledger OK` | Research chain verified now. |
-| `uv run python -m options_researcher.h7_event_ledger verify` | `VALID records=1 head=a1ea228c2abb…` | H7 store is not empty; its README is stale. |
+| `uv run python -m options_researcher.h7_event_ledger verify` | `VALID records=1 head=a1ea228c2abb…` | H7 store has one registration event and its README now states that explicitly. |
 | P0-focused unit set | 51/51 passed | Ratio, ordering, D+1, ordinary/terminal exits, same/different quotes. |
 | Provider/H5/H6/H8/flow/cache-focused set | 184/184 passed | Present behavior is pinned; some tests pin the H6 defect rather than disprove it. |
 | Discovery audit | 2,284 tests discovered and executed under `tests/` | The current root test collection includes the manifest, cap, provider-disable, exact-session, and receipt-stability regressions. |
@@ -134,16 +134,16 @@ runs for all branches. `.github/workflows/claude-review.yml` is configured but
 repository evidence does not show a successful review post; configuration is not
 operational proof.
 
-### 3.3 Instruction drift
+### 3.3 Instruction drift (reconciled by Q1)
 
 The root `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `pyproject.toml`, CI, and the
-nested `.claude/rules/` files apply. `.claude/rules/backtest-engine.md:14-29`
-still says F1-F6 are open and the execution convention is unregistered. That
-contradicts ledger seq 21 and current code. `ledger/h7_forward/README.md:7-10`
-still says the real store is absent/empty, but verification finds one
-`window_registration`. `docs/provider-transition.md:51` still says D+1
-registration is owed. These are documentation defects; canonical code and
-append-only records remain the truth.
+nested `.claude/rules/` files apply. The original audit found three stale
+claims: the backtest rule treated F1-F6 as open, the H7 README treated the real
+store as empty, and the provider document treated D+1 registration as owed.
+Q1 corrected those claims to cite research-ledger seq 21, the one-record H7
+registration store, and the current provider policy. The original audit text
+is historical evidence; canonical code and append-only records remain the
+truth.
 
 ## 4. Fable-versus-Sol roadmap matrix
 
@@ -544,17 +544,21 @@ into the next task.
   text/hash mismatch or duplicate; convene owner on any verification failure.
 - **Artifact/proof:** approved wording, hash, append receipt/diff. **One session:** yes.
 
-### Q1 — Documentation truth repair
+### Q1 — Documentation truth repair — COMPLETE
 
-- **Goal/position:** remove instruction drift before implementation agents act.
+- **Result:** stale instruction, provider, cache-miss, cancellation-checklist,
+  and H7-restart claims are reconciled with current code, ledger seq 21, the
+  one-record H7 store, and the paused H7 decision. Historical evidence remains
+  explicitly historical.
 - **Files:** `.claude/rules/backtest-engine.md`, `ledger/h7_forward/README.md`,
   `docs/provider-transition.md`, NAV spec, README status figures if stale.
 - **Allowed:** documentation only. **Forbidden:** code/config/ledgers/cache/books.
   **Prerequisite/gate:** none; no owner approval for factual corrections.
 - **Implementation:** replace stale claims with references to seq 21, current H7
   status, and canonical roadmap; label historical text rather than erasing it.
-- **Tests/quality/evidence:** both ledger verifies, link/reference scan,
-  `git diff --check`; no full suite needed.
+- **Tests/quality/evidence:** research ledger `ledger OK`; H7 ledger
+  `VALID records=1 head=a1ea228c2abb…`; changed-reference and stale-phrase
+  scans; docs-only inventory; `git diff --check`. No full suite needed.
 - **Failure/stop:** stop on a conflict requiring semantic choice. Revert only this
   task's uncommitted doc hunks if needed.
 - **Proof:** docs-only diff with current command outputs. **One session:** yes.
