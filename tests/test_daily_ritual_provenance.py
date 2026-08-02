@@ -80,12 +80,8 @@ class DailyRitualProvenanceTests(unittest.TestCase):
     def test_ops_publisher_requires_current_main(self):
         source = RITUAL.read_text()
         branch_guard = source.index('if [ "$RITUAL_BRANCH" != "main" ]')
-        current_main_guard = source.index(
-            'rev-parse origin/main 2>/dev/null'
-        )
-        publisher_role = source.index(
-            "export OPTIONS_VALIDATOR_CACHE_ROLE=publisher"
-        )
+        current_main_guard = source.index("rev-parse origin/main 2>/dev/null")
+        publisher_role = source.index("export OPTIONS_VALIDATOR_CACHE_ROLE=publisher")
         source_health = source.index("options_researcher.h7_source_health")
         self.assertLess(branch_guard, current_main_guard)
         self.assertLess(current_main_guard, publisher_role)
@@ -132,9 +128,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
     def test_ritual_terminal_status_is_separate_from_capture_receipt(self):
         source = RITUAL.read_text()
         running = source.index("--status RUNNING")
-        capture = source.index(
-            '"$UV" run python -m options_researcher.ritual_receipt'
-        )
+        capture = source.index('"$UV" run python -m options_researcher.ritual_receipt')
         terminal = source.index('--status "$RITUAL_TERMINAL_STATUS"')
         durability = source.index("# Step 8 — DURABILITY")
         self.assertLess(running, capture)

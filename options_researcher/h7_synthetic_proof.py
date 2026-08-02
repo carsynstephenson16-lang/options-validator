@@ -142,9 +142,7 @@ def _write_market_fixtures(root: Path) -> tuple[Path, Path]:
                 "close": [98.0, 99.0, 100.0],
             }
         ).to_parquet(closes / f"{symbol}.parquet", index=False)
-        _chain().to_parquet(
-            chains / f"{symbol}_{DECISION_SESSION}.parquet", index=False
-        )
+        _chain().to_parquet(chains / f"{symbol}_{DECISION_SESSION}.parquet", index=False)
     _write_synthetic_full_audit_receipt(chains)
     return closes, chains
 
@@ -156,10 +154,7 @@ def _write_synthetic_full_audit_receipt(chain_dir: Path) -> Path:
     parsed = [path.stem.rsplit("_", 1) for path in partitions]
     symbols = sorted({symbol for symbol, _session in parsed})
     sessions = sorted({session for _symbol, session in parsed})
-    file_hashes = {
-        str(path.resolve()): sha256_file(path)
-        for path in partitions
-    }
+    file_hashes = {str(path.resolve()): sha256_file(path) for path in partitions}
     report = {
         "schema": V2_SYNTHETIC_AUDIT_SCHEMA,
         "boundary": "SYNTHETIC-ONLY",
@@ -559,9 +554,7 @@ def run_synthetic_proof(root) -> dict:
             "ledger_tamper": tamper_rejected,
             "same_session_entry": same_session_refused,
             "missing_entry_benchmark": missing_benchmark_refused,
-            "over_sleeve_candidate": (
-                board.rejected[0]["rejection"] == "sleeve_exhausted"
-            ),
+            "over_sleeve_candidate": (board.rejected[0]["rejection"] == "sleeve_exhausted"),
             "incomplete_score": incomplete_score_refused,
             "score_read_only": score_read_only,
         },

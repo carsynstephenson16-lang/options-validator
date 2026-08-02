@@ -63,9 +63,7 @@ def _v2_chain() -> pd.DataFrame:
         "ask_size": 23,
         "ask_condition": 50,
         "iv_error": 0.001,
-        "underlying_timestamp": pd.Timestamp(
-            "2022-01-03 16:00", tz="America/New_York"
-        ),
+        "underlying_timestamp": pd.Timestamp("2022-01-03 16:00", tz="America/New_York"),
         "underlying_price": 477.71,
         "thetadata_client_version": "1.0.9",
     }
@@ -83,9 +81,7 @@ def _write_audit_receipt(
     consumer_scopes: tuple[str, ...] = V2_FULL_AUDIT_CONSUMER_SCOPES,
 ) -> None:
     repo_root = Path(thetadata_adapter.__file__).resolve().parents[1]
-    source_hashes = {
-        relative: _sha256_file(repo_root / relative) for relative in source_paths
-    }
+    source_hashes = {relative: _sha256_file(repo_root / relative) for relative in source_paths}
     file_hashes = {str(chain_path.resolve()): _sha256_file(chain_path)}
     quarantine_path = repo_root / "data" / "v2_partition_quarantine.json"
     raw_file_hashes = {"fixture/raw.parquet": "a" * 64}
@@ -118,9 +114,7 @@ def _write_audit_receipt(
         "blocks": [],
         "verdict": "PASS WITH WARNINGS",
         "quarantined_partitions": (
-            [{"symbol": "SPY", "session": "2022-01-03"}]
-            if quarantined
-            else []
+            [{"symbol": "SPY", "session": "2022-01-03"}] if quarantined else []
         ),
         "quarantined_findings": [],
         "raw_file_hashes": raw_file_hashes,
