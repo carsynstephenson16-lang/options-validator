@@ -59,3 +59,8 @@ Replaced the obsolete Windows vault path and flat-note rules in the shared
 `obsidian-vault` skill with the repo-local `wiki/` contract, immutable
 `wiki/raw/` boundary, index/log workflows, worktree-aware vault resolution,
 and validation against Obsidian's registered macOS vault path.
+
+
+## [2026-08-02] ingest | RAG health
+
+RAG health indexed 549 sources and 13137 chunks; 0 source failures were reported.
