@@ -1,0 +1,436 @@
+{
+  "captured_at_et": "2026-07-28T09:35:21.089260-04:00",
+  "captured_at_utc": "2026-07-28T13:35:21.089260+00:00",
+  "config_hash": "bbf1db4a05f520dc14af6a5a7d2503566acdf487c8dd8aa4fd75b8c700aeac11",
+  "force": false,
+  "iv_rank_calibration": null,
+  "names": {
+    "AMD": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/AMD_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 61,
+        "P": 44
+      },
+      "chain_contracts_total": {
+        "C": 152,
+        "P": 152
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.013236017093370646,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 460.475,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "AMD"
+    },
+    "AMZN": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/AMZN_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 40,
+        "P": 31
+      },
+      "chain_contracts_total": {
+        "C": 69,
+        "P": 69
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.017241379310344918,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 231.725,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "AMZN"
+    },
+    "AVGO": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/AVGO_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 23,
+        "P": 22
+      },
+      "chain_contracts_total": {
+        "C": 93,
+        "P": 93
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.010985992859104642,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 377.125,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "AVGO"
+    },
+    "CEG": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/CEG_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 0,
+        "P": 4
+      },
+      "chain_contracts_total": {
+        "C": 78,
+        "P": 78
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.01697530864197522,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 261.8,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "CEG"
+    },
+    "CRWV": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/CRWV_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 9,
+        "P": 34
+      },
+      "chain_contracts_total": {
+        "C": 69,
+        "P": 69
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.030435543117019372,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 67.175,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "CRWV"
+    },
+    "ET": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/ET_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 1,
+        "P": 0
+      },
+      "chain_contracts_total": {
+        "C": 34,
+        "P": 34
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.08450704225352106,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 19.79,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "ET"
+    },
+    "IREN": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/IREN_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 7,
+        "P": 36
+      },
+      "chain_contracts_total": {
+        "C": 63,
+        "P": 63
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.037414160549372376,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 34.725,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "IREN"
+    },
+    "MSFT": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/MSFT_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 45,
+        "P": 41
+      },
+      "chain_contracts_total": {
+        "C": 109,
+        "P": 109
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.009929254064788381,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 397.525,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "MSFT"
+    },
+    "NOW": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/NOW_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 18,
+        "P": 7
+      },
+      "chain_contracts_total": {
+        "C": 63,
+        "P": 63
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.05252525252525255,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 107.975,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "NOW"
+    },
+    "NVDA": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/NVDA_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 46,
+        "P": 33
+      },
+      "chain_contracts_total": {
+        "C": 105,
+        "P": 105
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.007145543437382603,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 194.625,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "NVDA"
+    },
+    "PLTR": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/PLTR_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 37,
+        "P": 30
+      },
+      "chain_contracts_total": {
+        "C": 90,
+        "P": 90
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.00751157306314954,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 124.025,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "PLTR"
+    },
+    "SMCI": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/SMCI_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 12,
+        "P": 18
+      },
+      "chain_contracts_total": {
+        "C": 71,
+        "P": 71
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.0546448087431694,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 28.0,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "SMCI"
+    },
+    "TEM": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/TEM_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 1,
+        "P": 3
+      },
+      "chain_contracts_total": {
+        "C": 41,
+        "P": 41
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.08406850025947077,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 41.96,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "TEM"
+    },
+    "USAR": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/USAR_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 0,
+        "P": 3
+      },
+      "chain_contracts_total": {
+        "C": 36,
+        "P": 36
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.0439932318104906,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 14.379999999999999,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "USAR"
+    },
+    "VST": {
+      "atm_iv": null,
+      "chain_cache_path": ".cache/intraday/VST_2026-07-28T0935.parquet",
+      "chain_contracts_admitted": {
+        "C": 0,
+        "P": 2
+      },
+      "chain_contracts_total": {
+        "C": 53,
+        "P": 53
+      },
+      "greeks_note": "not entitled: option greeks endpoint requires professional tier (_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting an option endpoint requiring a professional subscription, but you only have a STANDARD subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>); solver fallback failed: solver: no rate curve coverage",
+      "iv_label": null,
+      "iv_rank_preview": null,
+      "iv_source": null,
+      "min_spread_pct_observed": 0.03687095166915798,
+      "monthly_expiration": "2026-08-21",
+      "open_interest_asof": "2026-07-28",
+      "spot_ask": null,
+      "spot_bid": null,
+      "spot_mid": 150.05,
+      "spot_note": "stock snapshot batch failed: _MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.PERMISSION_DENIED\n\tdetails = \"Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n\tdebug_error_string = \"PERMISSION_DENIED:Requesting a stock endpoint requiring a value subscription, but you only have a FREE subscription. Please consider upgrading! ( https://www.thetadata.net/subscribe )\"\n>",
+      "spot_source": "parity_fallback",
+      "spot_ts": null,
+      "status": "ok",
+      "symbol": "VST"
+    }
+  },
+  "probe_healed_this_run": false,
+  "probe_receipt_path": "reports/live_probe/2026-07-24.json",
+  "receipt_kind": "intraday_capture/v1",
+  "scheduled_et": "09:35",
+  "session_tag": "open",
+  "universe": [
+    "CRWV",
+    "TEM",
+    "PLTR",
+    "NOW",
+    "SMCI",
+    "NVDA",
+    "AMD",
+    "AVGO",
+    "IREN",
+    "USAR",
+    "ET",
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN"
+  ]
+}
