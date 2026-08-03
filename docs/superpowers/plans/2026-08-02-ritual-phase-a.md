@@ -72,7 +72,13 @@ metadata = chain_schema_metadata(chain.columns)
 if verdict_bearing and metadata.schema_version < CHAIN_SCHEMA_VERSION_V2:
     raise CacheSchemaVersionError("v1 partitions are display-only")
 if verdict_bearing:
-    validate_v2_audit_receipt(cached.parent, cached, symbol=symbol, session=date)
+    validate_v2_audit_receipt(
+        cached.parent,
+        cached,
+        symbol=symbol,
+        session=date,
+        consumer_scope="H7",
+    )
 return chain
 ```
 
@@ -82,8 +88,11 @@ The original nine receipt-bound files and two omitted runtime dependencies must 
 
 Run the focused unittest files, then validate `NVDA_2026-07-31.parquet`
 against the clean-commit receipt. Receipt `6fd9a3ca...9578` was superseded by
-the dependency-closure repair (`c08106ba...c7e3`), which was then superseded by
-the consumer-scoped contract receipt `689c2b02...b1b6`.
+the dependency-closure repair (`c08106ba...c7e3`), the initial consumer-scoped
+contract (`689c2b02...b1b6`), the formatter-clean contract
+(`1e6951cc...61b3`), and the programmatic-authority repair
+(`316e415f...7959`). The final scope-closed receipt is `99d409c3...c68d`,
+bound to source commit `f0c41fde...e9c7`.
 
 Expected: focused tests pass; the real partition returns `PASS WITH WARNINGS` and its bound SHA-256.
 
@@ -165,6 +174,13 @@ git commit -m "fix(ritual): fail closed before stateful work"
 
 ## Final verification
 
-- [ ] Run the affected test set and repository-standard lint/types.
-- [ ] Review both commits and confirm no cache bytes, provider calls, ledgers, paper books, ops files, scheduler state, or remote refs changed.
-- [ ] Leave the branch local and report that full ritual execution remains not ready.
+- [x] Run the affected test set and repository-standard lint/types.
+- [x] Review all Phase A commits and confirm no cache bytes, provider calls,
+  ledgers, paper books, ops files, scheduler state, or remote refs changed.
+- [x] Leave the branch local and report that full ritual execution remains not
+  ready.
+
+Final verification: 2,347 tests passed; repository-wide Ruff lint and Pyright
+passed; shell syntax and read-only ritual status passed; independent re-review
+reported no remaining Critical or Important findings. Repository-wide Ruff
+formatting still reports 250 untouched legacy files and is outside Phase A.
