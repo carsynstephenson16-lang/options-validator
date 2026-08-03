@@ -5,6 +5,7 @@ existence and liquidity, and may test exit-window coverage only by file
 PRESENCE. It never prices an exit, never computes a return, and never
 imports exit-side fill helpers. That restriction is enforced by tests.
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -24,9 +25,17 @@ from options_researcher.chains import is_monthly
 from options_researcher.h9_events import H9Event
 from research.hashing import sha256_file
 
-REASONS = ("window_edge", "registry_excluded", "missing_closes",
-           "missing_entry_chain", "no_contract_in_bands", "entry_liquidity_fail",
-           "no_acceptance_ts", "unclassified_event", "non_earnings_event")
+REASONS = (
+    "window_edge",
+    "registry_excluded",
+    "missing_closes",
+    "missing_entry_chain",
+    "no_contract_in_bands",
+    "entry_liquidity_fail",
+    "no_acceptance_ts",
+    "unclassified_event",
+    "non_earnings_event",
+)
 
 # Exceptions the loaders below are documented to raise on a genuine data
 # miss. Narrowed deliberately (not bare Exception) so a real bug elsewhere
@@ -51,9 +60,17 @@ def _entry_chain(symbol: str, iso: str, chain_dir: Path) -> pd.DataFrame:
     # Cache-ONLY (spec §1 zero new data spend): a missing chain raises
     # FileNotFoundError, which the census loop codes as `missing_entry_chain`
     # and excludes the event -- it is NEVER fetched from the paid client.
+    # H9 is verdict-bearing, so legacy v1 partitions are refused as display-only.
     # Reads resolve against the census's OWN chain_dir so presence checks and
     # content reads can never diverge (post-merge test caught the divergence).
-    return load_cached_chain(symbol, iso, allow_oos=True, cache_dir=chain_dir)
+    return load_cached_chain(
+        symbol,
+        iso,
+        allow_oos=True,
+        cache_dir=chain_dir,
+        verdict_bearing=True,
+        verdict_consumer="H9",
+    )
 
 
 def _closes(symbol: str, start_iso: str, end_iso: str) -> pd.Series:
@@ -70,15 +87,20 @@ def _has_admissible_contract(chain: pd.DataFrame, entry_iso: str) -> tuple[bool,
     lo_t, hi_t = config.H6_DTE_BAND
     calls: pd.DataFrame = chain.loc[chain["right"].eq("C")].copy()
     in_band: pd.DataFrame = calls.loc[
-        (calls["delta"] >= lo_d) & (calls["delta"] <= hi_d)
+        (calls["delta"] >= lo_d)
+        & (calls["delta"] <= hi_d)
         & (calls["expiration"].map(lambda e: lo_t <= _dte(entry_iso, e) <= hi_t))
-        & (calls["expiration"].map(lambda e: is_monthly(
-            e if isinstance(e, date) else date.fromisoformat(str(e)[:10]))))
+        & (
+            calls["expiration"].map(
+                lambda e: is_monthly(e if isinstance(e, date) else date.fromisoformat(str(e)[:10]))
+            )
+        )
     ].copy()
     if in_band.empty:
         return False, "no_contract_in_bands"
-    liquid: pd.DataFrame = in_band.loc[in_band.apply(
-        lambda r: passes_liquidity(r["open_interest"], r["bid"], r["ask"]), axis=1)]
+    liquid: pd.DataFrame = in_band.loc[
+        in_band.apply(lambda r: passes_liquidity(r["open_interest"], r["bid"], r["ask"]), axis=1)
+    ]
     if liquid.empty:
         return False, "entry_liquidity_fail"
     return True, ""
@@ -86,8 +108,7 @@ def _has_admissible_contract(chain: pd.DataFrame, entry_iso: str) -> tuple[bool,
 
 def _max_exit_horizon(entry_iso: str) -> str:
     """Last session on/before entry + max-DTE calendar days, clamped to the window."""
-    cap = (date.fromisoformat(entry_iso)
-           + timedelta(days=config.H6_DTE_BAND[1])).isoformat()
+    cap = (date.fromisoformat(entry_iso) + timedelta(days=config.H6_DTE_BAND[1])).isoformat()
     days = trading_days(entry_iso, min(cap, config.H9_WINDOW[1]))
     return days[-1] if days else entry_iso
 
@@ -107,8 +128,7 @@ def in_registry_exclusion(event: H9Event) -> bool:
     return False
 
 
-def run_census(events: list[H9Event], *, chain_dir: Path,
-               floor: int | None = None) -> CensusResult:
+def run_census(events: list[H9Event], *, chain_dir: Path, floor: int | None = None) -> CensusResult:
     """Counts-only eligibility pass over `events`. Reads the T_entry chain
     solely to test contract existence + liquidity; exit-window coverage is a
     file-PRESENCE check on `chain_dir`, never a content read. Structurally
@@ -165,8 +185,13 @@ def run_census(events: list[H9Event], *, chain_dir: Path,
                 gap_days += 1
         stats["eligible"] += 1
         eligible.append(e)
-    res = CensusResult(eligible_count=len(eligible), per_symbol=per_symbol,
-                        reasons=reasons, exit_window_gap_days=gap_days,
-                        manifest=manifest, eligible_events=eligible)
+    res = CensusResult(
+        eligible_count=len(eligible),
+        per_symbol=per_symbol,
+        reasons=reasons,
+        exit_window_gap_days=gap_days,
+        manifest=manifest,
+        eligible_events=eligible,
+    )
     res.floor_met = res.eligible_count >= floor
     return res

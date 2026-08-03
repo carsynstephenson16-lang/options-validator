@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
 from data.cache_provenance import load_blind_cache_facts  # noqa: E402
 from data.cache_runner import trading_days  # noqa: E402
+from data.cache_schema import expected_usage  # noqa: E402
 from data.recent_topup import audit_chain, scope_symbols  # noqa: E402
 from data.thetadata_adapter import validate_chain_schema  # noqa: E402
 from data.underlying_closes import parity_spot_from_chain  # noqa: E402
@@ -247,11 +248,37 @@ def _strict_manifest(path: Path) -> tuple[dict[str, tuple[str, int]], list[str]]
     except OSError as exc:
         return {}, [f"MANIFEST_READ {type(exc).__name__}: {exc}"]
     for number, line in enumerate(lines, 1):
-        parts = line.split("  ", 2)
-        if len(parts) != 3:
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("  ")
+        if len(parts) == 3:
+            digest, raw_size, name = parts
+            schema_version = 1
+            usage = "display-only"
+        elif len(parts) == 5:
+            digest, raw_size, schema_text, usage_text, name = parts
+            if not schema_text.startswith("schema_version="):
+                problems.append(f"MANIFEST_LINE {number}: malformed schema_version")
+                continue
+            if not usage_text.startswith("usage="):
+                problems.append(f"MANIFEST_LINE {number}: malformed usage")
+                continue
+            try:
+                schema_version = int(schema_text.removeprefix("schema_version="))
+                usage = usage_text.removeprefix("usage=")
+                expected = expected_usage(schema_version)
+            except ValueError:
+                problems.append(f"MANIFEST_LINE {number}: unsupported schema_version")
+                continue
+            if usage != expected:
+                problems.append(
+                    f"MANIFEST_LINE {number}: schema_version={schema_version} "
+                    f"must use usage={expected}"
+                )
+                continue
+        else:
             problems.append(f"MANIFEST_LINE {number}: expected sha256, size, name")
             continue
-        digest, raw_size, name = parts
         line_problems: list[str] = []
         try:
             size = int(raw_size)
@@ -1254,12 +1281,13 @@ def _monthly_quality(
             value for value in expected_monthlies if value not in present_monthlies
         ]
         if expected_monthlies and relevant.empty:
-            blocks.append(
+            warnings.append(
                 _finding(
                     2,
                     symbol,
                     session,
-                    f"no listed {lane} monthly in {band} DTE; calendar candidates "
+                    f"strategy ineligible: no listed {lane} monthly in {band} DTE; "
+                    f"calendar candidates "
                     f"were {[value.isoformat() for value in expected_monthlies]}",
                 )
             )
@@ -1299,6 +1327,78 @@ def _monthly_quality(
     return blocks, warnings
 
 
+def _declared_lane_mask(
+    symbol: str,
+    session: str,
+    frame: pd.DataFrame,
+    spot: float,
+) -> pd.Series:
+    """Contracts that a currently declared H7 lane could actually consider."""
+    today = date.fromisoformat(session)
+    expirations = pd.to_datetime(frame["expiration"], errors="coerce").dt.date
+    dte = expirations.map(lambda value: (value - today).days if pd.notna(value) else -1)
+    monthly = expirations.map(lambda value: bool(pd.notna(value) and is_monthly(value)))
+    mid = (frame["bid"] + frame["ask"]) / 2.0
+    spread = (frame["ask"] - frame["bid"]) / mid.where(mid > 0)
+    liquid = (
+        (frame["open_interest"] >= config.MIN_OPEN_INTEREST)
+        & (frame["bid"] > 0)
+        & (frame["ask"] >= frame["bid"])
+        & (spread <= config.H7_ADMIT_MAX_SPREAD_PCT)
+    )
+    near_money = frame["strike"].between(
+        (1 - config.H7_NTM_BAND) * spot,
+        (1 + config.H7_NTM_BAND) * spot,
+    )
+    long_call = frame["right"].eq("C") & dte.between(*config.H7_LONG_DTE_BAND)
+    short_put = (
+        frame["right"].eq("P") & dte.between(*config.H7C_DTE_BAND)
+        if symbol not in config.H7_CORE_LONG_ONLY
+        else pd.Series(False, index=frame.index)
+    )
+    return liquid & near_money & monthly & (long_call | short_put)
+
+
+def _declared_iv_mask(
+    symbol: str,
+    session: str,
+    frame: pd.DataFrame,
+    spot: float,
+) -> pd.Series:
+    """Rows whose IV can affect a declared H7 route or contract choice."""
+    lane = _declared_lane_mask(symbol, session, frame, spot)
+    delta = pd.to_numeric(frame["delta"], errors="coerce")
+    tolerance = float(config.H7_DELTA_TOLERANCE)
+    call_candidate = frame["right"].eq("C") & (
+        delta.between(*config.H7_LONG_DELTA_BAND)
+        | ((delta - config.H7_SPREAD_LONG_DELTA).abs() <= tolerance)
+        | ((delta - config.H7_SPREAD_SHORT_DELTA).abs() <= tolerance)
+    )
+    # H7c's protective long put is selected by strike after the short put, so
+    # retain the full admitted put lane rather than guessing a delta band.
+    contract_candidate = lane & (call_candidate | frame["right"].eq("P"))
+
+    # The IV/RV route reads one exact ATM call even when that row is not a
+    # possible trade leg. Mirror h7_signals.atm_iv_90d's expiry-first choice.
+    route_candidate = pd.Series(False, index=frame.index)
+    today = date.fromisoformat(session)
+    calls = frame[frame["right"].eq("C") & (frame["bid"] > 0) & (frame["ask"] > 0)].copy()
+    if not calls.empty:
+        expiration = pd.to_datetime(calls["expiration"], errors="coerce").dt.date
+        calls = calls.assign(
+            _dte=expiration.map(lambda value: (value - today).days if pd.notna(value) else -1)
+        )
+        calls = calls[calls["_dte"].between(*config.H7_IV_TENOR_DTE_BAND)]
+        if not calls.empty:
+            target = sum(config.H7_IV_TENOR_DTE_BAND) // 2
+            expiry_index = (calls["_dte"] - target).abs().idxmin()
+            best_expiration = calls.loc[expiry_index, "expiration"]
+            within = calls[calls["expiration"] == best_expiration]
+            atm_index = (within["strike"] - spot).abs().idxmin()
+            route_candidate.loc[atm_index] = True
+    return contract_candidate | route_candidate
+
+
 def audit_symbol_session(
     symbol: str,
     session: str,
@@ -1306,6 +1406,7 @@ def audit_symbol_session(
     chain_dir: Path,
     close_dir: Path,
     facts: dict[tuple[str, str], dict],
+    parity_mode: str = "blocking",
 ) -> dict:
     """Run all fourteen data-audit checks for one symbol/session."""
     chain_path = chain_dir / f"{symbol}_{session}.parquet"
@@ -1343,7 +1444,11 @@ def audit_symbol_session(
     if crossed:
         blocks.append(_finding(6, symbol, session, f"{crossed} crossed markets"))
 
-    base = audit_chain(frame)
+    base = audit_chain(
+        frame,
+        selectable_mask=_declared_lane_mask(symbol, session, frame, spot),
+        iv_selectable_mask=_declared_iv_mask(symbol, session, frame, spot),
+    )
     for detail in base["block"]:
         blocks.append(_finding("10/11", symbol, session, detail))
     for detail in base["warn"]:
@@ -1353,13 +1458,22 @@ def audit_symbol_session(
     blocks.extend(monthly_blocks)
     warnings.extend(monthly_warnings)
 
+    if parity_mode not in {"blocking", "diagnostic"}:
+        raise ValueError(f"unsupported parity_mode={parity_mode!r}")
     parity = parity_spot_from_chain(frame, session)
     if pd.isna(parity):
-        blocks.append(_finding(13, symbol, session, "put-call parity spot unavailable"))
+        finding = _finding(13, symbol, session, "put-call parity spot unavailable")
+        if parity_mode == "diagnostic":
+            finding["detail"] = f"diagnostic parity: {finding['detail']}"
+            warnings.append(finding)
+        else:
+            blocks.append(finding)
     else:
         drift = abs(float(parity) / spot - 1.0)
         detail = f"parity={parity:.6f} close={spot:.6f} drift={drift:.4%}"
-        if drift > PARITY_BLOCK_DRIFT:
+        if parity_mode == "diagnostic" and drift > PARITY_WARN_DRIFT:
+            warnings.append(_finding(13, symbol, session, f"diagnostic parity: {detail}"))
+        elif drift > PARITY_BLOCK_DRIFT:
             blocks.append(_finding(13, symbol, session, detail))
         elif drift > PARITY_WARN_DRIFT:
             warnings.append(_finding(13, symbol, session, detail))
@@ -1392,6 +1506,7 @@ def run_audit(
     facts: dict[tuple[str, str], dict] | None = None,
     sessions: list[str] | None = None,
     identity: dict | None = None,
+    parity_mode: str = "blocking",
 ) -> dict:
     """Audit a complete forward window. No fetch or store function is called."""
     sessions = list(sessions) if sessions is not None else trading_days(start, end)
@@ -1409,6 +1524,7 @@ def run_audit(
                 chain_dir=Path(chain_dir),
                 close_dir=Path(close_dir),
                 facts=facts,
+                parity_mode=parity_mode,
             )
             blocks.extend(result["blocks"])
             warnings.extend(result["warnings"])
@@ -1430,6 +1546,7 @@ def run_audit(
         "window": {"start": start, "end": end},
         "sessions": sessions,
         "source_identity": identity,
+        "parity_mode": parity_mode,
         "counts": {
             "symbols": len(symbols),
             "sessions": len(sessions),
@@ -1500,6 +1617,7 @@ def verify_receipt(
         facts=facts,
         sessions=sessions,
         identity=identity,
+        parity_mode=expected.get("parity_mode", "blocking"),
     )
     failures = [
         key
