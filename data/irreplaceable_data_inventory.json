@@ -1,0 +1,35 @@
+{
+  "namespaces": {
+    ".cache/chains": {
+      "file_count": 31386,
+      "present": true,
+      "total_bytes": 3103141416
+    },
+    ".cache/chains_v2": {
+      "file_count": 18442,
+      "present": true,
+      "total_bytes": 2042888087
+    },
+    ".cache/future_tickers": {
+      "file_count": 3073,
+      "present": true,
+      "total_bytes": 106971152
+    },
+    ".cache/intraday": {
+      "file_count": 180,
+      "present": true,
+      "total_bytes": 1431434
+    },
+    ".cache/underlying": {
+      "file_count": 25,
+      "present": true,
+      "total_bytes": 596562
+    },
+    ".cache/underlying_ohlcv": {
+      "file_count": 20,
+      "present": true,
+      "total_bytes": 1509715
+    }
+  },
+  "note": "Gitignored, unreplaceable data. Provider acquisition is disabled; these bytes cannot be re-fetched. Verify before any worktree removal or cleanup sweep."
+}

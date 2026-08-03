@@ -719,11 +719,33 @@ into the next task.
   network-disabled consumer replay; real flow dataset absent. **One session:**
   complete.
 
-### Q10 — Conditional v2 path
+### Q10 — Conditional v2 path — CLOSED 2026-08-03
 
-- **Status:** **AUDITED / PARKED / UNMERGED.** The isolated 18-symbol capture
-  passed with three exact-byte quarantines; it has no strategy authority.
-- **Goal/position:** preserve the audited v2 work until explicit integration authority exists.
+- **Status:** **CLOSED / BRANCH RETIRED.** The v2 lane reached `main` on
+  2026-08-02 by a different route (`codex/main-phase-a-integration-20260802`),
+  and main's implementation is strictly ahead of the parked branch: a
+  20-column v2 schema versus the branch's 11, and a verdict gate that refuses
+  v1 partitions earlier. Comparison evidence: 13 merge conflicts, all of which
+  resolve to "take main"; 8 of the branch's 9 `test_cache_schema_v2.py` tests
+  fail against main because they pin the branch's superseded API, not because
+  main lost coverage. The wholesale merge this task forbade was therefore also
+  pointless. Owner authorized retirement 2026-08-03.
+- **What was salvaged:** the branch's only unique content — the parked
+  future-ticker audit (`tools/future_ticker_data_audit.py`, its tests, and the
+  two `reports/future_tickers/` artifacts) — was ported in `56afc10`; its two
+  tests pass against main. `codex/od1-v2-current` and its worktree were then
+  deleted. `codex/od1-v2-backfill` was verified to contain ZERO unique files
+  and is likewise superseded.
+- **Incident recorded:** the branch's worktree (under `~/Downloads`) held the
+  ONLY copy of the 1,536-partition future-ticker capture — 110 MB, 3,072
+  provider calls, taken before cancellation and therefore unrecoverable. The
+  bytes are gitignored and `tools/cache_manifest.py` covers only
+  `.cache/chains`, so no manifest, test, or CI check would have flagged their
+  loss. They were copied to `.cache/future_tickers` and verified byte-identical
+  by SHA-256 across all 1,536 partitions BEFORE deletion. Prevention landed as
+  `tools/irreplaceable_data_guard.py` plus
+  `data/irreplaceable_data_inventory.json`; see `.claude/rules/data-and-providers.md`.
+- **Historical goal/position:** preserve the audited v2 work until explicit integration authority exists.
 - **Files/discovery:** diff `codex/od1-v2-current` against current sfix; schema
   modules, H6/H8/H7 exit gates/tests. **Allowed:** port minimal current-base code,
   tests, new artifacts. **Forbidden:** wholesale merge, H9 rerun, v1 edits, bypass.

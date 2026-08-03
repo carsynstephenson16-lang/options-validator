@@ -1,0 +1,197 @@
+"""Presence-and-size guard for gitignored data that cannot be re-acquired.
+
+WHY THIS EXISTS (incident 2026-08-03): the parked future-ticker capture --
+1,536 partitions, 2,499,624 rows, 3,072 provider calls, taken BEFORE the
+ThetaData cancellation -- existed in exactly one place on disk: a disposable
+git worktree under ~/Downloads. Nothing tracked its existence, because the
+bytes are gitignored and `tools/cache_manifest.py` only covers .cache/chains.
+Deleting that worktree would have destroyed it permanently, and no test,
+manifest, or CI check would have noticed.
+
+ThetaData acquisition is disabled (OD-4). Every namespace listed in the
+inventory is now UNREPLACEABLE: if the bytes go, the evidence goes with them.
+
+This tool freezes a committable inventory (per-namespace file count and total
+size) and verifies the working copy against it. It is deliberately cheap --
+counts and sizes, not content hashes -- so it can be run before any worktree
+removal, cleanup sweep, or disk operation. Use --deep for content hashes when
+you need byte-level proof; use tools/cache_manifest.py for the canonical v1
+chain cache's per-file hash binding.
+
+Usage:
+    uv run python tools/irreplaceable_data_guard.py verify
+    uv run python tools/irreplaceable_data_guard.py verify --deep
+    uv run python tools/irreplaceable_data_guard.py generate
+
+Exit codes: 0 = every recorded namespace is present and no smaller than
+recorded; 1 = something is missing or has shrunk (investigate before any
+delete); 2 = usage/inventory error.
+
+A fresh clone legitimately has no cache. Pass --allow-absent to treat a
+wholly-absent namespace as a skip; a namespace that exists but has LOST files
+always fails, because that is the silent-corruption case this guards.
+"""
+import argparse
+import hashlib
+import json
+import os
+import sys
+
+DEFAULT_INVENTORY = os.path.join("data", "irreplaceable_data_inventory.json")
+
+# Namespaces that cannot be re-acquired now that provider acquisition is off.
+# Paths are repo-relative. Add a namespace here the moment it becomes
+# irreplaceable -- not after an incident.
+DEFAULT_NAMESPACES = [
+    ".cache/chains",
+    ".cache/chains_v2",
+    ".cache/future_tickers",
+    ".cache/intraday",
+    ".cache/underlying",
+    ".cache/underlying_ohlcv",
+]
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def scan(root: str, deep: bool = False) -> dict:
+    """Count files and bytes under `root`, recursively and deterministically.
+
+    Returns file_count, total_bytes, and (when deep) a single digest over the
+    sorted relative-path + per-file-hash list, which changes if any byte,
+    name, or file count changes.
+    """
+    if not os.path.isdir(root):
+        return {"present": False, "file_count": 0, "total_bytes": 0}
+
+    entries = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            path = os.path.join(dirpath, name)
+            if os.path.isfile(path) and not os.path.islink(path):
+                entries.append((os.path.relpath(path, root), path))
+    entries.sort()
+
+    total = sum(os.path.getsize(p) for _rel, p in entries)
+    out = {"present": True, "file_count": len(entries), "total_bytes": total}
+
+    if deep:
+        roll = hashlib.sha256()
+        for rel, path in entries:
+            roll.update(rel.encode())
+            roll.update(_sha256(path).encode())
+        out["content_digest"] = roll.hexdigest()
+    return out
+
+
+def build_inventory(namespaces: list[str], deep: bool = False) -> dict:
+    return {
+        "note": (
+            "Gitignored, unreplaceable data. Provider acquisition is disabled; "
+            "these bytes cannot be re-fetched. Verify before any worktree "
+            "removal or cleanup sweep."
+        ),
+        "namespaces": {ns: scan(ns, deep=deep) for ns in namespaces},
+    }
+
+
+def verify(inventory: dict, deep: bool = False, allow_absent: bool = False) -> list[str]:
+    """Return a list of human-readable problems; empty means healthy."""
+    problems = []
+    for ns, recorded in sorted(inventory.get("namespaces", {}).items()):
+        if not recorded.get("present"):
+            continue  # never recorded as present; nothing to protect yet
+
+        current = scan(ns, deep=deep and "content_digest" in recorded)
+
+        if not current["present"]:
+            if allow_absent:
+                continue
+            problems.append(
+                f"{ns}: MISSING ENTIRELY (recorded {recorded['file_count']} files, "
+                f"{recorded['total_bytes']} bytes). This data cannot be re-acquired."
+            )
+            continue
+
+        if current["file_count"] < recorded["file_count"]:
+            problems.append(
+                f"{ns}: LOST FILES -- {current['file_count']} present, "
+                f"{recorded['file_count']} recorded "
+                f"({recorded['file_count'] - current['file_count']} gone)."
+            )
+        if current["total_bytes"] < recorded["total_bytes"]:
+            problems.append(
+                f"{ns}: SHRANK -- {current['total_bytes']} bytes present, "
+                f"{recorded['total_bytes']} recorded."
+            )
+
+        recorded_digest = recorded.get("content_digest")
+        if deep and recorded_digest and current.get("content_digest") != recorded_digest:
+            problems.append(
+                f"{ns}: CONTENT CHANGED -- digest {current.get('content_digest')} "
+                f"!= recorded {recorded_digest}."
+            )
+    return problems
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=["generate", "verify"])
+    parser.add_argument("--inventory", default=DEFAULT_INVENTORY)
+    parser.add_argument(
+        "--deep",
+        action="store_true",
+        help="hash file contents (slow; use for byte-level proof)",
+    )
+    parser.add_argument(
+        "--allow-absent",
+        action="store_true",
+        help="treat a wholly-absent namespace as a skip (fresh clone / CI)",
+    )
+    args = parser.parse_args(argv)
+
+    if args.command == "generate":
+        inventory = build_inventory(DEFAULT_NAMESPACES, deep=args.deep)
+        with open(args.inventory, "w") as fh:
+            json.dump(inventory, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        for ns, info in sorted(inventory["namespaces"].items()):
+            state = (
+                f"{info['file_count']} files, {info['total_bytes']} bytes"
+                if info["present"]
+                else "absent"
+            )
+            print(f"  {ns}: {state}")
+        print(f"wrote {args.inventory}")
+        return 0
+
+    if not os.path.exists(args.inventory):
+        print(f"inventory not found: {args.inventory}", file=sys.stderr)
+        return 2
+    with open(args.inventory) as fh:
+        inventory = json.load(fh)
+
+    problems = verify(inventory, deep=args.deep, allow_absent=args.allow_absent)
+    if problems:
+        print("IRREPLACEABLE DATA CHECK FAILED", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        print(
+            "\nDo NOT delete any worktree, branch, or directory until this is "
+            "understood. These bytes cannot be re-fetched.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("irreplaceable data: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

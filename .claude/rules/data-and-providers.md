@@ -33,3 +33,13 @@ Canonical provider plan: `docs/provider-transition.md`.
 - **Provenance travels with data.** Every capture records source, retrieval
   time, and entitlement context. Data with unknown provenance cannot feed a
   gate or verdict.
+- **Irreplaceable bytes must never live in one disposable place.** The cache is
+  gitignored and acquisition is disabled, so every namespace in
+  `data/irreplaceable_data_inventory.json` is unrecoverable if deleted. Run
+  `uv run python tools/irreplaceable_data_guard.py verify` BEFORE removing any
+  worktree, branch, or directory, and re-run `generate` after an approved
+  capture. Incident 2026-08-03: the 1,536-partition future-ticker capture
+  (3,072 provider calls, taken before cancellation) existed only inside a git
+  worktree under `~/Downloads`; `tools/cache_manifest.py` covers only
+  `.cache/chains`, so nothing would have flagged its loss. A worktree is a
+  working copy, never a storage location.

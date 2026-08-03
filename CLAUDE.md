@@ -52,6 +52,7 @@ for docs, briefs, and trivial mechanical fixes — not strategy or ledger code.
 uv sync --frozen                                 # Python 3.12; uv.lock is source of truth
 uv run python -m unittest discover -s tests      # full suite, OFFLINE; exit code is the verdict
 uv run ruff check . && uv run pyright            # lint + types
+uv run python tools/irreplaceable_data_guard.py verify  # REQUIRED before deleting any worktree/branch/dir
 uv run python -m options_researcher.h7_source_health   # exit 1 = refresh needed
 uv run python -m options_researcher.h7_data_gate --source-health-receipt <path>
 uv run python -m options_researcher.h7_entry_preflight  # read-only; writes nothing
