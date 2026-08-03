@@ -5,10 +5,13 @@
 
 # Independent Research Critic Audit Report (LEGACY / UNTRUSTED)
 
-**Audit As-of Timestamp:** 2026-07-27 16:30:00 ET  
-**Target Document:** `reports/attractiveness_context/2026-07-24.json`  
-**Provenance:** LLM-asserted (primary public-source audit 2026-07-27)  
-**As-Of Market Date:** 2026-07-24  
+**Audit As-of Timestamp:** 2026-07-27 16:30:00 ET
+
+**Target Document:** `reports/attractiveness_context/2026-07-24.json`
+
+**Provenance:** LLM-asserted (primary public-source audit 2026-07-27)
+
+**As-Of Market Date:** 2026-07-24
 
 ---
 

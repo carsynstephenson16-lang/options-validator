@@ -152,12 +152,12 @@ INCORRECT / UNSUPPORTED / BLOCKED-FROM-VERIFICATION.
   unverifiable offline. A naive-ET feed would shift every timestamp 4–5 h
   self-consistently (internal prior-quote checks would still pass).
   **BLOCKED-FROM-VERIFICATION**; fail-closed guard delegated (B8), format
-  verification added to real-data gates (§12). 
+  verification added to real-data gates (§12).
 - **F10 — Plan §7 claimed unimplemented capabilities as present.** Multiplicity
   correction, ticker-aware negative controls, and dependence-aware inference
   exist nowhere in the flow code (grep-verified; the placebo is a flat seeded
-  sign permutation with no ticker argument). **Documentation INCORRECT — 
-  corrected in-session** (§7). 
+  sign permutation with no ticker argument). **Documentation INCORRECT —
+  corrected in-session** (§7).
 - **F11 — Audit BLOCK severity is caller-controlled.** `audit.py:110-114,
   310-317`: findings on rows the caller's `tradeable_mask` marks non-tradeable
   downgrade to WARN. Judged intended design (non-tradeable rows are context,

@@ -1,7 +1,8 @@
 # ThetaData Options-Flow Intelligence — Point-in-Time Historical Analogs
 
-**Status:** IMPLEMENTED OFFLINE / DISPLAY-ONLY / DATA ACQUISITION NOT AUTHORIZED  
-**Methodology:** `options_flow_analogs_v2`  
+**Status:** IMPLEMENTED OFFLINE / DISPLAY-ONLY / DATA ACQUISITION NOT AUTHORIZED
+
+**Methodology:** `options_flow_analogs_v2`
 **Authority:** This work cannot change H5–H10 triggers, scoring, ranking, sizing,
 registration, paper-trading authority, or live execution.
 
