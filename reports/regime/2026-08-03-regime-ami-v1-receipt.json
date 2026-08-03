@@ -1,0 +1,80 @@
+{
+  "hypothesis_id": "REGIME-AMI-v1",
+  "registration_doc": "docs/superpowers/2026-08-03-regime-ami-redundancy-registration.md",
+  "ledger_record_present": true,
+  "code_sha": "8a7caada7ce8073ce1adfe390126231b74f64b01",
+  "timestamp": "2026-08-03T13:52:44.926351-04:00",
+  "params": {
+    "window": 63,
+    "step": 5,
+    "n_clusters": 3,
+    "refit_every": 20,
+    "min_fit_windows": 24,
+    "n_init": 5,
+    "seed": 7,
+    "symbols": [
+      "VST",
+      "CEG",
+      "MSFT",
+      "AMZN"
+    ],
+    "data_start": "2018-01-01",
+    "median_ami_threshold": 0.5,
+    "min_included_steps": 100
+  },
+  "symbols": [
+    {
+      "symbol": "VST",
+      "status": "OK",
+      "n_labeled": 395,
+      "n_included": 391,
+      "as_of": "2026-07-31",
+      "ami": 0.028955962938322356,
+      "eligible": true,
+      "degenerate": false,
+      "note": null
+    },
+    {
+      "symbol": "CEG",
+      "status": "OK",
+      "n_labeled": 191,
+      "n_included": 187,
+      "as_of": "2026-07-31",
+      "ami": 0.11202806377972689,
+      "eligible": true,
+      "degenerate": false,
+      "note": null
+    },
+    {
+      "symbol": "MSFT",
+      "status": "OK",
+      "n_labeled": 395,
+      "n_included": 391,
+      "as_of": "2026-07-31",
+      "ami": 0.03002276205607849,
+      "eligible": true,
+      "degenerate": false,
+      "note": null
+    },
+    {
+      "symbol": "AMZN",
+      "status": "OK",
+      "n_labeled": 395,
+      "n_included": 391,
+      "as_of": "2026-07-31",
+      "ami": 0.019404253043819937,
+      "eligible": true,
+      "degenerate": false,
+      "note": null
+    }
+  ],
+  "eligible_symbols": [
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN"
+  ],
+  "median_ami": 0.029489362497200425,
+  "decision": "RETAINS_DISTINCT_INFORMATION",
+  "disclaimer": "Descriptive audit of a display-only lane; not a trade verdict. A RETAINS_DISTINCT_INFORMATION result is 'not yet rejected on redundancy', nothing more."
+}
