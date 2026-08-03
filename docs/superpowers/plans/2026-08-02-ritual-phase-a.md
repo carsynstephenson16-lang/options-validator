@@ -90,9 +90,10 @@ Run the focused unittest files, then validate `NVDA_2026-07-31.parquet`
 against the clean-commit receipt. Receipt `6fd9a3ca...9578` was superseded by
 the dependency-closure repair (`c08106ba...c7e3`), the initial consumer-scoped
 contract (`689c2b02...b1b6`), the formatter-clean contract
-(`1e6951cc...61b3`), and the programmatic-authority repair
-(`316e415f...7959`). The final scope-closed receipt is `99d409c3...c68d`,
-bound to source commit `f0c41fde...e9c7`.
+(`1e6951cc...61b3`), the programmatic-authority repair
+(`316e415f...7959`), and the isolated scope-closed receipt
+(`99d409c3...c68d`). The final combined-`main` receipt is
+`865024a8...3123`, bound to source commit `14c59606...0174`.
 
 Expected: focused tests pass; the real partition returns `PASS WITH WARNINGS` and its bound SHA-256.
 

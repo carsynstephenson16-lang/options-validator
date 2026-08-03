@@ -10,8 +10,8 @@ The full machine receipt is stored beside the ignored data at:
 
 `/Users/carsynstephenson/options-validator/.cache/chains_v2/od1-2026-08-01/_meta/full_audit.json`
 
-- Receipt SHA-256 identity: `99d409c3dabd67dfe2464a28281f5edb71737c1a926815fa362364b92c5ac68d`
-- Audit-source commit: `f0c41fde57d4e6dcde5d33f187896339e92ee9c7`
+- Receipt SHA-256 identity: `865024a8377210143eb7f7b4672fe0b01d48fe7a7104aecdb8bcd2ca346b3123`
+- Audit-source commit: `14c59606d7ed948a44d47a8f3d6db4546d730174`
 - Source identity: clean; 20 exact source hashes bound in the full receipt,
   including `data/atomic_io.py` and
   `options_researcher/h7_synthetic_proof.py`, two runtime dependencies omitted
@@ -29,9 +29,10 @@ The outer receipt hash, embedded base-audit receipt, normalized file-hash map,
 and raw-file hash map were independently recomputed after the dependency
 closure and consumer contract were repaired. The normalized and raw hash-map
 identities are unchanged from the superseded `c08106ba...c7e3`,
-`689c2b02...b1b6`, `1e6951cc...61b3`, and `316e415f...7959` receipts, proving
-that the contract, formatting, and final authority/scope-boundary repairs did
-not change data bytes.
+`689c2b02...b1b6`, `1e6951cc...61b3`, `316e415f...7959`, and
+`99d409c3...c68d` receipts, proving that the contract, formatting, final
+authority/scope-boundary repairs, and combination with `main` did not change
+data bytes.
 
 ## Exact-byte quarantines
 
