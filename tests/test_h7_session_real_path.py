@@ -244,7 +244,7 @@ class RealSessionCase(unittest.TestCase):
             gate_inputs[f"chain:{symbol}"] = chain_path
             gate_symbols[symbol] = {
                 "symbol": symbol,
-                "requested_run_date": DECISION,
+                "requested_run_date": gate_requested,
                 "evaluation_session": evaluation,
                 "verdict": verdict,
                 "close": {"path": str(close_path)},
