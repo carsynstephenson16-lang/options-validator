@@ -1134,3 +1134,11 @@ repo-scale corner survives as Badge B in the briefs.
   redundant ⇒ reclassify as rejected alongside HMM.
 - **Review date:** at the first live-hypothesis verdict, or 2026-11-03,
   whichever comes first.
+- **UN-PARKED 2026-08-03 (owner directive, same day):** owner explicitly
+  overrode the standing rule ("I want to amend my own scope rules and
+  unfreeze that") and authorized the build as a display-only offline lane.
+  Scope-guard exception recorded in `.cursorrules` and `AGENTS.md`.
+  yfinance stays excluded; data comes from `data/underlying_closes.py`.
+  The AMI redundancy test in the evaluation report §3 remains open and is
+  now runnable against the landed module whenever the owner types the
+  threshold; a redundant result still demotes this lane to rejected.

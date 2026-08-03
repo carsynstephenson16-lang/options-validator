@@ -108,3 +108,29 @@ overrides the standing rule:
 - Assumption: cached underlying closes cover SPY densely enough for the test
   window (SPY chain files end 2026-06-30; to be inventoried before the test
   is registered).
+
+## Addendum — owner override and authorized build (2026-08-03, same day)
+
+After reading this evaluation, the owner explicitly overrode the standing
+pre-verdict rule and amended the scope guard (owner wording: "I want to amend
+my own scope rules and unfreeze that. Continue with implementing this into
+the code base"). The exception is recorded in `.cursorrules` and `AGENTS.md`
+(kept in sync) and the parking-lot entry is marked UN-PARKED.
+
+Scope of the authorized build — narrower than the original request:
+
+- **Offline only.** Data via `data/underlying_closes.py` (split-adjusted
+  cached closes, `allow_oos=True` disclosed post-2022 researcher look).
+  yfinance and all network providers stay excluded; OD-4 stands. Gate 3 of
+  §2 is therefore satisfied by reimplementation, not waived.
+- **Walk-forward causal labeling only.** The upstream in-sample fit path is
+  not ported; gate 5's look-ahead concern is closed by construction. The
+  upstream backtest/equity-curve code is not ported at all (a backtest would
+  require its own pre-registration).
+- **Display-only, non-verdict-bearing.** Regime labels are unsupervised
+  historical descriptions; transition tables are historical frequencies, not
+  forecasts. Nothing in this lane can FIRE, gate, or adjudicate.
+- **Gate 4 (redundancy vs `rv_percentile` + SMA posture) remains OPEN.** The
+  landed module makes the pre-specified AMI test cheap to run; the owner
+  still types the frozen threshold before that test, and a redundant result
+  demotes this lane to rejected alongside HMM.
