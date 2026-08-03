@@ -112,6 +112,32 @@ Do not work around a hook; a block is correct by default. This repo is a
 validator: it never places orders, never connects to a live brokerage
 endpoint, and never disables paper mode.
 
+## Worktree location rule (owner-directed 2026-08-03)
+
+Worktrees live under `.tmp/worktrees/<short-name>` and **nowhere else** — never
+in `/tmp` or `/private/tmp` (macOS purges it), never in `~/Downloads`, never as
+a bare sibling directory. `git worktree list` from this repo is then the single
+honest inventory; a stray checkout that looks like a whole project when opened
+in an editor is exactly the confusion this rule prevents.
+
+Two sanctioned exceptions, both load-bearing for scheduled jobs — **do not
+remove or relocate them**:
+
+- `~/options-validator-ops` — production execution dir for the
+  `daily-ritual` and `live-dashboard` LaunchAgents (`WorkingDirectory` is
+  hardcoded in the plists; its `.cache` is a symlink to this repo's, and its
+  `.tmp/` holds live receipts not mirrored here).
+- `~/options-validator-research` — sole on-disk location of
+  `tools/research_refresh.sh` for the `research-refresh` LaunchAgent.
+
+To move a misplaced worktree use `git worktree move` (preserves the branch and
+its commits); never `rm -rf` a worktree. Before removing any worktree, branch,
+or directory, run `uv run python tools/irreplaceable_data_guard.py verify` AND
+check the target for untracked/gitignored data with
+`git -C <path> status --short --ignored=matching --untracked-files=all` — the
+2026-08-03 od1-v2 incident lost 110 MB of unrepurchasable provider data that
+lived only in a worktree and was invisible to every test and manifest.
+
 ## Conventions
 
 - Root dated notes (`/2026-*.md`, `Untitled*`) are gitignored Obsidian scratch — never commit them.

@@ -95,6 +95,25 @@ Never run destructive commands like `git reset --hard`, `git checkout --`, mass 
 Do not amend commits unless the user explicitly asks.
 If unexpected unrelated changes appear, stop and report the issue.
 
+### Worktree location rule (owner-directed 2026-08-03)
+
+Create worktrees only under `.tmp/worktrees/<short-name>`. Never in `/tmp` or
+`/private/tmp` (macOS purges it), never in `~/Downloads`, never as a bare
+sibling directory. `git worktree list` from the main repo must stay the single
+honest inventory.
+
+`~/options-validator-ops` and `~/options-validator-research` are sanctioned
+exceptions with hardcoded LaunchAgent dependencies — never remove or relocate
+them.
+
+Relocate a misplaced worktree with `git worktree move` (preserves branch and
+commits); never `rm -rf` a worktree. Before removing any worktree, branch, or
+directory, run `uv run python tools/irreplaceable_data_guard.py verify` AND
+inspect the target with
+`git -C <path> status --short --ignored=matching --untracked-files=all`. The
+2026-08-03 od1-v2 incident lost 110 MB of unrepurchasable provider data that
+lived only inside a worktree and was invisible to every test and manifest.
+
 ## Testing and Verification
 
 Before behavior-changing code edits, run the relevant baseline checks. For
