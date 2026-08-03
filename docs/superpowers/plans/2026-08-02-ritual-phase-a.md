@@ -183,4 +183,5 @@ git commit -m "fix(ritual): fail closed before stateful work"
 Final verification: 2,347 tests passed; repository-wide Ruff lint and Pyright
 passed; shell syntax and read-only ritual status passed; independent re-review
 reported no remaining Critical or Important findings. Repository-wide Ruff
-formatting still reports 250 untouched legacy files and is outside Phase A.
+formatting still reports 250 legacy files, including pre-existing formatting
+debt in `h7_watch.py`; that wholesale rewrite is outside Phase A.
