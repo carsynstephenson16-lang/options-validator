@@ -59,6 +59,13 @@ describe the script or the full consumer sequence as read-only.
 It does not place broker orders or authorize entries. Watcher output is
 information for the owner, never an instruction to act.
 
+The script records source health before its H7 data gate. The resulting gate
+receipt must bind that source-health receipt: a bare data-gate command creates
+an immutable receipt that permanently revokes that session's real-entry
+authority. A `NO_GO` prevents entry watchers and any ordinary consumer path;
+the script's receipt-bound H7 exit management remains separate. The script is
+authoritative for the exact downstream order and same-session flags.
+
 ## Report contract
 
 Report the checkout/branch guard, provider-policy state, evaluation session,
