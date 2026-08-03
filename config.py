@@ -768,3 +768,20 @@ IV_CALIBRATION_MEDIAN_ABS_DIFF_MAX = 0.02  # LLM-proposed, owner-delegated 2026-
 IV_CALIBRATION_IQR_MAX = 0.03            # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
 IV_CALIBRATION_MAX_AGE_DAYS = 30         # LLM-proposed, owner-delegated 2026-07-24; revisit against the first real calibration receipt
 IV_CALIBRATION_RECEIPT_DIR = "reports/iv_solver_calibration"  # durable per-run calibration receipts
+
+# ---------------------------------------------------------------------------
+# WASSERSTEIN REGIME CLUSTERING -- offline, DISPLAY-ONLY descriptive lane
+# (owner-directed scope exception 2026-08-03, .cursorrules "Scope guard";
+# evaluation reports/2026-08-03-wasserstein-regime-clustering-evaluation.md).
+# Adapted upstream defaults (mehul532/wasserstein-market-regime-clustering).
+# NOT registered hypothesis parameters: nothing here gates, sizes, or triggers
+# a trade, and no verdict of any kind reads these values.
+# ---------------------------------------------------------------------------
+REGIME_WINDOW_DAYS = 63     # rolling log-return window length (sessions)
+REGIME_STEP_DAYS = 5        # stride between successive windows
+REGIME_N_CLUSTERS = 3       # number of Wasserstein k-means regimes
+REGIME_REFIT_EVERY = 20     # walk-forward refit cadence (in window steps)
+REGIME_MIN_FIT_WINDOWS = 24  # minimum training windows before any label is emitted
+REGIME_N_INIT = 5           # k-means random restarts kept by lowest inertia
+REGIME_SEED = 7             # base seed; each refit uses REGIME_SEED + step index
+REGIME_SYMBOLS = ["VST", "CEG", "MSFT", "AMZN"]  # core-name display scope

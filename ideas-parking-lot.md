@@ -1109,3 +1109,36 @@ repo-scale corner survives as Badge B in the briefs.
   the N3-1 "owner-nod one-page spec" path.
 - **Gate before building:** owner-approved one-page spec freezing the
   skew definition; then the standard RQ2 badge pipeline.
+
+## Wasserstein regime clustering (parked 2026-08-03, owner-requested integration)
+
+- **What:** integrate `mehul532/wasserstein-market-regime-clustering` (MIT,
+  research demo): 1-D Wasserstein k-means over rolling 63-day return
+  distributions, 3 regimes, SPY-centric, yfinance-fed. Owner motivation:
+  "grasp current market levels and even predictive points."
+- **Why parked:** five gates fail — scope guard (moves no live hypothesis
+  toward verdict); standing pre-verdict rule (no new build before a verdict
+  lands); yfinance is an unapproved network provider (acquisition disabled
+  OD-4); the 2026-07-22 HMM-regime rejection's redundancy objection
+  (rv_percentile + SMA posture) is unanswered; and the repo's own README
+  disclaims prediction ("illustrative, not predictive"). Full evaluation:
+  `reports/2026-08-03-wasserstein-regime-clustering-evaluation.md`.
+- **What survives scrutiny:** the walk-forward path is causally timed
+  (refit on past windows only, positions shifted one period), and
+  dispersion-based regime re-selection sidesteps label-switching — this is
+  the best-engineered regime candidate seen so far; parked, not rejected.
+- **Gate before building:** (1) a live-hypothesis verdict lands OR explicit
+  owner override of the standing rule; (2) owner types the frozen AMI
+  redundancy threshold for the pre-specified offline un-park test (design
+  in the evaluation report §3); (3) test run once on cached closes only;
+  redundant ⇒ reclassify as rejected alongside HMM.
+- **Review date:** at the first live-hypothesis verdict, or 2026-11-03,
+  whichever comes first.
+- **UN-PARKED 2026-08-03 (owner directive, same day):** owner explicitly
+  overrode the standing rule ("I want to amend my own scope rules and
+  unfreeze that") and authorized the build as a display-only offline lane.
+  Scope-guard exception recorded in `.cursorrules` and `AGENTS.md`.
+  yfinance stays excluded; data comes from `data/underlying_closes.py`.
+  The AMI redundancy test in the evaluation report §3 remains open and is
+  now runnable against the landed module whenever the owner types the
+  threshold; a redundant result still demotes this lane to rejected.
