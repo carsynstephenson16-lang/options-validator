@@ -161,6 +161,18 @@ permanently retired. Before adding a new
 capability, ticker, strategy, or tool, answer: "Does this move one of the live
 hypotheses toward its declared verdict?" If no, write it into
 `ideas-parking-lot.md` and continue.
+Owner-directed exception (2026-08-03, owner wording: "I want to amend my own
+scope rules and unfreeze that"): the offline Wasserstein regime-clustering
+research lane is authorized as a display-only descriptive capability
+(un-parked from `ideas-parking-lot.md`; evaluation:
+`reports/2026-08-03-wasserstein-regime-clustering-evaluation.md`). Constraints
+that remain binding: cached data only via `data/underlying_closes.py` — no
+yfinance or any network provider (OD-4 stands); walk-forward causal labeling
+only (no in-sample labels presented as current state); every output carries
+its max as-of session; regime labels are historical descriptions, and any
+transition frequencies are historical frequencies, not forecasts; nothing this
+lane emits is verdict-bearing, FIRE-capable, or a registered signal without
+its own future registration.
 Registration feasibility gate (2026-07-24): a new loss-gated hypothesis or
 forward window may only be registered if the historical base rate of its full
 entry stack projects expected entries >= 2x the loss bar over the declared
