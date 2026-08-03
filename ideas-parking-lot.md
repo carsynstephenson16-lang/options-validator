@@ -1142,3 +1142,9 @@ repo-scale corner survives as Badge B in the briefs.
   The AMI redundancy test in the evaluation report §3 remains open and is
   now runnable against the landed module whenever the owner types the
   threshold; a redundant result still demotes this lane to rejected.
+- **REGISTERED 2026-08-03 (owner wording "Go register and run it"):**
+  REGIME-AMI-v1, ledger trial_intent record hash `1575d0a0b6d6acad…`, frozen
+  spec `docs/superpowers/2026-08-03-regime-ami-redundancy-registration.md`,
+  runner `uv run python -m tools.regime_redundancy_audit`. Threshold 0.50 is
+  LLM-proposed under that directive; owner veto before the run voids it.
+  Awaiting one run on cached data; result recorded whatever it shows.
