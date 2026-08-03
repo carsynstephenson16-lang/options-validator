@@ -28,6 +28,7 @@ from pathlib import Path
 import pandas as pd
 
 import config
+from data.cache_schema import CacheAuditReceiptError, validate_v2_audit_receipt
 from data.underlying_closes import adjustment_factor, load_closes_adjusted
 from options_researcher import h7_signals as sig
 from options_researcher.chains import load_range
@@ -63,6 +64,83 @@ from strategies.h7_lanes import decide_lane_a, decide_lane_b, decide_lane_c
 H7_POSITIONS_PATH = Path("data/positions/h7_positions.csv")
 
 
+def _validate_gate_scope_closure(receipt: dict, *, expected_scope: dict,
+                                 evaluation_session: str) -> None:
+    """Recompute official-scope authority instead of trusting receipt claims."""
+    official_scope = scope_identity()
+    expected_symbols = list(official_scope["symbols"])
+    records = receipt.get("symbols")
+    if (expected_scope != official_scope
+            or receipt.get("scope") != official_scope
+            or receipt.get("universe") != expected_symbols
+            or not isinstance(records, dict)
+            or set(records) != set(expected_symbols)):
+        raise ValueError("data-gate receipt failed official scope closure")
+
+    requested_run_date = receipt.get("requested_run_date")
+    expected_inputs = {}
+    go_count = 0
+    for symbol in expected_symbols:
+        record = records[symbol]
+        if (not isinstance(record, dict)
+                or record.get("symbol") != symbol
+                or record.get("requested_run_date") != requested_run_date
+                or record.get("evaluation_session") != evaluation_session):
+            raise ValueError(
+                f"data-gate receipt failed scope closure for {symbol}")
+        verdict = record.get("verdict")
+        if verdict not in {"GO", "NO_GO"}:
+            raise ValueError(
+                f"data-gate receipt has invalid verdict for {symbol}")
+        close_path = record.get("close", {}).get("path")
+        chain_path = record.get("chain", {}).get("expected_path")
+        if (not isinstance(close_path, str)
+                or Path(close_path).name != f"{symbol}.parquet"
+                or not isinstance(chain_path, str)
+                or Path(chain_path).name != (
+                    f"{symbol}_{evaluation_session}.parquet")):
+            raise ValueError(
+                f"data-gate receipt has invalid input paths for {symbol}")
+        expected_inputs[f"close:{symbol}"] = close_path
+        expected_inputs[f"chain:{symbol}"] = chain_path
+        if verdict == "GO":
+            if (not Path(close_path).is_file()
+                    or not Path(chain_path).is_file()):
+                raise ValueError(
+                    f"{symbol} GO lacks complete exact-session inputs")
+            try:
+                actual_binding = validate_v2_audit_receipt(
+                    Path(chain_path).parent, Path(chain_path), symbol=symbol,
+                    session=evaluation_session, consumer_scope="H7")
+            except CacheAuditReceiptError as exc:
+                raise ValueError(
+                    f"{symbol} GO lacks a real H7 full-audit binding") from exc
+            claimed_binding = record["chain"].get("audit_receipt")
+            if claimed_binding != {"valid": True, **actual_binding}:
+                raise ValueError(
+                    f"{symbol} GO lacks a real H7 full-audit binding")
+            go_count += 1
+
+    no_go_count = len(expected_symbols) - go_count
+    expected_verdict = "GO" if no_go_count == 0 else "NO_GO"
+    if (receipt.get("go_count") != go_count
+            or receipt.get("no_go_count") != no_go_count
+            or receipt.get("whole_universe_verdict") != expected_verdict):
+        raise ValueError(
+            "data-gate receipt counts/verdict failed scope closure")
+
+    stored_inputs = receipt.get("input_files")
+    if (not isinstance(stored_inputs, dict)
+            or set(stored_inputs) != set(expected_inputs)):
+        raise ValueError("data-gate receipt input labels failed scope closure")
+    for label, expected_path in expected_inputs.items():
+        stored = stored_inputs[label]
+        if (not isinstance(stored, dict)
+                or stored.get("path") != expected_path):
+            raise ValueError(
+                f"data-gate receipt input binding failed scope closure: {label}")
+
+
 def validate_data_gate_receipt(path: Path, *, evaluation_session: str,
                                names: list[str] | tuple[str, ...],
                                included: list[str] | tuple[str, ...] | None
@@ -84,6 +162,9 @@ def validate_data_gate_receipt(path: Path, *, evaluation_session: str,
         raise ValueError("data-gate receipt scope is not the official current scope")
     if receipt.get("evaluation_session") != evaluation_session:
         raise ValueError("data-gate receipt session does not match watcher")
+    _validate_gate_scope_closure(
+        receipt, expected_scope=expected_scope,
+        evaluation_session=evaluation_session)
     if included is None:
         if receipt.get("whole_universe_verdict") != "GO":
             raise ValueError("data-gate receipt is not a successful whole-universe pass")

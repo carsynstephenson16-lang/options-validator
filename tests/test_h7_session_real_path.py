@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 
+from data.cache_schema import V2_FULL_AUDIT_SCHEMA
 from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_forward_book as book
 from options_researcher import h7_paper_lifecycle as lifecycle
@@ -117,6 +119,12 @@ class RealSessionCase(unittest.TestCase):
         )
         self.source_hash.start()
         self.addCleanup(self.source_hash.stop)
+        self.audit_validator = patch(
+            "options_researcher.h7_watch.validate_v2_audit_receipt",
+            side_effect=self._fixture_audit_validator,
+        )
+        self.audit_validator.start()
+        self.addCleanup(self.audit_validator.stop)
         self.root = Path(self.tmp.name)
         self.base = self.root / "forward"
         self.scope = scope_identity()
@@ -147,6 +155,22 @@ class RealSessionCase(unittest.TestCase):
             self.root / f"source-{evaluation}.json",
             self.root / f"gate-{evaluation}.json",
         )
+
+    def _fixture_audit_validator(
+        self, cache_dir, chain_path, *, symbol, session, consumer_scope
+    ) -> dict:
+        chain_path = Path(chain_path)
+        self.assertEqual(Path(cache_dir), chain_path.parent)
+        self.assertEqual(consumer_scope, "H7")
+        self.assertEqual(chain_path.name, f"{symbol}_{session}.parquet")
+        return {
+            "path": str(chain_path.parent / "_meta" / "full_audit.json"),
+            "receipt_hash": "f" * 64,
+            "schema": V2_FULL_AUDIT_SCHEMA,
+            "verdict": "PASS WITH WARNINGS",
+            "partition_sha256": hashlib.sha256(chain_path.read_bytes()).hexdigest(),
+            "consumer_scope": "H7",
+        }
 
     def _write_receipts(
         self,
@@ -184,8 +208,7 @@ class RealSessionCase(unittest.TestCase):
         # output when symbols_override is given) rather than the synthetic
         # unhealthy_set, so both code paths stay internally consistent.
         source_unhealthy = sorted(
-            symbol for symbol, row in source_symbol_map.items()
-            if row.get("healthy") is not True
+            symbol for symbol, row in source_symbol_map.items() if row.get("healthy") is not True
         )
         source = make_receipt(
             "source_health",
@@ -205,20 +228,52 @@ class RealSessionCase(unittest.TestCase):
             },
         )
         source_path.write_text(json.dumps(source))
+        input_root = self.root / "gate-inputs" / evaluation
+        close_dir = input_root / "underlying"
+        chain_dir = input_root / "chains"
+        close_dir.mkdir(parents=True, exist_ok=True)
+        chain_dir.mkdir(parents=True, exist_ok=True)
+        gate_symbols = {}
+        gate_inputs = {}
+        for symbol in self.scope["symbols"]:
+            close_path = close_dir / f"{symbol}.parquet"
+            chain_path = chain_dir / f"{symbol}_{evaluation}.parquet"
+            close_path.write_bytes(f"close:{symbol}:{evaluation}".encode())
+            chain_path.write_bytes(f"chain:{symbol}:{evaluation}".encode())
+            gate_inputs[f"close:{symbol}"] = close_path
+            gate_inputs[f"chain:{symbol}"] = chain_path
+            gate_symbols[symbol] = {
+                "symbol": symbol,
+                "requested_run_date": DECISION,
+                "evaluation_session": evaluation,
+                "verdict": verdict,
+                "close": {"path": str(close_path)},
+                "chain": {
+                    "expected_path": str(chain_path),
+                    "audit_receipt": {
+                        "valid": True,
+                        **self._fixture_audit_validator(
+                            chain_dir,
+                            chain_path,
+                            symbol=symbol,
+                            session=evaluation,
+                            consumer_scope="H7",
+                        ),
+                    },
+                },
+            }
         gate = make_receipt(
             "data_gate",
             {
                 "evaluation_session": evaluation,
                 "requested_run_date": gate_requested,
                 "scope": self.scope,
+                "universe": list(self.scope["symbols"]),
                 "whole_universe_verdict": verdict,
                 "go_count": len(self.scope["symbols"]) if verdict == "GO" else 0,
                 "no_go_count": 0 if verdict == "GO" else len(self.scope["symbols"]),
-                "symbols": {
-                    symbol: {"symbol": symbol, "verdict": verdict}
-                    for symbol in self.scope["symbols"]
-                },
-                "input_files": {},
+                "symbols": gate_symbols,
+                "input_files": input_files(gate_inputs),
                 "source_health_receipt_hash": (
                     source["receipt_hash"] if linked else "not-the-source-hash"
                 ),
@@ -447,15 +502,23 @@ class TestSessionRefusals(RealSessionCase):
 
         def row(symbol: str, expected: date, *, event: str) -> dict:
             return {
-                "record_id": f"{symbol}-{event}", "symbol": symbol,
-                "event_id": f"{symbol}-{event}", "fiscal_period": "FY26Q2",
+                "record_id": f"{symbol}-{event}",
+                "symbol": symbol,
+                "event_id": f"{symbol}-{event}",
+                "fiscal_period": "FY26Q2",
                 "record_type": "assertion",
-                "event_class": "actual_quarterly_earnings", "status": "confirmed",
-                "expected_date": expected, "occurred_date": None,
-                "session_timing": "amc", "source_type": "company_pr",
+                "event_class": "actual_quarterly_earnings",
+                "status": "confirmed",
+                "expected_date": expected,
+                "occurred_date": None,
+                "session_timing": "amc",
+                "source_type": "company_pr",
                 "source_url": "https://example.test/ir",
-                "known_as_of_utc": known, "checked_at_utc": known,
-                "supersedes": "", "promoted_from": "", "notes": "",
+                "known_as_of_utc": known,
+                "checked_at_utc": known,
+                "supersedes": "",
+                "promoted_from": "",
+                "notes": "",
             }
 
         rows = [row("NOW", on - timedelta(days=7), event="past")]
@@ -484,7 +547,7 @@ class TestSessionRefusals(RealSessionCase):
 
         self._write_receipts(EVALUATION, symbols_override=result["symbols"])
 
-        session = self.open()   # must NOT raise SessionRefused
+        session = self.open()  # must NOT raise SessionRefused
         self.assertIn("NOW", session.included_symbols)
         evidence = session_module.record_session_evidence(session, symbol="NOW")
         self.assertIn("NOW", evidence.source_health.payload["healthy_symbols"])

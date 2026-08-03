@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Automated daily ritual — frozen operator order per H7 amendment v1.4
-# (2026-07-14): topup -> source health -> data gate (HARD) -> h7 exit
+# (2026-07-14): source health -> data gate (HARD) -> h7 exit
 # management -> QM OHLCV refresh -> attractiveness feature rebuild ->
 # h7_watch -> h6_features -> h6_watch -> h5 entry_watch [-> h8_watch if
 # built] -> h10_watch/h10_observe -> dashboards. The QM OHLCV refresh and
@@ -8,11 +8,11 @@
 # h5 entry_watch on 2026-07-24 (H10_RITUAL_ORDER_FIX, facts.log): each
 # consumer was running BEFORE its own data refresh, producing false
 # DATA/stale-IV-rank skips (see the 2026-07-24 07:10 production log).
-# Owner-authorized for unattended cron use 2026-07-15. It never creates,
-# approves, or fills an entry and never places a broker order. After the
-# real-exit review/owner pass it does perform receipt-bound mechanical
-# real-paper exit management; a refusal blocks the H7 entry path. Logs to
-# .tmp/daily_ritual/.
+# The former unattended authorization is paused. A read-only tracked authority
+# preflight now runs before log creation or any receipt, ledger, paper-book,
+# Git, backup, or provider surface. It never places a broker order. If a future
+# owner-approved window passes the preflight, the frozen consumer order below
+# remains authoritative. Logs for full runs go to .tmp/daily_ritual/.
 
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 # Derive the repo root from THIS script's own location rather than hardcoding
@@ -24,7 +24,32 @@ export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 # backstop that makes a wrong branch fail loudly instead of silently.
 REPO="${0:A:h:h}"
 UV="$HOME/.local/bin/uv"
+PYTHON="$REPO/.venv/bin/python"
 cd "$REPO" || exit 2
+
+if [ ! -x "$PYTHON" ]; then
+  echo "ritual authority unavailable: expected installed interpreter at $PYTHON" >&2
+  exit 2
+fi
+
+RITUAL_MODE="${1:-run}"
+if [ "$RITUAL_MODE" = "status" ]; then
+  exec env PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m data.ritual_authority status
+fi
+if [ "$RITUAL_MODE" != "run" ]; then
+  echo "usage: tools/daily_ritual.sh [run|status]" >&2
+  exit 2
+fi
+
+# This gate is deliberately before mkdir/log redirection and every stateful
+# surface below. A blocked full run emits only the read-only JSON status to
+# stdout and exits; it does not create a success-shaped ritual artifact.
+env PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m data.ritual_authority require-full
+AUTHORITY_RC=$?
+if [ "$AUTHORITY_RC" -ne 0 ]; then
+  echo "RITUAL STATUS: BLOCKED BY TRACKED AUTHORITY"
+  exit "$AUTHORITY_RC"
+fi
 
 LOGDIR="$REPO/.tmp/daily_ritual"
 mkdir -p "$LOGDIR"
@@ -62,62 +87,6 @@ fi
 # verifies this role, repository root, main branch, and origin/main identity
 # before any OOS cache or BLIND_CACHE fact mutation.
 export OPTIONS_VALIDATOR_CACHE_ROLE=publisher
-
-# Preflight — ThetaData auth. PATH C (data/thetadata_adapter.py) uses a direct
-# API key over HTTP against the remote MDDS: NO local ThetaTerminal process,
-# no port to start. The only unattended dependency is THETADATA_API_KEY
-# resolving from .env — which load_dotenv() reads relative to this working
-# directory (set above by `cd $REPO`). Surface a missing key LOUDLY rather
-# than letting the top-up fail into a silently stale board.
-if "$UV" run python -c 'from data.thetadata_adapter import _resolve_api_key; _resolve_api_key()' 2>/dev/null; then
-  KEY_OK=1
-else
-  KEY_OK=0
-  note "ThetaData API key: NOT RESOLVED from .env — top-up cannot fetch; board will be STALE"
-fi
-
-# Step 0 — recent-day top-up plus whole-cohort provenance preflight. This runs
-# even without an API key: a complete cache/fact cohort is network-free, while
-# a genuinely missing day fails loudly when acquisition cannot authenticate.
-H7_DATA_READY=0
-if "$UV" run python data/recent_topup.py --scope h7 --refresh-closes; then
-  H7_DATA_READY=1
-  note "topup: OK (closes refreshed)"
-else
-  if [ "$KEY_OK" -eq 1 ]; then
-    crit "topup/provenance preflight: FAILED (see traceback; API key resolved) — H6/H8 and entry watchers blocked"
-  else
-    crit "topup/provenance preflight: FAILED (no API key for missing data) — H6/H8 and entry watchers blocked"
-  fi
-fi
-
-# Step 0b — display-only extras top-up. This lane is presentation support,
-# not H7 evidence: it is deliberately outside every H7 gate/protected branch,
-# emits summary notes only, and can never change CRITICAL or the ritual exit
-# code. A failure leaves the extras visibly stale/blocked on the board.
-if [ "$KEY_OK" -eq 1 ] && "$UV" run python data/recent_topup.py --scope display-extra --refresh-closes; then
-  note "display-extra topup: OK (closes refreshed)"
-else
-  if [ "$KEY_OK" -eq 1 ]; then
-    note "display-extra topup: FAILED (non-blocking; display-only data may be stale)"
-  else
-    note "display-extra topup: SKIPPED (no API key; display-only data may be stale)"
-  fi
-fi
-
-# Step 0b — display-only extras top-up. This lane is presentation support,
-# not H7 evidence: it is deliberately outside every H7 gate/protected branch,
-# emits summary notes only, and can never change CRITICAL or the ritual exit
-# code. A failure leaves the extras visibly stale/blocked on the board.
-if [ "$KEY_OK" -eq 1 ] && "$UV" run python data/recent_topup.py --scope display-extra --refresh-closes; then
-  note "display-extra topup: OK (closes refreshed)"
-else
-  if [ "$KEY_OK" -eq 1 ]; then
-    note "display-extra topup: FAILED (non-blocking; display-only data may be stale)"
-  else
-    note "display-extra topup: SKIPPED (no API key; display-only data may be stale)"
-  fi
-fi
 
 # Step 1 — source health (run AND record; per-name ban, never blocks board).
 # One-door repair (e64e5e9) receipt chain: the gate must LINK the health
@@ -201,10 +170,6 @@ if [ -n "$DG_RECEIPT" ] && [ -f "$DG_RECEIPT" ]; then
   else
     crit "data-gate receipt has unexpected verdict: $DG_VERDICT"
   fi
-fi
-if [ "$H7_DATA_READY" -ne 1 ]; then
-  GATE_GO=0
-  note "registered entry watchers: BLOCKED by upstream cache/provenance preflight"
 fi
 note "evaluation session: ${AS_OF}"
 

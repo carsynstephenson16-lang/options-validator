@@ -8,6 +8,7 @@ activation gate.
 
 from __future__ import annotations
 
+import json
 import shutil
 from datetime import date, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ import pandas as pd
 
 import config
 from data.cache_runner import session_close_utc
+from data.cache_schema import V2_SYNTHETIC_AUDIT_SCHEMA
 from options_researcher import h7_data_gate
 from options_researcher import h7_event_ledger as ledger
 from options_researcher.h7_forward_book import derive_book, record_board_resolution
@@ -35,6 +37,7 @@ from options_researcher.h7_paper_lifecycle import (
 )
 from options_researcher.h7_scope import watch_universe
 from options_researcher.h7_source_health import symbol_health
+from research.hashing import canonical_json, sha256_file, sha256_hex
 
 FIXTURE_ID = "h7-stage7-v1"
 BOUNDARY = "BUILD-ONLY; SYNTHETIC-ONLY; INACTIVE"
@@ -104,6 +107,21 @@ def _chain(*, bid: float = 4.9, ask: float = 5.0) -> pd.DataFrame:
                 "gamma": 0.02,
                 "theta": -0.03,
                 "vega": 0.10,
+                "timestamp": pd.Timestamp(
+                    f"{DECISION_SESSION} 17:15:00",
+                    tz="America/New_York",
+                ),
+                "bid_size": 17,
+                "bid_condition": 50,
+                "ask_size": 23,
+                "ask_condition": 50,
+                "iv_error": 0.001,
+                "underlying_timestamp": pd.Timestamp(
+                    f"{DECISION_SESSION} 16:00:00",
+                    tz="America/New_York",
+                ),
+                "underlying_price": 100.0,
+                "thetadata_client_version": "1.0.9",
             }
         ]
     )
@@ -121,10 +139,35 @@ def _write_market_fixtures(root: Path) -> tuple[Path, Path]:
                 "close": [98.0, 99.0, 100.0],
             }
         ).to_parquet(closes / f"{symbol}.parquet", index=False)
-        _chain().to_parquet(
-            chains / f"{symbol}_{DECISION_SESSION}.parquet", index=False
-        )
+        _chain().to_parquet(chains / f"{symbol}_{DECISION_SESSION}.parquet", index=False)
+    _write_synthetic_full_audit_receipt(chains)
     return closes, chains
+
+
+def _write_synthetic_full_audit_receipt(chain_dir: Path) -> Path:
+    """Write a distinct receipt that can never authorize real v2 evidence."""
+    chain_dir = Path(chain_dir)
+    partitions = sorted(chain_dir.glob("*_????-??-??.parquet"))
+    parsed = [path.stem.rsplit("_", 1) for path in partitions]
+    symbols = sorted({symbol for symbol, _session in parsed})
+    sessions = sorted({session for _symbol, session in parsed})
+    file_hashes = {str(path.resolve()): sha256_file(path) for path in partitions}
+    report = {
+        "schema": V2_SYNTHETIC_AUDIT_SCHEMA,
+        "boundary": "SYNTHETIC-ONLY",
+        "output_namespace": str(chain_dir.resolve()),
+        "symbols": symbols,
+        "sessions": sessions,
+        "file_hashes": file_hashes,
+        "file_hashes_hash": sha256_hex(canonical_json(file_hashes)),
+    }
+    report["receipt_hash"] = sha256_hex(canonical_json(report))
+    payload = json.dumps(report, sort_keys=True, separators=(",", ":"))
+    receipt = chain_dir / "_meta" / "synthetic_audit.json"
+    receipt.parent.mkdir(exist_ok=True)
+    if not receipt.exists() or receipt.read_text() != payload:
+        receipt.write_text(payload)
+    return receipt
 
 
 def _event(
@@ -218,16 +261,20 @@ def run_synthetic_proof(root) -> dict:
         warn_sessions=config.H7_SOURCE_HEALTH_WARN_SESSIONS,
     )
 
-    gate = h7_data_gate.evaluate(
-        REQUESTED_RUN_DATE, close_dir=closes, chain_dir=chains
+    gate = h7_data_gate.evaluate_synthetic_fixture(
+        REQUESTED_RUN_DATE,
+        close_dir=closes,
+        chain_dir=chains,
     )
     if gate["whole_universe_verdict"] != "GO":
         raise AssertionError("the Stage-2 complete fixture did not pass")
     missing_chain = chains / f"{names[0]}_{DECISION_SESSION}.parquet"
     held_chain = missing_chain.with_suffix(".held")
     missing_chain.rename(held_chain)
-    no_go = h7_data_gate.evaluate(
-        REQUESTED_RUN_DATE, close_dir=closes, chain_dir=chains
+    no_go = h7_data_gate.evaluate_synthetic_fixture(
+        REQUESTED_RUN_DATE,
+        close_dir=closes,
+        chain_dir=chains,
     )
     held_chain.rename(missing_chain)
     no_refusal_events = not event_store.exists()
@@ -502,9 +549,7 @@ def run_synthetic_proof(root) -> dict:
             "ledger_tamper": tamper_rejected,
             "same_session_entry": same_session_refused,
             "missing_entry_benchmark": missing_benchmark_refused,
-            "over_sleeve_candidate": (
-                board.rejected[0]["rejection"] == "sleeve_exhausted"
-            ),
+            "over_sleeve_candidate": (board.rejected[0]["rejection"] == "sleeve_exhausted"),
             "incomplete_score": incomplete_score_refused,
             "score_read_only": score_read_only,
         },

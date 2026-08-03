@@ -32,6 +32,7 @@ Integrity: any date after config.IN_SAMPLE_END is refused unless the caller is
 the OOS reveal path (allow_oos=True) -- "just printing a chain" after 2022 is
 still a holdout look (spec, Unit 4).
 """
+
 from __future__ import annotations
 
 import fcntl
@@ -43,6 +44,7 @@ import subprocess
 import threading
 from contextlib import contextmanager
 from datetime import date as Date
+from importlib.metadata import version as package_version
 from pathlib import Path
 
 import numpy as np
@@ -56,19 +58,43 @@ from data.atomic_io import (
     publish_staged_file,
     stage_parquet_write,
 )
+from data.cache_schema import (
+    CHAIN_COLUMNS_V1,
+    CHAIN_COLUMNS_V2,
+    CHAIN_SCHEMA_VERSION_V1,
+    CHAIN_SCHEMA_VERSION_V2,
+    CHAIN_V2_PROVIDER_FIELDS,
+    THETADATA_CLIENT_VERSION_COLUMN,
+    chain_schema_metadata,
+    validate_v2_audit_receipt,
+)
+from data.cache_schema import (
+    CacheAuditReceiptError as CacheAuditReceiptError,
+)
 
 CACHE_DIR = Path(os.environ.get("OPTIONS_CACHE_DIR", ".cache/chains"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Schema every downstream consumer expects from a chain DataFrame:
-CHAIN_COLUMNS = [
-    "expiration", "strike", "right",         # right in {"P", "C"}
-    "bid", "ask", "open_interest",
-    "iv", "delta", "gamma", "theta", "vega",
-]
+CHAIN_COLUMNS = CHAIN_COLUMNS_V1
 NUMERIC_CHAIN_COLUMNS = [
-    "strike", "bid", "ask", "open_interest",
-    "iv", "delta", "gamma", "theta", "vega",
+    "strike",
+    "bid",
+    "ask",
+    "open_interest",
+    "iv",
+    "delta",
+    "gamma",
+    "theta",
+    "vega",
+]
+NUMERIC_CHAIN_COLUMNS_V2 = [
+    "bid_size",
+    "bid_condition",
+    "ask_size",
+    "ask_condition",
+    "iv_error",
+    "underlying_price",
 ]
 _SYMBOL_RE = re.compile(r"^[A-Z0-9._-]+$")
 
@@ -84,6 +110,10 @@ class CacheWriteRefused(PermissionError):
 
 class CacheProvenanceError(RuntimeError):
     """Cached bytes and their content-bound acquisition evidence disagree."""
+
+
+class CacheSchemaVersionError(ValueError):
+    """A display-only cache partition was requested as verdict evidence."""
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -112,9 +142,7 @@ def validate_chain_schema(chain: pd.DataFrame) -> pd.DataFrame:
     """Fail before malformed cached/fetched chain data reaches strategy logic."""
     if not isinstance(chain, pd.DataFrame):
         raise ValueError("option chain must be a pandas DataFrame")
-    missing = [col for col in CHAIN_COLUMNS if col not in chain.columns]
-    if missing:
-        raise ValueError(f"option chain missing required column(s): {missing}")
+    metadata = chain_schema_metadata(chain.columns)
     if chain["right"].isna().any():
         raise ValueError("option chain column 'right' contains missing values")
     rights = set(chain["right"].astype(str).str.upper().unique())
@@ -125,6 +153,21 @@ def validate_chain_schema(chain: pd.DataFrame) -> pd.DataFrame:
         values = pd.to_numeric(chain[col], errors="coerce")
         if values.isna().any() or not np.isfinite(values.to_numpy(dtype=float)).all():
             raise ValueError(f"option chain column {col!r} contains non-finite values")
+    if metadata.schema_version == CHAIN_SCHEMA_VERSION_V2:
+        for col in NUMERIC_CHAIN_COLUMNS_V2:
+            values = pd.to_numeric(chain[col], errors="coerce")
+            if values.isna().any() or not np.isfinite(values.to_numpy(dtype=float)).all():
+                raise ValueError(f"option chain v2 column {col!r} contains non-finite values")
+        for col in ("timestamp", "underlying_timestamp"):
+            if chain[col].isna().any() or any(
+                pd.Timestamp(value).tzinfo is None for value in chain[col]
+            ):
+                raise ValueError(f"option chain v2 column {col!r} must contain aware timestamps")
+        client_versions = chain[THETADATA_CLIENT_VERSION_COLUMN]
+        if client_versions.isna().any() or client_versions.astype(str).str.strip().eq("").any():
+            raise ValueError(
+                "option chain v2 column 'thetadata_client_version' contains missing values"
+            )
     return chain
 
 
@@ -151,8 +194,7 @@ def _resolve_api_key() -> str:
         if value:
             return value
     raise RuntimeError(
-        "No ThetaData API key found: set one of "
-        f"{', '.join(_API_KEY_ENV_VARS)} in .env."
+        f"No ThetaData API key found: set one of {', '.join(_API_KEY_ENV_VARS)} in .env."
     )
 
 
@@ -225,7 +267,10 @@ def _fetch_raw(symbol: str, date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     try:
         greeks = client.option_history_greeks_eod(
-            symbol=symbol, expiration="*", start_date=fetch_date, end_date=fetch_date,
+            symbol=symbol,
+            expiration="*",
+            start_date=fetch_date,
+            end_date=fetch_date,
         )
     except NoDataFoundError:
         greeks = None
@@ -238,7 +283,10 @@ def _fetch_raw(symbol: str, date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     try:
         oi = client.option_history_open_interest(
-            symbol=symbol, expiration="*", start_date=fetch_date, end_date=fetch_date,
+            symbol=symbol,
+            expiration="*",
+            start_date=fetch_date,
+            end_date=fetch_date,
         )
     except NoDataFoundError:
         oi = None
@@ -257,8 +305,7 @@ def _pick_col(frame: pd.DataFrame, candidates, ctx: str) -> str:
         if name in frame.columns:
             return name
     raise ValueError(
-        f"{ctx}: none of {list(candidates)} present; got columns "
-        f"{sorted(frame.columns)}"
+        f"{ctx}: none of {list(candidates)} present; got columns {sorted(frame.columns)}"
     )
 
 
@@ -273,8 +320,7 @@ def _normalize_contract_keys(frame: pd.DataFrame, ctx: str) -> pd.DataFrame:
     missing = [k for k in _KEY_COLS if k not in out.columns]
     if missing:
         raise ValueError(
-            f"{ctx}: missing contract key column(s) {missing}; got "
-            f"{sorted(out.columns)}"
+            f"{ctx}: missing contract key column(s) {missing}; got {sorted(out.columns)}"
         )
     right = out["right"].astype(str).str.strip().str.upper().str[0]
     if not set(right.unique()) <= {"P", "C"}:
@@ -290,12 +336,13 @@ def _normalize_contract_keys(frame: pd.DataFrame, ctx: str) -> pd.DataFrame:
 
 
 def _merge_chain_frames(greeks: pd.DataFrame, oi: pd.DataFrame) -> pd.DataFrame:
-    """Inner-join the two per-contract frames into CHAIN_COLUMNS.
+    """Inner-join provider frames into the immutable legacy v1 schema.
 
     Inner join is deliberate fail-closed behavior: a contract missing quotes,
     greeks, or open interest is untradeable under the liquidity/delta rules, so
-    it is dropped here rather than passed downstream with NaNs. The caller
-    logs the drop count."""
+    it is dropped here rather than passed downstream with NaNs. This shared
+    acquisition path intentionally remains v1; isolated v2 acquisition uses
+    ``_merge_chain_frames_v2`` below."""
     greeks = _normalize_contract_keys(greeks, "greeks")
     oi = _normalize_contract_keys(oi, "open_interest")
 
@@ -309,10 +356,44 @@ def _merge_chain_frames(greeks: pd.DataFrame, oi: pd.DataFrame) -> pd.DataFrame:
     merged = (
         greeks[_KEY_COLS + [bid_col, ask_col, "delta", "gamma", "theta", "vega", iv_col]]
         .rename(columns={bid_col: "bid", ask_col: "ask", iv_col: "iv"})
-        .merge(oi[_KEY_COLS + [oi_col]].rename(columns={oi_col: "open_interest"}),
-               on=_KEY_COLS, how="inner")
+        .merge(
+            oi[_KEY_COLS + [oi_col]].rename(columns={oi_col: "open_interest"}),
+            on=_KEY_COLS,
+            how="inner",
+        )
     )
-    return merged[CHAIN_COLUMNS].reset_index(drop=True)
+    return merged[CHAIN_COLUMNS_V1].reset_index(drop=True)
+
+
+def _merge_chain_frames_v2(greeks: pd.DataFrame, oi: pd.DataFrame) -> pd.DataFrame:
+    """Normalize provider frames for the isolated, schema-v2 backfill only."""
+    greeks = _normalize_contract_keys(greeks, "greeks")
+    oi = _normalize_contract_keys(oi, "open_interest")
+
+    bid_col = _pick_col(greeks, ("bid", "close_bid", "bid_price"), "greeks")
+    ask_col = _pick_col(greeks, ("ask", "close_ask", "ask_price"), "greeks")
+    iv_col = _pick_col(greeks, ("implied_vol", "implied_volatility", "iv"), "greeks")
+    oi_col = _pick_col(oi, ("open_interest", "oi"), "open_interest")
+    for greek in ("delta", "gamma", "theta", "vega"):
+        _pick_col(greeks, (greek,), "greeks")
+    for provider_field in CHAIN_V2_PROVIDER_FIELDS:
+        _pick_col(greeks, (provider_field,), "greeks")
+
+    merged = (
+        greeks[
+            _KEY_COLS
+            + [bid_col, ask_col, "delta", "gamma", "theta", "vega", iv_col]
+            + CHAIN_V2_PROVIDER_FIELDS
+        ]
+        .rename(columns={bid_col: "bid", ask_col: "ask", iv_col: "iv"})
+        .merge(
+            oi[_KEY_COLS + [oi_col]].rename(columns={oi_col: "open_interest"}),
+            on=_KEY_COLS,
+            how="inner",
+        )
+    )
+    merged[THETADATA_CLIENT_VERSION_COLUMN] = package_version("thetadata")
+    return merged[CHAIN_COLUMNS_V2].reset_index(drop=True)
 
 
 def _fetch_merged_chain(symbol: str, date: str):
@@ -366,20 +447,27 @@ def get_eod_chain(symbol: str, date: str, *, allow_oos: bool = False) -> pd.Data
             "authoritative ops publisher"
         )
 
-    provider_policy.require_thetadata_acquisition(
-        f"EOD chain fetch for {symbol} @ {date}"
-    )
+    provider_policy.require_thetadata_acquisition(f"EOD chain fetch for {symbol} @ {date}")
     _require_cache_publisher()
     chain, dropped = _fetch_merged_chain(symbol, date)
     if dropped:
-        print(f"{symbol} @ {date}: dropped {dropped} contracts "
-              "missing open interest (fail-closed; untradeable anyway)")
+        print(
+            f"{symbol} @ {date}: dropped {dropped} contracts "
+            "missing open interest (fail-closed; untradeable anyway)"
+        )
     atomic_parquet_write(chain, cached)
     return chain
 
 
-def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False,
-                      cache_dir: Path | None = None) -> pd.DataFrame:
+def load_cached_chain(
+    symbol: str,
+    date: str,
+    *,
+    allow_oos: bool = False,
+    cache_dir: Path | None = None,
+    verdict_bearing: bool = False,
+    verdict_consumer: str | None = None,
+) -> pd.DataFrame:
     """Cache-ONLY EOD chain read: return the validated parquet if it already
     exists locally, else raise FileNotFoundError. NEVER constructs the
     ThetaData client and NEVER fetches -- the H9 study's "zero new data spend"
@@ -390,6 +478,11 @@ def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False,
 
     The IN_SAMPLE_END / allow_oos holdout guard still applies, since reading a
     cached post-2022 chain outside the reveal gate is a holdout look.
+
+    `verdict_bearing=True` additionally requires schema v2 plus a clean,
+    content-bound full-audit receipt for the exact partition. Legacy v1 rows,
+    unaudited v2 rows, and quarantined v2 rows remain readable for display but
+    cannot become verdict evidence.
 
     `cache_dir` overrides the global cache directory so callers that take an
     injectable chain_dir (the H9 census) stay coherent: presence checks and
@@ -403,10 +496,33 @@ def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False,
             f"{symbol} @ {date} is after IN_SAMPLE_END={config.IN_SAMPLE_END}; "
             "post-2022 chains may only be opened through the OOS reveal gate."
         )
-    cached = (Path(cache_dir) / f"{symbol}_{date}.parquet"
-              if cache_dir is not None else _cache_path(symbol, date))
+    cached = (
+        Path(cache_dir) / f"{symbol}_{date}.parquet"
+        if cache_dir is not None
+        else _cache_path(symbol, date)
+    )
     if cached.exists():
-        return validate_chain_schema(pd.read_parquet(cached))
+        chain = validate_chain_schema(pd.read_parquet(cached))
+        metadata = chain_schema_metadata(chain.columns)
+        if verdict_bearing and metadata.schema_version < CHAIN_SCHEMA_VERSION_V2:
+            raise CacheSchemaVersionError(
+                f"{symbol} @ {date} has schema_version="
+                f"{CHAIN_SCHEMA_VERSION_V1}; v1 partitions are display-only "
+                "and cannot support verdict-bearing requests"
+            )
+        if verdict_bearing:
+            if not verdict_consumer:
+                raise CacheAuditReceiptError(
+                    "verdict-bearing v2 reads require an explicit consumer scope"
+                )
+            validate_v2_audit_receipt(
+                cached.parent,
+                cached,
+                symbol=symbol,
+                session=date,
+                consumer_scope=verdict_consumer,
+            )
+        return chain
     raise FileNotFoundError(
         f"no cached chain for {symbol} @ {date}; this reader is cache-only and "
         "never fetches (H9 zero-new-data-spend guarantee)."
@@ -418,8 +534,15 @@ def load_cached_chain(symbol: str, date: str, *, allow_oos: bool = False,
 # --------------------------------------------------------------------------
 
 BLIND_CACHE_METADATA_KEYS = (
-    "symbol", "date", "rows", "columns", "sha256", "path", "already_cached",
-    "attestation_status", "identity",
+    "symbol",
+    "date",
+    "rows",
+    "columns",
+    "sha256",
+    "path",
+    "already_cached",
+    "attestation_status",
+    "identity",
 )
 
 
@@ -456,24 +579,16 @@ def _require_cache_publisher() -> None:
             text=True,
         )
         if result.returncode:
-            raise CacheWriteRefused(
-                f"cache mutation refused: git {' '.join(args)} failed"
-            )
+            raise CacheWriteRefused(f"cache mutation refused: git {' '.join(args)} failed")
         return result.stdout.strip()
 
     root = Path(git("rev-parse", "--show-toplevel")).resolve()
     if Path.cwd().resolve() != root:
-        raise CacheWriteRefused(
-            f"cache mutation refused: run from repository root {root}"
-        )
+        raise CacheWriteRefused(f"cache mutation refused: run from repository root {root}")
     if git("rev-parse", "--abbrev-ref", "HEAD") != "main":
-        raise CacheWriteRefused(
-            "cache mutation refused: authoritative publisher must be on main"
-        )
+        raise CacheWriteRefused("cache mutation refused: authoritative publisher must be on main")
     if git("rev-parse", "HEAD") != git("rev-parse", "origin/main"):
-        raise CacheWriteRefused(
-            "cache mutation refused: main must exactly match origin/main"
-        )
+        raise CacheWriteRefused("cache mutation refused: main must exactly match origin/main")
 
 
 @contextmanager
@@ -508,9 +623,10 @@ def _write_attestation(
     payload = {
         "schema": "blind-cache-attestation/v1",
         "status": status,
-        **{key: meta[key] for key in (
-            "symbol", "date", "rows", "columns", "sha256", "path", "identity"
-        )},
+        **{
+            key: meta[key]
+            for key in ("symbol", "date", "rows", "columns", "sha256", "path", "identity")
+        },
     }
     if staged_path is not None:
         payload["staged_path"] = str(staged_path)
@@ -527,13 +643,9 @@ def _read_attestation(symbol: str, date: str) -> dict | None:
     try:
         payload = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
-        raise CacheProvenanceError(
-            f"malformed blind-cache attestation: {path}"
-        ) from exc
+        raise CacheProvenanceError(f"malformed blind-cache attestation: {path}") from exc
     if not isinstance(payload, dict):
-        raise CacheProvenanceError(
-            f"malformed blind-cache attestation: {path}"
-        )
+        raise CacheProvenanceError(f"malformed blind-cache attestation: {path}")
     return payload
 
 
@@ -543,9 +655,10 @@ def _pending_attestation_matches(meta: dict) -> bool:
         return False
     expected = {
         "schema": "blind-cache-attestation/v1",
-        **{key: meta[key] for key in (
-            "symbol", "date", "rows", "columns", "sha256", "path", "identity"
-        )},
+        **{
+            key: meta[key]
+            for key in ("symbol", "date", "rows", "columns", "sha256", "path", "identity")
+        },
     }
     if payload.get("status") == "PENDING_FACT":
         return payload == {"status": "PENDING_FACT", **expected}
@@ -582,8 +695,7 @@ def _recover_staged_cache(symbol: str, date: str, cached: Path) -> bool:
         )
     if not staged.is_file():
         raise CacheProvenanceError(
-            f"recorded staged cache bytes are missing for {symbol} @ {date}: "
-            f"{staged}"
+            f"recorded staged cache bytes are missing for {symbol} @ {date}: {staged}"
         )
     rows, columns = _parquet_metadata_without_values(staged)
     sha256 = hashlib.sha256(staged.read_bytes()).hexdigest()
@@ -707,9 +819,7 @@ def _blind_cache_chain_locked(
 
     from data.cache_provenance import load_blind_cache_facts
 
-    fact = load_blind_cache_facts(
-        Path(ledger_dir) / "facts.log"
-    ).get((symbol, date))
+    fact = load_blind_cache_facts(Path(ledger_dir) / "facts.log").get((symbol, date))
     if fact is not None:
         if fact["sha256"] != sha256:
             raise CacheProvenanceError(
@@ -741,9 +851,7 @@ def _blind_cache_chain_locked(
         f"already_cached={str(already_cached).lower()} path={cached}",
         base_dir=ledger_dir,
     )
-    meta["attestation_status"] = (
-        "REPAIRED_ATTESTATION" if already_cached else "FETCHED_ATTESTED"
-    )
+    meta["attestation_status"] = "REPAIRED_ATTESTATION" if already_cached else "FETCHED_ATTESTED"
     _write_attestation(meta, status="COMPLETE")
     return meta
 
