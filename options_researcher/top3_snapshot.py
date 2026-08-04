@@ -80,8 +80,28 @@ def candidate_id(section: Mapping[str, object], group: Mapping[str, object],
     return f"{symbol.upper()}:{lane}:{expiry}:{strike:.2f}"
 
 
-def integrity_status(section: Mapping[str, object]) -> dict[str, object]:
-    """Classify exact chain/feature-session integrity without reading disk."""
+def trading_sessions_between(start: str, end: str) -> int:
+    """Count weekday sessions in ``[start, end)`` without reading a calendar.
+
+    Market holidays are counted as sessions.  That over-states age rather than
+    under-stating it, so the staleness gate errs toward blocking a board that is
+    in fact one session fresher -- never toward showing one that is older.
+    """
+    import numpy as np
+
+    return int(np.busday_count(start, end))
+
+
+def integrity_status(section: Mapping[str, object], *,
+                     today: str | None = None) -> dict[str, object]:
+    """Classify exact chain/feature-session integrity without reading disk.
+
+    ``features_stale`` only compares the feature row to the chain session, so a
+    board whose chain and features are equally old reports no problem.  Passing
+    ``today`` adds the independent wall-clock question -- how old is the chain
+    session itself -- and is what stops a long-frozen cache from rendering as a
+    current board.  Omitting ``today`` preserves the prior behaviour exactly.
+    """
     reasons: list[str] = []
     as_of = _canonical_date(section.get("as_of"))
     if as_of is None:
@@ -98,11 +118,25 @@ def integrity_status(section: Mapping[str, object]) -> dict[str, object]:
         reasons.append("FEATURES_STALE" if stale is True
                        else "FEATURES_STALENESS_UNKNOWN")
 
+    age_sessions: int | None = None
+    if today is not None:
+        evaluation_date = _canonical_date(today)
+        if evaluation_date is None:
+            reasons.append("EVALUATION_DATE_INVALID")
+        elif as_of is not None:
+            if as_of > evaluation_date:
+                reasons.append("CHAIN_SESSION_IN_FUTURE")
+            else:
+                age_sessions = trading_sessions_between(as_of, evaluation_date)
+                if age_sessions >= config.CHAIN_STALE_BLOCK_SESSIONS:
+                    reasons.append("CHAIN_STALE_VS_TODAY")
+
     return {
         "status": DATA_BLOCKED if reasons else ELIGIBLE,
         "reason_codes": reasons,
         "as_of": as_of,
         "features_as_of": features_as_of,
+        "chain_age_sessions": age_sessions,
     }
 
 
@@ -220,15 +254,18 @@ def snapshot_candidate(section: Mapping[str, object], group: Mapping[str, object
                        covered_shares: int | None = None,
                        leaps_held: bool | None = None,
                        assignment_capital_authorized: bool | None = None,
-                       research: Mapping[str, object] | None = None
+                       research: Mapping[str, object] | None = None,
+                       today: str | None = None
                        ) -> dict[str, object]:
     """Build one immutable-in-spirit, JSON-serializable paper candidate record.
 
     Inputs are read only and are never mutated.  ``selection_status`` is
     determined exclusively by integrity and lane policy; qualitative research
     is copied to its own field and cannot boost or reduce rank eligibility.
+    ``today`` is forwarded to :func:`integrity_status` for the wall-clock chain
+    staleness check and is optional for backward compatibility.
     """
-    integrity = integrity_status(section)
+    integrity = integrity_status(section, today=today)
     policy = lane_policy_status(section, group, card,
                                 csp_open_count=csp_open_count,
                                 covered_shares=covered_shares,

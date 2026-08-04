@@ -1699,3 +1699,76 @@ class MainTests(unittest.TestCase):
                 self.assertTrue(os.path.exists(out))
                 self.assertIn("attractiveness.html", buf.getvalue())
                 self.assertEqual(path, os.path.abspath(out))
+
+
+class ChainAgeBannerTests(unittest.TestCase):
+    """The board must state how old its option quotes are.
+
+    Reproduces the 2026-08-04 production gap: a chain cache frozen at
+    2026-07-27 rendered as a normal board because every internal consistency
+    check passed -- the features were exactly as stale as the chain.
+    """
+
+    def _section(self, as_of: str) -> dict:
+        return {
+            "symbol": "MSFT", "as_of": as_of, "close": 373.02,
+            "iv_rank": 0.30, "features_as_of": as_of, "features_stale": False,
+            "groups": [
+                {"kind": "put", "title": "SELL A PUT?",
+                 "cards": [{"strike": 350.0, "expiry": "2026-09-18",
+                            "dte": 45, "credit": 494.0, "yield_mo": 0.0071,
+                            "grades": {"yield": "AMBER"},
+                            "verdict": "you'd be promising..."}],
+                 "empty": None},
+            ],
+        }
+
+    def _assemble(self, as_of: str, today: str | None):
+        return ad.assemble(symbol_sections=[self._section(as_of)],
+                           rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11},
+                           today=today)
+
+    def test_injected_fixtures_are_never_aged_out_by_the_calendar(self):
+        data = self._assemble("2026-06-30", None)
+        self.assertIsNone(data["chain_age_sessions"])
+        self.assertNotIn("STALE BOARD", ad.render(data))
+
+    def test_production_gap_renders_a_loud_stale_banner(self):
+        data = self._assemble("2026-07-27", "2026-08-04")
+        self.assertEqual(data["chain_age_sessions"], 6)
+        html = ad.render(data)
+        self.assertIn("STALE BOARD", html)
+        self.assertIn("6 trading sessions old", html)
+        self.assertIn("2026-07-27", html)
+
+    def test_stale_board_loses_rank_eligibility(self):
+        data = self._assemble("2026-07-27", "2026-08-04")
+        snapshot = data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"]
+        self.assertFalse(snapshot["rank_eligible"])
+        self.assertIn("CHAIN_STALE_VS_TODAY",
+                      snapshot["integrity"]["reason_codes"])
+
+    def test_one_session_old_warns_without_blocking(self):
+        data = self._assemble("2026-08-03", "2026-08-04")
+        self.assertEqual(data["chain_age_sessions"], 1)
+        html = ad.render(data)
+        self.assertIn("1 trading session old", html)
+        self.assertNotIn("STALE BOARD", html)
+        # Integrity only: rank_eligible also carries lane portfolio policy,
+        # which this gate must not influence in either direction.
+        snapshot = data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"]
+        self.assertEqual(snapshot["integrity"]["status"], "ELIGIBLE")
+        self.assertNotIn("CHAIN_STALE_VS_TODAY",
+                         snapshot["integrity"]["reason_codes"])
+
+    def test_current_session_says_so(self):
+        data = self._assemble("2026-08-04", "2026-08-04")
+        self.assertEqual(data["chain_age_sessions"], 0)
+        html = ad.render(data)
+        self.assertIn("most recent completed session", html)
+        self.assertNotIn("STALE BOARD", html)
+
+    def test_unknown_age_is_stated_not_silently_passed(self):
+        data = self._assemble("2026-08-05", "2026-08-04")
+        self.assertIsNone(data["chain_age_sessions"])
+        self.assertIn("UNKNOWN", ad.render(data))
