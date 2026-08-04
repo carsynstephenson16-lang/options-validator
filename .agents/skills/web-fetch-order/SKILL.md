@@ -42,12 +42,16 @@ checkout does not have trafilatura/crawl4ai/scrapling installed unless that
 command was run this session (verified absent from `.venv` on 2026-08-03) —
 doctrine naming a tool is not evidence the tool is present.
 
-Firecrawl is out of credits — do not reach for it. First recorded 2026-07-09,
-still out on 2026-07-23 (equity-research session note: "Firecrawl out of
-credits this session (same as 07-06); all market/peer/SPY data via
-`scripts/crawlee_fetch.py` fallback per doctrine"). Re-verified 2026-08-03:
-equity-research shows `firecrawl:PaymentRequiredError` on every fresh capture
-2026-08-01..03 (e.g. `tickers/SPY/web/quote_2026-08-03.md`) — still out. The
-`firecrawl-*` skills still carry recent invocation timestamps — that records
-the skill being dispatched, not a successful fetch. Don't read those
-timestamps as evidence that credits came back.
+Firecrawl is unreliable — do not reach for it without a same-session success.
+Receipt-corrected history (2026-08-04 adversarial review): equity-research
+logged an outage 2026-06-30 (`decisions.md:31`); this repo first recorded it
+2026-07-09; captures then SUCCEEDED again (41 firecrawl 200s in July, latest
+2026-07-16); session notes report it out 2026-07-17..23; and on 2026-08-01..03
+nearly every fresh equity-research capture fell back with
+`firecrawl:PaymentRequiredError` (e.g. `tickers/SPY/web/quote_2026-08-03.md`),
+while two show `RateLimitError` — a throttled-but-live signature. So the
+account state flaps; treat "it worked recently" and "it is dead" as equally
+unproven without a same-day receipt. The `firecrawl-*` skills still carry
+recent invocation timestamps — that records the skill being dispatched, not a
+successful fetch. Don't read those timestamps as evidence that credits came
+back.

@@ -135,11 +135,26 @@ must reconcile scope before acting; agents never create accounts):**
 | Tavily account | 1,000 credits/mo free, no card; basic=1 credit, advanced=2; PAYG $0.008/credit; free for students (all OFFICIAL) | Structured discovery with domain/date filters |
 | Exa account | $20 signup + $10/mo recurring free credits; $7/1k standard search; `financial report` category exists, `research papers` does not (closest: `publication`) | High-precision verification search |
 | BEA / EIA free API keys | free | Turns on two already-written, disabled `market_updates` providers in equity-research |
-| Firecrawl plan decision | free tier 1,000 credits/mo "no card" (OFFICIAL); Hobby $16/mo — exceeds the $10 budget | Current key PaymentRequired since ~2026-06-30. Recommendation: do NOT pay; downgrade the existing account to free, or stay crawlee-primary |
+| Firecrawl plan decision | free tier 1,000 credits/mo "no card" (OFFICIAL); Hobby $16/mo — exceeds the $10 budget | Key failing intermittently since 2026-06-30: last successful capture receipt 2026-07-16, hard `PaymentRequiredError` on nearly all equity-research captures 2026-07-29..08-03, two 08-03 captures show `RateLimitError` (throttled-but-live signature — check the account dashboard before deciding). Recommendation: do NOT pay; downgrade the existing account to free, or stay crawlee-primary |
 
 **Spend: $0. The $10/month budget stays unspent.** Tripwire to revisit: only
 if discovery quality is the *recorded* blocker in ≥2 sessions/week for two
-consecutive weeks, re-open the Tavily/Exa decision with those receipts.
+consecutive weeks, re-open the Tavily/Exa decision with those receipts. (The
+tripwire threshold is itself LLM-proposed and unratified; owner may reset it.)
+
+**Receipt limitation (added 2026-08-04 after adversarial review):** the
+numbers above were read from official pages on 2026-08-03 by the verification
+agent — Tavily `docs.tavily.com/documentation/api-credits` + `tavily.com/pricing`;
+Exa `exa.ai/pricing` + `exa.ai/docs/reference/search`; Firecrawl
+`firecrawl.dev/pricing`; Brave `api-dashboard.search.brave.com/documentation/pricing`;
+Jina `jina.ai/reader`; SEC `sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data`
+(verbatim quotes retained); FRED `fred.stlouisfed.org/docs/api/fred/v2/api_key.html`
+(verbatim); NWS `weather-gov.github.io/api/general-faqs`; Open-Meteo
+`open-meteo.com/en/pricing`; TikTok `developers.tiktok.com` (2024 Shop
+Affiliate APIs launch post); Anthropic `platform.claude.com` web-search tool
+docs; Google `mapsplatform.google.com/pricing` (verbatim). Page CAPTURES were
+not retained, so under §2 these are Inference-grade until recaptured —
+re-verify any number before it justifies spend or an account action.
 
 ## 8. What this standard explicitly does not do
 

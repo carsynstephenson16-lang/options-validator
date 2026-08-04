@@ -1,6 +1,9 @@
 # Cross-project research source & extraction standard — design
 
 **Date:** 2026-08-03
+**Amended 2026-08-04:** post-adversarial-review factual corrections (Firecrawl
+outage history was overstated as continuous; the fetcher `build_front_matter()`
+sharing claim was false; tripwire threshold now labeled LLM-proposed).
 **Status:** DESIGN (executed same-session under owner's standing directive to
 research → scope → spec → plan → execute; owner retains veto on every artifact)
 **Provenance:** synthesized by Claude (Fable) from six read-only discovery
@@ -25,7 +28,7 @@ that live (or don't) in each repo:
 | options-validator (1) | earnings dates, catalyst/news annotation for a deterministic board | Strong rules (EC-1 docs, banned-host enforcement, receipts) but fetch doctrine stale; dead deps; scheduled lane runs from a sibling checkout |
 | tiktok shop (2) | winning-creative discovery, hooks/transcripts, product commercial data | Active repo fetches nothing (manual paste by design); only live pipeline is in the June repo, 66 days stale, built on one unofficial proxy (tikwm.com); **no product commission/sales source at all** |
 | sunwest-lead-engine (3) | FL business signals (Sunbiz, permits, UCC, USAspending), verified contacts | Excellent provenance/compliance design; **zero coded collectors** (its own "collector boundary" forbids them until preconditions + owner sign-off); Firecrawl attempt died on credits |
-| equity-research (4) | SEC filings, market/consensus pages, macro series, news feed | Most mature: tiered source hierarchy, registry (`data/source_registry.json`, EC-1 schema), receipts, machine checks. But Firecrawl (doctrine tier 1) has been PaymentRequired since ~2026-06-30 and every capture for a month fell through to crawlee; status doc never mentions it |
+| equity-research (4) | SEC filings, market/consensus pages, macro series, news feed | Most mature: tiered source hierarchy, registry (`data/source_registry.json`, EC-1 schema), receipts, machine checks. But Firecrawl (doctrine tier 1) has failed intermittently since 2026-06-30 — last successful capture receipt 2026-07-16, hard `PaymentRequiredError` on nearly all captures 2026-07-29..08-03 — with recent captures falling through to crawlee; status doc never mentioned it |
 | kalshi bot (5) | weather forecasts, market prices | Already near-optimal: official free JSON APIs, fail-closed, retries. No scraping. Internal inconsistencies only |
 
 Common failure classes: (a) doctrine describing tools that are dead or not
@@ -58,9 +61,13 @@ month-old outages.
    A package would be built for the two repos that are forbidden to use it.
    Revisit only if ≥2 repos independently implement the same receipt code.
 2. *Refactor equity-research fetchers into router wrappers.* Rejected: the
-   chain (firecrawl→crawlee→scrapling→WebFetch→jina) already shares
-   `build_front_matter()` and auto-falls-through; the defect is doctrine
-   truth, not architecture.
+   chain (firecrawl→crawlee→scrapling→WebFetch→jina) auto-falls-through and
+   kept analyses flowing through the outage; the defect is doctrine truth,
+   not architecture. *(Corrected 2026-08-04: an earlier draft also claimed the
+   fetchers share `build_front_matter()` — review showed the four headers are
+   divergent inline implementations. The rejection stands on the
+   fallthrough/minimal-churn grounds; header unification is scoped as item 1
+   of the equity-research fetcher brief, not assumed done.)*
 3. *Pay for a provider now.* Rejected: verified free tiers + already-working
    local fetchers cover current volumes at $0. See §6 tripwire.
 
@@ -161,7 +168,8 @@ so the owner must reconcile scope before acting):**
 **Tripwire to revisit:** if, after adopting the standard, discovery quality is
 the demonstrated blocker in ≥2 sessions per week for two consecutive weeks
 (recorded, not vibes), bring the Tavily/Exa decision back to the owner with
-those receipts.
+those receipts. (The 2-sessions/2-weeks threshold is itself LLM-proposed and
+unratified; owner may reset it.)
 
 ## 7. Risks
 
