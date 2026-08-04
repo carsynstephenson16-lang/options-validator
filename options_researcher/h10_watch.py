@@ -66,6 +66,31 @@ FrameLoader = Callable[[str, str], pd.DataFrame | None]
 Gate = Callable[[], str | None]
 AssertionsLoader = Callable[[], list[dict]]
 
+# H10a/H10b registered forward-paper windows (ledger/experiments.jsonl seq
+# 15/16). The registration text ("window ends 2026-10-06" / "window ends
+# 2027-01-06") does not state whether the end date itself is included --
+# checked docs/ and the ledger, nothing further is specified. This repo's
+# choice: the window-end date is INCLUSIVE (fires/entries are still allowed
+# ON the end date); suppression starts the session strictly AFTER it. See
+# tests/test_h10_watch.py::WindowEndTests for the boundary tests that pin
+# this choice down.
+_WINDOW_END = {
+    "H10a": config.H10A_WINDOW_END,
+    "H10b": config.H10B_WINDOW_END,
+}
+
+
+def _window_status(eval_iso: str) -> dict[str, str]:
+    """Per-hypothesis registered-window status for `eval_iso`.
+
+    "WINDOW_CLOSED" once eval_iso is strictly after that hypothesis's
+    registered window end; "OPEN" on and before the end date.
+    """
+    return {
+        name: ("WINDOW_CLOSED" if eval_iso > end else "OPEN")
+        for name, end in _WINDOW_END.items()
+    }
+
 
 class H10BookError(RuntimeError):
     """The H10 book cannot prove the current open-premium exposure."""
@@ -111,12 +136,17 @@ def _validated_chain(chain: pd.DataFrame) -> pd.DataFrame:
 def _signals_at_session(
     frame: pd.DataFrame, eval_iso: str, params: Mapping[str, Any]
 ) -> dict[str, bool]:
+    """Raw QM fires at eval_iso, gated by each hypothesis's registered
+    window. A fire past its registered window end is suppressed here (never
+    reported as True) -- callers surface *why* via `_window_status`."""
     breakout_fires = qm_signals.breakout_fires(frame, params)
     parabolic_fires = qm_signals.parabolic_fires(frame, params)
-    return {
+    raw = {
         "H10a": bool(parabolic_fires) and parabolic_fires[-1] == eval_iso,
         "H10b": bool(breakout_fires) and breakout_fires[-1]["t"] == eval_iso,
     }
+    windows = _window_status(eval_iso)
+    return {name: (value and windows[name] == "OPEN") for name, value in raw.items()}
 
 
 def _candidate_contract(
@@ -252,6 +282,7 @@ def _evaluation(
     open_premium: float | None,
 ) -> dict[str, Any]:
     blank_signals: dict[str, bool | None] = {"H10a": None, "H10b": None}
+    window_status = _window_status(eval_iso)
 
     def result(
         status: str,
@@ -265,6 +296,7 @@ def _evaluation(
         return {
             "symbol": symbol,
             "signals": dict(signals),
+            "window_status": dict(window_status),
             "status": status,
             "reason": reason,
             "admitted_contracts": admitted,
@@ -487,7 +519,13 @@ def main(
         reason = f" reason={row['reason']}" if row["reason"] else ""
         fired = [name for name, value in row["signals"].items() if value]
         signal_text = f" signals={','.join(fired)}" if fired else ""
-        print(f"{row['symbol']}: {row['status']}{reason}{signal_text}")
+        closed = [
+            name
+            for name, value in row["window_status"].items()
+            if value == "WINDOW_CLOSED"
+        ]
+        window_text = f" window_closed={','.join(closed)}" if closed else ""
+        print(f"{row['symbol']}: {row['status']}{reason}{signal_text}{window_text}")
 
     receipt = {
         "as_of": run_date.isoformat(),
