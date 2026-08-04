@@ -21,8 +21,17 @@ name: Claude PR Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    # ready_for_review: a PR opened as a draft only gets an `opened` run,
+    # which the job-level draft check below skips; without subscribing here
+    # too, the later draft -> ready transition would never get reviewed
+    # (Codex PR #10 review).
+    types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
+    types: [created]
+  # Inline "@claude" comments on a specific diff line (as opposed to the
+  # top-level PR conversation issue_comment covers) were previously silently
+  # ignored (Codex PR #10 review).
+  pull_request_review_comment:
     types: [created]
 
 permissions:
@@ -36,7 +45,13 @@ permissions:
   id-token: write
 
 concurrency:
-  group: claude-review-${{ github.event.pull_request.number || github.ref }}
+  # issue_comment events have no github.event.pull_request (that field only
+  # exists on pull_request / pull_request_review_comment payloads), so the
+  # old fallback to github.ref put every PR-comment-triggered run for the
+  # WHOLE repo in one group -- two "@claude" comments on different PRs would
+  # cancel each other. Fall back to the issue (PR) number instead
+  # (Codex PR #10 review).
+  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true
 
 jobs:
@@ -45,9 +60,14 @@ jobs:
     if: >
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' &&
        contains(github.event.comment.body, '@claude'))
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Anthropic documents Code Review as taking ~20 minutes on average; a
+    # hard stop AT exactly that average cancels roughly half of all runs
+    # before Claude can post anything. Give it margin (Codex PR #10 review).
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -67,6 +87,28 @@ jobs:
             echo "CLAUDE_CODE_OAUTH_TOKEN is not configured; skipping optional Claude review."
           fi
 
+      - name: Load review charter from the base branch
+        # Security (Codex PR #10 review): for pull_request(_review_comment)
+        # runs, the Checkout step above checks out the PR's own merge ref, so
+        # a naive `./REVIEW.md` read is the CONTRIBUTOR-SUPPLIED version -- a
+        # PR could rewrite REVIEW.md to tell Claude to skip files or approve
+        # everything, bypassing review of that very same PR. Always overwrite
+        # the checked-out REVIEW.md with the base branch's version before
+        # Claude reads it, so the charter a PR is reviewed under can never be
+        # something that PR itself supplied.
+        if: steps.auth.outputs.enabled == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base_ref="${{ github.event.pull_request.base.ref }}"
+          if [[ -z "$base_ref" ]]; then
+            base_ref="$(gh pr view "${{ github.event.issue.number }}" \
+              --repo "${{ github.repository }}" --json baseRefName -q .baseRefName)"
+          fi
+          git fetch origin "$base_ref" --depth=1
+          git show "origin/${base_ref}:REVIEW.md" > REVIEW.md
+
       - name: Claude review
         if: steps.auth.outputs.enabled == 'true'
         uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
@@ -78,8 +120,9 @@ jobs:
           prompt: >
             Follow ./REVIEW.md exactly. Review pull request
             ${{ github.repository }}/pull/${{ github.event.pull_request.number || github.event.issue.number }}
-            using /code-review:code-review. Deploy focused, low-token sub-checks
-            per the charter, verify every finding against the diff before posting,
-            and report only confirmed high/medium-severity issues.
+            using /code-review:code-review --comment. Deploy focused,
+            low-token sub-checks per the charter, verify every finding
+            against the diff before posting, and report only confirmed
+            high/medium-severity issues.
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
