@@ -9,6 +9,7 @@ from typing import cast
 import numpy as np
 import pandas as pd
 
+from options_researcher.flow.horizons import required_horizon_for
 from options_researcher.robustness.walk_forward import WalkForwardSplitter
 
 
@@ -106,6 +107,15 @@ def compare_walk_forward(
 
     ``target_horizon_observations`` declares how many future observations are
     used by ``target``.  The purge must cover that entire look-ahead horizon.
+
+    The purge is ALSO checked against `target`'s own required horizon, parsed
+    from its column name via `required_horizon_for` (e.g. "return_21" needs
+    21). This closes a P2 review finding: `target_horizon_observations` is
+    caller-supplied and could understate what `target` actually needs, which
+    would let `purge_observations` pass a too-small look-ahead horizon and
+    leak future information across the train/test purge boundary. A `target`
+    that does not encode a recognizable horizon fails loudly rather than
+    silently skipping this check.
     """
     contexts = context_columns or []
     required = {"session", baseline_column, target, *contexts, *flow_columns}
@@ -116,6 +126,12 @@ def compare_walk_forward(
         raise ValueError("target_horizon_observations must be positive")
     if purge_observations < target_horizon_observations:
         raise ValueError("purge_observations must be at least target_horizon_observations")
+    target_required_horizon = required_horizon_for(target)
+    if purge_observations < target_required_horizon:
+        raise ValueError(
+            f"purge_observations must be at least {target!r}'s required horizon "
+            f"({target_required_horizon} observations, derived from its column name)"
+        )
     if purge_observations >= train_observations:
         raise ValueError("purge must leave training observations")
     ordered = panel.sort_values("session").copy()

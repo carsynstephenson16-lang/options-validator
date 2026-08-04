@@ -3,12 +3,14 @@ import io
 import json
 import tempfile
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 from test_qm_signals import PARAMS, breakout_fixture, parabolic_fixture
 
+import config
 from options_researcher import h10_watch, qm_signals
 from options_researcher.h7_watch import evaluation_session
 
@@ -326,6 +328,7 @@ class ReceiptTests(unittest.TestCase):
             {
                 "symbol",
                 "signals",
+                "window_status",
                 "status",
                 "reason",
                 "admitted_contracts",
@@ -334,6 +337,8 @@ class ReceiptTests(unittest.TestCase):
             },
         )
         self.assertEqual(set(row["signals"]), {"H10a", "H10b"})
+        self.assertEqual(set(row["window_status"]), {"H10a", "H10b"})
+        self.assertEqual(row["window_status"], {"H10a": "OPEN", "H10b": "OPEN"})
         self.assertEqual(
             set(row["candidate_contract"]),
             {
@@ -411,6 +416,165 @@ class FutureAsOfTests(unittest.TestCase):
         self.assertEqual(calls, [])
         self.assertIn("future", stdout.getvalue().lower())
         self.assertFalse((root / "receipts").exists())
+
+
+def _chain_for(eval_iso: str) -> pd.DataFrame:
+    """Same shape as `_chain` above, but with an expiration relative to
+    `eval_iso` so the DTE band still admits candidates far from AS_OF."""
+    expiration = (date.fromisoformat(eval_iso) + timedelta(days=45)).isoformat()
+    return pd.DataFrame(
+        [
+            (expiration, 92.0, "C", 0.60, 4.80, 5.00, 500),
+            (expiration, 96.0, "C", 0.55, 4.80, 5.00, 500),
+            (expiration, 100.0, "C", 0.50, 4.80, 5.00, 500),
+            (expiration, 104.0, "C", 0.45, 4.80, 5.00, 500),
+            (expiration, 108.0, "C", 0.40, 4.80, 5.00, 500),
+            (expiration, 100.0, "P", -0.50, 4.80, 5.00, 500),
+        ],
+        columns=(
+            "expiration",
+            "strike",
+            "right",
+            "delta",
+            "bid",
+            "ask",
+            "open_interest",
+        ),
+    )
+
+
+class WindowEndTests(unittest.TestCase):
+    """H10A_WINDOW_END / H10B_WINDOW_END boundary handling (Codex PR #14
+    review finding: config.py defines these but h10_watch never checked
+    them, so the watcher could fire past a hypothesis's registered window).
+
+    Boundary choice: the ledger seq 15/16 registration text (checked
+    `ledger/experiments.jsonl` and docs/) says only "window ends <date>" and
+    never states whether the end date itself is included. This repo's
+    choice, recorded here: the window-end date is INCLUSIVE -- fires/entries
+    are still allowed ON the end date; suppression begins the session
+    strictly AFTER it.
+    """
+
+    def test_window_status_open_on_and_before_end_date(self):
+        self.assertEqual(
+            h10_watch._window_status(config.H10A_WINDOW_END)["H10a"], "OPEN"
+        )
+        self.assertEqual(h10_watch._window_status("2026-10-05")["H10a"], "OPEN")
+        self.assertEqual(
+            h10_watch._window_status(config.H10B_WINDOW_END)["H10b"], "OPEN"
+        )
+
+    def test_window_status_closed_strictly_after_end_date(self):
+        self.assertEqual(
+            h10_watch._window_status("2026-10-07")["H10a"], "WINDOW_CLOSED"
+        )
+        self.assertEqual(
+            h10_watch._window_status("2027-01-07")["H10b"], "WINDOW_CLOSED"
+        )
+
+    def test_parabolic_fire_allowed_on_h10a_window_end_date(self):
+        eval_iso = config.H10A_WINDOW_END
+        frame = _adjusted_parabolic("PLTR", eval_iso)
+        signals = h10_watch._signals_at_session(frame, eval_iso, PARAMS)
+        self.assertTrue(signals["H10a"])
+
+    def test_parabolic_fire_suppressed_the_session_after_h10a_window_end(self):
+        eval_iso = "2026-10-07"  # the trading day after H10A_WINDOW_END
+        frame = _adjusted_parabolic("PLTR", eval_iso)
+        signals = h10_watch._signals_at_session(frame, eval_iso, PARAMS)
+        self.assertFalse(signals["H10a"])
+
+    def test_breakout_fire_allowed_on_h10b_window_end_date(self):
+        eval_iso = config.H10B_WINDOW_END
+        frame = _adjusted_breakout("PLTR", eval_iso)
+        signals = h10_watch._signals_at_session(frame, eval_iso, PARAMS)
+        self.assertTrue(signals["H10b"])
+
+    def test_breakout_fire_suppressed_the_session_after_h10b_window_end(self):
+        eval_iso = "2027-01-07"  # the trading day after H10B_WINDOW_END
+        frame = _adjusted_breakout("PLTR", eval_iso)
+        signals = h10_watch._signals_at_session(frame, eval_iso, PARAMS)
+        self.assertFalse(signals["H10b"])
+
+    def test_evaluation_row_fires_and_reports_open_on_window_end_date(self):
+        eval_iso = config.H10A_WINDOW_END
+        row = h10_watch._evaluation(
+            "PLTR",
+            eval_iso=eval_iso,
+            params=PARAMS,
+            load_adjusted=_adjusted_parabolic,
+            load_raw=_raw,
+            load_chain=lambda symbol, iso: _chain_for(iso),
+            assertions=[_assertion("2030-01-01")],
+            known_as_of=datetime.fromisoformat(f"{eval_iso}T20:00:00+00:00"),
+            open_premium=0.0,
+        )
+
+        self.assertEqual(row["status"], "FIRED")
+        self.assertEqual(row["signals"], {"H10a": True, "H10b": False})
+        self.assertEqual(row["window_status"], {"H10a": "OPEN", "H10b": "OPEN"})
+
+    def test_evaluation_row_suppresses_fire_and_reports_window_closed(self):
+        eval_iso = "2026-10-07"  # the trading day after H10A_WINDOW_END
+        row = h10_watch._evaluation(
+            "PLTR",
+            eval_iso=eval_iso,
+            params=PARAMS,
+            load_adjusted=_adjusted_parabolic,
+            load_raw=_raw,
+            load_chain=lambda symbol, iso: _chain_for(iso),
+            assertions=[_assertion("2030-01-01")],
+            known_as_of=datetime.fromisoformat(f"{eval_iso}T20:00:00+00:00"),
+            open_premium=0.0,
+        )
+
+        self.assertEqual(row["status"], "NO_SIGNAL")
+        self.assertEqual(row["signals"], {"H10a": False, "H10b": False})
+        self.assertFalse(row["book_action_required"])
+        self.assertIsNone(row["candidate_contract"])
+        self.assertEqual(
+            row["window_status"], {"H10a": "WINDOW_CLOSED", "H10b": "OPEN"}
+        )
+
+    def test_console_output_surfaces_window_closed_explicitly(self):
+        # window-end dates fall after this repo's real system clock, so the
+        # CLI's own (unrelated) "--as-of is in the future" guard has to be
+        # cleared by pinning main()'s notion of "today" -- everything else
+        # in main() still runs for real.
+        eval_iso = "2026-10-07"  # the trading day after H10A_WINDOW_END
+        as_of = (date.fromisoformat(eval_iso) + timedelta(days=1)).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            book = root / "h10_positions.csv"
+            _write_book(book)
+            receipts = root / "receipts"
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(h10_watch, "datetime") as mock_datetime,
+                contextlib.redirect_stdout(stdout),
+            ):
+                mock_datetime.now.return_value = datetime(
+                    2026, 10, 9, 12, 0, tzinfo=timezone.utc
+                )
+                rc = h10_watch.main(
+                    ["--as-of", as_of],
+                    universe=["PLTR"],
+                    load_adjusted=_adjusted_parabolic,
+                    load_raw=_raw,
+                    load_chain=lambda symbol, iso: _chain_for(iso),
+                    params=PARAMS,
+                    gate=lambda: None,
+                    load_assertions_fn=lambda: [_assertion("2030-01-01")],
+                    book_path=book,
+                    receipt_dir=receipts,
+                    known_as_of=datetime.fromisoformat(
+                        f"{eval_iso}T20:00:00+00:00"
+                    ),
+                )
+
+        self.assertEqual(rc, 0)
+        self.assertIn("window_closed=H10a", stdout.getvalue())
 
 
 if __name__ == "__main__":
