@@ -32,13 +32,22 @@ unknown URL from a question. They replace WebFetch once a URL is known.
    `PruningContentFilter` silently reduced a real page to 9 characters — check
    output length before trusting it.
 5. **Scrapling** — untested here; per above, last-resort static fetching.
+6. **Keyless Jina Reader** — `https://r.jina.ai/<url>` (~20 req/min anonymous,
+   verified 2026-08-03) — last resort for public JS-heavy pages when nothing
+   above works. Public pages only; never for paywalled/login content. See
+   `docs/evidence-upgrade/2026-08-03-cross-project-source-standard.md` §4.
 
-Install with `uv sync --extra web-fetchers`.
+Install with `uv sync --extra web-fetchers`. **Check before citing:** this
+checkout does not have trafilatura/crawl4ai/scrapling installed unless that
+command was run this session (verified absent from `.venv` on 2026-08-03) —
+doctrine naming a tool is not evidence the tool is present.
 
 Firecrawl is out of credits — do not reach for it. First recorded 2026-07-09,
 still out on 2026-07-23 (equity-research session note: "Firecrawl out of
 credits this session (same as 07-06); all market/peer/SPY data via
-`scripts/crawlee_fetch.py` fallback per doctrine"). The `firecrawl-*` skills
-still carry recent invocation timestamps — that records the skill being
-dispatched, not a successful fetch. Don't read those timestamps as evidence
-that credits came back.
+`scripts/crawlee_fetch.py` fallback per doctrine"). Re-verified 2026-08-03:
+equity-research shows `firecrawl:PaymentRequiredError` on every fresh capture
+2026-08-01..03 (e.g. `tickers/SPY/web/quote_2026-08-03.md`) — still out. The
+`firecrawl-*` skills still carry recent invocation timestamps — that records
+the skill being dispatched, not a successful fetch. Don't read those
+timestamps as evidence that credits came back.
