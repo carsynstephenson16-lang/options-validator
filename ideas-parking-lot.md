@@ -1148,3 +1148,27 @@ repo-scale corner survives as Badge B in the briefs.
   runner `uv run python -m tools.regime_redundancy_audit`. Threshold 0.50 is
   LLM-proposed under that directive; owner veto before the run voids it.
   Awaiting one run on cached data; result recorded whatever it shows.
+
+## Web-layer code cleanups (parked 2026-08-03)
+
+Context: surfaced by the cross-project source-standard inventory
+(`docs/evidence-upgrade/2026-08-03-cross-project-source-standard.md`). All are
+code-level and none moves a live hypothesis, so they wait here. Facts were
+verified read-only on 2026-08-03.
+
+- **Remove dead `scrapy` dependency:** top-level in `pyproject.toml`,
+  installed in `.venv`, zero call sites repo-wide. Gate: full offline suite
+  green after removal + owner ok on `uv.lock` churn (concurrent sessions).
+- **Remove tutorial `crawler.js` + `package.json` crawlee boilerplate:** the
+  script only crawls `crawlee.dev` (vendor demo) and nothing invokes it.
+  Gate: confirm no external automation calls `npm start` here.
+- **Align WebFetch domain allowlist with doctrine:** `.claude/settings.local.json`
+  pre-approves only anthropic/ssrn domains while doctrine requires SEC/IR/PJM
+  fetches. Gate: owner reviews the permission widening (it grants future
+  sessions more reach).
+- **Receipt-shape participation in EC-1:** map `attractiveness_research_v2.py`
+  SOURCE_FIELDS onto the cross-project receipt fields. Gate: OD-D review-lane
+  proof lands and EC-1 packets resume (PROJECT_STATE P2.4).
+- **First real `market_context.py` caller:** the equity-research bridge is
+  built, tested, and has zero callers. Gate: a consumer with a registered,
+  display-only purpose.
