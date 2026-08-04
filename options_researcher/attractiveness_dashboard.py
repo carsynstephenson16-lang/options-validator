@@ -796,6 +796,7 @@ def assemble(
     rv21_by_symbol: dict[str, float] | None = None,
     blocked: list[dict] | None = None,
     hypothesis_evidence_by_symbol: Mapping[str, object] | None = None,
+    composite_signals: list[dict] | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
 
@@ -912,6 +913,11 @@ def assemble(
                 if evidence is not None:
                     record["hypothesis_evidence"] = evidence
 
+    if composite_signals is None and real_assembly:
+        from options_researcher.composite_signals import build_board
+
+        composite_signals = build_board()
+
     canonical_symbols = [
         sec for sec in out_symbols if not sec.get("display_only")
     ]
@@ -922,6 +928,7 @@ def assemble(
         "display_data_as_of": _all_display_data_as_of(
             out_symbols, out_blocked
         ),
+        "composite_signals": composite_signals or [],
     }
 
 
@@ -2635,6 +2642,81 @@ def _pinned_html(data: dict) -> str:
             f'<div class="hero-grid">{cards}</div></section>')
 
 
+_COMPOSITE_GRADE_CLASS = {"A": "good", "B": "watch", "C": "unknown"}
+_COMPOSITE_TREND_CLASS = {"UP": "good", "DOWN": "bad", "MIXED": "watch"}
+_COMPOSITE_VOL_CLASS = {"CHEAP": "good", "RICH": "watch", "NEUTRAL": "unknown"}
+_COMPOSITE_REGIME_CLASS = {"TYPICAL": "good", "HIGH_DISPERSION": "watch"}
+_COMPOSITE_INTERNALS_CLASS = {"CONFIRM": "good", "VETO": "bad", "NEUTRAL": "unknown"}
+
+
+def _composite_badge(label: str, state: str, cls_map: Mapping[str, str]) -> str:
+    cls = cls_map.get(state, "unknown")
+    return (f'<span class="status-badge {cls}">{_esc(label)} '
+            f'{_esc(state)}</span>')
+
+
+def _as_mapping(value: object) -> Mapping[str, object]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _composite_card_html(card: Mapping[str, object]) -> str:
+    """One four-angle confluence card. DATA_BLOCKED angles render their
+    literal state (never hidden) plus, when present, the block reason."""
+    grade = str(card.get("grade") or "C")
+    trend = _as_mapping(card.get("trend"))
+    vol_premium = _as_mapping(card.get("vol_premium"))
+    regime = _as_mapping(card.get("regime"))
+    internals = _as_mapping(card.get("internals"))
+    badges = (
+        _composite_badge("TREND", str(trend.get("state", "DATA_BLOCKED")),
+                         _COMPOSITE_TREND_CLASS)
+        + _composite_badge("VOL", str(vol_premium.get("state", "DATA_BLOCKED")),
+                           _COMPOSITE_VOL_CLASS)
+        + _composite_badge("REGIME", str(regime.get("state", "DATA_BLOCKED")),
+                           _COMPOSITE_REGIME_CLASS)
+        + _composite_badge("INTERNALS", str(internals.get("state", "DATA_BLOCKED")),
+                           _COMPOSITE_INTERNALS_CLASS)
+    )
+    reasons = [
+        f"{name}: {angle.get('reason')}"
+        for name, angle in (("trend", trend), ("vol", vol_premium),
+                            ("regime", regime), ("internals", internals))
+        if angle.get("data_blocked") and angle.get("reason")
+    ]
+    reason_html = (f'<div class="label">{_esc("; ".join(reasons))}</div>'
+                  if reasons else "")
+    as_of = card.get("max_asof") or card.get("asof") or "?"
+    return (
+        '<div class="panel composite-card">'
+        '<div class="slot-label"><span>' + _esc(str(card.get("symbol", "?")))
+        + f'</span><span class="status-badge {_COMPOSITE_GRADE_CLASS.get(grade, "unknown")}">'
+        f'GRADE {_esc(grade)}</span></div>'
+        f'<div class="party-badges">{badges}</div>'
+        f'{reason_html}'
+        f'<div class="label">as of {_esc(str(as_of))}</div>'
+        '</div>'
+    )
+
+
+def _composite_html(data: dict) -> str:
+    """Composite signal board panel: display-only, non-verdict-bearing
+    four-angle confluence cards (options_researcher.composite_signals).
+    Omitted honestly when nothing was assembled."""
+    cards = data.get("composite_signals") or []
+    if not cards:
+        return ""
+    grid = "".join(_composite_card_html(card) for card in cards)
+    return (
+        '<section class="panel"><div class="section-header"><div>'
+        '<div class="eyebrow">COMPOSITE SIGNAL LANE</div>'
+        '<h2>Composite signal board — display-only</h2>'
+        '<p>Four independent angles (trend, vol premium, regime, options-'
+        'market internals) per name. Not verdict-bearing, not FIRE-capable; '
+        'writes nothing to ledger/ or positions.</p></div></div>'
+        f'<div class="card-grid">{grid}</div></section>'
+    )
+
+
 def _evidence_attr(value: object, name: str, default: object = None) -> object:
     if isinstance(value, Mapping):
         return value.get(name, default)
@@ -2867,6 +2949,7 @@ def render(
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
         f"{_pinned_html(data)}"
+        f"{_composite_html(data)}"
         f"{symbols_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
         "not predictions. Income annualization uses 365 calendar days; "
