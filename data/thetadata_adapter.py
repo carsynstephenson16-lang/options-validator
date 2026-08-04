@@ -139,7 +139,23 @@ def _cache_path(symbol: str, date: str) -> Path:
 
 
 def validate_chain_schema(chain: pd.DataFrame) -> pd.DataFrame:
-    """Fail before malformed cached/fetched chain data reaches strategy logic."""
+    """Fail before malformed cached/fetched chain data reaches strategy logic.
+
+    Mutates `chain` IN PLACE: every column in NUMERIC_CHAIN_COLUMNS (and, for
+    v2 partitions, NUMERIC_CHAIN_COLUMNS_V2) is coerced via
+    ``pd.to_numeric(..., errors="coerce")`` and the result is assigned back
+    into the frame, so a numeric-looking string column (e.g. bid/ask read
+    back as object dtype "1.95"/"2.05") becomes a real numeric dtype before
+    the finiteness checks below run, and genuinely non-numeric garbage
+    becomes NaN that those same checks then catch and raise on. This
+    mutation is intentional and load-bearing: at least one caller
+    (`tools/thetadata_exit_audit.py::audit_symbol_session`) calls
+    `validate_chain_schema(frame)` and discards the return value, then keeps
+    comparing `frame["bid"]` etc. directly -- it depends on the passed-in
+    frame itself ending up numeric, not just the return value. The function
+    still returns the same (now-coerced) frame for callers that prefer to
+    chain the call.
+    """
     if not isinstance(chain, pd.DataFrame):
         raise ValueError("option chain must be a pandas DataFrame")
     metadata = chain_schema_metadata(chain.columns)
@@ -150,13 +166,15 @@ def validate_chain_schema(chain: pd.DataFrame) -> pd.DataFrame:
     if invalid_rights:
         raise ValueError(f"option chain has invalid right values: {sorted(invalid_rights)}")
     for col in NUMERIC_CHAIN_COLUMNS:
-        values = pd.to_numeric(chain[col], errors="coerce")
-        if values.isna().any() or not np.isfinite(values.to_numpy(dtype=float)).all():
+        chain[col] = pd.to_numeric(chain[col], errors="coerce")
+        if chain[col].isna().any() or not np.isfinite(chain[col].to_numpy(dtype=float)).all():
             raise ValueError(f"option chain column {col!r} contains non-finite values")
     if metadata.schema_version == CHAIN_SCHEMA_VERSION_V2:
         for col in NUMERIC_CHAIN_COLUMNS_V2:
-            values = pd.to_numeric(chain[col], errors="coerce")
-            if values.isna().any() or not np.isfinite(values.to_numpy(dtype=float)).all():
+            chain[col] = pd.to_numeric(chain[col], errors="coerce")
+            if chain[col].isna().any() or not np.isfinite(
+                chain[col].to_numpy(dtype=float)
+            ).all():
                 raise ValueError(f"option chain v2 column {col!r} contains non-finite values")
         for col in ("timestamp", "underlying_timestamp"):
             if chain[col].isna().any() or any(

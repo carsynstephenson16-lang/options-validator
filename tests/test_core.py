@@ -136,6 +136,37 @@ class ChainCacheTests(unittest.TestCase):
         self.assertEqual(list(out.columns), thetadata_adapter.CHAIN_COLUMNS)
         self.assertEqual(out.iloc[0]["right"], "P")
 
+    def test_numeric_looking_string_columns_are_coerced_in_place(self):
+        """Codex PR #7 review finding, live-reproduced: validate_chain_schema
+        called pd.to_numeric(chain[col], errors="coerce") but never assigned
+        the result back, so a chain read back with bid/ask as strings
+        ("1.95"/"2.05" -- e.g. an object-dtype parquet round-trip) passed
+        validation unchanged and then crashed a caller doing
+        frame["bid"] < 0 with an uncaught TypeError (str < int). The frame
+        passed in must come out with real numeric dtypes."""
+        chain = self._valid_chain()
+        chain["bid"] = chain["bid"].astype(str)
+        chain["ask"] = chain["ask"].astype(str)
+        self.assertEqual(chain["bid"].dtype, object)
+
+        out = thetadata_adapter.validate_chain_schema(chain)
+
+        self.assertTrue(pd.api.types.is_numeric_dtype(chain["bid"]))
+        self.assertTrue(pd.api.types.is_numeric_dtype(chain["ask"]))
+        self.assertEqual(chain.iloc[0]["bid"], 1.00)
+        self.assertEqual(chain.iloc[0]["ask"], 1.05)
+        # in place: the caller's own comparison must now work, not just the
+        # returned frame's
+        self.assertFalse((chain["bid"] < 0).any())
+        self.assertIs(out, chain)
+
+    def test_genuinely_non_numeric_garbage_is_caught_as_nan(self):
+        chain = self._valid_chain()
+        chain["bid"] = "not-a-number"
+
+        with self.assertRaises(ValueError):
+            thetadata_adapter.validate_chain_schema(chain)
+
 
 class ChainMergeTests(unittest.TestCase):
     """Pin the offline-testable half of the ThetaData fetch: the two bulk

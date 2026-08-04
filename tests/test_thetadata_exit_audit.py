@@ -147,6 +147,27 @@ class ExitAuditTests(unittest.TestCase):
             any(item["check"] == 13 and "drift=" in item["detail"] for item in report["blocks"])
         )
 
+    def test_string_dtype_bid_ask_chain_does_not_crash_the_audit(self):
+        """Codex PR #7 review finding, live-reproduced: before the
+        data/thetadata_adapter.py::validate_chain_schema fix, a cached chain
+        with bid/ask stored as numeric-looking strings ("1.95"/"2.05" -- an
+        object-dtype parquet round-trip) passed schema validation unchanged
+        (pd.to_numeric's coerced result was computed but never assigned back
+        into the frame) and then crashed audit_symbol_session's
+        `frame["bid"] < 0` comparison with an uncaught TypeError (str < int),
+        outside the try/except that wraps only the initial schema check. The
+        audit must now either complete cleanly or produce an explicit
+        report -- never raise."""
+        malformed = _chain()
+        malformed["bid"] = malformed["bid"].astype(str)
+        malformed["ask"] = malformed["ask"].astype(str)
+        malformed.to_parquet(self.path, index=False)
+
+        report = self._run()
+
+        self.assertIn(report["verdict"], {"PASS", "BLOCK"})
+        self.assertEqual(report["counts"]["expected_symbol_sessions"], 1)
+
     def test_parity_can_be_diagnostic_when_v2_checks_provider_spot(self):
         pd.DataFrame({"date": [SESSION], "close": [50.0]}).to_parquet(
             self.closes / "AMD.parquet", index=False
