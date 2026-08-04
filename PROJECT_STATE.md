@@ -30,6 +30,25 @@ pending explicit integration authority. H7 will not restart now; any later
 restart requires a new registration and namespace. No strategy has demonstrated
 an advantage.
 
+**Directive update (2026-08-03; owner-directed in-session):** the global
+pre-verdict ship-blocker is retired (owner wording: the rule that nothing gets
+shipped until a strategy is proven — "i want to get rid of … ensure its
+gone"). Verdict-landing remains a goal, not a gate. The same directive
+commissioned composite-indicator signal research (trend, volatility-premium,
+regime, options-market internals combined into one decision view) as the
+current priority work and explicitly delegated the delivery form (new repo /
+new lane / other) to the implementing agent's evidence-based judgment (owner
+wording: "its 100% up to you what to do with them", "dont default to yes");
+that decision and its reasoning must be recorded in a dated report under
+`reports/`. Agent-proposed constraints for any resulting capability, inherited
+from the 2026-08-03 Wasserstein exception in `.cursorrules`/`AGENTS.md` (owner
+may veto): cached data only, causal walk-forward computation, max as-of stamps
+on every output, display-only — no verdict/FIRE authority, and any future
+registration must pass the 2026-07-24 feasibility gate. This update does NOT
+unblock anything in §6's still-blocked list (v1 cache bytes, one-run records,
+books, ledgers, unapproved provider calls, H7 restart, parked richer-data
+integration).
+
 ## 1. Executive verdict
 
 The Fable handoff is directionally useful but not safe as the sole execution plan.
