@@ -1,6 +1,7 @@
 """Offline contract tests for the ritual's cache/provenance dependency gate."""
 
 import hashlib
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
@@ -62,11 +63,14 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertLess(status, require_full)
 
     def test_status_preserves_log_tree_and_lockfile_bytes(self):
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
         repo = RITUAL.parents[1]
         guarded = (repo / ".tmp" / "daily_ritual", repo / "uv.lock")
         before = tuple(self._tree_identity(path) for path in guarded)
         result = subprocess.run(
-            ["zsh", str(RITUAL), "status"],
+            [zsh, str(RITUAL), "status"],
             cwd=repo,
             check=False,
             capture_output=True,

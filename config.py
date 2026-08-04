@@ -785,3 +785,33 @@ REGIME_MIN_FIT_WINDOWS = 24  # minimum training windows before any label is emit
 REGIME_N_INIT = 5           # k-means random restarts kept by lowest inertia
 REGIME_SEED = 7             # base seed; each refit uses REGIME_SEED + step index
 REGIME_SYMBOLS = ["VST", "CEG", "MSFT", "AMZN"]  # core-name display scope
+
+# ---------------------------------------------------------------------------
+# COMPOSITE SIGNAL LANE -- display-only, cached-data-only, walk-forward
+# confluence board (LLM-proposed, literature-anchored -- see
+# reports/2026-08-04-composite-signal-lane-decision.md). NOT a registered
+# hypothesis: nothing here gates, sizes, or triggers a trade, and no verdict
+# of any kind reads these values. Every constant is frozen and standard-
+# from-literature; zero per-name tuning (decision doc Part 3).
+# ---------------------------------------------------------------------------
+COMPOSITE_EMA_SLOW = 200          # research-baseline slow EMA (Angle 1: trend)
+COMPOSITE_EMA_MEDIUM = 50         # medium EMA (Angle 1: trend)
+COMPOSITE_TSMOM_LOOKBACK = 252    # 12-month time-series-momentum window
+COMPOSITE_TSMOM_SKIP = 21         # skip the most recent ~1 month (12-1 anchor;
+                                  # Moskowitz, Ooi & Pedersen 2012, JFE 104(2))
+COMPOSITE_PCTL_WINDOW = 252       # trailing percentile window (Angle 2 gap /
+                                  # Angle 4 skew), same convention as
+                                  # features.PCT_WINDOW
+COMPOSITE_PCTL_MIN_OBS = 126      # minimum observations before a percentile
+                                  # renders, same convention as
+                                  # features.PCT_MIN_OBS
+COMPOSITE_RICH_PCTL = 0.667       # >= this percentile -> RICH / steep-skew flag
+COMPOSITE_CHEAP_PCTL = 0.333      # <= this percentile -> CHEAP
+COMPOSITE_TERM_NEAR_DTE = (15, 60)   # near-tenor monthly DTE band (matches
+                                     # features.py's atm_iv convention)
+COMPOSITE_TERM_FAR_DTE = (61, 120)   # far-tenor monthly DTE band (Angle 2
+                                     # term-structure slope)
+COMPOSITE_SKEW_DELTA = 0.25       # 25-delta put/call skew reference (Angle 4;
+                                  # Xing, Zhang & Zhao 2010, JFQA 45(3))
+COMPOSITE_GRADE_A_MIN_ALIGNED = 3 # aligned non-neutral angles needed for grade A
+COMPOSITE_GRADE_B_MIN_ALIGNED = 2 # aligned non-neutral angles needed for grade B

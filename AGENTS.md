@@ -192,6 +192,24 @@ its max as-of session; regime labels are historical descriptions, and any
 transition frequencies are historical frequencies, not forecasts; nothing this
 lane emits is verdict-bearing, FIRE-capable, or a registered signal without
 its own future registration.
+Owner-directed amendment (2026-08-03, in-session wording: the rule that
+nothing gets shipped until a strategy is proven — "i want to get rid of …
+ensure its gone"): the pre-verdict ship-blocker is retired repo-wide; the
+scope-guard question above no longer blocks building. The same in-session
+directive commissioned composite-indicator signal research (several
+independent angles — trend, volatility-premium, regime, options-market
+internals — combined into one decision view) and explicitly delegated the
+delivery form to the implementing agent's evidence-based judgment (owner
+wording: "its 100% up to you what to do with them", "dont default to yes"):
+new repo, new lane, or other, to be decided and recorded with reasoning in a
+dated report under `reports/`. Agent-proposed binding constraints for any
+resulting capability (inherited from the Wasserstein exception's precedent;
+owner may veto): cached data only (parquet chain cache +
+`data/underlying_closes.py`; OD-4 stands — no network providers), causal
+walk-forward computation only, every output carries its max as-of session, and
+nothing emitted is verdict-bearing, FIRE-capable, or a registered signal
+without its own future registration passing the 2026-07-24 feasibility gate.
+Hard guardrails, claim discipline, and vocabulary discipline are unchanged.
 Registration feasibility gate (2026-07-24): a new loss-gated hypothesis or
 forward window may only be registered if the historical base rate of its full
 entry stack projects expected entries >= 2x the loss bar over the declared
