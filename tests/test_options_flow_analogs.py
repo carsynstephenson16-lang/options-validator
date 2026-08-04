@@ -188,6 +188,59 @@ class AnalogTests(unittest.TestCase):
         self.assertNotIn(too_recent_session, {str(row["session"]) for row in primary.analogs})
         self.assertEqual(opinion.directional_opinion, "POSITIVE_HISTORICAL_LEAN")
 
+    def test_longer_horizon_outcome_is_masked_when_not_yet_knowable(self):
+        """Codex PR #19 review finding, live-reproduced: candidate eligibility
+        only gates on the PRIMARY_OPINION_OUTCOME_HORIZON_SESSIONS=5 horizon
+        (`_outcome_known_by_query`), but `analog_columns` also serializes
+        longer-horizon outcome columns (return_21, future_rv21). A candidate
+        whose T+5 outcome was legitimately known at the query session can
+        still have a T+21 outcome that was NOT yet knowable -- before this
+        fix, that future value was emitted verbatim (a point-in-time leak
+        even though the candidate is a valid T+5 analog). Pinned with the
+        same query_position=34 fixture as
+        test_t5_opinion_excludes_analog_without_a_query_known_outcome: with
+        maximum_analogs=10, all 10 selected analogs sit at positions 20-29
+        (position+5 <= 34, so T5-eligible) but none reach position+21 <= 34
+        (T21 needs position <= 13), so every emitted future_rv21 must be
+        masked to NaN while return_5 stays a real, non-NaN value."""
+        panel = _panel()
+        # future_rv21 is not produced by assemble_analog_panel; attach a
+        # column that would trivially reveal a leak (monotone in session) if
+        # a future value ever slipped through unmasked.
+        panel = panel.assign(future_rv21=0.30 + 0.001 * np.arange(len(panel)))
+        query_position = 34
+        query = str(panel.iloc[query_position]["session"])
+        config = AnalogConfig(
+            covariance_minimum=12,
+            observations_per_feature=2,
+            covariance_maximum=30,
+            effective_rank_ratio=0.50,
+            maximum_analogs=10,
+            minimum_analogs=10,
+            separation_sessions=1,
+            similarity_quantile=1.0,
+            metric_jaccard_minimum=0.0,
+        )
+
+        result = match_historical_analogs(
+            panel,
+            query_session=query,
+            feature_columns=["flow_a", "flow_b"],
+            config=config,
+        )
+
+        positions = {str(session): position for position, session in enumerate(panel["session"])}
+        self.assertEqual(result.status, "READY")
+        self.assertEqual(len(result.analogs), 10)
+        # every selected candidate clears the T5 gate (return_5 real)...
+        self.assertTrue(all(np.isfinite(row["return_5"]) for row in result.analogs))
+        # ...but none clear the longer T21 horizon future_rv21 needs, and
+        # none of the masked cells leak the real (monotone) future value.
+        self.assertTrue(
+            all(positions[str(row["session"])] + 21 > query_position for row in result.analogs)
+        )
+        self.assertTrue(all(np.isnan(row["future_rv21"]) for row in result.analogs))
+
     def test_similarity_cutoff_starvation_does_not_become_metric_instability(self):
         panel = _panel()
         result = match_historical_analogs(

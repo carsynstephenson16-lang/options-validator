@@ -8,7 +8,22 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
+from options_researcher.flow.horizons import required_horizon_for
 from options_researcher.flow.panel import ANALOG_REGIME_READY
+
+# Outcome columns a matched analog record may carry, in the order they are
+# emitted. Each name's own trailing-integer horizon (required_horizon_for)
+# may exceed PRIMARY_OPINION_OUTCOME_HORIZON_SESSIONS -- see
+# `_mask_unknowable_outcomes`.
+ANALOG_OUTCOME_COLUMNS = (
+    "return_1",
+    "return_5",
+    "return_21",
+    "excess_return_5",
+    "future_rv21",
+    "iv_change_5",
+    "skew_change_5",
+)
 
 METHODOLOGY_VERSION = "options_flow_analogs_v2"
 PRIMARY_OPINION_OUTCOME_HORIZON_SESSIONS = 5
@@ -165,6 +180,46 @@ def _outcome_known_by_query(
         dtype=int,
     )
     return candidates.loc[candidate_positions <= latest_eligible_position].copy()
+
+
+def _mask_unknowable_outcomes(
+    frame: pd.DataFrame,
+    calendar: Sequence[str],
+    *,
+    query_session: str,
+    columns: Sequence[str],
+) -> pd.DataFrame:
+    """Per-column point-in-time knowability mask for emitted analog outcomes.
+
+    `_outcome_known_by_query` (above) only gates candidacy on the PRIMARY
+    T+5 opinion horizon (PRIMARY_OPINION_OUTCOME_HORIZON_SESSIONS). A
+    candidate that legitimately clears that T+5 gate can still carry
+    longer-horizon outcome columns -- return_21, future_rv21 -- that were
+    NOT yet knowable at `query_session` (candidate_session + 21 > query
+    session). Emitting those raw values would be a point-in-time leak even
+    though the candidate itself is a valid T+5 analog. Each column's own
+    horizon is parsed from its name via `required_horizon_for`; any cell
+    whose horizon has not yet elapsed as of `query_session` is masked to NaN
+    -- never the future value. NaN (not None) is used deliberately: analog
+    records flow into `options_researcher.flow.opinion`, which already
+    filters outcome arrays with `np.isfinite`, so NaN is silently and safely
+    excluded there, while None would crash its `float(...)` conversion.
+    """
+    positions = {session: index for index, session in enumerate(calendar)}
+    query_position = positions[query_session]
+    out = frame.copy()
+    candidate_positions = np.asarray(
+        [positions[str(session)] for session in out["session"].tolist()],
+        dtype=int,
+    )
+    for column in columns:
+        if column not in out.columns:
+            continue
+        horizon = required_horizon_for(column)
+        unknowable = candidate_positions + horizon > query_position
+        if unknowable.any():
+            out.loc[unknowable, column] = np.nan
+    return out
 
 
 def match_historical_analogs(
@@ -474,24 +529,22 @@ def match_historical_analogs(
         if jaccard < config.metric_jaccard_minimum:
             reasons.append("METRIC_INSTABILITY")
     status = "READY" if not reasons else "DESCRIPTIVE_ONLY"
+    outcome_columns = [column for column in ANALOG_OUTCOME_COLUMNS if column in selected]
+    # `outcome_calendar` (built above from the full ordered panel) is used
+    # rather than the narrower `calendar` local: it is guaranteed to contain
+    # `query_session` itself, which the per-column knowability mask needs.
+    selected = _mask_unknowable_outcomes(
+        selected,
+        outcome_calendar,
+        query_session=query_session,
+        columns=outcome_columns,
+    )
     analog_columns = [
         "symbol",
         "session",
         "mahalanobis_distance",
         "rms_distance",
-        *[
-            column
-            for column in (
-                "return_1",
-                "return_5",
-                "return_21",
-                "excess_return_5",
-                "future_rv21",
-                "iv_change_5",
-                "skew_change_5",
-            )
-            if column in selected
-        ],
+        *outcome_columns,
     ]
     return AnalogResult(
         METHODOLOGY_VERSION,
