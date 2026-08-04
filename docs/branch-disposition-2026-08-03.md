@@ -139,3 +139,26 @@ and their output recorded.
 Remote branches on `origin` were **not** deleted in this pass; only local
 branches were pruned. Cleaning up `origin` is a separate, explicitly
 owner-gated decision.
+
+## Addendum — origin cleanup EXECUTED 2026-08-04
+
+The owner delegated resolution of the origin branch list in-session on
+2026-08-03 ("complete all tasks 1–5 … decide what needs to be done"). Executed
+2026-08-04 from the primary checkout after `irreplaceable_data_guard.py verify`
+returned OK (run from the main checkout — the guard false-alarms from
+worktrees, which have no `.cache/`):
+
+- Verified per-branch before deletion: 19 of the 24 stale origin branches had
+  tips reachable from `origin/main` (fully merged — zero commits at risk); the
+  other 5 (`agent/h7-entry-authority-review`, `ci/claude-pr-review`,
+  `feature/h7-real-entry-path-main`, `feature/h7-stage4-spec`,
+  `parking/market-data-bundle-2026-07-20`) were each present in the local
+  repository AND pinned by an `archive/2026-08-03/*` tag already pushed to
+  origin, so their commits remain fetchable server-side via tags.
+- Zero open PRs at execution time (`gh pr list --state open` empty).
+- Deleted all 24; `origin` now holds exactly `main` and `sfix`.
+- The two KEPT local branches (`codex/h7-stage8-critical-20260717`,
+  `codex/qm-dashboard-integration-20260717`) remain harvest-only per the
+  ruling above; the qm branch's fail-closed display-guard concepts were
+  harvested into the composite-signal lane design
+  (`reports/2026-08-04-composite-signal-lane-decision.md`).

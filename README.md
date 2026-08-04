@@ -216,7 +216,22 @@ paper-trading window.
    `positions.csv`; covered-call rows only appear after a declared 100-share
    lot. Reuses the M7 CSS; no network/JS deps.
 
-**Scope status: four live hypotheses, forward paper windows.**
+**Scope status: registered research lanes and forward paper windows.**
+
+*Registry correction (2026-08-04, docs-truth repair):* the prose below predates
+several ledger registrations and is retained as history. The complete registry
+per `ledger/experiments.jsonl` is: **H5** (entry watch, alert-only), **H6**
+(seq 6; one open position, `INSUFFICIENT_SAMPLE`), **H7** (seq 7–10; forward
+window PAUSED per OD-3 — restart requires a new registration and namespace),
+**H8** (seq 11; zero positions), **H10a** (seq 15, window ends 2026-10-06,
+7-loss bar, zero positions), **H10b** (seq 16, window ends 2027-01-06, 7-loss
+bar, zero positions), **RQ1** (seq 17; SPENT — descriptive result recorded at
+seq 20, no verdict), **RQ2-v1** (seq 18; forward window opens 2026-09-01;
+badge modules not yet built), **A2-v1** (seq 19; not yet built). Status
+rulings and the data-lane situation as of 2026-08-04 live in
+`reports/2026-08-04-composite-signal-lane-decision.md`. The **composite
+signal lane** (display-only, non-verdict-bearing) is authorized per the
+2026-08-03 owner-directed amendment recorded in `.cursorrules`.
 **H5 Sector Income Core scanner/researcher**
 (`docs/superpowers/specs/2026-07-04-h5-sector-income-core-design.md`; ledger
 trial 6; H4 superseded at zero cycles) and **H6 post-earnings tactical long
