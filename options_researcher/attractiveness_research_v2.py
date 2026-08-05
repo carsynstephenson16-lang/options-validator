@@ -36,6 +36,12 @@ DASHBOARD_STALE_MARKERS: Final = (
     "Research evidence incomplete",
     "Research evidence stale",
 )
+# Core fields are required. The five below are the cross-project research
+# source standard's remaining receipt fields (docs/evidence-upgrade/
+# 2026-08-03-cross-project-source-standard.md §2), added as OPTIONAL so a
+# bundle may carry a full receipt without breaking any existing source dict.
+# `source_tier` already plays the standard's `source_class` role and is left
+# untouched.
 SOURCE_FIELDS: Final = frozenset(
     {
         "url",
@@ -43,6 +49,11 @@ SOURCE_FIELDS: Final = frozenset(
         "published_at",
         "publication_time_unknown_rationale",
         "retrieved_at_utc",
+        "final_url",
+        "publisher",
+        "fetched_via",
+        "capture_sha256",
+        "independence_group",
     }
 )
 BANNED_HOST_FRAGMENTS: Final = (
@@ -176,6 +187,25 @@ def validate_source_url(value: object, *, where: str) -> str:
     return value
 
 
+def _optional_nonempty_string(value: object, *, where: str) -> str | None:
+    """Validate an OPTIONAL string receipt field: absent stays absent, present must be non-empty."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ResearchArtifactError(f"{where}: non-empty string is required when present")
+    return value
+
+
+def validate_capture_sha256(value: object, *, where: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ResearchArtifactError(f"{where}: expected 64 lowercase hex characters")
+    return value
+
+
 def _require_attempt_id(value: object, *, where: str) -> str:
     if (
         not isinstance(value, str)
@@ -238,6 +268,25 @@ def _clean_sources(
             published = _parse_timestamp(published_at, where=f"{where}.published_at")
             if published.astimezone(timezone.utc) > retrieved:
                 raise ResearchArtifactError(f"{where}.published_at: later than retrieval timestamp")
+        final_url = raw.get("final_url")
+        normalized_final_url = (
+            None
+            if final_url is None
+            else validate_source_url(final_url, where=f"{where}.final_url")
+        )
+        publisher = _optional_nonempty_string(raw.get("publisher"), where=f"{where}.publisher")
+        fetched_via = _optional_nonempty_string(
+            raw.get("fetched_via"), where=f"{where}.fetched_via"
+        )
+        capture_sha256 = raw.get("capture_sha256")
+        normalized_capture_sha256 = (
+            None
+            if capture_sha256 is None
+            else validate_capture_sha256(capture_sha256, where=f"{where}.capture_sha256")
+        )
+        independence_group = _optional_nonempty_string(
+            raw.get("independence_group"), where=f"{where}.independence_group"
+        )
         cleaned.append(
             {
                 "url": url,
@@ -245,6 +294,11 @@ def _clean_sources(
                 "published_at": normalized_published,
                 "publication_time_unknown_rationale": normalized_rationale,
                 "retrieved_at_utc": retrieved.isoformat().replace("+00:00", "Z"),
+                "final_url": normalized_final_url,
+                "publisher": publisher,
+                "fetched_via": fetched_via,
+                "capture_sha256": normalized_capture_sha256,
+                "independence_group": independence_group,
             }
         )
     return cleaned

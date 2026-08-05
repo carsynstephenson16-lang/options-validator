@@ -51,8 +51,13 @@ def _source(
     *,
     published_at: str | None = "2026-07-01T12:00:00-04:00",
     retrieved_at_utc: str = "2026-07-27T19:15:00Z",
+    final_url: str | None = None,
+    publisher: str | None = None,
+    fetched_via: str | None = None,
+    capture_sha256: str | None = None,
+    independence_group: str | None = None,
 ) -> dict[str, object]:
-    return {
+    source: dict[str, object] = {
         "url": url,
         "source_tier": source_tier,
         "published_at": published_at,
@@ -63,6 +68,21 @@ def _source(
         ),
         "retrieved_at_utc": retrieved_at_utc,
     }
+    # The cross-project research source standard's remaining receipt fields
+    # (docs/evidence-upgrade/2026-08-03-cross-project-source-standard.md §2)
+    # are OPTIONAL: only set them when a caller passes a value, so most
+    # existing callers keep producing the legacy 5-field source shape.
+    optional_fields = {
+        "final_url": final_url,
+        "publisher": publisher,
+        "fetched_via": fetched_via,
+        "capture_sha256": capture_sha256,
+        "independence_group": independence_group,
+    }
+    for field, value in optional_fields.items():
+        if value is not None:
+            source[field] = value
+    return source
 
 
 def _claim(symbol: str) -> dict[str, object]:
@@ -452,10 +472,113 @@ class BundleTest(unittest.TestCase):
                     "published_at",
                     "publication_time_unknown_rationale",
                     "retrieved_at_utc",
+                    "final_url",
+                    "publisher",
+                    "fetched_via",
+                    "capture_sha256",
+                    "independence_group",
                     "used_by",
                 },
             )
             self.assertTrue(source["used_by"])
+
+    def test_legacy_source_without_standard_fields_still_validates(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        legacy_source = packet["sources"][0]
+        self.assertEqual(
+            set(legacy_source),
+            {
+                "url",
+                "source_tier",
+                "published_at",
+                "publication_time_unknown_rationale",
+                "retrieved_at_utc",
+            },
+        )
+        result = self.publish()
+        self.assertEqual(result.status, "PENDING_DASHBOARD")
+        manifest = self.verify(pending=True)
+        nvda_source = next(
+            source for source in manifest["sources"] if source["url"] == legacy_source["url"]
+        )
+        for field in ("final_url", "publisher", "fetched_via", "capture_sha256", "independence_group"):
+            self.assertIsNone(nvda_source[field])
+
+    def test_source_standard_receipt_fields_validate_when_present(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        url = str(packet["sources"][0]["url"])
+        packet["sources"][0] = _source(
+            url,
+            "issuer_ir",
+            final_url=url + "?utm_source=test",
+            publisher="NVIDIA Investor Relations",
+            fetched_via="WebFetch",
+            capture_sha256="a" * 64,
+            independence_group="nvidia-ir",
+        )
+        _write_json(path, packet)
+        self.publish()
+        manifest = self.verify(pending=True)
+        nvda_source = next(source for source in manifest["sources"] if source["url"] == url)
+        self.assertEqual(nvda_source["final_url"], url + "?utm_source=test")
+        self.assertEqual(nvda_source["publisher"], "NVIDIA Investor Relations")
+        self.assertEqual(nvda_source["fetched_via"], "WebFetch")
+        self.assertEqual(nvda_source["capture_sha256"], "a" * 64)
+        self.assertEqual(nvda_source["independence_group"], "nvidia-ir")
+
+    def test_bad_final_url_is_rejected(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["final_url"] = "not-a-url"
+        _write_json(path, packet)
+        with self.assertRaisesRegex(ResearchArtifactError, r"final_url: invalid source URL"):
+            self.publish()
+
+    def test_empty_publisher_is_rejected(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["publisher"] = "  "
+        _write_json(path, packet)
+        with self.assertRaisesRegex(ResearchArtifactError, r"publisher: non-empty string"):
+            self.publish()
+
+    def test_empty_fetched_via_is_rejected(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["fetched_via"] = ""
+        _write_json(path, packet)
+        with self.assertRaisesRegex(ResearchArtifactError, r"fetched_via: non-empty string"):
+            self.publish()
+
+    def test_capture_sha256_wrong_length_is_rejected(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["capture_sha256"] = "a" * 63
+        _write_json(path, packet)
+        with self.assertRaisesRegex(
+            ResearchArtifactError, r"capture_sha256: expected 64 lowercase hex characters"
+        ):
+            self.publish()
+
+    def test_capture_sha256_uppercase_is_rejected(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["capture_sha256"] = "A" * 64
+        _write_json(path, packet)
+        with self.assertRaisesRegex(
+            ResearchArtifactError, r"capture_sha256: expected 64 lowercase hex characters"
+        ):
+            self.publish()
+
+    def test_empty_independence_group_is_rejected(self):
+        path = self.inputs / "nvda.json"
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        packet["sources"][0]["independence_group"] = ""
+        _write_json(path, packet)
+        with self.assertRaisesRegex(ResearchArtifactError, r"independence_group: non-empty string"):
+            self.publish()
 
     def test_pjm_required_for_vst_and_ceg(self):
         path = self.inputs / "vst.json"
