@@ -3,8 +3,9 @@
 This module does not run or rewrite the frozen QM study.  It verifies a
 machine-readable sidecar against the committed report hash, evaluates only
 the current signal/MA state from cached OHLCV, and fails closed if any name is
-not aligned to the dashboard's market date.  The optional refresh CLI writes
-only the existing blind Yahoo OHLCV cache; it has no book or order path.
+not aligned to the dashboard's market date. The optional refresh CLI writes
+only covered names' existing blind Yahoo OHLCV cache; it has no book or order
+path.
 """
 
 from __future__ import annotations
@@ -101,8 +102,9 @@ def _blocked(
     symbols: dict[str, Any] | None = None,
     study: Mapping[str, Any] | None = None,
     quant_want: Mapping[str, Any] | None = None,
+    unexpected_symbols: Sequence[str] = (),
 ) -> dict[str, Any]:
-    return {
+    blocked = {
         "as_of": as_of,
         "status": "DATA_BLOCKED",
         "reason": reason,
@@ -110,10 +112,34 @@ def _blocked(
         "study": dict(study or {}),
         "quant_want": dict(quant_want or {}),
     }
+    if unexpected_symbols:
+        blocked["unexpected"] = True
+        blocked["unexpected_symbols"] = list(unexpected_symbols)
+    return blocked
 
 
 def _finite(value: Any) -> bool:
     return isinstance(value, (int, float)) and math.isfinite(float(value))
+
+
+def _frozen_symbol_or_block(
+    symbol: str, study: Mapping[str, Any]
+) -> Mapping[str, Any] | None:
+    """Return a usable symbol study entry, never aggregate evidence for an uncovered name."""
+    sidecar_symbols = study.get("symbols")
+    frozen = sidecar_symbols.get(symbol) if isinstance(sidecar_symbols, Mapping) else None
+    if not isinstance(frozen, Mapping):
+        return None
+    if frozen.get("evidence_status") == "NOT_IN_FROZEN_STUDY":
+        return None
+    return frozen
+
+
+def _not_in_frozen_study(symbol: str) -> dict[str, str]:
+    return {
+        "status": "NOT_IN_FROZEN_STUDY",
+        "reason": f"{symbol} is not in the frozen QM study sidecar",
+    }
 
 
 def _symbol_context(
@@ -123,6 +149,10 @@ def _symbol_context(
     params: Mapping[str, Any],
     study: Mapping[str, Any],
 ) -> dict[str, Any]:
+    frozen = _frozen_symbol_or_block(symbol, study)
+    if frozen is None:
+        return _not_in_frozen_study(symbol)
+
     last = _last_iso(frame)
     if last is None:
         return {"status": "NO_DATA", "reason": "no cached adjusted OHLCV"}
@@ -157,8 +187,6 @@ def _symbol_context(
     else:
         signal_status = "NO FIRE"
 
-    sidecar_symbols = study.get("symbols")
-    frozen = sidecar_symbols.get(symbol, {}) if isinstance(sidecar_symbols, Mapping) else {}
     breakout_dates = frozen.get("breakout_fire_dates", [])
     if not isinstance(breakout_dates, list):
         breakout_dates = []
@@ -217,23 +245,45 @@ def build_qm_context(
         )
     resolved_params = qm_signals.qm_params() if params is None else params
     per_symbol: dict[str, Any] = {}
+    unexpected_symbols: list[str] = []
     for symbol in symbols:
+        if _frozen_symbol_or_block(symbol, study) is None:
+            per_symbol[symbol] = _not_in_frozen_study(symbol)
+            continue
         try:
             frame = load_adjusted(symbol, as_of)
             per_symbol[symbol] = _symbol_context(symbol, frame, as_of, resolved_params, study)
-        except Exception as exc:  # fail-visible per name; ranking blocks below
+        except OSError as exc:  # expected absent/unreadable cache is visible but not a code failure
             per_symbol[symbol] = {
                 "status": "NO_DATA",
                 "reason": f"{exc.__class__.__name__}: {exc}",
             }
+        except Exception as exc:  # fail-visible and nonzero: never success-shaped over a code fault
+            unexpected_symbols.append(symbol)
+            per_symbol[symbol] = {
+                "status": "UNEXPECTED_ERROR",
+                "reason": f"{exc.__class__.__name__}: {exc}",
+                "unexpected": True,
+            }
     blocked = [symbol for symbol, item in per_symbol.items() if item.get("status") != "CURRENT"]
     if blocked:
+        uncovered = [
+            symbol for symbol in blocked
+            if per_symbol[symbol].get("status") == "NOT_IN_FROZEN_STUDY"
+        ]
+        stale = [symbol for symbol in blocked if symbol not in uncovered]
+        reasons = []
+        if uncovered:
+            reasons.append("not covered by the frozen QM study: " + ", ".join(uncovered))
+        if stale:
+            reasons.append("QM context is not exact-session current for: " + ", ".join(stale))
         return _blocked(
             as_of,
-            "QM context is not exact-session current for: " + ", ".join(blocked),
+            "; ".join(reasons),
             symbols=per_symbol,
             study=study.get("study", {}),
             quant_want=study.get("quant_want", {}),
+            unexpected_symbols=unexpected_symbols,
         )
     return {
         "as_of": as_of,
@@ -291,7 +341,7 @@ def underlying_breakeven_frequency(
     if lane not in {"long_call", "leaps"}:
         unavailable["label"] = (
             "Underlying breakeven comparison not applicable to this structure; "
-            "direction matches, but this option structure was not tested by QM."
+            "this option structure was not tested by QM."
         )
         return unavailable
     return unavailable
@@ -301,14 +351,25 @@ def refresh_qm_ohlcv(
     symbols: Sequence[str],
     as_of: str,
     *,
+    study: Mapping[str, Any] | None = None,
+    sidecar_path: str | Path = DEFAULT_SIDECAR,
     load_adjusted: Callable[[str, str], pd.DataFrame] = _default_load_adjusted,
     fetch: Callable[[str], str] | None = None,
     gate: Callable[[], str | None] = qm_signals.qm_prereg_gate,
 ) -> dict[str, Any]:
-    """Top up only missing/stale names, then verify the exact market date."""
+    """Top up only frozen-study members, then verify the exact market date.
+
+    A sidecar-uncovered symbol is a coverage failure, not an invitation to
+    create a new cache dependency. It is rejected before either load or fetch.
+    """
     reason = gate()
     if reason:
         return _blocked(as_of, reason)
+    if study is None:
+        try:
+            study = load_study_sidecar(sidecar_path)
+        except QmContextError as exc:
+            return _blocked(as_of, str(exc))
     if fetch is None:
         from data.underlying_ohlcv import fetch_underlying_ohlcv_yahoo
 
@@ -316,6 +377,9 @@ def refresh_qm_ohlcv(
 
     results: dict[str, Any] = {}
     for symbol in symbols:
+        if _frozen_symbol_or_block(symbol, study) is None:
+            results[symbol] = _not_in_frozen_study(symbol)
+            continue
         initial_last: str | None = None
         initial_error: Exception | None = None
         try:
