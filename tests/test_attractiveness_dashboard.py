@@ -1635,6 +1635,23 @@ class V2RenderTests(unittest.TestCase):
         self.assertLess(html.index("Market context"), html.index("Symbol review"))
         self.assertIn("DESCRIPTIVE ONLY — NOT A TRADE RANKING", html)
 
+    def test_composite_board_renders_between_qm_comparison_and_quant_background(self):
+        from options_researcher import composite_signals as cs
+
+        blocked_card = cs._card_blocked(
+            "ZZZ", "no cached closes (FileNotFoundError)", asof="2026-07-01"
+        )
+        data = self._assembled()
+        data["composite_signals"] = [blocked_card]
+        html = ad.render(data, context=_v2_context(), qm_context=self._qm_context())
+        self.assertLess(
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("Composite signal board"),
+        )
+        self.assertLess(
+            html.index("Composite signal board"), html.index("Quant-want background")
+        )
+
 
 class MainTests(unittest.TestCase):
     def test_main_reads_external_board_and_restores_output_cwd(self):

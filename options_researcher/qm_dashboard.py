@@ -267,9 +267,19 @@ def build_qm_context(
             }
     blocked = [symbol for symbol, item in per_symbol.items() if item.get("status") != "CURRENT"]
     if blocked:
+        uncovered = [
+            symbol for symbol in blocked
+            if per_symbol[symbol].get("status") == "NOT_IN_FROZEN_STUDY"
+        ]
+        stale = [symbol for symbol in blocked if symbol not in uncovered]
+        reasons = []
+        if uncovered:
+            reasons.append("not covered by the frozen QM study: " + ", ".join(uncovered))
+        if stale:
+            reasons.append("QM context is not exact-session current for: " + ", ".join(stale))
         return _blocked(
             as_of,
-            "QM context is not exact-session current for: " + ", ".join(blocked),
+            "; ".join(reasons),
             symbols=per_symbol,
             study=study.get("study", {}),
             quant_want=study.get("quant_want", {}),

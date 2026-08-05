@@ -1513,7 +1513,7 @@ _STYLE = """
   .hero-grid {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
   .hero-card, .pinned-card {
     background: var(--surface-soft);
@@ -1831,7 +1831,6 @@ _STYLE = """
     text-align: center;
   }
   @media (max-width: 1120px) {
-    .hero-grid { grid-template-columns: 1fr; }
     .market-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 760px) {
@@ -2896,7 +2895,8 @@ def render(
     self-contained HTML string. Pure string templating: no file I/O, no
     network, no external assets. Every value from `data` / `context` is
     html.escape()'d before embedding. Page order: compact metadata header ->
-    original Top-3 -> descriptive QM comparison -> quant/market background -> pinned names ->
+    original Top-3 -> descriptive QM comparison -> composite signal board ->
+    quant/market background -> pinned names ->
     per-symbol panels (card grid)."""
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
     symbols_html = ""
@@ -2988,10 +2988,10 @@ def render(
         f"{warn_html}"
         f"{_blocked_html(data.get('blocked') or [])}"
         f"{_hero_html(data, context, qm_context)}"
+        f"{_composite_html(data)}"
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
         f"{_pinned_html(data)}"
-        f"{_composite_html(data)}"
         f"{symbols_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
         "not predictions. Income annualization uses 365 calendar days; "

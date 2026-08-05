@@ -310,6 +310,49 @@ class ContextBuildTests(unittest.TestCase):
         self.assertEqual(qm_section.count("QM context withheld"), 3)
         self.assertEqual(touched, ["AAA"])
 
+    def test_blocked_reason_separates_study_coverage_from_staleness(self):
+        study = _study("AAA")
+        study["symbols"]["BBB"] = {
+            "breakout_fire_dates": [],
+            "parabolic_fire_dates": [],
+            "evidence_status": "NOT_IN_FROZEN_STUDY",
+        }
+
+        context = qm_dashboard.build_qm_context(
+            ["AAA", "BBB"],
+            "2026-07-02",
+            study=study,
+            gate=lambda: None,
+            load_adjusted=lambda *_: _frame(),
+        )
+
+        self.assertEqual(context["status"], "DATA_BLOCKED")
+        self.assertNotEqual(context["symbols"]["AAA"]["status"], "CURRENT")
+        self.assertIn("not covered by the frozen QM study: BBB", context["reason"])
+        self.assertIn("QM context is not exact-session current for: AAA", context["reason"])
+
+    def test_blocked_reason_omits_staleness_clause_when_only_coverage_blocks(self):
+        study = _study("AAA")
+        study["symbols"]["BBB"] = {
+            "breakout_fire_dates": [],
+            "parabolic_fire_dates": [],
+            "evidence_status": "NOT_IN_FROZEN_STUDY",
+        }
+
+        context = qm_dashboard.build_qm_context(
+            ["BBB"],
+            "2026-07-01",
+            study=study,
+            params={"QM_HORIZONS": (5, 10, 20)},
+            gate=lambda: None,
+            load_adjusted=lambda *_: _frame(),
+        )
+
+        self.assertEqual(context["status"], "DATA_BLOCKED")
+        self.assertEqual(
+            context["reason"], "not covered by the frozen QM study: BBB"
+        )
+
     def test_unexpected_context_exception_is_visible_and_nonzero(self):
         context = qm_dashboard.build_qm_context(
             ["AAA"],
