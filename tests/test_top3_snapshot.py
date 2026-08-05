@@ -68,6 +68,77 @@ class IntegrityTests(unittest.TestCase):
         self.assertIn("FEATURES_STALENESS_UNKNOWN", result["reason_codes"])
 
 
+class ChainAgeTests(unittest.TestCase):
+    """Wall-clock staleness: a self-consistent card can still be far too old.
+
+    ``features_stale`` only compares the feature row to the chain session, so an
+    equally stale pair stays silent.  These cases pin the separate question of
+    how old the chain session is relative to the evaluation date.
+    """
+
+    def test_omitting_today_preserves_prior_behaviour(self):
+        # Callers that never opt in must not acquire a new blocker.
+        result = snapshots.integrity_status(section(as_of="2026-07-27",
+                                                    features_as_of="2026-07-27"))
+        self.assertEqual(result["status"], snapshots.ELIGIBLE)
+        self.assertEqual(result["reason_codes"], [])
+        self.assertIsNone(result["chain_age_sessions"])
+
+    def test_same_session_is_zero_sessions_old(self):
+        result = snapshots.integrity_status(section(as_of="2026-08-04",
+                                                    features_as_of="2026-08-04"),
+                                            today="2026-08-04")
+        self.assertEqual(result["status"], snapshots.ELIGIBLE)
+        self.assertEqual(result["chain_age_sessions"], 0)
+
+    def test_age_is_counted_in_trading_sessions_not_calendar_days(self):
+        # 2026-07-27 Mon -> 2026-08-04 Tue spans 8 calendar days but 6 sessions.
+        result = snapshots.integrity_status(section(as_of="2026-07-27",
+                                                    features_as_of="2026-07-27"),
+                                            today="2026-08-04")
+        self.assertEqual(result["chain_age_sessions"], 6)
+
+    def test_chain_past_block_threshold_is_data_blocked(self):
+        # The exact production gap that made the board disagree with the broker.
+        result = snapshots.integrity_status(section(as_of="2026-07-27",
+                                                    features_as_of="2026-07-27"),
+                                            today="2026-08-04")
+        self.assertEqual(result["status"], snapshots.DATA_BLOCKED)
+        self.assertIn("CHAIN_STALE_VS_TODAY", result["reason_codes"])
+
+    def test_age_inside_block_threshold_stays_eligible(self):
+        result = snapshots.integrity_status(section(as_of="2026-08-03",
+                                                    features_as_of="2026-08-03"),
+                                            today="2026-08-04")
+        self.assertEqual(result["chain_age_sessions"], 1)
+        self.assertEqual(result["status"], snapshots.ELIGIBLE)
+        self.assertNotIn("CHAIN_STALE_VS_TODAY", result["reason_codes"])
+
+    def test_chain_session_after_today_is_data_blocked(self):
+        # A chain dated ahead of the evaluation date is never a fresher board.
+        result = snapshots.integrity_status(section(as_of="2026-08-05",
+                                                    features_as_of="2026-08-05"),
+                                            today="2026-08-04")
+        self.assertEqual(result["status"], snapshots.DATA_BLOCKED)
+        self.assertIn("CHAIN_SESSION_IN_FUTURE", result["reason_codes"])
+
+    def test_uninterpretable_today_fails_closed(self):
+        result = snapshots.integrity_status(section(), today="04/08/2026")
+        self.assertEqual(result["status"], snapshots.DATA_BLOCKED)
+        self.assertIn("EVALUATION_DATE_INVALID", result["reason_codes"])
+        self.assertIsNone(result["chain_age_sessions"])
+
+    def test_stale_chain_removes_rank_eligibility_end_to_end(self):
+        stale = snapshots.snapshot_candidate(
+            section(as_of="2026-07-27", features_as_of="2026-07-27"),
+            group(), card(), today="2026-08-04",
+        )
+        self.assertFalse(stale["rank_eligible"])
+        self.assertEqual(stale["selection_status"], snapshots.DATA_BLOCKED)
+        self.assertIn("CHAIN_STALE_VS_TODAY",
+                      stale["integrity"]["reason_codes"])
+
+
 class LanePolicyTests(unittest.TestCase):
     def test_long_call_uses_defined_risk_cap(self):
         eligible = snapshots.lane_policy_status(

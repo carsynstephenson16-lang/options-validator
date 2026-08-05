@@ -657,6 +657,20 @@ ATTRACTIVENESS_UNIVERSE = [
     _s for _s in H7_WATCHLIST + H7_CORE_LONG_ONLY if _s not in H7_EXCLUDED
 ] + ATTRACTIVENESS_EXTRA_NAMES
 
+# Wall-clock chain staleness for the display board (presentation layer ONLY).
+# `features_stale` compares the feature row to the chain session, so an equally
+# stale pair stays silent; these thresholds answer the separate question of how
+# old the chain session is relative to the evaluation date. Measured in trading
+# sessions (weekday count -- market holidays are counted as sessions, which
+# over-states age and therefore fails safe).
+#   WARN  -- render the age as a visible warning; still rankable.
+#   BLOCK -- DATA_BLOCKED, drops out of the Top-3 admissible pool.
+# PROVENANCE: LLM-asserted 2026-08-04, pending owner confirmation. These are
+# display gates only: they bind no hypothesis, verdict, or registered trigger.
+# Evidence: reports/provider-transition/2026-08-04-scanner-staleness-diagnosis.md
+CHAIN_STALE_WARN_SESSIONS = 1
+CHAIN_STALE_BLOCK_SESSIONS = 3
+
 # ---------------------------------------------------------------------------
 # --- LIVE MISSION-CONTROL DASHBOARD (presentation/plumbing layer ONLY) ---
 # Spec: docs/superpowers/specs/2026-07-16-live-dashboard-design.md.

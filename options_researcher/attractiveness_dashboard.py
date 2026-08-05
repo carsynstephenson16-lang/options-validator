@@ -790,6 +790,70 @@ def _all_display_data_as_of(
     return min(dates) if dates else "no cached data"
 
 
+def _chain_age_html(data: Mapping[str, object]) -> str:
+    """Say out loud how old the board's option quotes are.
+
+    The per-symbol ``features_stale`` warning compares the feature row to the
+    chain session, so a board whose chain and features are equally old shows
+    nothing at all.  Without this banner a long-frozen cache renders exactly
+    like a current one -- the page is rebuilt daily, so only the quote dates
+    betray it.  Silence here is therefore never "fine"; unknown age says so.
+    """
+    import config
+
+    age = data.get("chain_age_sessions")
+    as_of = _esc(str(data.get("data_as_of") or "no cached data"))
+    evaluation_date = data.get("evaluation_date")
+
+    if not isinstance(age, int):
+        if not evaluation_date:
+            return ""
+        return ('<div class="notice watch">! Option-quote age UNKNOWN — the '
+                f"board's chain date ({as_of}) could not be compared with the "
+                "evaluation date. Treat every quote as unverified and check "
+                "the live broker quote.</div>")
+
+    sessions = "session" if age == 1 else "sessions"
+    if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+        return ('<div class="notice bad"><strong>! STALE BOARD — option quotes '
+                f"are {age} trading {sessions} old.</strong> Every premium, "
+                "delta, and moneyness figure below is from the "
+                f"{as_of} close, not today. Cards past the "
+                f"{config.CHAIN_STALE_BLOCK_SESSIONS}-session limit are marked "
+                "DATA_BLOCKED and excluded from the shortlist. Do not size or "
+                "compare a trade from this page — read the live broker quote."
+                "</div>")
+    if age >= config.CHAIN_STALE_WARN_SESSIONS:
+        return ('<div class="notice watch">! Option quotes are '
+                f"{age} trading {sessions} old (chain close {as_of}). "
+                "Verify against the live broker quote before acting.</div>")
+    return (f'<div class="notice info">Option quotes are from the {as_of} '
+            "close — the most recent completed session.</div>")
+
+
+def _page_chain_age_sessions(page_as_of: str, today: str | None) -> int | None:
+    """Age of the page's oldest chain session, in trading sessions.
+
+    None when the age cannot be established (no evaluation date, no cached
+    data, or a chain dated ahead of the evaluation date). None means "do not
+    claim an age", never "fresh"; the caller renders it as unknown.
+    """
+    if not today:
+        return None
+    from datetime import date as _date
+
+    try:
+        as_of_date = _date.fromisoformat(page_as_of)
+        evaluation_date = _date.fromisoformat(today)
+    except (TypeError, ValueError):
+        return None
+    if as_of_date > evaluation_date:
+        return None
+    from options_researcher.top3_snapshot import trading_sessions_between
+
+    return trading_sessions_between(page_as_of, today)
+
+
 def assemble(
     *,
     symbol_sections: list[dict] | None = None,
@@ -797,16 +861,27 @@ def assemble(
     blocked: list[dict] | None = None,
     hypothesis_evidence_by_symbol: Mapping[str, object] | None = None,
     composite_signals: list[dict] | None = None,
+    today: str | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
 
     The arguments default to the real project state (see _gather_all);
     inject them to unit-test without touching disk or the network.
     ``blocked`` carries the machine-readable per-symbol failure records
-    (fail-visible: they render on the page, never disappear)."""
+    (fail-visible: they render on the page, never disappear).
+
+    ``today`` is the evaluation session for the wall-clock chain-staleness
+    gate.  A real assembly defaults it to the current America/New_York date; an
+    injected assembly leaves it None unless passed, so fixtures stay
+    deterministic and are never aged out by the calendar."""
     real_assembly = symbol_sections is None
     if real_assembly:
         symbol_sections, rv21_by_symbol, blocked = _gather_all()
+        if today is None:
+            from datetime import datetime as _dt
+            from zoneinfo import ZoneInfo as _ZoneInfo
+
+            today = _dt.now(_ZoneInfo("America/New_York")).date().isoformat()
     rv21_by_symbol = rv21_by_symbol or {}
     blocked = blocked or []
 
@@ -842,6 +917,7 @@ def assemble(
                     csp_open_count=sec.get("csp_open_count"),
                     covered_shares=sec.get("covered_shares"),
                     leaps_held=sec.get("leaps_held"),
+                    today=today,
                 )
                 enriched["top3_snapshot"] = snapshot
                 policy = snapshot.get("policy")
@@ -921,13 +997,16 @@ def assemble(
     canonical_symbols = [
         sec for sec in out_symbols if not sec.get("display_only")
     ]
+    page_as_of = _page_data_as_of(canonical_symbols)
     return {
         "symbols": out_symbols,
         "blocked": out_blocked,
-        "data_as_of": _page_data_as_of(canonical_symbols),
+        "data_as_of": page_as_of,
         "display_data_as_of": _all_display_data_as_of(
             out_symbols, out_blocked
         ),
+        "evaluation_date": today,
+        "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
     }
 
@@ -2928,6 +3007,7 @@ def render(
     warn_html = (
         f'<div class="notice watch">! {_esc(context_warning)}</div>' if context_warning else ""
     )
+    age_html = _chain_age_html(data)
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -2943,6 +3023,7 @@ def render(
         f"{_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header><main class="page-body">'
+        f"{age_html}"
         f"{warn_html}"
         f"{_blocked_html(data.get('blocked') or [])}"
         f"{_hero_html(data, context, qm_context)}"
