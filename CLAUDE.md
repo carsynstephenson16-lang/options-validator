@@ -136,7 +136,18 @@ or directory, run `uv run python tools/irreplaceable_data_guard.py verify` AND
 check the target for untracked/gitignored data with
 `git -C <path> status --short --ignored=matching --untracked-files=all` — the
 2026-08-03 od1-v2 incident lost 110 MB of unrepurchasable provider data that
-lived only in a worktree and was invisible to every test and manifest.
+lived only in a worktree and was invisible to every test and branch/worktree
+manifest.
+
+## Branch hygiene (owner-directed 2026-08-04)
+
+Any session that created commits on a branch MUST `git push origin <branch>`
+before ending. Pushing is backup, not integration — merges stay owner-gated
+exactly as before, and branch deletion is a separate owner decision (never
+implied by this rule). Rationale: on 2026-08-04 a sweep found 19 commits
+across four local branches (two of them from 2026-07-17) that existed on this
+laptop only; a disk failure would have erased them silently. Sessions that end
+without a merge decision are normal; sessions that end without a push are not.
 
 ## Conventions
 
