@@ -10,19 +10,25 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-import config
-from data.atomic_io import atomic_text_write
-from data.cache_runner import session_close_utc
-from data.underlying_closes import adjustment_factor, load_closes_adjusted
-from options_researcher.chains import load_range
-from options_researcher.h7_board import resolve_board
-from options_researcher.h7_earnings import load_assertions
-from options_researcher.h7_scope import watch_universe
-from options_researcher.h7_watch import assemble_name
-from research.hashing import canonical_json, config_hash, sha256_hex
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import config  # noqa: E402
+from data.atomic_io import atomic_text_write  # noqa: E402
+from data.cache_runner import session_close_utc  # noqa: E402
+from data.underlying_closes import (  # noqa: E402
+    adjustment_factor,
+    load_closes_adjusted,
+)
+from options_researcher.chains import load_range  # noqa: E402
+from options_researcher.h7_board import resolve_board  # noqa: E402
+from options_researcher.h7_earnings import load_assertions  # noqa: E402
+from options_researcher.h7_scope import watch_universe  # noqa: E402
+from options_researcher.h7_watch import assemble_name  # noqa: E402
+from research.hashing import canonical_json, config_hash, sha256_hex  # noqa: E402
 
 RECEIPT_KIND = "h7_schwab_feasibility/v1"
 STACK_VERSION = "h7-frozen-entry-stack-plus-board/v1"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -47,6 +49,18 @@ class ArithmeticTests(unittest.TestCase):
 
 
 class NoNetworkSurfaceTests(unittest.TestCase):
+    def test_direct_script_help_resolves_repo_imports(self):
+        root = Path(__file__).resolve().parents[1]
+        completed = subprocess.run(
+            [sys.executable, "tools/h7_schwab_feasibility.py", "--help"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("cached-only H7 full-stack base rate", completed.stdout)
+
     def test_tool_has_no_provider_or_client_surface(self):
         source = Path(feasibility.__file__).read_text(encoding="utf-8")
         for forbidden in (
