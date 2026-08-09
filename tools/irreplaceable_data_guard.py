@@ -30,11 +30,20 @@ delete); 2 = usage/inventory error.
 A fresh clone legitimately has no cache. Pass --allow-absent to treat a
 wholly-absent namespace as a skip; a namespace that exists but has LOST files
 always fails, because that is the silent-corruption case this guards.
+
+Inventory paths are relative to the MAIN checkout's root, and the tool anchors
+there no matter where it is invoked from. Linked worktrees carry the committed
+inventory but never the gitignored bytes, so resolving against the invoking
+directory manufactured a total-loss report from every worktree (false alarm,
+2026-08-09) -- in the exact situation CLAUDE.md requires running this guard.
+When the main checkout cannot be located at all, the tool exits 2 with a
+LOCATION error, which is never a data-loss finding.
 """
 import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
 
 DEFAULT_INVENTORY = os.path.join("data", "irreplaceable_data_inventory.json")
@@ -50,6 +59,29 @@ DEFAULT_NAMESPACES = [
     ".cache/underlying",
     ".cache/underlying_ohlcv",
 ]
+
+
+def resolve_repo_root() -> str:
+    """Absolute path of the main checkout's working tree, from any cwd.
+
+    The recorded namespaces are gitignored, so their bytes exist ONLY in the
+    main checkout; a linked worktree shares the repository but not the data.
+    `git rev-parse --git-common-dir` names the main checkout's .git from the
+    main checkout, any subdirectory, and every linked worktree alike.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("git executable not found") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() if exc.stderr else str(exc)
+        raise RuntimeError(f"not inside a git checkout ({detail})") from exc
+    return os.path.dirname(os.path.abspath(proc.stdout.strip()))
 
 
 def _sha256(path: str) -> str:
@@ -90,25 +122,31 @@ def scan(root: str, deep: bool = False) -> dict:
     return out
 
 
-def build_inventory(namespaces: list[str], deep: bool = False) -> dict:
+def build_inventory(namespaces: list[str], deep: bool = False, root: str = ".") -> dict:
     return {
         "note": (
             "Gitignored, unreplaceable data. Provider acquisition is disabled; "
             "these bytes cannot be re-fetched. Verify before any worktree "
             "removal or cleanup sweep."
         ),
-        "namespaces": {ns: scan(ns, deep=deep) for ns in namespaces},
+        "namespaces": {ns: scan(os.path.join(root, ns), deep=deep) for ns in namespaces},
     }
 
 
-def verify(inventory: dict, deep: bool = False, allow_absent: bool = False) -> list[str]:
-    """Return a list of human-readable problems; empty means healthy."""
+def verify(
+    inventory: dict, deep: bool = False, allow_absent: bool = False, root: str = "."
+) -> list[str]:
+    """Return a list of human-readable problems; empty means healthy.
+
+    Relative namespace paths resolve against `root` (the main checkout);
+    absolute ones -- as the unit-test fixtures use -- are taken as-is.
+    """
     problems = []
     for ns, recorded in sorted(inventory.get("namespaces", {}).items()):
         if not recorded.get("present"):
             continue  # never recorded as present; nothing to protect yet
 
-        current = scan(ns, deep=deep and "content_digest" in recorded)
+        current = scan(os.path.join(root, ns), deep=deep and "content_digest" in recorded)
 
         if not current["present"]:
             if allow_absent:
@@ -143,7 +181,11 @@ def verify(inventory: dict, deep: bool = False, allow_absent: bool = False) -> l
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["generate", "verify"])
-    parser.add_argument("--inventory", default=DEFAULT_INVENTORY)
+    parser.add_argument(
+        "--inventory",
+        default=DEFAULT_INVENTORY,
+        help="inventory path; relative paths resolve against the MAIN checkout root",
+    )
     parser.add_argument(
         "--deep",
         action="store_true",
@@ -156,9 +198,31 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    try:
+        root = resolve_repo_root()
+    except RuntimeError as exc:
+        print(f"LOCATION ERROR: {exc}", file=sys.stderr)
+        print(
+            "Refusing to run. This is NOT a data-loss finding -- invoke the "
+            "guard from inside the repository so it can anchor on the main "
+            "checkout.",
+            file=sys.stderr,
+        )
+        return 2
+    if os.path.realpath(os.getcwd()) != os.path.realpath(root):
+        print(
+            f"note: invoked from {os.getcwd()}\n"
+            f"      verifying the main checkout at {root}",
+            file=sys.stderr,
+        )
+
+    inventory_path = (
+        args.inventory if os.path.isabs(args.inventory) else os.path.join(root, args.inventory)
+    )
+
     if args.command == "generate":
-        inventory = build_inventory(DEFAULT_NAMESPACES, deep=args.deep)
-        with open(args.inventory, "w") as fh:
+        inventory = build_inventory(DEFAULT_NAMESPACES, deep=args.deep, root=root)
+        with open(inventory_path, "w") as fh:
             json.dump(inventory, fh, indent=2, sort_keys=True)
             fh.write("\n")
         for ns, info in sorted(inventory["namespaces"].items()):
@@ -168,20 +232,32 @@ def main(argv: list[str] | None = None) -> int:
                 else "absent"
             )
             print(f"  {ns}: {state}")
-        print(f"wrote {args.inventory}")
+        print(f"wrote {inventory_path}")
         return 0
 
-    if not os.path.exists(args.inventory):
-        print(f"inventory not found: {args.inventory}", file=sys.stderr)
+    if not os.path.exists(inventory_path):
+        print(f"inventory not found: {inventory_path}", file=sys.stderr)
         return 2
-    with open(args.inventory) as fh:
+    with open(inventory_path) as fh:
         inventory = json.load(fh)
 
-    problems = verify(inventory, deep=args.deep, allow_absent=args.allow_absent)
+    problems = verify(inventory, deep=args.deep, allow_absent=args.allow_absent, root=root)
     if problems:
         print("IRREPLACEABLE DATA CHECK FAILED", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
+        recorded_present = sum(
+            1 for rec in inventory.get("namespaces", {}).values() if rec.get("present")
+        )
+        missing = sum("MISSING ENTIRELY" in p for p in problems)
+        if missing and missing == recorded_present:
+            print(
+                f"\nEvery recorded namespace is absent under {root}. If that is "
+                "a secondary clone, the canonical checkout may still hold the "
+                "bytes -- check it before concluding loss. If that IS the "
+                "canonical checkout, treat this as a live incident.",
+                file=sys.stderr,
+            )
         print(
             "\nDo NOT delete any worktree, branch, or directory until this is "
             "understood. These bytes cannot be re-fetched.",
