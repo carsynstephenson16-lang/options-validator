@@ -1,0 +1,173 @@
+"""Offline tests for the durable Schwab preclose chain capture lane."""
+
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+from zoneinfo import ZoneInfo
+
+import pandas as pd
+
+from options_researcher import schwab_chain_capture as capture
+
+NY = ZoneInfo("America/New_York")
+PRECLOSE = pd.Timestamp("2026-08-10T15:45:00", tz=NY).to_pydatetime()
+
+
+def full_frame(*, expirations=("2026-08-21", "2026-09-18"), bid=1.0):
+    rows = []
+    for expiration in expirations:
+        for right, delta in (("C", 0.4), ("P", -0.4)):
+            rows.append(
+                {
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": right,
+                    "bid": bid,
+                    "ask": 1.2,
+                    "open_interest": 100,
+                    "implied_vol": 0.30,
+                    "delta": delta,
+                    "gamma": 0.02,
+                    "theta": -0.03,
+                    "vega": 0.10,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+class FakeClient:
+    provider_name = "schwab"
+    provider_version = "test"
+
+    def __init__(self, *, fail_symbol=None, expirations=("2026-08-21", "2026-09-18"), bid=1.0):
+        self.fail_symbol = fail_symbol
+        self.expirations = expirations
+        self.bid = bid
+        self.calls = []
+
+    def option_full_chain(self, symbol):
+        self.calls.append(symbol)
+        if symbol == self.fail_symbol:
+            raise RuntimeError("synthetic provider failure")
+        return full_frame(expirations=self.expirations, bid=self.bid)
+
+
+class SchwabChainCaptureTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.chain_dir = self.root / "chains"
+        self.reports_dir = self.root / "reports"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _capture(self, client, *, universe=("AAA", "BBB"), now_ny=PRECLOSE):
+        return capture.capture(
+            client=client,
+            now_ny=now_ny,
+            universe=list(universe),
+            chain_dir=self.chain_dir,
+            reports_dir=self.reports_dir,
+            force=True,
+        )
+
+    def test_complete_capture_writes_h7_columns_manifest_and_receipt(self):
+        exit_code, receipt = self._capture(FakeClient())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(receipt["overall_status"], "ok")
+        self.assertEqual(receipt["session"], "2026-08-10")
+        self.assertEqual(
+            receipt["session_chain_convention"], "preclose_snapshot_v1"
+        )
+        self.assertEqual(receipt["universe"], ["AAA", "BBB"])
+        self.assertTrue((self.reports_dir / "2026-08-10" / "manifest.json").is_file())
+        self.assertTrue((self.reports_dir / "2026-08-10" / "preclose.json").is_file())
+        expected_columns = [
+            "expiration",
+            "strike",
+            "right",
+            "bid",
+            "ask",
+            "open_interest",
+            "iv",
+            "delta",
+            "gamma",
+            "theta",
+            "vega",
+        ]
+        for symbol in ("AAA", "BBB"):
+            frame = pd.read_parquet(
+                self.chain_dir / f"{symbol}_2026-08-10.parquet"
+            )
+            self.assertEqual(list(frame.columns), expected_columns)
+            self.assertEqual(frame["expiration"].nunique(), 2)
+            self.assertEqual(set(frame["right"]), {"C", "P"})
+
+    def test_partial_capture_writes_failed_receipt_and_no_manifest(self):
+        exit_code, receipt = self._capture(FakeClient(fail_symbol="BBB"))
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(receipt["overall_status"], "failed")
+        self.assertEqual(receipt["names"]["AAA"]["status"], "ok")
+        self.assertEqual(receipt["names"]["BBB"]["status"], "failed")
+        self.assertIsNone(receipt["manifest_hash"])
+        self.assertFalse((self.reports_dir / "2026-08-10" / "manifest.json").exists())
+
+    def test_single_expiration_is_marked_failed(self):
+        exit_code, receipt = self._capture(
+            FakeClient(expirations=("2026-08-21",)), universe=("AAA",)
+        )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(receipt["names"]["AAA"]["status"], "failed")
+        self.assertIn("at least two expirations", receipt["names"]["AAA"]["note"])
+
+    def test_required_greek_column_missing_entirely_is_marked_failed(self):
+        client = FakeClient()
+        client.option_full_chain = mock.Mock(return_value=full_frame().drop(columns="gamma"))
+
+        exit_code, receipt = self._capture(client, universe=("AAA",))
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(receipt["names"]["AAA"]["status"], "failed")
+        self.assertIn("missing required columns", receipt["names"]["AAA"]["note"])
+
+    def test_invalid_session_refuses_before_default_client_construction(self):
+        sunday = pd.Timestamp("2026-08-09T15:45:00", tz=NY).to_pydatetime()
+        with mock.patch.object(
+            capture, "_default_client", side_effect=AssertionError("client constructed")
+        ):
+            exit_code, receipt = capture.capture(
+                client=None,
+                now_ny=sunday,
+                chain_dir=self.chain_dir,
+                reports_dir=self.reports_dir,
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIsNone(receipt)
+        self.assertFalse(self.reports_dir.exists())
+
+    def test_changed_retry_refuses_existing_file_and_receipt(self):
+        first_code, _ = self._capture(FakeClient(bid=1.0), universe=("AAA",))
+        second_code, second_receipt = self._capture(
+            FakeClient(bid=1.1), universe=("AAA",)
+        )
+
+        self.assertEqual(first_code, 0)
+        self.assertEqual(second_code, 2)
+        self.assertEqual(second_receipt["overall_status"], "failed")
+        stored = json.loads(
+            (self.reports_dir / "2026-08-10" / "preclose.json").read_text()
+        )
+        self.assertEqual(stored["overall_status"], "ok")
+
+
+if __name__ == "__main__":
+    unittest.main()

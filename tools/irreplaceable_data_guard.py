@@ -47,6 +47,7 @@ DEFAULT_NAMESPACES = [
     ".cache/chains_v2",
     ".cache/future_tickers",
     ".cache/intraday",
+    ".cache/schwab_chains",
     ".cache/underlying",
     ".cache/underlying_ohlcv",
 ]

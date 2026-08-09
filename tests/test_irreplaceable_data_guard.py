@@ -140,6 +140,9 @@ class VerifyTests(unittest.TestCase):
 
 
 class InventoryShapeTests(unittest.TestCase):
+    def test_schwab_chains_is_covered(self):
+        self.assertIn(".cache/schwab_chains", guard.DEFAULT_NAMESPACES)
+
     def test_future_tickers_is_covered(self):
         """The 2026-08-03 incident namespace must never drop off the list."""
         self.assertIn(".cache/future_tickers", guard.DEFAULT_NAMESPACES)
@@ -156,6 +159,7 @@ class InventoryShapeTests(unittest.TestCase):
             self.skipTest("inventory not generated in this checkout")
         inventory = json.loads(inventory_path.read_text())
         self.assertIn(".cache/future_tickers", inventory["namespaces"])
+        self.assertIn(".cache/schwab_chains", inventory["namespaces"])
 
 
 if __name__ == "__main__":
