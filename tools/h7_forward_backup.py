@@ -35,6 +35,7 @@ BACKUP_TAG = "options-validator-h7-forward"
 # Explicit allow-list: no broad .cache/ or repository-root backup is allowed.
 BACKUP_PATHS = (
     Path(".cache/chains"),
+    Path(".cache/schwab_chains"),
     Path(".cache/underlying"),
     Path("data/earnings/gating_v3.csv"),
     Path("data/earnings/assertions_v2.csv"),
@@ -44,6 +45,9 @@ BACKUP_PATHS = (
     Path("reports/h7_data_gate"),
     Path("reports/h7_receipts"),
     Path("reports/h7_forward"),
+    Path("reports/schwab_chains"),
+    Path("reports/h7_forward_schwab"),
+    Path("ledger/h7_forward_schwab"),
 )
 EXCLUDE_PATTERNS = (
     ".env", ".env.*", "*.pem", "*.key", "credentials*", ".tmp/*",

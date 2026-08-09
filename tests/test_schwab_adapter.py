@@ -174,6 +174,25 @@ class FakeApi:
         )
 
 
+class FullChainApi(FakeApi):
+    def __init__(self):
+        super().__init__()
+        self.last_chain_kwargs = None
+
+    def get_option_chain(self, symbol, **kwargs):
+        self.last_chain_kwargs = dict(kwargs)
+        response = super().get_option_chain(symbol, **kwargs)
+        payload = response.payload
+        payload["numberOfContracts"] = 4
+        for map_name, right in (("callExpDateMap", "C"), ("putExpDateMap", "P")):
+            original = next(iter(payload[map_name]["2026-08-21:23"].values()))[0]
+            second = dict(original)
+            second["symbol"] = f"VST  260918{right}00100000"
+            second["daysToExpiration"] = 51
+            payload[map_name]["2026-09-18:51"] = {"100.0": [second]}
+        return FakeResponse(payload)
+
+
 class SchwabMarketDataTests(unittest.TestCase):
     def test_stock_quotes_are_thetadata_shaped_and_timezone_aware(self):
         client = sa.SchwabMarketData(FakeApi())
@@ -198,6 +217,31 @@ class SchwabMarketDataTests(unittest.TestCase):
         self.assertEqual(api.chain_calls, 1)
         self.assertEqual(set(quote["chain_status"]), {"SUCCESS"})
         self.assertFalse(quote["chain_is_delayed"].any())
+
+    def test_full_chain_returns_every_expiration_with_h7_fields(self):
+        api = FullChainApi()
+        frame = sa.SchwabMarketData(api).option_full_chain("vst")
+
+        self.assertEqual(set(frame["expiration"]), {"2026-08-21", "2026-09-18"})
+        self.assertEqual(set(frame["right"]), {"C", "P"})
+        self.assertTrue(
+            {
+                "expiration",
+                "strike",
+                "right",
+                "bid",
+                "ask",
+                "open_interest",
+                "implied_vol",
+                "delta",
+                "gamma",
+                "theta",
+                "vega",
+            }.issubset(frame.columns)
+        )
+        self.assertEqual(api.chain_calls, 1)
+        self.assertNotIn("from_date", api.last_chain_kwargs)
+        self.assertNotIn("to_date", api.last_chain_kwargs)
 
     def test_chain_cache_expires_before_next_thirty_second_dashboard_refresh(self):
         api = FakeApi()

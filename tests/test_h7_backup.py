@@ -13,6 +13,15 @@ from tools import h7_forward_backup as backup
 
 
 class BackupTests(unittest.TestCase):
+    def test_allow_list_includes_new_schwab_evidence_and_ledger(self):
+        expected = {
+            Path(".cache/schwab_chains"),
+            Path("reports/schwab_chains"),
+            Path("reports/h7_forward_schwab"),
+            Path("ledger/h7_forward_schwab"),
+        }
+        self.assertTrue(expected <= set(backup.BACKUP_PATHS))
+
     def test_backup_command_has_no_credentials_and_writes_receipt(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

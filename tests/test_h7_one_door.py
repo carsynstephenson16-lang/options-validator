@@ -1,7 +1,8 @@
 """One-door registration reconciliation plus typed post-registration writers.
 
-``register_window_real`` is the only path allowed to create seq-0 in the real
-H7 forward store, and ``tools/h7_manual_activate.py`` is its only caller.  The
+Each namespace's ``register_window_real`` is the only path allowed to create
+its seq-0 registration. ``tools/h7_manual_activate.py`` remains the only caller
+for the legacy real H7 forward store. The
 later real exit/scoring arc intentionally adds factory-issued, receipt-gated
 append paths after registration; those are distinct typed doors, not alternate
 activation paths.
@@ -193,8 +194,8 @@ def _module_sources() -> dict[str, str]:
 
 
 class StructuralOneDoorTests(unittest.TestCase):
-    def test_register_window_real_is_the_sole_unguarded_registration_constructor(self):
-        # NOTE: this proves ``register_window_real`` is the only function that
+    def test_each_namespace_has_one_unguarded_registration_constructor(self):
+        # NOTE: this proves each ``register_window_real`` is the only function that
         # BUILDS its own append base without the ``_synthetic_base`` refusal --
         # i.e. the only one structurally CAPABLE of appending to whatever store
         # it is handed. It does not (and cannot statically) prove exactly one
@@ -205,8 +206,17 @@ class StructuralOneDoorTests(unittest.TestCase):
         with_constructor = {name: fns for name, fns in offenders.items() if fns}
         self.assertEqual(
             with_constructor,
-            {"options_researcher/h7_window_registration.py": ["register_window_real"]},
-            "only register_window_real may construct an unguarded seq-0 append base")
+            {
+                "options_researcher/h7_schwab_window_registration.py": [
+                    "register_window_real"
+                ],
+                "options_researcher/h7_window_registration.py": [
+                    "register_window_real"
+                ],
+            },
+            "only one register_window_real per namespace may construct an "
+            "unguarded seq-0 append base",
+        )
 
     def test_post_registration_typed_writers_keep_runtime_guards(self):
         sources = _module_sources()

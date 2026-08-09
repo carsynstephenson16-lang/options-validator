@@ -75,6 +75,12 @@ class TestFileToolsBlocked(unittest.TestCase):
     def test_edit_h7_forward_head(self):
         self.assert_blocked(edit("ledger/h7_forward/HEAD"))
 
+    def test_write_h7_forward_schwab_events(self):
+        self.assert_blocked(write("ledger/h7_forward_schwab/events.jsonl"))
+
+    def test_edit_h7_forward_schwab_head(self):
+        self.assert_blocked(edit("ledger/h7_forward_schwab/HEAD"))
+
     def test_edit_with_redundant_path_segments(self):
         self.assert_blocked(edit("ledger/./HEAD"))
 
@@ -99,6 +105,7 @@ class TestFileToolsAllowed(unittest.TestCase):
         # READMEs in ledger/ are documentation, not chain files.
         self.assert_allowed(edit("ledger/README.md"))
         self.assert_allowed(edit("ledger/h7_forward/README.md"))
+        self.assert_allowed(edit("ledger/h7_forward_schwab/README.md"))
 
     def test_edit_file_merely_named_like_head(self):
         self.assert_allowed(edit("docs/ledger/HEADERS.md"))
@@ -129,6 +136,12 @@ class TestBashBlocked(unittest.TestCase):
 
     def test_touch_creates_h7_forward_events(self):
         self.assert_blocked("touch ledger/h7_forward/events.jsonl")
+
+    def test_touch_creates_h7_forward_schwab_events(self):
+        self.assert_blocked("touch ledger/h7_forward_schwab/events.jsonl")
+
+    def test_rm_h7_forward_schwab_head(self):
+        self.assert_blocked("rm ledger/h7_forward_schwab/HEAD")
 
     def test_mv_over_experiments(self):
         self.assert_blocked("mv /tmp/fake.jsonl ledger/experiments.jsonl")

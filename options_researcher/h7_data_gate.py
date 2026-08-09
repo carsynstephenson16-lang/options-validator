@@ -208,6 +208,7 @@ def _evaluate_chain(
     chain_dir: Path,
     *,
     receipt_validator: Callable[..., dict] | None = None,
+    schema_policy: str = "thetadata_v2",
 ) -> dict:
     expected = chain_dir / f"{symbol}_{eval_iso}.parquet"
     days = _chain_days(symbol, chain_dir)
@@ -249,6 +250,23 @@ def _evaluate_chain(
     rec["missing_required_columns"] = missing
     if missing:
         codes.append(CHAIN_SCHEMA_MISSING)
+    elif schema_policy == "external_exact_session":
+        try:
+            validator = receipt_validator or validate_v2_audit_receipt
+            binding = validator(
+                chain_dir,
+                expected,
+                symbol=symbol,
+                session=eval_iso,
+                consumer_scope="H7",
+            )
+        except CacheAuditReceiptError as exc:
+            rec["audit_receipt"] = {"valid": False, "error": str(exc)}
+            codes.append(CHAIN_V2_AUDIT_RECEIPT_INVALID)
+        else:
+            rec["schema_version"] = "external-exact-session-v1"
+            rec["usage"] = "H7_EXACT_SESSION_EVIDENCE"
+            rec["audit_receipt"] = {"valid": True, **binding}
     else:
         try:
             schema = chain_schema_metadata(df.columns)
@@ -365,6 +383,7 @@ def _evaluate(
     symbols: list[str] | tuple[str, ...] | None = None,
     receipt_validator: Callable[..., dict],
     evidence_mode: str,
+    schema_policy: str = "thetadata_v2",
 ) -> dict:
     """Pure whole-universe evaluation. Filesystem inputs are injected via
     close_dir/chain_dir so tests drive fixture caches. Raises GateStoreError
@@ -385,6 +404,7 @@ def _evaluate(
             eval_iso,
             chain_dir,
             receipt_validator=receipt_validator,
+            schema_policy=schema_policy,
         )
         codes = sorted(set(close_codes) | set(chain_codes))
         verdict = "GO" if not codes else "NO_GO"
@@ -451,6 +471,40 @@ def evaluate_synthetic_fixture(
         symbols=symbols,
         receipt_validator=validate_v2_synthetic_audit_receipt,
         evidence_mode=SYNTHETIC_EVIDENCE_MODE,
+    )
+
+
+def evaluate_exact_session_package(
+    requested_run_date: date,
+    *,
+    close_dir: Path,
+    chain_dir: Path,
+    receipt_validator: Callable[..., dict],
+    evidence_mode: str,
+    scope: dict | None = None,
+    symbols: list[str] | tuple[str, ...] | None = None,
+) -> dict:
+    """Evaluate a separately byte-bound exact-session provider package.
+
+    The caller must supply the provider-specific validator and evidence-mode
+    label. This seam bypasses only ThetaData schema classification; every
+    existing H7 column, dtype, nonfinite, duplicate, liquidity, crossed-market,
+    close-session, and whole-scope check remains active.
+    """
+    if not evidence_mode or evidence_mode in {
+        REAL_H7_EVIDENCE_MODE,
+        SYNTHETIC_EVIDENCE_MODE,
+    }:
+        raise ValueError("external exact-session evidence mode must be explicit")
+    return _evaluate(
+        requested_run_date,
+        close_dir=close_dir,
+        chain_dir=chain_dir,
+        scope=scope,
+        symbols=symbols,
+        receipt_validator=receipt_validator,
+        evidence_mode=evidence_mode,
+        schema_policy="external_exact_session",
     )
 
 
