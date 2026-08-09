@@ -193,6 +193,100 @@ class SchwabMarketData:
             "PN": Client.Options.Entitlement.NON_PAYING_PRO,
         }[self.entitlement]
 
+    def _parse_chain_payload(
+        self,
+        symbol: str,
+        payload: dict,
+        *,
+        expected_expiration: date | None = None,
+    ) -> pd.DataFrame:
+        chain_is_delayed = payload.get("isDelayed")
+        chain_is_truncated = payload.get("isChainTruncated")
+        chain_status = payload.get("status")
+        provider_contract_count = payload.get("numberOfContracts")
+        if chain_is_delayed is True:
+            raise RuntimeError("Schwab marked the requested option chain delayed.")
+        if chain_is_truncated is True:
+            raise RuntimeError("Schwab marked the requested option chain truncated.")
+        if str(chain_status or "").strip().upper() != "SUCCESS":
+            raise RuntimeError("Schwab option-chain status was not SUCCESS.")
+
+        expected_iso = (
+            expected_expiration.isoformat() if expected_expiration is not None else None
+        )
+        rows = []
+        for map_name, right in (("callExpDateMap", "C"), ("putExpDateMap", "P")):
+            for exp_key, strikes in (payload.get(map_name) or {}).items():
+                exp_iso = str(exp_key).split(":", 1)[0]
+                if expected_iso is not None and exp_iso != expected_iso:
+                    raise RuntimeError(
+                        "Schwab option chain contained an unexpected expiration."
+                    )
+                for strike_key, contracts in (strikes or {}).items():
+                    for contract in contracts or []:
+                        if not isinstance(contract, dict):
+                            raise RuntimeError(
+                                "Schwab option chain contained a malformed contract."
+                            )
+                        rows.append(
+                            {
+                                "symbol": symbol,
+                                "expiration": exp_iso,
+                                "strike": contract.get("strikePrice", strike_key),
+                                "right": right,
+                                "contract_symbol": contract.get("symbol"),
+                                "bid": contract.get("bid"),
+                                "ask": contract.get("ask"),
+                                "last": contract.get("last"),
+                                "mark": contract.get("mark"),
+                                "volume": contract.get("totalVolume"),
+                                "delta": contract.get("delta"),
+                                "gamma": contract.get("gamma"),
+                                "theta": contract.get("theta"),
+                                "vega": contract.get("vega"),
+                                "rho": contract.get("rho"),
+                                "implied_vol": _iv_decimal(contract.get("volatility")),
+                                "open_interest": contract.get("openInterest"),
+                                "intrinsic_value": contract.get("intrinsicValue"),
+                                "extrinsic_value": contract.get("extrinsicValue"),
+                                "time_value": contract.get("timeValue"),
+                                "days_to_expiration": contract.get("daysToExpiration"),
+                                "multiplier": contract.get("multiplier"),
+                                "non_standard": contract.get("nonStandard"),
+                                "mini": contract.get("mini"),
+                                "in_the_money": contract.get("inTheMoney"),
+                                "expiration_type": contract.get("expirationType"),
+                                "settlement_type": contract.get("settlementType"),
+                                "deliverable_note": contract.get("deliverableNote"),
+                                "timestamp": _timestamp(
+                                    contract.get("quoteTimeInLong")
+                                    or contract.get("quoteTime")
+                                ),
+                                "trade_timestamp": _timestamp(
+                                    contract.get("tradeTimeInLong")
+                                    or contract.get("tradeTime")
+                                ),
+                                "chain_is_delayed": chain_is_delayed,
+                                "chain_is_truncated": chain_is_truncated,
+                                "chain_status": chain_status,
+                                "provider_contract_count": provider_contract_count,
+                            }
+                        )
+        try:
+            expected_count = int(str(provider_contract_count))
+        except (TypeError, ValueError):
+            raise RuntimeError("Schwab option chain omitted a valid contract count.")
+        if expected_count != len(rows):
+            raise RuntimeError(
+                "Schwab option chain contract count did not match parsed rows."
+            )
+        native_symbols = [row["contract_symbol"] for row in rows]
+        if any(not native_symbol for native_symbol in native_symbols):
+            raise RuntimeError("Schwab option chain omitted a native contract symbol.")
+        if len(set(native_symbols)) != len(native_symbols):
+            raise RuntimeError("Schwab option chain contained duplicate contract symbols.")
+        return pd.DataFrame(rows)
+
     def stock_snapshot_quote(self, symbols) -> pd.DataFrame:
         normalized = [str(symbol).strip().upper() for symbol in symbols]
         payload = _response_json(self.api.get_quotes(normalized))
@@ -257,89 +351,24 @@ class SchwabMarketData:
             entitlement=self._entitlement_enum(),
         )
         payload = _response_json(response)
-        chain_is_delayed = payload.get("isDelayed")
-        chain_is_truncated = payload.get("isChainTruncated")
-        chain_status = payload.get("status")
-        provider_contract_count = payload.get("numberOfContracts")
-        if chain_is_delayed is True:
-            raise RuntimeError("Schwab marked the requested option chain delayed.")
-        if chain_is_truncated is True:
-            raise RuntimeError("Schwab marked the requested option chain truncated.")
-        if str(chain_status or "").strip().upper() != "SUCCESS":
-            raise RuntimeError("Schwab option-chain status was not SUCCESS.")
-        rows = []
-        for map_name, right in (("callExpDateMap", "C"), ("putExpDateMap", "P")):
-            for exp_key, strikes in (payload.get(map_name) or {}).items():
-                exp_iso = str(exp_key).split(":", 1)[0]
-                if exp_iso != exp.isoformat():
-                    raise RuntimeError(
-                        "Schwab option chain contained an unexpected expiration."
-                    )
-                for strike_key, contracts in (strikes or {}).items():
-                    for contract in contracts or []:
-                        if not isinstance(contract, dict):
-                            raise RuntimeError(
-                                "Schwab option chain contained a malformed contract."
-                            )
-                        rows.append(
-                            {
-                                "symbol": symbol,
-                                "expiration": exp_iso,
-                                "strike": contract.get("strikePrice", strike_key),
-                                "right": right,
-                                "contract_symbol": contract.get("symbol"),
-                                "bid": contract.get("bid"),
-                                "ask": contract.get("ask"),
-                                "last": contract.get("last"),
-                                "mark": contract.get("mark"),
-                                "volume": contract.get("totalVolume"),
-                                "delta": contract.get("delta"),
-                                "gamma": contract.get("gamma"),
-                                "theta": contract.get("theta"),
-                                "vega": contract.get("vega"),
-                                "rho": contract.get("rho"),
-                                "implied_vol": _iv_decimal(contract.get("volatility")),
-                                "open_interest": contract.get("openInterest"),
-                                "intrinsic_value": contract.get("intrinsicValue"),
-                                "extrinsic_value": contract.get("extrinsicValue"),
-                                "time_value": contract.get("timeValue"),
-                                "days_to_expiration": contract.get("daysToExpiration"),
-                                "multiplier": contract.get("multiplier"),
-                                "non_standard": contract.get("nonStandard"),
-                                "mini": contract.get("mini"),
-                                "in_the_money": contract.get("inTheMoney"),
-                                "expiration_type": contract.get("expirationType"),
-                                "settlement_type": contract.get("settlementType"),
-                                "deliverable_note": contract.get("deliverableNote"),
-                                "timestamp": _timestamp(
-                                    contract.get("quoteTimeInLong") or contract.get("quoteTime")
-                                ),
-                                "trade_timestamp": _timestamp(
-                                    contract.get("tradeTimeInLong")
-                                    or contract.get("tradeTime")
-                                ),
-                                "chain_is_delayed": chain_is_delayed,
-                                "chain_is_truncated": chain_is_truncated,
-                                "chain_status": chain_status,
-                                "provider_contract_count": provider_contract_count,
-                            }
-                        )
-        try:
-            expected_count = int(provider_contract_count)
-        except (TypeError, ValueError):
-            raise RuntimeError("Schwab option chain omitted a valid contract count.")
-        if expected_count != len(rows):
-            raise RuntimeError(
-                "Schwab option chain contract count did not match parsed rows."
-            )
-        native_symbols = [row["contract_symbol"] for row in rows]
-        if any(not symbol for symbol in native_symbols):
-            raise RuntimeError("Schwab option chain omitted a native contract symbol.")
-        if len(set(native_symbols)) != len(native_symbols):
-            raise RuntimeError("Schwab option chain contained duplicate contract symbols.")
-        frame = pd.DataFrame(rows)
+        frame = self._parse_chain_payload(
+            symbol, payload, expected_expiration=exp
+        )
         self._chain_cache[key] = (now, frame)
         return frame.copy()
+
+    def option_full_chain(self, symbol: str) -> pd.DataFrame:
+        """Return every expiration from one read-only Schwab chain response."""
+        symbol = symbol.strip().upper()
+        from schwab.client import Client
+
+        response = self.api.get_option_chain(
+            symbol,
+            contract_type=Client.Options.ContractType.ALL,
+            include_underlying_quote=False,
+            entitlement=self._entitlement_enum(),
+        )
+        return self._parse_chain_payload(symbol, _response_json(response))
 
     def option_list_expirations(self, symbol: str) -> pd.DataFrame:
         payload = _response_json(
