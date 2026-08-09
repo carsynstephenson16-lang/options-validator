@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 
 import config
-from data.thetadata_adapter import (
+from data.chain_policy import (
     _normalize_contract_keys,
     _pick_col,
     mid_price,
