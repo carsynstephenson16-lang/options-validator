@@ -52,7 +52,7 @@ for docs, briefs, and trivial mechanical fixes — not strategy or ledger code.
 uv sync --frozen                                 # Python 3.12; uv.lock is source of truth
 uv run python -m unittest discover -s tests      # full suite, OFFLINE; exit code is the verdict
 uv run ruff check . && uv run pyright            # lint + types
-uv run python tools/irreplaceable_data_guard.py verify  # REQUIRED before deleting any worktree/branch/dir
+uv run python tools/irreplaceable_data_guard.py verify  # REQUIRED before deleting any worktree/branch/dir; anchors on the MAIN checkout from any cwd (2026-08-09)
 uv run python -m options_researcher.h7_source_health   # exit 1 = refresh needed
 uv run python -m options_researcher.h7_data_gate --source-health-receipt <path>
 uv run python -m options_researcher.h7_entry_preflight  # read-only; writes nothing
@@ -137,6 +137,9 @@ check the target for untracked/gitignored data with
 `git -C <path> status --short --ignored=matching --untracked-files=all` — the
 2026-08-03 od1-v2 incident lost 110 MB of unrepurchasable provider data that
 lived only in a worktree and was invisible to every test and manifest.
+Since 2026-08-09 the guard anchors on the main checkout from any cwd (running
+it from a worktree used to false-report the whole cache as lost); its
+`LOCATION ERROR` exit (code 2) means "wrong place", never data loss.
 
 ## Conventions
 

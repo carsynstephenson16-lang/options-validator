@@ -5,7 +5,10 @@ so they stay offline, fast, and green on a fresh clone with no cache present.
 """
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -156,6 +159,97 @@ class InventoryShapeTests(unittest.TestCase):
             self.skipTest("inventory not generated in this checkout")
         inventory = json.loads(inventory_path.read_text())
         self.assertIn(".cache/future_tickers", inventory["namespaces"])
+
+
+class RepoRootAnchoringTests(unittest.TestCase):
+    """The CLI must anchor on the main checkout, never the invoking directory.
+
+    2026-08-09 false alarm: run with cwd inside a linked worktree, the guard
+    found the committed inventory (it travels with every checkout) but not the
+    gitignored bytes (they exist only in the main checkout), and reported all
+    ~5 GB as MISSING ENTIRELY while every byte sat safe. The one alarm that
+    must never cry wolf was crying wolf in its primary use case -- CLAUDE.md
+    requires running it exactly when worktrees are about to be deleted.
+    """
+
+    GUARD = str(Path(guard.__file__).resolve())
+
+    def _run(self, cwd, *argv, env=None):
+        return subprocess.run(
+            [sys.executable, self.GUARD, *argv],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def _fixture_repo(self, temp: Path) -> Path:
+        """A tiny git repo shaped like the real one: committed inventory,
+        gitignored-in-spirit (untracked) namespace bytes."""
+        repo = temp / "main"
+        repo.mkdir()
+
+        def git(*args: str) -> None:
+            subprocess.run(
+                ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+                check=True,
+                capture_output=True,
+            )
+
+        git("init", "-q")
+        _write(repo, "myns/a.parquet", b"aaa")
+        inventory = {"namespaces": {"myns": guard.scan(str(repo / "myns"))}}
+        inv = repo / "data" / "irreplaceable_data_inventory.json"
+        inv.parent.mkdir(parents=True)
+        inv.write_text(json.dumps(inventory))
+        git("add", "data")
+        git("commit", "-qm", "inventory")
+        return repo
+
+    def test_verify_from_linked_worktree_is_not_a_loss_report(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            worktree = Path(temp) / "wt"
+            subprocess.run(
+                ["git", "-C", str(repo), "worktree", "add", "--detach", "-q", str(worktree)],
+                check=True,
+                capture_output=True,
+            )
+            result = self._run(worktree, "verify")
+        self.assertNotIn("MISSING ENTIRELY", result.stderr)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("irreplaceable data: OK", result.stdout)
+        self.assertIn("main checkout", result.stderr)  # says what it anchored on
+
+    def test_verify_from_subdirectory_anchors_on_repo_root(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            sub = repo / "deep" / "dir"
+            sub.mkdir(parents=True)
+            result = self._run(sub, "verify")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn("MISSING ENTIRELY", result.stderr)
+
+    def test_outside_any_repo_is_a_location_error_not_a_loss(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = {**os.environ, "GIT_CEILING_DIRECTORIES": str(Path(temp).parent)}
+            result = self._run(temp, "verify", env=env)
+        self.assertEqual(result.returncode, 2, msg=result.stderr)
+        self.assertIn("NOT a data-loss finding", result.stderr)
+        self.assertNotIn("MISSING ENTIRELY", result.stderr)
+
+    def test_genuine_loss_still_alarms_from_the_main_checkout(self):
+        """The fix must not soften the real alarm -- only relocate its anchor."""
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            (repo / "myns" / "a.parquet").unlink()
+            (repo / "myns").rmdir()
+            result = self._run(repo, "verify")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("MISSING ENTIRELY", result.stderr)
+        self.assertIn("cannot be re-fetched", result.stderr)
+        # every namespace absent => point at the canonical checkout first
+        self.assertIn("canonical", result.stderr)
 
 
 if __name__ == "__main__":
