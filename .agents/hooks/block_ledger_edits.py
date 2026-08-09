@@ -28,7 +28,7 @@ except Exception as e:  # noqa: BLE001 - safety hook fails closed on anything
 
 PROTECTED = (
     r"ledger/(?:HEAD\b|facts\.log|experiments\.jsonl"
-    r"|h7_forward/(?:events\.jsonl|HEAD\b))"
+    r"|h7_forward(?:_schwab)?/(?:events\.jsonl|HEAD\b))"
 )
 PROTECTED_RE = re.compile(PROTECTED)
 
@@ -36,8 +36,8 @@ REASON = (
     "This file is part of the append-only ledger and may only be written "
     "through its typed Python API (research/ledger.py, research/facts.py, or "
     "options_researcher/h7_event_ledger.append_event). A hand edit breaks the "
-    "hash chain and `verify` will refuse. ledger/h7_forward/{events.jsonl,HEAD} "
-    "must not be created at all before Stage 8 activation."
+    "hash chain and `verify` will refuse. The H7 forward chain files "
+    "(old and Schwab namespaces) must not be hand-created."
 )
 
 # --- File tools: any direct Edit/Write/NotebookEdit on a protected path ---
