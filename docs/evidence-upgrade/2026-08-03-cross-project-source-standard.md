@@ -165,6 +165,42 @@ docs; Google `mapsplatform.google.com/pricing` (verbatim). Page CAPTURES were
 not retained, so under §2 these are Inference-grade until recaptured —
 re-verify any number before it justifies spend or an account action.
 
+**Bright Data — evaluated and DECLINED 2026-08-09 (Carsyn-directed,
+in-session).** A Bright Data agent-onboarding skill was invoked in this repo;
+the owner ruled that invoking it is *not* the "explicit new owner directive"
+the 2026-08-04 ruling requires, and that the $0 **no-account** stack remains
+the standard. Nothing was installed, no account was created, no config or
+env var was written anywhere.
+
+- *Measured locally 2026-08-09 (Repo-verified):* `brightdata`/`bdata` not
+  installed globally; reachable only via `npx @brightdata/cli` (v0.3.3, needs
+  Node ≥20 — host has v22.23.1); no `~/.brightdata`; `BRIGHTDATA_API_KEY`
+  unset; `bdata config` returns defaults only (no account, no zones);
+  `bdata budget` → `Error: No API key found.`; zero references to Bright Data
+  across all five governed repos; no MCP server wired (`~/.claude.json` holds
+  only plugin-usage telemetry).
+- *VENDOR-REPORTED, NOT independently verified* (read from the vendor's own
+  skill bundle, not fetched from an official page — under §2 this is
+  Inference-grade): free tier 5,000 credits/month (~$7.50) from one pool
+  shared across Unlocker API, SERP API, Web Scraper API and Scraper Studio,
+  1 credit per request/record; hard stop with no card on file; resets the 1st,
+  no rollover; Proxy products and Browser API excluded from the free pool
+  ($2/7-day trial + $5/30-day bonus, both requiring a payment method); MCP
+  server requests draw from the same pool. Claimed source for re-verification:
+  `docs.brightdata.com/general/account/billing-and-pricing/free-tier`.
+- *Why declined:* the free tier plausibly satisfies the **$0** half of the
+  standard but not the **no-account** half — `bdata login` is an OAuth signup,
+  which is the exact class of action the 2026-08-04 Exa revert enforced
+  against. Agents never create accounts (§8).
+- *Scoping decision recorded for any future reversal:* if the owner ever does
+  onboard it, the owner directed that it be scoped to **options-validator
+  only**, not cross-project. `.cursorrules` web-fetcher limits would bind it
+  unchanged — manual research utility only, never called from tests, strategy
+  code, or a trigger path, and never a market-data source.
+- *No tripwire.* Per the 2026-08-04 ruling this does not auto-revisit on any
+  schedule or usage threshold; only an explicit owner directive re-opens it.
+  Parked, not rejected: `ideas-parking-lot.md`.
+
 ## 8. What this standard explicitly does not do
 
 No shared code package. No new fetchers or collectors anywhere. No EC-1
