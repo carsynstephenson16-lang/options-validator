@@ -126,6 +126,15 @@ class BuilderTests(unittest.TestCase):
                 ),
             )
 
+    def test_measurement_code_sha_may_precede_registration_commit(self):
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(), evidence=evidence(code_commit="c" * 40)
+        )
+        self.assertEqual(
+            event["payload"]["feasibility"]["receipt"]["code_sha"],
+            "b" * 40,
+        )
+
 
 class SyntheticAppendTests(unittest.TestCase):
     def setUp(self):

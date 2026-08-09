@@ -178,10 +178,6 @@ def build_window_registration_event(
 
     feasibility = evidence["feasibility_receipt"]
     _validate_feasibility(feasibility, evidence["feasibility_receipt_hash"])
-    if feasibility["code_sha"] != evidence["code_commit"]:
-        raise RegistrationInputError(
-            "feasibility code_sha disagrees with registration code_commit"
-        )
     if int(feasibility["window_sessions"]) != count:
         raise RegistrationInputError(
             "feasibility window_sessions disagrees with registration window"

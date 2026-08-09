@@ -1,0 +1,58 @@
+{
+  "base_rate": 0.002857142857142857,
+  "code_sha": "37290498ddf874dc35ff2b0b0826d479919f0a55",
+  "config_hash": "0454250d414dd84228b8017ded2b21f87c7c7e7614064b61d6b5c0c4a6d95044",
+  "error_count": 0,
+  "errors": [],
+  "expected_entries": 3.0,
+  "full_stack_passes": 3,
+  "lookback_end": "2026-07-27",
+  "lookback_sessions": 70,
+  "lookback_start": "2026-04-16",
+  "method": {
+    "allocation": "options_researcher.h7_board.resolve_board",
+    "data": "existing .cache/chains plus .cache/underlying only",
+    "error_policy": "unavailable symbol-day counts in denominator and cannot pass",
+    "portfolio_state_assumption": "each historical session starts with no open H7 positions and the full frozen monthly sleeve; same-session board caps apply",
+    "signal_and_execution": "options_researcher.h7_watch.assemble_name"
+  },
+  "passing_symbol_days": [
+    {
+      "session": "2026-07-13",
+      "symbol": "NOW"
+    },
+    {
+      "session": "2026-07-16",
+      "symbol": "MSFT"
+    },
+    {
+      "session": "2026-07-16",
+      "symbol": "PLTR"
+    }
+  ],
+  "provenance": "LLM/tool-computed",
+  "receipt_hash": "8b567a5eb6f1950fa32ee9ddfbd4a440e32a7e12ff7a617888e9cd67baff625c",
+  "receipt_kind": "h7_schwab_feasibility/v1",
+  "stack_version": "h7-frozen-entry-stack-plus-board/v1",
+  "symbol_days": 1050,
+  "tool_label": "cached-only read-only measurement; no verdict",
+  "universe": [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST"
+  ],
+  "universe_size": 15,
+  "window_sessions": 70
+}
