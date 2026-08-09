@@ -142,6 +142,15 @@ if discovery quality is the *recorded* blocker in ≥2 sessions/week for two
 consecutive weeks, re-open the Tavily/Exa decision with those receipts. (The
 tripwire threshold is itself LLM-proposed and unratified; owner may reset it.)
 
+**Owner ruling 2026-08-04 (Carsyn-directed, in-session): the Tavily/Exa
+decision is CLOSED as "settle".** No paid or account-gated search API; the $0
+no-account stack above (built-in WebSearch/WebFetch + repo-local fetchers +
+keyless Jina) is the standard. Exa MCP config was briefly wired
+(dormant, env-var only, no key, no account) into equity-research, tik tok, and
+sunwest-lead-engine earlier the same day and fully reverted on this ruling.
+The tripwire above no longer re-opens the decision on its own — only an
+explicit new owner directive does.
+
 **Receipt limitation (added 2026-08-04 after adversarial review):** the
 numbers above were read from official pages on 2026-08-03 by the verification
 agent — Tavily `docs.tavily.com/documentation/api-credits` + `tavily.com/pricing`;

@@ -20,6 +20,11 @@ files, or manifests. Do not recommend trades or change a repository verdict.
    The filename date is `market_as_of_date`, not the research-generation date.
    Ignore `manifest.pending.json`: it is deliberately untrusted and must never
    be selected for criticism.
+
+   If no `reports/attractiveness_research/` directory exists, or no
+   `manifest.json` exists under any date, return exactly
+   `[NO_INPUT] No finalized attractiveness_research manifest exists to audit.`
+   and stop. Do not audit `manifest.pending.json` in its place.
 4. Require `schema_version == "attractiveness_research/v2"` and
    `publication_status == "FINAL"`. Require a dashboard verification block.
    Read the exact `run_id`, `outputs.context.path`, `outputs.context.sha256`,
@@ -133,3 +138,9 @@ End with these exact headers:
 When an audit receipt is separately authorized, bind it to the exact
 `producer_run_id` and `producer_context_sha256`. Never write a success-shaped
 receipt for an unverified manifest.
+
+## Maintenance
+
+`.agents/rules/independent-research-critic.md` is the condensed Codex-facing
+twin of these guardrails. When a guardrail here changes, update both files
+together so they do not drift.

@@ -9,3 +9,7 @@
    VST and CEG until PJM publishes the exact auction date.
 5. Remain read-only and never change research, hypothesis, dashboard, or trade
    state.
+
+Full procedure and source of truth:
+`.agents/skills/independent-research-critic/SKILL.md`. When a guardrail
+changes, update both files together so they do not drift.
