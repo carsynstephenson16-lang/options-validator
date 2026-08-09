@@ -1172,3 +1172,33 @@ verified read-only on 2026-08-03.
 - **First real `market_context.py` caller:** the equity-research bridge is
   built, tested, and has zero callers. Gate: a consumer with a registered,
   display-only purpose.
+
+## Bright Data web-access provider (parked 2026-08-09)
+
+Context: a Bright Data agent-onboarding skill was invoked in this repo on
+2026-08-09. It offers SERP results, JS-rendered page extraction with CAPTCHA
+handling, structured pipelines for 40+ platforms, a Browser API, and an MCP
+tool layer — a strictly richer discovery/extraction surface than the current
+stack. Full evaluation and measured local state:
+`docs/evidence-upgrade/2026-08-03-cross-project-source-standard.md` §7.
+
+- **Why parked:** it requires creating an account (`bdata login` is an OAuth
+  signup). The owner ruling of 2026-08-04 closed the search-provider question
+  as *settle* — $0 **and** no-account — and that ruling was enforced the same
+  day by reverting a dormant, keyless Exa MCP wiring from three repos. Owner
+  confirmed 2026-08-09 that invoking the onboarding skill does not by itself
+  re-open the decision. Nothing was installed or configured.
+- **Also true:** no live hypothesis is blocked on discovery quality today, so
+  this fails the scope guard independently of the account question.
+- **Gate before un-parking:** an explicit owner directive, in the owner's own
+  words, superseding the 2026-08-04 ruling. Then, in order: (1) owner performs
+  the signup — agents never create accounts; (2) re-verify the free-tier
+  numbers against the official pricing page before relying on them (the
+  figures on record are VENDOR-REPORTED and uncaptured); (3) scope to
+  **options-validator only** (owner's 2026-08-09 answer), not cross-project;
+  (4) `.cursorrules` web-fetcher limits still bind — manual research only,
+  never in tests, strategy code, or a trigger path, never a market-data
+  source, and it cannot change a registered hypothesis, trigger, or verdict.
+- **Review date: none, deliberately.** The 2026-08-04 ruling disabled the
+  usage tripwire that used to re-open this class of decision. Putting a date
+  here would quietly resurrect it. Nothing revisits this but the owner.
