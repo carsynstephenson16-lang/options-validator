@@ -27,6 +27,12 @@ underlying closes, earnings stores, facts, manifests, receipts, and H7
 reports. It excludes environment files, credentials, temporary files, and
 unrelated caches.
 
+The allow-list also includes the prepared Schwab restart paths:
+`.cache/schwab_chains/`, `reports/schwab_chains/`,
+`reports/h7_forward_schwab/`, and `ledger/h7_forward_schwab/`. A real restore
+drill for that lane requires a verified live canary package; do not substitute
+synthetic bytes for operational durability evidence.
+
 ```sh
 uv run python tools/h7_forward_backup.py backup \
   --completed-session YYYY-MM-DD

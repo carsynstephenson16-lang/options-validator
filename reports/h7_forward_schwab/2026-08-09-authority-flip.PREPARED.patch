@@ -1,0 +1,46 @@
+diff --git a/data/ritual_authority.py b/data/ritual_authority.py
+index 3bc4307..0000000 100644
+--- a/data/ritual_authority.py
++++ b/data/ritual_authority.py
+@@ -16,6 +16,6 @@ class RitualAuthority:
+ 
+ 
+ CURRENT_AUTHORITY = RitualAuthority(
+-    h7_active=False,
+-    exact_session_source_active=False,
++    h7_active=True,
++    exact_session_source_active=True,
+ )
+diff --git a/tests/test_ritual_authority.py b/tests/test_ritual_authority.py
+index c326bb1..0000000 100644
+--- a/tests/test_ritual_authority.py
++++ b/tests/test_ritual_authority.py
+@@ -21,14 +21,11 @@ class RitualAuthorityContractTests(unittest.TestCase):
+         self.assertTrue(hasattr(ritual_authority, "evaluate_full_ritual"))
+         self.assertTrue(hasattr(ritual_authority, "main"))
+ 
+-    def test_full_ritual_is_blocked_without_source_and_h7_authority(self):
++    def test_full_ritual_is_ready_with_source_and_h7_authority(self):
+         readiness = ritual_authority.evaluate_full_ritual()
+ 
+-        self.assertFalse(readiness.ready)
+-        joined = " ".join(readiness.blockers)
+-        self.assertIn("exact-session", joined)
+-        self.assertIn("H7", joined)
+-        self.assertIn("ThetaData", joined)
++        self.assertTrue(readiness.ready)
++        self.assertEqual(readiness.blockers, ())
+ 
+     def test_status_succeeds_but_require_full_refuses(self):
+         status_out = io.StringIO()
+@@ -42,8 +39,8 @@ class RitualAuthorityContractTests(unittest.TestCase):
+         required = json.loads(require_out.getvalue())
+ 
+         self.assertEqual(status_rc, 0)
+-        self.assertEqual(require_rc, 1)
+-        self.assertFalse(status["ready"])
++        self.assertEqual(require_rc, 0)
++        self.assertTrue(status["ready"])
+         self.assertEqual(required, status)
+ 
+ 
