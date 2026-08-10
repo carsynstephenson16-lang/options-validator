@@ -2772,6 +2772,14 @@ _EXPERIMENT_LANES = (
 )
 
 
+def _experiment_state_class(state: str) -> str:
+    if state in {"OK", "ABOVE_TBILL"}:
+        return "good"
+    if "BLOCKED" in state:
+        return "bad"
+    return "unknown"
+
+
 def _experiment_asof(cards: list[dict]) -> str:
     stamps = [
         str(card.get("max_asof") or card.get("asof"))
@@ -2800,10 +2808,14 @@ def _experiment_health_html(data: dict) -> str:
             if reasons
             else ""
         )
+        health_class = (
+            "good" if rendered == len(cards) else "bad" if rendered == 0 else "unknown"
+        )
         cells.append(
             '<div class="panel composite-card">'
             f'<div class="slot-label"><span>{_esc(experiment_id)}</span>'
-            '<span class="status-badge unknown">ENABLED FOR THIS RENDER</span></div>'
+            f'<span class="status-badge {health_class}">'
+            'ENABLED FOR THIS RENDER</span></div>'
             f'<div class="label">Source: {_esc(source)}</div>'
             f'<div class="label">max as-of {_esc(_experiment_asof(cards))}</div>'
             f'<div class="label">{rendered} / {len(cards)} names rendered</div>'
@@ -2875,12 +2887,15 @@ def _experiment_card_line(card: Mapping[str, object]) -> str:
     asof = str(card.get("max_asof") or card.get("asof") or "unavailable")
     caveat = str(card.get("caveat") or "Descriptive history, not a forecast.")
     assignment = _as_mapping(card.get("assignment"))
-    assignment_line = (
-        " Early-assignment risk: unknown — no ex-dividend-date data on disk yet."
-        if experiment_id == "EXP-TBILL"
-        and assignment.get("reason") == "EX_DIV_DATE_UNAVAILABLE"
-        else ""
-    )
+    assignment_reason = assignment.get("reason")
+    if experiment_id != "EXP-TBILL" or not assignment_reason:
+        assignment_line = ""
+    elif assignment_reason == "EX_DIV_DATE_UNAVAILABLE":
+        assignment_line = (
+            " Early-assignment risk: unknown — no ex-dividend-date data on disk yet."
+        )
+    else:
+        assignment_line = f" Early-assignment risk caveat: {assignment_reason}."
     return f"{line} As of {asof}. {caveat}{assignment_line}"
 
 
@@ -2888,7 +2903,8 @@ def _experiment_lane_html(cards: list[dict], experiment_id: str) -> str:
     lines = "".join(
         '<div class="panel composite-card"><div class="slot-label">'
         f'<span>{_esc(str(card.get("symbol", "?")))}</span>'
-        f'<span class="status-badge unknown">{_esc(str(card.get("state", "?")))}</span>'
+        f'<span class="status-badge {_experiment_state_class(str(card.get("state", "?")))}">'
+        f'{_esc(str(card.get("state", "?")))}</span>'
         f'</div><div>{_esc(_experiment_card_line(card))}</div></div>'
         for card in cards
     )
