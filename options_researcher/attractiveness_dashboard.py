@@ -820,10 +820,6 @@ def assemble(
     blocked: list[dict] | None = None,
     hypothesis_evidence_by_symbol: Mapping[str, object] | None = None,
     composite_signals: list[dict] | None = None,
-    exp_beta: list[dict] | None = None,
-    exp_tail: list[dict] | None = None,
-    exp_spread: list[dict] | None = None,
-    exp_tbill: list[dict] | None = None,
     today: str | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
@@ -971,13 +967,6 @@ def assemble(
         "evaluation_date": today,
         "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
-        # Experiment payloads are pass-through only. In particular, None must
-        # never trigger self-computation here: no-argument production rebuilds
-        # call assemble() directly and experiments are disabled by default.
-        "exp_beta": exp_beta or [],
-        "exp_tail": exp_tail or [],
-        "exp_spread": exp_spread or [],
-        "exp_tbill": exp_tbill or [],
     }
 
 
@@ -2764,183 +2753,6 @@ def _composite_html(data: dict) -> str:
     )
 
 
-_EXPERIMENT_LANES = (
-    ("exp_beta", "EXP-BETA", "adjusted closes + QQQ"),
-    ("exp_tail", "EXP-TAIL", "adjusted closes"),
-    ("exp_spread", "EXP-SPREAD", "cached option chains + earnings calendar"),
-    ("exp_tbill", "EXP-TBILL", "cached option chains + Treasury curve"),
-)
-
-
-def _experiment_state_class(state: str) -> str:
-    if state in {"OK", "ABOVE_TBILL"}:
-        return "good"
-    if "BLOCKED" in state:
-        return "bad"
-    return "unknown"
-
-
-def _experiment_asof(cards: list[dict]) -> str:
-    stamps = [
-        str(card.get("max_asof") or card.get("asof"))
-        for card in cards
-        if card.get("max_asof") or card.get("asof")
-    ]
-    return max(stamps) if stamps else "unavailable"
-
-
-def _experiment_health_html(data: dict) -> str:
-    cells = []
-    for key, experiment_id, source in _EXPERIMENT_LANES:
-        cards = data.get(key) or []
-        if not cards:
-            continue
-        rendered = sum(not bool(card.get("data_blocked")) for card in cards)
-        reasons = sorted(
-            {
-                str(card.get("reason"))
-                for card in cards
-                if card.get("data_blocked") and card.get("reason")
-            }
-        )
-        reason_html = (
-            f'<div class="label">Blocked: {_esc("; ".join(reasons))}</div>'
-            if reasons
-            else ""
-        )
-        health_class = (
-            "good" if rendered == len(cards) else "bad" if rendered == 0 else "unknown"
-        )
-        cells.append(
-            '<div class="panel composite-card">'
-            f'<div class="slot-label"><span>{_esc(experiment_id)}</span>'
-            f'<span class="status-badge {health_class}">'
-            'ENABLED FOR THIS RENDER</span></div>'
-            f'<div class="label">Source: {_esc(source)}</div>'
-            f'<div class="label">max as-of {_esc(_experiment_asof(cards))}</div>'
-            f'<div class="label">{rendered} / {len(cards)} names rendered</div>'
-            f"{reason_html}</div>"
-        )
-    return '<div class="card-grid">' + "".join(cells) + "</div>"
-
-
-def _experiment_blocked_line(card: Mapping[str, object]) -> str:
-    reason = str(card.get("reason") or "required cached data unavailable")
-    asof = str(card.get("max_asof") or card.get("asof") or "unavailable")
-    return f"DATA BLOCKED as of {asof}: {reason}."
-
-
-def _experiment_float(value: object) -> float:
-    if isinstance(value, (str, int, float)):
-        return float(value)
-    raise TypeError(f"experiment numeric value has unsupported type {type(value).__name__}")
-
-
-def _experiment_int(value: object) -> int:
-    if isinstance(value, (str, int, float)):
-        return int(value)
-    raise TypeError(f"experiment integer value has unsupported type {type(value).__name__}")
-
-
-def _experiment_card_line(card: Mapping[str, object]) -> str:
-    experiment_id = str(card.get("experiment_id") or "UNKNOWN")
-    if card.get("data_blocked"):
-        line = _experiment_blocked_line(card)
-    elif experiment_id == "EXP-BETA":
-        line = (
-            f"beta {_experiment_float(card['beta']):.2f} to QQQ; "
-            f"R² {_experiment_float(card['r_squared']):.2f}; "
-            f"half-window beta {_experiment_float(card['beta_half_window']):.2f}; "
-            f"{_experiment_int(card['n_obs'])} sessions"
-        )
-    elif experiment_id == "EXP-TAIL":
-        skew_direction = "down" if _experiment_float(card["skew"]) < 0 else "up"
-        line = (
-            f"{_experiment_int(card['jump_count'])} moves bigger than 3× normal in the "
-            f"past year; recent surprises leaned {skew_direction}; sample "
-            f"skew {_experiment_float(card['skew']):.2f}, excess kurtosis "
-            f"{_experiment_float(card['excess_kurtosis']):.2f}"
-        )
-        if card.get("state") == "UNSTABLE":
-            line += "; UNSTABLE across window choices"
-    elif experiment_id == "EXP-SPREAD":
-        line = (
-            f"spread at the {str(card.get('max_asof') or card.get('asof') or '?')} "
-            f"close was {_experiment_float(card['ratio']):.2f}× its usual level "
-            f"(median of {_experiment_int(card['baseline_sessions_used'])} "
-            "usable prior sessions)"
-        )
-        if card.get("today_is_earnings_week"):
-            line += "; that close was in an asserted earnings week"
-    elif experiment_id == "EXP-TBILL":
-        rate_provenance = str(card.get("rate_provenance") or "rate provenance unavailable")
-        line = (
-            f"${_experiment_float(card['collateral']):,.0f} collateral; put credit yield "
-            f"{_experiment_float(card['credit_annualized_yield']):.1%}/yr vs T-bills "
-            f"{_experiment_float(card['tbill_annualized_yield']):.1%}/yr "
-            f"(carry spread {_experiment_float(card['carry_spread']):+.1%}/yr; quote mid, "
-            f"real fills are mid or worse). Treasury rate source: {rate_provenance}"
-        )
-    else:
-        line = str(card.get("reason") or card.get("state") or "No display detail")
-
-    asof = str(card.get("max_asof") or card.get("asof") or "unavailable")
-    caveat = str(card.get("caveat") or "Descriptive history, not a forecast.")
-    assignment = _as_mapping(card.get("assignment"))
-    assignment_reason = assignment.get("reason")
-    if experiment_id != "EXP-TBILL" or not assignment_reason:
-        assignment_line = ""
-    elif assignment_reason == "EX_DIV_DATE_UNAVAILABLE":
-        assignment_line = (
-            " Early-assignment risk: unknown — no ex-dividend-date data on disk yet."
-        )
-    else:
-        assignment_line = f" Early-assignment risk caveat: {assignment_reason}."
-    return f"{line} As of {asof}. {caveat}{assignment_line}"
-
-
-def _experiment_lane_html(cards: list[dict], experiment_id: str) -> str:
-    lines = "".join(
-        '<div class="panel composite-card"><div class="slot-label">'
-        f'<span>{_esc(str(card.get("symbol", "?")))}</span>'
-        f'<span class="status-badge {_experiment_state_class(str(card.get("state", "?")))}">'
-        f'{_esc(str(card.get("state", "?")))}</span>'
-        f'</div><div>{_esc(_experiment_card_line(card))}</div></div>'
-        for card in cards
-    )
-    return (
-        f'<div class="eyebrow">{_esc(experiment_id)}</div>'
-        f'<div class="card-grid">{lines}</div>'
-    )
-
-
-def _experiments_html(data: dict) -> str:
-    present = [
-        (key, experiment_id, data.get(key) or [])
-        for key, experiment_id, _source in _EXPERIMENT_LANES
-        if data.get(key)
-    ]
-    if not present:
-        return ""
-    lanes = "".join(
-        _experiment_lane_html(cards, experiment_id)
-        for _key, experiment_id, cards in present
-    )
-    return (
-        '<section class="panel"><div class="section-header"><div>'
-        '<div class="eyebrow">EXPERIMENT HEALTH + COMPARISON</div>'
-        '<h2>Experiments — display-only (not part of Top-3 ranking)</h2>'
-        '<p>Isolated descriptive views. Missing data stays visibly blocked; '
-        'each lane keeps its own data source and max as-of stamp.</p></div></div>'
-        f'{_experiment_health_html(data)}{lanes}'
-        '<div class="notice watch">Limitations: display-only and descriptive, '
-        'not predictive. The chain lane is frozen at 2026-07-27 while closes '
-        'currently extend to 2026-08-04; constants are LLM-proposed and not '
-        'owner-ratified. Promotion requires a separate owner decision and every '
-        'applicable registration and feasibility gate.</div></section>'
-    )
-
-
 def _evidence_attr(value: object, name: str, default: object = None) -> object:
     if isinstance(value, Mapping):
         return value.get(name, default)
@@ -3084,7 +2896,7 @@ def render(
     network, no external assets. Every value from `data` / `context` is
     html.escape()'d before embedding. Page order: compact metadata header ->
     original Top-3 -> descriptive QM comparison -> composite signal board ->
-    display-only experiments -> quant/market background -> pinned names ->
+    quant/market background -> pinned names ->
     per-symbol panels (card grid)."""
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
     symbols_html = ""
@@ -3177,7 +2989,6 @@ def render(
         f"{_blocked_html(data.get('blocked') or [])}"
         f"{_hero_html(data, context, qm_context)}"
         f"{_composite_html(data)}"
-        f"{_experiments_html(data)}"
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
         f"{_pinned_html(data)}"
@@ -3223,47 +3034,6 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     return abs_path, _run_exit_code(blocked, qm_context=qm_context)
 
 
-def _cli_experiment_payloads(
-    *,
-    force_all: bool,
-    asof: str | None = None,
-) -> dict[str, list[dict]]:
-    """Build explicitly enabled experiment lanes for one CLI render.
-
-    This is intentionally outside assemble(): scheduled callers invoke
-    ``main()``/``assemble()`` without CLI intent, and must never cause an
-    experiment to self-compute merely because its keyword default is None.
-    """
-    if asof is None:
-        from datetime import datetime as _dt
-        from zoneinfo import ZoneInfo as _ZoneInfo
-
-        asof = _dt.now(_ZoneInfo("America/New_York")).date().isoformat()
-
-    import config
-
-    enabled = config.EXPERIMENT_LANES_ENABLED
-    symbols = list(config.ATTRACTIVENESS_UNIVERSE)
-    payloads: dict[str, list[dict]] = {}
-    if force_all or enabled.get("EXP-BETA", False):
-        from options_researcher.exp_beta_qqq import build_exp_beta_board
-
-        payloads["exp_beta"] = build_exp_beta_board(symbols, asof=asof)
-    if force_all or enabled.get("EXP-TAIL", False):
-        from options_researcher.exp_tail_shape import build_exp_tail_board
-
-        payloads["exp_tail"] = build_exp_tail_board(symbols, asof=asof)
-    if force_all or enabled.get("EXP-SPREAD", False):
-        from options_researcher.exp_spread_stability import build_exp_spread_board
-
-        payloads["exp_spread"] = build_exp_spread_board(symbols, asof=asof)
-    if force_all or enabled.get("EXP-TBILL", False):
-        from options_researcher.exp_tbill_carry import build_exp_tbill_board
-
-        payloads["exp_tbill"] = build_exp_tbill_board(symbols, asof=asof)
-    return payloads
-
-
 def main(**assemble_kwargs) -> str:
     """Assemble real (or injected) candidates, load the dated research
     context (honest fallback when absent), render, write to OUTPUT_PATH.
@@ -3278,7 +3048,4 @@ if __name__ == "__main__":
     if "--json" in sys.argv:
         print(sections_json())
     else:
-        experiment_payloads = _cli_experiment_payloads(
-            force_all="--experiments" in sys.argv
-        )
-        raise SystemExit(_build_and_write(**experiment_payloads)[1])
+        raise SystemExit(_build_and_write()[1])
