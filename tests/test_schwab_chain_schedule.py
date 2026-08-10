@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import plistlib
+import shlex
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -56,6 +58,40 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self.assertFalse(payload["RunAtLoad"])
         self.assertNotIn("KeepAlive", payload)
         self.assertNotIn("intraday_capture", str(payload))
+
+    def test_expired_refresh_token_requires_schwab_reauth(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        start = source.index('if [ "$RC" -ne 0 ]; then')
+        end = source.index('\necho "SCHWAB CHAIN STATUS: OK"', start)
+        block = source[start:end]
+        cap_out = (
+            "schwab_chain_capture auth EXPIRED: Refresh token is invalid, "
+            "expired or revoked; run uv run python tools/setup_schwab.py"
+        )
+        script = "\n".join(
+            [
+                "set -u",
+                "RC=1",
+                "CAP_OUT=" + shlex.quote(cap_out),
+                block,
+                "",
+            ]
+        )
+
+        completed = subprocess.run(
+            ["/bin/bash", "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn(
+            "CRITICAL: SCHWAB REAUTH REQUIRED -- run uv run python "
+            "tools/setup_schwab.py",
+            completed.stdout,
+        )
+        self.assertNotIn("receipt/log contains evidence", completed.stdout)
 
 
 if __name__ == "__main__":

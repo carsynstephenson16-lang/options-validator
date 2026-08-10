@@ -154,6 +154,15 @@ ALLOWLIST: list[tuple[str, str, str]] = [
         "'^...'`/`grep -m1 '^...'` pattern, and the raw var is otherwise "
         "only echoed to the log for human context.",
     ),
+    (
+        "tools/schwab_chain_capture.sh",
+        "CAP_OUT=",
+        "reason (a)+(b): raw combined stdout+stderr capture exists so RC=$? "
+        "reflects the Python process's own exit code; the only parsed value "
+        "uses the anchored `grep -q '^schwab_chain_capture auth EXPIRED:'` "
+        "classification, and CAP_OUT is otherwise only echoed to the "
+        "human-facing log.",
+    ),
 ]
 
 

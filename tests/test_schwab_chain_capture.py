@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from authlib.integrations.base_client.errors import OAuthError
 
 from options_researcher import schwab_chain_capture as capture
 
@@ -167,6 +169,39 @@ class SchwabChainCaptureTests(unittest.TestCase):
             (self.reports_dir / "2026-08-10" / "preclose.json").read_text()
         )
         self.assertEqual(stored["overall_status"], "ok")
+
+    def test_expired_refresh_token_propagates_to_cli_boundary(self):
+        expired = OAuthError(
+            "invalid_grant",
+            "Refresh token is invalid, expired or revoked",
+        )
+        client = FakeClient()
+        client.option_full_chain = mock.Mock(side_effect=expired)
+
+        with self.assertRaises(OAuthError):
+            self._capture(client, universe=("AAA",))
+
+        self.assertFalse(self.reports_dir.exists())
+
+    def test_main_classifies_expired_schwab_refresh_token(self):
+        expired = OAuthError(
+            "invalid_grant",
+            "Refresh token is invalid, expired or revoked",
+        )
+        stdout = io.StringIO()
+
+        with (
+            mock.patch.object(capture, "capture", side_effect=expired),
+            mock.patch("sys.stdout", stdout),
+        ):
+            rc = capture.main(["--force"])
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(
+            stdout.getvalue(),
+            "schwab_chain_capture auth EXPIRED: Refresh token is invalid, "
+            "expired or revoked; run uv run python tools/setup_schwab.py\n",
+        )
 
 
 if __name__ == "__main__":

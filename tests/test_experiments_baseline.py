@@ -162,6 +162,7 @@ class ExperimentBaselineTests(unittest.TestCase):
             0,
             without_experiments.stdout + without_experiments.stderr,
         )
+        self.assertIn("wrote ", without_experiments.stdout)
         baseline_html = output.read_text()
         self.assertEqual(baseline_html.lower().count("experiment"), 0)
 
@@ -182,6 +183,7 @@ class ExperimentBaselineTests(unittest.TestCase):
             0,
             with_experiments.stdout + with_experiments.stderr,
         )
+        self.assertIn("wrote ", with_experiments.stdout)
         self.assertIn("Experiments — display-only", output.read_text())
 
     def test_config_matches_every_module_frozen_default(self):

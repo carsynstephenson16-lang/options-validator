@@ -115,6 +115,8 @@ elif echo "$CAP_OUT" | grep -q '^intraday_capture refused:'; then
   crit "intraday_capture (${TAG}): REFUSED (exit ${CAP_RC}) -- $(echo "$CAP_OUT" | grep -m1 '^intraday_capture refused:')"
 elif echo "$CAP_OUT" | grep -q '^intraday_capture receipt CONFLICT'; then
   crit "intraday_capture (${TAG}): RECEIPT CONFLICT (exit ${CAP_RC}) -- $(echo "$CAP_OUT" | grep -m1 '^intraday_capture receipt CONFLICT')"
+elif echo "$CAP_OUT" | grep -q '^intraday_capture auth EXPIRED:'; then
+  crit "intraday_capture (${TAG}): SCHWAB REAUTH REQUIRED -- run uv run python tools/setup_schwab.py"
 else
   crit "intraday_capture (${TAG}): FAILED (exit ${CAP_RC}) -- unrecognized failure mode, see output above"
 fi
