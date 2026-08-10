@@ -829,3 +829,42 @@ COMPOSITE_SKEW_DELTA = 0.25       # 25-delta put/call skew reference (Angle 4;
                                   # Xing, Zhang & Zhao 2010, JFQA 45(3))
 COMPOSITE_GRADE_A_MIN_ALIGNED = 3 # aligned non-neutral angles needed for grade A
 COMPOSITE_GRADE_B_MIN_ALIGNED = 2 # aligned non-neutral angles needed for grade B
+
+# ---------------------------------------------------------------------------
+# ATTRACTIVENESS EXPERIMENT LANES -- display-only, cached-data-only, and
+# disabled by default. LLM-proposed 2026-08-09; standard-from-literature or
+# repo conventions; not owner-ratified. Nothing here changes Top-3 ranking,
+# registered hypotheses, verdicts, FIRE authority, or paper-book state.
+# ---------------------------------------------------------------------------
+
+# EXP-BETA: rolling beta to QQQ (COMPOSITE_PCTL window/min-obs analog).
+EXP_BETA_WINDOW = 252
+EXP_BETA_HALF_WINDOW = 126
+EXP_BETA_MIN_OBS = 126
+EXP_BETA_UNSTABLE_DELTA = 0.5
+
+# EXP-TAIL: realized sample tail shape (survey rank-7 convention).
+EXP_TAIL_WINDOW = 252
+EXP_TAIL_MIN_OBS = 250
+EXP_TAIL_JUMP_SIGMA = 3.0
+EXP_TAIL_ALT_WINDOWS = (189, 378)
+
+# EXP-SPREAD: role-based near-tenor put spread stability (survey rank-12 and
+# composite near-tenor conventions).
+EXP_SPREAD_BASELINE = 20
+EXP_SPREAD_MIN_BASELINE_OBS = 10
+EXP_SPREAD_LOOKBACK_SESSIONS = 25
+EXP_SPREAD_ELEVATED = 2.0
+EXP_SPREAD_TENOR_DTE = (15, 60)
+EXP_SPREAD_TARGET_DELTA = 0.50
+
+# EXP-TBILL: role-based near-tenor put carry comparison (composite convention).
+EXP_TBILL_TENOR_DTE = (15, 60)
+EXP_TBILL_TARGET_DELTA = 0.50
+
+EXPERIMENT_LANES_ENABLED = {
+    "EXP-BETA": False,
+    "EXP-TAIL": False,
+    "EXP-SPREAD": False,
+    "EXP-TBILL": False,
+}
