@@ -1,0 +1,609 @@
+{
+ "run_id": "parking-lot-471-2026-08-09",
+ "source_sha256": "528c821c159ffec6ed7f7260f60e53b0ab795217219d98b2e92455df6d1703c7",
+ "boundary_line": 471,
+ "total_lines": 1204,
+ "ideas": [
+  {
+   "idea_id": "PL471-A1",
+   "name": "Admit CRWD/NBIS/ZS to H7 watchlist",
+   "start_line": 418,
+   "end_line": 528,
+   "category": "owner-action",
+   "disposition": "parked; owner-typed H7 amendment required",
+   "scoring_candidate": 0,
+   "blocker": "owner registration + earnings source"
+  },
+  {
+   "idea_id": "PL471-A2",
+   "name": "config.UNIVERSE rename + risk-denominator split",
+   "start_line": 530,
+   "end_line": 599,
+   "category": "implementation-ready refactor",
+   "disposition": "parked",
+   "scoring_candidate": 0,
+   "blocker": "owner-typed value if denominator split; >45 call sites; live windows"
+  },
+  {
+   "idea_id": "PL471-A3",
+   "name": "TAOV composite scalar",
+   "start_line": 601,
+   "end_line": 612,
+   "category": "rejected or do-not-build",
+   "disposition": "explicitly rejected",
+   "scoring_candidate": 0,
+   "blocker": "permanent reject"
+  },
+  {
+   "idea_id": "PL471-A4",
+   "name": "Ranked trade-suggestor",
+   "start_line": 601,
+   "end_line": 612,
+   "category": "rejected or do-not-build",
+   "disposition": "explicitly rejected",
+   "scoring_candidate": 0,
+   "blocker": "validator-only scope"
+  },
+  {
+   "idea_id": "PL471-A5",
+   "name": "Narrative ticker scores",
+   "start_line": 601,
+   "end_line": 612,
+   "category": "rejected or do-not-build",
+   "disposition": "explicitly rejected",
+   "scoring_candidate": 0,
+   "blocker": "belongs in equity-research"
+  },
+  {
+   "idea_id": "PL471-A6",
+   "name": "Insider-cluster pre-earnings signal",
+   "start_line": 616,
+   "end_line": 629,
+   "category": "owner-action",
+   "disposition": "parked by owner directive",
+   "scoring_candidate": 0,
+   "blocker": "owner do-not-pursue + Form4 data absent"
+  },
+  {
+   "idea_id": "PL471-A7",
+   "name": "BS fair-value richness ranking",
+   "start_line": 644,
+   "end_line": 656,
+   "category": "rejected or do-not-build",
+   "disposition": "park-leaning-REJECT",
+   "scoring_candidate": 0,
+   "blocker": "owner override + non-redundancy prereg"
+  },
+  {
+   "idea_id": "PL471-A8",
+   "name": "Unconditioned term/skew richness score",
+   "start_line": 658,
+   "end_line": 668,
+   "category": "duplicate",
+   "disposition": "parked; VRP-in-disguise",
+   "scoring_candidate": 0,
+   "blocker": "prereg gate; overlaps Badge B surface"
+  },
+  {
+   "idea_id": "PL471-A9",
+   "name": "QM study rerun",
+   "start_line": 672,
+   "end_line": 683,
+   "category": "rejected or do-not-build",
+   "disposition": "spent one-run; p-hacking",
+   "scoring_candidate": 0,
+   "blocker": "new vintage or owner prereg"
+  },
+  {
+   "idea_id": "PL471-A10",
+   "name": "Big-4 P&L backtest 2023+",
+   "start_line": 687,
+   "end_line": 697,
+   "category": "rejected or do-not-build",
+   "disposition": "standing guardrail",
+   "scoring_candidate": 0,
+   "blocker": "no honest holdout exists"
+  },
+  {
+   "idea_id": "PL471-A11",
+   "name": "ET long-term exposure",
+   "start_line": 702,
+   "end_line": 711,
+   "category": "owner-action",
+   "disposition": "accepted tradability fail",
+   "scoring_candidate": 0,
+   "blocker": "shares out of scope / new registration"
+  },
+  {
+   "idea_id": "PL471-A12",
+   "name": "PRYMY analysis",
+   "start_line": 717,
+   "end_line": 739,
+   "category": "rejected or do-not-build",
+   "disposition": "no listed US options exist",
+   "scoring_candidate": 0,
+   "blocker": "structural"
+  },
+  {
+   "idea_id": "PL471-EXT",
+   "name": "Full-market TS x VRP interaction study (pasted external design)",
+   "start_line": 741,
+   "end_line": 871,
+   "category": "data-blocked",
+   "disposition": "parked per replan \u00a77; corner survives as Badge B",
+   "scoring_candidate": 0,
+   "blocker": "OptionMetrics vendor data; broad universe; owner freeze manifest"
+  },
+  {
+   "idea_id": "PL471-B1",
+   "name": "Tail-shape line (skew/kurt/jump-count)",
+   "start_line": 886,
+   "end_line": 887,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 7; strongest of parked set",
+   "scoring_candidate": 1,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-B2",
+   "name": "Vol-of-vol earnings-conditioned",
+   "start_line": 888,
+   "end_line": 889,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 8",
+   "scoring_candidate": 1,
+   "blocker": "must be earnings-conditioned"
+  },
+  {
+   "idea_id": "PL471-B3",
+   "name": "IV-rank ex-earnings variant + naming fix",
+   "start_line": 890,
+   "end_line": 892,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 9",
+   "scoring_candidate": 0,
+   "blocker": "touches live threshold input naming; variant scored under C5 family adjacency"
+  },
+  {
+   "idea_id": "PL471-B4",
+   "name": "Rank-stability meter",
+   "start_line": 893,
+   "end_line": 894,
+   "category": "monitoring or QA experiment",
+   "disposition": "parked rank 11; history log absent",
+   "scoring_candidate": 1,
+   "blocker": "0 days persisted history; replay re-scope offered"
+  },
+  {
+   "idea_id": "PL471-B5",
+   "name": "Spread-stability annotation",
+   "start_line": 895,
+   "end_line": 896,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 12",
+   "scoring_candidate": 1,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-B6",
+   "name": "Taylor 1-day P&L attribution",
+   "start_line": 897,
+   "end_line": 898,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 13",
+   "scoring_candidate": 1,
+   "blocker": "keep separate from intrinsic ladder"
+  },
+  {
+   "idea_id": "PL471-B7",
+   "name": "OU half-life of IV",
+   "start_line": 899,
+   "end_line": 900,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 14; method conf Low-Med",
+   "scoring_candidate": 1,
+   "blocker": "thin obs"
+  },
+  {
+   "idea_id": "PL471-B8",
+   "name": "Beta-to-QQQ translation line",
+   "start_line": 901,
+   "end_line": 903,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 15; NEEDS-DATA now stale",
+   "scoring_candidate": 1,
+   "blocker": "QQQ closes exist"
+  },
+  {
+   "idea_id": "PL471-B9",
+   "name": "CVaR 5% CSP lane",
+   "start_line": 904,
+   "end_line": 905,
+   "category": "portfolio or risk experiment",
+   "disposition": "parked rank 16",
+   "scoring_candidate": 1,
+   "blocker": "TEM/CRWV fail 750-obs floor; overlaps B1"
+  },
+  {
+   "idea_id": "PL471-B10",
+   "name": "Model-free implied variance strip",
+   "start_line": 906,
+   "end_line": 908,
+   "category": "shared infrastructure",
+   "disposition": "parked rank 17; design-only",
+   "scoring_candidate": 0,
+   "blocker": "frozen zero-bid stop rule undesigned"
+  },
+  {
+   "idea_id": "PL471-B11",
+   "name": "HAR/EWMA/GARCH forecast comparison",
+   "start_line": 909,
+   "end_line": 911,
+   "category": "research-only",
+   "disposition": "parked rank 18",
+   "scoring_candidate": 0,
+   "blocker": "registered study must come FIRST"
+  },
+  {
+   "idea_id": "PL471-B12",
+   "name": "25d risk-reversal skew line",
+   "start_line": 912,
+   "end_line": 913,
+   "category": "already implemented",
+   "disposition": "parked rank 19; shipped in composite Angle 4 (skew_25d)",
+   "scoring_candidate": 0,
+   "blocker": "dispositions correction needed"
+  },
+  {
+   "idea_id": "PL471-B13",
+   "name": "PCA first-eigenvalue share + MP null",
+   "start_line": 914,
+   "end_line": 915,
+   "category": "descriptive context experiment",
+   "disposition": "parked rank 20; companion to unbuilt C1",
+   "scoring_candidate": 0,
+   "blocker": "stranded on C1; adjacent to rejected IV-PCA"
+  },
+  {
+   "idea_id": "PL471-B14",
+   "name": "Early-assignment dividend flag + T-bill comparison",
+   "start_line": 916,
+   "end_line": 920,
+   "category": "portfolio or risk experiment",
+   "disposition": "survey rank 6; top of unlock queue; rates CSVs now exist",
+   "scoring_candidate": 1,
+   "blocker": "ex-div DATE calendar absent -> flag half fails closed"
+  },
+  {
+   "idea_id": "PL471-C1a",
+   "name": "Execution-mode enforcement layer",
+   "start_line": 965,
+   "end_line": 981,
+   "category": "shared infrastructure",
+   "disposition": "parked; 5/10 components already exist",
+   "scoring_candidate": 0,
+   "blocker": "no incident; owner decision"
+  },
+  {
+   "idea_id": "PL471-C1b",
+   "name": "OOS read guard",
+   "start_line": 982,
+   "end_line": 986,
+   "category": "monitoring or QA experiment",
+   "disposition": "parked with C1a",
+   "scoring_candidate": 0,
+   "blocker": "zero incidents; holdout intact"
+  },
+  {
+   "idea_id": "PL471-C1c",
+   "name": "Salvaged integrity batch v1 (4/5 unbuilt drift)",
+   "start_line": 987,
+   "end_line": 990,
+   "category": "partial implementation",
+   "disposition": "salvaged-not-parked; only block_live_trading built",
+   "scoring_candidate": 0,
+   "blocker": "out of program scope; drift flagged"
+  },
+  {
+   "idea_id": "PL471-C2a",
+   "name": "PyArrow",
+   "start_line": 1003,
+   "end_line": 1006,
+   "category": "already implemented",
+   "disposition": "satisfied",
+   "scoring_candidate": 0,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-C2b",
+   "name": "SciPy direct dep",
+   "start_line": 1007,
+   "end_line": 1016,
+   "category": "shared infrastructure",
+   "disposition": "transitively installed; no import",
+   "scoring_candidate": 0,
+   "blocker": "un-park on first real import"
+  },
+  {
+   "idea_id": "PL471-C2c",
+   "name": "Polars",
+   "start_line": 1017,
+   "end_line": 1021,
+   "category": "shared infrastructure",
+   "disposition": "parked; no bottleneck",
+   "scoring_candidate": 0,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-C2d",
+   "name": "QuantLib",
+   "start_line": 1022,
+   "end_line": 1028,
+   "category": "shared infrastructure",
+   "disposition": "parked",
+   "scoring_candidate": 0,
+   "blocker": "needs registered hypothesis"
+  },
+  {
+   "idea_id": "PL471-C2e",
+   "name": "Numba",
+   "start_line": 1029,
+   "end_line": 1034,
+   "category": "rejected or do-not-build",
+   "disposition": "skip",
+   "scoring_candidate": 0,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-C2f",
+   "name": "CVXPY",
+   "start_line": 1035,
+   "end_line": 1040,
+   "category": "rejected or do-not-build",
+   "disposition": "skip",
+   "scoring_candidate": 0,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-C2g",
+   "name": "vectorbt second engine",
+   "start_line": 1041,
+   "end_line": 1045,
+   "category": "rejected or do-not-build",
+   "disposition": "conflicts one-engine rule",
+   "scoring_candidate": 0,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-C3",
+   "name": "Intraday RVOL scanner signal",
+   "start_line": 1051,
+   "end_line": 1076,
+   "category": "data-blocked",
+   "disposition": "RESEARCH-VALID IMPLEMENTATION-REJECTED",
+   "scoring_candidate": 0,
+   "blocker": "needs paid intraday feed + prereg"
+  },
+  {
+   "idea_id": "PL471-C4a",
+   "name": "OI change v1",
+   "start_line": 1079,
+   "end_line": 1096,
+   "category": "already implemented",
+   "disposition": "shipped + ratified",
+   "scoring_candidate": 0,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-C4b",
+   "name": "OI change v2 percentile+NOTABLE",
+   "start_line": 1087,
+   "end_line": 1090,
+   "category": "descriptive context experiment",
+   "disposition": "parked; constants ratified INACTIVE",
+   "scoring_candidate": 0,
+   "blocker": "pre-registered calibration study before results"
+  },
+  {
+   "idea_id": "PL471-C5",
+   "name": "IV skew steepness badge (C4 one-pager)",
+   "start_line": 1098,
+   "end_line": 1112,
+   "category": "partial implementation",
+   "disposition": "parked; composite ships different skew",
+   "scoring_candidate": 0,
+   "blocker": "[OWNER] blanks in one-pager"
+  },
+  {
+   "idea_id": "PL471-C6",
+   "name": "Wasserstein regime clustering",
+   "start_line": 1113,
+   "end_line": 1151,
+   "category": "already implemented",
+   "disposition": "doc stale: run DONE 2026-08-03 RETAINS_DISTINCT_INFORMATION",
+   "scoring_candidate": 0,
+   "blocker": "dispositions correction needed"
+  },
+  {
+   "idea_id": "PL471-C7a",
+   "name": "Remove scrapy dep",
+   "start_line": 1159,
+   "end_line": 1161,
+   "category": "maintenance cleanup",
+   "disposition": "parked",
+   "scoring_candidate": 0,
+   "blocker": "owner ok on uv.lock churn"
+  },
+  {
+   "idea_id": "PL471-C7b",
+   "name": "Remove crawler.js boilerplate",
+   "start_line": 1162,
+   "end_line": 1164,
+   "category": "maintenance cleanup",
+   "disposition": "parked",
+   "scoring_candidate": 0,
+   "blocker": ""
+  },
+  {
+   "idea_id": "PL471-C7c",
+   "name": "WebFetch allowlist alignment",
+   "start_line": 1165,
+   "end_line": 1168,
+   "category": "maintenance cleanup",
+   "disposition": "parked",
+   "scoring_candidate": 0,
+   "blocker": "owner reviews permission widening"
+  },
+  {
+   "idea_id": "PL471-C7d",
+   "name": "EC-1 receipt-shape participation",
+   "start_line": 1169,
+   "end_line": 1171,
+   "category": "maintenance cleanup",
+   "disposition": "parked",
+   "scoring_candidate": 0,
+   "blocker": "gated on EC-1 program"
+  },
+  {
+   "idea_id": "PL471-C7e",
+   "name": "First market_context caller",
+   "start_line": 1172,
+   "end_line": 1174,
+   "category": "maintenance cleanup",
+   "disposition": "parked",
+   "scoring_candidate": 0,
+   "blocker": "needs registered display consumer"
+  },
+  {
+   "idea_id": "PL471-C8",
+   "name": "Bright Data provider",
+   "start_line": 1176,
+   "end_line": 1204,
+   "category": "owner-action",
+   "disposition": "parked; account creation prohibited",
+   "scoring_candidate": 0,
+   "blocker": "owner directive required; no review date by design"
+  }
+ ],
+ "scores": {
+  "C1": {
+   "quant": 77,
+   "engineering": 85,
+   "dashboard": 86,
+   "portfolio": 90,
+   "consensus_mean": 84.5
+  },
+  "C2": {
+   "quant": 77,
+   "engineering": 69,
+   "dashboard": 79,
+   "portfolio": 89,
+   "consensus_mean": 78.5
+  },
+  "C3": {
+   "quant": 71,
+   "engineering": 87,
+   "dashboard": 88,
+   "portfolio": 79,
+   "consensus_mean": 81.2
+  },
+  "C4": {
+   "quant": 87,
+   "engineering": 84,
+   "dashboard": 88,
+   "portfolio": 86,
+   "consensus_mean": 86.2
+  },
+  "C5": {
+   "quant": 73,
+   "engineering": 77,
+   "dashboard": 69,
+   "portfolio": 77,
+   "consensus_mean": 74.0
+  },
+  "C6": {
+   "quant": 36,
+   "engineering": 73,
+   "dashboard": 68,
+   "portfolio": 62,
+   "consensus_mean": 59.8
+  },
+  "C7": {
+   "quant": 71,
+   "engineering": 76,
+   "dashboard": 77,
+   "portfolio": 77,
+   "consensus_mean": 75.2
+  },
+  "C8": {
+   "quant": 33,
+   "engineering": 41,
+   "dashboard": 39,
+   "portfolio": 58,
+   "consensus_mean": 42.8
+  },
+  "C9": {
+   "quant": 74,
+   "engineering": 61,
+   "dashboard": 67,
+   "portfolio": 79,
+   "consensus_mean": 70.2
+  }
+ },
+ "decisions": [
+  {
+   "idea_id": "PL471-B8",
+   "decision": "SELECTED",
+   "rank": 1,
+   "reason": "consensus 86.3; only factor-exposure axis; QQQ closes verified; all four reviewers >=84"
+  },
+  {
+   "idea_id": "PL471-B1",
+   "decision": "SELECTED",
+   "rank": 2,
+   "reason": "consensus 84.5; realized-tail-shape axis, strongest of parked set; quant sigma fix mandated in brief"
+  },
+  {
+   "idea_id": "PL471-B5",
+   "decision": "SELECTED",
+   "rank": 3,
+   "reason": "consensus 81.3; only execution-cost-dynamics axis; role-based contract series + [t-20,t-1] baseline mandated"
+  },
+  {
+   "idea_id": "PL471-B14",
+   "decision": "SELECTED",
+   "rank": 4,
+   "reason": "consensus 78.5 (<80 triggered full-file fallback review; no pre-471 idea displaces it); rescoped: T-bill carry core + fail-closed EX_DIV_DATE_UNAVAILABLE assignment stub"
+  },
+  {
+   "idea_id": "PL471-B2",
+   "decision": "REJECTED_CLOSE_FINALIST",
+   "rank": 5,
+   "reason": "consensus 74.0 <75; adjacency to composite Angle 2; Goyal-Saretto citation defect must be re-verified before any future build"
+  },
+  {
+   "idea_id": "PL471-B6",
+   "decision": "REJECTED_CLOSE_FINALIST",
+   "rank": 6,
+   "reason": "consensus 75.3 but decision value 6-8/20 unanimous; padding risk; revisit after typed-Card refactor"
+  },
+  {
+   "idea_id": "PL471-B4",
+   "decision": "REJECTED_CLOSE_FINALIST",
+   "rank": 7,
+   "reason": "consensus 70.3; hidden-state-leak risk in naive replay; 600-820 LOC largest build; mislabeling risk; forward append-only log may be proposed separately"
+  },
+  {
+   "idea_id": "PL471-B9",
+   "decision": "REJECTED",
+   "rank": 8,
+   "reason": "consensus 59.8; same information source as C1; overlapping-window effective-N structurally thin"
+  },
+  {
+   "idea_id": "PL471-B7",
+   "decision": "REJECTED",
+   "rank": 9,
+   "reason": "consensus 42.8; needs statsmodels (new dep) or risky hand-rolled ADF; survey's own Low-Med confidence; thin sample"
+  }
+ ]
+}

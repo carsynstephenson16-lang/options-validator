@@ -210,6 +210,28 @@ walk-forward computation only, every output carries its max as-of session, and
 nothing emitted is verdict-bearing, FIRE-capable, or a registered signal
 without its own future registration passing the 2026-07-24 feasibility gate.
 Hard guardrails, claim discipline, and vocabulary discipline are unchanged.
+Owner-directed attractiveness-scanner experiment authorization (2026-08-09,
+in-session): the global pre-verdict ship-blocker remains retired (2026-08-03
+amendment above; it is NOT re-retired here). The owner authorizes a bounded
+program of three to five selected parking-lot experiments for the
+attractiveness scanner (selection report:
+`reports/2026-08-09-parking-lot-471-selection-report.md`). Binding constraints
+for every experiment in the program: display-only, disabled by default,
+cached-data-only (parquet chain cache + `data/underlying_closes.py` +
+`data/rates/`; OD-4 stands — no network providers), causally timed, and
+stamped with its maximum as-of session. Experiments remain isolated from
+registered hypotheses (H5/H6/H7/H8/H10a/H10b/RQ2-v1/A2-v1), verdict authority,
+FIRE authority, live-order paths, paper-book mutation, and the default
+baseline ranking (the frozen GREEN-fraction recipe is untouched while all
+experiment flags are off). Each experiment requires a dated specification,
+isolated output, named acceptance metrics, tests, failure behavior, and a
+rollback path. Experiment constants are standard-from-literature or
+official-source conventions frozen in `config.py` with LLM-proposed provenance
+labels (composite-lane precedent, 2026-08-04); no owner-typed number is
+invented. Promotion beyond experimental status requires a separate owner
+decision and every applicable registration or feasibility gate (2026-07-24).
+Existing hard guardrails, provider restrictions, append-only records,
+owner-only frozen values, and no-live-order rules are unchanged.
 Registration feasibility gate (2026-07-24): a new loss-gated hypothesis or
 forward window may only be registered if the historical base rate of its full
 entry stack projects expected entries >= 2x the loss bar over the declared

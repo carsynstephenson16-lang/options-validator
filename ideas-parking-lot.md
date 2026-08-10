@@ -1202,3 +1202,57 @@ stack. Full evaluation and measured local state:
 - **Review date: none, deliberately.** The 2026-08-04 ruling disabled the
   usage tripwire that used to re-open this class of decision. Putting a date
   here would quietly resurrect it. Nothing revisits this but the owner.
+
+## 2026-08-09 — Line-471 adjudication: experiment-program dispositions (append-only)
+
+Owner-directed bounded experiment program (authorization recorded in
+`.cursorrules`/`AGENTS.md` 2026-08-09; selection evidence:
+`reports/2026-08-09-parking-lot-471-selection-report.md`). Existing
+headings above are unchanged; this section records dispositions only.
+
+**Selected as display-only, default-off, cached-data experiments**
+(Codex briefs `docs/superpowers/plans/2026-08-09-0{1,2,3,4}-*`; NOT yet
+implemented — Codex unavailable at selection time):
+
+- Beta-to-QQQ translation line (survey rank 15) — SELECTED #1 (86.3/100).
+  The "NEEDS-DATA: no QQQ/SPY closes" blocker above is stale: QQQ.parquet
+  and SPY.parquet exist since 2026-08-04 (2,408 rows each).
+- Tail-shape line (rank 7) — SELECTED #2 (84.5/100), with a causal jump
+  sigma replacing the survey formula's in-window sigma.
+- Spread-stability liquidity annotation (rank 12) — SELECTED #3
+  (81.3/100), role-based contract series + strictly-[t−20,t−1] baseline.
+- Early-assignment dividend flag + T-bill collateral comparison (rank 6)
+  — SELECTED #4 (78.5/100) RESCOPED: the T-bill comparison is buildable
+  now (`data/rates/` exists since 2026-08-04 and resolves at the
+  2026-07-27 chain edge); the early-assignment half stays fail-closed
+  EX_DIV_DATE_UNAVAILABLE because no forward ex-dividend DATE calendar
+  exists on disk — that unlock is an owner data action.
+
+**Evaluated, not selected (parked status unchanged):** Taylor 1-day
+attribution (75.3 — unanimous lowest decision value), vol-of-vol (74.0 —
+adjacency to composite Angle 2; NOTE: the Goyal–Saretto citation attached
+to it in the survey describes (IV−RV)/RV, not stdev(ΔIV) — re-verify
+before any future build), rank-stability meter (70.3 even re-scoped as a
+current-recipe replay; zero days of persisted board history exist),
+CVaR 5% (59.8 — same information source as the tail-shape line;
+overlapping-window effective-N is structurally thin), OU half-life
+(42.8 — needs statsmodels or a hand-rolled ADF; survey's own Low-Med
+confidence).
+
+**Dispositions corrections (docs-truth, measured 2026-08-09):**
+
+- 25Δ risk-reversal skew line (rank 19, parked above): a near-identical
+  statistic has been SHIPPING since 2026-08-04 inside
+  `composite_signals.internals_angle` (`skew_25d`/`skew_pctl`/
+  `steep_skew`) under the composite-lane authorization. Treat the parked
+  entry as superseded-by-implementation; do not build a second copy.
+- Wasserstein regime clustering (section above): the "Awaiting one run"
+  line is stale — REGIME-AMI-v1 ran 2026-08-03, decision
+  RETAINS_DISTINCT_INFORMATION (median AMI 0.0295 vs threshold 0.50;
+  receipt `reports/regime/2026-08-03-regime-ami-v1-receipt.md`), and the
+  regime module is wired into the composite lane.
+- Model-free implied variance strip (rank 17): the rates-CSV half of its
+  gate is resolved; the frozen zero-bid strike-stop rule remains the
+  open design decision.
+- HAR/EWMA/GARCH (rank 18) and OI-change v2: unchanged — both remain
+  gated on their own pre-registered studies before results exist.

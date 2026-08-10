@@ -1,0 +1,10 @@
+candidate,idea_id,name,quant,engineering,dashboard,portfolio,consensus_mean,decision,rank,reason
+C4,PL471-B8,Beta-to-QQQ translation line,87,84,88,86,86.2,SELECTED,1,consensus 86.3; only factor-exposure axis; QQQ closes verified; all four reviewers >=84
+C1,PL471-B1,Tail-shape line (skew/kurt/jump-count),77,85,86,90,84.5,SELECTED,2,"consensus 84.5; realized-tail-shape axis, strongest of parked set; quant sigma fix mandated in brief"
+C3,PL471-B5,Spread-stability annotation,71,87,88,79,81.2,SELECTED,3,"consensus 81.3; only execution-cost-dynamics axis; role-based contract series + [t-20,t-1] baseline mandated"
+C2,PL471-B14,Early-assignment dividend flag + T-bill comparison,77,69,79,89,78.5,SELECTED,4,consensus 78.5 (<80 triggered full-file fallback review; no pre-471 idea displaces it); rescoped: T-bill carry core + fail-closed EX_DIV_DATE_UNAVAILABLE assignment stub
+C5,PL471-B2,Vol-of-vol earnings-conditioned,73,77,69,77,74.0,REJECTED_CLOSE_FINALIST,5,consensus 74.0 <75; adjacency to composite Angle 2; Goyal-Saretto citation defect must be re-verified before any future build
+C7,PL471-B6,Taylor 1-day P&L attribution,71,76,77,77,75.2,REJECTED_CLOSE_FINALIST,6,consensus 75.3 but decision value 6-8/20 unanimous; padding risk; revisit after typed-Card refactor
+C9,PL471-B4,Rank-stability meter,74,61,67,79,70.2,REJECTED_CLOSE_FINALIST,7,consensus 70.3; hidden-state-leak risk in naive replay; 600-820 LOC largest build; mislabeling risk; forward append-only log may be proposed separately
+C6,PL471-B9,CVaR 5% CSP lane,36,73,68,62,59.8,REJECTED,8,consensus 59.8; same information source as C1; overlapping-window effective-N structurally thin
+C8,PL471-B7,OU half-life of IV,33,41,39,58,42.8,REJECTED,9,consensus 42.8; needs statsmodels (new dep) or risky hand-rolled ADF; survey's own Low-Med confidence; thin sample
