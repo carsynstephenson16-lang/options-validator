@@ -178,7 +178,10 @@ and CSCV/PBO are inapplicable to them by design, not by oversight:
 
 - RQ2-v1 (ledger seq 18): "Candidate badges K=2" — 2-3 parameter variants
   depending on how the baseline is counted, against a floor of
-  `CSCV_MIN_VARIANTS_M = 10`.
+  `CSCV_MIN_VARIANTS_M = 10`. *(2026-08-10: superseded by ledger seq 25,
+  RQ2_AMENDMENT_V1_1 — owner-directed K=3 candidate badges B1/A1/V1, with
+  V1 registered membership-only and its statistic unpinned. K=3 remains far
+  below the floor, so the conclusion of this flag is unchanged.)*
 - A2-v1 (ledger seq 19): five lanes (CSP, CC, PMCC, LEAPS, tactical) scored
   separately, each with its own arm count — CSP alone declares multiple
   registered exit arms while other lanes have as few as one — giving a
