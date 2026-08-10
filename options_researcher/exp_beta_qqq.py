@@ -26,7 +26,6 @@ EXP_BETA_MIN_OBS = getattr(config, "EXP_BETA_MIN_OBS", 126)
 # analog); display-only; not owner-ratified.
 EXP_BETA_UNSTABLE_DELTA = getattr(config, "EXP_BETA_UNSTABLE_DELTA", 0.5)
 
-_CLOSES_HISTORY_START = "1900-01-01"
 _CAVEAT = (
     "Betas drift toward 1 in sharp selloffs; a calm-period beta "
     "understates crash co-movement. Descriptive history, not a forecast."
@@ -146,7 +145,7 @@ def exp_beta_qqq(
 def build_exp_beta_board(symbols: list[str], *, asof: str) -> list[dict]:
     """Build one fail-visible EXP-BETA card per symbol from cached closes."""
     try:
-        benchmark = load_closes_adjusted("QQQ", _CLOSES_HISTORY_START, asof, allow_oos=True).loc[
+        benchmark = load_closes_adjusted("QQQ", config.BACKTEST_START, asof, allow_oos=True).loc[
             :asof
         ]
     except Exception as exc:
@@ -164,7 +163,7 @@ def build_exp_beta_board(symbols: list[str], *, asof: str) -> list[dict]:
     cards: list[dict] = []
     for symbol in symbols:
         try:
-            closes = load_closes_adjusted(symbol, _CLOSES_HISTORY_START, asof, allow_oos=True).loc[
+            closes = load_closes_adjusted(symbol, config.BACKTEST_START, asof, allow_oos=True).loc[
                 :asof
             ]
             card = exp_beta_qqq(closes, benchmark, asof=asof)
