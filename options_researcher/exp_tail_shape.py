@@ -35,9 +35,13 @@ EXP_TAIL_JUMP_SIGMA = float(getattr(config, "EXP_TAIL_JUMP_SIGMA", 3.0))
 # not owner-ratified.
 EXP_TAIL_ALT_WINDOWS = tuple(getattr(config, "EXP_TAIL_ALT_WINDOWS", (189, 378)))
 
+# Brief-mandated causal-sigma floor; LLM-proposed 2026-08-09; display-only;
+# not owner-ratified.
 _JUMP_MIN_PERIODS = 126
+# Brief-mandated qualitative stability threshold; LLM-proposed 2026-08-09;
+# display-only; not owner-ratified.
+_FAT_TAIL_EXCESS_KURTOSIS = 1.0
 _CAVEAT = "Describes past return shape only; not a forecast; a calm year hides tail risk."
-_HISTORY_START = "1900-01-01"
 
 
 def _blocked_card(*, asof: str, reason: str, max_asof: str | None = None, n_obs: int = 0) -> dict:
@@ -75,7 +79,7 @@ def _qualitative_moment_read(returns: pd.Series, window: int) -> tuple[int, bool
     skew = float(sample.skew())
     excess_kurtosis = float(sample.kurt())
     skew_sign = -1 if skew < 0.0 else (1 if skew > 0.0 else 0)
-    return skew_sign, excess_kurtosis > 1.0
+    return skew_sign, excess_kurtosis > _FAT_TAIL_EXCESS_KURTOSIS
 
 
 def exp_tail_shape(closes: pd.Series, *, asof: str) -> dict:
@@ -139,7 +143,7 @@ def build_exp_tail_board(symbols: Sequence[str], *, asof: str) -> list[dict]:
     cards: list[dict] = []
     for symbol in symbols:
         try:
-            closes = load_closes_adjusted(symbol, _HISTORY_START, asof, allow_oos=True)
+            closes = load_closes_adjusted(symbol, config.BACKTEST_START, asof, allow_oos=True)
             card = exp_tail_shape(closes.loc[:asof], asof=asof)
         except Exception as exc:
             card = _blocked_card(
