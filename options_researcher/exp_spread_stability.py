@@ -206,25 +206,27 @@ def build_exp_spread_board(symbols: list[str], *, asof: str) -> list[dict]:
         weeks_by_symbol = load_earnings_weeks(asof=asof)
     except Exception as exc:
         reason = f"earnings gating failed ({exc.__class__.__name__}: {exc})"
-        return [_blocked(reason, asof=asof) for _symbol in symbols]
+        return [{"symbol": symbol, **_blocked(reason, asof=asof)} for symbol in symbols]
 
     cards: list[dict] = []
     for symbol in symbols:
         try:
             sessions = _cached_sessions(symbol, asof)
             chains = _load_selected_sessions(symbol, sessions)
-            cards.append(
-                exp_spread_stability(
-                    chains,
-                    asof=asof,
-                    earnings_weeks=weeks_by_symbol.get(symbol, set()),
-                )
+            card = exp_spread_stability(
+                chains,
+                asof=asof,
+                earnings_weeks=weeks_by_symbol.get(symbol, set()),
             )
+            cards.append({"symbol": symbol, **card})
         except Exception as exc:
             cards.append(
-                _blocked(
-                    f"chain load failed ({exc.__class__.__name__}: {exc})",
-                    asof=asof,
-                )
+                {
+                    "symbol": symbol,
+                    **_blocked(
+                        f"chain load failed ({exc.__class__.__name__}: {exc})",
+                        asof=asof,
+                    ),
+                }
             )
     return cards
