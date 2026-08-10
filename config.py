@@ -862,9 +862,5 @@ EXP_SPREAD_TARGET_DELTA = 0.50
 EXP_TBILL_TENOR_DTE = (15, 60)
 EXP_TBILL_TARGET_DELTA = 0.50
 
-EXPERIMENT_LANES_ENABLED = {
-    "EXP-BETA": False,
-    "EXP-TAIL": False,
-    "EXP-SPREAD": False,
-    "EXP-TBILL": False,
-}
+# structural, owner-directed split 2026-08-10; display-only artifact path.
+EXPERIMENTS_OUTPUT_PATH = ".tmp/dashboard/experiments.html"
