@@ -229,6 +229,7 @@ class SpreadStabilityTest(unittest.TestCase):
         ):
             cards = build_exp_spread_board(["AAA"], asof="2026-01-30")
         self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["symbol"], "AAA")
         self.assertEqual(cards[0]["state"], "DATA_BLOCKED")
         self.assertIn("ValueError", cards[0]["reason"])
 
