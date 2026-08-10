@@ -18,6 +18,13 @@ from data.thetadata_adapter import CACHE_DIR
 from data.underlying_closes import load_closes
 from options_researcher.chains import atm_row, load_range, nearest_monthly
 
+# PROVENANCE: LLM-proposed 2026-08-09, composite convention; display-only;
+# not owner-ratified.
+EXP_TBILL_TENOR_DTE = getattr(config, "EXP_TBILL_TENOR_DTE", (15, 60))
+# PROVENANCE: LLM-proposed 2026-08-09, composite convention; display-only;
+# not owner-ratified.
+EXP_TBILL_TARGET_DELTA = getattr(config, "EXP_TBILL_TARGET_DELTA", 0.50)
+
 _ASSIGNMENT_UNLOCK = "owner-sourced forward ex-dividend date calendar"
 _CAVEAT = (
     "Display-only comparison using quote mid; real fills are mid or worse. "
@@ -67,6 +74,10 @@ def _rate_provenance(resolved_rate) -> str:
     )
 
 
+def _board_card(card: dict, symbol: str) -> dict:
+    return {**card, "symbol": symbol}
+
+
 def exp_tbill_carry(
     contract_row,
     spot: float,
@@ -114,7 +125,7 @@ def exp_tbill_carry(
     credit_annualized_yield = (mid * 100.0 / collateral) * (365.0 / tau)
     tbill_annualized_yield = math.exp(rate) - 1.0
     carry_spread = credit_annualized_yield - tbill_annualized_yield
-    max_asof = min(asof_date, resolved_rate.provenance.valid_through).isoformat()
+    max_asof = min(asof_date, resolved_rate.source_date).isoformat()
     return {
         "experiment_id": "EXP-TBILL",
         "state": "ABOVE_TBILL" if carry_spread >= 0.0 else "BELOW_TBILL",
@@ -158,14 +169,17 @@ def _row_expiration_iso(row) -> str:
 def build_exp_tbill_board(symbols, *, asof) -> list[dict]:
     """Build per-symbol cards from exactly one cached chain session per name."""
     resolved_asof = date.fromisoformat(asof).isoformat()
-    tenor_dte = getattr(config, "EXP_TBILL_TENOR_DTE", (15, 60))
-    target_delta = getattr(config, "EXP_TBILL_TARGET_DELTA", 0.50)
     cards: list[dict] = []
     for raw_symbol in symbols:
         symbol = str(raw_symbol).strip().upper()
         chain_session = _latest_cached_session(symbol, resolved_asof)
         if chain_session is None:
-            cards.append(_blocked_card("no cached chain for the as-of session", asof=resolved_asof))
+            cards.append(
+                _board_card(
+                    _blocked_card("no cached chain for the as-of session", asof=resolved_asof),
+                    symbol,
+                )
+            )
             continue
         try:
             chains = load_range(
@@ -177,10 +191,13 @@ def build_exp_tbill_board(symbols, *, asof) -> list[dict]:
             chain = chains.get(chain_session)
             if chain is None or chain.empty:
                 cards.append(
-                    _blocked_card(
-                        "no valid reference put",
-                        asof=chain_session,
-                        max_asof=chain_session,
+                    _board_card(
+                        _blocked_card(
+                            "no valid reference put",
+                            asof=chain_session,
+                            max_asof=chain_session,
+                        ),
+                        symbol,
                     )
                 )
                 continue
@@ -188,25 +205,28 @@ def build_exp_tbill_board(symbols, *, asof) -> list[dict]:
             expiration = nearest_monthly(
                 chain,
                 session_date,
-                min_dte=int(tenor_dte[0]),
-                max_dte=int(tenor_dte[1]),
+                min_dte=int(EXP_TBILL_TENOR_DTE[0]),
+                max_dte=int(EXP_TBILL_TENOR_DTE[1]),
             )
             reference_put = (
                 atm_row(
                     chain,
                     expiration,
                     right="P",
-                    target_delta=float(target_delta),
+                    target_delta=float(EXP_TBILL_TARGET_DELTA),
                 )
                 if expiration is not None
                 else None
             )
             if reference_put is None:
                 cards.append(
-                    _blocked_card(
-                        "no valid reference put",
-                        asof=chain_session,
-                        max_asof=chain_session,
+                    _board_card(
+                        _blocked_card(
+                            "no valid reference put",
+                            asof=chain_session,
+                            max_asof=chain_session,
+                        ),
+                        symbol,
                     )
                 )
                 continue
@@ -218,28 +238,37 @@ def build_exp_tbill_board(symbols, *, asof) -> list[dict]:
             )
             if closes.empty:
                 cards.append(
-                    _blocked_card(
-                        "no synchronized spot for the chain session",
-                        asof=chain_session,
-                        max_asof=chain_session,
+                    _board_card(
+                        _blocked_card(
+                            "no synchronized spot for the chain session",
+                            asof=chain_session,
+                            max_asof=chain_session,
+                        ),
+                        symbol,
                     )
                 )
                 continue
             cards.append(
-                exp_tbill_carry(
-                    reference_put,
-                    float(closes.iloc[-1]),
-                    symbol=symbol,
-                    asof=chain_session,
-                    expiration=_row_expiration_iso(reference_put),
+                _board_card(
+                    exp_tbill_carry(
+                        reference_put,
+                        float(closes.iloc[-1]),
+                        symbol=symbol,
+                        asof=chain_session,
+                        expiration=_row_expiration_iso(reference_put),
+                    ),
+                    symbol,
                 )
             )
         except Exception as exc:
             cards.append(
-                _blocked_card(
-                    f"board build failed ({exc.__class__.__name__}: {exc})",
-                    asof=chain_session,
-                    max_asof=chain_session,
+                _board_card(
+                    _blocked_card(
+                        f"board build failed ({exc.__class__.__name__}: {exc})",
+                        asof=chain_session,
+                        max_asof=chain_session,
+                    ),
+                    symbol,
                 )
             )
     return cards

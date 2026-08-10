@@ -9,6 +9,7 @@ import pandas as pd
 
 import config
 from data.rates import MissingRateError
+from options_researcher import exp_tbill_carry as exp_tbill_module
 from options_researcher.exp_tbill_carry import (
     build_exp_tbill_board,
     early_assignment_flag,
@@ -80,6 +81,10 @@ class TestAssignmentStub(unittest.TestCase):
 
 
 class TestCarryMath(unittest.TestCase):
+    def test_module_defaults_match_composite_convention(self):
+        self.assertEqual(exp_tbill_module.EXP_TBILL_TENOR_DTE, (15, 60))
+        self.assertEqual(exp_tbill_module.EXP_TBILL_TARGET_DELTA, 0.50)
+
     @patch("options_researcher.exp_tbill_carry.risk_free_rate")
     def test_key_contract(self, mocked_rate):
         mocked_rate.return_value = rate_result()
@@ -229,7 +234,8 @@ class TestBoard(unittest.TestCase):
 
         self.assertFalse(result["data_blocked"])
         self.assertEqual(result["asof"], "2026-07-25")
-        self.assertEqual(result["max_asof"], "2026-07-24")
+        self.assertEqual(result["max_asof"], "2026-07-23")
+        self.assertEqual(result["symbol"], "VST")
         self.assertEqual(
             observed,
             {
@@ -247,6 +253,7 @@ class TestBoard(unittest.TestCase):
         mocked_load_range.return_value = {"2026-07-25": pd.DataFrame()}
         result = build_exp_tbill_board(["VST"], asof="2026-07-27")[0]
         self.assertEqual(result["state"], "DATA_BLOCKED")
+        self.assertEqual(result["symbol"], "VST")
         self.assertEqual(result["reason"], "no valid reference put")
 
     @patch("options_researcher.exp_tbill_carry._latest_cached_session")
@@ -254,8 +261,28 @@ class TestBoard(unittest.TestCase):
         latest_session.return_value = None
         result = build_exp_tbill_board(["VST"], asof="2026-07-27")[0]
         self.assertEqual(result["state"], "DATA_BLOCKED")
+        self.assertEqual(result["symbol"], "VST")
         self.assertEqual(result["reason"], "no cached chain for the as-of session")
         self.assertEqual(result["assignment"], early_assignment_flag())
+
+    @patch("options_researcher.exp_tbill_carry.risk_free_rate")
+    @patch("options_researcher.exp_tbill_carry.load_closes")
+    @patch("options_researcher.exp_tbill_carry.load_range")
+    @patch("options_researcher.exp_tbill_carry._latest_cached_session")
+    def test_builder_uses_frozen_module_constants(
+        self, latest_session, mocked_load_range, mocked_load_closes, mocked_rate
+    ):
+        latest_session.return_value = "2026-07-25"
+        mocked_load_range.return_value = {"2026-07-25": chain_frame()}
+        mocked_load_closes.return_value = pd.Series([105.0], index=["2026-07-25"])
+        mocked_rate.return_value = rate_result()
+        with (
+            patch.object(exp_tbill_module, "EXP_TBILL_TENOR_DTE", (30, 60)),
+            patch.object(exp_tbill_module, "EXP_TBILL_TARGET_DELTA", 0.25),
+        ):
+            result = build_exp_tbill_board(["VST"], asof="2026-07-27")[0]
+        self.assertEqual(result["state"], "DATA_BLOCKED")
+        self.assertEqual(result["reason"], "no valid reference put")
 
     def test_real_cache_board_has_at_least_one_unblocked_name_when_available(self):
         cache = Path(".cache/chains")
