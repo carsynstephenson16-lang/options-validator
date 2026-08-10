@@ -111,6 +111,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from authlib.integrations.base_client.errors import OAuthError
 
 import config
 from data import rates as data_rates
@@ -122,6 +123,10 @@ from options_researcher.black_scholes import delta as bs_delta
 from options_researcher.black_scholes import implied_vol
 from options_researcher.chains import atm_row
 from options_researcher.h7_scope import watch_universe
+from options_researcher.schwab_auth_failure import (
+    expired_auth_line,
+    is_expired_refresh_token_error,
+)
 from research.hashing import config_hash
 
 NY_TZ = "America/New_York"
@@ -807,7 +812,13 @@ def main(argv: list[str] | None = None) -> int:
         help="bypass the scheduled-time tolerance check for a manual/testing "
             "run (recorded in the receipt as force=true)")
     args = parser.parse_args(argv)
-    exit_code, _ = capture(args.session_tag, force=args.force)
+    try:
+        exit_code, _ = capture(args.session_tag, force=args.force)
+    except OAuthError as exc:
+        if not is_expired_refresh_token_error(exc):
+            raise
+        print(expired_auth_line("intraday_capture"))
+        return 1
     return exit_code
 
 

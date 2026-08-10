@@ -15,6 +15,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from authlib.integrations.base_client.errors import OAuthError
 
 from data.atomic_io import (
     atomic_text_write,
@@ -24,6 +25,10 @@ from data.atomic_io import (
 from options_researcher.h7_scope import watch_universe
 from options_researcher.intraday_capture import validate_session_tag
 from options_researcher.live_quotes import in_regular_session
+from options_researcher.schwab_auth_failure import (
+    expired_auth_line,
+    is_expired_refresh_token_error,
+)
 from research.hashing import config_hash, sha256_file
 from tools.schwab_chain_manifest import (
     SESSION_CHAIN_CONVENTION,
@@ -186,6 +191,8 @@ def capture(
                 "path": str(path),
             }
         except Exception as exc:
+            if is_expired_refresh_token_error(exc):
+                raise
             records[symbol] = {
                 "status": "failed",
                 "note": f"{type(exc).__name__}: {exc}",
@@ -241,7 +248,13 @@ def main(argv: list[str] | None = None) -> int:
         help="bypass only the preclose timing tolerance; regular session still required",
     )
     args = parser.parse_args(argv)
-    exit_code, _ = capture(force=args.force)
+    try:
+        exit_code, _ = capture(force=args.force)
+    except OAuthError as exc:
+        if not is_expired_refresh_token_error(exc):
+            raise
+        print(expired_auth_line("schwab_chain_capture"))
+        return 1
     return exit_code
 
 

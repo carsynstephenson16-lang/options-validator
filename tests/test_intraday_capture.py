@@ -7,6 +7,7 @@ the repo's real reports/intraday_capture or .cache/intraday.
 """
 import glob
 import inspect
+import io
 import json
 import os
 import shlex
@@ -21,6 +22,7 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from authlib.integrations.base_client.errors import OAuthError
 
 import config
 from options_researcher import intraday_capture as ic
@@ -1208,6 +1210,26 @@ class MainCLITests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             ic.main([])
 
+    def test_main_classifies_expired_schwab_refresh_token(self):
+        expired = OAuthError(
+            "invalid_grant",
+            "Refresh token is invalid, expired or revoked",
+        )
+        stdout = io.StringIO()
+
+        with (
+            mock.patch.object(ic, "capture", side_effect=expired),
+            mock.patch("sys.stdout", stdout),
+        ):
+            rc = ic.main(["--session-tag", "midday"])
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(
+            stdout.getvalue(),
+            "intraday_capture auth EXPIRED: Refresh token is invalid, expired "
+            "or revoked; run uv run python tools/setup_schwab.py\n",
+        )
+
 
 # ---------------------------------------------------------------------------
 # tools/intraday_capture.sh banner-pollution guard (2026-07-24 production
@@ -1309,7 +1331,7 @@ class WrapperZeroCoverageWarnLiveTests(unittest.TestCase):
     def _extract_block(self) -> str:
         source = WRAPPER.read_text(encoding="utf-8")
         start = source.index('if [ "$CAP_RC" -eq 0 ]; then')
-        end = source.index("\nfi\n", start) + len("\nfi")
+        end = source.index('\necho "=== summary ==="', start)
         return source[start:end]
 
     def _run_block(self, cap_out: str, cap_rc: int) -> str:
@@ -1363,6 +1385,19 @@ class WrapperZeroCoverageWarnLiveTests(unittest.TestCase):
         self.assertIn(": OK -- coverage: 15/15 names captured", out)
         self.assertNotIn("WARN", out)
         self.assertNotIn("CRITICAL", out)
+
+    def test_expired_refresh_token_requires_schwab_reauth(self):
+        out = self._run_block(
+            "intraday_capture auth EXPIRED: Refresh token is invalid, expired "
+            "or revoked; run uv run python tools/setup_schwab.py",
+            1,
+        )
+        self.assertIn(
+            "CRITICAL: intraday_capture (midday): SCHWAB REAUTH REQUIRED -- "
+            "run uv run python tools/setup_schwab.py",
+            out,
+        )
+        self.assertNotIn("unrecognized failure mode", out)
 
 
 class TagDerivationBannerLiveTests(unittest.TestCase):

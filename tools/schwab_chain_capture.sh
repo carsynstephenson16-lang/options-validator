@@ -36,12 +36,17 @@ fi
 
 # Provider selection is explicit. Trading remains fail-closed even if the
 # caller's environment says otherwise.
-LIVE_MARKET_DATA_PROVIDER=schwab \
-SCHWAB_TRADING_ENABLED=false \
-  "$UV" run python -m options_researcher.schwab_chain_capture
+CAP_OUT="$(env LIVE_MARKET_DATA_PROVIDER=schwab \
+  SCHWAB_TRADING_ENABLED=false \
+  "$UV" run python -m options_researcher.schwab_chain_capture 2>&1)"
 RC=$?
+echo "$CAP_OUT"
 if [ "$RC" -ne 0 ]; then
-  echo "SCHWAB CHAIN STATUS: BROKEN (exit ${RC}; receipt/log contains evidence)"
+  if echo "$CAP_OUT" | grep -q '^schwab_chain_capture auth EXPIRED:'; then
+    echo "CRITICAL: SCHWAB REAUTH REQUIRED -- run uv run python tools/setup_schwab.py"
+  else
+    echo "SCHWAB CHAIN STATUS: BROKEN (exit ${RC}; receipt/log contains evidence)"
+  fi
   exit "$RC"
 fi
 echo "SCHWAB CHAIN STATUS: OK"
