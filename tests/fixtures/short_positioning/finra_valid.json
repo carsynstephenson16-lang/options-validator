@@ -1,0 +1,50 @@
+[
+  {
+    "accountingYearMonthNumber": 202607,
+    "averageDailyVolumeQuantity": 500000,
+    "changePercent": 25.0,
+    "changePreviousNumber": 250000,
+    "currentShortPositionQuantity": 1250000,
+    "daysToCoverQuantity": 2.5,
+    "issueName": "ZEPHYR QUANTA HOLDINGS INC COMMON STOCK",
+    "issuerServicesGroupExchangeCode": "Q",
+    "marketClassCode": "NNM",
+    "previousShortPositionQuantity": 1000000,
+    "revisionFlag": null,
+    "settlementDate": "2026-07-15",
+    "stockSplitFlag": null,
+    "symbolCode": "ZQXA"
+  },
+  {
+    "accountingYearMonthNumber": 202607,
+    "averageDailyVolumeQuantity": 400000,
+    "changePercent": 150.0,
+    "changePreviousNumber": 1500000,
+    "currentShortPositionQuantity": 2500000,
+    "daysToCoverQuantity": 6.25,
+    "issueName": "TERRANOVA VECTOR CORP CLASS A COMMON STOCK",
+    "issuerServicesGroupExchangeCode": "N",
+    "marketClassCode": "NYSE",
+    "previousShortPositionQuantity": 1000000,
+    "revisionFlag": null,
+    "settlementDate": "2026-07-15",
+    "stockSplitFlag": null,
+    "symbolCode": "TRNVQ"
+  },
+  {
+    "accountingYearMonthNumber": 202607,
+    "averageDailyVolumeQuantity": null,
+    "changePercent": null,
+    "changePreviousNumber": null,
+    "currentShortPositionQuantity": 90000,
+    "daysToCoverQuantity": null,
+    "issueName": "HALCYON GRID UTILITIES INC COMMON STOCK",
+    "issuerServicesGroupExchangeCode": "Q",
+    "marketClassCode": "NNM",
+    "previousShortPositionQuantity": null,
+    "revisionFlag": null,
+    "settlementDate": "2026-07-15",
+    "stockSplitFlag": null,
+    "symbolCode": "HLGRD"
+  }
+]

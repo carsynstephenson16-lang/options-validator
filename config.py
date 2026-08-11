@@ -864,3 +864,17 @@ EXP_TBILL_TARGET_DELTA = 0.50
 
 # structural, owner-directed split 2026-08-10; display-only artifact path.
 EXPERIMENTS_OUTPUT_PATH = ".tmp/dashboard/experiments.html"
+
+# EXP-SHORT: issuer-level reported short positioning (FINRA Consolidated Short
+# Interest). Display-only, disabled by default, with no ranking, verdict,
+# entry, sizing, or execution authority. Design:
+# docs/superpowers/specs/2026-08-11-short-positioning-context-design.md
+EXP_SHORT_ENABLED = False
+# Local, gitignored capture root. Provider rows never enter Git.
+SHORT_POSITIONING_ROOT = ".cache/short_positioning"
+# Display-health setting, NOT a predictive threshold: a symbol more than this
+# many observed publications behind reads STALE. LLM-proposed 2026-08-11;
+# not owner-ratified.
+SHORT_POSITIONING_MAX_AGE_RELEASES = 1
+# FINRA only. Every other provider stays LICENSE BLOCKED and unimplemented.
+SHORT_POSITIONING_PROVIDER_ORDER = ("finra",)
