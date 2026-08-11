@@ -14,6 +14,24 @@
 
 ## 1. Decision
 
+> **Review outcome, 2026-08-11 (reviewer-drafted; not an owner decision).**
+> Of the three plugins below, **one survives review**. Measured on the machine:
+>
+> - **Core — proceed**, scoped per its §2.1. Its top-ranked deliverable (moving
+>   the live-trading hook into tracked storage with tests) is an existing
+>   roadmap item and stands on its own.
+> - **Sentry — not recommended as scoped.** For jobs that run and exit nonzero,
+>   detection, classification, logging and desktop push already exist and
+>   demonstrably worked. For the one failure that truly went unseen — three
+>   trading days on which the job never ran at all — this design is blind by
+>   construction, because its §3 scope needs the wrapper to run. A heartbeat
+>   check, not error ingestion, is what the evidence supports. See its §10.
+> - **Zotero — park.** Zotero is not installed on this machine and no library
+>   exists, so there is nothing to read. See its §10.
+>
+> The program therefore reduces from four audit units to one, plus the
+> ledger-merge precondition in §5.1.
+
 Build three independently installable plugins through one repository-local
 marketplace:
 

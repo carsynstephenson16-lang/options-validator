@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-11
 
-**Status:** Draft — pending owner review. **Blocked on §10 below.**
+**Status:** Draft — **PARK**; no Zotero library exists on this machine. See §10.
 
 > **Provenance correction (2026-08-11).** First committed (`9713dfc`) carrying
 > `Status: Owner-approved design`. That label was never true — no owner
@@ -160,9 +160,31 @@ non-canonical, not verdict-eligible, not market data, and insufficient for the
 repository's primary-source requirements. A capability that is none of those
 things must state what it *is* for.
 
-The reviewer cannot answer this: the contents of the owner's Zotero library are
-not visible from the repository. What follows is two candidate corpora found in
-the repository, offered so the owner can confirm, replace, or reject them.
+### 10.0 Measured finding — there is no Zotero library
+
+Checked on the machine, 2026-08-11. **Zotero is not installed and no library
+exists.** All of the following are absent:
+
+- `/Applications/Zotero.app` and `~/Applications/Zotero.app`;
+- `~/Zotero/` (the default data directory) and `~/Zotero/zotero.sqlite`;
+- any `zotero*.sqlite` under `$HOME` to depth 4;
+- any Zotero profile under `~/Library/Application Support/`;
+- any result from `mdfind -name "zotero.sqlite"` or a Spotlight application
+  query for Zotero — so it is not installed anywhere the index reaches.
+
+This is not a missing credential or an unauthenticated connector, which §2 and
+§9 already fail closed on. There is no library, no items, no attachments, and
+no metadata for the pipeline in §4-§6 to read. Every acceptance test in §8 that
+requires "an authenticated read" is unrunnable, and the deliverable would be a
+read-only integration to an empty set.
+
+**Recommendation: park this plugin** in `ideas-parking-lot.md`. Parked is not
+rejected — if a library is later created, §10.1 and §10.2 below record two
+corpora the repository would actually use, and this specification can be
+revived against whichever is real. Sections 1-9 are not approved.
+
+The two candidates below were found in the repository and are recorded so the
+work is not lost.
 
 ### 10.1 Candidate A — the academic bibliography already in use
 
@@ -203,16 +225,17 @@ specification's "rights or availability notes" field records but does not
 resolve. Whether such documents may be held in a personal reference manager is
 an owner determination, not an agent one.
 
-### 10.3 Owner questions that gate approval
+### 10.3 If this is revived
 
-1. **Which corpus, if either?** If Candidate A, the deliverable is much smaller
-   than §1-§9 imply — metadata, DOIs and retrieval dates for perhaps a few
-   dozen papers, with attachment handling optional. If Candidate B, the full
-   attachment-safety machinery is warranted but the rights question must be
-   settled first. If neither, this plugin should be parked in
-   `ideas-parking-lot.md` rather than built.
-2. **Does the library already exist and roughly how large is it?** The
-   specification's cost is dominated by the attachment pipeline. A library of
-   forty metadata records and no attachments does not need it.
+Per §10.0 the plugin is parked, so nothing here is a live question. Recorded so
+a future session does not re-derive it:
 
-Until both are answered in writing, sections 1-9 are not approved.
+- Candidate A needs metadata, DOIs and retrieval dates for on the order of
+  a dozen papers. It does **not** need the attachment pipeline in §4-§6, which
+  is most of this specification's cost. Building it as written would be
+  substantially over-engineered for that corpus.
+- Candidate B justifies the full attachment machinery, but its rights question
+  must be settled first, and it depends on more licensed packages arriving —
+  one package is not a pipeline.
+- Reviving against either requires re-checking §10.0, since it is a measurement
+  of the machine at one moment and a library can be created at any time.
