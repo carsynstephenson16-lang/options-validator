@@ -392,6 +392,13 @@ def register_window_real(
     for key in ("source_health_evidence_id", "data_gate_evidence_id"):
         if gates.get(key) != evidence[key]:
             raise ActivationRefused(f"append-time {key} disagrees with evidence")
+    if (
+        gates.get("backup_restore_receipt_hash")
+        != evidence["backup_restore_receipt_hash"]
+    ):
+        raise ActivationRefused(
+            "append-time backup_restore_receipt_hash disagrees with evidence"
+        )
 
     verified = ledger.verify(base_dir=base)
     if not (verified.valid and verified.empty):

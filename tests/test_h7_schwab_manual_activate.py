@@ -183,8 +183,8 @@ class SchwabManualActivateTests(unittest.TestCase):
             },
         )
 
-    def _activate(self, *, code_state=None):
-        evaluator = lambda *args, **kwargs: dict(self.data_result)
+    def _activate(self, *, code_state=None, data_gate_evaluator=None):
+        evaluator = data_gate_evaluator or (lambda *args, **kwargs: dict(self.data_result))
         source_evaluator = lambda **kwargs: {"activation_ready": True}
         with (
             mock.patch.object(
@@ -267,6 +267,49 @@ class SchwabManualActivateTests(unittest.TestCase):
                 with self.assertRaises(registration.ActivationRefused):
                     self._activate(code_state=code_state)
                 self.assertTrue(ledger.verify(self.store).empty)
+
+    def test_append_time_valid_backup_pair_substitution_refuses(self):
+        calls = 0
+
+        def evaluator(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                backup = make_receipt(
+                    "backup",
+                    {
+                        "completed_session": SESSION,
+                        "snapshot_id": "snapshot-substituted",
+                        "scope": scope_identity(),
+                        "input_files": {
+                            "ledger/h7_forward_schwab": {
+                                "kind": "directory",
+                                "files": {},
+                            }
+                        },
+                    },
+                )
+                _write_json(self.backup_path, backup)
+                restore = make_receipt(
+                    "backup_restore",
+                    {
+                        "completed_session": SESSION,
+                        "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+                        "snapshot": "snapshot-substituted",
+                        "snapshot_id": "snapshot-substituted",
+                        "backup_receipt_hash": backup["receipt_hash"],
+                        "scope": scope_identity(),
+                        "restored_inventory": backup["input_files"],
+                        "verification": {"ok": True},
+                    },
+                )
+                _write_json(self.restore_path, restore)
+            return dict(self.data_result)
+
+        with self.assertRaises(registration.ActivationRefused):
+            self._activate(data_gate_evaluator=evaluator)
+        self.assertEqual(calls, 2)
+        self.assertTrue(ledger.verify(self.store).empty)
 
 
 if __name__ == "__main__":

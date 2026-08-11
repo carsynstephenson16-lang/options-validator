@@ -196,6 +196,7 @@ class GuardedDoorTests(unittest.TestCase):
                 "data_gate_go": True,
                 "source_health_evidence_id": "sh:2026-08-07",
                 "data_gate_evidence_id": "dg:2026-08-07",
+                "backup_restore_receipt_hash": "f" * 64,
             },
             now=datetime.fromisoformat("2026-08-09T20:30:00+00:00"),
         )

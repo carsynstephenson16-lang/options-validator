@@ -211,6 +211,8 @@ def _make_recheck(
     names: list[str],
     source_hash: str,
     data_gate_hash: str,
+    backup_hash: str,
+    backup_restore_hash: str,
     data_gate_evaluator,
     source_health_evaluator,
     source_assertion_loader,
@@ -225,7 +227,7 @@ def _make_recheck(
             names=names,
             evaluator=data_gate_evaluator,
         )
-        _exact_backup_chain(
+        backup, backup_restore = _exact_backup_chain(
             backup_path=backup_path,
             backup_restore_path=backup_restore_path,
             completed_session=completed_session,
@@ -237,6 +239,14 @@ def _make_recheck(
         if data_receipt["receipt_hash"] != data_gate_hash:
             raise registration.ActivationRefused(
                 "data-gate receipt changed between assembly and append"
+            )
+        if backup["receipt_hash"] != backup_hash:
+            raise registration.ActivationRefused(
+                "backup receipt changed between assembly and append"
+            )
+        if backup_restore["receipt_hash"] != backup_restore_hash:
+            raise registration.ActivationRefused(
+                "backup-restore receipt changed between assembly and append"
             )
         on = date.fromisoformat(completed_session)
         health = source_health_evaluator(
@@ -255,6 +265,7 @@ def _make_recheck(
             ),
             "source_health_evidence_id": source_hash,
             "data_gate_evidence_id": data_gate_hash,
+            "backup_restore_receipt_hash": backup_restore_hash,
         }
 
     return recheck
@@ -296,7 +307,7 @@ def activate(
     )
     if data_receipt.get("source_health_receipt_hash") != source["receipt_hash"]:
         raise ValueError("Schwab data gate is not linked to source-health evidence")
-    _, backup_restore = _exact_backup_chain(
+    backup, backup_restore = _exact_backup_chain(
         backup_path=backup_path,
         backup_restore_path=backup_restore_path,
         completed_session=completed_session,
@@ -338,6 +349,8 @@ def activate(
         names=names,
         source_hash=source["receipt_hash"],
         data_gate_hash=data_receipt["receipt_hash"],
+        backup_hash=backup["receipt_hash"],
+        backup_restore_hash=backup_restore["receipt_hash"],
         data_gate_evaluator=data_gate_evaluator,
         source_health_evaluator=source_health_evaluator,
         source_assertion_loader=source_assertion_loader,

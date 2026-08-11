@@ -13,7 +13,7 @@ operative owner wording and grants no authority. Live trading remains disabled.
 | Measured feasibility | `2026-08-09-feasibility.json`, hash `8b567a5eb6f1950fa32ee9ddfbd4a440e32a7e12ff7a617888e9cd67baff625c` | complete; owner decision pending |
 | Window identity | builder derives start/count/end and freezes unchanged strategy/cost/scoring identity | prepared; owner fields blank |
 | New store | `ledger/h7_forward_schwab/` verifies VALID-EMPTY | ready for guarded first event only |
-| Backup/restore | Restic allow-list includes new chain/report/ledger paths | `BLOCKED_PENDING_MONDAY_CANARY` |
+| Backup/restore | Restic allow-list includes new chain/report/ledger paths | blocked pending the next valid completed-session 15:45 ET canary |
 | Independent adversarial review | prompt below | pending orchestrating Claude/Opus |
 
 ## OD-3 template — OWNER MUST TYPE THE OPERATIVE LINE
