@@ -207,9 +207,12 @@ MUTATION_REVERTED_IN_MEMORY=True
 
 - Base: `d6ed665`.
 - Implementation/tests: `09d2344`.
-- Receipt commit: recorded by the final Git handoff after this file is
-  committed.
-- Branch merge commit: recorded after the authorized `--no-ff` merge.
+- Receipt-bearing commit: `e67a8956378d9d6a67b8a3b662d5e32baccc3914`.
+- Authorized `--no-ff` merge commit:
+  `c39d5b6d590a6fbc560b823784a65a0248379f1e`.
+- Remote verification after fetch: `origin/codex/experiments-dashboard-split`
+  resolved to `e67a8956378d9d6a67b8a3b662d5e32baccc3914`, and `origin/main`
+  resolved to `c39d5b6d590a6fbc560b823784a65a0248379f1e`.
 - Deviations: none in implementation scope. The only validation
   accommodations were reusing the already-installed local `.venv` in offline
   mode, granting loopback permission for eight unchanged server tests, and
