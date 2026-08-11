@@ -75,7 +75,8 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
                              data_gate_receipt: dict | None = None,
                              backup_restore_receipt: dict | None = None,
                              completed_session: str | None = None,
-                             included: tuple | None = None) -> GuardReport:
+                             included: tuple | None = None,
+                             owner_fields: tuple[str, ...] = OWNER_FIELDS) -> GuardReport:
     """When ``included`` is None (default) the guard checks the whole
     ``universe`` -- today's all-or-nothing 15-name activation, unchanged.
 
@@ -194,7 +195,7 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
             "fresh verified restore evidence" if backup_ok
             else "missing/stale/unverified backup restore evidence"))
 
-    blank = [f for f in OWNER_FIELDS if owner_inputs.get(f) in (None, "")]
+    blank = [f for f in owner_fields if owner_inputs.get(f) in (None, "")]
     report.checks.append(Check(
         "owner_inputs_complete", not blank,
         "complete" if not blank else f"blank: {blank}"))

@@ -59,6 +59,7 @@ def evidence(**overrides) -> dict:
         "data_gate_evidence_id": "dg:2026-08-07",
         "source_health_receipt_hash": "c" * 64,
         "data_gate_receipt_hash": "d" * 64,
+        "backup_restore_receipt_hash": "f" * 64,
         "last_historical_session": "2026-08-07",
         "last_historical_manifest_receipt_hash": "e" * 64,
         "provider_identity": "schwab-read-only/v1",

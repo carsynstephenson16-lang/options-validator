@@ -239,6 +239,14 @@ class StructuralOneDoorTests(unittest.TestCase):
         # ...and it must call the one door.
         self.assertIn("register_window_real", cli_src)
 
+    def test_schwab_cli_never_appends_directly(self):
+        cli_src = Path("tools/h7_schwab_manual_activate.py").read_text()
+        self.assertFalse(
+            _has_append_call(cli_src),
+            "h7_schwab_manual_activate must not call append_event",
+        )
+        self.assertIn("register_window_real", cli_src)
+
     def test_no_module_appends_to_the_real_store(self):
         # No scanned module may append_event to REAL_FORWARD_STORE, whether
         # literally or via an in-function / default-parameter alias.

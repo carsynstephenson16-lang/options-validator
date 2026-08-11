@@ -59,6 +59,7 @@ EVIDENCE_FIELDS = (
     "data_gate_evidence_id",
     "source_health_receipt_hash",
     "data_gate_receipt_hash",
+    "backup_restore_receipt_hash",
     "last_historical_session",
     "last_historical_manifest_receipt_hash",
     "provider_identity",
@@ -265,6 +266,9 @@ def build_window_registration_event(
             "data_gate_evidence_id": evidence["data_gate_evidence_id"],
             "source_health_receipt_hash": evidence["source_health_receipt_hash"],
             "data_gate_receipt_hash": evidence["data_gate_receipt_hash"],
+            "backup_restore_receipt_hash": evidence[
+                "backup_restore_receipt_hash"
+            ],
             "scope_id": scope["scope_id"],
             "scope_hash": scope["scope_hash"],
         },

@@ -8,8 +8,8 @@ operative owner wording and grants no authority. Live trading remains disabled.
 | Contract item | Evidence | State |
 |---|---|---|
 | Provider and cache identity | Schwab read-only; `.cache/schwab_chains/`; `preclose_snapshot_v1` | machinery ready; live canary absent |
-| Exact historical boundary | Manifest + capture receipts bind exact session and every Parquet byte | machinery ready; Monday boundary absent |
-| Scope and source health | immutable 15-name H7 scope; gate requires exact receipt package | machinery ready; Monday receipt absent |
+| Exact historical boundary | Manifest + capture receipts bind exact session and every Parquet byte | machinery ready; evidence from the next valid completed-session 15:45 ET canary is absent |
+| Scope and source health | immutable 15-name H7 scope; gate requires exact receipt package | machinery ready; the next valid completed-session 15:45 ET canary receipt is absent |
 | Measured feasibility | `2026-08-09-feasibility.json`, hash `8b567a5eb6f1950fa32ee9ddfbd4a440e32a7e12ff7a617888e9cd67baff625c` | complete; owner decision pending |
 | Window identity | builder derives start/count/end and freezes unchanged strategy/cost/scoring identity | prepared; owner fields blank |
 | New store | `ledger/h7_forward_schwab/` verifies VALID-EMPTY | ready for guarded first event only |
@@ -55,7 +55,7 @@ The patch is stored at
 only `exact_session_source_active=True`, `h7_active=True`, and matching tests.
 It must not be applied or committed until all of these occur in order:
 
-1. Monday canary is 15/15 and its manifest verifies.
+1. The next valid completed-session 15:45 ET canary is 15/15 and its manifest verifies.
 2. Owner types OD-3 and the starvation decision.
 3. Backup/restore drill succeeds byte-for-byte.
 4. Independent adversarial review is resolved.
