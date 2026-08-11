@@ -2,7 +2,11 @@
 
 **Date:** 2026-08-11
 
-**Status:** Owner-approved design
+**Status:** Draft — pending owner review. **Blocked on §10 below.**
+
+> **Provenance correction (2026-08-11).** First committed (`9713dfc`) carrying
+> `Status: Owner-approved design`. That label was never true — no owner
+> approval had been given or requested. Corrected to the accurate state.
 
 **Parent:** `2026-08-11-options-validator-plugin-program-design.md`
 
@@ -142,3 +146,73 @@ Disabling or uninstalling the plugin cannot change Zotero or existing tracked
 indexes. Private attachment storage is retained. Its deletion is a separate
 destructive action requiring explicit owner approval and a resolved, inspected
 target.
+
+## 10. Corpus and question — REQUIRED, currently unanswered
+
+*Added 2026-08-11 by review. Reviewer-drafted; not an owner decision. This
+section blocks approval of the rest of this specification.*
+
+Sections 1-9 specify a careful read-only ingestion pipeline — content-addressed
+storage, duplicate detection, prompt-injection fixtures, an eleven-field
+provenance schema — without ever naming what is in the library or which
+decision it changes. Section 5 simultaneously concedes the output is
+non-canonical, not verdict-eligible, not market data, and insufficient for the
+repository's primary-source requirements. A capability that is none of those
+things must state what it *is* for.
+
+The reviewer cannot answer this: the contents of the owner's Zotero library are
+not visible from the repository. What follows is two candidate corpora found in
+the repository, offered so the owner can confirm, replace, or reject them.
+
+### 10.1 Candidate A — the academic bibliography already in use
+
+`.cursorrules` requires experiment and composite-lane constants to be
+"standard-from-literature or official-source conventions frozen in `config.py`
+with LLM-proposed provenance labels." The repository already carries a
+substantial working bibliography, currently held only as prose inside a report:
+
+- forecast combination — Clemen 1989; Timmermann 2006; DeMiguel, Garlappi &
+  Uppal 2009 (`reports/2026-08-04-composite-signal-lane-decision.md:147-148`);
+- time-series momentum — Moskowitz, Ooi & Pedersen 2012, *JFE* 104(2), with
+  Lo, Mamaysky & Wang 2000 and Sullivan, Timmermann & White 1999 as displayed
+  caveats (`:159-163`);
+- causal regime labeling — Shu & Mulvey 2024, arXiv:2410.14841; Cederburg,
+  O'Doherty, Wang & Yan 2020, *JFE* 138(1) (`:189-193`);
+- open-interest change — Fodor, Krieger & Doran 2011, *FMPM* 25(3) (`:198-202`).
+
+**The question this corpus answers:** when a frozen constant is challenged
+months later, can its literature provenance be re-verified from a stable
+locator rather than from an LLM-written sentence in a report? Today the answer
+is no — there is no DOI, no stored PDF, and no retrieval date behind any of
+these citations.
+
+### 10.2 Candidate B — the licensed source packages
+
+`docs/superpowers/specs/2026-08-10-vst-post-earnings-analyst-review-design.md`
+§3.2 stores a licensed CapitalIQ package outside Git at a private absolute
+path, and already tracks the exact concerns this plugin implements by hand:
+SHA-256 identity, a two-PDF duplicate collapsed to one underlying source, an
+inadmissible placeholder document, and a hard "must not copy licensed PDFs or
+long proprietary excerpts into Git" rule.
+
+That is §4-§6 of this specification performed manually. If more such packages
+are coming, mechanizing it is defensible.
+
+**Caution:** licensed vendor documents raise a rights question this
+specification's "rights or availability notes" field records but does not
+resolve. Whether such documents may be held in a personal reference manager is
+an owner determination, not an agent one.
+
+### 10.3 Owner questions that gate approval
+
+1. **Which corpus, if either?** If Candidate A, the deliverable is much smaller
+   than §1-§9 imply — metadata, DOIs and retrieval dates for perhaps a few
+   dozen papers, with attachment handling optional. If Candidate B, the full
+   attachment-safety machinery is warranted but the rights question must be
+   settled first. If neither, this plugin should be parked in
+   `ideas-parking-lot.md` rather than built.
+2. **Does the library already exist and roughly how large is it?** The
+   specification's cost is dominated by the attachment pipeline. A library of
+   forty metadata records and no attachments does not need it.
+
+Until both are answered in writing, sections 1-9 are not approved.

@@ -2,7 +2,11 @@
 
 **Date:** 2026-08-11
 
-**Status:** Owner-approved design
+**Status:** Draft — pending owner review.
+
+> **Provenance correction (2026-08-11).** First committed (`9713dfc`) carrying
+> `Status: Owner-approved design`. That label was never true — no owner
+> approval had been given or requested. Corrected to the accurate state.
 
 **Parent:** `2026-08-11-options-validator-plugin-program-design.md`
 
@@ -28,6 +32,43 @@ source manifest and deterministic checker.
 
 The package version begins at `0.1.0`. It has no connector, MCP server,
 authentication, network access, or external dependency.
+
+### 2.1 Deliverable ranking (added 2026-08-11 by review)
+
+*Reviewer-drafted; not an owner decision.*
+
+Section 8 states the package is deliberately **not enabled** in this checkout.
+That is correct, and it means the specification must be honest about which
+parts deliver value now and which are speculative. Ranked:
+
+1. **Move `block_live_trading.py` into `.agents/hooks/` with tests.** This is
+   an existing roadmap item, not new scope: `PROJECT_STATE.md:196` lists
+   "P3 hook | Move live-trading hook to tracked `.agents/hooks` with tests" as
+   **READY NOW after P0 docs**, and `PROJECT_STATE.md:73` records P0.3-P0.6 and
+   P0.8 closed, so the precondition reads as satisfied. Verified current state:
+   the hook is untracked and gitignored (`.gitignore:22` matches `.claude/*`;
+   `git ls-files .claude/hooks/block_live_trading.py` returns nothing), and
+   `.agents/hooks/` contains only `block_ledger_edits.py` and `README.md`.
+   The repository's single no-live-orders tripwire is therefore backed up
+   nowhere and covered by no test. This is worth doing on its own merits and
+   should not be made contingent on the plugin decision.
+2. **`ov/` drift classification and checker.** Independently useful: it pins a
+   divergence that is currently undocumented. Verified by hashing all nine
+   `ov/` skills against `.agents/skills/` — six are byte-identical, exactly two
+   diverge (`repo-health-review`, `results-red-team`), one is bundle-only
+   (`advisor-tool`), matching §6. Each skill is a single `SKILL.md` except
+   `advisor-tool`, so that comparison is complete rather than partial.
+3. **Fix the dangling critic rule reference.** Verified real:
+   `.agents/skills/independent-research-critic/SKILL.md:144` points at
+   `.agents/rules/independent-research-critic.md`, which exists (779 bytes) but
+   sits outside the skill folder and would not travel with a packaged skill.
+4. **The plugin package itself.** Speculative. It is built, smoke-installed in
+   a throwaway clone, proved to work, and then not used by anything. Its value
+   is optionality, which is real but should not be presented as equal to
+   items 1-3.
+
+If the owner approves only item 1, that is a coherent and useful outcome and
+this specification should not be read as requiring the rest.
 
 ## 3. Canonical content
 
@@ -111,7 +152,8 @@ configuration, reports, or private source material.
 
 ## 6. `ov/` compatibility classification
 
-`ov/SOURCE_MANIFEST.json` preserves the current three classes:
+`ov/SOURCE_MANIFEST.json` does not exist yet; this specification creates it (see
+§4). It records the three classes that are already true on disk today:
 
 - **Mirror:** the six byte-identical skills must match their canonical
   `.agents/skills/` sources.

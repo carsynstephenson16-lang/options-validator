@@ -2,7 +2,13 @@
 
 **Date:** 2026-08-11
 
-**Status:** Owner-approved design
+**Status:** Draft — pending owner review.
+
+> **Provenance correction (2026-08-11).** This file was first committed
+> (`9713dfc`) carrying `Status: Owner-approved design`. That label was never
+> true: no owner approval had been given or requested at the time of writing.
+> Corrected here to the accurate state. Nothing in this document is approved,
+> and no implementation is authorized by it.
 
 **Scope:** Three independent, private/local plugins for Options Validator
 
@@ -96,6 +102,28 @@ The Core plugin is built and smoke-installed in an isolated temporary
 repository. It is not enabled in this source checkout because the same 13
 skills are already discovered directly from `.agents/skills/`; enabling the
 package here would expose duplicate workflows.
+
+### 5.1 Sequencing precondition (added 2026-08-11 by review)
+
+*Reviewer-drafted; not an owner decision.*
+
+No unit of this program should start while the research ledger is forked.
+Verified 2026-08-11:
+
+- `main`'s `ledger/experiments.jsonl` holds 25 lines ending at **seq 24**,
+  `record_hash` `52f9d972…`, and `main`'s `ledger/HEAD` is that same hash.
+- Branch `claude/rq2-k3-and-dashboard-split` is **not** an ancestor of `main`
+  (`git merge-base --is-ancestor` exits nonzero) and its commit `f230813`
+  appends one line — **seq 25**, `prev_hash` `52f9d972…` — plus the matching
+  `ledger/HEAD` update.
+
+Because that pending entry's `prev_hash` is pinned to `main`'s *current* head,
+any other session appending to `main` first produces a second, different seq 25
+sharing the same predecessor. The chain then has two competing successors and
+cannot be reconciled by an append-only rule. The window is open now and closes
+only when the branch is merged.
+
+Merging that branch is therefore ordered ahead of unit 1.
 
 ## 6. Required audit sequence
 
