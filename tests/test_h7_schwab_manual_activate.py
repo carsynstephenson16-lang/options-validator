@@ -25,6 +25,23 @@ from tools import h7_schwab_manual_activate as cli
 
 SESSION = "2026-08-10"
 REQUESTED = "2026-08-11"
+CANONICAL_UNIVERSE = [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST",
+]
 
 
 def _write_json(path: Path, value: dict) -> Path:
@@ -38,8 +55,14 @@ def _feasibility() -> dict:
         "provenance": "LLM/tool-computed",
         "lookback_start": "2026-04-16",
         "lookback_end": "2026-07-27",
-        "stack_version": "h7-frozen-entry-stack/v1",
+        "lookback_sessions": 70,
+        "stack_version": "h7-frozen-entry-stack-plus-board/v1",
         "code_sha": "a" * 40,
+        "config_hash": "80fe2bf649e16e9b18f7cb7a9ccc26b9b01bcb852fcb6998c7b14611934a4d49",
+        "error_count": 0,
+        "errors": [],
+        "tool_label": "cached-only read-only measurement; no verdict",
+        "universe": CANONICAL_UNIVERSE,
         "universe_size": 15,
         "window_sessions": 70,
         "symbol_days": 1050,

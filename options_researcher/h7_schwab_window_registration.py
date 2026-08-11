@@ -30,12 +30,20 @@ from research.hashing import (
     sha256_file,
     sha256_hex,
 )
+from tools.h7_schwab_feasibility import (
+    RECEIPT_KIND as FEASIBILITY_RECEIPT_KIND,
+)
+from tools.h7_schwab_feasibility import STACK_VERSION as FEASIBILITY_STACK_VERSION
 
 NAMESPACE = "h7-forward-schwab-v1"
 SCHWAB_FORWARD_STORE = Path("ledger/h7_forward_schwab")
 CACHE_NAMESPACE = ".cache/schwab_chains/"
 SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
 FEASIBILITY_OWNER_DECISION_FIELD = "H7_SCHWAB_FEASIBILITY_DECISION"
+FEASIBILITY_LOOKBACK_START = "2026-04-16"
+FEASIBILITY_LOOKBACK_END = "2026-07-27"
+FEASIBILITY_SESSION_COUNT = 70
+FEASIBILITY_TOOL_LABEL = "cached-only read-only measurement; no verdict"
 
 RegistrationInputError = old_registration.RegistrationInputError
 WindowRuleError = old_registration.WindowRuleError
@@ -77,14 +85,20 @@ FEASIBILITY_FIELDS = (
     "provenance",
     "lookback_start",
     "lookback_end",
+    "lookback_sessions",
     "stack_version",
     "code_sha",
+    "config_hash",
+    "tool_label",
+    "universe",
     "universe_size",
     "window_sessions",
     "symbol_days",
     "full_stack_passes",
     "base_rate",
     "expected_entries",
+    "error_count",
+    "errors",
     "receipt_hash",
 )
 
@@ -118,14 +132,36 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> None:
         raise RegistrationInputError(
             "feasibility receipt hash mismatch; payload may have been tampered"
         )
-    if receipt["receipt_kind"] != "h7_schwab_feasibility/v1":
+    if receipt["receipt_kind"] != FEASIBILITY_RECEIPT_KIND:
         raise RegistrationInputError("unexpected feasibility receipt kind")
     if receipt["provenance"] != "LLM/tool-computed":
         raise RegistrationInputError("feasibility provenance must be LLM/tool-computed")
+    if receipt["stack_version"] != FEASIBILITY_STACK_VERSION:
+        raise RegistrationInputError("unexpected feasibility stack version")
+    if receipt["tool_label"] != FEASIBILITY_TOOL_LABEL:
+        raise RegistrationInputError("unexpected feasibility tool identity")
+    if (
+        receipt["lookback_start"] != FEASIBILITY_LOOKBACK_START
+        or receipt["lookback_end"] != FEASIBILITY_LOOKBACK_END
+        or int(receipt["lookback_sessions"]) != FEASIBILITY_SESSION_COUNT
+        or int(receipt["window_sessions"]) != FEASIBILITY_SESSION_COUNT
+    ):
+        raise RegistrationInputError("feasibility receipt is not the canonical v1 study window")
+    if receipt["config_hash"] != config_hash():
+        raise RegistrationInputError("feasibility config_hash is not current")
+    if int(receipt["error_count"]) != 0 or receipt["errors"] != []:
+        raise RegistrationInputError("feasibility receipt contains measurement errors")
+    canonical_universe = list(scope_identity()["symbols"])
+    if receipt["universe"] != canonical_universe:
+        raise RegistrationInputError("feasibility universe is not the canonical ordered H7 scope")
     symbol_days = int(receipt["symbol_days"])
     passes = int(receipt["full_stack_passes"])
     sessions = int(receipt["window_sessions"])
     universe_size = int(receipt["universe_size"])
+    if universe_size != len(canonical_universe):
+        raise RegistrationInputError("feasibility universe_size is not the canonical H7 scope size")
+    if symbol_days != FEASIBILITY_SESSION_COUNT * len(canonical_universe):
+        raise RegistrationInputError("feasibility denominator is not the canonical v1 census")
     if symbol_days <= 0 or not 0 <= passes <= symbol_days:
         raise RegistrationInputError("invalid feasibility counts")
     base_rate = passes / symbol_days
@@ -213,8 +249,8 @@ def build_window_registration_event(
         or manifest.get("scope_hash") != scope["scope_hash"]
     ):
         raise RegistrationInputError("universe manifest is not bound to H7 scope")
-    if int(feasibility["universe_size"]) != len(manifest["included"]):
-        raise RegistrationInputError("feasibility universe_size disagrees with registration cohort")
+    if manifest.get("included") != feasibility["universe"]:
+        raise RegistrationInputError("feasibility universe disagrees with registration cohort")
 
     registered_cost_hash = cost_model_hash()
     stage456_parameters = {name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES}

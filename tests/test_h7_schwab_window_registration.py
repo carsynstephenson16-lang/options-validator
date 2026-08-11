@@ -12,15 +12,39 @@ from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_schwab_window_registration as registration
 from research.hashing import canonical_json, sha256_file, sha256_hex
 
+CANONICAL_UNIVERSE = [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST",
+]
+
 
 def feasibility_receipt(**overrides) -> dict:
     payload = {
         "receipt_kind": "h7_schwab_feasibility/v1",
         "provenance": "LLM/tool-computed",
-        "lookback_start": "2026-05-08",
-        "lookback_end": "2026-08-07",
-        "stack_version": "h7-frozen-entry-stack/v1",
+        "lookback_start": "2026-04-16",
+        "lookback_end": "2026-07-27",
+        "lookback_sessions": 70,
+        "stack_version": "h7-frozen-entry-stack-plus-board/v1",
         "code_sha": "b" * 40,
+        "config_hash": "80fe2bf649e16e9b18f7cb7a9ccc26b9b01bcb852fcb6998c7b14611934a4d49",
+        "error_count": 0,
+        "errors": [],
+        "tool_label": "cached-only read-only measurement; no verdict",
+        "universe": CANONICAL_UNIVERSE,
         "universe_size": 15,
         "window_sessions": 70,
         "symbol_days": 1050,
@@ -166,6 +190,55 @@ class BuilderTests(unittest.TestCase):
                 with self.assertRaises(registration.RegistrationInputError):
                     registration.build_window_registration_event(
                         owner=owner,
+                        evidence=evidence(
+                            feasibility_receipt=receipt,
+                            feasibility_receipt_hash=receipt["receipt_hash"],
+                        ),
+                    )
+
+    def test_shortened_denominator_cannot_manufacture_twenty_expected_entries(self):
+        receipt = feasibility_receipt(
+            symbol_days=210,
+            full_stack_passes=4,
+            base_rate=4 / 210,
+            expected_entries=20.0,
+        )
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
+                evidence=evidence(
+                    feasibility_receipt=receipt,
+                    feasibility_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_receipt_universe_must_equal_canonical_manifest_universe(self):
+        receipt = feasibility_receipt(universe=["FAKE1", "FAKE2"])
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
+                evidence=evidence(
+                    feasibility_receipt=receipt,
+                    feasibility_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_alternate_study_identity_refuses(self):
+        for label, overrides in (
+            ("stack", {"stack_version": "alternate-entry-stack/v1"}),
+            ("tool", {"tool_label": "different measurement tool"}),
+            ("lookback", {"lookback_sessions": 69}),
+            ("start", {"lookback_start": "2026-04-17"}),
+            ("end", {"lookback_end": "2026-07-28"}),
+            ("errors", {"error_count": 1}),
+            ("hidden errors", {"errors": [{"error": "fixture"}]}),
+            ("config", {"config_hash": "0" * 64}),
+        ):
+            with self.subTest(label=label):
+                receipt = feasibility_receipt(**overrides)
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.build_window_registration_event(
+                        owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
                         evidence=evidence(
                             feasibility_receipt=receipt,
                             feasibility_receipt_hash=receipt["receipt_hash"],

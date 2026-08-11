@@ -44,12 +44,14 @@ hash:
 
 `REJECT OLD 3/1050 STARVATION-RISK PATH; BIND h7-forward-schwab-v1 TO QUALIFYING FEASIBILITY RECEIPT <receipt_hash>`
 
-This line cannot be typed or bound to the nonqualifying
+This line cannot be bound to the nonqualifying
 `d0ffe1f900b8ffc132f757f9783d4581464aaf8b3538271fe2ae337ba1702d0c`
 receipt.
 
-No later v1 rerun may reopen this stopped lane. The only research path is the
-separately versioned v2 design below.
+This current v1 candidate remains stopped and cannot be registered or activated
+from this evidence. The owner-selected next research path is the separately
+versioned v2 redesign below; it requires its own preregistration before any
+experiment.
 
 ## New numeric parameter provenance
 
