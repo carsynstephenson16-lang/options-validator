@@ -7,6 +7,7 @@ run. No authority switch, operations checkout, OAuth state, market data,
 cache, or ledger content was changed.
 
 Implementation commit: `5648b29` (`feat(h7): add receipt-bound Schwab completion interfaces`).
+Review-fix commit: `7cf667f` (`fix(h7): pin append-time backup evidence`).
 
 ## Files changed
 
@@ -76,7 +77,7 @@ Observed GREEN: 4 tests passed.
 ## Focused validation
 
 - `test_h7_backup.py`: 7 passed.
-- `test_h7_schwab_manual_activate.py`: 4 passed.
+- `test_h7_schwab_manual_activate.py`: 5 passed after the review fix.
 - `test_h7_schwab_window_registration.py`: 10 passed.
 - `test_h7_one_door.py`: 8 passed.
 - `test_h7_activation_guard.py`: 8 passed.
@@ -92,7 +93,39 @@ Observed GREEN: 4 tests passed.
   fixed evidence inputs are exposed, with no trim/custom-universe option.
 
 The parent agent explicitly reserved broader full-repository validation and
-independent review; no full-suite run is claimed here.
+the independent review recheck; no full-suite run is claimed here.
+
+## Independent-review fix cycle
+
+The first independent review found that append-time revalidation accepted a
+different internally valid backup/restore pair at the same paths while the
+event still recorded the assembly-time restore hash.
+
+RED command:
+
+`MPLCONFIGDIR=/private/tmp/h7-schwab-recovery-mpl PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p 'test_h7_schwab_manual_activate.py' -v`
+
+Observed RED: exit 1; the new
+`test_append_time_valid_backup_pair_substitution_refuses` failed because no
+`ActivationRefused` was raised and the substituted pair reached append.
+
+GREEN evidence after the minimal fix:
+
+- The same manual-activation command: 5 tests passed.
+- `test_h7_schwab_window_registration.py`: 10 tests passed.
+- `test_h7_one_door.py`: 8 tests passed.
+- Ruff check over the five review-fix Python files: passed.
+- Ruff format check over the new CLI and its test: passed.
+- Pyright over the new CLI and its test: 0 errors, 0 warnings.
+- `git diff --check`: passed.
+- `rg -ni "monday" reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md`:
+  no matches (exit 1 is the expected no-match status).
+
+The fix captures both assembly-time backup and restore hashes, compares both
+against the receipts reloaded during append-time recheck, returns the exact
+revalidated restore hash, and requires the Schwab guarded door to match that
+hash to the event evidence. A same-session valid pair substitution now leaves
+the temporary store VALID-EMPTY.
 
 ## Self-review
 
@@ -124,9 +157,9 @@ independent review; no full-suite run is claimed here.
   this task's mutation scope and registration remains owner-gated.
 - Focused tests emitted the repository's existing unclosed-event-loop
   `ResourceWarning` in some modules; all affected test processes exited 0.
-- Full-repository tests and independent adversarial review remain for the
-  parent task, as explicitly directed.
+- Full-repository tests and independent review recheck remain for the parent
+  task, as explicitly directed.
 
 ## Final decision
 
-READY FOR PARENT REVIEW. NOT REGISTERED and NOT ACTIVATED.
+READY FOR INDEPENDENT RE-REVIEW. NOT REGISTERED and NOT ACTIVATED.
