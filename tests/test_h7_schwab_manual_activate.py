@@ -43,9 +43,9 @@ def _feasibility() -> dict:
         "universe_size": 15,
         "window_sessions": 70,
         "symbol_days": 1050,
-        "full_stack_passes": 3,
-        "base_rate": 3 / 1050,
-        "expected_entries": 3.0,
+        "full_stack_passes": 20,
+        "base_rate": 20 / 1050,
+        "expected_entries": 20.0,
     }
     return {**payload, "receipt_hash": sha256_hex(canonical_json(payload))}
 
@@ -62,6 +62,7 @@ class SchwabManualActivateTests(unittest.TestCase):
         self.spec = self.root / "activation.md"
         self.spec.write_text("reviewed Schwab activation fixture\n", encoding="utf-8")
         self.spec_sha = sha256_file(self.spec)
+        feasibility = _feasibility()
         self.owner_path = _write_json(
             self.root / "owner.json",
             {
@@ -76,6 +77,11 @@ class SchwabManualActivateTests(unittest.TestCase):
                 "SCHWAB_CAPTURE_COMMITMENT_THROUGH": "2026-12-31",
                 "SCHWAB_CONFIRMATION_EVIDENCE": "owner-typed fixture",
                 "SESSION_CHAIN_CONVENTION": "preclose_snapshot_v1",
+                "H7_SCHWAB_FEASIBILITY_DECISION": (
+                    "REJECT OLD 3/1050 STARVATION-RISK PATH; BIND "
+                    "h7-forward-schwab-v1 TO QUALIFYING FEASIBILITY RECEIPT "
+                    f"{feasibility['receipt_hash']}"
+                ),
             },
         )
         source = make_receipt(
@@ -160,7 +166,6 @@ class SchwabManualActivateTests(unittest.TestCase):
         )
         self.restore_path = _write_json(self.root / "restore.json", restore_receipt)
 
-        feasibility = _feasibility()
         self.evidence_path = _write_json(
             self.root / "evidence.json",
             {

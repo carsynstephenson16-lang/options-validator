@@ -23,17 +23,19 @@ def feasibility_receipt(**overrides) -> dict:
         "code_sha": "b" * 40,
         "universe_size": 15,
         "window_sessions": 70,
-        "symbol_days": 540,
-        "full_stack_passes": 3,
-        "base_rate": 3 / 540,
-        "expected_entries": (3 / 540) * 70 * 15,
+        "symbol_days": 1050,
+        "full_stack_passes": 20,
+        "base_rate": 20 / 1050,
+        "expected_entries": 20.0,
     }
     payload.update(overrides)
     payload["receipt_hash"] = sha256_hex(canonical_json(payload))
     return payload
 
 
-def owner_inputs(**overrides) -> dict:
+def owner_inputs(*, receipt_hash: str | None = None, **overrides) -> dict:
+    if receipt_hash is None:
+        receipt_hash = feasibility_receipt()["receipt_hash"]
     values = {
         "H7_STAGE8_EXPLICIT_AUTHORIZATION": "owner-typed placeholder",
         "WINDOW_START_DECISION_SESSION": "2026-08-10",
@@ -44,6 +46,11 @@ def owner_inputs(**overrides) -> dict:
         "SCHWAB_CAPTURE_COMMITMENT_THROUGH": "2026-12-31",
         "SCHWAB_CONFIRMATION_EVIDENCE": "owner-typed placeholder",
         "SESSION_CHAIN_CONVENTION": "preclose_snapshot_v1",
+        "H7_SCHWAB_FEASIBILITY_DECISION": (
+            "REJECT OLD 3/1050 STARVATION-RISK PATH; BIND "
+            "h7-forward-schwab-v1 TO QUALIFYING FEASIBILITY RECEIPT "
+            f"{receipt_hash}"
+        ),
     }
     values.update(overrides)
     return values
@@ -97,9 +104,7 @@ class BuilderTests(unittest.TestCase):
         owner = owner_inputs()
         del owner["SCHWAB_CONFIRMATION_EVIDENCE"]
         with self.assertRaises(registration.RegistrationInputError):
-            registration.build_window_registration_event(
-                owner=owner, evidence=evidence()
-            )
+            registration.build_window_registration_event(owner=owner, evidence=evidence())
 
     def test_capture_commitment_short_of_window_end_refuses(self):
         with self.assertRaises(registration.WindowRuleError):
@@ -127,6 +132,46 @@ class BuilderTests(unittest.TestCase):
                 ),
             )
 
+    def test_exactly_twenty_expected_entries_is_accepted(self):
+        receipt = feasibility_receipt()
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
+            evidence=evidence(
+                feasibility_receipt=receipt,
+                feasibility_receipt_hash=receipt["receipt_hash"],
+            ),
+        )
+
+        self.assertEqual(event["payload"]["feasibility"]["receipt"]["expected_entries"], 20.0)
+
+    def test_qualifying_receipt_requires_exact_hash_and_namespace_owner_line(self):
+        receipt = feasibility_receipt()
+        exact = owner_inputs(receipt_hash=receipt["receipt_hash"])
+        wrong_lines = {
+            "missing": None,
+            "stale hash": exact["H7_SCHWAB_FEASIBILITY_DECISION"].replace(
+                receipt["receipt_hash"], "0" * 64
+            ),
+            "wrong namespace": exact["H7_SCHWAB_FEASIBILITY_DECISION"].replace(
+                "h7-forward-schwab-v1", "h7-forward-schwab-v2"
+            ),
+        }
+        for label, decision in wrong_lines.items():
+            with self.subTest(label=label):
+                owner = owner_inputs(receipt_hash=receipt["receipt_hash"])
+                if decision is None:
+                    del owner["H7_SCHWAB_FEASIBILITY_DECISION"]
+                else:
+                    owner["H7_SCHWAB_FEASIBILITY_DECISION"] = decision
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.build_window_registration_event(
+                        owner=owner,
+                        evidence=evidence(
+                            feasibility_receipt=receipt,
+                            feasibility_receipt_hash=receipt["receipt_hash"],
+                        ),
+                    )
+
     def test_measurement_code_sha_may_precede_registration_commit(self):
         event = registration.build_window_registration_event(
             owner=owner_inputs(), evidence=evidence(code_commit="c" * 40)
@@ -152,10 +197,28 @@ class SyntheticAppendTests(unittest.TestCase):
         self.assertTrue(verified.valid)
         self.assertEqual(verified.count, 1)
 
+    def test_nonqualifying_hash_correct_receipts_refuse_before_append(self):
+        for passes in (3, 4):
+            with self.subTest(passes=passes):
+                receipt = feasibility_receipt(
+                    full_stack_passes=passes,
+                    base_rate=passes / 1050,
+                    expected_entries=float(passes),
+                )
+                store = Path(self.temp.name) / f"h7_forward_schwab_{passes}"
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.register_window(
+                        owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
+                        evidence=evidence(
+                            feasibility_receipt=receipt,
+                            feasibility_receipt_hash=receipt["receipt_hash"],
+                        ),
+                        base_dir=store,
+                    )
+                self.assertTrue(ledger.verify(store).empty)
+
     def test_non_empty_target_refuses(self):
-        registration.register_window(
-            owner=owner_inputs(), evidence=evidence(), base_dir=self.store
-        )
+        registration.register_window(owner=owner_inputs(), evidence=evidence(), base_dir=self.store)
         with self.assertRaises(ledger.LedgerHeadConflictError):
             registration.register_window(
                 owner=owner_inputs(), evidence=evidence(), base_dir=self.store

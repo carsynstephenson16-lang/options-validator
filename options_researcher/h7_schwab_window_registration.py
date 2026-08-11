@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime, timezone
+from os import PathLike
 from pathlib import Path
 
 import config
@@ -34,6 +35,7 @@ NAMESPACE = "h7-forward-schwab-v1"
 SCHWAB_FORWARD_STORE = Path("ledger/h7_forward_schwab")
 CACHE_NAMESPACE = ".cache/schwab_chains/"
 SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
+FEASIBILITY_OWNER_DECISION_FIELD = "H7_SCHWAB_FEASIBILITY_DECISION"
 
 RegistrationInputError = old_registration.RegistrationInputError
 WindowRuleError = old_registration.WindowRuleError
@@ -50,6 +52,7 @@ OWNER_FIELDS = (
     "SCHWAB_CAPTURE_COMMITMENT_THROUGH",
     "SCHWAB_CONFIRMATION_EVIDENCE",
     "SESSION_CHAIN_CONVENTION",
+    FEASIBILITY_OWNER_DECISION_FIELD,
 )
 EVIDENCE_FIELDS = (
     "review_evidence",
@@ -90,8 +93,7 @@ def _require(mapping: dict, fields: tuple[str, ...], label: str) -> None:
     for field in fields:
         if mapping.get(field) in (None, ""):
             raise RegistrationInputError(
-                f"{label} input {field!r} is missing/None/empty; no default "
-                "may be inferred"
+                f"{label} input {field!r} is missing/None/empty; no default may be inferred"
             )
 
 
@@ -132,6 +134,19 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> None:
         raise RegistrationInputError("feasibility base_rate arithmetic mismatch")
     if not math.isclose(float(receipt["expected_entries"]), expected, rel_tol=1e-12):
         raise RegistrationInputError("feasibility expected_entries arithmetic mismatch")
+    minimum = 2 * config.MIN_LOSSES_FOR_VERDICT
+    if expected < minimum:
+        raise RegistrationInputError(
+            f"feasibility expected_entries {expected} is below required {minimum}"
+        )
+
+
+def qualifying_feasibility_owner_line(receipt_hash: str) -> str:
+    """Return the exact owner line required for a qualifying v1 receipt."""
+    return (
+        "REJECT OLD 3/1050 STARVATION-RISK PATH; BIND "
+        f"{NAMESPACE} TO QUALIFYING FEASIBILITY RECEIPT {receipt_hash}"
+    )
 
 
 def build_window_registration_event(
@@ -148,9 +163,7 @@ def build_window_registration_event(
             f"SESSION_CHAIN_CONVENTION must equal {SESSION_CHAIN_CONVENTION!r}"
         )
     if evidence["cache_namespace"] != CACHE_NAMESPACE:
-        raise RegistrationInputError(
-            f"cache_namespace must equal {CACHE_NAMESPACE!r}"
-        )
+        raise RegistrationInputError(f"cache_namespace must equal {CACHE_NAMESPACE!r}")
 
     start = _canonical_date(owner["WINDOW_START_DECISION_SESSION"], "window start")
     count = int(owner["WINDOW_DECISION_SESSION_COUNT"])
@@ -161,8 +174,7 @@ def build_window_registration_event(
     )
     if commitment < end:
         raise WindowRuleError(
-            f"Schwab capture commitment only through {commitment}, short of "
-            f"window end {end}"
+            f"Schwab capture commitment only through {commitment}, short of window end {end}"
         )
     verified_through = _canonical_date(
         owner["SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH"],
@@ -173,12 +185,17 @@ def build_window_registration_event(
     )
     if verified_through != historical_session:
         raise RegistrationInputError(
-            "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH must equal the bound last "
-            "historical session"
+            "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH must equal the bound last historical session"
         )
 
     feasibility = evidence["feasibility_receipt"]
     _validate_feasibility(feasibility, evidence["feasibility_receipt_hash"])
+    required_owner_line = qualifying_feasibility_owner_line(evidence["feasibility_receipt_hash"])
+    if owner[FEASIBILITY_OWNER_DECISION_FIELD] != required_owner_line:
+        raise RegistrationInputError(
+            f"{FEASIBILITY_OWNER_DECISION_FIELD} must exactly bind the "
+            "qualifying v1 feasibility receipt"
+        )
     if int(feasibility["window_sessions"]) != count:
         raise RegistrationInputError(
             "feasibility window_sessions disagrees with registration window"
@@ -191,19 +208,16 @@ def build_window_registration_event(
     )
     old_registration._validate_universe_manifest(manifest)
     scope = scope_identity()
-    if manifest.get("scope_id") != scope["scope_id"] or manifest.get(
-        "scope_hash"
-    ) != scope["scope_hash"]:
+    if (
+        manifest.get("scope_id") != scope["scope_id"]
+        or manifest.get("scope_hash") != scope["scope_hash"]
+    ):
         raise RegistrationInputError("universe manifest is not bound to H7 scope")
     if int(feasibility["universe_size"]) != len(manifest["included"]):
-        raise RegistrationInputError(
-            "feasibility universe_size disagrees with registration cohort"
-        )
+        raise RegistrationInputError("feasibility universe_size disagrees with registration cohort")
 
     registered_cost_hash = cost_model_hash()
-    stage456_parameters = {
-        name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES
-    }
+    stage456_parameters = {name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES}
     scorer = {
         "module": "options_researcher.h7_forward_scoring",
         "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
@@ -230,18 +244,14 @@ def build_window_registration_event(
         },
         "history": {
             "last_session": historical_session,
-            "manifest_receipt_hash": evidence[
-                "last_historical_manifest_receipt_hash"
-            ],
+            "manifest_receipt_hash": evidence["last_historical_manifest_receipt_hash"],
         },
         "window": {
             "start_decision_session": start,
             "decision_session_count": count,
             "final_decision_session": end,
             "end_rule": "inclusive count of XNYS decision sessions from start",
-            "three_month_proof": (
-                f"{end} >= three-calendar-month anniversary of {start}"
-            ),
+            "three_month_proof": (f"{end} >= three-calendar-month anniversary of {start}"),
         },
         "cohort_rule": "decision_session in registered window (immutable key)",
         "frozen": {
@@ -266,9 +276,7 @@ def build_window_registration_event(
             "data_gate_evidence_id": evidence["data_gate_evidence_id"],
             "source_health_receipt_hash": evidence["source_health_receipt_hash"],
             "data_gate_receipt_hash": evidence["data_gate_receipt_hash"],
-            "backup_restore_receipt_hash": evidence[
-                "backup_restore_receipt_hash"
-            ],
+            "backup_restore_receipt_hash": evidence["backup_restore_receipt_hash"],
             "scope_id": scope["scope_id"],
             "scope_hash": scope["scope_hash"],
         },
@@ -293,7 +301,7 @@ def build_window_registration_event(
     }
 
 
-def _synthetic_base(base_dir: object) -> Path:
+def _synthetic_base(base_dir: str | PathLike[str] | None) -> Path:
     if base_dir is None:
         raise ActivationBoundaryError("an explicit synthetic base_dir is required")
     base = Path(base_dir)
@@ -310,7 +318,7 @@ def register_window(
     *,
     owner: dict,
     evidence: dict,
-    base_dir: object,
+    base_dir: str | PathLike[str] | None,
     universe_manifest: dict | None = None,
     clock=None,
 ) -> ledger.AppendResult:
@@ -328,8 +336,8 @@ def register_window_real(
     evidence: dict,
     guard_report,
     spec_sha256: str,
-    spec_path: object,
-    base_dir: object,
+    spec_path: str | PathLike[str],
+    base_dir: str | PathLike[str],
     code_state,
     recheck_gates,
     universe_manifest: dict | None = None,
@@ -349,9 +357,7 @@ def register_window_real(
     base = Path(base_dir)
     bound = str(base.resolve(strict=False))
     if guard_report.forward_base != bound:
-        raise ActivationRefused(
-            "guard report is bound to a different target store"
-        )
+        raise ActivationRefused("guard report is bound to a different target store")
     if not guard_report.code_commit or not guard_report.built_at_utc:
         raise ActivationRefused("guard report carries no fresh code/build identity")
 
@@ -392,19 +398,12 @@ def register_window_real(
     for key in ("source_health_evidence_id", "data_gate_evidence_id"):
         if gates.get(key) != evidence[key]:
             raise ActivationRefused(f"append-time {key} disagrees with evidence")
-    if (
-        gates.get("backup_restore_receipt_hash")
-        != evidence["backup_restore_receipt_hash"]
-    ):
-        raise ActivationRefused(
-            "append-time backup_restore_receipt_hash disagrees with evidence"
-        )
+    if gates.get("backup_restore_receipt_hash") != evidence["backup_restore_receipt_hash"]:
+        raise ActivationRefused("append-time backup_restore_receipt_hash disagrees with evidence")
 
     verified = ledger.verify(base_dir=base)
     if not (verified.valid and verified.empty):
-        raise ActivationRefused(
-            "target Schwab forward store is not VALID EMPTY at append time"
-        )
+        raise ActivationRefused("target Schwab forward store is not VALID EMPTY at append time")
     event = build_window_registration_event(
         owner=owner, evidence=evidence, universe_manifest=universe_manifest
     )
