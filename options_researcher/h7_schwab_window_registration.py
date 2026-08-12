@@ -75,6 +75,7 @@ FEASIBILITY_FIELDS = (
     "lookback_end",
     "stack_version",
     "code_sha",
+    "config_hash",
     "universe_size",
     "window_sessions",
     "symbol_days",
@@ -178,6 +179,20 @@ def build_window_registration_event(
 
     feasibility = evidence["feasibility_receipt"]
     _validate_feasibility(feasibility, evidence["feasibility_receipt_hash"])
+    # Adversarial review 2026-08-12 (finding B3): `d77f995` removed the only
+    # binding between the feasibility receipt and the code/config that
+    # produced it (a since-unsatisfiable exact-HEAD code_sha check). Bind the
+    # receipt to the CONFIG that would be frozen by this registration instead
+    # -- config_hash() is satisfiable today (the receipt need not have been
+    # measured at the exact registering commit, only against the same
+    # config.py) and catches the case that matters: the entry stack or its
+    # parameters changing after the base rate was measured.
+    if feasibility["config_hash"] != config_hash():
+        raise RegistrationInputError(
+            "feasibility receipt config_hash disagrees with the registering "
+            "commit's config_hash(); the base rate was measured against a "
+            "different config.py and must be re-measured before registration"
+        )
     if int(feasibility["window_sessions"]) != count:
         raise RegistrationInputError(
             "feasibility window_sessions disagrees with registration window"
@@ -194,6 +209,15 @@ def build_window_registration_event(
         "scope_hash"
     ) != scope["scope_hash"]:
         raise RegistrationInputError("universe manifest is not bound to H7 scope")
+    # Exact name-list equality, not just cardinality: a same-size universe
+    # swap (e.g. a name added and a different name removed between
+    # measurement and registration) would pass a count-only check while
+    # binding the old base rate to a different cohort.
+    if feasibility.get("universe") != manifest["included"]:
+        raise RegistrationInputError(
+            "feasibility universe disagrees with registration cohort "
+            "(name-list mismatch, not just count)"
+        )
     if int(feasibility["universe_size"]) != len(manifest["included"]):
         raise RegistrationInputError(
             "feasibility universe_size disagrees with registration cohort"
