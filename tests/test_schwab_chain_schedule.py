@@ -59,31 +59,53 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self.assertNotIn("KeepAlive", payload)
         self.assertNotIn("intraday_capture", str(payload))
 
-    def test_expired_refresh_token_requires_schwab_reauth(self):
+    # --- audit M7: failure-taxonomy parity with tools/intraday_capture.sh ---
+    #
+    # options_researcher/schwab_chain_capture.py's own printed lines are the
+    # evidence keyed on below (never the exit code alone -- exit 2 is used
+    # both for a genuine receipt CONFLICT and could collide with an
+    # unrelated argparse usage error, same caveat as
+    # tools/intraday_capture.sh:96-101 documents for its own lane):
+    #   "schwab_chain_capture auth EXPIRED: ..."     (main(), exit 1)
+    #   "schwab_chain_capture refused: ..."          (capture(), exit 1)
+    #   "schwab_chain_capture receipt CONFLICT: ..." (capture(), exit 2)
+    #   "schwab_chain_capture failed: ...; receipt=" (capture(), exit 1)
+    # This is a *wrapper-only* contract: schwab_chain_capture.py itself is
+    # never touched by this change.
+
+    def _run_status_tail(self, *, rc: int, cap_out: str) -> subprocess.CompletedProcess:
+        """Run the wrapper's post-capture status/notification tail (the part
+        of the script that runs after CAP_OUT/RC are known) with a synthetic
+        RC/CAP_OUT, so this test never has to invoke the real Schwab client.
+        Extracted by marker rather than line numbers so the test breaks
+        loudly (KeyError-shaped ValueError from str.index) if the marker
+        text is renamed, instead of silently testing stale dead code."""
         source = WRAPPER.read_text(encoding="utf-8")
-        start = source.index('if [ "$RC" -ne 0 ]; then')
-        end = source.index('\necho "SCHWAB CHAIN STATUS: OK"', start)
-        block = source[start:end]
-        cap_out = (
-            "schwab_chain_capture auth EXPIRED: Refresh token is invalid, "
-            "expired or revoked; run uv run python tools/setup_schwab.py"
-        )
+        start = source.index("CRITICAL=0")
+        block = source[start:]
         script = "\n".join(
             [
                 "set -u",
-                "RC=1",
+                "REPO=" + shlex.quote(str(ROOT)),
+                "STAMP=test-stamp",
+                "RC=" + str(rc),
                 "CAP_OUT=" + shlex.quote(cap_out),
                 block,
-                "",
             ]
         )
-
-        completed = subprocess.run(
+        return subprocess.run(
             ["/bin/bash", "-c", script],
             capture_output=True,
             text=True,
             timeout=30,
         )
+
+    def test_expired_refresh_token_requires_schwab_reauth(self):
+        cap_out = (
+            "schwab_chain_capture auth EXPIRED: Refresh token is invalid, "
+            "expired or revoked; run uv run python tools/setup_schwab.py"
+        )
+        completed = self._run_status_tail(rc=1, cap_out=cap_out)
 
         self.assertEqual(completed.returncode, 1, completed.stderr)
         self.assertIn(
@@ -92,6 +114,118 @@ class SchwabChainScheduleTests(unittest.TestCase):
             completed.stdout,
         )
         self.assertNotIn("receipt/log contains evidence", completed.stdout)
+
+    def test_refused_branch_is_distinct_from_generic_broken(self):
+        cap_out = (
+            "schwab_chain_capture refused: 2026-08-10T16:05:00-04:00 ET is "
+            "outside the NY regular session"
+        )
+        completed = self._run_status_tail(rc=1, cap_out=cap_out)
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn("CRITICAL: SCHWAB CHAIN REFUSED", completed.stdout)
+        self.assertIn(
+            "schwab_chain_capture refused: 2026-08-10T16:05:00-04:00 ET is "
+            "outside the NY regular session",
+            completed.stdout,
+        )
+
+    def test_receipt_conflict_branch_is_exit_2_and_documents_retry_constraint(
+        self,
+    ):
+        cap_out = (
+            "schwab_chain_capture receipt CONFLICT: "
+            "reports/schwab_chains/2026-08-10/preclose.json"
+        )
+        completed = self._run_status_tail(rc=2, cap_out=cap_out)
+
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertIn("CRITICAL: SCHWAB CHAIN RECEIPT CONFLICT", completed.stdout)
+        self.assertIn("SAME-DAY RETRY IS UNSAFE", completed.stdout)
+        self.assertIn("hash-match-or-refuse", completed.stdout)
+        self.assertIn("docs/h7-forward-operations.md", completed.stdout)
+
+    def test_partial_failure_branch_is_distinct_and_documents_retry_constraint(
+        self,
+    ):
+        cap_out = (
+            "schwab_chain_capture failed: ['CEG']; "
+            "receipt=reports/schwab_chains/2026-08-10/preclose.json"
+        )
+        completed = self._run_status_tail(rc=1, cap_out=cap_out)
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn("CRITICAL: SCHWAB CHAIN PARTIAL FAILURE", completed.stdout)
+        self.assertIn("SAME-DAY RETRY IS UNSAFE", completed.stdout)
+        self.assertIn("docs/h7-forward-operations.md", completed.stdout)
+
+    def test_unrecognized_failure_still_falls_back_to_generic_broken(self):
+        cap_out = "Traceback (most recent call last):\nRuntimeError: boom"
+        completed = self._run_status_tail(rc=1, cap_out=cap_out)
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn(
+            "CRITICAL: SCHWAB CHAIN STATUS unrecognized failure mode",
+            completed.stdout,
+        )
+        self.assertIn(
+            "SCHWAB CHAIN STATUS: BROKEN (exit 1; receipt/log contains evidence)",
+            completed.stdout,
+        )
+
+    def test_ok_result_has_no_critical_line(self):
+        completed = self._run_status_tail(rc=0, cap_out="schwab_chain_capture complete: 2/2 x")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertNotIn("CRITICAL", completed.stdout)
+        self.assertIn("SCHWAB CHAIN STATUS: OK", completed.stdout)
+
+    def test_operator_notification_present_and_guarded_like_sibling(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        # Guarded the same way as tools/intraday_capture.sh's own osascript
+        # calls: a bare `/usr/bin/osascript -e ... 2>/dev/null` fire-and-
+        # forget invocation with no pre-existence check and no `$?`
+        # handling, so it is a silent no-op on any non-macOS host (this
+        # container included) rather than a build/runtime failure.
+        self.assertIn("/usr/bin/osascript -e", source)
+        self.assertIn('display notification', source)
+        osascript_lines = [
+            line for line in source.splitlines() if "osascript -e" in line
+        ]
+        self.assertTrue(osascript_lines, "expected an osascript notification line")
+        for line in osascript_lines:
+            self.assertTrue(
+                line.rstrip().endswith("2>/dev/null"),
+                f"osascript line not guarded like the sibling: {line!r}",
+            )
+
+    def test_notification_fires_as_a_no_op_off_macos_on_every_branch(self):
+        # This container has no /usr/bin/osascript, so if the guard were
+        # missing (e.g. an unguarded `$(osascript ...)` whose failure is
+        # checked), these would fail or hang instead of returning the
+        # underlying RC cleanly.
+        for rc, cap_out in (
+            (0, "schwab_chain_capture complete: 2/2 x"),
+            (1, "schwab_chain_capture refused: outside regular session"),
+            (2, "schwab_chain_capture receipt CONFLICT: x"),
+        ):
+            with self.subTest(rc=rc):
+                completed = self._run_status_tail(rc=rc, cap_out=cap_out)
+                self.assertEqual(completed.returncode, rc, completed.stderr)
+
+    def test_same_day_retry_constraint_documented_in_wrapper_source(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("SAME-DAY RETRY", source)
+        self.assertIn("hash-match-or-refuse", source)
+        self.assertIn("docs/h7-forward-operations.md", source)
+
+    def test_no_behavior_change_to_capture_module_itself(self):
+        # Guard rail for this change's own scope: the wrapper may only ever
+        # invoke the module as a subprocess, never import/monkeypatch it.
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn(
+            "python -m options_researcher.schwab_chain_capture", source
+        )
 
 
 if __name__ == "__main__":

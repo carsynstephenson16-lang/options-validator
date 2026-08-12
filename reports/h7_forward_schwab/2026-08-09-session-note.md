@@ -28,6 +28,16 @@ NOT ACTIVATED / NOT MERGED.
 - New store: `VerifyResult(valid=True, empty=True, count=0, head=None)`.
 - Authority constants remain both `False`; no registration event exists.
 
+## Correction note (2026-08-12, audit M6)
+
+Commit `d77f995` ("docs(h7): record fresh Schwab feasibility") was not
+docs-only: it also removed the `feasibility["code_sha"] != evidence["code_commit"]`
+equality check from `h7_schwab_window_registration.build_window_registration_event`
+(a deliberate loosening — receipts may legitimately predate doc-only commits —
+covered by a new test; the receipt's own hash binding via
+`_validate_feasibility` is unchanged). Recorded here because the commit label
+hid a functional change to registration validation from changelog-level review.
+
 ## Pending / stop points
 
 - Backup/restore drill: `BLOCKED_PENDING_MONDAY_CANARY`; there are no live

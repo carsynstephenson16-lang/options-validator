@@ -1212,7 +1212,9 @@ headings above are unchanged; this section records dispositions only.
 
 **Selected as display-only, default-off, cached-data experiments**
 (Codex briefs `docs/superpowers/plans/2026-08-09-0{1,2,3,4}-*`; NOT yet
-implemented — Codex unavailable at selection time):
+implemented — Codex unavailable at selection time)
+[corrected 2026-08-12: all four shipped 2026-08-09/10 as display-only
+experiments — see reports/2026-08-09-attractiveness-experiment-authorization.md]:
 
 - Beta-to-QQQ translation line (survey rank 15) — SELECTED #1 (86.3/100).
   The "NEEDS-DATA: no QQQ/SPY closes" blocker above is stale: QQQ.parquet
