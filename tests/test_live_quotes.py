@@ -29,6 +29,28 @@ MONTHLY_EXP = third_friday(2026, 8)           # 37 DTE from TODAY (in 15-60)
 WEEKLY_EXP = MONTHLY_EXP + timedelta(days=7)  # in band but NOT a monthly
 LEAPS_EXP = third_friday(2027, 7)             # 366 DTE (in H4_THESIS_DTE_BAND)
 
+# This module's own fixtures (below) and several production functions under
+# test (probe_ok's cross-check against the currently-configured provider)
+# call live_quotes._configured_provider(), which reads LIVE_MARKET_DATA_PROVIDER.
+# Pin it for the whole module so the suite is hermetic (2026-08-11 audit L5)
+# instead of depending on ambient shell/.env state. clear=False -- only this
+# one key is touched; unrelated ambient env (PATH, HOME, ...) that some tests
+# still spawn real subprocesses against stays intact. dotenv.load_dotenv is
+# stubbed too so a real .env on disk cannot clobber or interfere.
+_env_patcher = mock.patch.dict(
+    "os.environ", {"LIVE_MARKET_DATA_PROVIDER": "schwab"})
+_dotenv_patcher = mock.patch("dotenv.load_dotenv")
+
+
+def setUpModule():
+    _dotenv_patcher.start()
+    _env_patcher.start()
+
+
+def tearDownModule():
+    _env_patcher.stop()
+    _dotenv_patcher.stop()
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -595,6 +617,49 @@ class RunProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(lq.load_latest_probe(dir=tmp + "/nope"))
             self.assertIsNone(lq.load_latest_probe(dir=tmp))
+
+
+class RunProbeProviderLazyDefaultTests(unittest.TestCase):
+    """Pins the 2026-08-11 audit L5 fix at run_probe()'s provider/version
+    resolution. getattr(obj, name, default) evaluates `default` EAGERLY --
+    Python builds the full call before dispatching it -- so
+    _configured_provider() (a hard RuntimeError when
+    LIVE_MARKET_DATA_PROVIDER is unset) used to run even when `client`
+    already supplied provider_name, breaking every offline test that injects
+    a fake client. Both cases below run with NO env var and NO .env file to
+    prove the fallback is now reached only when the attribute is genuinely
+    absent -- a real client missing the label must still raise identically."""
+
+    def test_client_supplied_provider_label_bypasses_configured_provider(self):
+        fake = FakeClient(spots={s: 150.0 for s in config.UNIVERSE})
+        fake.provider_name = "schwab"
+        fake.provider_version = "stub-1"
+        with (
+            mock.patch("dotenv.load_dotenv"),
+            mock.patch.dict("os.environ", {}, clear=True),
+            tempfile.TemporaryDirectory() as tmp,
+        ):
+            probe = lq.run_probe(client=fake, now_ny=NOW_NY, out_dir=tmp)
+        # provider/provider_version came straight off the fake client --
+        # _configured_provider()/_installed_provider_version() were never
+        # reached, so a genuinely empty environment did not raise.
+        self.assertEqual(probe["provider"], "schwab")
+        self.assertEqual(probe["provider_version"], "stub-1")
+
+    def test_missing_provider_label_still_raises_the_same_error(self):
+        fake = FakeClient(spots={s: 150.0 for s in config.UNIVERSE})
+        self.assertFalse(hasattr(fake, "provider_name"))
+        with (
+            mock.patch("dotenv.load_dotenv"),
+            mock.patch.dict("os.environ", {}, clear=True),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"LIVE_MARKET_DATA_PROVIDER must be set explicitly to "
+                r"'schwab'; ThetaData acquisition is disabled and no "
+                r"fallback is permitted\.",
+            ):
+                lq.run_probe(client=fake, now_ny=NOW_NY)
 
 
 # ---------------------------------------------------------------------------
