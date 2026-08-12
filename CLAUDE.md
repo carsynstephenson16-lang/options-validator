@@ -25,8 +25,8 @@ If sources conflict, say so instead of picking one silently.
   registry of WHICH hypotheses are live; PROJECT_STATE.md governs sequencing,
   and its P0 gate wins over any doc that implies building now.
 - **Provider transition (ThetaData exit, Schwab lane):** `docs/provider-transition.md`.
-- **Open engine defects (read before touching backtest code):**
-  `reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`.
+- **Engine-defect history** (P0 closures recorded in `PROJECT_STATE.md`;
+  report kept as evidence): `reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`.
 - **Parked ideas:** `ideas-parking-lot.md` — parked is not rejected; it's just not now.
 - **Path-scoped rules** load automatically from `.claude/rules/` (ledger,
   data/providers, backtest engine).
