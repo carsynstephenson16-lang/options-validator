@@ -741,6 +741,16 @@ def capture(session_tag: str, *, force: bool = False, client=None,
     try:
         spots = _stock_spots(client, universe, probe, now_utc)
     except Exception as exc:
+        # An expired/revoked Schwab refresh token is not a per-symbol data
+        # gap -- every subsequent call will fail the same way. Re-raise so
+        # main()'s `except OAuthError` can classify it, mirroring
+        # schwab_chain_capture.py's preclose-lane re-raise (2026-08-11
+        # audit finding M1: this handler used to swallow it, yielding
+        # exit 0 / zero coverage / no reauth banner in the common
+        # fresh-probe steady state). Every other exception keeps its
+        # existing fail-open behavior unchanged.
+        if is_expired_refresh_token_error(exc):
+            raise
         spots_error = f"{type(exc).__name__}: {exc}"
 
     names: dict[str, dict] = {}
@@ -756,6 +766,11 @@ def capture(session_tag: str, *, force: bool = False, client=None,
                 # WHOLE batch call raised, not just this one symbol's row.
                 summary["spot_note"] = f"stock snapshot batch failed: {spots_error}"
         except Exception as exc:
+            # Same re-raise as the batch handler above -- see its comment
+            # (M1). Non-auth per-symbol failures keep failing open so one
+            # name's outage never aborts the board.
+            if is_expired_refresh_token_error(exc):
+                raise
             summary, chain_frame, calib_used = (
                 {"symbol": sym, "status": "unavailable",
                  "note": f"{type(exc).__name__}: {exc}"}, None, None)
