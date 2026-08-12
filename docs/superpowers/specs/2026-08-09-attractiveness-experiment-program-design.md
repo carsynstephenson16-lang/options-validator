@@ -236,7 +236,9 @@ then every rendered line stays labeled display-only.
 were selected from 9 Wave-2-scored candidates out of a 48-idea inventory;
 any future registration built on an experiment's numbers must disclose
 that selection history in its multiple-testing accounting (K-counting),
-alongside the already-open RQ2-v1 K=2-vs-K=3 discrepancy.
+alongside the RQ2-v1 K=2-vs-K=3 discrepancy (resolved 2026-08-10: the owner
+ruled K=3; ledger seq 25 `RQ2_AMENDMENT_V1_1` records the amendment — see the
+addenda in both 2026-08-09 selection/authorization reports).
 
 ## 11. Acceptance metrics (named per lane)
 
