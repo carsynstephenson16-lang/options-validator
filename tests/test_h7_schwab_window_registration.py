@@ -62,6 +62,7 @@ def evidence(**overrides) -> dict:
         "code_commit": "b" * 40,
         "source_health_evidence_id": "sh:2026-08-07",
         "data_gate_evidence_id": "dg:2026-08-07",
+        "data_gate_evidence_mode": "REAL-H7-SCHWAB-PRECLOSE-AUDIT",
         "source_health_receipt_hash": "c" * 64,
         "data_gate_receipt_hash": "d" * 64,
         "last_historical_session": "2026-08-07",
@@ -117,6 +118,13 @@ class BuilderTests(unittest.TestCase):
             registration.build_window_registration_event(
                 owner=owner_inputs(SESSION_CHAIN_CONVENTION="eod_mark_v1"),
                 evidence=evidence(),
+            )
+
+    def test_thetadata_evidence_mode_refuses(self):
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(data_gate_evidence_mode="REAL-H7-FULL-AUDIT"),
             )
 
     def test_tampered_feasibility_payload_refuses(self):

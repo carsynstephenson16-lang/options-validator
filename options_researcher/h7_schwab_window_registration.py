@@ -13,6 +13,7 @@ from pathlib import Path
 import config
 from data.cache_runner import session_close_utc
 from options_researcher import h7_event_ledger as ledger
+from options_researcher import h7_schwab_data_gate
 from options_researcher import h7_window_registration as old_registration
 from options_researcher.h7_paper_lifecycle import ActivationBoundaryError
 from options_researcher.h7_scope import scope_identity
@@ -57,6 +58,7 @@ EVIDENCE_FIELDS = (
     "code_commit",
     "source_health_evidence_id",
     "data_gate_evidence_id",
+    "data_gate_evidence_mode",
     "source_health_receipt_hash",
     "data_gate_receipt_hash",
     "last_historical_session",
@@ -143,6 +145,11 @@ def build_window_registration_event(
     """Build, but never append, the Schwab namespace registration event."""
     _require(owner, OWNER_FIELDS, "owner")
     _require(evidence, EVIDENCE_FIELDS, "evidence")
+    if evidence["data_gate_evidence_mode"] != h7_schwab_data_gate.EVIDENCE_MODE:
+        raise RegistrationInputError(
+            "data_gate_evidence_mode must equal "
+            f"{h7_schwab_data_gate.EVIDENCE_MODE!r}"
+        )
     if owner["SESSION_CHAIN_CONVENTION"] != SESSION_CHAIN_CONVENTION:
         raise RegistrationInputError(
             f"SESSION_CHAIN_CONVENTION must equal {SESSION_CHAIN_CONVENTION!r}"
