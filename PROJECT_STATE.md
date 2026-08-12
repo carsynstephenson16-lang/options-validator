@@ -49,6 +49,51 @@ unblock anything in §6's still-blocked list (v1 cache bytes, one-run records,
 books, ledgers, unapproved provider calls, H7 restart, parked richer-data
 integration).
 
+**Status refresh (2026-08-12; audit-repair session, delegable drafting — no
+frozen number below is newly typed):** the 2026-08-11 three-day audit
+(`reports/repo-audits/2026-08-11-three-day-state-audit.md`, verdict SOUND WITH
+RESIDUALS) is the map for the 2026-08-05→08-11 window; this session resolved
+its residuals. Landed on this branch: the owner-ruled **RQ2 K=3 amendment
+(ledger seq 25, `RQ2_AMENDMENT_V1_1`)** — RQ2-v1 badges are K=3 (B1, A1, V1
+membership-only; V1's statistic is NOT pinned and the runner must refuse V1
+comparisons until a further pre-result amendment); the **August ops evidence**
+(Aug 5–7 intraday receipts + 2026-08-05 probe + 20 facts.log lines) folded
+back from `evidence/ops-august-2026-08-09` — the raw `.cache/intraday`
+parquet bytes for those dates exist only on the production disk and their
+backup coverage is still an open owner question; **expired-Schwab-auth
+classification** now propagates loudly in BOTH capture lanes (audit M1) and
+the preclose wrapper has full failure-taxonomy parity (M7); the exact-session
+gate branch gained direct tests (M2); the `.env`-free suite-hermeticity
+repair (L5/L6) is the last item of this session's batch — its final state is
+recorded in the session's pull request and the low-findings disposition
+report. **H7:** the old namespace stays paused per OD-3; the new
+`h7-forward-schwab-v1` lane is **PREPARED / NOT REGISTERED / NOT ACTIVATED**.
+Its gate-packet prerequisite #4 (independent adversarial review) is now
+resolved: `reports/h7_forward_schwab/2026-08-12-adversarial-review-receipt.md`,
+verdict **PASS WITH FIXES** — merge stands; registration/authority-flip remain
+blocked. Review blockers B1 (one-door scan covers the Schwab store) and B3
+(feasibility receipts bound to `config_hash` + exact universe) are closed in
+code this session; **B2 (Schwab gate → registration receipt path) is open**,
+and the B3 binding correctly refuses the 2026-08-09 feasibility receipt at
+current config — a fresh feasibility run is required before registration. The
+gate packet carries a B4 disclosure amendment (3/1050 is an upper bound
+measured on ThetaData EOD; 95% CI [0.62, 8.74] expected entries vs the
+2026-07-24 bar of 20; review recommends redesign over starvation
+pre-acceptance). Remaining before any activation: B2, fresh feasibility,
+Monday 15/15 canary + manifest verify, backup/restore drill, owner OD-3 +
+starvation decision, guarded registration, owner-authorized flip — plus a
+working Schwab OAuth session: the production refresh token is
+**expired/revoked** (`invalid_grant`, failure window Aug 7 evening–Aug 10);
+reauth steps in `reports/2026-08-12-schwab-auth-diagnosis.md`. **Unmerged
+post-audit branches awaiting review/owner decision (not landed here):**
+`codex/h7-schwab-recovery` (Schwab registration CLI + feasibility identity
+binding + a new 2026-08-11 primary-earnings feasibility receipt — needs its
+own independent adversarial review before merge), `codex/capitaliq-ownership-inputs`,
+`codex/short-positioning-phases-1-4`, `codex/attractive-exp-wiring` (VST
+analyst-review specs), `codex/local-main-eea4700`,
+`codex/options-validator-plugins-design`. LOW-finding dispositions:
+`reports/repo-audits/2026-08-12-low-findings-disposition.md`.
+
 ## 1. Executive verdict
 
 The Fable handoff is directionally useful but not safe as the sole execution plan.
