@@ -345,10 +345,19 @@ def run_probe(client=None, now_ny=None, out_dir: str = PROBE_DIR) -> dict:
                 "both equity and equity-option regular sessions open"
             )
     ny_date = now_ny.date()
-    provider = getattr(client, "provider_name", _configured_provider())
-    provider_version = getattr(
-        client, "provider_version", _installed_provider_version(provider)
-    )
+    # getattr(obj, name, default) evaluates `default` EAGERLY -- Python
+    # builds the whole call before dispatching it, so _configured_provider()
+    # (a hard RuntimeError when LIVE_MARKET_DATA_PROVIDER is unset) used to
+    # run even when `client` already supplies provider_name, breaking every
+    # offline test that injects a fake/stub client. Resolve lazily instead:
+    # only call the fallback when the attribute is genuinely absent. A real
+    # client missing the label still raises the identical RuntimeError.
+    provider = getattr(client, "provider_name", None)
+    if provider is None:
+        provider = _configured_provider()
+    provider_version = getattr(client, "provider_version", None)
+    if provider_version is None:
+        provider_version = _installed_provider_version(provider)
 
     endpoints: dict = {}
     stock_res, _ = _endpoint_result(

@@ -40,6 +40,28 @@ SATURDAY = datetime(2026, 7, 18, 12, 0, tzinfo=NY)
 MONTHLY_EXP = third_friday(2026, 8)             # 37 DTE from TODAY (in 15-60)
 UNIVERSE = ["VST", "CEG"]
 
+# This module's own _probe()/_probe_realistic_entitlement() fixtures and a
+# few assertions call live_quotes._configured_provider(), which reads
+# LIVE_MARKET_DATA_PROVIDER. Pin it for the whole module so the suite is
+# hermetic (2026-08-11 audit L5) instead of depending on ambient shell/.env
+# state. clear=False -- only this one key is touched; the subprocess-driving
+# tests below (TagDerivationBannerLiveTests, WrapperBannerFilterLiveTests)
+# still inherit a full, real environment. dotenv.load_dotenv is stubbed too
+# so a real .env on disk cannot clobber or interfere.
+_env_patcher = mock.patch.dict(
+    "os.environ", {"LIVE_MARKET_DATA_PROVIDER": "schwab"})
+_dotenv_patcher = mock.patch("dotenv.load_dotenv")
+
+
+def setUpModule():
+    _dotenv_patcher.start()
+    _env_patcher.start()
+
+
+def tearDownModule():
+    _env_patcher.stop()
+    _dotenv_patcher.stop()
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
