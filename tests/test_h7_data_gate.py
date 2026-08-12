@@ -16,7 +16,7 @@ from unittest import mock
 import pandas as pd
 
 from data.cache_runner import trading_days
-from data.cache_schema import V2_FULL_AUDIT_SCHEMA
+from data.cache_schema import V2_FULL_AUDIT_SCHEMA, CacheAuditReceiptError
 from options_researcher import h7_data_gate as gate
 from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_synthetic_proof import (
@@ -596,6 +596,112 @@ class TestFailClosedBoundary(GateBase):
             res = self._eval()
         self.assertEqual(res["whole_universe_verdict"], "GO")
         self.assertEqual(snapshot(), before)  # bytes + mtimes unchanged
+
+
+class TestExactSessionPackageGate(unittest.TestCase):
+    """Direct coverage for ``evaluate_exact_session_package()`` (audit M2,
+    2026-08-11 three-day-state-audit): its ``schema_policy=
+    "external_exact_session"`` branch in ``_evaluate_chain``, the
+    ``CacheAuditReceiptError`` -> ``CHAIN_V2_AUDIT_RECEIPT_INVALID`` NO_GO
+    path, and the reserved-evidence-mode ``ValueError`` guard. This seam is
+    provider-agnostic (h7_schwab_data_gate.py is one caller of it), so the
+    fixture is deliberately independent of both GateBase's 15-name
+    watch_universe fixture and of tools.schwab_chain_manifest: a minimal
+    2-symbol synthetic close/chain package plus a hand-written
+    receipt_validator standing in for a provider manifest verifier, built
+    the way tests/test_h7_schwab_data_gate.py builds its packages. Every
+    test below calls the real evaluate_exact_session_package() with no
+    mocking of the function under test."""
+
+    SYMBOLS = ["AAA", "BBB"]
+    EVIDENCE_MODE = "EXTERNAL-TEST-FIXTURE-V1"
+
+    def setUp(self):
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.close_dir = Path(tmp.name) / "closes"
+        self.chain_dir = Path(tmp.name) / "chains"
+        self.close_dir.mkdir()
+        self.chain_dir.mkdir()
+        self.eval_iso = evaluation_session(REQ).isoformat()
+        for sym in self.SYMBOLS:
+            _write_close(
+                self.close_dir, sym, [("2026-07-08", 90.0), (self.eval_iso, 100.0)]
+            )
+            _write_chain(self.chain_dir, sym, self.eval_iso, _good_chain())
+
+    @staticmethod
+    def _valid_binding_validator(chain_dir, chain_path, *, symbol, session, consumer_scope):
+        return {
+            "provider": "synthetic-external-test",
+            "symbol": symbol,
+            "session": session,
+            "consumer_scope": consumer_scope,
+            "partition_sha256": hashlib.sha256(Path(chain_path).read_bytes()).hexdigest(),
+        }
+
+    @staticmethod
+    def _raising_validator(chain_dir, chain_path, *, symbol, session, consumer_scope):
+        raise CacheAuditReceiptError(f"synthetic package refusal for {symbol}")
+
+    def _evaluate(self, *, receipt_validator, evidence_mode):
+        return gate.evaluate_exact_session_package(
+            REQ,
+            close_dir=self.close_dir,
+            chain_dir=self.chain_dir,
+            receipt_validator=receipt_validator,
+            evidence_mode=evidence_mode,
+            symbols=self.SYMBOLS,
+        )
+
+    def test_receipt_validator_raises_is_no_go_with_chain_v2_audit_receipt_invalid(self):
+        result = self._evaluate(
+            receipt_validator=self._raising_validator, evidence_mode=self.EVIDENCE_MODE
+        )
+        self.assertEqual(result["evidence_mode"], self.EVIDENCE_MODE)
+        self.assertEqual(result["whole_universe_verdict"], "NO_GO")
+        self.assertEqual(result["go_count"], 0)
+        for sym in self.SYMBOLS:
+            record = result["symbols"][sym]
+            self.assertEqual(record["verdict"], "NO_GO")
+            self.assertIn("CHAIN_V2_AUDIT_RECEIPT_INVALID", record["reason_codes"])
+            audit_receipt = record["chain"]["audit_receipt"]
+            self.assertEqual(audit_receipt["valid"], False)
+            self.assertIn(f"synthetic package refusal for {sym}", audit_receipt["error"])
+
+    def test_reserved_evidence_modes_are_rejected(self):
+        # REAL_H7_EVIDENCE_MODE and SYNTHETIC_EVIDENCE_MODE are reserved for
+        # evaluate()/evaluate_synthetic_fixture(); an empty/falsy mode is
+        # equally rejected so an external caller can never smuggle in one of
+        # the two production evidence labels via this seam.
+        for reserved in (gate.REAL_H7_EVIDENCE_MODE, gate.SYNTHETIC_EVIDENCE_MODE, ""):
+            with self.subTest(evidence_mode=reserved):
+                with self.assertRaisesRegex(ValueError, "explicit"):
+                    self._evaluate(
+                        receipt_validator=self._valid_binding_validator,
+                        evidence_mode=reserved,
+                    )
+
+    def test_manifest_verified_synthetic_package_is_go(self):
+        result = self._evaluate(
+            receipt_validator=self._valid_binding_validator, evidence_mode=self.EVIDENCE_MODE
+        )
+        self.assertEqual(result["evidence_mode"], self.EVIDENCE_MODE)
+        self.assertEqual(result["whole_universe_verdict"], "GO")
+        self.assertEqual(result["go_count"], len(self.SYMBOLS))
+        for sym in self.SYMBOLS:
+            record = result["symbols"][sym]
+            self.assertEqual(record["verdict"], "GO")
+            self.assertEqual(record["reason_codes"], [gate.EXACT_SESSION_GO])
+            chain = record["chain"]
+            self.assertEqual(chain["schema_version"], "external-exact-session-v1")
+            self.assertEqual(chain["usage"], "H7_EXACT_SESSION_EVIDENCE")
+            binding = chain["audit_receipt"]
+            self.assertTrue(binding["valid"])
+            self.assertEqual(binding["provider"], "synthetic-external-test")
+            self.assertEqual(binding["symbol"], sym)
+            self.assertEqual(binding["session"], self.eval_iso)
+            self.assertEqual(binding["consumer_scope"], "H7")
 
 
 if __name__ == "__main__":
