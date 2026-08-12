@@ -62,6 +62,10 @@ dependencies. No experiment imports another experiment.
    standard-from-literature / repo convention; display-only; not
    owner-ratified"). No per-name tuning. Reused repo conventions:
    window 252 / min-obs 126 mirror `COMPOSITE_PCTL_WINDOW/MIN_OBS`.
+   Documented exception (audit L1, 2026-08-12): `exp_tail_shape.py`'s
+   internal derived thresholds `_JUMP_MIN_PERIODS`/`_FAT_TAIL_EXCESS_KURTOSIS`
+   stay module-level rather than in `config.py` — a deliberate carve-out,
+   not a drift, recorded in `reports/repo-audits/2026-08-12-low-findings-disposition.md`.
 4. **Off by default — with an explicit no-auto-compute rule:**
    `EXPERIMENT_LANES_ENABLED: dict[str, bool]` in `config.py`, all four
    `False`. The dashboard CLI gains `--experiments` (enables all built

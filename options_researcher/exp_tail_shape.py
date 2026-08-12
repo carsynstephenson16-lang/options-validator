@@ -35,6 +35,13 @@ EXP_TAIL_JUMP_SIGMA = float(getattr(config, "EXP_TAIL_JUMP_SIGMA", 3.0))
 # not owner-ratified.
 EXP_TAIL_ALT_WINDOWS = tuple(getattr(config, "EXP_TAIL_ALT_WINDOWS", (189, 378)))
 
+# Documented carve-out (audit L1, 2026-08-12): these two constants stay
+# module-level rather than routing through config.py like their sibling
+# experiments' constants do. They are internal derived thresholds (not
+# owner-tunable knobs), already provenance-labeled and test-covered below;
+# moving them was judged riskier than documenting the exception. See
+# reports/repo-audits/2026-08-11-three-day-state-audit.md L1 and
+# reports/repo-audits/2026-08-12-low-findings-disposition.md.
 # Brief-mandated causal-sigma floor; LLM-proposed 2026-08-09; display-only;
 # not owner-ratified.
 _JUMP_MIN_PERIODS = 126

@@ -149,6 +149,18 @@ def verify(
 
         current = scan(os.path.join(root, ns), deep=deep and "content_digest" in recorded)
 
+        # Doc note (audit L8, 2026-08-12): --allow-absent only skips a
+        # namespace whose directory does not exist at all (scan()'s
+        # `present: False`). A directory that EXISTS but is EMPTY -- e.g.
+        # auto-mkdir'd as a side effect of importing a module that touches
+        # its cache path, with no bytes ever written -- still has
+        # `present: True` here and falls through to the file_count/
+        # total_bytes comparison below, which alarms as LOST FILES if the
+        # inventory recorded any files. This is intentional, not a bug: the
+        # tool cannot distinguish "never populated" from "silently emptied"
+        # once the directory exists, and silent emptying is exactly the
+        # failure mode this guard exists to catch. Working as documented;
+        # see reports/repo-audits/2026-08-12-low-findings-disposition.md.
         if not current["present"]:
             if allow_absent:
                 continue
