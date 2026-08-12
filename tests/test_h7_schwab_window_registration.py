@@ -10,7 +10,10 @@ from pathlib import Path
 from options_researcher import h7_activation_guard as activation_guard
 from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_schwab_window_registration as registration
-from research.hashing import canonical_json, sha256_file, sha256_hex
+from options_researcher import h7_window_registration as old_registration
+from research.hashing import canonical_json, config_hash, sha256_file, sha256_hex
+
+_DEFAULT_UNIVERSE = old_registration.default_universe_manifest()["included"]
 
 
 def feasibility_receipt(**overrides) -> dict:
@@ -21,6 +24,8 @@ def feasibility_receipt(**overrides) -> dict:
         "lookback_end": "2026-08-07",
         "stack_version": "h7-frozen-entry-stack/v1",
         "code_sha": "b" * 40,
+        "config_hash": config_hash(),
+        "universe": list(_DEFAULT_UNIVERSE),
         "universe_size": 15,
         "window_sessions": 70,
         "symbol_days": 540,
@@ -134,6 +139,49 @@ class BuilderTests(unittest.TestCase):
             event["payload"]["feasibility"]["receipt"]["code_sha"],
             "b" * 40,
         )
+
+    # -- adversarial review 2026-08-12, finding B3 -------------------------- #
+    # `d77f995` removed the only binding between the feasibility receipt and
+    # the code/config that produced it. These tests reconstruct the review's
+    # fix: the receipt's config_hash must equal the registering commit's
+    # config_hash(), and its universe must be the EXACT name list the
+    # registration cohort resolves to (not just the same count).
+
+    def test_feasibility_config_hash_mismatch_refuses(self):
+        receipt = feasibility_receipt(config_hash="0" * 64)
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    feasibility_receipt=receipt,
+                    feasibility_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_feasibility_universe_name_mismatch_refuses(self):
+        # Same cardinality (15 names) as the registration cohort, but one
+        # name swapped -- the pre-B3-fix cardinality-only check would have
+        # let this through silently.
+        tampered = list(_DEFAULT_UNIVERSE)
+        tampered[0] = "ZZZZ"
+        self.assertEqual(len(tampered), len(_DEFAULT_UNIVERSE))
+        receipt = feasibility_receipt(universe=tampered)
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    feasibility_receipt=receipt,
+                    feasibility_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_feasibility_config_hash_and_universe_match_registers(self):
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(), evidence=evidence()
+        )
+        receipt = event["payload"]["feasibility"]["receipt"]
+        self.assertEqual(receipt["config_hash"], config_hash())
+        self.assertEqual(receipt["universe"], list(_DEFAULT_UNIVERSE))
 
 
 class SyntheticAppendTests(unittest.TestCase):
