@@ -158,10 +158,14 @@ ALLOWLIST: list[tuple[str, str, str]] = [
         "tools/schwab_chain_capture.sh",
         "CAP_OUT=",
         "reason (a)+(b): raw combined stdout+stderr capture exists so RC=$? "
-        "reflects the Python process's own exit code; the only parsed value "
-        "uses the anchored `grep -q '^schwab_chain_capture auth EXPIRED:'` "
-        "classification, and CAP_OUT is otherwise only echoed to the "
-        "human-facing log.",
+        "reflects the Python process's own exit code; the parsed values "
+        "(audit M7) use four anchored classifications -- `grep -q "
+        "'^schwab_chain_capture auth EXPIRED:'`, `'^schwab_chain_capture "
+        "refused:'`, `'^schwab_chain_capture receipt CONFLICT:'`, and "
+        "`'^schwab_chain_capture failed:'` -- mirroring tools/"
+        "intraday_capture.sh's CAP_OUT allowlist entry below; CAP_OUT is "
+        "otherwise only echoed to the human-facing log and to the MSG "
+        "variable used for the operator osascript notification.",
     ),
 ]
 
@@ -383,6 +387,26 @@ class ShellBannerGuardTests(unittest.TestCase):
             "this test file if the capture is provably safe per the "
             "module docstring's reason (a)/(b).\n\n" + "\n".join(failures),
         )
+
+    def test_schwab_chain_capture_cap_out_has_four_anchored_branches(self) -> None:
+        """Audit M7: tools/schwab_chain_capture.sh must classify CAP_OUT the
+        same evidence-based way tools/intraday_capture.sh already does for
+        its own CAP_OUT (see the ALLOWLIST entry above for that file) --
+        four distinct anchored patterns, not a collapsed generic bucket."""
+        path = REPO_ROOT / "tools" / "schwab_chain_capture.sh"
+        text = path.read_text(encoding="utf-8")
+        for pattern in (
+            r"grep\s+-q\s+'\^schwab_chain_capture auth EXPIRED:'",
+            r"grep\s+-q\s+'\^schwab_chain_capture refused:'",
+            r"grep\s+-q\s+'\^schwab_chain_capture receipt CONFLICT:'",
+            r"grep\s+-q\s+'\^schwab_chain_capture failed:'",
+        ):
+            self.assertRegex(
+                text,
+                pattern,
+                f"expected an anchored CAP_OUT classification matching {pattern!r} "
+                "in tools/schwab_chain_capture.sh (audit M7 failure-taxonomy parity)",
+            )
 
     def test_allowlist_reason_a_entries_have_a_downstream_anchored_filter(
         self,
