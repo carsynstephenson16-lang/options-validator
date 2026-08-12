@@ -217,7 +217,8 @@ DSR_DEFAULT_MEAN_TRIAL_SR = 0.0
 # required" (the trial/variant-count floor) and "S=16 is a reasonable value
 # in most cases" (the split-count default). LLM-proposed, owner-delegated
 # 2026-07-24; forward-looking -- no registered grid meets the M floor yet
-# (RQ2-v1 has M=2-3 candidate parameter variants, A2-v1 has M=1-5 per lane),
+# (RQ2-v1 has K=3 candidate badges B1/A1/V1 per ledger seq 25,
+# RQ2_AMENDMENT_V1_1 2026-08-10; A2-v1 has M=1-5 per lane),
 # so CSCV/PBO stay inapplicable to the currently-registered grids by design
 # until a grid is built wide enough to clear CSCV_MIN_VARIANTS_M.
 CSCV_MIN_VARIANTS_M = 10

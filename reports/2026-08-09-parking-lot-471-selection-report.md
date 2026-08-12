@@ -247,3 +247,22 @@ made** and the portfolio remains all post-line-471.
   its multiple-testing accounting (also recorded in the design spec §10).
 - Nothing in this report claims any selected experiment has an edge,
   predicts returns, or grades candidates. All four are descriptive.
+
+## Addendum 2026-08-10 — K discrepancy resolved; seq-18 date attribution corrected
+
+*Appended 2026-08-10; the original text above is unchanged (dated report,
+append-only).*
+
+- **K discrepancy RESOLVED** (§4 bullet and open item §9.1): ledger seq 25
+  (`RQ2_AMENDMENT_V1_1`, 2026-08-10, owner-directed) adjudicates RQ2-v1 to
+  **K=3 candidate badges — B1, A1, V1** — with V1 registered as
+  **membership-only** (its candidate statistic is NOT pinned; the RQ2 runner
+  must refuse any V1 comparison until a further pre-result append-only
+  amendment pins it). Read seq 25 in `ledger/experiments.jsonl` before
+  treating V1 as anything more than a registered member.
+- **Attribution correction.** §4 attributes "forward window opens 2026-09-01"
+  to ledger seq 18, but seq 18 contains no start date. That date comes from
+  the LLM-proposed delegated-values table in
+  `docs/superpowers/plans/2026-07-22-rq2-scanner-enrichment-briefs.md`
+  ("RQ2 forward window | Start 2026-09-01; backstop 2027-09-01"), not from the
+  chained registration.
