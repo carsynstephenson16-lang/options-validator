@@ -1232,6 +1232,169 @@ class MainCLITests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Expired-Schwab-auth propagation (2026-08-11 audit finding M1)
+#
+# With a FRESH schema probe -- the common steady state -- an authlib
+# OAuthError raised by any Schwab client call inside capture() must
+# propagate all the way to main()'s `except OAuthError` banner, not be
+# swallowed by the per-batch (:741-744) or per-symbol (:748-761) fail-open
+# handlers. Mirrors schwab_chain_capture.py's already-correct re-raise
+# (:193-195). Every test below drives the REAL capture()/main() against an
+# injected fake client -- capture() itself is never mocked.
+# ---------------------------------------------------------------------------
+
+def _expired_oauth_error() -> OAuthError:
+    return OAuthError(
+        "invalid_grant", "Refresh token is invalid, expired or revoked")
+
+
+class _ExpiredAuthClient(FakeClient):
+    """FakeClient variant where selected calls raise the EXACT authlib
+    OAuthError shape schwab_auth_failure.is_expired_refresh_token_error
+    matches, instead of the generic synthetic RuntimeErrors the base
+    class's *_raises flags produce. Three independent trigger points, one
+    per Schwab call site relevant to this defect:
+      - stock_auth_expired: the BATCH stock_snapshot_quote call
+        (_stock_spots, guarded by intraday_capture.py's :741-744 handler)
+      - expirations_auth_expired: a PER-SYMBOL option_list_expirations call
+        (guarded by intraday_capture.py's :748-761 handler)
+      - session_auth_expired: run_probe's own regular_session_state call
+        (live_quotes.py:341, unguarded -- the sibling path that already
+        works but had no direct test)."""
+
+    def __init__(self, *, stock_auth_expired=False,
+                 expirations_auth_expired=(), session_auth_expired=False,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.stock_auth_expired = stock_auth_expired
+        self.expirations_auth_expired = set(expirations_auth_expired)
+        self.session_auth_expired = session_auth_expired
+
+    def stock_snapshot_quote(self, symbols, **kw):
+        if self.stock_auth_expired:
+            self.calls["stock"] += 1
+            raise _expired_oauth_error()
+        return super().stock_snapshot_quote(symbols, **kw)
+
+    def option_list_expirations(self, symbol):
+        if symbol in self.expirations_auth_expired:
+            self.calls["expirations"].append(symbol)
+            raise _expired_oauth_error()
+        return super().option_list_expirations(symbol)
+
+    def regular_session_state(self, now_ny):
+        if self.session_auth_expired:
+            raise _expired_oauth_error()
+        return {"open": True, "equity_regular_open": True,
+                "option_regular_open": True, "source": "test"}
+
+
+class _FixedNowDateTime(datetime):
+    """Stand-in for the `datetime` name intraday_capture.py imports, so the
+    main()-level tests below (main() has no now_ny override -- it always
+    resolves wall-clock time itself) can be driven from a fixed,
+    in-regular-session instant without touching main()'s signature."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return NOW_NY.astimezone(tz) if tz is not None else NOW_NY
+
+
+class ExpiredSchwabAuthPropagationTests(unittest.TestCase):
+    def setUp(self):
+        lq._reset_memos()
+
+    # -- direct capture() calls: isolate each handler individually --------
+
+    def test_fresh_probe_batch_handler_reraises_expired_auth(self):
+        """The stock-quote BATCH call is the first Schwab call capture()
+        makes; with a valid, unexpired probe (the common steady state) an
+        expired-refresh-token failure there must not be swallowed."""
+        client = _ExpiredAuthClient(spots={"VST": 150.0, "CEG": 90.0},
+                                    stock_auth_expired=True)
+        probe = _probe(NOW_NY.astimezone(timezone.utc))
+        cache_dir, receipt_dir = _tmp_dirs()
+        with mock.patch.object(lq, "load_latest_probe",
+                               lambda dir=lq.PROBE_DIR: probe):
+            with self.assertRaises(OAuthError):
+                ic.capture("midmorning", client=client, now_ny=NOW_NY,
+                          universe=UNIVERSE, cache_dir=cache_dir,
+                          receipt_dir=receipt_dir)
+
+    def test_fresh_probe_per_symbol_handler_reraises_expired_auth(self):
+        """A PER-SYMBOL call (option_list_expirations for one name) is a
+        second, independent Schwab call site; the batch call succeeds here
+        so this isolates the per-symbol handler specifically."""
+        client = _ExpiredAuthClient(spots={"VST": 150.0, "CEG": 90.0},
+                                    expirations_auth_expired={"VST"})
+        probe = _probe(NOW_NY.astimezone(timezone.utc))
+        cache_dir, receipt_dir = _tmp_dirs()
+        with mock.patch.object(lq, "load_latest_probe",
+                               lambda dir=lq.PROBE_DIR: probe):
+            with self.assertRaises(OAuthError):
+                ic.capture("midmorning", client=client, now_ny=NOW_NY,
+                          universe=UNIVERSE, cache_dir=cache_dir,
+                          receipt_dir=receipt_dir)
+
+    def test_stale_probe_reraises_expired_auth(self):
+        """Sibling coverage for the path the audit found already WORKING
+        but untested: a missing/stale probe forces one fresh
+        live_quotes.run_probe() call (capture's auto-heal), whose unguarded
+        regular_session_state call is where auth expiry surfaces in this
+        state."""
+        client = _ExpiredAuthClient(spots={"VST": 150.0, "CEG": 90.0},
+                                    session_auth_expired=True)
+        cache_dir, receipt_dir = _tmp_dirs()
+        with mock.patch.object(lq, "load_latest_probe",
+                               lambda dir=lq.PROBE_DIR: None):
+            with self.assertRaises(OAuthError):
+                ic.capture("midmorning", client=client, now_ny=NOW_NY,
+                          universe=UNIVERSE, cache_dir=cache_dir,
+                          receipt_dir=receipt_dir)
+
+    # -- end-to-end through main(): banner + exit code ---------------------
+
+    def _main_with_client(self, client, *, probe):
+        """Drives main() end-to-end: main() calls the real module-level
+        capture() (never mocked); since main() has no client/cache_dir/
+        receipt_dir override, patch lq._live_client (capture()'s own
+        client source) so the real per-batch/per-symbol handlers run
+        against our fake client, and repoint capture()'s keyword-only
+        cache_dir/receipt_dir defaults at a tempdir -- otherwise, if a
+        future regression makes capture() NOT raise here, this test would
+        silently write a real receipt into the repo's own
+        reports/intraday_capture/ tree (2026-08-11 audit L6)."""
+        cache_dir, receipt_dir = _tmp_dirs()
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(lq, "load_latest_probe",
+                              lambda dir=lq.PROBE_DIR: probe),
+            mock.patch.object(lq, "_live_client", return_value=client),
+            mock.patch.object(ic, "datetime", _FixedNowDateTime),
+            mock.patch.dict(ic.capture.__kwdefaults__,
+                            {"cache_dir": cache_dir, "receipt_dir": receipt_dir}),
+            mock.patch("sys.stdout", stdout),
+        ):
+            rc = ic.main(["--session-tag", "midmorning", "--force"])
+        return rc, stdout.getvalue()
+
+    def test_main_exits_1_with_banner_fresh_probe(self):
+        client = _ExpiredAuthClient(spots={"VST": 150.0, "CEG": 90.0},
+                                    stock_auth_expired=True)
+        probe = _probe(NOW_NY.astimezone(timezone.utc))
+        rc, out = self._main_with_client(client, probe=probe)
+        self.assertEqual(rc, 1)
+        self.assertIn("intraday_capture auth EXPIRED:", out)
+
+    def test_main_exits_1_with_banner_stale_probe(self):
+        client = _ExpiredAuthClient(spots={"VST": 150.0, "CEG": 90.0},
+                                    session_auth_expired=True)
+        rc, out = self._main_with_client(client, probe=None)
+        self.assertEqual(rc, 1)
+        self.assertIn("intraday_capture auth EXPIRED:", out)
+
+
+# ---------------------------------------------------------------------------
 # tools/intraday_capture.sh banner-pollution guard (2026-07-24 production
 # incident: LumiBot + python-dotenv print import-time INFO banner lines to
 # stdout, so a naive `$(uv run python -c ...)` command substitution
