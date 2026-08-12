@@ -33,6 +33,16 @@ The allow-list also includes the prepared Schwab restart paths:
 drill for that lane requires a verified live canary package; do not substitute
 synthetic bytes for operational durability evidence.
 
+### Schwab preclose same-day retry constraint
+
+`tools/schwab_chain_capture.sh` captures the whole registered universe as one
+immutable package. A same-day retry is not a repair path: it must perform a
+whole-universe refetch, and any existing chain byte that does not match causes
+hash-match refusal. Therefore a session completes only in one atomic run.
+Treat a stale partial receipt as evidence, not a repair target; do not rerun
+it unattended. An operator must explicitly inspect and handle stale partials
+before deciding whether any recovery work is safe.
+
 ```sh
 uv run python tools/h7_forward_backup.py backup \
   --completed-session YYYY-MM-DD

@@ -74,3 +74,8 @@ RAG health indexed 594 sources and 14879 chunks; 0 source failures were reported
 ## [2026-08-09] ingest | RAG health
 
 RAG health indexed 594 sources and 14879 chunks; 0 source failures were reported.
+
+
+## [2026-08-12] ingest | RAG health
+
+RAG health indexed 642 sources and 15442 chunks; 0 source failures were reported.

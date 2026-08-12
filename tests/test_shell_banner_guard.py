@@ -140,7 +140,7 @@ ALLOWLIST: list[tuple[str, str, str]] = [
         "on the next line via an anchored `grep -Eo "
         "'^(open_auction|open|midmorning|midday|preclose|NONE)$' | tail "
         "-1`. TAG_RAW is also dumped verbatim on a refusal (`echo "
-        "\"$TAG_RAW\"` under the unparseable-output branch) so the operator "
+        '"$TAG_RAW"` under the unparseable-output branch) so the operator '
         "can see exactly what banner/output confused the parse -- that's "
         "diagnostic display, not a second parse path.",
     ),
@@ -153,6 +153,15 @@ ALLOWLIST: list[tuple[str, str, str]] = [
         "'CONFLICT' branches) goes through its own anchored `grep "
         "'^...'`/`grep -m1 '^...'` pattern, and the raw var is otherwise "
         "only echoed to the log for human context.",
+    ),
+    (
+        "tools/schwab_chain_capture.sh",
+        "CAP_OUT=",
+        "reason (a): raw combined stdout+stderr capture exists only so "
+        "CAP_RC=$? can preserve the capture CLI's exit code; every "
+        "downstream classification reads CAP_OUT through an anchored "
+        "`grep '^schwab_chain_capture ...'` filter, and the raw value is "
+        "also echoed to the human-facing log.",
     ),
 ]
 

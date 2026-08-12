@@ -7,6 +7,7 @@ the repo's real reports/intraday_capture or .cache/intraday.
 """
 import glob
 import inspect
+import io
 import json
 import os
 import shlex
@@ -21,6 +22,7 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from authlib.integrations.base_client.errors import OAuthError
 
 import config
 from options_researcher import intraday_capture as ic
@@ -189,6 +191,41 @@ class FakeClient:
             # below config.MIN_OPEN_INTEREST
             {"expiration": exp, "strike": 200.0, "right": "C", "open_interest": 10},
         ])
+
+
+class ExpiredRefreshTokenClient:
+    """Provider double whose every live call reports the exact Authlib error."""
+
+    @staticmethod
+    def _expired(*_args, **_kwargs):
+        raise OAuthError(
+            "invalid_grant",
+            "Refresh token is invalid, expired or revoked",
+        )
+
+    stock_snapshot_quote = _expired
+    option_list_expirations = _expired
+    option_snapshot_quote = _expired
+    option_snapshot_greeks_all = _expired
+    option_snapshot_open_interest = _expired
+    regular_session_state = _expired
+
+
+class ExpiredRefreshTokenAfterStockClient(ExpiredRefreshTokenClient):
+    """Lets the batch succeed so the per-symbol exception path is reached."""
+
+    @staticmethod
+    def stock_snapshot_quote(symbols, **_kwargs):
+        return pd.DataFrame([
+            {"symbol": symbol, "bid": 100.0, "ask": 100.1}
+            for symbol in symbols
+        ])
+
+
+class _FrozenCaptureDateTime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return NOW_NY if tz is None else NOW_NY.astimezone(tz)
 
 
 def _tree_snapshot(root: Path) -> dict:
@@ -1187,6 +1224,20 @@ class ZeroVerdictAuthorityTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class MainCLITests(unittest.TestCase):
+    def _run_main_with_expired_client(self, probe, client=None):
+        stdout = io.StringIO()
+        with (
+            mock.patch.object(
+                lq, "_live_client",
+                return_value=client or ExpiredRefreshTokenClient()),
+            mock.patch.object(lq, "load_latest_probe", return_value=probe),
+            mock.patch.object(ic, "datetime", _FrozenCaptureDateTime),
+            mock.patch.object(ic, "_write_receipt", return_value=True),
+            mock.patch("sys.stdout", stdout),
+        ):
+            rc = ic.main(["--session-tag", "midmorning"])
+        return rc, stdout.getvalue()
+
     def test_main_forwards_session_tag_and_force(self):
         calls = {}
 
@@ -1207,6 +1258,41 @@ class MainCLITests(unittest.TestCase):
     def test_main_requires_session_tag(self):
         with self.assertRaises(SystemExit):
             ic.main([])
+
+    def test_main_reports_expired_auth_from_fresh_probe_capture(self):
+        rc, output = self._run_main_with_expired_client(
+            _probe(NOW_NY.astimezone(timezone.utc)))
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(
+            output,
+            "intraday_capture auth EXPIRED: Refresh token is invalid, expired "
+            "or revoked; run uv run python tools/setup_schwab.py\n",
+        )
+
+    def test_main_reports_expired_auth_from_fresh_probe_symbol_capture(self):
+        rc, output = self._run_main_with_expired_client(
+            _probe(NOW_NY.astimezone(timezone.utc)),
+            client=ExpiredRefreshTokenAfterStockClient(),
+        )
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(
+            output,
+            "intraday_capture auth EXPIRED: Refresh token is invalid, expired "
+            "or revoked; run uv run python tools/setup_schwab.py\n",
+        )
+
+    def test_main_reports_expired_auth_while_healing_stale_probe(self):
+        rc, output = self._run_main_with_expired_client(
+            _probe(NOW_NY.astimezone(timezone.utc) - timedelta(days=30)))
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(
+            output,
+            "intraday_capture auth EXPIRED: Refresh token is invalid, expired "
+            "or revoked; run uv run python tools/setup_schwab.py\n",
+        )
 
 
 # ---------------------------------------------------------------------------

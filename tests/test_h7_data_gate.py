@@ -7,6 +7,7 @@ prove no fetch path is ever touched and no input byte changes."""
 
 import hashlib
 import inspect
+import json
 import unittest
 from datetime import date
 from pathlib import Path
@@ -16,15 +17,16 @@ from unittest import mock
 import pandas as pd
 
 from data.cache_runner import trading_days
-from data.cache_schema import V2_FULL_AUDIT_SCHEMA
+from data.cache_schema import V2_FULL_AUDIT_SCHEMA, CacheAuditReceiptError
 from options_researcher import h7_data_gate as gate
 from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_synthetic_proof import (
     _write_synthetic_full_audit_receipt,
 )
 from options_researcher.h7_watch import evaluation_session
-from research.hashing import DIAGNOSTIC_SOURCE_HASH_VERSION
+from research.hashing import DIAGNOSTIC_SOURCE_HASH_VERSION, sha256_file
 from research.receipts import load_receipt, make_receipt, write_immutable_receipt
+from tools import schwab_chain_manifest as manifest
 
 REQ = date(2026, 7, 12)  # Sunday (today) -> evaluation session Fri 2026-07-10
 
@@ -297,6 +299,119 @@ class TestChainFailures(GateBase):
         self.assertEqual(res["symbols"]["AMD"]["chain"]["row_count"], 0)
         self.assertEqual(res["symbols"]["AMD"]["verdict"], "NO_GO")
         self.assertEqual(self._run(), 1)
+
+
+class TestExternalExactSessionPackage(GateBase):
+    def test_receipt_validator_error_is_reason_coded_no_go(self):
+        def invalid_receipt(*_args, **_kwargs):
+            raise CacheAuditReceiptError("synthetic manifest receipt is invalid")
+
+        result = gate.evaluate_exact_session_package(
+            REQ,
+            close_dir=self.close_dir,
+            chain_dir=self.chain_dir,
+            symbols=watch_universe(),
+            receipt_validator=invalid_receipt,
+            evidence_mode="SYNTHETIC-MANIFEST-EXACT-SESSION",
+        )
+
+        record = result["symbols"]["AMD"]
+        self.assertEqual(result["whole_universe_verdict"], "NO_GO")
+        self.assertEqual(record["verdict"], "NO_GO")
+        self.assertIn(gate.CHAIN_V2_AUDIT_RECEIPT_INVALID, record["reason_codes"])
+        self.assertEqual(
+            record["chain"]["audit_receipt"],
+            {"valid": False, "error": "synthetic manifest receipt is invalid"},
+        )
+
+    def test_reserved_evidence_modes_are_rejected(self):
+        for evidence_mode in (gate.REAL_H7_EVIDENCE_MODE, gate.SYNTHETIC_EVIDENCE_MODE):
+            with self.subTest(evidence_mode=evidence_mode):
+                with self.assertRaisesRegex(ValueError, "external exact-session evidence mode"):
+                    gate.evaluate_exact_session_package(
+                        REQ,
+                        close_dir=self.close_dir,
+                        chain_dir=self.chain_dir,
+                        symbols=watch_universe(),
+                        receipt_validator=lambda *_args, **_kwargs: {},
+                        evidence_mode=evidence_mode,
+                    )
+
+    def test_manifest_verified_synthetic_package_is_go(self):
+        symbols = sorted(watch_universe())
+        for symbol in symbols:
+            chain = pd.concat(
+                [_good_chain(), _good_chain().assign(expiration="2026-09-18")],
+                ignore_index=True,
+            )
+            _write_chain(self.chain_dir, symbol, self.eval_iso, chain)
+
+        report_dir = self.reports / self.eval_iso
+        report_dir.mkdir(parents=True)
+        manifest_path = report_dir / "manifest.json"
+        receipt_path = report_dir / "synthetic-package-receipt.json"
+        package_manifest = manifest.build_manifest(self.eval_iso, symbols, self.chain_dir)
+        manifest.write_manifest(package_manifest, manifest_path)
+        names = {}
+        for symbol in symbols:
+            chain_path = self.chain_dir / f"{symbol}_{self.eval_iso}.parquet"
+            frame = pd.read_parquet(chain_path)
+            names[symbol] = {
+                "status": "ok",
+                "row_count": len(frame),
+                "expiration_count": int(frame["expiration"].nunique()),
+                "sha256": sha256_file(chain_path),
+                "size_bytes": chain_path.stat().st_size,
+            }
+        receipt_path.write_text(
+            json.dumps(
+                {
+                    "receipt_kind": "schwab_chain_capture/v1",
+                    "session": self.eval_iso,
+                    "session_chain_convention": "preclose_snapshot_v1",
+                    "universe": symbols,
+                    "overall_status": "ok",
+                    "names": names,
+                    "manifest_hash": package_manifest["manifest_hash"],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        package = manifest.verify_session(
+            self.eval_iso, symbols, self.chain_dir, manifest_path, receipt_path
+        )
+
+        def manifest_verified_validator(cache_dir, chain_path, *, symbol, session, consumer_scope):
+            expected_path = self.chain_dir / f"{symbol}_{self.eval_iso}.parquet"
+            if (
+                Path(cache_dir) != self.chain_dir
+                or Path(chain_path) != expected_path
+                or session != self.eval_iso
+                or symbol not in symbols
+                or consumer_scope != "H7"
+            ):
+                raise CacheAuditReceiptError("synthetic manifest binding mismatch")
+            return package
+
+        result = gate.evaluate_exact_session_package(
+            REQ,
+            close_dir=self.close_dir,
+            chain_dir=self.chain_dir,
+            symbols=symbols,
+            receipt_validator=manifest_verified_validator,
+            evidence_mode="SYNTHETIC-MANIFEST-EXACT-SESSION",
+        )
+
+        self.assertEqual(result["whole_universe_verdict"], "GO")
+        self.assertEqual(result["evidence_mode"], "SYNTHETIC-MANIFEST-EXACT-SESSION")
+        for symbol in symbols:
+            chain = result["symbols"][symbol]["chain"]
+            self.assertEqual(result["symbols"][symbol]["reason_codes"], [gate.EXACT_SESSION_GO])
+            self.assertEqual(chain["schema_version"], "external-exact-session-v1")
+            self.assertEqual(chain["usage"], "H7_EXACT_SESSION_EVIDENCE")
+            self.assertEqual(chain["audit_receipt"], {"valid": True, **package})
 
 
 class TestSourceHealthLinkRequired(GateBase):
