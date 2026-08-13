@@ -34,6 +34,11 @@
       "file_count": 20,
       "present": true,
       "total_bytes": 1511030
+    },
+    "reports/schwab_chains": {
+      "file_count": 0,
+      "present": false,
+      "total_bytes": 0
     }
   },
   "note": "Gitignored, unreplaceable data. Provider acquisition is disabled; these bytes cannot be re-fetched. Verify before any worktree removal or cleanup sweep."

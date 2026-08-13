@@ -146,6 +146,9 @@ class InventoryShapeTests(unittest.TestCase):
     def test_schwab_chains_is_covered(self):
         self.assertIn(".cache/schwab_chains", guard.DEFAULT_NAMESPACES)
 
+    def test_schwab_chain_reports_are_covered(self):
+        self.assertIn("reports/schwab_chains", guard.DEFAULT_NAMESPACES)
+
     def test_future_tickers_is_covered(self):
         """The 2026-08-03 incident namespace must never drop off the list."""
         self.assertIn(".cache/future_tickers", guard.DEFAULT_NAMESPACES)
@@ -163,6 +166,7 @@ class InventoryShapeTests(unittest.TestCase):
         inventory = json.loads(inventory_path.read_text())
         self.assertIn(".cache/future_tickers", inventory["namespaces"])
         self.assertIn(".cache/schwab_chains", inventory["namespaces"])
+        self.assertIn("reports/schwab_chains", inventory["namespaces"])
 
 
 class RepoRootAnchoringTests(unittest.TestCase):
@@ -254,6 +258,24 @@ class RepoRootAnchoringTests(unittest.TestCase):
         self.assertIn("cannot be re-fetched", result.stderr)
         # every namespace absent => point at the canonical checkout first
         self.assertIn("canonical", result.stderr)
+
+    def test_cacheless_clone_reports_loss_not_location_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = self._fixture_repo(root)
+            clone = root / "clone"
+            subprocess.run(
+                ["git", "clone", "--local", "-q", str(source), str(clone)],
+                check=True,
+                capture_output=True,
+            )
+
+            result = self._run(clone, "verify")
+
+        self.assertEqual(result.returncode, 1, msg=result.stderr)
+        self.assertNotEqual(result.returncode, 2)
+        self.assertIn("MISSING ENTIRELY", result.stderr)
+        self.assertNotIn("LOCATION ERROR", result.stderr)
 
 
 if __name__ == "__main__":

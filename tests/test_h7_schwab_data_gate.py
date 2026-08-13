@@ -88,6 +88,8 @@ class H7SchwabDataGateTests(unittest.TestCase):
             "receipt_kind": "schwab_chain_capture/v1",
             "session": receipt_session,
             "session_chain_convention": "preclose_snapshot_v1",
+            "captured_at_et": "2026-08-10T15:45:00-04:00",
+            "force": False,
             "universe": SYMBOLS,
             "overall_status": "ok",
             "names": names,
@@ -107,6 +109,17 @@ class H7SchwabDataGateTests(unittest.TestCase):
             symbols=SYMBOLS,
         )
 
+    def _assert_package_no_go(self, result, *, error_contains):
+        self.assertEqual(result["whole_universe_verdict"], "NO_GO")
+        self.assertEqual(result["go_count"], 0)
+        self.assertEqual(result["no_go_count"], len(SYMBOLS))
+        for symbol in SYMBOLS:
+            record = result["symbols"][symbol]
+            self.assertEqual(record["verdict"], "NO_GO")
+            self.assertEqual(record["reason_codes"], [gate.SCHWAB_PACKAGE_INVALID])
+            self.assertFalse(record["chain"]["audit_receipt"]["valid"])
+            self.assertIn(error_contains, record["chain"]["audit_receipt"]["error"])
+
     def test_verified_package_reuses_h7_integrity_checks(self):
         result = self._evaluate()
 
@@ -122,8 +135,10 @@ class H7SchwabDataGateTests(unittest.TestCase):
         path = self.chain_dir / f"AAA_{SESSION}.parquet"
         path.rename(self.chain_dir / "AAA_2026-08-07.parquet")
 
-        with self.assertRaisesRegex(manifest.SchwabChainManifestError, "missing"):
-            self._evaluate()
+        with self.assertLogs(gate.__name__, level="ERROR"):
+            result = self._evaluate()
+
+        self._assert_package_no_go(result, error_contains="missing")
 
     def test_stale_receipt_refuses(self):
         receipt = json.loads(self.receipt_path.read_text())
@@ -132,8 +147,10 @@ class H7SchwabDataGateTests(unittest.TestCase):
             json.dumps(receipt, indent=2, sort_keys=True) + "\n"
         )
 
-        with self.assertRaisesRegex(manifest.SchwabChainManifestError, "receipt session"):
-            self._evaluate()
+        with self.assertLogs(gate.__name__, level="ERROR"):
+            result = self._evaluate()
+
+        self._assert_package_no_go(result, error_contains="receipt session")
 
     def test_partial_receipt_refuses(self):
         receipt = json.loads(self.receipt_path.read_text())
@@ -142,8 +159,10 @@ class H7SchwabDataGateTests(unittest.TestCase):
             json.dumps(receipt, indent=2, sort_keys=True) + "\n"
         )
 
-        with self.assertRaisesRegex(manifest.SchwabChainManifestError, "universe"):
-            self._evaluate()
+        with self.assertLogs(gate.__name__, level="ERROR"):
+            result = self._evaluate()
+
+        self._assert_package_no_go(result, error_contains="universe")
 
     def test_single_expiration_smuggling_refuses(self):
         chain_frame(expirations=("2026-08-21",)).to_parquet(
@@ -152,10 +171,12 @@ class H7SchwabDataGateTests(unittest.TestCase):
         self.manifest_path.unlink()
         self._write_package()
 
-        with self.assertRaisesRegex(manifest.SchwabChainManifestError, "expiration"):
-            self._evaluate()
+        with self.assertLogs(gate.__name__, level="ERROR"):
+            result = self._evaluate()
 
-    def test_same_size_byte_tamper_refuses_before_gate_go(self):
+        self._assert_package_no_go(result, error_contains="expiration")
+
+    def test_same_size_byte_tamper_returns_no_go_and_logs_failure(self):
         path = self.chain_dir / f"AAA_{SESSION}.parquet"
         with path.open("r+b") as stream:
             stream.seek(16)
@@ -163,8 +184,13 @@ class H7SchwabDataGateTests(unittest.TestCase):
             stream.seek(16)
             stream.write(bytes([original[0] ^ 0x01]))
 
-        with self.assertRaisesRegex(manifest.SchwabChainManifestError, "hash"):
-            self._evaluate()
+        with self.assertLogs(gate.__name__, level="ERROR") as captured:
+            result = self._evaluate()
+
+        self._assert_package_no_go(result, error_contains="hash mismatch for AAA")
+        self.assertIn("Schwab package verification failed", captured.output[0])
+        self.assertIn("hash mismatch for AAA", captured.output[0])
+        self.assertIn("Traceback", captured.output[0])
 
     def test_evaluation_never_constructs_a_schwab_client(self):
         with mock.patch(
