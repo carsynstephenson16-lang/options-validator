@@ -37,8 +37,17 @@ synthetic bytes for operational durability evidence.
 uv run python tools/h7_forward_backup.py backup \
   --completed-session YYYY-MM-DD
 uv run python tools/h7_forward_backup.py restore-check \
+  --backup-receipt <path of the backup receipt written by the command above> \
   --completed-session YYYY-MM-DD
 ```
+
+`restore-check` no longer accepts `--snapshot latest` (hardening, 2026-08-14).
+`--backup-receipt` is REQUIRED: the tool reads that receipt, restores the exact
+`snapshot_id` it names, and refuses unless the restored inventory equals the
+receipt's `input_files` exactly. `--snapshot` is now optional and only asserts
+that the caller's expected id matches the receipt's; a mismatch is refused.
+"Latest" was never durability evidence — it can silently resolve to a different
+snapshot than the one being attested.
 
 Stage 8 remains closed. The only real-store writer is
 `tools/h7_manual_activate.py`; it requires the literal confirmation token,

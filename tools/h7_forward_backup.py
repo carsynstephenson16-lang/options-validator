@@ -210,22 +210,56 @@ def verify_restored_tree(restored_root: Path) -> dict:
     return checks
 
 
-def run_restore_check(*, snapshot: str = "latest", completed_session: str,
+def run_restore_check(*, backup_receipt_path: Path,
+                      completed_session: str,
+                      snapshot: str | None = None,
                       root: Path = REPO_ROOT,
                       receipt_path: Path | None = None) -> Path:
-    """Restore into a temporary directory, verify it, then write evidence."""
+    """Restore the receipt-bound snapshot and prove an exact inventory match."""
     root = Path(root).resolve()
+    backup_receipt = load_receipt(
+        Path(backup_receipt_path), expected_type="backup"
+    )
+    receipt_session = backup_receipt.get("completed_session")
+    if receipt_session != completed_session:
+        raise RuntimeError(
+            "backup receipt completed session does not match restore request"
+        )
+    if backup_receipt.get("scope") != scope_identity():
+        raise RuntimeError("backup receipt scope does not match current H7 scope")
+    receipt_snapshot = backup_receipt.get("snapshot_id")
+    if (
+        not isinstance(receipt_snapshot, str)
+        or not receipt_snapshot
+        or receipt_snapshot == "latest"
+    ):
+        raise RuntimeError("backup receipt carries no exact snapshot id")
+    if snapshot is not None and snapshot != receipt_snapshot:
+        raise RuntimeError("caller snapshot does not match backup receipt snapshot")
+    expected_inventory = backup_receipt.get("input_files")
+    if not isinstance(expected_inventory, dict):
+        raise RuntimeError("backup receipt carries no input inventory")
+
     with tempfile.TemporaryDirectory(prefix="h7-restic-restore-") as temp:
-        _run_restic(["restore", snapshot, "--target", temp,
+        _run_restic(["restore", receipt_snapshot, "--target", temp,
                      "--tag", BACKUP_TAG], cwd=root)
-        verification = verify_restored_tree(Path(temp))
+        restored_root = Path(temp)
+        restored_inventory = backup_inventory(restored_root)
+        if restored_inventory != expected_inventory:
+            raise RuntimeError(
+                "restored H7 inventory does not exactly match backup receipt"
+            )
+        verification = verify_restored_tree(restored_root)
         if not verification["ok"]:
             raise RuntimeError(f"restored H7 state failed verification: {verification}")
     receipt = make_receipt("backup_restore", {
         "completed_session": completed_session,
         "verified_at_utc": datetime.now(timezone.utc).isoformat(),
-        "snapshot": snapshot,
+        "snapshot": receipt_snapshot,
+        "snapshot_id": receipt_snapshot,
+        "backup_receipt_hash": backup_receipt["receipt_hash"],
         "scope": scope_identity(),
+        "restored_inventory": restored_inventory,
         "verification": verification,
     })
     path = (Path(receipt_path) if receipt_path else
@@ -251,7 +285,8 @@ def main(argv: list[str] | None = None) -> int:
     backup.add_argument("--completed-session", required=True)
     backup.add_argument("--receipt", type=Path)
     restore = sub.add_parser("restore-check")
-    restore.add_argument("--snapshot", default="latest")
+    restore.add_argument("--backup-receipt", type=Path, required=True)
+    restore.add_argument("--snapshot")
     restore.add_argument("--completed-session", required=True)
     restore.add_argument("--receipt", type=Path)
     args = parser.parse_args(argv)
@@ -259,7 +294,8 @@ def main(argv: list[str] | None = None) -> int:
         path = (run_backup(completed_session=args.completed_session,
                            receipt_path=args.receipt)
                 if args.command == "backup" else
-                run_restore_check(snapshot=args.snapshot,
+                run_restore_check(backup_receipt_path=args.backup_receipt,
+                                  snapshot=args.snapshot,
                                   completed_session=args.completed_session,
                                   receipt_path=args.receipt))
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
