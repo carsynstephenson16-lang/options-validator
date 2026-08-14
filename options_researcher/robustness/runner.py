@@ -48,6 +48,17 @@ PANEL_FIELDS = {
     "regime",
 }
 
+_REQUIRED_STABILITY_GATE_KEYS = {
+    "minimum_observations",
+    "sign_consistency",
+    "ticker_concentration",
+    "regime_concentration",
+    "window_concentration",
+    "cost_stress",
+    "brittleness",
+}
+_VALID_STABILITY_GATE_OUTCOMES = {"PASS", "FAIL", "BLOCKED"}
+
 
 @dataclass(frozen=True, slots=True)
 class _ComputedTask:
@@ -56,6 +67,33 @@ class _ComputedTask:
     audit_ranges: dict[str, dict[str, str] | None]
     cost_stress: dict[float, float]
     bid_ask_stress: dict[float, float]
+
+
+def _merge_stability_gate_outcomes(
+    runner_gates: Mapping[str, str], stability_gates: object
+) -> dict[str, str]:
+    if not isinstance(stability_gates, (tuple, list)) or not stability_gates:
+        raise ValueError("stability gate outcomes must be non-empty pairs")
+    validated: dict[str, str] = {}
+    for gate in stability_gates:
+        if not isinstance(gate, tuple) or len(gate) != 2:
+            raise ValueError("stability gate outcomes must contain string pairs")
+        key, value = gate
+        if (
+            not isinstance(key, str)
+            or not key.strip()
+            or not isinstance(value, str)
+            or value not in _VALID_STABILITY_GATE_OUTCOMES
+        ):
+            raise ValueError("stability gate outcomes must contain valid string pairs")
+        if key in validated:
+            raise ValueError(f"duplicate stability gate outcome {key!r}")
+        if key in runner_gates:
+            raise ValueError(f"stability gate outcome collides with runner gate {key!r}")
+        validated[key] = value
+    if not _REQUIRED_STABILITY_GATE_KEYS.issubset(validated):
+        raise ValueError("stability gate outcomes must contain the complete stability gate set")
+    return {**runner_gates, **validated}
 
 
 def file_sha256(path: str | Path) -> str:
@@ -443,6 +481,12 @@ def run_experiment(
         _, effect_size, null_interval = parameter_nulls[parameter_id]
         diagnostic = stability[parameter_id]
         adverse_gate = "PASS" if metric.bottom_count >= minimum_adverse else "BLOCKED"
+        runner_gates = {
+            "registration": "PASS",
+            "adverse_bottom_bucket": adverse_gate,
+            "holm": "PASS" if holm.rejected else "FAIL",
+            "production_promotion": "BLOCKED",
+        }
         registry.record_completed_task(
             spec.run_id,
             fold,
@@ -469,12 +513,9 @@ def run_experiment(
                 },
                 "raw_p_value": holm.raw_p_value,
                 "adjusted_p_value": holm.adjusted_p_value,
-                "gate_outcomes": {
-                    "registration": "PASS",
-                    "adverse_bottom_bucket": adverse_gate,
-                    "holm": "PASS" if holm.rejected else "FAIL",
-                    "production_promotion": "BLOCKED",
-                },
+                "gate_outcomes": _merge_stability_gate_outcomes(
+                    runner_gates, diagnostic.gate_outcomes
+                ),
                 "artifact_paths": [],
             },
         )
@@ -483,9 +524,7 @@ def run_experiment(
         try:
             matrix_writer.finalize()
         except Exception:
-            logger.warning(
-                "return-matrix finalize failed for run %s", spec.run_id, exc_info=True
-            )
+            logger.warning("return-matrix finalize failed for run %s", spec.run_id, exc_info=True)
     registry.finish_run(spec.run_id)
 
     if lumibot_adapter is not None:

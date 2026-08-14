@@ -176,9 +176,7 @@ def _governance_dsr_bullet(run_id: str, matrix_root: str | Path) -> str:
             "NOT the whole-program trial count; diagnostic only, never gates promotion."
         )
     except Exception:
-        logger.warning(
-            "DSR governance bullet computation failed for run %s", run_id, exc_info=True
-        )
+        logger.warning("DSR governance bullet computation failed for run %s", run_id, exc_info=True)
         return unavailable
 
 
@@ -246,8 +244,12 @@ def _markdown_text(payload: dict[str, object], governance_dsr_bullet: str) -> st
                 f"regime concentration: {metrics.get('regime_concentration')}; "
                 f"window concentration: {metrics.get('window_concentration')}.",
                 f"- Isolated-peak brittleness: {metrics.get('brittle_isolated_peak')}.",
-                f"- Total-cost stress (0.5x/1.0x/1.5x): {metrics.get('cost_stress')}.",
-                f"- Bid/ask stress (0.5x/1.0x/1.5x): {metrics.get('bid_ask_stress')}.",
+                "- Total modeled-cost stress (0.5x / 1.0x / 1.5x; arithmetic sensitivity; "
+                "same-sample point estimates; no stress-arm CI; all modeled cost, including any "
+                "commission embedded upstream, is scaled arithmetically): "
+                f"{metrics.get('cost_stress')}.",
+                "- Bid/ask stress (0.5x / 1.0x / 1.5x; arithmetic sensitivity; same-sample "
+                f"point estimates; no stress-arm CI): {metrics.get('bid_ask_stress')}.",
                 f"- Null effect / interval: {metrics.get('null_effect_size')} / "
                 f"{metrics.get('null_confidence_interval')}.",
                 f"- Walk-forward coverage: {metrics.get('walk_forward_ranges')}.",
