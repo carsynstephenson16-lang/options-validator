@@ -16,6 +16,15 @@ The vault is for Future Carsyn, six weeks from now, who remembers nothing. She d
 - Write "Open worries" honestly, including doubts about whether the day's work was the right work.
 - Use [[wikilinks]] for tickers, strategies, and concepts so the vault connects (e.g. [[put credit spread]], [[VST]], [[stationary bootstrap]]).
 
+## Where the note goes
+
+The note is the MAIN checkout root's `YYYY-MM-DD.md` (`~/options-validator/`),
+gitignored. The Stop hook (`.claude/hooks/session_note_guard.py`, local-only)
+anchors there even from a worktree session (fixed 2026-08-14) — never leave
+the note only inside a worktree: a gitignored note there is destroyed with the
+worktree. If today's note already exists (another session wrote it), append
+under a `---` divider instead of overwriting.
+
 ## Format
 
 # {{YYYY-MM-DD}} — {{one-line what this session was about}}

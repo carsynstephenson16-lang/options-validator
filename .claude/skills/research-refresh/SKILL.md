@@ -1,6 +1,7 @@
 ---
 name: research-refresh
 description: Produce an advisory attractiveness-research v2 bundle only after an exact-session daily-ritual preflight succeeds.
+disable-model-invocation: true
 ---
 
 # Research refresh (attractiveness board)
