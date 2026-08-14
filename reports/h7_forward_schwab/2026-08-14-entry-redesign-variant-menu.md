@@ -367,6 +367,16 @@ Cached data only — parquet chain cache plus cached underlying closes. No
 provider calls, no network. Each receipt is hash-bound and immutable: rerunning
 against changed inputs raises rather than overwriting.
 
+**Run it from the main checkout.** A worktree has no `.cache` of its own. These
+numbers were produced with `.cache` symlinked to the main checkout's, following
+the `~/options-validator-ops` convention. That symlink must be **removed before
+running the test suite**: two tests legitimately require an empty cache
+(`test_experiments_dashboard` asserts the DATA BLOCKED banner, and the
+short-positioning git-policy test walks `.cache/` paths), so they fail against
+a populated one. The suite was verified green with the symlink removed; the
+cache was byte-for-byte unchanged by every run
+(`tools/irreplaceable_data_guard.py verify` clean).
+
 Tests: `uv run python -m unittest discover -s tests` (see
 `tests/test_h7_entry_variant_menu.py` for the causality, no-look-ahead,
 receipt-hashing, integrity-guard, and occupancy tests).
