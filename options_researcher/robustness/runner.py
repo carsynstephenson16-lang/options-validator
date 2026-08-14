@@ -48,7 +48,7 @@ PANEL_FIELDS = {
     "regime",
 }
 
-_STABILITY_GATE_KEYS = {
+_REQUIRED_STABILITY_GATE_KEYS = {
     "minimum_observations",
     "sign_consistency",
     "ticker_concentration",
@@ -90,7 +90,7 @@ def _merge_stability_gate_outcomes(
         if key in runner_gates:
             raise ValueError(f"stability gate outcome collides with runner gate {key!r}")
         validated[key] = value
-    if set(validated) != _STABILITY_GATE_KEYS:
+    if not _REQUIRED_STABILITY_GATE_KEYS.issubset(validated):
         raise ValueError("stability gate outcomes must contain the complete stability gate set")
     return {**runner_gates, **validated}
 

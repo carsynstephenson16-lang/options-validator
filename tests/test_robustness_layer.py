@@ -484,6 +484,46 @@ class RegistryAndReportTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "stability gate"):
                 self._run_fixture(Path(tmp), diagnostic=_stability_diagnostic((("holm", "FAIL"),)))
 
+    def test_runner_surfaces_a_future_non_colliding_stability_gate(self):
+        diagnostic = _stability_diagnostic(
+            (
+                ("minimum_observations", "PASS"),
+                ("sign_consistency", "PASS"),
+                ("ticker_concentration", "FAIL"),
+                ("regime_concentration", "FAIL"),
+                ("window_concentration", "PASS"),
+                ("cost_stress", "PASS"),
+                ("brittleness", "PASS"),
+                ("future_stability_gate", "PASS"),
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            records, paths = self._run_fixture(Path(tmp), diagnostic=diagnostic)
+            json_payload = json.loads(next(path for path in paths if path.suffix == ".json").read_text())
+            csv_rows = list(
+                csv.DictReader(
+                    next(path for path in paths if path.suffix == ".csv").read_text().splitlines()
+                )
+            )
+            markdown = next(path for path in paths if path.suffix == ".md").read_text()
+
+        self.assertTrue(
+            all(record["gate_outcomes"]["future_stability_gate"] == "PASS" for record in records)
+        )
+        self.assertTrue(
+            all(
+                task["gate_outcomes"]["future_stability_gate"] == "PASS"
+                for task in json_payload["tasks"]
+            )
+        )
+        self.assertTrue(
+            all(
+                json.loads(row["gate_outcomes"])["future_stability_gate"] == "PASS"
+                for row in csv_rows
+            )
+        )
+        self.assertIn("future_stability_gate=PASS", markdown)
+
     def test_runner_rejects_empty_duplicate_and_malformed_stability_gates(self):
         cases = {
             "empty": (),
