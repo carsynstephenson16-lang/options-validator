@@ -94,6 +94,33 @@ analyst-review specs), `codex/local-main-eea4700`,
 `codex/options-validator-plugins-design`. LOW-finding dispositions:
 `reports/repo-audits/2026-08-12-low-findings-disposition.md`.
 
+**Status refresh (2026-08-13; PM scope session, delegable drafting — no frozen
+number newly typed):** full audit in `reports/2026-08-13-pm-scope-audit.md`
+(three read-only agent audits + Opus adversarial review of the bundle, rev 1
+FAIL → rev 2 applied). Landed via this merge train (owner-directed "go on
+runbook" + FINRA integration authorization, in-session 2026-08-13):
+`codex/pre-canary-capture-hardening` @401f78b (review items H1/H2/H3/M-c;
+suite exit 0 pre-merge), `codex/capitaliq-ownership-inputs` (supersedes the
+local-main fork commit eea4700), `codex/short-positioning-phases-1-4`
+(FINRA short-interest context lane — owner-authorized integration; capture
+remains a manual CLI, no scheduled network job), and the 2026-08-13 docs
+(brief 07 = B2 receipt path, runbook 08 rev 2 = fork healing/ops sync/canary,
+brief 09 = H7 entry redesign). **Owner decisions taken 2026-08-13:**
+starvation → REDESIGN (brief 09; menu measured on frequency only, owner
+picks + types numbers at registration); ops-checkout sync approved.
+**Schwab token outage resolved:** failures 08-10 09:31→08-11 15:45; intraday
+capture 15/15 healthy since 08-12 09:31 (recovery Repo-verified; manual-reauth
+cause is Inference). **Fork healed this session** (ops worktree merged to
+origin/main tip); first canary attempt = next trading session 15:45 ET —
+freeze origin/main until it completes (the wrapper compares against
+last-fetched origin/main; see runbook 08 step 6). Still open: B2 (brief 07,
+sole code blocker), `codex/h7-schwab-recovery` adversarial review (running
+2026-08-13, receipt to land separately), backup/restore drill with real
+canary bytes, then owner OD-3 + registration + authority flip.
+`codex/handoff` (2c8332a) pushed but unmerged — overlaps landed M1 fixes,
+reconcile-don't-blind-merge. Four stale `codex/attractive-exp-*` branches
+remain deletion candidates (owner-approved batch, guard first).
+
 ## 1. Executive verdict
 
 The Fable handoff is directionally useful but not safe as the sole execution plan.
