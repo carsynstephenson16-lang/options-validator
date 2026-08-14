@@ -85,7 +85,8 @@ class ScoreBacktestCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         payload = json.loads(out.getvalue())
         for key in ("dsr", "psr_vs_zero", "dsr_n_trials", "dsr_n_provenance",
-                    "dsr_note", "dsr_trial_sr_variance_input"):
+                    "dsr_note", "dsr_trial_sr_variance_input",
+                    "dsr_trial_sr_variance_provenance"):
             self.assertNotIn(key, payload)
 
     def test_dsr_ledger_source_requires_trial_sr_var(self):
@@ -101,6 +102,27 @@ class ScoreBacktestCliTests(unittest.TestCase):
         self.assertIn("--dsr-trial-sr-var is required", err.getvalue())
         run.assert_not_called()
 
+    def test_dsr_ledger_source_requires_nonblank_variance_provenance(self):
+        for provenance in (None, "   "):
+            with self.subTest(provenance=provenance):
+                run = mock.Mock(side_effect=AssertionError("must not run the backtest"))
+                err = io.StringIO()
+                args = [
+                    "--symbols", "SPY",
+                    "--dsr-n-source", "ledger",
+                    "--dsr-trial-sr-var", "0.05",
+                ]
+                if provenance is not None:
+                    args.extend(["--dsr-trial-sr-var-provenance", provenance])
+
+                with mock.patch.object(score_backtest.run_backtest, "run", run):
+                    with contextlib.redirect_stderr(err):
+                        code = score_backtest.main(args)
+
+                self.assertEqual(code, 1)
+                self.assertIn("--dsr-trial-sr-var-provenance is required", err.getvalue())
+                run.assert_not_called()
+
     def test_dsr_ledger_source_reads_real_ledger_trial_count(self):
         def fake_run(strategy_cls, start=None, end=None, *, symbols=None, allow_oos=False):
             return [
@@ -115,15 +137,18 @@ class ScoreBacktestCliTests(unittest.TestCase):
                     "--symbols", "SPY,QQQ",
                     "--dsr-n-source", "ledger",
                     "--dsr-trial-sr-var", "0.05",
+                    "--dsr-trial-sr-var-provenance", "  manual variance review  ",
                     "--json",
                 ])
 
         self.assertEqual(code, 0)
         payload = json.loads(out.getvalue())
-        self.assertEqual(payload["dsr_n_provenance"], "ledger-trial-count")
+        self.assertEqual(payload["dsr_n_provenance"], "ledger-N-operator-variance")
         self.assertEqual(
             payload["dsr_n_trials"], score_backtest.research_ledger.current_trial_count())
         self.assertEqual(payload["dsr_trial_sr_variance_input"], 0.05)
+        self.assertEqual(
+            payload["dsr_trial_sr_variance_provenance"], "  manual variance review  ")
         # Only 2 trades in this fake run: below DSR_MIN_T -> the string path.
         self.assertEqual(payload["dsr"], "INSUFFICIENT SAMPLE FOR DSR")
 
@@ -141,11 +166,15 @@ class ScoreBacktestCliTests(unittest.TestCase):
                     "--symbols", "SPY,QQQ",
                     "--dsr-n-source", "ledger",
                     "--dsr-trial-sr-var", "0.05",
+                    "--dsr-trial-sr-var-provenance", "operator variance workbook",
                 ])
 
         self.assertEqual(code, 0)
+        self.assertIn("ledger-N-operator-variance", out.getvalue())
         self.assertIn("DSR trial_sr_variance input", out.getvalue())
         self.assertIn("0.05", out.getvalue())
+        self.assertIn("DSR trial_sr_variance provenance", out.getvalue())
+        self.assertIn("operator variance workbook", out.getvalue())
 
 
 if __name__ == "__main__":
