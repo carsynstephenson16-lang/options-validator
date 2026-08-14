@@ -218,6 +218,43 @@ class ProviderConflictTests(AuditTestCase):
         for marker in ("1400000", "1250000"):
             self.assertNotIn(marker, rendered)
 
+    def test_a_malformed_partition_produces_a_blocking_finding_not_a_crash(self):
+        self.seed()
+        partition = next(self.root.rglob("records-*.json"))
+        partition.write_text("{not json")
+
+        report = audit_provider_conflicts(
+            self.root, dataset="consolidated-short-interest", providers=("finra",), asof=ASOF
+        )
+        self.assertEqual(report["status"], "BLOCK")
+        self.assertIn("SCHEMA_ERROR", [finding["code"] for finding in report["findings"]])
+
+    def test_a_row_missing_symbol_produces_a_blocking_finding_not_a_crash(self):
+        self.seed()
+        partition = next(self.root.rglob("records-*.json"))
+        document = json.loads(partition.read_text())
+        del document["records"][0]["symbol"]
+        partition.write_text(json.dumps(document))
+
+        report = audit_provider_conflicts(
+            self.root, dataset="consolidated-short-interest", providers=("finra",), asof=ASOF
+        )
+        self.assertEqual(report["status"], "BLOCK")
+        self.assertIn("SCHEMA_ERROR", [finding["code"] for finding in report["findings"]])
+
+    def test_a_negative_share_partition_blocks_without_crashing_the_conflict_scan(self):
+        self.seed()
+        partition = next(self.root.rglob("records-*.json"))
+        document = json.loads(partition.read_text())
+        document["records"][0]["current_short_shares"] = -1
+        partition.write_text(json.dumps(document))
+
+        report = audit_provider_conflicts(
+            self.root, dataset="consolidated-short-interest", providers=("finra",), asof=ASOF
+        )
+        self.assertEqual(report["status"], "BLOCK")
+        self.assertIn("SCHEMA_ERROR", [finding["code"] for finding in report["findings"]])
+
 
 class ReceiptTests(AuditTestCase):
     def test_receipt_carries_statuses_and_counts_but_no_row_level_values(self):

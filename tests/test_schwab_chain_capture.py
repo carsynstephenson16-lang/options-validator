@@ -88,6 +88,28 @@ class SchwabChainCaptureTests(unittest.TestCase):
                 force=False,
             )
 
+    def test_force_refuses_before_fetching_or_writing_anything(self):
+        client = FakeClient()
+
+        with mock.patch.object(
+            capture, "FACTS_DIR", self.root / "ledger", create=True
+        ):
+            exit_code, receipt = capture.capture(
+                client=client,
+                now_ny=PRECLOSE,
+                universe=["AAA", "BBB"],
+                chain_dir=self.chain_dir,
+                reports_dir=self.reports_dir,
+                force=True,
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIsNone(receipt)
+        self.assertEqual(client.calls, [])
+        self.assertFalse(self.chain_dir.exists())
+        self.assertFalse(self.reports_dir.exists())
+        self.assertFalse((self.root / "ledger").exists())
+
     def test_complete_capture_writes_h7_columns_manifest_and_receipt(self):
         exit_code, receipt = self._capture(FakeClient())
 

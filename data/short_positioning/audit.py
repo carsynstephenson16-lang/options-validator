@@ -229,23 +229,48 @@ def audit_provider_conflicts(
     root = Path(root)
     observed: dict[tuple[str, date], dict[str, int]] = {}
     symbols: set[str] = set()
+    findings: list[dict] = []
 
     for provider in providers:
         base = root / "normalized" / f"provider={provider}" / f"dataset={dataset}"
         for partition in sorted(base.glob(f"publication_date=*/{NORMALIZED_FILE_GLOB}")):
-            document = json.loads(partition.read_text())
-            for row in document.get("records", []):
-                symbols.add(row["symbol"])
+            try:
+                document = json.loads(partition.read_text())
+                for row in document.get("records", []):
+                    symbols.add(row["symbol"])
+            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                # A corrupt or malformed partition is exactly what this audit
+                # exists to diagnose; report it as a blocking finding instead
+                # of letting the exception end the whole audit run.
+                findings.append(
+                    _finding(
+                        "SCHEMA_ERROR",
+                        f"partition is not readable: {exc}",
+                        artifact=partition.name,
+                        provider=provider,
+                    )
+                )
 
     for symbol in sorted(symbols):
         for provider in providers:
-            for record in load_latest_available_records(
-                root, provider=provider, dataset=dataset, symbol=symbol, asof=asof
-            ):
+            try:
+                records = load_latest_available_records(
+                    root, provider=provider, dataset=dataset, symbol=symbol, asof=asof
+                )
+            except ShortPositioningSchemaError as exc:
+                findings.append(
+                    _finding(
+                        "SCHEMA_ERROR",
+                        f"stored data failed validation: {exc}",
+                        symbol=symbol,
+                        provider=provider,
+                    )
+                )
+                continue
+            for record in records:
                 key = (record.symbol, record.settlement_date)
                 observed.setdefault(key, {})[provider] = record.current_short_shares
 
-    findings: list[dict] = []
     for (symbol, settlement), by_provider in sorted(observed.items()):
         if len(by_provider) > 1 and len(set(by_provider.values())) > 1:
             findings.append(

@@ -14,6 +14,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
+from urllib.parse import parse_qs, urlencode
 
 from data.short_positioning.models import ShortPositioningSchemaError
 from data.short_positioning.provider import (
@@ -266,6 +267,29 @@ class TimingTests(unittest.TestCase):
         self.assertNotEqual(record.available_session, record.publication_date)
         self.assertNotEqual(record.available_session, record.settlement_date)
 
+    def test_a_late_captured_revision_is_bounded_by_when_it_was_retrieved(self):
+        # The correction did not exist publicly at the original scheduled
+        # release; it can only be "known" once it was actually captured.
+        scheduled = finra_available_at(date(2026, 7, 17))
+        late_retrieval = datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc)
+        record = _normalize(_rows("finra_revision.json")[0], retrieved_at=late_retrieval)
+        self.assertTrue(record.revision_flag)
+        self.assertEqual(record.available_at, late_retrieval)
+        self.assertGreater(record.available_at, scheduled)
+
+    def test_a_promptly_captured_revision_keeps_the_scheduled_availability(self):
+        scheduled = finra_available_at(date(2026, 7, 17))
+        record = _normalize(_rows("finra_revision.json")[0], retrieved_at=scheduled)
+        self.assertTrue(record.revision_flag)
+        self.assertEqual(record.available_at, scheduled)
+
+    def test_an_original_rows_available_at_is_unaffected_by_retrieval_time(self):
+        scheduled = finra_available_at(date(2026, 7, 17))
+        late_retrieval = datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc)
+        record = _normalize(_rows("finra_valid.json")[0], retrieved_at=late_retrieval)
+        self.assertIsNone(record.revision_flag)
+        self.assertEqual(record.available_at, scheduled)
+
 
 class _Transport:
     """Scripted mock transport. Records calls; never touches a network."""
@@ -321,6 +345,21 @@ class RetryPolicyTests(unittest.TestCase):
                 with self.assertRaises(expected):
                     self._fetch(transport)
                 self.assertEqual(transport.calls, 1)
+
+    def test_query_parameters_are_encoded_onto_the_request_url(self):
+        captured_urls: list[str] = []
+
+        def transport(url, *, headers, timeout):
+            captured_urls.append(url)
+            return (200, {}, b"[]")
+
+        self._fetch(transport)
+
+        self.assertEqual(len(captured_urls), 1)
+        base, _, query = captured_urls[0].partition("?")
+        self.assertEqual(base, self.plan.url)
+        self.assertTrue(query, "query parameters were dropped from the request URL")
+        self.assertEqual(parse_qs(query), parse_qs(urlencode(self.plan.query)))
 
     def test_dry_run_plan_never_calls_the_transport(self):
         transport = _Transport([])

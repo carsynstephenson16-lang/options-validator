@@ -19,6 +19,7 @@ from data.short_positioning.models import (
     ShortPositioningSchemaError,
     ShortPositioningSnapshotV1,
     primary_status_of,
+    validate_short_interest_record,
 )
 from data.short_positioning.normalize import NORMALIZED_FILE_GLOB, record_from_json
 from data.short_positioning.provider import LICENSE_BLOCKED_PROVIDERS
@@ -40,7 +41,13 @@ def _load_partition(path: Path) -> list[ShortInterestRecordV1]:
     rows = document.get("records") if isinstance(document, dict) else None
     if not isinstance(rows, list):
         raise ShortPositioningSchemaError(f"partition {path.name} has no records array")
-    return [record_from_json(row) for row in rows]
+    records = [record_from_json(row) for row in rows]
+    # record_from_json only reconstructs a well-formed row; the causal and
+    # value invariants (non-negative shares, derived key, timing) are gated
+    # here so a corrupted-but-parseable partition fails closed on read.
+    for record in records:
+        validate_short_interest_record(record)
+    return records
 
 
 def _load_all(root: Path, provider: str, dataset: str) -> list[ShortInterestRecordV1]:

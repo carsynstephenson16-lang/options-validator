@@ -237,6 +237,22 @@ class CausalResolutionTests(StoreTestCase):
         self.assertEqual(snapshot.primary_status, "SCHEMA_ERROR")
         self.assertIsNone(snapshot.short_interest)
 
+    def test_a_negative_share_count_fails_closed_instead_of_flowing_through(self):
+        # The row is otherwise well-formed (record_from_json succeeds); only
+        # the value-level validator catches a negative share count, so the
+        # read path must call it rather than trusting a parseable partition.
+        self.seed()
+        partition = next(self.root.rglob("records-*.json"))
+        document = json.loads(partition.read_text())
+        document["records"][0]["current_short_shares"] = -1
+        partition.write_text(json.dumps(document))
+
+        snapshot = resolve_short_positioning_snapshot(
+            self.root, symbol="ZQXA", asof=datetime(2026, 7, 21, 20, 0, tzinfo=timezone.utc)
+        )
+        self.assertEqual(snapshot.primary_status, "SCHEMA_ERROR")
+        self.assertIsNone(snapshot.short_interest)
+
 
 class FloatLookaheadTests(unittest.TestCase):
     def _features(self, **overrides) -> ShortInterestFeaturesV1:

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import time as time_module
+import urllib.parse
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 from typing import Callable
@@ -288,6 +289,11 @@ def normalize_finra_row(
     available_at = finra_available_at(
         request.publication_date, observed_release_at=request.observed_release_at
     )
+    if revision_flag:
+        # A revision is only knowable once it was actually captured. Bounding
+        # below by retrieved_at stops a correction pulled in weeks after the
+        # original schedule from being backdated to that original release.
+        available_at = max(available_at, retrieved_at.astimezone(ZoneInfo("UTC")))
 
     provenance = SourceProvenanceV1(
         schema_version="short-positioning-provenance/v1",
@@ -377,6 +383,10 @@ class FinraConsolidatedShortInterestAdapter:
 
         send = transport or _http_transport
         url = plan.url
+        if plan.query:
+            # ``plan.query`` is an ordered tuple of pairs, so urlencode keeps
+            # the parameter order deterministic for testability.
+            url = f"{url}?{urllib.parse.urlencode(plan.query)}"
         headers = self._headers()
         last_reason = "no attempt completed"
 

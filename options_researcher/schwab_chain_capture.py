@@ -165,6 +165,17 @@ def capture(
     force: bool = False,
 ) -> tuple[int, dict | None]:
     """Capture one official preclose package; 0 ok, 1 failed, 2 conflict."""
+    if force:
+        # A forced capture can never become gate evidence (verify_session
+        # requires force=false), but it WOULD write the session's immutable
+        # parquet/manifest/receipt and block the official preclose capture
+        # from ever landing. Refuse before fetching or writing anything.
+        print(
+            "schwab_chain_capture refused: force=True cannot produce canonical "
+            "session artifacts; a forced package would poison the session and "
+            "is never valid gate evidence"
+        )
+        return 1, None
     if now_ny is None:
         now_ny = datetime.now(ZoneInfo(NY_TZ))
     if not in_regular_session(now_ny):
