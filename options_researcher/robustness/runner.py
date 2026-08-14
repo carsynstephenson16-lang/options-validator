@@ -57,6 +57,7 @@ _REQUIRED_STABILITY_GATE_KEYS = {
     "cost_stress",
     "brittleness",
 }
+_VALID_STABILITY_GATE_OUTCOMES = {"PASS", "FAIL", "BLOCKED"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,8 +79,13 @@ def _merge_stability_gate_outcomes(
         if not isinstance(gate, tuple) or len(gate) != 2:
             raise ValueError("stability gate outcomes must contain string pairs")
         key, value = gate
-        if not isinstance(key, str) or not key or not isinstance(value, str) or not value:
-            raise ValueError("stability gate outcomes must contain non-empty string pairs")
+        if (
+            not isinstance(key, str)
+            or not key.strip()
+            or not isinstance(value, str)
+            or value not in _VALID_STABILITY_GATE_OUTCOMES
+        ):
+            raise ValueError("stability gate outcomes must contain valid string pairs")
         if key in validated:
             raise ValueError(f"duplicate stability gate outcome {key!r}")
         if key in runner_gates:

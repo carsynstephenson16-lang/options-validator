@@ -529,12 +529,24 @@ class RegistryAndReportTests(unittest.TestCase):
         self.assertIn("future_stability_gate=PASS", markdown)
 
     def test_runner_rejects_empty_duplicate_and_malformed_stability_gates(self):
+        complete_gates = (
+            ("minimum_observations", "PASS"),
+            ("sign_consistency", "PASS"),
+            ("ticker_concentration", "PASS"),
+            ("regime_concentration", "PASS"),
+            ("window_concentration", "PASS"),
+            ("cost_stress", "PASS"),
+            ("brittleness", "PASS"),
+        )
         cases = {
             "empty": (),
             "duplicate": (("minimum_observations", "PASS"), ("minimum_observations", "FAIL")),
             "empty-key": (("", "PASS"),),
             "empty-value": (("minimum_observations", ""),),
             "not-a-pair": (("minimum_observations",),),
+            "whitespace-key": (*complete_gates, ("   ", "PASS")),
+            "whitespace-value": (*complete_gates, ("future_gate", "   ")),
+            "unsupported-value": (*complete_gates[:-1], ("brittleness", "PSS")),
             "missing-required-key": (
                 ("minimum_observations", "PASS"),
                 ("sign_consistency", "PASS"),
