@@ -12,8 +12,8 @@ from pathlib import Path
 
 import config
 from data.cache_runner import session_close_utc
+from options_researcher import h7_data_gate, h7_schwab_data_gate
 from options_researcher import h7_event_ledger as ledger
-from options_researcher import h7_schwab_data_gate
 from options_researcher import h7_window_registration as old_registration
 from options_researcher.h7_paper_lifecycle import ActivationBoundaryError
 from options_researcher.h7_scope import scope_identity
@@ -60,6 +60,7 @@ EVIDENCE_FIELDS = (
     "data_gate_evidence_id",
     "data_gate_evidence_mode",
     "source_health_receipt_hash",
+    "data_gate_receipt",
     "data_gate_receipt_hash",
     "last_historical_session",
     "last_historical_manifest_receipt_hash",
@@ -134,6 +135,71 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> None:
         raise RegistrationInputError("feasibility base_rate arithmetic mismatch")
     if not math.isclose(float(receipt["expected_entries"]), expected, rel_tol=1e-12):
         raise RegistrationInputError("feasibility expected_entries arithmetic mismatch")
+
+
+def _validate_data_gate_receipt(
+    receipt: dict,
+    claimed_hash: str,
+    claimed_source_health_hash: str,
+    universe_manifest: dict,
+    historical_session: str,
+) -> None:
+    if not isinstance(receipt, dict):
+        raise RegistrationInputError("data-gate receipt must be an object")
+    try:
+        verified_symbols = h7_data_gate.validate_durable_receipt(receipt)
+    except (OSError, ValueError) as exc:
+        raise RegistrationInputError(
+            f"data-gate receipt failed durable verification: {exc}"
+        ) from exc
+    if receipt.get("receipt_hash") != claimed_hash:
+        raise RegistrationInputError("data-gate receipt hash mismatch")
+    if receipt.get("source_health_receipt_hash") != claimed_source_health_hash:
+        raise RegistrationInputError(
+            "data-gate receipt source-health hash disagrees with registration evidence"
+        )
+    if receipt.get("evidence_mode") != h7_schwab_data_gate.EVIDENCE_MODE:
+        raise RegistrationInputError("data-gate receipt is not Schwab evidence")
+    if receipt.get("evaluation_session") != historical_session:
+        raise RegistrationInputError(
+            "data-gate receipt session disagrees with registered history"
+        )
+    if (
+        receipt.get("whole_universe_verdict") != "GO"
+        or receipt.get("go_count") != len(universe_manifest["included"])
+        or receipt.get("no_go_count") != 0
+    ):
+        raise RegistrationInputError(
+            "data-gate receipt is not a whole-universe GO"
+        )
+    if receipt.get("config_hash") != config_hash():
+        raise RegistrationInputError(
+            "data-gate receipt config_hash disagrees with registration-time config"
+        )
+    if receipt.get("universe") != universe_manifest["included"]:
+        raise RegistrationInputError(
+            "data-gate receipt universe disagrees with registration cohort"
+        )
+    if verified_symbols != universe_manifest["included"]:
+        raise RegistrationInputError(
+            "verified data-gate symbols disagree with registration cohort"
+        )
+    scope = receipt.get("scope")
+    if not isinstance(scope, dict) or (
+        scope.get("scope_id") != universe_manifest["scope_id"]
+        or scope.get("scope_hash") != universe_manifest["scope_hash"]
+    ):
+        raise RegistrationInputError(
+            "data-gate receipt scope disagrees with registration cohort"
+        )
+    for field in ("schwab_manifest_hash", "schwab_capture_receipt_hash"):
+        value = receipt.get(field)
+        if not isinstance(value, str) or len(value) != 64 or any(
+            char not in "0123456789abcdef" for char in value
+        ):
+            raise RegistrationInputError(
+                f"data-gate receipt lacks a valid {field} binding"
+            )
 
 
 def build_window_registration_event(
@@ -228,6 +294,24 @@ def build_window_registration_event(
     if int(feasibility["universe_size"]) != len(manifest["included"]):
         raise RegistrationInputError(
             "feasibility universe_size disagrees with registration cohort"
+        )
+    _validate_data_gate_receipt(
+        evidence["data_gate_receipt"],
+        evidence["data_gate_receipt_hash"],
+        evidence["source_health_receipt_hash"],
+        manifest,
+        historical_session,
+    )
+    if evidence["data_gate_evidence_id"] != evidence["data_gate_receipt_hash"]:
+        raise RegistrationInputError(
+            "data_gate_evidence_id must equal the durable receipt hash"
+        )
+    if (
+        evidence["source_health_evidence_id"]
+        != evidence["source_health_receipt_hash"]
+    ):
+        raise RegistrationInputError(
+            "source_health_evidence_id must equal the durable receipt hash"
         )
 
     registered_cost_hash = cost_model_hash()

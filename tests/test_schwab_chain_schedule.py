@@ -34,6 +34,15 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self.assertNotIn("options_researcher.intraday_capture", source)
         self.assertNotIn("tools/intraday_capture.sh", source)
 
+    def test_wrapper_refreshes_origin_main_before_comparing_head(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        fetch = source.index('git -C "$REPO" fetch -q origin main')
+        read_remote = source.index(
+            'REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main'
+        )
+
+        self.assertLess(fetch, read_remote)
+
     def test_plist_runs_only_weekdays_at_1545_et(self):
         payload = plistlib.loads(PLIST.read_bytes())
         self.assertEqual(

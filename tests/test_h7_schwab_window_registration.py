@@ -2,18 +2,141 @@
 
 from __future__ import annotations
 
+import copy
+import json
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
+import pandas as pd
+
 from options_researcher import h7_activation_guard as activation_guard
+from options_researcher import (
+    h7_data_gate,
+    h7_schwab_data_gate,
+)
 from options_researcher import h7_event_ledger as ledger
-from options_researcher import h7_schwab_window_registration as registration
+from options_researcher import (
+    h7_schwab_window_registration as registration,
+)
 from options_researcher import h7_window_registration as old_registration
+from options_researcher.h7_scope import scope_identity
 from research.hashing import canonical_json, config_hash, sha256_file, sha256_hex
+from research.receipts import make_receipt, write_immutable_receipt
+from tools import schwab_chain_manifest
 
 _DEFAULT_UNIVERSE = old_registration.default_universe_manifest()["included"]
+_REAL_GATE_TMP: tempfile.TemporaryDirectory | None = None
+_REAL_GATE_RECEIPT: dict | None = None
+
+
+def _chain_frame() -> pd.DataFrame:
+    rows = []
+    for expiration in ("2026-08-21", "2026-09-18"):
+        for right, delta in (("C", 0.4), ("P", -0.4)):
+            rows.append(
+                {
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": right,
+                    "bid": 1.0,
+                    "ask": 1.2,
+                    "open_interest": 100,
+                    "iv": 0.30,
+                    "delta": delta,
+                    "gamma": 0.02,
+                    "theta": -0.03,
+                    "vega": 0.10,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _verified_data_gate_receipt() -> dict:
+    """Create one persistent real Schwab package for registration tests."""
+    global _REAL_GATE_RECEIPT, _REAL_GATE_TMP
+    if _REAL_GATE_RECEIPT is not None:
+        return copy.deepcopy(_REAL_GATE_RECEIPT)
+
+    _REAL_GATE_TMP = tempfile.TemporaryDirectory()
+    root = Path(_REAL_GATE_TMP.name)
+    chain_dir = root / "chains"
+    close_dir = root / "closes"
+    report_dir = root / "reports" / "2026-08-07"
+    chain_dir.mkdir(parents=True)
+    close_dir.mkdir(parents=True)
+    report_dir.mkdir(parents=True)
+    for symbol in _DEFAULT_UNIVERSE:
+        frame = _chain_frame()
+        frame.to_parquet(chain_dir / f"{symbol}_2026-08-07.parquet")
+        pd.DataFrame({"date": ["2026-08-07"], "close": [100.0]}).to_parquet(
+            close_dir / f"{symbol}.parquet"
+        )
+
+    manifest_path = report_dir / "manifest.json"
+    capture_receipt_path = report_dir / "preclose.json"
+    built = schwab_chain_manifest.build_manifest(
+        "2026-08-07", _DEFAULT_UNIVERSE, chain_dir
+    )
+    schwab_chain_manifest.write_manifest(built, manifest_path)
+    names = {}
+    for symbol in _DEFAULT_UNIVERSE:
+        path = chain_dir / f"{symbol}_2026-08-07.parquet"
+        frame = pd.read_parquet(path)
+        names[symbol] = {
+            "status": "ok",
+            "row_count": len(frame),
+            "expiration_count": int(frame["expiration"].nunique()),
+            "sha256": sha256_file(path),
+            "size_bytes": path.stat().st_size,
+        }
+    capture_receipt_path.write_text(
+        json.dumps(
+            {
+                "receipt_kind": "schwab_chain_capture/v1",
+                "session": "2026-08-07",
+                "session_chain_convention": "preclose_snapshot_v1",
+                "captured_at_et": "2026-08-07T15:45:00-04:00",
+                "force": False,
+                "universe": _DEFAULT_UNIVERSE,
+                "overall_status": "ok",
+                "names": names,
+                "manifest_hash": built["manifest_hash"],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+    result = h7_schwab_data_gate.evaluate(
+        date(2026, 8, 8),
+        close_dir=close_dir,
+        chain_dir=chain_dir,
+        manifest_path=manifest_path,
+        receipt_path=capture_receipt_path,
+        symbols=_DEFAULT_UNIVERSE,
+    )
+    source_health = make_receipt(
+        "source_health",
+        {
+            "evaluation_session": "2026-08-07",
+            "scope": scope_identity(),
+            "symbols": {
+                symbol: {"healthy": True, "gate": "CLEAR"}
+                for symbol in _DEFAULT_UNIVERSE
+            },
+        },
+    )
+    source_health_path = report_dir / "source-health.json"
+    write_immutable_receipt(source_health, source_health_path)
+    _REAL_GATE_RECEIPT = h7_data_gate.build_receipt(
+        result,
+        source_health_receipt=source_health,
+        source_health_receipt_path=source_health_path,
+    )
+    return copy.deepcopy(_REAL_GATE_RECEIPT)
 
 
 def feasibility_receipt(**overrides) -> dict:
@@ -54,17 +177,32 @@ def owner_inputs(**overrides) -> dict:
     return values
 
 
+def data_gate_receipt(**overrides) -> dict:
+    receipt = _verified_data_gate_receipt()
+    payload = {
+        key: value
+        for key, value in receipt.items()
+        if key not in {"receipt_schema", "receipt_type", "receipt_hash"}
+    }
+    payload.update(overrides)
+    return make_receipt("data_gate", payload)
+
+
 def evidence(**overrides) -> dict:
     receipt = feasibility_receipt()
+    gate_receipt = data_gate_receipt()
     values = {
         "review_evidence": "external adversarial review placeholder",
         "activation_spec_sha256": "a" * 64,
         "code_commit": "b" * 40,
-        "source_health_evidence_id": "sh:2026-08-07",
-        "data_gate_evidence_id": "dg:2026-08-07",
+        "source_health_evidence_id": gate_receipt[
+            "source_health_receipt_hash"
+        ],
+        "data_gate_evidence_id": gate_receipt["receipt_hash"],
         "data_gate_evidence_mode": "REAL-H7-SCHWAB-PRECLOSE-AUDIT",
-        "source_health_receipt_hash": "c" * 64,
-        "data_gate_receipt_hash": "d" * 64,
+        "source_health_receipt_hash": gate_receipt["source_health_receipt_hash"],
+        "data_gate_receipt": gate_receipt,
+        "data_gate_receipt_hash": gate_receipt["receipt_hash"],
         "last_historical_session": "2026-08-07",
         "last_historical_manifest_receipt_hash": "e" * 64,
         "provider_identity": "schwab-read-only/v1",
@@ -125,6 +263,115 @@ class BuilderTests(unittest.TestCase):
             registration.build_window_registration_event(
                 owner=owner_inputs(),
                 evidence=evidence(data_gate_evidence_mode="REAL-H7-FULL-AUDIT"),
+            )
+
+    def test_data_gate_receipt_mode_mismatch_refuses(self):
+        receipt = data_gate_receipt(evidence_mode="REAL-H7-FULL-AUDIT")
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    data_gate_receipt=receipt,
+                    data_gate_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_data_gate_receipt_hash_mismatch_refuses(self):
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(data_gate_receipt_hash="d" * 64),
+            )
+
+    def test_data_gate_evidence_id_mismatch_refuses(self):
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(data_gate_evidence_id="dg:detached"),
+            )
+
+    def test_source_health_evidence_id_mismatch_refuses(self):
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(source_health_evidence_id="sh:detached"),
+            )
+
+    def test_fabricated_content_addressed_go_receipt_refuses(self):
+        fabricated = data_gate_receipt()
+        for field in (
+            "symbols",
+            "input_files",
+            "source_health_receipt_path",
+            "source_health_receipt_hash",
+            "source_hash",
+            "source_hash_contract",
+        ):
+            fabricated.pop(field, None)
+        payload = {
+            key: value
+            for key, value in fabricated.items()
+            if key not in {"receipt_schema", "receipt_type", "receipt_hash"}
+        }
+        fabricated = make_receipt("data_gate", payload)
+
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    data_gate_receipt=fabricated,
+                    data_gate_receipt_hash=fabricated["receipt_hash"],
+                ),
+            )
+
+    def test_data_gate_receipt_config_hash_mismatch_refuses(self):
+        receipt = data_gate_receipt(config_hash="0" * 64)
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    data_gate_receipt=receipt,
+                    data_gate_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_data_gate_receipt_universe_name_mismatch_refuses(self):
+        tampered = list(_DEFAULT_UNIVERSE)
+        tampered[0] = "ZZZZ"
+        receipt = data_gate_receipt(universe=tampered)
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    data_gate_receipt=receipt,
+                    data_gate_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_data_gate_receipt_no_go_refuses(self):
+        receipt = data_gate_receipt(
+            whole_universe_verdict="NO_GO",
+            go_count=len(_DEFAULT_UNIVERSE) - 1,
+            no_go_count=1,
+        )
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    data_gate_receipt=receipt,
+                    data_gate_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_data_gate_receipt_session_mismatch_refuses(self):
+        receipt = data_gate_receipt(evaluation_session="2026-08-06")
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    data_gate_receipt=receipt,
+                    data_gate_receipt_hash=receipt["receipt_hash"],
+                ),
             )
 
     def test_tampered_feasibility_payload_refuses(self):
@@ -235,12 +482,13 @@ class GuardedDoorTests(unittest.TestCase):
         )
 
     def call(self):
+        evidence_values = evidence(
+            activation_spec_sha256=self.spec_sha,
+            code_commit=self.head,
+        )
         return registration.register_window_real(
             owner=owner_inputs(),
-            evidence=evidence(
-                activation_spec_sha256=self.spec_sha,
-                code_commit=self.head,
-            ),
+            evidence=evidence_values,
             guard_report=self.report,
             spec_sha256=self.spec_sha,
             spec_path=self.spec,
@@ -249,8 +497,12 @@ class GuardedDoorTests(unittest.TestCase):
             recheck_gates=lambda: {
                 "source_health_all_healthy": True,
                 "data_gate_go": True,
-                "source_health_evidence_id": "sh:2026-08-07",
-                "data_gate_evidence_id": "dg:2026-08-07",
+                "source_health_evidence_id": evidence_values[
+                    "source_health_evidence_id"
+                ],
+                "data_gate_evidence_id": evidence_values[
+                    "data_gate_evidence_id"
+                ],
             },
             now=datetime.fromisoformat("2026-08-09T20:30:00+00:00"),
         )

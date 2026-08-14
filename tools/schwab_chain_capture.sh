@@ -34,6 +34,10 @@ echo "repo: ${REPO}"
 # Unattended evidence may run only from the merged and current ops main.
 BRANCH="$(git -C "$REPO" branch --show-current 2>/dev/null)"
 LOCAL_SHA="$(git -C "$REPO" rev-parse HEAD 2>/dev/null)"
+if ! git -C "$REPO" fetch -q origin main; then
+  echo "schwab_chain_capture wrapper REFUSED: could not refresh origin/main"
+  exit 1
+fi
 REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main 2>/dev/null)"
 if [ "$BRANCH" != "main" ]; then
   echo "schwab_chain_capture wrapper REFUSED: branch is '${BRANCH}', not main"

@@ -148,6 +148,15 @@ class SchwabChainCaptureTests(unittest.TestCase):
             f"receipt_hash={sha256_file(receipt_path)}",
         )
 
+    def test_identical_successful_replay_keeps_one_fact_for_session(self):
+        first_code, _ = self._capture(FakeClient(), universe=("AAA",))
+        second_code, _ = self._capture(FakeClient(), universe=("AAA",))
+
+        self.assertEqual(first_code, 0)
+        self.assertEqual(second_code, 0)
+        lines = (self.root / "ledger" / "facts.log").read_text().splitlines()
+        self.assertEqual(len(lines), 1)
+
     def test_partial_capture_writes_failed_receipt_and_no_manifest(self):
         exit_code, receipt = self._capture(FakeClient(fail_symbol="BBB"))
 
