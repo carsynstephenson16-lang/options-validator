@@ -61,7 +61,7 @@ def main(argv=None) -> int:
         "--dsr-n-source", choices=["ledger", "off"], default="off",
         help="Deflated Sharpe Ratio N-trials provenance: 'ledger' reads the "
              "hash-chained research/ledger.py trial count (provenance "
-             "'ledger-trial-count'); 'off' (default) computes no DSR/PSR at "
+             "'ledger-N-operator-variance'); 'off' (default) computes no DSR/PSR at "
              "all. Display/diagnostic only -- never affects the verdict.",
     )
     parser.add_argument(
@@ -70,6 +70,11 @@ def main(argv=None) -> int:
              "Required when --dsr-n-source=ledger: there is no stored "
              "per-trial Sharpe series repo-wide to compute this from, so it "
              "must be supplied explicitly -- never guessed or defaulted.",
+    )
+    parser.add_argument(
+        "--dsr-trial-sr-var-provenance",
+        help="verbatim operator-supplied origin for --dsr-trial-sr-var. "
+             "Required and non-blank when --dsr-n-source=ledger.",
     )
     args = parser.parse_args(argv)
 
@@ -83,10 +88,18 @@ def main(argv=None) -> int:
                 file=sys.stderr,
             )
             return 1
+        if (args.dsr_trial_sr_var_provenance is None
+                or not args.dsr_trial_sr_var_provenance.strip()):
+            print(
+                "score_backtest refused: --dsr-trial-sr-var-provenance is required "
+                "and must be non-blank when --dsr-n-source=ledger",
+                file=sys.stderr,
+            )
+            return 1
         dsr_kwargs = {
             "dsr_n_trials": research_ledger.current_trial_count(),
             "dsr_trial_sr_variance": args.dsr_trial_sr_var,
-            "dsr_n_provenance": "ledger-trial-count",
+            "dsr_n_provenance": "ledger-N-operator-variance",
         }
 
     try:
@@ -113,13 +126,19 @@ def main(argv=None) -> int:
         # modes -- it is an input the caller typed, not something scoreboard()
         # computed, so it belongs alongside the result for reproducibility.
         result["dsr_trial_sr_variance_input"] = args.dsr_trial_sr_var
+        result["dsr_trial_sr_variance_provenance"] = args.dsr_trial_sr_var_provenance
 
     if args.json:
         print(json.dumps(_json_ready(result), indent=2, sort_keys=True))
     else:
         print_scoreboard(result)
         if dsr_kwargs:
+            print(f"  DSR N/variance provenance     {result['dsr_n_provenance']}")
             print(f"  DSR trial_sr_variance input   {args.dsr_trial_sr_var}")
+            print(
+                "  DSR trial_sr_variance provenance "
+                f"{args.dsr_trial_sr_var_provenance}"
+            )
     return 0
 
 
