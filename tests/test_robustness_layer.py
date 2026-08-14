@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import sqlite3
 import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from options_researcher import attractiveness
+from options_researcher.robustness import runner
 from options_researcher.robustness.models import (
     ExperimentSpec,
     SpecValidationError,
@@ -29,6 +32,7 @@ from options_researcher.robustness.screening import (
 )
 from options_researcher.robustness.stability import (
     ParameterFoldResult,
+    StabilityDiagnostic,
     analyze_stability,
 )
 from options_researcher.robustness.statistics import (
@@ -101,6 +105,50 @@ def _panel(parameter_id: str = "baseline", lane: str = "sell_put") -> list[Panel
                 )
             )
     return rows
+
+
+def _runner_fixture_rows() -> list[PanelObservation]:
+    rows: list[PanelObservation] = []
+    for parameter_id in ("baseline", "badge-b"):
+        for day_index, day in enumerate(_iso_days(60)):
+            for ticker_index, ticker in enumerate(("AAA", "BBB", "CCC")):
+                adjusted_return = (
+                    ticker_index * 0.01
+                    + day_index * 0.0001
+                    + (0.001 if parameter_id == "badge-b" else 0.0)
+                )
+                rows.append(
+                    PanelObservation(
+                        panel_date=day,
+                        ticker=ticker,
+                        lane="sell_put",
+                        parameter_id=parameter_id,
+                        score=float(ticker_index),
+                        gross_forward_return=adjusted_return + 0.002,
+                        modeled_cost=0.002,
+                        bid_ask_cost=0.0015,
+                        forward_cost_adjusted_return=adjusted_return,
+                        regime="normal",
+                    )
+                )
+    return rows
+
+
+def _stability_diagnostic(gate_outcomes: object) -> StabilityDiagnostic:
+    return StabilityDiagnostic(
+        parameter_id="baseline",
+        neighboring_parameter_performance=None,
+        rank_stability=1.0,
+        sign_consistency=1.0,
+        out_of_sample_decay=0.0,
+        ticker_concentration=0.5,
+        regime_concentration=0.5,
+        window_concentration=0.5,
+        minimum_observation_count=30,
+        cost_sensitive=False,
+        brittle_isolated_peak=False,
+        gate_outcomes=gate_outcomes,  # type: ignore[arg-type]
+    )
 
 
 class ExperimentSpecTests(unittest.TestCase):
@@ -273,8 +321,56 @@ class StabilityTests(unittest.TestCase):
         self.assertGreater(diagnostic.ticker_concentration, 0.8)
         self.assertTrue(diagnostic.cost_sensitive)
 
+    def test_cost_sensitivity_ignores_a_failing_unpinned_higher_cost_arm(self):
+        diagnostic = analyze_stability(
+            "baseline",
+            (
+                ParameterFoldResult(
+                    parameter_id="baseline",
+                    fold=0,
+                    train_metric=0.10,
+                    test_metric=0.10,
+                    observation_count=30,
+                    cost_stress_metrics={1.0: 0.10, 1.5: 0.08, 2.0: -0.01},
+                ),
+            ),
+            minimum_observations=10,
+        )
+        self.assertFalse(diagnostic.cost_sensitive)
+
 
 class RegistryAndReportTests(unittest.TestCase):
+    def _run_fixture(
+        self,
+        base: Path,
+        *,
+        diagnostic: StabilityDiagnostic | None = None,
+    ) -> tuple[list[dict[str, object]], tuple[Path, Path, Path]]:
+        payload = _spec_dict()
+        payload["permutation_count"] = 9
+        spec = ExperimentSpec.from_mapping(payload)
+        with ExperimentRegistry(base / "registry.sqlite3") as registry:
+            if diagnostic is None:
+                paths = run_experiment(
+                    spec,
+                    _runner_fixture_rows(),
+                    [{"entry_type": "trial_intent", "hypothesis_id": "RQ2-v1"}],
+                    registry,
+                    output_directory=base / "reports",
+                    matrix_root=base / "matrices",
+                )
+            else:
+                with patch.object(runner, "analyze_stability", return_value=diagnostic):
+                    paths = run_experiment(
+                        spec,
+                        _runner_fixture_rows(),
+                        [{"entry_type": "trial_intent", "hypothesis_id": "RQ2-v1"}],
+                        registry,
+                        output_directory=base / "reports",
+                        matrix_root=base / "matrices",
+                    )
+            return registry.task_records(spec.run_id), paths
+
     def test_idempotent_resume_and_conflict_detection(self):
         spec = ExperimentSpec.from_mapping(_spec_dict())
         with tempfile.TemporaryDirectory() as tmp:
@@ -339,6 +435,86 @@ class RegistryAndReportTests(unittest.TestCase):
             markdown = next(path for path in paths if path.suffix == ".md").read_text()
             self.assertIn("RESEARCH-ONLY", markdown)
             self.assertIn("No production recommendation", markdown)
+
+    def test_runner_surfaces_all_stability_gates_in_registry_and_reports(self):
+        expected_gates = {
+            "registration": "PASS",
+            "adverse_bottom_bucket": "PASS",
+            "holm": "FAIL",
+            "production_promotion": "BLOCKED",
+            "minimum_observations": "PASS",
+            "sign_consistency": "PASS",
+            "ticker_concentration": "FAIL",
+            "regime_concentration": "FAIL",
+            "window_concentration": "PASS",
+            "cost_stress": "PASS",
+            "brittleness": "PASS",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            records, paths = self._run_fixture(Path(tmp))
+            json_payload = json.loads(next(path for path in paths if path.suffix == ".json").read_text())
+            csv_rows = list(
+                csv.DictReader(
+                    next(path for path in paths if path.suffix == ".csv").read_text().splitlines()
+                )
+            )
+            markdown = next(path for path in paths if path.suffix == ".md").read_text()
+
+        for record, json_task, csv_row in zip(
+            records, json_payload["tasks"], csv_rows, strict=True
+        ):
+            metrics = record["metrics"]
+            self.assertIsInstance(metrics, dict)
+            self.assertEqual(metrics["spread"], 0.02)
+            self.assertEqual(record["raw_p_value"], 1.0)
+            self.assertEqual(record["adjusted_p_value"], 1.0)
+            gates = record["gate_outcomes"]
+            self.assertEqual(gates, expected_gates)
+            self.assertEqual(gates["registration"], "PASS")
+            self.assertEqual(gates["adverse_bottom_bucket"], "PASS")
+            self.assertEqual(gates["holm"], "FAIL")
+            self.assertEqual(gates["production_promotion"], "BLOCKED")
+            self.assertEqual(json_task["gate_outcomes"], expected_gates)
+            self.assertEqual(json.loads(csv_row["gate_outcomes"]), expected_gates)
+        for key, value in expected_gates.items():
+            self.assertIn(f"{key}={value}", markdown)
+
+    def test_runner_rejects_stability_gate_collision_with_runner_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "stability gate"):
+                self._run_fixture(Path(tmp), diagnostic=_stability_diagnostic((("holm", "FAIL"),)))
+
+    def test_runner_rejects_empty_duplicate_and_malformed_stability_gates(self):
+        cases = {
+            "empty": (),
+            "duplicate": (("minimum_observations", "PASS"), ("minimum_observations", "FAIL")),
+            "empty-key": (("", "PASS"),),
+            "empty-value": (("minimum_observations", ""),),
+            "not-a-pair": (("minimum_observations",),),
+        }
+        for name, gate_outcomes in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaisesRegex(ValueError, "stability gate"):
+                    self._run_fixture(
+                        Path(tmp), diagnostic=_stability_diagnostic(gate_outcomes)
+                    )
+
+    def test_markdown_discloses_arithmetic_stress_sensitivity_limits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _records, paths = self._run_fixture(Path(tmp))
+            markdown = next(path for path in paths if path.suffix == ".md").read_text()
+
+        self.assertIn(
+            "Total modeled-cost stress (0.5x / 1.0x / 1.5x; arithmetic sensitivity; "
+            "same-sample point estimates; no stress-arm CI; all modeled cost, including any "
+            "commission embedded upstream, is scaled arithmetically)",
+            markdown,
+        )
+        self.assertIn(
+            "Bid/ask stress (0.5x / 1.0x / 1.5x; arithmetic sensitivity; same-sample point "
+            "estimates; no stress-arm CI)",
+            markdown,
+        )
 
     def test_runner_resumes_without_rewriting_completed_tasks(self):
         payload = _spec_dict()
