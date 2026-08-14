@@ -37,8 +37,8 @@ evidence quality, not majority vote. Prefer one agent for routine tasks.
 ## Skills
 
 Reusable operator skills live in `.agents/skills/<name>/SKILL.md` (the
-tracked source of truth; `.claude/skills/` holds local copies for Claude
-Code). Before starting work that a skill covers — backtest realism audits,
+tracked source of truth; `.claude/skills/` holds symlinks to them for Claude
+Code, plus the real `research-refresh` directory). Before starting work that a skill covers — backtest realism audits,
 data audits, ledger discipline, red-teaming results, the daily ritual —
 read the matching SKILL.md and follow it. Guardrail rules for advisor-style
 agents live in `.agents/rules/`.

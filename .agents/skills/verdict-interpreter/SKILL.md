@@ -13,7 +13,7 @@ The validator produces statistical output (stationary bootstrap, confidence inte
 2. Translate every verdict into a decision-relevant sentence:
    - Not "Sharpe 1.4, CI [0.2, 2.1]" but "The strategy made money in this sample, but the plausible range includes 'barely better than nothing' — this result does not yet distinguish skill from luck."
 3. Always state the sample size in trades and in independent-ish market regimes, and say whether it's enough. Fewer than ~100 trades or fewer than 2 distinct regimes = say explicitly the verdict is weak.
-4. Never use these words about a backtest result: "proven," "confirmed," "edge found," "works." Allowed vocabulary: "survived this test," "not yet rejected," "rejected," "consistent with zero edge."
+4. Never use these words about a backtest result: "proven," "confirmed," "edge found," "works," "guaranteed." Allowed vocabulary: "survived this test," "not yet rejected," "rejected," "consistent with zero edge."
 5. If a result looks good, your NEXT sentence must be the most likely boring explanation (small sample, one favorable regime, costs underestimated, multiple testing).
 6. Distinguish the two failure directions every time:
    - False positive: believing a dead strategy works (costs real money later).
