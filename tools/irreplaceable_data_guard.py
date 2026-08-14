@@ -59,6 +59,7 @@ DEFAULT_NAMESPACES = [
     ".cache/schwab_chains",
     ".cache/underlying",
     ".cache/underlying_ohlcv",
+    "reports/schwab_chains",
 ]
 
 

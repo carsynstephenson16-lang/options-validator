@@ -34,6 +34,23 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self.assertNotIn("options_researcher.intraday_capture", source)
         self.assertNotIn("tools/intraday_capture.sh", source)
 
+    def test_wrapper_refreshes_origin_main_before_comparing_head(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        fetch = source.index("fetch -q origin main")
+        read_remote = source.index(
+            'REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main'
+        )
+        branch_check = source.index('if [ "$BRANCH" != "main" ]')
+
+        # Offline refusal reasons stay honest: the branch check runs before
+        # the network fetch, and the fetch is bounded and prompt-free because
+        # it sits on the irreplaceable-capture critical path.
+        self.assertLess(branch_check, fetch)
+        self.assertLess(fetch, read_remote)
+        self.assertIn("GIT_TERMINAL_PROMPT=0", source)
+        self.assertIn("http.lowSpeedLimit=1000", source)
+        self.assertIn("http.lowSpeedTime=20", source)
+
     def test_plist_runs_only_weekdays_at_1545_et(self):
         payload = plistlib.loads(PLIST.read_bytes())
         self.assertEqual(

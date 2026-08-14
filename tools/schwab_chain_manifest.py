@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from data.atomic_io import atomic_text_write
+from options_researcher.intraday_capture import validate_session_tag
 from research.hashing import canonical_json, sha256_file, sha256_hex
 
 SCHEMA_VERSION = "schwab-chain-manifest/v1"
 PROVIDER = "schwab"
 SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
+NY_TZ = ZoneInfo("America/New_York")
 
 
 class SchwabChainManifestError(RuntimeError):
@@ -52,6 +55,26 @@ def _load_object(path: Path, label: str) -> dict:
     if not isinstance(value, dict):
         raise SchwabChainManifestError(f"{label} must be a JSON object")
     return value
+
+
+def _captured_at_preclose(value: object, session: str) -> datetime:
+    try:
+        captured_at = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError) as exc:
+        raise SchwabChainManifestError(
+            "receipt captured_at_et must be an ISO-8601 timestamp"
+        ) from exc
+    if captured_at.tzinfo is None or captured_at.utcoffset() is None:
+        raise SchwabChainManifestError("receipt captured_at_et must include an offset")
+    captured_at_ny = captured_at.astimezone(NY_TZ)
+    if captured_at_ny.date().isoformat() != session:
+        raise SchwabChainManifestError("receipt captured_at_et session does not match")
+    timing_ok, timing_reason = validate_session_tag("preclose", captured_at_ny)
+    if not timing_ok:
+        raise SchwabChainManifestError(
+            f"receipt captured_at_et is outside preclose tolerance: {timing_reason}"
+        )
+    return captured_at_ny
 
 
 def _manifest_hash(value: dict) -> str:
@@ -152,6 +175,9 @@ def verify_session(
         raise SchwabChainManifestError("receipt kind does not match")
     if receipt.get("session") != session:
         raise SchwabChainManifestError("receipt session does not match request")
+    _captured_at_preclose(receipt.get("captured_at_et"), session)
+    if receipt.get("force") is not False:
+        raise SchwabChainManifestError("receipt force must be false; require force=false")
     if receipt.get("session_chain_convention") != SESSION_CHAIN_CONVENTION:
         raise SchwabChainManifestError("receipt convention does not match")
     if receipt.get("universe") != symbols:

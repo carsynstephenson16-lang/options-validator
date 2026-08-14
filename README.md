@@ -144,6 +144,33 @@ H4/H5 forward-window entries are time-dependent paper marks, not
 re-runnable point results; their "reproduction" is the positions CSVs plus
 the dated reports.
 
+## Short positioning context (EXP-SHORT, off by default)
+
+Issuer-level reported short interest from FINRA Consolidated Short Interest,
+shown as a separate display-only lane on the experiments dashboard. It is
+**not** a signal: no ranking, verdict, entry, sizing, or execution authority,
+and it is disabled unless `config.EXP_SHORT_ENABLED` is turned on.
+
+```bash
+# describe a capture without touching the network (dry-run is the default)
+uv run python tools/short_positioning_capture.py \
+  --provider finra --dataset consolidated-short-interest \
+  --publication-date 2026-08-11 --symbols MSFT,AMZN,VST,CEG \
+  --output-root .cache/short_positioning --dry-run
+
+# audit what is already on disk (offline; never repairs)
+uv run python tools/short_positioning_audit.py \
+  --root .cache/short_positioning --provider finra \
+  --dataset consolidated-short-interest \
+  --through-publication-date 2026-08-11 --strict
+```
+
+Captured provider rows stay **local and gitignored** (`.cache/short_positioning/`);
+only invented synthetic fixtures are tracked. S&P Global and every other
+securities-finance provider remain LICENSE BLOCKED and unimplemented. Design
+and data rights: `docs/superpowers/specs/2026-08-11-short-positioning-context-design.md`
+and `docs/data/short-positioning-contract.md`.
+
 ## Capital & risk
 
 `RISK_SLEEVE` ($14k) and `MAX_LOSS_PER_TRADE` ($600 economic max loss, owner

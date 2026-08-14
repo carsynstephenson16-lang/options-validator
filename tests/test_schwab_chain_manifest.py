@@ -52,7 +52,13 @@ class SchwabChainManifestTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _write_package(self, *, receipt_session: str = SESSION):
+    def _write_package(
+        self,
+        *,
+        receipt_session: str = SESSION,
+        captured_at_et: str = "2026-08-10T15:45:00-04:00",
+        force: bool = False,
+    ):
         built = manifest.build_manifest(SESSION, SYMBOLS, self.chain_dir)
         manifest_path = manifest.write_manifest(built, self.report_dir / "manifest.json")
         names = {}
@@ -69,6 +75,8 @@ class SchwabChainManifestTests(unittest.TestCase):
             "receipt_kind": "schwab_chain_capture/v1",
             "session": receipt_session,
             "session_chain_convention": "preclose_snapshot_v1",
+            "captured_at_et": captured_at_et,
+            "force": force,
             "universe": SYMBOLS,
             "overall_status": "ok",
             "names": names,
@@ -107,6 +115,37 @@ class SchwabChainManifestTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(manifest.SchwabChainManifestError, "receipt session"):
+            manifest.verify_session(
+                SESSION, SYMBOLS, self.chain_dir, manifest_path, receipt_path
+            )
+
+    def test_review_probe_at_0931_with_force_true_refuses(self):
+        manifest_path, receipt_path, _ = self._write_package(
+            captured_at_et="2026-08-10T09:31:00-04:00",
+            force=True,
+        )
+
+        with self.assertRaises(manifest.SchwabChainManifestError):
+            manifest.verify_session(
+                SESSION, SYMBOLS, self.chain_dir, manifest_path, receipt_path
+            )
+
+    def test_out_of_preclose_tolerance_receipt_refuses_without_force(self):
+        manifest_path, receipt_path, _ = self._write_package(
+            captured_at_et="2026-08-10T09:31:00-04:00",
+        )
+
+        with self.assertRaisesRegex(
+            manifest.SchwabChainManifestError, "preclose tolerance"
+        ):
+            manifest.verify_session(
+                SESSION, SYMBOLS, self.chain_dir, manifest_path, receipt_path
+            )
+
+    def test_force_true_receipt_refuses_inside_preclose_tolerance(self):
+        manifest_path, receipt_path, _ = self._write_package(force=True)
+
+        with self.assertRaisesRegex(manifest.SchwabChainManifestError, "force=false"):
             manifest.verify_session(
                 SESSION, SYMBOLS, self.chain_dir, manifest_path, receipt_path
             )
