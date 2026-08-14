@@ -154,16 +154,49 @@ class NetworkIsolationTests(unittest.TestCase):
         self.assertIn(report["status"], {"PASS", "WARN", "BLOCK"})
 
 
+def _check_ignore(path: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "check-ignore", "-q", "--no-index", path],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _first_symlink_ancestor(path: str) -> str | None:
+    """Shallowest path component that is a symlink on disk, if any."""
+    current = Path()
+    for part in Path(path).parts:
+        current = current / part
+        if (REPO_ROOT / current).is_symlink():
+            return current.as_posix()
+    return None
+
+
 class GitPolicyTests(unittest.TestCase):
     def test_every_local_data_path_is_ignored_by_git(self):
         for path in IGNORED_DATA_PATHS:
             with self.subTest(path=path):
-                result = subprocess.run(
-                    ["git", "check-ignore", "-q", "--no-index", path],
-                    cwd=REPO_ROOT,
-                    capture_output=True,
+                result = _check_ignore(path)
+                if result.returncode == 0:
+                    continue
+                # Deployments symlink .cache to the main checkout's cache, and
+                # git refuses pathspecs that traverse a symlink (exit 128).
+                # Git can never track a file beyond a symlink, so the
+                # equivalent guarantee is that the symlinked component itself
+                # is ignored.
+                ancestor = _first_symlink_ancestor(path)
+                if ancestor is None:
+                    self.fail(
+                        f"{path} is not gitignored "
+                        f"(check-ignore exit {result.returncode}: {result.stderr.strip()})"
+                    )
+                self.assertEqual(
+                    _check_ignore(ancestor).returncode,
+                    0,
+                    f"{path} traverses symlink {ancestor}, which is itself "
+                    "not gitignored — the symlink would be tracked",
                 )
-                self.assertEqual(result.returncode, 0, f"{path} is not gitignored")
 
     def test_no_raw_or_normalized_provider_data_is_tracked(self):
         tracked = subprocess.run(
