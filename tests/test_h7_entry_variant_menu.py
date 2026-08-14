@@ -497,6 +497,29 @@ class ArmingCensusTests(unittest.TestCase):
         self.assertNotIn("clears_bar_ci_lower_ge_bar", receipt)
 
 
+class InputBindingTests(unittest.TestCase):
+    def test_input_hash_binds_bytes_not_normalised_text(self):
+        """CRLF must change the digest: assertions_v2.csv is a CRLF file, and a
+        text-mode hash would silently agree with an LF copy of it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            crlf = Path(tmp) / "crlf.csv"
+            lf = Path(tmp) / "lf.csv"
+            crlf.write_bytes(b"a,b\r\n1,2\r\n")
+            lf.write_bytes(b"a,b\n1,2\n")
+            hashes = menu.input_file_hashes({"crlf": crlf, "lf": lf})
+            self.assertNotEqual(hashes["crlf"]["sha256"], hashes["lf"]["sha256"])
+
+    def test_input_hash_matches_hashlib_over_raw_bytes(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "x.csv"
+            payload = b"header\r\nrow\r\n"
+            path.write_bytes(payload)
+            hashes = menu.input_file_hashes({"x": path})
+            self.assertEqual(hashes["x"]["sha256"],
+                             hashlib.sha256(payload).hexdigest())
+
+
 class MenuDefinitionTests(unittest.TestCase):
     def test_variant_ids_are_unique(self):
         ids = [v.variant_id for v in menu.build_variants()]

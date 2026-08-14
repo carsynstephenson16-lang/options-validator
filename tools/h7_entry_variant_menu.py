@@ -58,7 +58,12 @@ from options_researcher.h7_cohort import load_registered_cohort  # noqa: E402
 from options_researcher.h7_earnings import load_assertions  # noqa: E402
 from options_researcher.h7_scope import watch_universe  # noqa: E402
 from options_researcher.h7_watch import assemble_name  # noqa: E402
-from research.hashing import canonical_json, config_hash, sha256_hex  # noqa: E402
+from research.hashing import (  # noqa: E402
+    canonical_json,
+    config_hash,
+    sha256_file,
+    sha256_hex,
+)
 from strategies import h7_lanes  # noqa: E402
 
 RECEIPT_KIND = "h7_entry_variant_frequency/v1"
@@ -875,10 +880,15 @@ def write_receipt(receipt: dict, path: Path) -> None:
 
 
 def input_file_hashes(paths: dict[str, Path]) -> dict:
+    """Bind inputs by their BYTES, via the repo's standard file hash.
+
+    Text-mode hashing would silently normalise CRLF to LF -- assertions_v2.csv
+    has 254 CRLF rows -- producing a digest that neither binds the real bytes
+    nor matches the 2026-08-11 feasibility receipt it must be comparable to.
+    """
     out = {}
     for label, path in sorted(paths.items()):
-        out[label] = {"path": str(path),
-                      "sha256": sha256_hex(Path(path).read_text(encoding="utf-8"))}
+        out[label] = {"path": str(path), "sha256": sha256_file(Path(path))}
     return out
 
 
