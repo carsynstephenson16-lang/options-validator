@@ -121,6 +121,38 @@ canary bytes, then owner OD-3 + registration + authority flip.
 reconcile-don't-blind-merge. Four stale `codex/attractive-exp-*` branches
 remain deletion candidates (owner-approved batch, guard first).
 
+### 2026-08-14 addendum (supersedes stale lines above)
+
+**The "B2 still open" line above was stale when written** — B2 closed INSIDE
+the PR #35 merge train itself (`927dddd` reviewed FAIL → fixed in-session →
+`ab7611d` + `4c759ff`); reconstructed review receipt:
+`reports/h7_forward_schwab/2026-08-13-b2-adversarial-review-receipt.md`.
+**PR #35 merged 2026-08-13 late (58b1fd9, regular merge). CANARY SUCCESS
+2026-08-14 15:45 ET:** first real preclose capture, 15/15 names, manifest
+verified offline exit 0; evidence committed to main (13d48a9). Freeze
+lifted. **Six-agent fleet day (2026-08-14):** switched-off inventory, H7
+decision dossier, financial tie-out (caps all MATCH; two findings: $16k
+LEAPS bucket vs $14k sleeve dormant contradiction; dual 3/1050-vs-4/1050
+feasibility numbers pending slice A), brief 10 switch-on FAILED adversarial
+review and was WITHDRAWN (receipt
+`reports/2026-08-14-brief-10-adversarial-review-receipt.md`), replaced by
+**rev-2.1 spec** `docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md`
+(PASS WITH FIXES, all 18 findings applied; three-flag design; owner
+decisions D-1..D-6). **Recovery branch decomposed into slices** (whole-branch
+merge rejected): slice B backup hardening = PR #38 (drill prerequisite),
+slice A earnings repair = PR #39; registration CLI deferred to registration
+day. **Brief 09 variant menu BUILT and decisive**
+(`wt/brief09-variant-menu-0814` @ccd161f, V0 byte-reproduces 4/1050):
+NO variant clears the 20-entry bar; binding blockers are the earnings gate
+and liquidity admission (integrity rails); one-position-per-name arithmetic
+caps a 70-session window at ~15 (cohort-9) / ~25 (scope-15) entries. Owner
+options (a) longer window (b) pre-accept quoting the number (c) lower loss
+bar (d) capture-only — see
+`reports/2026-08-14-owner-decision-package.md` (single consolidated
+decision list). Mid-freeze incident: owner merged PR #36 10:28 ET; ops
+realigned 14:28 ET (4-hour canary-refusal window → new owner decision D-6,
+intra-day alignment check).
+
 ## 1. Executive verdict
 
 The Fable handoff is directionally useful but not safe as the sole execution plan.
