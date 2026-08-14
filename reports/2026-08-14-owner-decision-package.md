@@ -79,7 +79,36 @@ variant menu (in flight).
 - Attractiveness experiments dashboard runs (explicit invocation by design).
 - Stale-branch cleanup batch (guard + untracked check each, per rule).
 
-## Canary status
+## Canary status — SUCCESS (verified)
 
-⏳ At assembly time: gate re-verified ALIGNED at c96ed4b (14:56 ET);
-scheduled fire 15:45 ET. Result appended below when known.
+2026-08-14 15:45 ET: first real preclose canary COMPLETE — 15/15 names,
+`SCHWAB CHAIN STATUS: OK`, receipt `reports/schwab_chains/2026-08-14/
+preclose.json` + manifest + 15 parquet chains in `.cache/schwab_chains/`.
+Manifest verified offline exit 0 (15:48 ET, `python -m
+tools.schwab_chain_manifest verify --session 2026-08-14`). The freeze on
+origin/main is LIFTED; the landing train awaits the Group-1 GO.
+
+## Variant menu result (input to decision 10) — ARRIVED, decisive
+
+Brief 09 menu built and verified (`wt/brief09-variant-menu-0814` @ccd161f;
+suite 2,938 green; V0 baseline byte-reproduces the 4/1050 receipt; 18
+variants, multiple-testing count disclosed in receipts). Headline:
+**no variant clears the 20-entry bar.** Threshold loosening does nothing
+(the binding blockers are the earnings gate and liquidity admission — both
+integrity rails, forbidden to relax). The two OR-trigger variants project
+104 and 147 unconstrained, but under the already-registered
+one-position-per-underlying rule they collapse to 10 and 15. Arithmetic
+ceiling (LLM-inference, flagged): position limit × ~42-session holds caps a
+70-session window at ~25 entries (15 names) / ~15 (9-name cohort) — the
+cohort CANNOT meet the bar on this window under any entry rule.
+
+Decision 10 therefore reframes to these honest options:
+  (a) V9 + LONGER WINDOW (e.g. 140 sessions ≈ 7 months): constrained
+      expectancy roughly doubles to ~20 — plausibly clears; owner types the
+      window length as a frozen number.
+  (b) V9 on the 70-session window + explicit starvation pre-accept quoting
+      ~10 expected vs bar 20 (H10 precedent).
+  (c) Lower the loss bar (owner-typed change; H10 used 7).
+  (d) Register nothing yet; capture-only until the Schwab panel accumulates.
+No recommendation is frozen here; the menu document presents frequencies
+only, no outcome statistics, per the redesign integrity boundary.
