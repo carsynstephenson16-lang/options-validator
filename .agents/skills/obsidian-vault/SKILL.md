@@ -72,3 +72,6 @@ rg -n '/mnt''/d|Mostly'' flat|No'' folders' .agents/skills/obsidian-vault/SKILL.
 The final `rg` must return no matches. Before claiming Obsidian visibility,
 confirm the registered vault path is the checkout containing the edits; a
 worktree-only change becomes visible in the primary vault after it is landed.
+Exception: gitignored root daily notes (`YYYY-MM-DD.md`) never land with any
+branch — the session-note hook anchors them at the MAIN checkout root; see
+`session-synthesis`.

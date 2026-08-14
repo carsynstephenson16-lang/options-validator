@@ -29,6 +29,7 @@ from options_researcher.schwab_auth_failure import (
     expired_auth_line,
     is_expired_refresh_token_error,
 )
+from research.facts import append_fact
 from research.hashing import config_hash, sha256_file
 from tools.schwab_chain_manifest import (
     SESSION_CHAIN_CONVENTION,
@@ -40,10 +41,12 @@ from tools.schwab_chain_manifest import (
 NY_TZ = "America/New_York"
 CHAIN_DIR = Path(".cache/schwab_chains")
 REPORTS_DIR = Path("reports/schwab_chains")
+FACTS_DIR = Path("ledger")
 H7_CHAIN_COLUMNS = [
     "expiration",
     "strike",
     "right",
+    "contract_symbol",
     "bid",
     "ask",
     "open_interest",
@@ -52,11 +55,17 @@ H7_CHAIN_COLUMNS = [
     "gamma",
     "theta",
     "vega",
+    "multiplier",
+    "non_standard",
+    "mini",
+    "timestamp",
+    "trade_timestamp",
 ]
 ADAPTER_COLUMNS = [
     "expiration",
     "strike",
     "right",
+    "contract_symbol",
     "bid",
     "ask",
     "open_interest",
@@ -65,6 +74,11 @@ ADAPTER_COLUMNS = [
     "gamma",
     "theta",
     "vega",
+    "multiplier",
+    "non_standard",
+    "mini",
+    "timestamp",
+    "trade_timestamp",
 ]
 
 
@@ -151,6 +165,17 @@ def capture(
     force: bool = False,
 ) -> tuple[int, dict | None]:
     """Capture one official preclose package; 0 ok, 1 failed, 2 conflict."""
+    if force:
+        # A forced capture can never become gate evidence (verify_session
+        # requires force=false), but it WOULD write the session's immutable
+        # parquet/manifest/receipt and block the official preclose capture
+        # from ever landing. Refuse before fetching or writing anything.
+        print(
+            "schwab_chain_capture refused: force=True cannot produce canonical "
+            "session artifacts; a forced package would poison the session and "
+            "is never valid gate evidence"
+        )
+        return 1, None
     if now_ny is None:
         now_ny = datetime.now(ZoneInfo(NY_TZ))
     if not in_regular_session(now_ny):
@@ -231,6 +256,13 @@ def capture(
         return 2, receipt
     if complete:
         verify_session(session, names, chain_dir, manifest_path, receipt_path)
+        fact_prefix = f"SCHWAB_CHAIN_CAPTURE session={session} "
+        append_fact(
+            f"{fact_prefix}manifest_hash={manifest_hash} "
+            f"receipt_hash={sha256_file(receipt_path)}",
+            base_dir=FACTS_DIR,
+            dedupe_prefix=fact_prefix,
+        )
         print(f"schwab_chain_capture complete: {len(names)}/{len(names)} {receipt_path}")
         return 0, receipt
     failed = [symbol for symbol, record in records.items() if record["status"] != "ok"]

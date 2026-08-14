@@ -25,8 +25,11 @@ If sources conflict, say so instead of picking one silently.
   registry of WHICH hypotheses are live; PROJECT_STATE.md governs sequencing,
   and its P0 gate wins over any doc that implies building now.
 - **Provider transition (ThetaData exit, Schwab lane):** `docs/provider-transition.md`.
-- **Open engine defects (read before touching backtest code):**
-  `reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`.
+- **Ops checkouts + scheduled jobs (post-merge sync, LaunchAgent install/debug):**
+  `docs/superpowers/plans/2026-08-13-08-fork-healing-ops-sync-canary-runbook.md`
+  (ops-sync steps) + `tools/launchagents/README.md`.
+- **Engine-defect history** (P0 closures recorded in `PROJECT_STATE.md`;
+  report kept as evidence): `reports/strategy-evaluations/12_review_of_the_two_landed_commits.md`.
 - **Parked ideas:** `ideas-parking-lot.md` — parked is not rejected; it's just not now.
 - **Path-scoped rules** load automatically from `.claude/rules/` (ledger,
   data/providers, backtest engine).
@@ -99,8 +102,8 @@ are symlinked into `.claude/skills/` so they load as skills:
 for it), `ledger-discipline`, `web-fetch-order`, `backtest-realism-audit`,
 `results-red-team`, `independent-research-critic`, `repo-health-review`,
 `verdict-interpreter`, `options-data-audit`, `grilling`,
-`options-beginner-explainer`, `obsidian-vault`. `.claude/skills/research-refresh`
-is the scheduled research-context refresh.
+`options-beginner-explainer`, `obsidian-vault`, `codex-brief-writing`.
+`.claude/skills/research-refresh` is the scheduled research-context refresh.
 
 ## Hard enforcement (hooks — treat a block as correct)
 
@@ -145,6 +148,6 @@ it from a worktree used to false-report the whole cache as lost); its
 
 - Root dated notes (`/2026-*.md`, `Untitled*`) are gitignored Obsidian scratch — never commit them.
 - Secrets live in `.env` / macOS Keychain (`.env.example` is the template).
-- `.claude/rules/` and `.claude/skills/` are meant to be committed (un-ignored
-  2026-07-31; commit them with the next landing); the rest of `.claude/` stays local-only.
+- `.claude/rules/` and `.claude/skills/` are tracked and committed (un-ignored
+  2026-07-31); the rest of `.claude/` stays local-only.
 - `wiki/` is derived operator memory, never source of truth (`wiki/CLAUDE.md`).

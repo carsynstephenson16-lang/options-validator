@@ -141,6 +141,15 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertIn('RITUAL_TERMINAL_STATUS="BROKEN"', source)
         self.assertIn('RITUAL_TERMINAL_STATUS="OK"', source)
 
+    def test_durability_allow_list_includes_schwab_ledger_and_reports(self):
+        source = RITUAL.read_text()
+        git_add = source.index("git add --")
+        allow_list_end = source.index("2>/dev/null", git_add)
+        allow_list = source[git_add:allow_list_end]
+
+        self.assertIn("ledger/h7_forward_schwab", allow_list)
+        self.assertIn("reports/schwab_chains", allow_list)
+
 
 if __name__ == "__main__":
     unittest.main()

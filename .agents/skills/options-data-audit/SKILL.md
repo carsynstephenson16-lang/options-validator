@@ -1,11 +1,13 @@
 ---
 name: options-data-audit
-description: Audit options chain data quality before any backtest run or after loading new data. Use whenever new ThetaData (or any) options data is fetched, cached, or loaded, before running a backtest on data that hasn't been audited this session, or when results look suspicious (too good, too smooth, impossible fills).
+description: Audit options chain data quality before any backtest run or after loading new data. Use whenever new options chain data (the immutable ThetaData cache or a Schwab-lane capture) is fetched, cached, or loaded, before running a backtest on data that hasn't been audited this session, or when results look suspicious (too good, too smooth, impossible fills).
 ---
 
 # Options Data Audit
 
 Bad data produces confident garbage. No backtest runs on unaudited data. The audit must be run by CODE that prints results, not by eyeballing a dataframe — write or run an audit script and show its output.
+
+Provider note: the historical corpus is the immutable cached ThetaData parquet; the live lane is Schwab preclose capture. Schwab supplies no dated historical chains, point-in-time open interest, or historical Greeks, and no Schwab response enters `.cache/chains` (`.claude/rules/data-and-providers.md`). On a Schwab-lane package, checks that need OI/Greeks history report N/A explicitly — an N/A is honest; a silently skipped check is not.
 
 ## Checks (all required)
 

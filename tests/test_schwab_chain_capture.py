@@ -14,6 +14,7 @@ import pandas as pd
 from authlib.integrations.base_client.errors import OAuthError
 
 from options_researcher import schwab_chain_capture as capture
+from research.hashing import sha256_file
 
 NY = ZoneInfo("America/New_York")
 PRECLOSE = pd.Timestamp("2026-08-10T15:45:00", tz=NY).to_pydatetime()
@@ -28,6 +29,7 @@ def full_frame(*, expirations=("2026-08-21", "2026-09-18"), bid=1.0):
                     "expiration": expiration,
                     "strike": 100.0,
                     "right": right,
+                    "contract_symbol": f"AAA-{expiration}-{right}-100",
                     "bid": bid,
                     "ask": 1.2,
                     "open_interest": 100,
@@ -36,6 +38,11 @@ def full_frame(*, expirations=("2026-08-21", "2026-09-18"), bid=1.0):
                     "gamma": 0.02,
                     "theta": -0.03,
                     "vega": 0.10,
+                    "multiplier": 100.0,
+                    "non_standard": False,
+                    "mini": False,
+                    "timestamp": pd.Timestamp("2026-08-10T19:44:30Z"),
+                    "trade_timestamp": pd.Timestamp("2026-08-10T19:44:20Z"),
                 }
             )
     return pd.DataFrame(rows)
@@ -69,14 +76,39 @@ class SchwabChainCaptureTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def _capture(self, client, *, universe=("AAA", "BBB"), now_ny=PRECLOSE):
-        return capture.capture(
-            client=client,
-            now_ny=now_ny,
-            universe=list(universe),
-            chain_dir=self.chain_dir,
-            reports_dir=self.reports_dir,
-            force=True,
-        )
+        with mock.patch.object(
+            capture, "FACTS_DIR", self.root / "ledger", create=True
+        ):
+            return capture.capture(
+                client=client,
+                now_ny=now_ny,
+                universe=list(universe),
+                chain_dir=self.chain_dir,
+                reports_dir=self.reports_dir,
+                force=False,
+            )
+
+    def test_force_refuses_before_fetching_or_writing_anything(self):
+        client = FakeClient()
+
+        with mock.patch.object(
+            capture, "FACTS_DIR", self.root / "ledger", create=True
+        ):
+            exit_code, receipt = capture.capture(
+                client=client,
+                now_ny=PRECLOSE,
+                universe=["AAA", "BBB"],
+                chain_dir=self.chain_dir,
+                reports_dir=self.reports_dir,
+                force=True,
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIsNone(receipt)
+        self.assertEqual(client.calls, [])
+        self.assertFalse(self.chain_dir.exists())
+        self.assertFalse(self.reports_dir.exists())
+        self.assertFalse((self.root / "ledger").exists())
 
     def test_complete_capture_writes_h7_columns_manifest_and_receipt(self):
         exit_code, receipt = self._capture(FakeClient())
@@ -94,6 +126,7 @@ class SchwabChainCaptureTests(unittest.TestCase):
             "expiration",
             "strike",
             "right",
+            "contract_symbol",
             "bid",
             "ask",
             "open_interest",
@@ -102,6 +135,11 @@ class SchwabChainCaptureTests(unittest.TestCase):
             "gamma",
             "theta",
             "vega",
+            "multiplier",
+            "non_standard",
+            "mini",
+            "timestamp",
+            "trade_timestamp",
         ]
         for symbol in ("AAA", "BBB"):
             frame = pd.read_parquet(
@@ -110,6 +148,36 @@ class SchwabChainCaptureTests(unittest.TestCase):
             self.assertEqual(list(frame.columns), expected_columns)
             self.assertEqual(frame["expiration"].nunique(), 2)
             self.assertEqual(set(frame["right"]), {"C", "P"})
+            self.assertTrue(frame["contract_symbol"].str.startswith("AAA-").all())
+            self.assertEqual(set(frame["multiplier"]), {100.0})
+            self.assertEqual(set(frame["non_standard"]), {False})
+            self.assertEqual(set(frame["mini"]), {False})
+            self.assertTrue(frame["timestamp"].notna().all())
+            self.assertTrue(frame["trade_timestamp"].notna().all())
+
+    def test_success_appends_manifest_and_receipt_hashes_to_facts_log(self):
+        exit_code, receipt = self._capture(FakeClient(), universe=("AAA",))
+
+        self.assertEqual(exit_code, 0)
+        receipt_path = self.reports_dir / "2026-08-10" / "preclose.json"
+        lines = (self.root / "ledger" / "facts.log").read_text().splitlines()
+        self.assertEqual(len(lines), 1)
+        _, payload = lines[0].split("\t", 1)
+        self.assertEqual(
+            payload,
+            "SCHWAB_CHAIN_CAPTURE "
+            f"session=2026-08-10 manifest_hash={receipt['manifest_hash']} "
+            f"receipt_hash={sha256_file(receipt_path)}",
+        )
+
+    def test_identical_successful_replay_keeps_one_fact_for_session(self):
+        first_code, _ = self._capture(FakeClient(), universe=("AAA",))
+        second_code, _ = self._capture(FakeClient(), universe=("AAA",))
+
+        self.assertEqual(first_code, 0)
+        self.assertEqual(second_code, 0)
+        lines = (self.root / "ledger" / "facts.log").read_text().splitlines()
+        self.assertEqual(len(lines), 1)
 
     def test_partial_capture_writes_failed_receipt_and_no_manifest(self):
         exit_code, receipt = self._capture(FakeClient(fail_symbol="BBB"))
@@ -120,6 +188,7 @@ class SchwabChainCaptureTests(unittest.TestCase):
         self.assertEqual(receipt["names"]["BBB"]["status"], "failed")
         self.assertIsNone(receipt["manifest_hash"])
         self.assertFalse((self.reports_dir / "2026-08-10" / "manifest.json").exists())
+        self.assertFalse((self.root / "ledger" / "facts.log").exists())
 
     def test_single_expiration_is_marked_failed(self):
         exit_code, receipt = self._capture(

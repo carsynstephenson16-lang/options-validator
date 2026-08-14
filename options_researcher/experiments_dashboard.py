@@ -16,9 +16,16 @@ from zoneinfo import ZoneInfo
 
 import config
 from options_researcher.exp_beta_qqq import build_exp_beta_board
+from options_researcher.exp_short_positioning import load_exp_short_lane
 from options_researcher.exp_spread_stability import build_exp_spread_board
 from options_researcher.exp_tail_shape import build_exp_tail_board
 from options_researcher.exp_tbill_carry import build_exp_tbill_board
+from options_researcher.short_positioning_context import (
+    LANE_HEADING,
+    LANE_TEXT,
+    LANE_TITLE,
+    render_short_positioning_card,
+)
 
 EXPERIMENTS_OUTPUT_PATH = config.EXPERIMENTS_OUTPUT_PATH
 
@@ -188,6 +195,17 @@ def _safe_experiment_lane_html(cards: list[dict], experiment_id: str, asof: str)
         return _experiment_lane_html([_error_card(experiment_id, asof, exc)], experiment_id)
 
 
+def _short_lane_html(cards: list) -> str:
+    """EXP-SHORT lane. Present only while the experiment is enabled."""
+    rendered = "".join(render_short_positioning_card(card) for card in cards)
+    return (
+        f'<div class="eyebrow">{_esc(LANE_HEADING)}</div>'
+        f"<h3>{_esc(LANE_TITLE)}</h3>"
+        f"<p>{_esc(LANE_TEXT)}</p>"
+        f'<div class="card-grid">{rendered}</div>'
+    )
+
+
 def _experiments_html(data: Mapping[str, object], *, build_asof: str) -> str:
     lanes = "".join(
         _safe_experiment_lane_html(
@@ -197,6 +215,9 @@ def _experiments_html(data: Mapping[str, object], *, build_asof: str) -> str:
         )
         for key, experiment_id, _source, _builder_name in _LANES
     )
+    short_cards = data.get("exp_short")
+    if isinstance(short_cards, list):
+        lanes += _short_lane_html(short_cards)
     return (
         '<section class="panel"><div class="section-header"><div>'
         '<div class="eyebrow">EXPERIMENT HEALTH + COMPARISON</div>'
@@ -227,7 +248,7 @@ def _error_card(experiment_id: str, asof: str, exc: Exception) -> dict:
     }
 
 
-def build_experiment_lanes(symbols: list[str], *, asof: str) -> dict[str, list[dict]]:
+def build_experiment_lanes(symbols: list[str], *, asof: str) -> dict[str, list]:
     """Build every lane and turn a lane exception into a visible ERROR card."""
     builders: dict[str, Callable[..., list[dict]]] = {
         "build_exp_beta_board": build_exp_beta_board,
@@ -235,12 +256,18 @@ def build_experiment_lanes(symbols: list[str], *, asof: str) -> dict[str, list[d
         "build_exp_spread_board": build_exp_spread_board,
         "build_exp_tbill_board": build_exp_tbill_board,
     }
-    data: dict[str, list[dict]] = {}
+    data: dict[str, list] = {}
     for key, experiment_id, _source, builder_name in _LANES:
         try:
             data[key] = builders[builder_name](symbols, asof=asof)
         except Exception as exc:
             data[key] = [_error_card(experiment_id, asof, exc)]
+
+    # EXP-SHORT is absent unless explicitly enabled, so the disabled artifact
+    # stays byte-identical to the pre-change output.
+    short_cards = load_exp_short_lane(symbols, asof=asof)
+    if short_cards is not None:
+        data["exp_short"] = short_cards
     return data
 
 
@@ -250,7 +277,7 @@ def render(data: Mapping[str, object], *, build_asof: str) -> str:
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>Display-only research experiments</title>"
-        f"<style>{_STYLE}</style></head><body>"
+        f"<style>{_STYLE}{_SHORT_STYLE if 'exp_short' in data else ''}</style></head><body>"
         '<header class="app-header"><div class="app-header-inner">'
         '<div><div class="eyebrow">Options research · experiments</div>'
         "<h1>Display-only research experiments</h1>"
@@ -299,6 +326,15 @@ _STYLE = """
   .notice { border-radius:10px; padding:12px 14px; margin-top:16px; }
   .notice.watch { background:#fff7df; border:1px solid #edcf77; }
   .page-footer { color:var(--muted); font-size:12px; margin-top:24px; }
+"""
+
+# Appended only while EXP-SHORT is enabled, so the disabled artifact is
+# byte-identical. Neutral is deliberately not green: a short-interest reading
+# is neither good nor bad.
+_SHORT_STYLE = """
+  .status-badge.neutral { color:var(--ink); background:#eef1f7; }
+  .status-badge.amber { color:var(--unknown); background:#fff5cf; }
+  .status-badge.red { color:var(--bad); background:#fbe8e8; }
 """
 
 

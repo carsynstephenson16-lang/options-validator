@@ -144,6 +144,33 @@ H4/H5 forward-window entries are time-dependent paper marks, not
 re-runnable point results; their "reproduction" is the positions CSVs plus
 the dated reports.
 
+## Short positioning context (EXP-SHORT, off by default)
+
+Issuer-level reported short interest from FINRA Consolidated Short Interest,
+shown as a separate display-only lane on the experiments dashboard. It is
+**not** a signal: no ranking, verdict, entry, sizing, or execution authority,
+and it is disabled unless `config.EXP_SHORT_ENABLED` is turned on.
+
+```bash
+# describe a capture without touching the network (dry-run is the default)
+uv run python tools/short_positioning_capture.py \
+  --provider finra --dataset consolidated-short-interest \
+  --publication-date 2026-08-11 --symbols MSFT,AMZN,VST,CEG \
+  --output-root .cache/short_positioning --dry-run
+
+# audit what is already on disk (offline; never repairs)
+uv run python tools/short_positioning_audit.py \
+  --root .cache/short_positioning --provider finra \
+  --dataset consolidated-short-interest \
+  --through-publication-date 2026-08-11 --strict
+```
+
+Captured provider rows stay **local and gitignored** (`.cache/short_positioning/`);
+only invented synthetic fixtures are tracked. S&P Global and every other
+securities-finance provider remain LICENSE BLOCKED and unimplemented. Design
+and data rights: `docs/superpowers/specs/2026-08-11-short-positioning-context-design.md`
+and `docs/data/short-positioning-contract.md`.
+
 ## Capital & risk
 
 `RISK_SLEEVE` ($14k) and `MAX_LOSS_PER_TRADE` ($600 economic max loss, owner
@@ -232,6 +259,23 @@ rulings and the data-lane situation as of 2026-08-04 live in
 `reports/2026-08-04-composite-signal-lane-decision.md`. The **composite
 signal lane** (display-only, non-verdict-bearing) is authorized per the
 2026-08-03 owner-directed amendment recorded in `.cursorrules`.
+*Registry update (2026-08-12, audit-repair session):* **RQ2-v1 is K=3** (B1,
+A1, V1 membership-only) per ledger seq 25 `RQ2_AMENDMENT_V1_1` (owner-ruled
+2026-08-10); V1's candidate statistic is not pinned — a further pre-result
+amendment must pin it before any V1 comparison. **H7** adds a prepared Schwab
+restart lane `h7-forward-schwab-v1`: PREPARED / NOT REGISTERED / NOT
+ACTIVATED — independent adversarial review resolved 2026-08-12 (PASS WITH
+FIXES; `reports/h7_forward_schwab/2026-08-12-adversarial-review-receipt.md`);
+registration remains blocked on review fix B2, a fresh feasibility receipt,
+the Monday canary, the backup drill, and owner-typed OD-3 + starvation
+decisions. The four **attractiveness experiments** (EXP-BETA/TAIL/SPREAD/
+TBILL) are display-only, off by default, in the standalone
+`experiments_dashboard.py`; the frozen baseline ranking is untouched. The
+production Schwab OAuth refresh token is **expired** — see
+`reports/2026-08-12-schwab-auth-diagnosis.md` for the reauth procedure.
+Current sequencing and open owner gates: `PROJECT_STATE.md` status refresh
+2026-08-12.
+
 **H5 Sector Income Core scanner/researcher**
 (`docs/superpowers/specs/2026-07-04-h5-sector-income-core-design.md`; ledger
 trial 6; H4 superseded at zero cycles) and **H6 post-earnings tactical long

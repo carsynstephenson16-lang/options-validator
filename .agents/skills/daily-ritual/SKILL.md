@@ -38,6 +38,13 @@ surface. That gate currently refuses because there is no approved ongoing
 exact-session options source and H7 has no active namespace. Therefore the
 full ritual remains **NOT RUNNABLE**.
 
+The merged Schwab preclose lane (`ledger/h7_forward_schwab`,
+`reports/schwab_chains`) does not change this by itself. The gate reads
+`data/ritual_authority.py` (`exact_session_source_active`, `h7_active`);
+flipping them is owner-gated via the prepared patch
+`reports/h7_forward_schwab/2026-08-09-authority-flip.PREPARED.patch`. Check
+those flags for current status — this paragraph does not update itself.
+
 For an explicit run request, report this deterministic blocker and stop. Do
 not treat an API key, subscription state, or a frozen complete cache as an
 override, and do not manually run downstream consumers. A later resumption

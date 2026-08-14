@@ -77,3 +77,41 @@ It must not be applied or committed until all of these occur in order:
 
 OD-3 typing; starvation accept/redesign; registration through the guarded
 door; authority-flip authorization/commit; any merge to main.
+
+## Amendment 2026-08-12 — adversarial review resolved; feasibility disclosure (review finding B4)
+
+*Appended 2026-08-12; original text above unchanged. Provenance: audit-repair
+session, drafted per the independent adversarial review's B4 requirement;
+owner-delegated standing 2026-07-25 does not apply here — this is a
+disclosure, not a registered-spec amendment; owner retains veto.*
+
+Prerequisite #4 (independent adversarial review) is now **resolved**:
+`2026-08-12-adversarial-review-receipt.md` (Claude Opus, read-only), verdict
+**PASS WITH FIXES** — the merge stands; registration and the authority flip
+remain blocked until review findings B1–B3 are closed in code and this B4
+disclosure is before the owner.
+
+Before typing the starvation decision, the owner should know about the
+`3/1050 → 3.0 expected entries` number:
+
+1. **It was measured on a different data source than the window will run.**
+   The measurement used ThetaData EOD chains from `.cache/chains` (frozen
+   2026-07-27); the window will run on Schwab ~15:45 ET preclose snapshots in
+   `.cache/schwab_chains`.
+2. **Every known simplification inflates it** (upper bound): the feasibility
+   path never runs the data gate; portfolio state resets to empty each
+   session (most permissive board); only fully data-complete sessions were
+   counted.
+3. **"3.0 expected entries" is a restatement of "we observed 3 passes",**
+   not an independent projection (window sessions == lookback sessions == 70
+   over the same universe, so the formula reduces to the observed count).
+4. **The 95% confidence interval on 3/1050 is [0.62, 8.74] expected entries
+   against the 2026-07-24 gate's bar of 20** (2× the 10-loss verdict rule).
+   The entire interval is below the bar; at the measured base rate the bar
+   needs roughly 467 decision sessions (~22 months), not 70. The 3 passes
+   cluster on just two sessions (2026-07-13 NOW; 2026-07-16 MSFT + PLTR).
+
+The review's plain-language conclusion, quoted: "the real decision in front
+of you is a redesign (or a different hypothesis), not a starvation
+pre-acceptance." The owner decision fields above remain **blank**; nothing
+here types or pre-empts either path.

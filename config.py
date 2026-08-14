@@ -217,7 +217,8 @@ DSR_DEFAULT_MEAN_TRIAL_SR = 0.0
 # required" (the trial/variant-count floor) and "S=16 is a reasonable value
 # in most cases" (the split-count default). LLM-proposed, owner-delegated
 # 2026-07-24; forward-looking -- no registered grid meets the M floor yet
-# (RQ2-v1 has M=2-3 candidate parameter variants, A2-v1 has M=1-5 per lane),
+# (RQ2-v1 has K=3 candidate badges B1/A1/V1 per ledger seq 25,
+# RQ2_AMENDMENT_V1_1 2026-08-10; A2-v1 has M=1-5 per lane),
 # so CSCV/PBO stay inapplicable to the currently-registered grids by design
 # until a grid is built wide enough to clear CSCV_MIN_VARIANTS_M.
 CSCV_MIN_VARIANTS_M = 10
@@ -864,3 +865,17 @@ EXP_TBILL_TARGET_DELTA = 0.50
 
 # structural, owner-directed split 2026-08-10; display-only artifact path.
 EXPERIMENTS_OUTPUT_PATH = ".tmp/dashboard/experiments.html"
+
+# EXP-SHORT: issuer-level reported short positioning (FINRA Consolidated Short
+# Interest). Display-only, disabled by default, with no ranking, verdict,
+# entry, sizing, or execution authority. Design:
+# docs/superpowers/specs/2026-08-11-short-positioning-context-design.md
+SHORT_CONTEXT_ENABLED = False
+# Local, gitignored capture root. Provider rows never enter Git.
+SHORT_POSITIONING_ROOT = ".cache/short_positioning"
+# Display-health setting, NOT a predictive threshold: a symbol more than this
+# many observed publications behind reads STALE. LLM-proposed 2026-08-11;
+# not owner-ratified.
+SHORT_POSITIONING_MAX_AGE_RELEASES = 1
+# FINRA only. Every other provider stays LICENSE BLOCKED and unimplemented.
+SHORT_POSITIONING_PROVIDER_ORDER = ("finra",)

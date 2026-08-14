@@ -110,3 +110,22 @@ every future promotion.
   needed before anyone treats V1 as registered.
 - The frozen GREEN-fraction baseline ranking (RQ1 recipe) is the baseline lane
   of this program and is not modified while experiment flags are off.
+
+## Addendum 2026-08-10 — K discrepancy resolved; seq-18 date attribution corrected
+
+*Appended 2026-08-10; the original text above is unchanged (dated report,
+append-only).*
+
+- **K discrepancy RESOLVED.** The §6 discrepancy bullet is no longer open:
+  ledger seq 25 (`RQ2_AMENDMENT_V1_1`, 2026-08-10, owner-directed) adjudicates
+  RQ2-v1 to **K=3 candidate badges — B1, A1, V1** — with V1 registered as
+  **membership-only** (its candidate statistic is NOT pinned; the RQ2 runner
+  must refuse any V1 comparison until a further pre-result append-only
+  amendment pins it). Read seq 25 in `ledger/experiments.jsonl` before
+  treating V1 as anything more than a registered member.
+- **Attribution correction.** §6 attributes "forward window opens 2026-09-01"
+  to ledger seq 18, but seq 18 contains no start date. That date comes from
+  the LLM-proposed delegated-values table in
+  `docs/superpowers/plans/2026-07-22-rq2-scanner-enrichment-briefs.md`
+  ("RQ2 forward window | Start 2026-09-01; backstop 2027-09-01"), not from the
+  chained registration.

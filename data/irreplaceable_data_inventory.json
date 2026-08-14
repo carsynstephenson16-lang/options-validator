@@ -16,9 +16,9 @@
       "total_bytes": 106971152
     },
     ".cache/intraday": {
-      "file_count": 180,
+      "file_count": 360,
       "present": true,
-      "total_bytes": 1431434
+      "total_bytes": 3167350
     },
     ".cache/schwab_chains": {
       "file_count": 0,
@@ -28,12 +28,17 @@
     ".cache/underlying": {
       "file_count": 25,
       "present": true,
-      "total_bytes": 596562
+      "total_bytes": 597873
     },
     ".cache/underlying_ohlcv": {
       "file_count": 20,
       "present": true,
-      "total_bytes": 1509715
+      "total_bytes": 1511030
+    },
+    "reports/schwab_chains": {
+      "file_count": 0,
+      "present": false,
+      "total_bytes": 0
     }
   },
   "note": "Gitignored, unreplaceable data. Provider acquisition is disabled; these bytes cannot be re-fetched. Verify before any worktree removal or cleanup sweep."

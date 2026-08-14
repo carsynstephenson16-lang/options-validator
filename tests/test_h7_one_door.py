@@ -9,10 +9,16 @@ activation paths.
 
 What the STRUCTURAL (AST) scan below actually proves -- and what it does NOT:
   * It PROVES that, across the scanned source roots, no module makes a direct
-    ``append_event`` call whose ``base_dir`` is REAL_FORWARD_STORE (literally
-    or via an in-function alias / default-parameter alias), and that the CLI
-    makes no ``append_event`` call at all. In other words: no source-level
-    second door that names the real store.
+    ``append_event`` call whose ``base_dir`` is a real store -- REAL_FORWARD_STORE
+    (legacy namespace) or SCHWAB_FORWARD_STORE (Schwab namespace) -- literally,
+    via an in-function alias / default-parameter alias, or via a
+    ``Path("ledger/...")`` string-literal reconstruction of that store's path,
+    and that the CLI makes no ``append_event`` call at all. In other words: no
+    source-level second door that names, aliases, or re-literalizes any real
+    store. The scan is asserted PER NAMESPACE (see ``_REAL_STORES``) so adding
+    a new namespace's constant to that mapping is what puts it under watch --
+    a future namespace whose constant is never added stays unwatched, which is
+    why every registration module's store constant belongs in the mapping.
   * It does NOT, by itself, prove "exactly one runtime path writes the real
     store." ``register_window_real`` legitimately appends to whatever
     ``base_dir`` it is handed (the CLI hands it REAL_FORWARD_STORE via a
@@ -26,9 +32,9 @@ What the STRUCTURAL (AST) scan below actually proves -- and what it does NOT:
     being added silently.
 
 Four proofs:
-  (a) structural scan: no scanned module appends to REAL_FORWARD_STORE (direct,
-      aliased, or default-parameter alias), and the CLI contains no
-      ``append_event`` call at all;
+  (a) structural scan: no scanned module appends to any real store (direct,
+      aliased, default-parameter alias, or Path-literal), and the CLI
+      contains no ``append_event`` call at all;
   (b) end-to-end synthetic activation through the CLI ``activate`` -- a seq-0
       window_registration lands with the receipt hashes in its payload;
   (c) a receipt-hash mismatch discovered INSIDE the CLI's append-time
@@ -53,6 +59,7 @@ from options_researcher import h7_activation_guard as ag
 from options_researcher import h7_event_ledger as el
 from options_researcher import h7_window_registration as wr
 from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE
+from options_researcher.h7_schwab_window_registration import SCHWAB_FORWARD_STORE
 from options_researcher.h7_scope import scope_identity
 from research.hashing import config_hash, diagnostic_source_hash, sha256_file
 from research.receipts import load_receipt, make_receipt
@@ -61,6 +68,14 @@ from tools import h7_manual_activate as cli
 _SCAN_ROOTS = (Path("options_researcher"), Path("tools"), Path("research"),
                Path("data"), Path("harness"))
 _LEDGER_MODULE = "h7_event_ledger.py"  # defines append_event; not a caller
+
+# Every namespace's real store: identifier name -> its canonical relative
+# ledger path literal. Scanners are parameterized over this so a NEW
+# namespace's store constant is watched the moment it is added here.
+_REAL_STORES: dict[str, str] = {
+    "REAL_FORWARD_STORE": "ledger/h7_forward",
+    "SCHWAB_FORWARD_STORE": "ledger/h7_forward_schwab",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -105,56 +120,73 @@ def _real_store_constructor_functions(source: str) -> list[str]:
     return out
 
 
-def _is_real_store_ref(node: ast.AST) -> bool:
-    """A bare reference to REAL_FORWARD_STORE (Name or attribute access), NOT a
-    derivation of it such as ``REAL_FORWARD_STORE.resolve()`` (that is a Call)."""
-    return ((isinstance(node, ast.Name) and node.id == "REAL_FORWARD_STORE")
-            or (isinstance(node, ast.Attribute)
-                and node.attr == "REAL_FORWARD_STORE"))
+def _is_real_store_ref(node: ast.AST, store_name: str) -> bool:
+    """A bare reference to ``store_name`` (Name or attribute access), NOT a
+    derivation of it such as ``REAL_FORWARD_STORE.resolve()`` (that is a
+    Call) -- OR a ``Path("ledger/...")`` string-literal reconstruction of
+    that same store's canonical path (e.g. ``Path("ledger/h7_forward_schwab")``
+    for SCHWAB_FORWARD_STORE), which reaches the real store without ever
+    naming its constant. ``store_name`` must be a key of ``_REAL_STORES``."""
+    if ((isinstance(node, ast.Name) and node.id == store_name)
+            or (isinstance(node, ast.Attribute) and node.attr == store_name)):
+        return True
+    if (isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name) and node.func.id == "Path"
+            and len(node.args) == 1
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and node.args[0].value.rstrip("/") == _REAL_STORES[store_name]):
+        return True
+    return False
 
 
-def _real_store_alias_names(fn: ast.AST) -> set[str]:
-    """Names bound inside ``fn`` to a bare REAL_FORWARD_STORE reference -- via a
-    default parameter value (``def f(base=REAL_FORWARD_STORE)``) or a local
-    assignment (``base = REAL_FORWARD_STORE``). A value DERIVED from it (e.g.
-    ``REAL_FORWARD_STORE.resolve()``) is a Call, not a bare ref, so it does not
-    launder into the real store for append purposes and is not treated as an
-    alias."""
+def _real_store_alias_names(fn: ast.AST, store_name: str) -> set[str]:
+    """Names bound inside ``fn`` to a bare ``store_name`` reference (or its
+    Path-literal reconstruction) -- via a default parameter value
+    (``def f(base=REAL_FORWARD_STORE)``) or a local assignment
+    (``base = REAL_FORWARD_STORE`` or ``base = Path("ledger/h7_forward")``). A
+    value DERIVED from it (e.g. ``REAL_FORWARD_STORE.resolve()``) is a Call,
+    not a bare ref, so it does not launder into the real store for append
+    purposes and is not treated as an alias."""
     aliases: set[str] = set()
     if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
         a = fn.args
         positional = a.posonlyargs + a.args
         offset = len(positional) - len(a.defaults)
         for i, default in enumerate(a.defaults):
-            if _is_real_store_ref(default):
+            if _is_real_store_ref(default, store_name):
                 aliases.add(positional[offset + i].arg)
         for arg, default in zip(a.kwonlyargs, a.kw_defaults):
-            if default is not None and _is_real_store_ref(default):
+            if default is not None and _is_real_store_ref(default, store_name):
                 aliases.add(arg.arg)
     for node in ast.walk(fn):
-        if isinstance(node, ast.Assign) and _is_real_store_ref(node.value):
+        if isinstance(node, ast.Assign) and _is_real_store_ref(node.value, store_name):
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     aliases.add(target.id)
         if (isinstance(node, ast.AnnAssign) and node.value is not None
-                and _is_real_store_ref(node.value)
+                and _is_real_store_ref(node.value, store_name)
                 and isinstance(node.target, ast.Name)):
             aliases.add(node.target.id)
     return aliases
 
 
-def _appends_to_real_store(source: str) -> bool:
+def _appends_to_real_store(source: str, store_name: str) -> bool:
     """True if any function in ``source`` makes an ``append_event`` call whose
-    ``base_dir`` is the real store -- either literally REAL_FORWARD_STORE, or a
-    name that aliases it (in-function assignment OR default parameter). Catches
-    both the old two-door literal (``base_dir=REAL_FORWARD_STORE``) and an
-    alias-laundered evasion (``def f(base=REAL_FORWARD_STORE): append_event(
-    ..., base_dir=base)``)."""
+    ``base_dir`` is the real store named by ``store_name`` -- either literally
+    (the store constant, or a ``Path("ledger/...")`` literal reconstruction of
+    its path), or a name that aliases it (in-function assignment OR default
+    parameter). Catches the two-door literal (``base_dir=REAL_FORWARD_STORE``),
+    an alias-laundered evasion (``def f(base=REAL_FORWARD_STORE): append_event(
+    ..., base_dir=base)``), and a Path-literal evasion (``base_dir=Path(
+    "ledger/h7_forward_schwab")``) -- for whichever store ``store_name`` names.
+    ``store_name`` must be a key of ``_REAL_STORES``; call once per store to
+    scan per-namespace."""
     tree = ast.parse(source)
     for fn in ast.walk(tree):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        aliases = _real_store_alias_names(fn)
+        aliases = _real_store_alias_names(fn, store_name)
         for sub in ast.walk(fn):
             if not (isinstance(sub, ast.Call)
                     and ((isinstance(sub.func, ast.Attribute)
@@ -165,7 +197,7 @@ def _appends_to_real_store(source: str) -> bool:
             candidates = list(sub.args)
             candidates += [kw.value for kw in sub.keywords if kw.arg == "base_dir"]
             for val in candidates:
-                if _is_real_store_ref(val):
+                if _is_real_store_ref(val, store_name):
                     return True
                 if isinstance(val, ast.Name) and val.id in aliases:
                     return True
@@ -178,7 +210,7 @@ def _appends_to_real_store(source: str) -> bool:
                          and sub.func.id == "append_event"))):
             for val in list(sub.args) + [kw.value for kw in sub.keywords
                                          if kw.arg == "base_dir"]:
-                if _is_real_store_ref(val):
+                if _is_real_store_ref(val, store_name):
                     return True
     return False
 
@@ -240,12 +272,83 @@ class StructuralOneDoorTests(unittest.TestCase):
         self.assertIn("register_window_real", cli_src)
 
     def test_no_module_appends_to_the_real_store(self):
-        # No scanned module may append_event to REAL_FORWARD_STORE, whether
-        # literally or via an in-function / default-parameter alias.
-        for name, src in _module_sources().items():
+        # No scanned module may append_event to ANY real store, whether
+        # literally, via an in-function / default-parameter alias, or via a
+        # Path("ledger/...") literal reconstruction of that store's path.
+        # Asserted PER NAMESPACE (see _REAL_STORES) -- a namespace whose
+        # constant is not in that mapping would silently go unwatched, which
+        # is exactly the gap the adversarial review (B1, 2026-08-12) found.
+        sources = _module_sources()
+        for store_name in _REAL_STORES:
+            for name, src in sources.items():
+                self.assertFalse(
+                    _appends_to_real_store(src, store_name),
+                    f"{name} appends to {store_name} (direct, aliased, or "
+                    "Path-literal)")
+
+    def test_real_store_path_literals_track_the_constants(self):
+        # Sanity, not tautology: the Path("ledger/...") literal used by the
+        # evasion-detection branch of _is_real_store_ref must track the
+        # ACTUAL store constants, or a future rename/move of either store
+        # would silently desync the two and reopen the Path-literal evasion.
+        self.assertEqual(SCHWAB_FORWARD_STORE, Path(_REAL_STORES["SCHWAB_FORWARD_STORE"]))
+        self.assertTrue(
+            str(REAL_FORWARD_STORE).replace("\\", "/").endswith(
+                "/" + _REAL_STORES["REAL_FORWARD_STORE"]))
+
+    def test_revert_to_a_schwab_store_evasion_is_caught(self):
+        # Adversarial review 2026-08-12 (finding B1): `_is_real_store_ref`
+        # matched only the identifier REAL_FORWARD_STORE, so a hypothetical
+        # second door writing to SCHWAB_FORWARD_STORE was invisible to both
+        # AST scanners. Reconstruct the review's own probe-table evasions
+        # (a), (b), (c) verbatim and prove the SAME scanners the structural
+        # tests use now catch every one of them for the Schwab namespace.
+        #
+        # Red-first history: against the pre-fix scanner (single-argument
+        # `_appends_to_real_store(source)`, hardcoded to REAL_FORWARD_STORE
+        # only) evasions (a) and (b) below were invisible --
+        # `_appends_to_real_store` returned False for both. That was run and
+        # confirmed failing before the scanners were parameterized; see the
+        # adversarial-review receipt's B1 probe table for the reviewer's
+        # independent reconstruction.
+        module_scope_evasion = (  # (a)
+            "from options_researcher import h7_event_ledger as ledger\n"
+            "from options_researcher.h7_schwab_window_registration import "
+            "SCHWAB_FORWARD_STORE\n"
+            "e = {}\n"
+            "ledger.append_event(e, base_dir=SCHWAB_FORWARD_STORE, "
+            "expected_head=None)\n"
+        )
+        aliased_default_evasion = (  # (b)
+            "from options_researcher import h7_event_ledger as ledger\n"
+            "from options_researcher.h7_schwab_window_registration import "
+            "SCHWAB_FORWARD_STORE\n"
+            "def f(event, base=SCHWAB_FORWARD_STORE):\n"
+            "    return ledger.append_event(event, base_dir=base,\n"
+            "                               expected_head=None)\n"
+        )
+        path_literal_evasion = (  # (c)
+            "from pathlib import Path\n"
+            "from options_researcher import h7_event_ledger as ledger\n"
+            "def quietly_register(event):\n"
+            "    return ledger.append_event(\n"
+            "        event, base_dir=Path(\"ledger/h7_forward_schwab\"),\n"
+            "        expected_head=None)\n"
+        )
+        for regressed in (module_scope_evasion, aliased_default_evasion,
+                          path_literal_evasion):
+            self.assertTrue(
+                _appends_to_real_store(regressed, "SCHWAB_FORWARD_STORE"),
+                f"scanner failed to catch a reconstructed evasion:\n{regressed}")
+
+        # Non-tautology control: the scan is genuinely per-namespace, not a
+        # blanket "any append_event call is suspicious" trip -- the Schwab
+        # evasions above must NOT be flagged when scanning for the *other*
+        # (legacy) store, since they never name it.
+        for regressed in (module_scope_evasion, aliased_default_evasion,
+                          path_literal_evasion):
             self.assertFalse(
-                _appends_to_real_store(src),
-                f"{name} appends to REAL_FORWARD_STORE (direct or aliased)")
+                _appends_to_real_store(regressed, "REAL_FORWARD_STORE"))
 
     def test_revert_to_a_direct_or_aliased_cli_append_is_caught(self):
         # (d) Revert-proof: reconstruct BOTH evasions and prove the SAME
@@ -270,13 +373,14 @@ class StructuralOneDoorTests(unittest.TestCase):
         )
         for regressed in (direct, aliased):
             self.assertTrue(_has_append_call(regressed))
-            self.assertTrue(_appends_to_real_store(regressed))
+            self.assertTrue(_appends_to_real_store(regressed, "REAL_FORWARD_STORE"))
         # And the current CLI is clean under both -- its forward_base=
         # REAL_FORWARD_STORE default is NOT flagged because activate makes no
         # append_event call (it hands the base to the one door instead).
         cli_src = Path("tools/h7_manual_activate.py").read_text()
         self.assertFalse(_has_append_call(cli_src))
-        self.assertFalse(_appends_to_real_store(cli_src))
+        self.assertFalse(_appends_to_real_store(cli_src, "REAL_FORWARD_STORE"))
+        self.assertFalse(_appends_to_real_store(cli_src, "SCHWAB_FORWARD_STORE"))
 
 
 # --------------------------------------------------------------------------- #
