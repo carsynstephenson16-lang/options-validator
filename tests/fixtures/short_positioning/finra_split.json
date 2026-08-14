@@ -1,0 +1,18 @@
+[
+  {
+    "accountingYearMonthNumber": 202607,
+    "averageDailyVolumeQuantity": 900000,
+    "changePercent": 100.0,
+    "changePreviousNumber": 800000,
+    "currentShortPositionQuantity": 1600000,
+    "daysToCoverQuantity": 1.78,
+    "issueName": "TERRANOVA VECTOR CORP CLASS A COMMON STOCK",
+    "issuerServicesGroupExchangeCode": "N",
+    "marketClassCode": "NYSE",
+    "previousShortPositionQuantity": 800000,
+    "revisionFlag": null,
+    "settlementDate": "2026-07-31",
+    "stockSplitFlag": "Y",
+    "symbolCode": "TRNVQ"
+  }
+]

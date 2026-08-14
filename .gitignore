@@ -65,3 +65,12 @@ node_modules/
 
 # Crawlee local run output
 storage/
+
+# short-positioning captures (FINRA raw + normalized + any licensed inbox).
+# Provider rows stay local; only invented synthetic fixtures are tracked.
+.cache/short_positioning/
+.local/short_positioning/
+data/short_positioning/raw/
+data/short_positioning/licensed/
+*.spglobal.csv
+*.securities-finance.csv
