@@ -176,9 +176,7 @@ def _governance_dsr_bullet(run_id: str, matrix_root: str | Path) -> str:
             "NOT the whole-program trial count; diagnostic only, never gates promotion."
         )
     except Exception:
-        logger.warning(
-            "DSR governance bullet computation failed for run %s", run_id, exc_info=True
-        )
+        logger.warning("DSR governance bullet computation failed for run %s", run_id, exc_info=True)
         return unavailable
 
 

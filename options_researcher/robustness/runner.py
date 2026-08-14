@@ -78,12 +78,7 @@ def _merge_stability_gate_outcomes(
         if not isinstance(gate, tuple) or len(gate) != 2:
             raise ValueError("stability gate outcomes must contain string pairs")
         key, value = gate
-        if (
-            not isinstance(key, str)
-            or not key
-            or not isinstance(value, str)
-            or not value
-        ):
+        if not isinstance(key, str) or not key or not isinstance(value, str) or not value:
             raise ValueError("stability gate outcomes must contain non-empty string pairs")
         if key in validated:
             raise ValueError(f"duplicate stability gate outcome {key!r}")
@@ -523,9 +518,7 @@ def run_experiment(
         try:
             matrix_writer.finalize()
         except Exception:
-            logger.warning(
-                "return-matrix finalize failed for run %s", spec.run_id, exc_info=True
-            )
+            logger.warning("return-matrix finalize failed for run %s", spec.run_id, exc_info=True)
     registry.finish_run(spec.run_id)
 
     if lumibot_adapter is not None:

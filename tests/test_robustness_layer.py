@@ -452,7 +452,9 @@ class RegistryAndReportTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             records, paths = self._run_fixture(Path(tmp))
-            json_payload = json.loads(next(path for path in paths if path.suffix == ".json").read_text())
+            json_payload = json.loads(
+                next(path for path in paths if path.suffix == ".json").read_text()
+            )
             csv_rows = list(
                 csv.DictReader(
                     next(path for path in paths if path.suffix == ".csv").read_text().splitlines()
@@ -499,7 +501,9 @@ class RegistryAndReportTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             records, paths = self._run_fixture(Path(tmp), diagnostic=diagnostic)
-            json_payload = json.loads(next(path for path in paths if path.suffix == ".json").read_text())
+            json_payload = json.loads(
+                next(path for path in paths if path.suffix == ".json").read_text()
+            )
             csv_rows = list(
                 csv.DictReader(
                     next(path for path in paths if path.suffix == ".csv").read_text().splitlines()
@@ -535,9 +539,7 @@ class RegistryAndReportTests(unittest.TestCase):
         for name, gate_outcomes in cases.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
                 with self.assertRaisesRegex(ValueError, "stability gate"):
-                    self._run_fixture(
-                        Path(tmp), diagnostic=_stability_diagnostic(gate_outcomes)
-                    )
+                    self._run_fixture(Path(tmp), diagnostic=_stability_diagnostic(gate_outcomes))
 
     def test_markdown_discloses_arithmetic_stress_sensitivity_limits(self):
         with tempfile.TemporaryDirectory() as tmp:
