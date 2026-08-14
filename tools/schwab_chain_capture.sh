@@ -34,15 +34,20 @@ echo "repo: ${REPO}"
 # Unattended evidence may run only from the merged and current ops main.
 BRANCH="$(git -C "$REPO" branch --show-current 2>/dev/null)"
 LOCAL_SHA="$(git -C "$REPO" rev-parse HEAD 2>/dev/null)"
-if ! git -C "$REPO" fetch -q origin main; then
-  echo "schwab_chain_capture wrapper REFUSED: could not refresh origin/main"
-  exit 1
-fi
-REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main 2>/dev/null)"
 if [ "$BRANCH" != "main" ]; then
   echo "schwab_chain_capture wrapper REFUSED: branch is '${BRANCH}', not main"
   exit 1
 fi
+# Bounded, prompt-free refresh: this fetch sits on the irreplaceable-capture
+# critical path, so a hung network call must fail closed well inside the
+# preclose tolerance window instead of eating it.
+if ! GIT_TERMINAL_PROMPT=0 git -C "$REPO" \
+    -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 \
+    fetch -q origin main; then
+  echo "schwab_chain_capture wrapper REFUSED: could not refresh origin/main"
+  exit 1
+fi
+REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main 2>/dev/null)"
 if [ -z "$LOCAL_SHA" ] || [ -z "$REMOTE_SHA" ]; then
   echo "schwab_chain_capture wrapper REFUSED: could not resolve local/remote identity"
   exit 1

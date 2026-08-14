@@ -697,6 +697,22 @@ def validate_durable_receipt(receipt: dict) -> list[str]:
     stored_inputs = receipt.get("input_files")
     if not isinstance(stored_inputs, dict) or set(stored_inputs) != expected_labels:
         raise ValueError("data-gate receipt lacks the exact official input-file set")
+    # The hashed input_files entries must be the SAME files the per-symbol
+    # verdicts were computed from (mirrors h7_watch scope closure). Without
+    # this, a hand-crafted receipt can hash one file while its close-quality
+    # verdicts describe another.
+    for symbol in expected_symbols:
+        for kind, section, path_key in (
+            ("close", "close", "path"),
+            ("chain", "chain", "expected_path"),
+        ):
+            label = f"{kind}:{symbol}"
+            stored = stored_inputs[label]
+            expected_path = str(receipt["symbols"][symbol][section][path_key])
+            if not isinstance(stored, dict) or stored.get("path") != expected_path:
+                raise ValueError(
+                    f"data-gate receipt input binding failed scope closure: {label}"
+                )
     changed = changed_input_files(receipt)
     if changed:
         raise ValueError(f"data-gate receipt input files changed: {changed}")

@@ -167,8 +167,9 @@ class H7SchwabDataGateTests(unittest.TestCase):
         )
 
     def test_verified_receipt_passes_registration_builder_end_to_end(self):
+        from test_h7_schwab_window_registration import evidence, owner_inputs
+
         from options_researcher import h7_schwab_window_registration as registration
-        from tests.test_h7_schwab_window_registration import evidence, owner_inputs
 
         result = self._evaluate()
         source_health = self._source_health()
@@ -200,6 +201,38 @@ class H7SchwabDataGateTests(unittest.TestCase):
             event["payload"]["gates"]["data_gate_receipt_hash"],
             receipt["receipt_hash"],
         )
+
+    def test_forged_input_binding_cannot_pass_durable_validation(self):
+        from research.receipts import input_file_record, verify_receipt
+
+        result = self._evaluate()
+        source_health = self._source_health()
+        source_health_path = self.root / "source-health.json"
+        write_immutable_receipt(source_health, source_health_path)
+        receipt = h7_data_gate.build_receipt(
+            result,
+            source_health_receipt=source_health,
+            source_health_receipt_path=source_health_path,
+        )
+        h7_data_gate.validate_durable_receipt(receipt)
+
+        first, second = SYMBOLS[0], SYMBOLS[1]
+        payload = {
+            key: value
+            for key, value in receipt.items()
+            if key not in ("receipt_schema", "receipt_type", "receipt_hash")
+        }
+        payload["input_files"] = dict(payload["input_files"])
+        payload["input_files"][f"close:{first}"] = input_file_record(
+            self.close_dir / f"{second}.parquet"
+        )
+        forged = make_receipt("data_gate", payload)
+
+        self.assertEqual([], verify_receipt(forged))
+        with self.assertRaisesRegex(
+            ValueError, "input binding failed scope closure"
+        ):
+            h7_data_gate.validate_durable_receipt(forged)
 
     def test_thetadata_shaped_binding_cannot_wear_schwab_mode(self):
         result = self._evaluate()
