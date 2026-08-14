@@ -14,13 +14,29 @@ def _path(base_dir):
     return Path(base_dir) / "facts.log"
 
 
-def append_fact(text: str, base_dir="ledger") -> None:
+def append_fact(
+    text: str,
+    base_dir="ledger",
+    *,
+    dedupe_prefix: str | None = None,
+) -> None:
+    if dedupe_prefix is not None and (
+        not dedupe_prefix or not text.startswith(dedupe_prefix)
+    ):
+        raise ValueError("dedupe_prefix must be a non-empty prefix of the fact")
     p = _path(base_dir)
     p.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).isoformat()
-    with p.open("a") as f:
+    with p.open("a+") as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         try:
+            if dedupe_prefix is not None:
+                f.seek(0)
+                for line in f:
+                    _, separator, payload = line.partition("\t")
+                    if separator and payload.startswith(dedupe_prefix):
+                        return
+                f.seek(0, 2)
             f.write(f"{stamp}\t{text}\n")
             f.flush()
             import os

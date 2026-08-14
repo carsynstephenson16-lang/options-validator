@@ -245,11 +245,12 @@ def capture(
         return 2, receipt
     if complete:
         verify_session(session, names, chain_dir, manifest_path, receipt_path)
+        fact_prefix = f"SCHWAB_CHAIN_CAPTURE session={session} "
         append_fact(
-            "SCHWAB_CHAIN_CAPTURE "
-            f"session={session} manifest_hash={manifest_hash} "
+            f"{fact_prefix}manifest_hash={manifest_hash} "
             f"receipt_hash={sha256_file(receipt_path)}",
             base_dir=FACTS_DIR,
+            dedupe_prefix=fact_prefix,
         )
         print(f"schwab_chain_capture complete: {len(names)}/{len(names)} {receipt_path}")
         return 0, receipt

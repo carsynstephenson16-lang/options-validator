@@ -56,7 +56,14 @@ from research.hashing import (
     config_hash,
     diagnostic_source_hash,
 )
-from research.receipts import input_files, load_receipt, make_receipt, write_immutable_receipt
+from research.receipts import (
+    changed_input_files,
+    input_files,
+    load_receipt,
+    make_receipt,
+    verify_receipt,
+    write_immutable_receipt,
+)
 
 SCHEMA_VERSION = 2
 DEFAULT_CLOSE_DIR = Path(".cache/underlying")
@@ -508,8 +515,20 @@ def evaluate_exact_session_package(
     )
 
 
-def _validate_result_scope_closure(result: dict) -> list[str]:
+def _validate_result_scope_closure(
+    result: dict,
+) -> tuple[list[str], dict[str, str]]:
     """Recompute the complete official-scope result before serialization."""
+    from options_researcher import h7_schwab_data_gate
+
+    evidence_mode = result.get("evidence_mode")
+    if evidence_mode not in {
+        REAL_H7_EVIDENCE_MODE,
+        h7_schwab_data_gate.EVIDENCE_MODE,
+    }:
+        raise ValueError(
+            "synthetic data-gate evaluation cannot create a durable receipt"
+        )
     expected_scope = scope_identity()
     expected_symbols = list(expected_scope["symbols"])
     records = result.get("symbols")
@@ -550,19 +569,24 @@ def _validate_result_scope_closure(result: dict) -> list[str]:
         if verdict == "GO":
             if not Path(close_path).is_file() or not Path(chain_path).is_file():
                 raise ValueError(f"{symbol} GO lacks complete exact-session inputs")
-            try:
-                actual_binding = validate_v2_audit_receipt(
-                    Path(chain_path).parent,
-                    Path(chain_path),
-                    symbol=symbol,
-                    session=evaluation_session,
-                    consumer_scope="H7",
-                )
-            except CacheAuditReceiptError as exc:
-                raise ValueError(f"{symbol} GO lacks a real H7 full-audit binding") from exc
-            claimed_binding = record["chain"].get("audit_receipt")
-            if claimed_binding != {"valid": True, **actual_binding}:
-                raise ValueError(f"{symbol} GO lacks a real H7 full-audit binding")
+            if evidence_mode == REAL_H7_EVIDENCE_MODE:
+                try:
+                    actual_binding = validate_v2_audit_receipt(
+                        Path(chain_path).parent,
+                        Path(chain_path),
+                        symbol=symbol,
+                        session=evaluation_session,
+                        consumer_scope="H7",
+                    )
+                except CacheAuditReceiptError as exc:
+                    raise ValueError(
+                        f"{symbol} GO lacks a real H7 full-audit binding"
+                    ) from exc
+                claimed_binding = record["chain"].get("audit_receipt")
+                if claimed_binding != {"valid": True, **actual_binding}:
+                    raise ValueError(
+                        f"{symbol} GO lacks a real H7 full-audit binding"
+                    )
             go_count += 1
 
     no_go_count = len(expected_symbols) - go_count
@@ -573,7 +597,14 @@ def _validate_result_scope_closure(result: dict) -> list[str]:
         or result.get("whole_universe_verdict") != whole_universe_verdict
     ):
         raise ValueError("data-gate result counts/verdict failed scope closure")
-    return expected_symbols
+    receipt_fields = (
+        h7_schwab_data_gate.validate_receipt_scope_closure(
+            result, expected_symbols
+        )
+        if evidence_mode == h7_schwab_data_gate.EVIDENCE_MODE
+        else {}
+    )
+    return expected_symbols, receipt_fields
 
 
 def build_receipt(
@@ -586,9 +617,9 @@ def build_receipt(
     ``h7_session.open_real_session`` refuses an unlinked chain -- so an
     unlinked receipt must never reach disk in the first place.
     """
-    if result.get("evidence_mode") != REAL_H7_EVIDENCE_MODE:
-        raise ValueError("synthetic data-gate evaluation cannot create a durable receipt")
-    expected_symbols = _validate_result_scope_closure(result)
+    expected_symbols, evidence_package_fields = _validate_result_scope_closure(
+        result
+    )
     if source_health_receipt is None or source_health_receipt_path is None:
         raise ValueError(
             "data gate requires a linked source_health receipt; refusing to "
@@ -631,8 +662,76 @@ def build_receipt(
         "config_hash": config_hash(),
         "source_hash": diagnostic_source_hash(),
         "source_hash_contract": DIAGNOSTIC_SOURCE_HASH_VERSION,
+        **evidence_package_fields,
     }
     return make_receipt("data_gate", payload)
+
+
+def validate_durable_receipt(receipt: dict) -> list[str]:
+    """Re-verify every live binding carried by a durable data-gate receipt.
+
+    Content addressing alone proves only that a JSON object is internally
+    consistent.  Registration needs the stronger statement that the object
+    still closes over the official scope, the exact market-data bytes, the
+    provider package, the linked source-health receipt, and the current
+    diagnostic source contract.
+    """
+    failures = verify_receipt(receipt)
+    if failures:
+        raise ValueError(f"invalid data-gate receipt: {failures}")
+    if receipt.get("receipt_schema") != "h7-receipt/v1":
+        raise ValueError("unexpected data-gate receipt schema")
+    if receipt.get("receipt_type") != "data_gate":
+        raise ValueError("unexpected data-gate receipt type")
+
+    expected_symbols, package_fields = _validate_result_scope_closure(receipt)
+    for field, expected in package_fields.items():
+        if receipt.get(field) != expected:
+            raise ValueError(f"data-gate receipt {field} binding changed")
+
+    expected_labels = {
+        f"{kind}:{symbol}"
+        for symbol in expected_symbols
+        for kind in ("close", "chain")
+    }
+    stored_inputs = receipt.get("input_files")
+    if not isinstance(stored_inputs, dict) or set(stored_inputs) != expected_labels:
+        raise ValueError("data-gate receipt lacks the exact official input-file set")
+    changed = changed_input_files(receipt)
+    if changed:
+        raise ValueError(f"data-gate receipt input files changed: {changed}")
+
+    source_path = receipt.get("source_health_receipt_path")
+    source_hash = receipt.get("source_health_receipt_hash")
+    if not isinstance(source_path, str) or not source_path:
+        raise ValueError("data-gate receipt lacks a source-health receipt path")
+    if not isinstance(source_hash, str) or not source_hash:
+        raise ValueError("data-gate receipt lacks a source-health receipt hash")
+    try:
+        source_receipt = load_receipt(
+            Path(source_path), expected_type="source_health"
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("data-gate receipt source-health link is invalid") from exc
+    if source_receipt.get("receipt_hash") != source_hash:
+        raise ValueError("data-gate receipt source-health hash changed")
+    if source_receipt.get("evaluation_session") != receipt.get(
+        "evaluation_session"
+    ):
+        raise ValueError("data-gate and source-health sessions disagree")
+    if source_receipt.get("scope") != receipt.get("scope"):
+        raise ValueError("data-gate and source-health scopes disagree")
+    changed_source = changed_input_files(source_receipt)
+    if changed_source:
+        raise ValueError(
+            f"data-gate source-health inputs changed: {changed_source}"
+        )
+
+    if receipt.get("source_hash_contract") != DIAGNOSTIC_SOURCE_HASH_VERSION:
+        raise ValueError("data-gate receipt source-hash contract changed")
+    if receipt.get("source_hash") != diagnostic_source_hash():
+        raise ValueError("data-gate receipt diagnostic source changed")
+    return expected_symbols
 
 
 def to_artifact(result: dict) -> str:

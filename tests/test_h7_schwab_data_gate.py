@@ -11,13 +11,17 @@ from unittest import mock
 
 import pandas as pd
 
+from options_researcher import h7_data_gate
 from options_researcher import h7_schwab_data_gate as gate
+from options_researcher.h7_scope import scope_identity, watch_universe
 from research.hashing import sha256_file
+from research.receipts import make_receipt, write_immutable_receipt
 from tools import schwab_chain_manifest as manifest
 
 SESSION = "2026-08-10"
 REQUESTED = date(2026, 8, 11)
-SYMBOLS = ["AAA", "BBB"]
+SYMBOLS = sorted(watch_universe())
+TARGET = SYMBOLS[0]
 
 
 def chain_frame(*, expirations=("2026-08-21", "2026-09-18")):
@@ -109,6 +113,19 @@ class H7SchwabDataGateTests(unittest.TestCase):
             symbols=SYMBOLS,
         )
 
+    def _source_health(self):
+        return make_receipt(
+            "source_health",
+            {
+                "evaluation_session": SESSION,
+                "scope": scope_identity(),
+                "symbols": {
+                    symbol: {"healthy": True, "gate": "CLEAR"}
+                    for symbol in SYMBOLS
+                },
+            },
+        )
+
     def _assert_package_no_go(self, result, *, error_contains):
         self.assertEqual(result["whole_universe_verdict"], "NO_GO")
         self.assertEqual(result["go_count"], 0)
@@ -131,9 +148,104 @@ class H7SchwabDataGateTests(unittest.TestCase):
             self.assertTrue(binding["valid"])
             self.assertEqual(binding["provider"], "schwab")
 
+    def test_verified_package_builds_hash_bound_durable_receipt(self):
+        result = self._evaluate()
+
+        receipt = h7_data_gate.build_receipt(
+            result,
+            source_health_receipt=self._source_health(),
+            source_health_receipt_path=self.root / "source-health.json",
+        )
+
+        stored_manifest = json.loads(self.manifest_path.read_text())
+        self.assertEqual(receipt["evidence_mode"], gate.EVIDENCE_MODE)
+        self.assertEqual(
+            receipt["schwab_manifest_hash"], stored_manifest["manifest_hash"]
+        )
+        self.assertEqual(
+            receipt["schwab_capture_receipt_hash"], sha256_file(self.receipt_path)
+        )
+
+    def test_verified_receipt_passes_registration_builder_end_to_end(self):
+        from options_researcher import h7_schwab_window_registration as registration
+        from tests.test_h7_schwab_window_registration import evidence, owner_inputs
+
+        result = self._evaluate()
+        source_health = self._source_health()
+        source_health_path = self.root / "source-health.json"
+        write_immutable_receipt(source_health, source_health_path)
+        receipt = h7_data_gate.build_receipt(
+            result,
+            source_health_receipt=source_health,
+            source_health_receipt_path=source_health_path,
+        )
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH=SESSION),
+            evidence=evidence(
+                data_gate_evidence_mode=receipt["evidence_mode"],
+                data_gate_receipt=receipt,
+                data_gate_receipt_hash=receipt["receipt_hash"],
+                source_health_receipt_hash=receipt[
+                    "source_health_receipt_hash"
+                ],
+                source_health_evidence_id=receipt[
+                    "source_health_receipt_hash"
+                ],
+                data_gate_evidence_id=receipt["receipt_hash"],
+                last_historical_session=SESSION,
+            ),
+        )
+
+        self.assertEqual(
+            event["payload"]["gates"]["data_gate_receipt_hash"],
+            receipt["receipt_hash"],
+        )
+
+    def test_thetadata_shaped_binding_cannot_wear_schwab_mode(self):
+        result = self._evaluate()
+        for record in result["symbols"].values():
+            record["chain"]["audit_receipt"] = {
+                "valid": True,
+                "schema": "cache-audit-v2",
+                "consumer_scope": "H7",
+            }
+
+        with self.assertRaisesRegex(ValueError, "verified Schwab"):
+            h7_data_gate.build_receipt(
+                result,
+                source_health_receipt=self._source_health(),
+                source_health_receipt_path=self.root / "source-health.json",
+            )
+
+    def test_schwab_binding_cannot_wear_thetadata_mode(self):
+        result = self._evaluate()
+        result["evidence_mode"] = h7_data_gate.REAL_H7_EVIDENCE_MODE
+
+        with self.assertRaisesRegex(ValueError, "real H7 full-audit"):
+            h7_data_gate.build_receipt(
+                result,
+                source_health_receipt=self._source_health(),
+                source_health_receipt_path=self.root / "source-health.json",
+            )
+
+    def test_manifest_tampered_after_evaluation_cannot_build_receipt(self):
+        result = self._evaluate()
+        stored_manifest = json.loads(self.manifest_path.read_text())
+        stored_manifest["files"][SYMBOLS[0]]["row_count"] += 1
+        self.manifest_path.write_text(
+            json.dumps(stored_manifest, indent=2, sort_keys=True) + "\n"
+        )
+
+        with self.assertRaisesRegex(ValueError, "verified Schwab"):
+            h7_data_gate.build_receipt(
+                result,
+                source_health_receipt=self._source_health(),
+                source_health_receipt_path=self.root / "source-health.json",
+            )
+
     def test_missing_session_file_refuses_without_fallback(self):
-        path = self.chain_dir / f"AAA_{SESSION}.parquet"
-        path.rename(self.chain_dir / "AAA_2026-08-07.parquet")
+        path = self.chain_dir / f"{TARGET}_{SESSION}.parquet"
+        path.rename(self.chain_dir / f"{TARGET}_2026-08-07.parquet")
 
         with self.assertLogs(gate.__name__, level="ERROR"):
             result = self._evaluate()
@@ -154,7 +266,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
 
     def test_partial_receipt_refuses(self):
         receipt = json.loads(self.receipt_path.read_text())
-        receipt["universe"] = ["AAA"]
+        receipt["universe"] = [TARGET]
         self.receipt_path.write_text(
             json.dumps(receipt, indent=2, sort_keys=True) + "\n"
         )
@@ -166,7 +278,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
 
     def test_single_expiration_smuggling_refuses(self):
         chain_frame(expirations=("2026-08-21",)).to_parquet(
-            self.chain_dir / f"AAA_{SESSION}.parquet"
+            self.chain_dir / f"{TARGET}_{SESSION}.parquet"
         )
         self.manifest_path.unlink()
         self._write_package()
@@ -177,7 +289,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
         self._assert_package_no_go(result, error_contains="expiration")
 
     def test_same_size_byte_tamper_returns_no_go_and_logs_failure(self):
-        path = self.chain_dir / f"AAA_{SESSION}.parquet"
+        path = self.chain_dir / f"{TARGET}_{SESSION}.parquet"
         with path.open("r+b") as stream:
             stream.seek(16)
             original = stream.read(1)
@@ -187,9 +299,11 @@ class H7SchwabDataGateTests(unittest.TestCase):
         with self.assertLogs(gate.__name__, level="ERROR") as captured:
             result = self._evaluate()
 
-        self._assert_package_no_go(result, error_contains="hash mismatch for AAA")
+        self._assert_package_no_go(
+            result, error_contains=f"hash mismatch for {TARGET}"
+        )
         self.assertIn("Schwab package verification failed", captured.output[0])
-        self.assertIn("hash mismatch for AAA", captured.output[0])
+        self.assertIn(f"hash mismatch for {TARGET}", captured.output[0])
         self.assertIn("Traceback", captured.output[0])
 
     def test_evaluation_never_constructs_a_schwab_client(self):
