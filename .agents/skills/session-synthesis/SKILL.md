@@ -18,14 +18,12 @@ The vault is for Future Carsyn, six weeks from now, who remembers nothing. She d
 
 ## Where the note goes
 
-The note is `<checkout root>/YYYY-MM-DD.md`, gitignored. The Stop hook
-(`.claude/hooks/session_note_guard.py`) checks the CURRENT checkout's root. In
-a worktree session that is the WORKTREE root — and a gitignored note there is
-silently destroyed when the worktree is removed. So from a worktree: write the
-note at the worktree root (satisfies the hook), then immediately copy it to
-the main checkout root (`~/options-validator/`). If today's note already
-exists there (another session), append under a `---` divider instead of
-overwriting.
+The note is the MAIN checkout root's `YYYY-MM-DD.md` (`~/options-validator/`),
+gitignored. The Stop hook (`.claude/hooks/session_note_guard.py`, local-only)
+anchors there even from a worktree session (fixed 2026-08-14) — never leave
+the note only inside a worktree: a gitignored note there is destroyed with the
+worktree. If today's note already exists (another session wrote it), append
+under a `---` divider instead of overwriting.
 
 ## Format
 
