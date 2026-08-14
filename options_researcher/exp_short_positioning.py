@@ -1,6 +1,6 @@
 """EXP-SHORT display lane.
 
-Disabled by default (``config.EXP_SHORT_ENABLED``). Reads local validated
+Disabled by default (``config.SHORT_CONTEXT_ENABLED``). Reads local validated
 artifacts only, never a provider. A lane failure becomes a visible red card
 rather than an empty lane, and nothing here can reach ranking, verdict, entry,
 sizing, book, or live-order code.
@@ -67,6 +67,6 @@ def build_exp_short_board(symbols: Sequence[str], *, asof: str) -> list[ShortPos
 
 def load_exp_short_lane(symbols: Sequence[str], *, asof: str) -> list[ShortPositioningCard] | None:
     """Return lane cards when the experiment is enabled, otherwise ``None``."""
-    if not getattr(config, "EXP_SHORT_ENABLED", False):
+    if not getattr(config, "SHORT_CONTEXT_ENABLED", False):
         return None
     return build_exp_short_board(symbols, asof=asof)

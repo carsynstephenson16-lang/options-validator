@@ -38,12 +38,12 @@ class LaneTestCase(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def enabled(self):
-        return mock.patch.object(config, "EXP_SHORT_ENABLED", True)
+        return mock.patch.object(config, "SHORT_CONTEXT_ENABLED", True)
 
 
 class BoardTests(LaneTestCase):
     def test_the_default_configuration_keeps_the_lane_off(self):
-        self.assertIs(config.EXP_SHORT_ENABLED, False)
+        self.assertIs(config.SHORT_CONTEXT_ENABLED, False)
         self.assertEqual(config.SHORT_POSITIONING_PROVIDER_ORDER, ("finra",))
         self.assertEqual(config.SHORT_POSITIONING_MAX_AGE_RELEASES, 1)
 

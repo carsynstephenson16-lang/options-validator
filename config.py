@@ -870,7 +870,7 @@ EXPERIMENTS_OUTPUT_PATH = ".tmp/dashboard/experiments.html"
 # Interest). Display-only, disabled by default, with no ranking, verdict,
 # entry, sizing, or execution authority. Design:
 # docs/superpowers/specs/2026-08-11-short-positioning-context-design.md
-EXP_SHORT_ENABLED = False
+SHORT_CONTEXT_ENABLED = False
 # Local, gitignored capture root. Provider rows never enter Git.
 SHORT_POSITIONING_ROOT = ".cache/short_positioning"
 # Display-health setting, NOT a predictive threshold: a symbol more than this
