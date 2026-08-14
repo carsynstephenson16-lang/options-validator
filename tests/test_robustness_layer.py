@@ -535,6 +535,14 @@ class RegistryAndReportTests(unittest.TestCase):
             "empty-key": (("", "PASS"),),
             "empty-value": (("minimum_observations", ""),),
             "not-a-pair": (("minimum_observations",),),
+            "missing-required-key": (
+                ("minimum_observations", "PASS"),
+                ("sign_consistency", "PASS"),
+                ("ticker_concentration", "PASS"),
+                ("regime_concentration", "PASS"),
+                ("window_concentration", "PASS"),
+                ("cost_stress", "PASS"),
+            ),
         }
         for name, gate_outcomes in cases.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
