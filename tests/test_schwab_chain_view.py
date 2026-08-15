@@ -155,15 +155,17 @@ class SchwabChainViewTests(unittest.TestCase):
         sessions, failures = view.verified_sessions(**self._dirs())
         self.assertEqual(sessions, [])
         self.assertEqual(len(failures), 1)
-        self.assertEqual(failures[0][0], SESSION)
-        self.assertIn("hash mismatch", failures[0][1])
+        self.assertEqual(failures[0]["session"], SESSION)
+        self.assertEqual(failures[0]["kind"], view.UNVERIFIED)
+        self.assertIn("hash mismatch", failures[0]["reason"])
         self.assertIsNone(view.newest_chain("NVDA", **self._dirs()))
 
     def test_forced_receipt_is_refused(self):
         _write_store(self.root, ["NVDA"], force=True)
         sessions, failures = view.verified_sessions(**self._dirs())
         self.assertEqual(sessions, [])
-        self.assertIn("force must be false", failures[0][1])
+        self.assertEqual(failures[0]["kind"], view.UNVERIFIED)
+        self.assertIn("force must be false", failures[0]["reason"])
         self.assertIsNone(view.newest_chain("NVDA", **self._dirs()))
 
     def test_verification_uses_the_manifests_own_universe_not_a_fixed_list(self):
@@ -180,7 +182,33 @@ class SchwabChainViewTests(unittest.TestCase):
         view._reset_memo_for_tests()
         sessions, failures = view.verified_sessions(**self._dirs())
         self.assertEqual(sessions, [])
-        self.assertEqual(failures[0][0], SESSION)
+        self.assertEqual(failures[0]["session"], SESSION)
+        self.assertEqual(failures[0]["kind"], view.UNVERIFIED)
+
+    def test_tracked_receipt_without_local_chains_is_its_own_state(self):
+        # MEASURED 2026-08-15: reports/schwab_chains IS tracked in git (commit
+        # 13d48a9) while .cache/schwab_chains is ops-only, so this is the
+        # normal research-checkout state -- an expected deployment fact, not an
+        # integrity failure, and it must not read like one.
+        _write_store(self.root, ["NVDA"])
+        (self.chain_dir / f"NVDA_{SESSION}.parquet").unlink()
+        view._reset_memo_for_tests()
+
+        sessions, failures = view.verified_sessions(**self._dirs())
+        self.assertEqual(sessions, [])
+        self.assertEqual(failures[0]["kind"], view.CHAINS_ABSENT)
+        self.assertNotEqual(failures[0]["kind"], view.UNVERIFIED)
+        self.assertIsNone(view.newest_chain("NVDA", **self._dirs()))
+
+    def test_a_partially_present_session_is_a_real_failure(self):
+        # Some files present and some missing is NOT the deployment case; it is
+        # a broken package and must stay loud.
+        _write_store(self.root, ["MSFT", "NVDA"])
+        (self.chain_dir / f"NVDA_{SESSION}.parquet").unlink()
+        view._reset_memo_for_tests()
+
+        _sessions, failures = view.verified_sessions(**self._dirs())
+        self.assertEqual(failures[0]["kind"], view.UNVERIFIED)
 
     def test_non_canonical_session_directory_is_not_a_session(self):
         _write_store(self.root, ["NVDA"])
@@ -272,7 +300,7 @@ class SchwabChainViewTests(unittest.TestCase):
         _write_store(self.root, ["NVDA"], session=SESSION, force=True)
         sessions, failures = view.verified_sessions(**self._dirs())
         self.assertEqual(sessions, ["2026-08-13"])
-        self.assertEqual([f[0] for f in failures], [SESSION])
+        self.assertEqual([f["session"] for f in failures], [SESSION])
         _frame, session = view.newest_chain("NVDA", **self._dirs())
         self.assertEqual(session, "2026-08-13")
 

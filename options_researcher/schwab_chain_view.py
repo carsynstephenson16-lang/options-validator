@@ -55,6 +55,7 @@ DISPLAY_EXCLUDED_SYMBOLS = frozenset({"ET", "USAR"})
 # (tools/schwab_chain_manifest.py:18). This is its human label; every date
 # surface that shows schwab-sourced data must carry it.
 CONVENTION_LABEL = "15:45 pre-close (Schwab)"
+HEADER_CHIP_LABEL = "Pre-close 15:45 (Schwab)"
 CHAIN_SOURCE = "schwab_preclose"
 THETADATA_CHAIN_SOURCE = "thetadata_eod"
 CLOSE_KIND = "preclose_mid_1545"
@@ -76,11 +77,26 @@ DISPLAY_COLUMNS = [
     "vega",
 ]
 
+class _ChainsAbsent(RuntimeError):
+    """The receipt is present but its chain files are not in this checkout."""
+
+
+# Failure kinds. MEASURED 2026-08-15: the capture RECEIPTS are tracked in git
+# (commit 13d48a9, "first real Schwab preclose canary") but the chain parquet
+# lives only in the ops execution checkout. Every research checkout therefore
+# sees a receipt whose files are absent -- an expected deployment fact, not an
+# integrity failure, and it must not render as a permanent red alarm that
+# trains the reader to ignore the real one.
+UNVERIFIED = "unverified"
+CHAINS_ABSENT = "chains_absent"
+
 # (cwd, chain_dir, reports_dir, session) -> (symbols | None, failure | None).
 # Keyed on the resolved cwd because every path here is relative: the dashboard
 # reads inputs under an explicitly switched root (_input_root_cwd), and a memo
 # that survived that switch would answer for the wrong checkout.
-_SESSION_MEMO: dict[tuple[str, str, str, str], tuple[list[str] | None, str | None]] = {}
+_SESSION_MEMO: dict[
+    tuple[str, str, str, str], tuple[list[str] | None, dict[str, str] | None]
+] = {}
 
 
 def _reset_memo_for_tests() -> None:
@@ -103,7 +119,7 @@ def _dirs(chain_dir: Path | str | None,
 
 
 def _verify_one(session: str, chain_dir: Path,
-                reports_dir: Path) -> tuple[list[str] | None, str | None]:
+                reports_dir: Path) -> tuple[list[str] | None, dict[str, str] | None]:
     """Verify one session against its OWN manifest universe.
 
     Reading the universe from the manifest (rather than assuming a fixed
@@ -123,7 +139,7 @@ def _verify_one(session: str, chain_dir: Path,
 
     manifest_path = reports_dir / session / "manifest.json"
     receipt_path = reports_dir / session / "preclose.json"
-    result: tuple[list[str] | None, str | None]
+    result: tuple[list[str] | None, dict[str, str] | None]
     try:
         manifest = json.loads(manifest_path.read_text())
         if not isinstance(manifest, dict):
@@ -133,10 +149,18 @@ def _verify_one(session: str, chain_dir: Path,
                 or not symbols
                 or not all(isinstance(item, str) for item in symbols)):
             raise SchwabChainManifestError("manifest symbols are unusable")
+        if not any((chain_dir / f"{symbol}_{session}.parquet").is_file()
+                   for symbol in symbols):
+            raise _ChainsAbsent(
+                f"no chain files for session {session} in {chain_dir}")
         verify_session(session, symbols, chain_dir, manifest_path, receipt_path)
         result = ([str(symbol) for symbol in symbols], None)
+    except _ChainsAbsent as exc:
+        result = (None, {"session": session, "kind": CHAINS_ABSENT,
+                         "reason": str(exc)})
     except (SchwabChainManifestError, OSError, ValueError) as exc:
-        result = (None, f"{type(exc).__name__}: {exc}")
+        result = (None, {"session": session, "kind": UNVERIFIED,
+                         "reason": f"{type(exc).__name__}: {exc}"})
     _SESSION_MEMO[key] = result
     return result
 
@@ -145,25 +169,26 @@ def verified_sessions(
     *,
     chain_dir: Path | str | None = None,
     reports_dir: Path | str | None = None,
-) -> tuple[list[str], list[tuple[str, str]]]:
+) -> tuple[list[str], list[dict[str, str]]]:
     """Return ``(verified_sessions_ascending, failures)``.
 
-    ``failures`` carries ``(session, reason)`` for every session whose receipt
-    exists but whose package does not verify. Callers MUST surface failures:
-    an unverifiable capture is a loud page state, never a quiet fallback.
+    Each failure is ``{"session", "kind", "reason"}``. ``kind`` is
+    ``UNVERIFIED`` for a package that exists but does not verify (a loud page
+    state -- never a quiet fallback) or ``CHAINS_ABSENT`` for the expected
+    research-checkout case where the tracked receipt has no local chain files.
     Empty sessions AND empty failures means "no Schwab receipts on disk".
     """
     chain_dir, reports_dir = _dirs(chain_dir, reports_dir)
     sessions: list[str] = []
-    failures: list[tuple[str, str]] = []
+    failures: list[dict[str, str]] = []
     for receipt_path in sorted(reports_dir.glob("*/preclose.json")):
         session = _canonical_session(receipt_path.parent.name)
         if session is None:
             continue
         symbols, failure = _verify_one(session, chain_dir, reports_dir)
-        if symbols is None:
-            failures.append((session, str(failure)))
-        else:
+        if symbols is None and failure is not None:
+            failures.append(failure)
+        elif symbols is not None:
             sessions.append(session)
     return sorted(sessions), failures
 
@@ -338,6 +363,7 @@ def as_of_label(session: str) -> str:
 
 
 __all__ = [
+    "CHAINS_ABSENT",
     "CHAIN_DIR",
     "CHAIN_SOURCE",
     "CLOSE_KIND",
@@ -345,9 +371,11 @@ __all__ = [
     "DISPLAY_COLUMNS",
     "DISPLAY_EXCLUDED_SYMBOLS",
     "EOD_CLOSE_KIND",
+    "HEADER_CHIP_LABEL",
     "INTRADAY_REPORTS_DIR",
     "REPORTS_DIR",
     "THETADATA_CHAIN_SOURCE",
+    "UNVERIFIED",
     "as_of_label",
     "load_chain",
     "load_preclose_spot",

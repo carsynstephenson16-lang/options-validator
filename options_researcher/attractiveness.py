@@ -23,13 +23,40 @@ DELTA_BAND = config.H5_INCOME_DELTA_BAND
 N_CANDIDATES = 3
 
 
+UNKNOWN = "UNKNOWN"
+
+
+def _unavailable(value: object) -> bool:
+    """True when a grading input carries no information at all.
+
+    An absent input is NOT a measurement. Coercing one to a neutral number
+    silently manufactures a verdict -- with `iv_for_buyer` (lower is better) a
+    missing IV rank read as 0.0 grades GREEN, i.e. "the cheapest implied vol
+    this name has ever shown", from no data whatsoever. Every such input now
+    grades UNKNOWN instead.
+    """
+    return (value is None
+            or isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value)))
+
+
 def grade(value: float, green: float, amber: float, *,
           higher_is_better: bool = True) -> str:
+    if _unavailable(value):
+        return UNKNOWN
     if higher_is_better:
         return "GREEN" if value >= green else ("AMBER" if value >= amber
                                                else "RED")
     return "GREEN" if value <= green else ("AMBER" if value <= amber
                                            else "RED")
+
+
+def _iv_seller_grade(iv_rank: float) -> str:
+    """IV-rank badge for a seller; UNKNOWN when the rank is unavailable."""
+    if _unavailable(iv_rank):
+        return UNKNOWN
+    return "GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN else "AMBER"
 
 
 def _expiry_rows(chain: pd.DataFrame, day: str, right: str,
@@ -135,7 +162,13 @@ def _vrp_seller_grade(iv_minus_rv: float) -> str:
     AMBER otherwise. NOT a true variance risk premium: trailing realized is
     not realized over the option's own cycle, and the tenors only roughly
     match. Surfaces premium richness vs recent realized -- which IV-rank
-    (IV vs its own history) cannot see -- but never forecasts future vol."""
+    (IV vs its own history) cannot see -- but never forecasts future vol.
+
+    UNKNOWN when iv_minus_rv is unavailable: the GREEN threshold is 0.0, so a
+    missing value coerced to zero renders as a clean GREEN premium reading
+    built on no measurement at all."""
+    if _unavailable(iv_minus_rv):
+        return UNKNOWN
     return "GREEN" if iv_minus_rv >= config.H5_VRP_SELL_GREEN else "AMBER"
 
 
@@ -166,8 +199,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                            config.H5_PUT_YIELD_AMBER),
             "cushion": grade(cushion, config.H5_CUSHION_GREEN,
                              config.H5_CUSHION_AMBER),
-            "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
-                              else "AMBER"),
+            "iv_for_seller": _iv_seller_grade(iv_rank),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": ("AMBER" if earnings_in_cycle
                          else "UNKNOWN" if earnings_unknown else "GREEN"),
@@ -176,13 +208,18 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
         ann = yield_mo * 365.0 / max(int(r["dte"]), 1)
+        wiggle = (f"its typical monthly wiggle is {100 * monthly_move:.1f}%."
+                  if not _unavailable(monthly_move)
+                  else ("its typical monthly wiggle is UNAVAILABLE (no "
+                        "realized-volatility input for this session), so the "
+                        "cushion badge is UNKNOWN."))
         verdict = (f"you'd be promising to buy 100 sh of {symbol} at "
                    f"${k:.0f} (${k * 100:,.0f} set aside); pays "
                    f"${credit:,.0f} now = {100 * yield_mo:.2f}% over "
                    f"{int(r['dte'])}d (~{100 * ann:.0f}%/yr) "
                    "(simple, not compounded); the stock is "
-                   f"{100 * otm:.1f}% above your promise level and its "
-                   f"typical monthly wiggle is {100 * monthly_move:.1f}%.")
+                   f"{100 * otm:.1f}% above your promise level and "
+                   f"{wiggle}")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
                     "yield_mo": yield_mo, "cushion": cushion,
@@ -223,8 +260,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                            config.H5_CC_YIELD_AMBER),
             "upside_room": ("GREEN" if upside >= config.H5_CC_UPSIDE_GREEN
                             else "AMBER"),
-            "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
-                              else "AMBER"),
+            "iv_for_seller": _iv_seller_grade(iv_rank),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": ("AMBER" if earnings_in_cycle
                          else "UNKNOWN" if earnings_unknown else "GREEN"),
@@ -283,8 +319,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "yield": grade(yield_mo, config.H5_CC_YIELD_GREEN,
                            config.H5_CC_YIELD_AMBER),
             "safety": "GREEN",   # by construction: only safe strikes reach here
-            "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
-                              else "AMBER"),
+            "iv_for_seller": _iv_seller_grade(iv_rank),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": ("AMBER" if earnings_in_cycle
                          else "UNKNOWN" if earnings_unknown else "GREEN"),
