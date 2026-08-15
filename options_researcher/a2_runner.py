@@ -634,15 +634,27 @@ def _symbol_from_name(path: Path) -> str:
     return (match.group(1) if match else path.stem).upper()
 
 
-def _load_chain_bundle(path: Path) -> dict[str, dict[str, pd.DataFrame]]:
+def _load_chain_bundle(
+    path: Path,
+    *,
+    common_start: str | None = None,
+    file_counts: dict[str, int] | None = None,
+) -> dict[str, dict[str, pd.DataFrame]]:
     output: dict[str, dict[str, pd.DataFrame]] = {}
+    counts = file_counts if file_counts is not None else {}
+    for symbol in config.A2_UNIVERSE:
+        counts.setdefault(symbol, 0)
     for item in _files(path, (".parquet",)):
         match = re.match(r"^(.+?)_(\d{4}-\d{2}-\d{2})$", item.stem)
         if match is None:
             continue
-        if match.group(2) > config.BACKTEST_END:
+        symbol, day = match.group(1).upper(), match.group(2)
+        if symbol not in config.A2_UNIVERSE:
             continue
-        output.setdefault(match.group(1).upper(), {})[match.group(2)] = _frame(item)
+        if day > config.BACKTEST_END or (common_start is not None and day < common_start):
+            continue
+        counts[symbol] += 1
+        output.setdefault(symbol, {})[day] = _frame(item)
     return output
 
 
@@ -712,6 +724,16 @@ def _load_feature_bundle(path: Path) -> dict[str, pd.DataFrame]:
             raise A2RunnerError(f"feature index contains duplicate dates: {item}")
         output[_symbol_from_name(item)] = frame.sort_index()
     return output
+
+
+def _common_feature_start(features: Mapping[str, pd.DataFrame]) -> str:
+    starts: dict[str, str] = {}
+    for symbol in config.A2_UNIVERSE:
+        frame = features.get(symbol)
+        if frame is None or frame.empty:
+            raise A2RunnerError(f"A2 feature coverage is missing for {symbol}")
+        starts[symbol] = min(str(value)[:10] for value in frame.index)
+    return max(starts.values())
 
 
 def _panel_feature_values(
@@ -958,9 +980,15 @@ def _reconstruct_signals(inputs: A2LocalInputs) -> dict[str, dict[str, float]]:
 
 
 def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
-    chains = _load_chain_bundle(paths.chain)
-    raw, adjusted = _load_close_bundle(paths.underlying)
     features = _load_feature_bundle(paths.features)
+    common_start = _common_feature_start(features)
+    chain_file_counts: dict[str, int] = {}
+    chains = _load_chain_bundle(
+        paths.chain,
+        common_start=common_start,
+        file_counts=chain_file_counts,
+    )
+    raw, adjusted = _load_close_bundle(paths.underlying)
     earnings, earnings_records = _load_earnings(paths.earnings)
     rates, rate_source_dates = _load_rates(paths.rates, chains)
     positions, positions_status = _load_positions(paths.positions)
@@ -983,6 +1011,8 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
         "rates_path": str(paths.rates),
         "earnings_path": str(paths.earnings),
         "positions_path": str(paths.positions),
+        "common_start": common_start,
+        "chain_file_counts": chain_file_counts,
         "chain_max_as_of": max((day for days in chains.values() for day in days), default=None),
         "close_max_as_of": max((day for days in raw.values() for day in days), default=None),
         "earnings_max_as_of": max(

@@ -23,6 +23,8 @@ from options_researcher.a2_runner import (
     OneRunError,
     _causal_earnings,
     _causal_fomc,
+    _common_feature_start,
+    _load_chain_bundle,
     _load_close_bundle,
     _load_earnings,
     _load_feature_bundle,
@@ -525,6 +527,32 @@ class RunnerContracts(unittest.TestCase):
 
 
 class CachePathTests(unittest.TestCase):
+    def test_chain_loader_skips_non_a2_and_pre_common_start_before_reading(self):
+        symbol = config.A2_UNIVERSE[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pre = root / f"{symbol}_2024-12-31.parquet"
+            kept = root / f"{symbol}_2025-01-02.parquet"
+            other = root / "NOT_A2_2025-01-02.parquet"
+            for path in (pre, kept, other):
+                path.touch()
+            counts: dict[str, int] = {}
+            with patch(
+                "options_researcher.a2_runner._frame", return_value=pd.DataFrame()
+            ) as reader:
+                loaded = _load_chain_bundle(root, common_start="2025-01-01", file_counts=counts)
+        reader.assert_called_once_with(kept)
+        self.assertEqual(set(loaded[symbol]), {"2025-01-02"})
+        self.assertEqual(counts[symbol], 1)
+
+    def test_common_feature_start_refuses_missing_a2_coverage(self):
+        features = {
+            symbol: pd.DataFrame({"rv21": [0.1]}, index=["2025-01-02"])
+            for symbol in config.A2_UNIVERSE[:-1]
+        }
+        with self.assertRaisesRegex(A2RunnerError, "feature coverage"):
+            _common_feature_start(features)
+
     def test_tracked_pit_fomc_calendar_is_causal_before_2025_decisions(self):
         path = Path(__file__).resolve().parents[1] / "data" / "events" / "fomc_pit.csv"
         frame = pd.read_csv(path)
