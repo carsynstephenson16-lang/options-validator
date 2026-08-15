@@ -128,7 +128,7 @@ fi
 # status vocabulary; no new capture status is introduced here.
 CHAIN_EDGE="$(ls .cache/chains 2>/dev/null | sed -n 's/.*_\([0-9-]\{10\}\)\.parquet$/\1/p' | sort -u | tail -1)"
 note "canonical chain cache edge: ${CHAIN_EDGE:-none} (evaluation session ${AS_OF})"
-if [ -n "$CHAIN_EDGE" ] && [ "$CHAIN_EDGE" \< "$AS_OF" ]; then
+if [ -n "$CHAIN_EDGE" ] && [[ "$CHAIN_EDGE" < "$AS_OF" ]]; then  # [[ < ]]: zsh's [ rejects \< (exit 2; skipped starvation detection 2026-08-14)
   DATA_STARVED=1
   note "chain-dependent lanes are STARVED: no exact-session chain for ${AS_OF} (cache frozen at ${CHAIN_EDGE}; OD-2/OD-4 forbid refill)"
 fi
