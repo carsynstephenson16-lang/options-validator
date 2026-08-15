@@ -28,6 +28,7 @@ BUCKET_COUNT = 3
 PERMUTATION_COUNT = 5_000
 HOLM_ALPHA = 0.10
 COST_STRESS_MULTIPLIERS = (0.5, 1.0, 1.5)
+PROVENANCE_IDENTITY_KEYS = ("source", "source_id", "receipt", "receipt_id")
 
 # These are the literal A2 registration arms.  The values are intentionally
 # local to this pure boundary; Task 2 may import them but must not redefine
@@ -138,6 +139,22 @@ def _finite(value: object, field: str) -> float:
     return result
 
 
+def _validate_provenance_identity(provenance: Mapping[str, object]) -> None:
+    identity_keys = [key for key in PROVENANCE_IDENTITY_KEYS if key in provenance]
+    if not identity_keys:
+        raise ValueError("A2 provenance requires a named source or receipt identity field")
+    for key in identity_keys:
+        value = provenance[key]
+        if isinstance(value, str):
+            if not value.strip():
+                raise ValueError("A2 provenance source/receipt identity cannot be empty")
+        elif isinstance(value, (int, float, bool)):
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError("A2 provenance source/receipt identity must be finite")
+        else:
+            raise ValueError("A2 provenance source/receipt identity must be scalar")
+
+
 @dataclass(frozen=True, slots=True)
 class A2Outcome:
     """One fully resolved A2 observation.
@@ -211,6 +228,7 @@ class A2Outcome:
         provenance = dict(self.provenance)
         if any(not isinstance(key, str) or not key.strip() for key in provenance):
             raise ValueError("A2 provenance keys must be non-empty text")
+        _validate_provenance_identity(provenance)
         object.__setattr__(self, "arm", arm)
         object.__setattr__(self, "gross_return", gross)
         object.__setattr__(self, "modeled_cost", modeled)
@@ -441,6 +459,8 @@ class A2VariantSummary:
     expectancy_confidence_interval: tuple[float, float] | None = None
     claim_status: str = "NO_DATA"
     effective_k: int = 1
+    holm_family_complete: bool = False
+    holm_family_size: int = 0
 
     @property
     def parameter_id(self) -> str:
@@ -470,6 +490,7 @@ def summarize_lane(
     *,
     effective_k: int = 1,
     measured_dependence: bool = False,
+    family_raw_p_values: Mapping[str, float] | None = None,
     random_seed: int = 42,
     permutations: int = PERMUTATION_COUNT,
 ) -> A2VariantSummary:
@@ -549,12 +570,38 @@ def summarize_lane(
 
     claim_status = "DESCRIPTIVE_ONLY"
     adjusted_p: float | None = None
+    family_complete = False
+    family_size = 0
+    family_values: dict[str, float] = {}
+    if family_raw_p_values is not None:
+        if not isinstance(family_raw_p_values, Mapping):
+            raise ValueError("family_raw_p_values must be a mapping")
+        family_values = dict(family_raw_p_values)
+        family_size = len(family_values)
+        for parameter_id, p_value in family_values.items():
+            if (
+                not isinstance(parameter_id, str)
+                or parameter_id not in LANE_ARMS[canonical_lane]
+                or not isinstance(p_value, (int, float))
+                or isinstance(p_value, bool)
+                or not math.isfinite(float(p_value))
+                or not 0.0 <= float(p_value) <= 1.0
+            ):
+                raise ValueError("family_raw_p_values contains an invalid arm or p-value")
+        family_complete = set(family_values) == set(LANE_ARMS[canonical_lane])
+        if selected_arm in family_values:
+            supplied = float(family_values[selected_arm])
+            if raw_p is not None and not math.isclose(
+                raw_p, supplied, rel_tol=0.0, abs_tol=RECONCILIATION_TOLERANCE
+            ):
+                raise ValueError("selected raw p-value disagrees with supplied Holm family")
+            raw_p = supplied
     if effective_k >= 10 or measured_dependence:
         claim_status = "BLOCKED_ROMANO_WOLF_UNAVAILABLE"
-    elif raw_p is not None:
-        adjusted_p = holm_step_down({selected_arm: raw_p}, alpha=HOLM_ALPHA)[
-            selected_arm
-        ].adjusted_p_value
+    elif family_complete:
+        adjusted_p = holm_step_down(family_values, alpha=HOLM_ALPHA)[selected_arm].adjusted_p_value
+    elif family_raw_p_values is not None:
+        claim_status = "HOLM_FAMILY_INCOMPLETE"
     return A2VariantSummary(
         lane=canonical_lane,
         arm=selected_arm,
@@ -583,6 +630,8 @@ def summarize_lane(
         expectancy_confidence_interval=expectancy_ci,
         claim_status=claim_status,
         effective_k=effective_k,
+        holm_family_complete=family_complete,
+        holm_family_size=family_size,
     )
 
 

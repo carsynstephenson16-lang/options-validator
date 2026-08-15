@@ -109,6 +109,17 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_outcomes((row, replace(row, lane="covered_call", arm="covered_call")))
 
+    def test_provenance_requires_nonempty_scalar_source_or_receipt_identity(self):
+        for provenance in (
+            {"source": ""},
+            {"source": None},
+            {"source": {"path": "fixture"}},
+            {"regime": "normal"},
+        ):
+            with self.subTest(provenance=provenance):
+                with self.assertRaises(ValueError):
+                    _outcome(provenance=provenance)
+
 
 class ViewSeparationTests(unittest.TestCase):
     def test_inference_accepts_only_strictly_nonoverlapping_cohorts(self):
@@ -133,14 +144,28 @@ class ViewSeparationTests(unittest.TestCase):
         )
         extra = replace(
             _outcome(symbol="Z"),
-            decision_date="2025-01-01",
-            entry_date="2025-01-02",
-            resolution_date="2025-01-03",
+            decision_date="2025-01-09",
+            entry_date="2025-01-10",
+            resolution_date="2025-01-20",
         )
-        first = summarize_lane(non_overlapping_inference_rows(base), lane="csp", arm="capture_50")
-        second = summarize_lane(non_overlapping_inference_rows(base), lane="csp", arm="capture_50")
+        changed_extra = replace(
+            extra,
+            gross_return=-0.50,
+            cost_adjusted_return=-0.51,
+            components={**_CSP_COMPONENTS, "option_pnl": -0.48},
+        )
+        first_rows = non_overlapping_inference_rows(base + (extra,))
+        second_rows = non_overlapping_inference_rows(base + (changed_extra,))
+        first = summarize_lane(first_rows, lane="csp", arm="capture_50")
+        second = summarize_lane(second_rows, lane="csp", arm="capture_50")
+        self.assertEqual(first_rows, second_rows)
         self.assertEqual(first.spread, second.spread)
-        self.assertEqual(len(staggered_descriptive_rows(base + (extra,))), 4)
+        first_staggered = staggered_descriptive_rows(base + (extra,))
+        second_staggered = staggered_descriptive_rows(base + (changed_extra,))
+        self.assertEqual(len(first_staggered), 4)
+        self.assertNotEqual(
+            first_staggered[-1].cost_adjusted_return, second_staggered[-1].cost_adjusted_return
+        )
 
 
 class SummaryTests(unittest.TestCase):
@@ -164,10 +189,40 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(summary.top_count, 5)
         self.assertEqual(summary.middle_count, 5)
         self.assertEqual(summary.bottom_count, 5)
-        self.assertGreater(summary.spread, 0.0)
+        self.assertEqual(summary.spread, 0.10)
         self.assertTrue(summary.middle_monotonicity)
+        self.assertEqual(summary.positive_cohort_win_rate, 1.0)
+        self.assertEqual(summary.median, 0.10)
+        self.assertEqual(summary.worst_period, 0.10)
+        self.assertEqual(summary.drawdown, 0.0)
+        self.assertEqual(summary.turnover, 0.0)
         self.assertEqual(summary.bottom_bucket_observation_count, 5)
         self.assertEqual(set(summary.cost_stress), {0.5, 1.0, 1.5})
+        self.assertEqual(summary.cost_stress, {0.5: 0.10, 1.0: 0.10, 1.5: 0.10})
+        self.assertEqual(summary.bid_ask_stress, {0.5: 0.10, 1.0: 0.10, 1.5: 0.10})
+
+    def test_holm_adjustment_requires_complete_sibling_arm_family(self):
+        family = {
+            "capture_50": 0.01,
+            "close_21_dte": 0.02,
+            "fixed_10_sessions": 0.03,
+            "breach_hold_21_dte": 0.04,
+            "assignment_accepting": 0.05,
+        }
+        complete = summarize_lane(
+            self._fifteen(), lane="csp", arm="capture_50", family_raw_p_values=family
+        )
+        self.assertEqual(complete.raw_p_value, 0.01)
+        self.assertEqual(complete.adjusted_p_value, 0.05)
+
+        incomplete = summarize_lane(
+            self._fifteen(),
+            lane="csp",
+            arm="capture_50",
+            family_raw_p_values={"capture_50": 0.01, "close_21_dte": 0.02},
+        )
+        self.assertEqual(incomplete.raw_p_value, 0.01)
+        self.assertIsNone(incomplete.adjusted_p_value)
 
     def test_empty_pmcc_is_no_data(self):
         summary = summarize_lane((), lane="pmcc", arm="pmcc")
