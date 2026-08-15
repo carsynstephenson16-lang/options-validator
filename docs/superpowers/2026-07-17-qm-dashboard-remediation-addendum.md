@@ -84,3 +84,13 @@ review range for Track 4.
 > statistics still never attach to names outside the frozen study's coverage.
 > Recorded by the implementing agent after independent adversarial review and
 > Fable sign-off (review receipt: PR review thread of this brief's PR).
+>
+> *Receipt appended 2026-08-15:* the review named above is now concrete — PR
+> #51 (https://github.com/carsynstephenson16-lang/options-validator/pull/51),
+> independent adversarial subagent review (PASS-with-concerns; hard
+> constraints all verified) + Fable merge-review sign-off recorded on the PR
+> thread. The one merge-blocking finding (movement lane claimed "no fires"
+> when gate-blocked) was fixed in 60fe2bd and that fix was itself
+> independently adversarially reviewed (PASS; new tests verified red against
+> pre-fix code). Owner veto remains available by further append-only
+> amendment.
