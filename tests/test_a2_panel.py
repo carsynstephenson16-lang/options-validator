@@ -186,6 +186,49 @@ class ResolutionTests(unittest.TestCase):
         self.assertEqual(outcomes, ())
         self.assertEqual(diagnostics.skips["missing_matched_tenor_rate"], 1)
 
+    def test_csp_cash_forgone_uses_actual_arm_tenor_and_mae_is_never_positive(self):
+        entry = _chain([_row(expiration="2025-01-17")])
+        target = _chain([_row(expiration="2025-01-17", bid=0.47, ask=0.5)])
+        outcomes = build_historical_outcomes(
+            signals={"2024-12-31": {SYMBOL: 1.0}},
+            chains={SYMBOL: {"2025-01-01": entry, "2025-01-02": target}},
+            raw_closes={
+                SYMBOL: {
+                    "2024-12-31": 105.0,
+                    "2025-01-01": 104.0,
+                    "2025-01-02": 104.0,
+                    "2025-01-17": 95.0,
+                }
+            },
+            adjusted_closes={
+                SYMBOL: {
+                    "2024-12-31": 105.0,
+                    "2025-01-01": 104.0,
+                    "2025-01-02": 104.0,
+                    "2025-01-17": 95.0,
+                }
+            },
+            rates={SYMBOL: {"2025-01-01": 0.365}},
+        )
+        capture = next(row for row in outcomes if row.arm == "capture_50")
+        assigned = next(row for row in outcomes if row.arm == "assignment_accepting")
+        self.assertGreater(
+            capture.components["cash_return_forgone"], assigned.components["cash_return_forgone"]
+        )
+        self.assertLessEqual(capture.components["max_adverse_excursion"], 0.0)
+
+    def test_invalid_rate_is_a_counted_skip(self):
+        diagnostics = A2Diagnostics()
+        build_historical_outcomes(
+            signals={"2024-12-31": {SYMBOL: 1.0}},
+            chains={SYMBOL: {"2025-01-01": _chain([_row(expiration="2025-01-17")])}},
+            raw_closes={SYMBOL: {"2024-12-31": 105.0, "2025-01-01": 104.0}},
+            adjusted_closes={SYMBOL: {"2024-12-31": 105.0, "2025-01-01": 104.0}},
+            rates={SYMBOL: {"2025-01-01": float("nan")}},
+            diagnostics=diagnostics,
+        )
+        self.assertEqual(diagnostics.skips["invalid_matched_tenor_rate"], 1)
+
     def test_missing_or_invalid_resolution_quote_is_counted_and_not_substituted(self):
         diagnostics = A2Diagnostics()
         outcomes = build_historical_outcomes(

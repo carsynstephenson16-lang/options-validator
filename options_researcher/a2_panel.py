@@ -17,6 +17,9 @@ from data.thetadata_adapter import passes_liquidity
 from options_researcher.a2_battery import LANE_COMPONENTS, A2Outcome
 from options_researcher.chains import is_monthly, nearest_monthly
 
+A2_SIMULATED_BAR_TIME_UTC = "21:00:00+00:00"
+A2_QUOTE_TIMESTAMP_TOLERANCE_SECONDS = 3_600
+
 
 @dataclass(slots=True)
 class A2Diagnostics:
@@ -261,10 +264,12 @@ def _csp(
             pnl, bidask = _option_pnl(contract, quote, True)
             commission = 2 * config.COMMISSION_PER_CONTRACT
         components = {key: 0.0 for key in LANE_COMPONENTS["csp"]}
-        calendar_days = (_day(expiry) - _day(entry_day)).days
+        calendar_days = (_day(day) - _day(entry_day)).days
         cash_forgone = denom * (math.exp(rate * calendar_days / 365.0) - 1.0)
         marks = [float(raw[session]) for session in sessions if entry_day <= session <= day]
-        max_adverse = min((mark - strike) * 100.0 for mark in marks) if marks else 0.0
+        # Dollar loss per assigned 100-share lot, clamped at zero: favorable
+        # marks cannot become a positive "adverse" component.
+        max_adverse = min(0.0, min((mark - strike) * 100.0 for mark in marks)) if marks else 0.0
         assigned = (
             (float(raw[expiry]) - strike) * 100.0
             if arm == "assignment_accepting" and float(raw[expiry]) < strike
@@ -360,26 +365,38 @@ def _long(
                 (min(adjusted_marks) - float(adjusted[entry_day])) * 100 / denom
             )
         else:
-            required = ("iv", "vega", "theta", "gamma", "vanna", "volga", "delta")
+            required = ("iv", "vega", "theta", "gamma", "delta")
             if any(column not in contract or column not in quote for column in required):
                 diagnostics.skip("missing_tactical_attribution_input")
                 return None
             feature = (features or {}).get(symbol, {}).get(entry_day, {})
-            sigma = feature.get("d_sigma")
-            if sigma is None:
-                diagnostics.skip("missing_tactical_sigma_change")
+            sigma, d1, d2, dividend_yield = (
+                feature.get("d_sigma"),
+                feature.get("d1"),
+                feature.get("d2"),
+                feature.get("dividend_yield"),
+            )
+            if sigma is None or d1 is None or d2 is None or dividend_yield is None:
+                diagnostics.skip("missing_tactical_derived_greek_input")
                 return None
             ds = float(raw[day]) - float(raw[entry_day])
             dt = (_day(day) - _day(entry_day)).days / 365.0
             d_sigma = float(sigma)
+            iv = float(contract.iv)
+            if not math.isfinite(iv) or iv <= 0:
+                diagnostics.skip("invalid_tactical_iv")
+                return None
+            normal_density = math.exp(-0.5 * float(d1) ** 2) / math.sqrt(2.0 * math.pi)
+            vanna = -math.exp(-float(dividend_yield) * dt) * normal_density * float(d2) / iv
+            volga = float(contract.vega) * float(d1) * float(d2) / iv
             components["stock_price"] = float(contract.delta) * ds * 100 / denom
             components["iv"] = float(contract.vega) * d_sigma / (denom / 100)
             components["decay"] = float(contract.theta) * dt * 100 / denom
             components["cross_effects"] = (
                 (
                     0.5 * float(contract.gamma) * ds * ds
-                    + 0.5 * float(contract.volga) * d_sigma * d_sigma
-                    + float(contract.vanna) * ds * d_sigma
+                    + 0.5 * volga * d_sigma * d_sigma
+                    + vanna * ds * d_sigma
                 )
                 * 100
                 / denom
@@ -494,7 +511,14 @@ def build_historical_outcomes(
             if _usable(put):
                 assert put is not None
                 raw_rate = (rates or {}).get(symbol, {}).get(entry_day)
-                rate = float(raw_rate) if raw_rate is not None else None
+                try:
+                    rate = float(raw_rate) if raw_rate is not None else None
+                except (TypeError, ValueError):
+                    diag.skip("invalid_matched_tenor_rate")
+                    continue
+                if rate is not None and not math.isfinite(rate):
+                    diag.skip("invalid_matched_tenor_rate")
+                    continue
                 rows = _csp(
                     symbol,
                     decision,
@@ -572,11 +596,18 @@ def audit_historical_inputs(
     chains: Mapping[str, Mapping[str, pd.DataFrame]],
     raw_closes: Mapping[str, Mapping[str, float]],
     selected_contracts: set[tuple[str, str, str]] | None = None,
+    eligible_contracts: set[tuple[str, str, str]] | None = None,
+    audit_start: str | None = None,
+    audit_end: str | None = None,
+    eligible_universe: set[str] | None = None,
 ) -> A2AuditResult:
     """Programmatic fourteen-check audit, with any selected-contract failure blocking."""
-    selected, checks = selected_contracts or set(), {n: [] for n in range(1, 15)}
+    selected = (selected_contracts or set()) | (eligible_contracts or set())
+    checks = {n: [] for n in range(1, 15)}
     calendar = xcals.get_calendar("XNYS")
     for symbol, daily in chains.items():
+        if eligible_universe is not None and symbol not in eligible_universe:
+            continue
         observed = {_day(session) for session in daily}
         if observed:
             expected = {
@@ -584,6 +615,25 @@ def audit_historical_inputs(
             }
             for missing in sorted(expected - observed):
                 checks[1].append(f"{symbol} {missing}: missing XNYS session")
+        expirations = sorted(
+            {
+                _day(row.expiration)
+                for chain in daily.values()
+                if isinstance(chain, pd.DataFrame)
+                for _, row in chain.iterrows()
+            }
+        )
+        if audit_start is not None and audit_end is not None and expirations:
+            start, end = _day(audit_start), _day(audit_end)
+            weekly = [expiry for expiry in expirations if start <= expiry <= end]
+            if any((later - earlier).days > 7 for earlier, later in zip(weekly, weekly[1:])):
+                checks[2].append(f"{symbol}: weekly expiration cadence gap")
+            months = {(expiry.year, expiry.month) for expiry in weekly if is_monthly(expiry)}
+            cursor = date(start.year, start.month, 1)
+            while cursor <= end:
+                if (cursor.year, cursor.month) not in months:
+                    checks[2].append(f"{symbol} {cursor:%Y-%m}: monthly expiration cadence gap")
+                cursor = date(cursor.year + (cursor.month == 12), cursor.month % 12 + 1, 1)
         for session, chain in daily.items():
             if not isinstance(chain, pd.DataFrame) or chain.empty:
                 checks[1].append(f"{symbol} {session}: missing chain")
@@ -638,9 +688,14 @@ def audit_historical_inputs(
                 timestamp = row.get("timestamp")
                 if timestamp is not None and pd.notna(timestamp):
                     try:
-                        if abs((_day(str(timestamp)[:10]) - _day(session)).days) > 1:
+                        quote_stamp = pd.Timestamp(timestamp)
+                        expected_stamp = pd.Timestamp(f"{session}T{A2_SIMULATED_BAR_TIME_UTC}")
+                        if (
+                            abs((quote_stamp - expected_stamp).total_seconds())
+                            > A2_QUOTE_TIMESTAMP_TOLERANCE_SECONDS
+                        ):
                             checks[9].append(tag)
-                    except ValueError:
+                    except (TypeError, ValueError):
                         checks[9].append(tag)
                 underlying = row.get("underlying_price")
                 if raw_close is not None and underlying is not None and pd.notna(underlying):
