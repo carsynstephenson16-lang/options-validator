@@ -1,0 +1,74 @@
+{
+  "symbol": "SMCI",
+  "news_summary": "Supermicro reported record Q4 and full fiscal-year 2026 results on August 11, 2026: Q4 revenue of $11.1B (17.5% GAAP gross margin, non-GAAP diluted EPS of $1.70) and full FY2026 revenue of $39.1B, up 78% year over year, on record backlog and more than $60B of new orders entering fiscal 2027. FY2027 revenue guidance was raised to $65.0B-$72.0B. A July 21, 2026 preliminary update had already flagged unexpectedly strong gross margins (15%-17% versus 8.2%-8.4% originally guided) ahead of the full print. Set against the growth story, the same August 11 release disclosed that the company's Board is conducting an independent review of certain transactions in connection with export-control issues, which remained unresolved as of the earnings call. That review follows a March 19, 2026 U.S. Department of Justice indictment of three individuals connected to Supermicro (the company itself was not charged) alleging illegal diversion of roughly $2.5B of Nvidia-powered AI servers to Chinese customers, and Supermicro's own April 7, 2026 launch of an independent internal investigation led by two independent board members with outside counsel and forensic accountants. (The DOJ-indictment and internal-investigation details are drawn from a secondary legal-analysis source, not a primary DOJ or company filing fetched in this run, and are flagged confirmed:false accordingly.)",
+  "sentiment": "neutral",
+  "catalysts": [
+    {
+      "id": "smci-q4fy26-print",
+      "what": "Q4 & full FY2026 results: Q4 revenue $11.1B (17.5% GAAP gross margin, non-GAAP diluted EPS $1.70); FY2026 revenue $39.1B (+78% YoY), FY2026 GAAP diluted EPS $3.26",
+      "date": "2026-08-11",
+      "confirmed": true,
+      "source": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Financial-Results/default.aspx"
+    },
+    {
+      "id": "smci-fy27-guidance",
+      "what": "FY2027 revenue guidance issued at $65.0B-$72.0B, with Q1 FY2027 revenue guided to $14.5B-$15.5B, on record backlog and more than $60B in new orders entering fiscal 2027",
+      "date": "2026-08-11",
+      "confirmed": true,
+      "source": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Financial-Results/default.aspx"
+    },
+    {
+      "id": "smci-export-control-review",
+      "what": "Board disclosed it is conducting an independent review of certain transactions in connection with export-control issues; unresolved as of the August 11, 2026 earnings release",
+      "date": "2026-08-11",
+      "confirmed": true,
+      "source": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Financial-Results/default.aspx"
+    },
+    {
+      "id": "smci-prelim-update",
+      "what": "Preliminary Q4 FY2026 business update: revenue estimated near the low end of the $11.0B-$12.5B guided range; GAAP/non-GAAP gross margin estimated at 15%-17%, well above the 8.2%-8.4% originally guided, with backlog and new orders (>$60B) at record levels",
+      "date": "2026-07-21",
+      "confirmed": true,
+      "source": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Provides-Fourth-Quarter-of-Fiscal-Year-2026-Preliminary-Business-Update/default.aspx"
+    },
+    {
+      "id": "smci-doj-indictment",
+      "what": "DOJ unsealed an indictment of three individuals (former employees/a contractor connected to Supermicro, including a former co-founder) alleging a conspiracy to illegally divert roughly $2.5B of Nvidia-powered AI servers to Chinese customers in violation of export controls; the company itself was not charged",
+      "date": "2026-03-19",
+      "confirmed": false,
+      "source": "https://natlawreview.com/article/super-micros-export-control-issues-compliance-and-financial-reporting-implications"
+    },
+    {
+      "id": "smci-internal-investigation",
+      "what": "Supermicro launched a new independent internal investigation, led by two independent board members (Scott Angel, Tally Liu) with outside counsel Munger, Tolles & Olson LLP and forensic accountants from AlixPartners, focused on the March 2026 indictment and the company's global trade-compliance program",
+      "date": "2026-04-07",
+      "confirmed": false,
+      "source": "https://natlawreview.com/article/super-micros-export-control-issues-compliance-and-financial-reporting-implications"
+    }
+  ],
+  "move_thesis": "Supermicro's Q4/FY2026 print (August 11, 2026) confirms the AI-server growth story is intact: record $39.1B FY2026 revenue (+78% YoY), a large non-GAAP EPS beat, and FY2027 revenue guidance raised to $65B-$72B on record backlog and over $60B of new orders. That is counterbalanced by an unresolved, Board-disclosed independent review of transactions tied to export-control issues -- disclosed in the same release -- layered on top of a March 2026 DOJ indictment of individuals connected to the company and a company-initiated internal investigation (both reported here via a secondary source only, not independently confirmed against a primary filing in this run). With genuinely two-sided evidence -- a strong operating beat/guide-up against an unresolved legal/governance overhang -- sentiment is read as neutral rather than unambiguously bullish; the near-term stock path likely depends on which of the two narratives the market weights more heavily once the export-control review concludes.",
+  "sources": [
+    {
+      "url": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Financial-Results/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (August 11, 2026) but no time-of-day or timezone in the extracted content.",
+      "retrieved_at_utc": "2026-08-15T17:18:00Z"
+    },
+    {
+      "url": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Provides-Fourth-Quarter-of-Fiscal-Year-2026-Preliminary-Business-Update/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (July 21, 2026) but no time-of-day or timezone in the extracted content.",
+      "retrieved_at_utc": "2026-08-15T17:18:30Z"
+    },
+    {
+      "url": "https://natlawreview.com/article/super-micros-export-control-issues-compliance-and-financial-reporting-implications",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article discusses dated events (indictment 2026-03-19, investigation launch 2026-04-07) but the article's own publish date/timezone was not present in the extracted content.",
+      "retrieved_at_utc": "2026-08-15T17:31:00Z"
+    }
+  ],
+  "claims": []
+}

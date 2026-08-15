@@ -1,0 +1,95 @@
+{
+  "symbol": "CEG",
+  "news_summary": "Constellation Energy beat Q2 2026 earnings estimates on Aug 6, 2026 and raised full-year adjusted operating EPS guidance to $11.50-$12.50 (from $11.00-$12.00), helped by the Calpine acquisition and higher capacity prices. The quarter also brought two regulatory wins toward restarting the Crane Clean Energy Center (former Three Mile Island Unit 1) by H2 2027 (an NRC fuel-license amendment and a FERC capacity-interconnection-rights waiver), about 920 MW of new long-term nuclear power purchase agreements (including a Walmart deal), a $860M agreed sale of the Brazos Valley Energy Center, and a 10% dividend increase. Shares jumped premarket on the report though some analysts flagged that the guidance raise's underlying earnings-pool growth was smaller than the per-share increase implies due to a lower share count.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "CEG_Q2_2026_EARNINGS",
+      "what": "Constellation reported Q2 2026 results: adjusted operating EPS $2.55 (vs ~$2.33-$2.41 estimates), up from $1.91 a year earlier; GAAP EPS $1.42, down from $2.67; revenue ~$7.5B (missed estimates near $7.7-7.9B). Raised FY2026 adjusted operating EPS guidance to $11.50-$12.50 from $11.00-$12.00, citing the Calpine addition and higher capacity revenue, partly offset by unfavorable nuclear outages.",
+      "date": "2026-08-06",
+      "confirmed": false,
+      "source": "https://www.investing.com/news/company-news/constellation-q2-2026-slides-nuclear-contracts-drive-20-growth-outlook-93CH-4843690"
+    },
+    {
+      "id": "CEG_CRANE_REGULATORY_MILESTONES",
+      "what": "The Crane Clean Energy Center restart cleared two regulatory hurdles: FERC approved a waiver (decided June 1, 2026) to transfer 760 MW of capacity interconnection rights from the Eddystone plant to Crane, and the NRC issued a draft finding of no significant environmental impact for the restart (announced June 8, 2026, with a 30-day public comment period). Constellation's Q2 2026 earnings materials separately confirmed the NRC approved a fuel-license amendment for Crane. Targeted restart remains H2 2027, with a license-extension request to operate through 2054.",
+      "date": "2026-06-01",
+      "confirmed": false,
+      "source": "https://www.world-nuclear-news.org/articles/ferc-waiver-clears-way-for-crane-clean-nuclear-interconnection"
+    },
+    {
+      "id": "CEG_NUCLEAR_PPAS",
+      "what": "Constellation signed roughly 920 MW of new long-term (15-20 year, average ~18.5 year) nuclear power purchase agreements with investment-grade customers, including 176 MW to Walmart from the Dresden plant, with contract start dates between 2029 and 2032.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.ans.org/news/2026-08-13/article-8291/secondquarter-updates-from-constellation-new-ppas-crane-restart-and-more/"
+    },
+    {
+      "id": "CEG_BRAZOS_VALLEY_SALE",
+      "what": "Constellation agreed to sell the 606 MW Brazos Valley Energy Center (ERCOT gas plant) to LS Power for approximately $860 million (before closing adjustments), disclosed alongside Q2 2026 earnings; sale remains subject to regulatory approval.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.investing.com/news/company-news/constellation-q2-2026-slides-nuclear-contracts-drive-20-growth-outlook-93CH-4843690"
+    },
+    {
+      "id": "CEG_DIVIDEND_INCREASE",
+      "what": "Constellation's board declared a quarterly dividend of $0.4265/share (a 10% year-over-year increase), payable Sept 4, 2026 to shareholders of record as of 5pm ET Aug 18, 2026.",
+      "date": "2026-08-04",
+      "confirmed": false,
+      "source": "https://finance.yahoo.com/energy/articles/constellation-energy-corporation-declares-dividend-182300822.html"
+    },
+    {
+      "id": "PJM_BRA_NEXT",
+      "what": "PJM's next Base Residual Auction (capacity auction), for the 2029/2030 Delivery Year, is scheduled for December 2026 as PJM works toward returning to its three-year-forward planning cycle; exact offer-window and results-posting dates have not yet been published. Constellation is one of PJM's largest nuclear/gas capacity sellers.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/"
+    }
+  ],
+  "move_thesis": "CEG has been moving on the buildout of nuclear capacity for AI/data-center demand: the Q2 beat-and-raise, ~920 MW of new long-dated nuclear PPAs (including a Walmart deal), and clearing FERC/NRC hurdles for the Crane Clean Energy Center restart are the bull-case drivers behind the post-earnings rally. Near-term debate centers on guidance 'quality' (some analysts noted the implied earnings pool grew less than the per-share guidance suggests, given a lower diluted share count) and execution risk on Crane's H2 2027 restart target and the pending Brazos Valley divestiture. PJM's December 2026 Base Residual Auction (2029/2030 delivery year) is a structural catalyst for forward capacity pricing.",
+  "sources": [
+    {
+      "url": "https://www.investing.com/news/company-news/constellation-q2-2026-slides-nuclear-contracts-drive-20-growth-outlook-93CH-4843690",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 6, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T17:45:00Z"
+    },
+    {
+      "url": "https://www.world-nuclear-news.org/articles/ferc-waiver-clears-way-for-crane-clean-nuclear-interconnection",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (Monday, 8 June 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T17:55:00Z"
+    },
+    {
+      "url": "https://www.ans.org/news/2026-08-13/article-8291/secondquarter-updates-from-constellation-new-ppas-crane-restart-and-more/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed a time (9:39 AM, August 13, 2026) without an explicit timezone label, so an exact UTC-offset timestamp cannot be verified.",
+      "retrieved_at_utc": "2026-08-15T18:00:00Z"
+    },
+    {
+      "url": "https://finance.yahoo.com/energy/articles/constellation-energy-corporation-declares-dividend-182300822.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 4, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T18:10:00Z"
+    },
+    {
+      "url": "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/",
+      "source_tier": "market_operator",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page (PJM Inside Lines, a pjm.com subdomain) showed only a publish date (July 14, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T18:20:00Z"
+    },
+    {
+      "url": "https://www.pjm.com/markets-and-operations/rpm",
+      "source_tier": "market_operator",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Live capacity-market (RPM) information page with rolling updates to planning documents; no single publish timestamp is displayed.",
+      "retrieved_at_utc": "2026-08-15T18:22:00Z"
+    }
+  ],
+  "claims": []
+}

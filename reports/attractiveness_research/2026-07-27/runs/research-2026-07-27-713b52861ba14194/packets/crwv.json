@@ -1,0 +1,81 @@
+{
+  "symbol": "CRWV",
+  "news_summary": "CoreWeave reported Q2 2026 results on Aug 11, 2026: revenue $2.575B (+112% YoY, near the top of its $2.45-2.60B guide), adjusted loss per share of $1.03-$1.14 (beating consensus loss estimates around -$1.24 to -$1.41), GAAP net loss widened to $626M (adjusted net loss $567M) as interest expense more than doubled YoY to $640M from $267M, and adjusted EBITDA was $1.51B at a 59% margin. Revenue backlog rose to approximately $104B as of June 30, 2026 (effective backlog cited around $129B including new commitments added in early Q3). FY2026 guidance was raised to $12.4-13.2B revenue and $960M-1.15B adjusted operating income, with capex guidance raised to $35-39B and a target of over 1.85 gigawatts of active power by year-end. The quarter included business with Anthropic and Meta plus new enterprise logos (Bentley Systems, Caterpillar, Grammarly, Isomorphic Labs, Sunday Robotics) and expanded relationships with Cognition, Databricks, Hudson River Trading, and others. Financing activity included raising over $10B in unsecured debt and convertible bonds (including an inaugural Eurobond), a $3.1B delayed-draw term loan backed by HPC infrastructure, and a $1B strategic investment from Jane Street. Shares closed the regular Aug 11 session up 2.42% at $90.32 then jumped further after hours to roughly $102-104.50, a combined move of about 18.5%, exceeding the options market's ~13% implied move. Separately, CoreWeave joined the Nasdaq-100 Index effective before market open on June 22, 2026 (announced June 12, 2026). The persistent bear case is leverage: analysts and coverage in mid-August 2026 cite net debt/adjusted EBITDA figures ranging roughly 4.9x-6.7x and a debt-to-equity ratio above 7x (per D.A. Davidson's Gil Luria), with Barclays maintaining a cautious Equal-Weight rating even as Piper Sandler, Wells Fargo, Cantor Fitzgerald and others stayed bullish on the backlog.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "q2-2026-earnings-beat",
+      "what": "Q2 2026 revenue of $2.575B (+112% YoY) beat guidance and consensus; adjusted loss per share of roughly $1.03-1.14 beat consensus loss estimates; FY2026 revenue guidance raised to $12.4-13.2B and adjusted operating income guidance raised to $960M-1.15B",
+      "date": "2026-08-11",
+      "confirmed": true,
+      "source": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx"
+    },
+    {
+      "id": "backlog-and-capex-raise",
+      "what": "Revenue backlog rose to approximately $104B as of June 30, 2026 (effective backlog cited near $129B including early-Q3 net new commitments); capex guidance raised to $35-39B for the year with a target of over 1.85 gigawatts of active power by year-end",
+      "date": "2026-08-11",
+      "confirmed": true,
+      "source": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx"
+    },
+    {
+      "id": "debt-and-financing-raises-q2",
+      "what": "During Q2 2026 CoreWeave raised more than $10B in unsecured debt and convertible bonds (including its inaugural Eurobond issuance), closed a $3.1B delayed-draw term loan described as the first publicly syndicated facility of its kind backed by HPC infrastructure, and received a $1B strategic investment from Jane Street following expansion of their commercial relationship",
+      "date": null,
+      "confirmed": false,
+      "source": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx"
+    },
+    {
+      "id": "nasdaq-100-inclusion",
+      "what": "CoreWeave joined the Nasdaq-100 Index effective before market open on June 22, 2026 (announced June 12, 2026), as one of five new entrants in that quarterly rebalance",
+      "date": "2026-06-22",
+      "confirmed": true,
+      "source": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-to-Join-Nasdaq-100-Index/default.aspx"
+    },
+    {
+      "id": "leverage-debt-bear-case",
+      "what": "Analysts continue to flag CoreWeave's elevated leverage as the central bear case even after the Q2 beat: debt-to-equity above 7x per D.A. Davidson's Gil Luria (who called it CoreWeave's biggest company-specific risk versus AI-infrastructure peers), with net debt/adjusted EBITDA figures cited in roughly the 4.9x-6.7x range depending on methodology, and Barclays holding a cautious Equal-Weight rating while other desks (Piper Sandler, Wells Fargo, Cantor Fitzgerald) stayed bullish on the backlog",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.tradingkey.com/analysis/stocks/us-stocks/262034116-coreweave-extends-slide-5th-day-7x-leverage-tradingkey"
+    }
+  ],
+  "move_thesis": "Bull case: Q2 2026 delivered the clearest evidence yet that CoreWeave's enormous capex is starting to generate operating leverage -- 112% revenue growth, a 59% adjusted EBITDA margin, backlog scaling to ~$104B (~$129B including early-Q3 adds), continued marquee customer wins (Anthropic, Meta, plus a wave of new enterprise logos), and Nasdaq-100 inclusion. Shares jumped roughly 18.5% on the print, beating the options market's ~13% implied move. Bear case: the same quarter showed a debt load growing faster than the business can easily service -- interest expense more than doubled YoY to $640M, GAAP net loss widened to $626M, and the company added over $10B in new debt (unsecured notes, convertible bonds, a first Eurobond, and a $3.1B HPC-backed term loan) on top of already-elevated leverage that multiple analysts peg at roughly 5-7x net debt/EBITDA or debt-to-equity above 7x. D.A. Davidson's Gil Luria specifically flags CoreWeave's unusually heavy reliance on debt financing versus AI-infrastructure peers as its top company-specific risk, and Barclays remains Equal-Weight even as more bullish desks argue the backlog will outrun the debt. The core tension for the stock is whether contracted revenue converts to cash fast enough to service rising financing costs before AI-infrastructure demand or credit conditions turn.",
+  "sources": [
+    {
+      "url": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR release page did not surface an explicit publish timestamp; earnings call was held 2026-08-11 at 5:00pm ET (21:00 UTC) per corroborating secondary coverage.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-to-Join-Nasdaq-100-Index/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR release confirms 2026-06-12 announcement / 2026-06-22 effective date but no intraday timestamp.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.cnbc.com/2026/08/11/coreweave-crwv-q2-earnings-report-2026.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-11 publication; exact time-of-day not captured (direct fetch returned HTTP 403, content obtained via live search retrieval).",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.tradingkey.com/analysis/stocks/us-stocks/262034116-coreweave-extends-slide-5th-day-7x-leverage-tradingkey",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "No explicit publish timestamp captured in retrieved content; article discusses a multi-day price slide rather than a single dated event.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://247wallst.com/investing/2026/08/12/coreweave-bulls-just-got-what-they-wanted-but-its-massive-debt-problem-isnt-going-away/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-12 publication; exact time-of-day not captured in retrieved content.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    }
+  ],
+  "claims": []
+}

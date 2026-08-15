@@ -1,0 +1,88 @@
+{
+  "symbol": "PLTR",
+  "news_summary": "Palantir reported Q2 2026 earnings on Aug 3, 2026 that blew past expectations: revenue $1.935B (+93% YoY) vs $1.80B expected, adjusted EPS $0.41 vs $0.35 expected, GAAP net income $1.062B (55% margin), GAAP operating margin 47% / adjusted 62%, Rule-of-40 score 155%. US commercial revenue surged 149% YoY to $764M, with US commercial remaining deal value up 124% YoY to $6.238B. Palantir raised FY2026 revenue guidance to $8.150-8.158B (from $7.65-7.66B, ~82% YoY growth) and lifted US commercial guidance to in excess of $3.424B. Shares initially popped ~12% and extended gains toward ~30% over the following days before consolidating near $156, though PLTR remains down roughly 29% year-to-date amid broader AI-software valuation concerns. Government/defense momentum continued into August: the Pentagon pledged up to $243.9M in no-bid Palantir software funding through March 2027 with a DoD memo directing agencies to identify further spending for 2027-2028, which government-oversight-focused press flagged for skipping standard FAR sole-source justification procedures (no-bid contracts reached 14.8% of H1 2026 awards, up from 12.6% in H1 2025); Palantir's Warp Speed defense-manufacturing coordination platform has also been adopted by major weapons builders including Boeing and L3Harris. On the bear side, heavy insider selling by CEO Alex Karp and other executives has continued through 2026 with essentially no offsetting purchases, and Citigroup has flagged the stock's roughly 70x forward-revenue multiple as stretched even after the beat-and-raise quarter.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "q2-2026-earnings-beat-guidance-raise",
+      "what": "Q2 2026 results beat expectations (revenue $1.935B, +93% YoY; adjusted EPS $0.41 vs $0.35 est.; GAAP net income $1.062B) and Palantir raised FY2026 revenue guidance to $8.150-8.158B from $7.65-7.66B, with US commercial revenue guidance raised to in excess of $3.424B",
+      "date": "2026-08-03",
+      "confirmed": true,
+      "source": "https://investors.palantir.com/news-details/2026/Palantir-Reports-Q2-2026-U-S--Comm-Revenue-Growth-of-149-YY-and-Revenue-Growth-of-93-YY-Raises-FY-2026-Revenue-Guidance-to-82-YY-Growth-and-U-S--Comm-Revenue-Guidance-to-134-YY-Crushing-Consensus-Expectations/"
+    },
+    {
+      "id": "pentagon-no-bid-pledge-244m",
+      "what": "Pentagon pledged up to $243.9M in no-bid funding for Palantir software through March 2027, with Deputy Secretary of Defense Steve Feinberg directing DOD departments to identify further Palantir spending options for April 2027-Dec 2028; oversight-focused reporting noted the directive skips the FAR's standard sole-source justification process and that no-bid contracts grew to 14.8% of all H1 2026 awards (up from 12.6% in H1 2025)",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.nextgov.com/acquisition/2026/08/palantirs-no-bid-pipeline-just-got-bigger/415379/"
+    },
+    {
+      "id": "warp-speed-boeing-l3harris",
+      "what": "Palantir's Warp Speed defense-manufacturing coordination platform (connecting defense manufacturers and suppliers on parts availability and production data) has been adopted by major weapons builders including Boeing and L3Harris",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.nextgov.com/acquisition/2026/08/palantirs-no-bid-pipeline-just-got-bigger/415379/"
+    },
+    {
+      "id": "insider-selling-trend-2026",
+      "what": "Heavy insider selling by CEO Alex Karp and other Palantir executives continued through 2026 (roughly nine shares sold for every one bought over a recent three-month stretch with zero offsetting purchases; net insider selling exceeded $43.5M in the 90 days to mid-August 2026), coinciding with a ~10% stock pullback over the same window and analyst valuation caution (Citigroup cited a ~70x forward-revenue multiple as stretched)",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.tradingview.com/news/gurufocus:ca743bcd6094b:0-palantir-heavy-insider-selling-meets-strong-momentum-what-it-means/"
+    },
+    {
+      "id": "q3-2026-earnings-date",
+      "what": "Palantir's Q3 2026 earnings report is expected in early-to-mid November 2026 (estimates vary by source between Nov 2 and Nov 9, 2026; not yet officially confirmed by the company)",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.tipranks.com/stocks/pltr/earnings"
+    }
+  ],
+  "move_thesis": "Bull case: Q2 2026 was an unambiguous beat-and-raise quarter, with US commercial revenue accelerating to 149% YoY growth, Rule-of-40 at 155%, and government/defense demand still expanding via new no-bid Pentagon commitments, the prior $10B Army enterprise agreement, and Warp Speed adoption by major defense manufacturers -- giving several near-term catalysts before the next print (~November 2026). Bear case: valuation is stretched (Citigroup: ~70x forward revenue), insider selling by Karp and other executives has continued through 2026 with no offsetting purchases even after the rally, and the government no-bid contract pipeline is drawing oversight scrutiny over its FAR sole-source justification process -- a headline/political risk if it triggers regulatory pushback. Shares remain down roughly 29% for the year despite the post-earnings pop, reflecting unresolved market skepticism about AI-software valuations broadly.",
+  "sources": [
+    {
+      "url": "https://investors.palantir.com/news-details/2026/Palantir-Reports-Q2-2026-U-S--Comm-Revenue-Growth-of-149-YY-and-Revenue-Growth-of-93-YY-Raises-FY-2026-Revenue-Guidance-to-82-YY-Growth-and-U-S--Comm-Revenue-Guidance-to-134-YY-Crushing-Consensus-Expectations/",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR page rendered only site navigation, not the release body with a timestamp; corroborating secondary coverage places the release and 5:00pm ET (21:00 UTC) earnings webcast on 2026-08-03.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://finance.yahoo.com/markets/stocks/articles/palantir-reports-q2-2026-u-200500706.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Article carries no explicit timestamp in fetched content beyond the 2026-08-03 earnings date referenced throughout.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.cnbc.com/2026/08/03/palantir-pltr-earnings-q2-2026.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-03 publication; exact time-of-day not captured (direct fetch returned HTTP 403, content obtained via live search retrieval).",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.nextgov.com/acquisition/2026/08/palantirs-no-bid-pipeline-just-got-bigger/415379/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "URL path indicates August 2026 publication; exact day/time not shown in fetched article content.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.tradingview.com/news/gurufocus:ca743bcd6094b:0-palantir-heavy-insider-selling-meets-strong-momentum-what-it-means/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Aggregated trend article covering a rolling multi-month window; no single publication timestamp confirmed.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.tipranks.com/stocks/pltr/earnings",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Earnings-calendar page is continuously updated (not a dated article); reflects estimates as retrieved during this session.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    }
+  ],
+  "claims": []
+}

@@ -1,0 +1,74 @@
+{
+  "symbol": "IREN",
+  "news_summary": "IREN heads into its fiscal-year 2026 results (scheduled for August 27, 2026) on a run of AI-cloud momentum confirmed directly on the company's own investor-relations site. On August 13, 2026, IREN announced that Microsoft accepted delivery of 'Horizon 1,' the first of four 50MW direct-to-chip liquid-cooled AI data center deployments under IREN's five-year, $9.7B Microsoft cloud-services contract, and that IREN achieved 'NVIDIA Exemplar Cloud' status following NVIDIA's testing of its GB300 NVL72 deployment at that site; management's stated targets are 480MW (gross) of AI Cloud capacity by year-end 2026 and 1.2GW (gross) by 2027. On August 4, 2026, IREN completed its acquisition of Mirantis, a cloud-software/AI-orchestration company, funded with roughly 12.6 million IREN shares plus about $40 million of cash/RSUs, adding a software/orchestration layer on top of IREN's owned data centers and compute infrastructure. On July 20, 2026, IREN signed $2.8B in new multi-year AI-cloud contracts with additional AI developers, raising its year-end-2026 AI Cloud annualized run-rate revenue (ARR) target from $3.7B to more than $4B, with approximately 85% of that target now under contract.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "iren-horizon1-microsoft",
+      "what": "Microsoft accepted delivery of Horizon 1, the first of four 50MW direct-to-chip liquid-cooled AI data centers under IREN's five-year, $9.7B Microsoft cloud-services contract; IREN also achieved NVIDIA Exemplar Cloud status on its GB300 NVL72 deployment",
+      "date": "2026-08-13",
+      "confirmed": true,
+      "source": "https://iren.com/investors/news"
+    },
+    {
+      "id": "iren-mirantis-close",
+      "what": "IREN completed its acquisition of Mirantis (cloud-software/AI-orchestration company) for approximately 12.6 million IREN ordinary shares plus roughly $40 million in cash/RSUs, adding a software layer to its vertically integrated AI Cloud platform",
+      "date": "2026-08-04",
+      "confirmed": true,
+      "source": "https://iren.com/investors/news"
+    },
+    {
+      "id": "iren-28bn-contracts",
+      "what": "IREN signed $2.8B in new multi-year AI-cloud contracts with additional AI developers, raising its year-end-2026 AI Cloud annualized run-rate revenue (ARR) target from $3.7B to more than $4B, with approximately 85% of that target now under contract",
+      "date": "2026-07-20",
+      "confirmed": true,
+      "source": "https://iren.com/investors/news"
+    },
+    {
+      "id": "iren-fy26-results-date",
+      "what": "IREN scheduled to release its FY2026 full-year results (fiscal year ended June 30, 2026) via conference call at 5:00pm ET",
+      "date": "2026-08-27",
+      "confirmed": true,
+      "source": "https://iren.com/investors/events"
+    },
+    {
+      "id": "iren-capacity-targets",
+      "what": "Management is targeting 480MW (gross) of AI Cloud capacity by year-end 2026, scaling to 1.2GW (gross) by 2027, up from roughly 3MW of self-built AI Cloud capacity a year earlier",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.manilatimes.net/2026/08/13/tmt-newswire/globenewswire/iren-delivers-horizon-1-to-microsoft-and-achieves-nvidia-exemplar-cloud-status-on-gb300-nvl72/2404794"
+    }
+  ],
+  "move_thesis": "IREN's narrative is shifting from a pure bitcoin-mining story to an AI-cloud infrastructure buildout story: rapid, contracted capacity expansion (targeting 480MW gross by year-end 2026 and 1.2GW gross by 2027) anchored by the $9.7B multi-year Microsoft contract, which is now hitting real delivery milestones (Horizon 1 accepted, NVIDIA Exemplar Cloud status). A $2.8B round of new AI-developer contracts lifted the 2026 ARR target above $4B with roughly 85% already under contract, and the Mirantis acquisition adds a software/orchestration layer intended to help IREN serve both hyperscaler bare-metal and managed-cloud customers. The August 27, 2026 FY26 results release is the next scheduled catalyst, where the market will look for confirmation of the capacity ramp pace, the legacy bitcoin-mining segment's contribution, and execution on the remaining Horizon 2-4 deliveries to Microsoft.",
+  "sources": [
+    {
+      "url": "https://iren.com/investors/news",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page is an aggregated news index listing dated headlines (2026-08-13, 2026-08-04, 2026-07-20) without a single publish timestamp or timezone for the page itself.",
+      "retrieved_at_utc": "2026-08-15T17:34:00Z"
+    },
+    {
+      "url": "https://iren.com/investors/events",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page is an events calendar listing the August 27, 2026 FY26 results call date without a specific publish timestamp/timezone for the page itself (the event start time, 5:00pm ET, is a scheduled call time, not a publication time).",
+      "retrieved_at_utc": "2026-08-15T17:35:00Z"
+    },
+    {
+      "url": "https://www.manilatimes.net/2026/08/13/tmt-newswire/globenewswire/iren-delivers-horizon-1-to-microsoft-and-achieves-nvidia-exemplar-cloud-status-on-gb300-nvl72/2404794",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Wire-syndicated mirror of an August 13, 2026 GlobeNewswire release; extracted content shows the date but not a specific time-of-day/timezone.",
+      "retrieved_at_utc": "2026-08-15T17:26:00Z"
+    },
+    {
+      "url": "https://www.manilatimes.net/2026/08/04/tmt-newswire/globenewswire/iren-completes-acquisition-of-mirantis/2397845",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Wire-syndicated mirror of an August 4, 2026 GlobeNewswire release; extracted content shows the date but not a specific time-of-day/timezone.",
+      "retrieved_at_utc": "2026-08-15T17:26:30Z"
+    }
+  ],
+  "claims": []
+}

@@ -1,0 +1,88 @@
+{
+  "symbol": "AVGO",
+  "news_summary": "Broadcom will report Q3 fiscal 2026 results on Wednesday, Sept 2, 2026, after market close, per its own investor-relations announcement on Aug 3, 2026. That follows a strong Q2 FY2026 print on June 3, 2026 (revenue $22.19B, +48% YoY; AI semiconductor revenue $10.8B, +143% YoY; GAAP diluted EPS $1.91), guidance for Q3 FY2026 revenue of ~$29.4B (+84% YoY) with AI semiconductor revenue expected to exceed $16.0B (+200%+ YoY), and a $0.65/share quarterly dividend -- though the stock sold off after that report on unchanged full-year AI guidance. More recently, on Aug 6, 2026 Broadcom announced new VMware vDefend and Avi Load Balancer security capabilities (native API/AI-app protection, air-gapped deployment support, up to 33% hardware cost reduction), part of its push to diversify beyond AI-chip customer concentration with higher-margin infrastructure software.",
+  "sentiment": "neutral",
+  "catalysts": [
+    {
+      "id": "avgo-q3-2026-earnings-date",
+      "what": "Broadcom will report Q3 fiscal 2026 financial results and business outlook on Wednesday, Sept 2, 2026, after market close, with a 2:00 p.m. PT / 5:00 p.m. ET conference call.",
+      "date": "2026-09-02",
+      "confirmed": true,
+      "source": "https://www.broadcom.com/company/news/financial-releases/64621"
+    },
+    {
+      "id": "avgo-q2-2026-results",
+      "what": "Broadcom reported Q2 FY2026 revenue of $22.19B (+48% YoY) and record AI semiconductor revenue of $10.8B (+143% YoY); GAAP diluted EPS $1.91, non-GAAP diluted EPS $2.44, and a $0.65/share quarterly dividend.",
+      "date": "2026-06-03",
+      "confirmed": false,
+      "source": "https://www.prnewswire.com/news-releases/broadcom-inc-announces-second-quarter-fiscal-year-2026-financial-results-and-quarterly-dividend-302790698.html"
+    },
+    {
+      "id": "avgo-q3-2026-guidance",
+      "what": "Broadcom guided Q3 FY2026 revenue to approximately $29.4B (+84% YoY) with non-GAAP operating margin of about 67% and Adjusted EBITDA margin of about 68%.",
+      "date": "2026-06-03",
+      "confirmed": false,
+      "source": "https://www.prnewswire.com/news-releases/broadcom-inc-announces-second-quarter-fiscal-year-2026-financial-results-and-quarterly-dividend-302790698.html"
+    },
+    {
+      "id": "avgo-vdefend-avi-announcement",
+      "what": "Broadcom announced new VMware vDefend and Avi Load Balancer capabilities -- native API/AI-application protection, air-gapped deployment support, an AI-powered troubleshooting assistant, and up to 33% hardware cost reduction -- for private-cloud multi-layer cyber defense.",
+      "date": "2026-08-06",
+      "confirmed": false,
+      "source": "https://www.globenewswire.com/de/news-release/2026/08/06/3340327/19933/en/Broadcom-Enables-Enterprises-to-Strengthen-Multi-Layer-Cyber-Defense-and-Operational-Efficiency-with-New-vDefend-and-Avi-Load-Balancer-Capabilities.html"
+    },
+    {
+      "id": "avgo-fy2026-ai-revenue-guidance",
+      "what": "Broadcom guided full-year fiscal 2026 AI semiconductor revenue to approximately $56B (+180% YoY) and has separately reiterated a target of exceeding $100B in AI semiconductor revenue for fiscal 2027.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://finance.yahoo.com/news/broadcom-forecasts-fourth-quarter-revenue-203506882.html"
+    }
+  ],
+  "move_thesis": "AVGO has been trading on the AI custom-silicon growth story -- Q2 FY2026 AI semiconductor revenue of $10.8B (+143% YoY) and Q3 FY2026 guidance of ~$29.4B total revenue with AI semiconductor revenue expected above $16.0B (+200%+ YoY) -- even though the June 3, 2026 print drew a negative stock reaction on unchanged full-year AI guidance and softer commentary elsewhere in the business. The next catalyst is the confirmed Sept 2, 2026 Q3 fiscal-2026 earnings report, alongside incremental VMware/infrastructure-software announcements (the Aug 6, 2026 vDefend/Avi Load Balancer update) that management is positioning as a higher-margin diversification story against AI-chip customer-concentration risk.",
+  "sources": [
+    {
+      "url": "https://www.broadcom.com/company/news/financial-releases/64621",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Company news page fetched successfully but the extracted text contains no explicit dateline; the Sept 2, 2026 report date and Aug 3, 2026 announcement date are corroborated by the secondary source below.",
+      "retrieved_at_utc": "2026-08-15T17:29:00Z"
+    },
+    {
+      "url": "https://finance.yahoo.com/markets/stocks/articles/broadcom-inc-announce-third-quarter-120000388.html",
+      "source_tier": "secondary",
+      "published_at": "2026-08-03T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T18:10:00Z"
+    },
+    {
+      "url": "https://www.prnewswire.com/news-releases/broadcom-inc-announces-second-quarter-fiscal-year-2026-financial-results-and-quarterly-dividend-302790698.html",
+      "source_tier": "secondary",
+      "published_at": "2026-06-03T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:19:00Z"
+    },
+    {
+      "url": "https://www.broadcom.com/company/news/financial-releases/64371",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Company news page fetched successfully but the extracted text contains only the headline, with no explicit dateline; date corroborated by the PRNewswire source above.",
+      "retrieved_at_utc": "2026-08-15T18:15:00Z"
+    },
+    {
+      "url": "https://www.globenewswire.com/de/news-release/2026/08/06/3340327/19933/en/Broadcom-Enables-Enterprises-to-Strengthen-Multi-Layer-Cyber-Defense-and-Operational-Efficiency-with-New-vDefend-and-Avi-Load-Balancer-Capabilities.html",
+      "source_tier": "secondary",
+      "published_at": "2026-08-06T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T18:05:00Z"
+    },
+    {
+      "url": "https://finance.yahoo.com/news/broadcom-forecasts-fourth-quarter-revenue-203506882.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Date not shown in the retrieved content; the $56B FY2026 AI-revenue guidance it reports ties to the June 3, 2026 Q2 earnings call per cross-referenced coverage, but no explicit article dateline was captured.",
+      "retrieved_at_utc": "2026-08-15T18:02:00Z"
+    }
+  ],
+  "claims": []
+}

@@ -1,0 +1,74 @@
+{
+  "symbol": "AMD",
+  "news_summary": "AMD reported record Q2 2026 results on Aug 4, 2026: revenue of $11.5B (+50% YoY), with Data Center segment revenue of $6.7B more than doubling YoY (+107%) to 58% of total revenue, and non-GAAP diluted EPS of $1.66. Alongside the print, AMD announced a multiyear deal with Anthropic to deploy up to 2 gigawatts of Instinct MI450 Series GPUs in AMD Helios rack-scale systems, plus an expanded Microsoft Azure collaboration. AMD guided Q3 2026 revenue to roughly $13.0B (+/-$300M). Its next earnings date (Q3 2026) is not yet officially confirmed by AMD but third-party trackers place it around Nov 3, 2026. On the regulatory side, AMD's MI350X was named alongside Nvidia chips in Commerce Department guidance (issued around May 31, 2026) tightening export-license requirements for China-headquartered entities routing purchases through offshore subsidiaries.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "amd-q2-2026-results",
+      "what": "AMD reported record Q2 2026 revenue of $11.5B (+50% YoY), with Data Center segment revenue of $6.7B (+107% YoY, 58% of total revenue); GAAP diluted EPS $1.38, non-GAAP diluted EPS $1.66.",
+      "date": "2026-08-04",
+      "confirmed": true,
+      "source": "https://ir.amd.com/news-events/press-releases/detail/1295/amd-reports-second-quarter-2026-financial-results"
+    },
+    {
+      "id": "amd-q3-2026-guidance",
+      "what": "AMD guided Q3 2026 revenue to approximately $13.0B (+/-$300M), roughly 41% YoY growth, with non-GAAP gross margin of about 56%.",
+      "date": "2026-08-04",
+      "confirmed": true,
+      "source": "https://ir.amd.com/news-events/press-releases/detail/1295/amd-reports-second-quarter-2026-financial-results"
+    },
+    {
+      "id": "amd-anthropic-helios-deal",
+      "what": "AMD and Anthropic announced a multiyear strategic collaboration to deploy up to 2 gigawatts of AMD Instinct MI450 Series GPUs in AMD Helios rack-scale systems, alongside an expanded Microsoft Azure deployment of Helios racks and 6th Gen EPYC CPUs.",
+      "date": "2026-08-04",
+      "confirmed": true,
+      "source": "https://ir.amd.com/news-events/press-releases/detail/1295/amd-reports-second-quarter-2026-financial-results"
+    },
+    {
+      "id": "amd-q3-2026-earnings-date-estimate",
+      "what": "Third-party earnings trackers list AMD's Q3 2026 results as expected around Nov 3, 2026 after market close, but explicitly flag the date as unconfirmed pending an official AMD announcement.",
+      "date": "2026-11-03",
+      "confirmed": false,
+      "source": "https://www.tipranks.com/stocks/amd/earnings"
+    },
+    {
+      "id": "amd-mi350x-china-export-guidance",
+      "what": "AMD's MI350X was named alongside Nvidia's Rubin/Blackwell chips in new US Commerce Department guidance enforcing export-license requirements for shipments to China-headquartered entities, even via subsidiaries located outside mainland China.",
+      "date": "2026-05-31",
+      "confirmed": false,
+      "source": "https://m.investing.com/news/stock-market-news/nvidia-and-amd-face-new-export-limits-on-china-subsidiaries-4717940?ampMode=1"
+    }
+  ],
+  "move_thesis": "AMD has been moving on accelerating AI Data Center demand -- record Q2 2026 revenue with Data Center segment more than doubling YoY, a $13B Q3 guide, and marquee capacity commitments (Anthropic's up-to-2GW MI450/Helios deal, expanded Microsoft Azure deployment) that management says position the business for data-center revenue to more than double YoY in 2027. Near-term, the stock has no confirmed next earnings catalyst on AMD's own IR site yet (third-party trackers estimate Nov 3, 2026 for Q3), so the market is trading forward on the Helios/MI450 ramp narrative and second-half guidance while watching for further clarity on China export-license exposure (MI350X) alongside Nvidia's chips.",
+  "sources": [
+    {
+      "url": "https://ir.amd.com/news-events/press-releases/detail/1295/amd-reports-second-quarter-2026-financial-results",
+      "source_tier": "issuer_ir",
+      "published_at": "2026-08-04T20:05:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:58:00Z"
+    },
+    {
+      "url": "https://ir.amd.com/news-events/press-releases/detail/1289/amd-to-report-fiscal-second-quarter-2026-financial-results",
+      "source_tier": "issuer_ir",
+      "published_at": "2026-07-08T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:17:00Z"
+    },
+    {
+      "url": "https://www.tipranks.com/stocks/amd/earnings",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page with no article dateline; the page itself flags the Nov 3, 2026 date as unconfirmed.",
+      "retrieved_at_utc": "2026-08-15T17:15:00Z"
+    },
+    {
+      "url": "https://m.investing.com/news/stock-market-news/nvidia-and-amd-face-new-export-limits-on-china-subsidiaries-4717940?ampMode=1",
+      "source_tier": "secondary",
+      "published_at": "2026-05-31T20:19:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:52:00Z"
+    }
+  ],
+  "claims": []
+}
