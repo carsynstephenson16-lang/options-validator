@@ -513,6 +513,45 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             source.index('crit "capture receipt: REFUSED'),
         )
 
+    def test_starved_title_flips_to_broken_on_a_second_critical(self):
+        """Execute the title logic itself, so the invariant is behavioral.
+
+        A genuinely CRITICAL run must never be relabeled as merely starved: the
+        instant a second CRITICAL exists from any source, [BROKEN] wins.
+        """
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        source = _source()
+        start = source.index('TITLE="options-validator daily ritual"')
+        end = source.index("/usr/bin/osascript", start)
+        block = source[start:end]
+
+        cases = (
+            # CRITICAL, DATA_STARVED, STARVED_CRIT, CRIT_COUNT, expected
+            (1, 1, 1, 1, "[DATA-STARVED] options-validator daily ritual"),
+            (1, 1, 1, 2, "[BROKEN] options-validator daily ritual"),
+            (1, 1, 0, 1, "[BROKEN] options-validator daily ritual"),
+            (1, 0, 1, 1, "[BROKEN] options-validator daily ritual"),
+            (0, 1, 1, 1, "options-validator daily ritual"),
+        )
+        for critical, starved, starved_crit, count, expected in cases:
+            with self.subTest(critical=critical, count=count):
+                script = "\n".join(
+                    [
+                        f"CRITICAL={critical}",
+                        f"DATA_STARVED={starved}",
+                        f"STARVED_CRIT={starved_crit}",
+                        f"CRIT_COUNT={count}",
+                        block,
+                        'echo "$TITLE"',
+                    ]
+                )
+                completed = subprocess.run(
+                    [zsh, "-c", script], capture_output=True, text=True, timeout=30
+                )
+                self.assertEqual(completed.stdout.strip(), expected, completed.stderr)
+
     def test_cache_edge_note_is_shell_only_and_fails_soft(self):
         source = _source()
         self.assertIn("canonical chain cache edge: ${CHAIN_EDGE:-none}", source)
