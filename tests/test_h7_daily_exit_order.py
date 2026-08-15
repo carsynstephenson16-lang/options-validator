@@ -19,7 +19,13 @@ class H7DailyExitOrderTests(unittest.TestCase):
         step = source.index("# Step 2c — H7 real-paper exit management")
         fill = source.index("options_researcher.h7_exit_session fill")
         monitor = source.index("options_researcher.h7_exit_session monitor")
-        gate_block = source.index('if [ "$GATE_GO" -eq 1 ]; then')
+        # The GATE_GO block gained the full-tier fence's condition in the
+        # 2026-08-14 switch-on restructure (brief 11 §6.2); it is the same
+        # block, so this binds the new condition line rather than dropping
+        # the assertion.
+        gate_block = source.index(
+            'if [ "$FULL_AUTHORITY_RC" -eq 0 ] && [ "$GATE_GO" -eq 1 ]; then'
+        )
         entry_guard = source.index('if [ "$H7_EXIT_READY" -eq 1 ]; then')
         preflight = source.index("options_researcher.h7_entry_preflight")
 
@@ -103,7 +109,9 @@ class RitualRefreshBeforeConsumerOrderTests(unittest.TestCase):
         display = (
             "build_all('$AS_OF', symbols=ATTRACTIVENESS_EXTRA_NAMES)"
         )
-        gate_block = source.index('if [ "$GATE_GO" -eq 1 ]; then')
+        gate_block = source.index(
+            'if [ "$FULL_AUTHORITY_RC" -eq 0 ] && [ "$GATE_GO" -eq 1 ]; then'
+        )
 
         self.assertIn(canonical, source)
         self.assertIn(display, source)
