@@ -1623,6 +1623,41 @@ class V2RenderTests(unittest.TestCase):
         )
         self.assertNotIn('class="movement-card"', lane)
 
+    def test_movement_lane_blocked_context_never_claims_no_fires(self):
+        """A gate-blocked/no-data lane must render BLOCKED, not a no-fires observation."""
+        context = self._qm_context()
+        context["status"] = "DATA_BLOCKED"
+        context["reason"] = "pre-registration gate refused"
+        # No movement_symbols key at all — the shape load_qm_context returns when blocked.
+        html = ad.render(self._assembled(), qm_context=context)
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        lane = html[movement_start:movement_end]
+
+        self.assertIn("BLOCKED — movement state is unavailable this session", lane)
+        self.assertIn("pre-registration gate refused", lane)
+        self.assertNotIn("No movement fires today", lane)
+
+        context_all_dead = self._movement_context(statuses=("BREAKOUT",))
+        for item in context_all_dead["movement_symbols"].values():
+            item["status"] = "DATA_BLOCKED"
+        html = ad.render(self._assembled(), qm_context=context_all_dead)
+        lane = html[html.index("QM MOVEMENT LANE"):html.index("QM + MOVING-AVERAGE CONTEXT")]
+        self.assertIn("BLOCKED — movement state is unavailable this session", lane)
+        self.assertNotIn("No movement fires today", lane)
+
+    def test_movement_lane_discloses_partially_unavailable_names(self):
+        context = self._movement_context(statuses=("NO FIRE", "NO FIRE"))
+        context["movement_symbols"]["SYM1"] = {
+            "status": "NO_DATA",
+            "reason": "no cached adjusted OHLCV",
+        }
+        html = ad.render(self._assembled(), qm_context=context)
+        lane = html[html.index("QM MOVEMENT LANE"):html.index("QM + MOVING-AVERAGE CONTEXT")]
+
+        self.assertIn("No movement fires today", lane)
+        self.assertIn("Not evaluated this session: SYM1 (NO_DATA).", lane)
+
     def test_movement_fires_leave_canonical_mechanical_selection_bytes_unchanged(self):
         import json
 

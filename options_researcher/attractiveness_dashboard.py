@@ -3378,26 +3378,49 @@ _QM_MOVEMENT_EMPTY = (
     "No movement fires today. Expected — these patterns fired ~46 times in nine years "
     "across twelve names."
 )
+_QM_MOVEMENT_BLOCKED = (
+    "BLOCKED — movement state is unavailable this session; no claim about fires is made."
+)
 
 
 def _qm_movement_lane_html(
     data: Mapping[str, object], qm_context: Mapping[str, object] | None
 ) -> str:
     """Render read-only QM fires without attaching frozen-study evidence."""
-    movement = qm_context.get("movement_symbols") if isinstance(qm_context, Mapping) else None
-    movement = movement if isinstance(movement, Mapping) else {}
-    fires = [
-        (str(symbol), item)
-        for symbol, item in movement.items()
-        if isinstance(item, Mapping)
-        and item.get("status") == "CURRENT"
-        and item.get("signal_status") in _QM_MOVEMENT_SIGNAL_STATUSES
+    raw_movement = qm_context.get("movement_symbols") if isinstance(qm_context, Mapping) else None
+    has_movement = isinstance(raw_movement, Mapping)
+    movement = raw_movement if isinstance(raw_movement, Mapping) else {}
+    items = [
+        (str(symbol), item) for symbol, item in movement.items() if isinstance(item, Mapping)
     ]
+    evaluated = [(symbol, item) for symbol, item in items if item.get("status") == "CURRENT"]
+    unavailable = [(symbol, item) for symbol, item in items if item.get("status") != "CURRENT"]
+    fires = [
+        (symbol, item)
+        for symbol, item in evaluated
+        if item.get("signal_status") in _QM_MOVEMENT_SIGNAL_STATUSES
+    ]
+    unavailable_note = ""
+    if unavailable:
+        detail = ", ".join(
+            f"{symbol} ({item.get('status', 'UNKNOWN')})" for symbol, item in unavailable
+        )
+        unavailable_note = f'<p class="label">Not evaluated this session: {_esc(detail)}.</p>'
     label_context: Mapping[str, object] | None = qm_context
     if isinstance(qm_context, Mapping) and isinstance(qm_context.get("movement_as_of"), str):
         label_context = {**qm_context, "as_of": qm_context["movement_as_of"], "not_covered": []}
-    if not fires:
-        body = f'<p class="label">{_esc(_QM_MOVEMENT_EMPTY)}</p>'
+    if not has_movement or not evaluated:
+        reason = (
+            str(qm_context.get("reason", "")).strip()
+            if isinstance(qm_context, Mapping)
+            else ""
+        )
+        reason_html = f'<p class="label">Reason: {_esc(reason)}</p>' if reason else ""
+        body = (
+            f'<p class="label">{_esc(_QM_MOVEMENT_BLOCKED)}</p>{reason_html}{unavailable_note}'
+        )
+    elif not fires:
+        body = f'<p class="label">{_esc(_QM_MOVEMENT_EMPTY)}</p>{unavailable_note}'
     else:
         cards = []
         for symbol, item in fires:
@@ -3413,7 +3436,7 @@ def _qm_movement_lane_html(
                 f'<div class="label">Current QM signal: {_esc(str(item["signal_status"]))}</div>'
                 f"{coverage_html}</article>"
             )
-        body = f'<div class="card-grid">{"".join(cards)}</div>'
+        body = f'<div class="card-grid">{"".join(cards)}</div>{unavailable_note}'
     return (
         '<section class="panel qm-movement">'
         '<div class="section-header"><div>'
