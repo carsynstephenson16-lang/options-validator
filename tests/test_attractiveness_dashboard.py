@@ -1641,7 +1641,7 @@ class V2RenderTests(unittest.TestCase):
 
     def test_movement_lane_sits_between_mechanical_top_three_and_retained_comparison(self):
         html = ad.render(self._assembled(), qm_context=self._movement_context())
-        self.assertLess(html.index("ORIGINAL MECHANICAL TOP 3"), html.index("QM MOVEMENT LANE"))
+        self.assertLess(html.index("Rule-based top 3"), html.index("QM MOVEMENT LANE"))
         self.assertLess(
             html.index("QM MOVEMENT LANE"),
             html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
@@ -1659,10 +1659,10 @@ class V2RenderTests(unittest.TestCase):
         qm_context["symbols"]["AMZN"] = qm_context["symbols"].pop("MSFT")
         html = ad.render(data, qm_context=qm_context)
         self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", html)
-        self.assertIn("ORIGINAL MECHANICAL TOP 3", html)
+        self.assertIn("Rule-based top 3", html)
         self.assertEqual(html.count('class="hero-card '), 6)
         self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 2)
-        original_start = html.index("ORIGINAL MECHANICAL TOP 3")
+        original_start = html.index("Rule-based top 3")
         qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
         self.assertNotIn("Current QM signal", html[original_start:qm_start])
         self.assertIn(
@@ -1713,7 +1713,7 @@ class V2RenderTests(unittest.TestCase):
             qm_context=self._qm_context(status="DATA_BLOCKED", as_of="2026-06-29"),
         )
         qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
-        original_start = html.index("ORIGINAL MECHANICAL TOP 3")
+        original_start = html.index("Rule-based top 3")
         qm_section = html[qm_start:]
         self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
         self.assertIn("Sell the MSFT $350 put", html[original_start:])
@@ -1734,14 +1734,14 @@ class V2RenderTests(unittest.TestCase):
 
         html = ad.render(self._assembled(), context=context, qm_context=self._qm_context())
 
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
-        qm_end = html.index("Quant-want background")
-        self.assertIn("research annotation(s) do not match any card", html[qm_start:qm_end])
+        desk_start = html.index("RESEARCH DESK")
+        desk_end = html.index("EXPERIMENTS SHELF")
+        self.assertIn("research annotation(s) do not match any card", html[desk_start:desk_end])
 
     def test_page_order_puts_mechanical_list_before_descriptive_qm_comparison(self):
         html = ad.render(self._assembled(), context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("ORIGINAL MECHANICAL TOP 3"),
+            html.index("Rule-based top 3"),
             html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
         )
         self.assertLess(
@@ -1851,6 +1851,139 @@ class MainTests(unittest.TestCase):
                 self.assertTrue(os.path.exists(out))
                 self.assertIn("attractiveness.html", buf.getvalue())
                 self.assertEqual(path, os.path.abspath(out))
+
+
+# ---------------------------------------------------------------------------
+# Brief 13: passive Lane Board presentation surfaces.
+# ---------------------------------------------------------------------------
+
+
+class LaneBoardPresentationTests(unittest.TestCase):
+    """Presentation-only board surfaces must stay injected and fail-visible."""
+
+    def _data(self):
+        data = ad.assemble(
+            symbol_sections=[
+                _fresh_section("NVDA", "2026-08-14", closes_as_of="2026-08-13"),
+                _stale_section("MSFT", "2026-08-11", closes_as_of="2026-08-12"),
+            ],
+            rv21_by_symbol={},
+            today="2026-08-14",
+            composite_signals=[
+                {"symbol": "NVDA", "grade": "A", "max_asof": "2026-08-13"},
+                {"symbol": "MSFT", "grade": "B", "max_asof": "2026-08-12"},
+            ],
+        )
+        return data
+
+    def _context(self):
+        return {
+            "as_of": "2026-08-14",
+            "researched_on": "2026-08-14",
+            "provenance": "fixture provenance",
+            "symbols": {"NVDA": {"news_summary": "covered"}},
+        }
+
+    def test_status_reader_accepts_only_atomic_three_line_contract(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "research-views-status.txt"
+            path.write_text(
+                "research views refresh: 2026-08-15T07:30:00-0400\n"
+                "experiments: OK exit=0\n"
+                "wasserstein: FAILED exit=2\n"
+            )
+            status = ad.load_research_views_status(path)
+            self.assertEqual(status["state"], "published")
+            self.assertEqual(status["timestamp"], "2026-08-15T07:30:00-0400")
+            self.assertEqual(status["experiments"], "OK")
+            self.assertEqual(status["wasserstein"], "FAILED")
+
+            path.write_text("experiments: OK exit=0\n")
+            self.assertEqual(ad.load_research_views_status(path)["state"], "malformed")
+
+    def test_freshness_research_composite_and_shelf_are_visible_in_board_order(self):
+        html = ad.render(
+            self._data(),
+            context=self._context(),
+            qm_context={"status": "DATA_BLOCKED"},
+            research_views_status={
+                "state": "published",
+                "timestamp": "2026-08-15T07:30:00-0400",
+                "experiments": "OK",
+                "wasserstein": "FAILED",
+            },
+        )
+        self.assertIn("DATA FRESHNESS", html)
+        self.assertIn("Frozen EOD (.cache/chains)", html)
+        self.assertIn("Verified Schwab 15:45 pre-close (.cache/schwab_chains)", html)
+        self.assertIn("Underlying closes", html)
+        self.assertIn("Rule-based top 3 — best policy-and-liquidity fit today", html)
+        self.assertIn(
+            "Chosen by fixed rules (green-check fraction, one pick per stock). This is a fit ranking, not a prediction; whether it predicts anything is exactly what the registered RQ2/A2 studies will measure.",
+            html,
+        )
+        self.assertIn("Highest agreement today: NVDA", html)
+        self.assertIn("RESEARCH DESK", html)
+        self.assertEqual(html.count('class="research-coverage-row"'), 18)
+        self.assertIn("EXPERIMENTS SHELF", html)
+        self.assertIn('href="experiments.html"', html)
+        self.assertIn('href="wasserstein-regime.txt"', html)
+        self.assertIn("experiments: OK", html)
+        self.assertIn("wasserstein: FAILED", html)
+        for earlier, later in (
+            ("DATA FRESHNESS", "Rule-based top 3"),
+            ("Rule-based top 3", "QM MOVEMENT LANE"),
+            ("QM MOVEMENT LANE", "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            ("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", "Composite signal board"),
+            ("Composite signal board", "RESEARCH DESK"),
+            ("RESEARCH DESK", "EXPERIMENTS SHELF"),
+            ("EXPERIMENTS SHELF", "Symbol review"),
+        ):
+            self.assertLess(html.index(earlier), html.index(later))
+
+    def test_unknown_freshness_and_absent_research_are_blocked_not_ok(self):
+        data = self._data()
+        data["symbols"][0]["as_of"] = "not-a-date"
+        data["symbols"][0]["closes_as_of"] = "not-a-date"
+        data["chain_age_sessions"] = None
+        html = ad.render(data, research_views_status={"state": "absent"})
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        self.assertIn("UNKNOWN", freshness)
+        self.assertIn("BLOCKED", freshness)
+        self.assertIn("research: none", html)
+        self.assertIn("not published", html)
+
+    def test_research_desk_marks_stale_and_scalar_packets_uncovered(self):
+        context = self._context()
+        context.update({"as_of": "2026-08-11", "symbols": {"NVDA": "bad packet"}})
+        html = ad.render(self._data(), context=context)
+        desk = html[html.index("RESEARCH DESK"):html.index("EXPERIMENTS SHELF")]
+        self.assertIn("stale by 3 sessions", desk)
+        self.assertIn("NVDA</strong> · no mapping-valued packet", desk)
+        self.assertEqual(desk.count('class="research-coverage-row"'), 18)
+
+    def test_hard_chain_block_banner_survives_freshness_strip(self):
+        data = ad.assemble(
+            symbol_sections=[_stale_section("MSFT", "2026-08-11")],
+            rv21_by_symbol={},
+            today="2026-08-14",
+        )
+        html = ad.render(data)
+        self.assertIn("STALE BOARD", html)
+        self.assertLess(html.index("DATA FRESHNESS"), html.index("STALE BOARD"))
+
+    def test_composite_summary_never_promotes_malformed_or_non_a_cards(self):
+        html = ad._composite_html({
+            "composite_signals": [
+                {"symbol": "MSFT", "grade": "B"},
+                {"symbol": "bad", "grade": None},
+                "not-a-card",
+            ]
+        })
+        self.assertIn("Highest agreement today: none at grade A", html)
 
 
 class ChainAgeBannerTests(unittest.TestCase):

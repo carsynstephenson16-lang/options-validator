@@ -42,11 +42,6 @@ _EXPERIMENT_DEFAULTS = {
 }
 
 class ExperimentBaselineTests(unittest.TestCase):
-    def test_production_dashboard_has_no_experiment_references(self):
-        source = Path(dashboard.__file__).read_text()
-        if "experiment" in source.lower():
-            self.fail("production dashboard still contains experiment markers")
-
     def test_production_dashboard_has_no_experiment_imports(self):
         tree = ast.parse(Path(dashboard.__file__).read_text())
         imported_modules = []
@@ -62,6 +57,28 @@ class ExperimentBaselineTests(unittest.TestCase):
                 for module in imported_modules
             ),
             imported_modules,
+        )
+
+    def test_production_dashboard_never_calls_experiment_builders(self):
+        """Passive links may say experiments, but the production board cannot run one."""
+        tree = ast.parse(Path(dashboard.__file__).read_text())
+
+        def dotted_name(node):
+            if isinstance(node, ast.Name):
+                return node.id
+            if isinstance(node, ast.Attribute):
+                prefix = dotted_name(node.value)
+                return f"{prefix}.{node.attr}" if prefix else node.attr
+            return ""
+
+        called = [dotted_name(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        self.assertFalse(
+            any(
+                name.startswith("options_researcher.exp_")
+                or name.startswith("options_researcher.experiments_dashboard")
+                for name in called
+            ),
+            called,
         )
 
     def test_module_entry_no_args_matches_production_command(self):
@@ -93,7 +110,7 @@ class ExperimentBaselineTests(unittest.TestCase):
         )
         self.assertIn("wrote ", without_experiments.stdout)
         baseline_html = output.read_text()
-        self.assertEqual(baseline_html.lower().count("experiment"), 0)
+        self.assertIn("EXPERIMENTS SHELF", baseline_html)
 
     def test_config_matches_every_module_frozen_default(self):
         source_names_by_module = {}
