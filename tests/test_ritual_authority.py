@@ -13,6 +13,7 @@ import contextlib
 import io
 import itertools
 import json
+import sys
 import unittest
 from dataclasses import asdict
 from pathlib import Path
@@ -130,32 +131,42 @@ class RitualAuthorityContractTests(unittest.TestCase):
                 self.assertEqual(full_out, status["full_ritual"])
 
     def test_all_modes_are_side_effect_free(self):
-        authority = _authority(data=True, source=True, h7=True)
-        watched = (
-            REPO / "reports",
-            REPO / "ledger",
-            REPO / ".tmp" / "daily_ritual",
-        )
-        before = tuple(
-            sorted(
-                (str(item), item.stat().st_mtime_ns)
-                for path in watched
-                if path.exists()
-                for item in path.rglob("*")
-            )
-        )
-        for mode in ("status", "require-data", "require-full"):
-            _run(mode, authority)
-        after = tuple(
-            sorted(
-                (str(item), item.stat().st_mtime_ns)
-                for path in watched
-                if path.exists()
-                for item in path.rglob("*")
-            )
-        )
-        self.assertEqual(after, before)
+        """No file is created or modified anywhere under the repo root.
 
+        The watched set is the WHOLE repo root (spec §10.7), not a hand-picked
+        list of directories: a hand-picked list only proves the modes did not
+        touch the places someone already thought of. Only ephemeral interpreter
+        and VCS bookkeeping artifacts are excluded -- `__pycache__` (bytecode
+        writing is additionally suppressed below, the in-process equivalent of
+        `python -B`), the virtualenv, tool caches, and `.git`, whose internals
+        can be rewritten by unrelated background housekeeping and would make
+        this a flaky test rather than a stricter one. `.cache/`, `.tmp/`,
+        `ledger/` and `reports/` are all inside the watched set.
+        """
+        authority = _authority(data=True, source=True, h7=True)
+        pruned = {".git", ".venv", "__pycache__", ".pytest_cache", ".ruff_cache"}
+
+        def snapshot() -> tuple:
+            seen = []
+            for item in REPO.rglob("*"):
+                if pruned.intersection(item.parts):
+                    continue
+                try:
+                    stat = item.stat()
+                except OSError:
+                    continue
+                seen.append((str(item), stat.st_mtime_ns, stat.st_size))
+            return tuple(sorted(seen))
+
+        before = snapshot()
+        bytecode_was_off = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
+        try:
+            for mode in ("status", "require-data", "require-full"):
+                _run(mode, authority)
+        finally:
+            sys.dont_write_bytecode = bytecode_was_off
+        self.assertEqual(snapshot(), before)
 
 if __name__ == "__main__":
     unittest.main()

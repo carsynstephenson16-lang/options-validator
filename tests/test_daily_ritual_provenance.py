@@ -96,7 +96,15 @@ MUTATION_VERB_PATTERNS = {
     "git commit": r"\bgit\s+commit\b",
     "git fetch": r"\bgit\s+fetch\b",
     "git merge": r"\bgit\s+merge\b",
-    "git push": r"\bgit(?:\s+-c\s+\S+)*\s+push\b",
+    # `git push` is preceded by `-c` config flags, so the verb is not adjacent
+    # to `git`. The matcher must therefore span them -- but it must ALSO not
+    # match the push-failure crit message, which contains the realign command
+    # `git -C ${REPO} push origin main` as prose inside a quoted string.
+    # Relying on `-C` != `-c` for that is a case accident; instead the matcher
+    # is anchored to COMMAND position: the verb may only follow the start of a
+    # line, a `&&`/`||`/`;`/`|` separator, or an env-assignment prefix -- never
+    # arbitrary text such as the middle of a message string.
+    "git push": r"(?:^|&&|\|\||;|\|)\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\s+-c\s+\S+)*\s+push\b",
     "restic backup": r"\brestic\s+backup\b",
 }
 MUTATION_VERB_SITES = {
@@ -111,10 +119,18 @@ MUTATION_VERB_SITES = {
     "git push": (490,),  # data tier
     "restic backup": (507,),  # data tier
 }
-# Any mkdir/git/restic verb anywhere in the script must be registered above.
+# Any mutation verb anywhere in the script must be registered above. The
+# families are deliberately WIDER than what the script uses today (`git reset`,
+# `git checkout`, `git rm`, `git clean`, bare `rm`, `restic forget` are all
+# absent right now) so P4's "every mutation verb is classified" claim keeps
+# holding when someone adds one -- the closure test fails before the verb can
+# run unattended.
 ANY_MUTATION_VERB_RE = re.compile(
-    r"\bmkdir\b|\bgit\s+add\b|\bgit\s+commit\b|\bgit\s+fetch\b|\bgit\s+merge\b"
-    r"|\bgit(?:\s+-c\s+\S+)*\s+push\b|\brestic\s+backup\b"
+    r"\bmkdir\b"
+    r"|\bgit\s+(?:add|commit|fetch|merge|reset|checkout|rm|clean)\b"
+    r"|(?:^|&&|\|\||;|\|)\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\s+-c\s+\S+)*\s+push\b"
+    r"|(?:^|&&|\|\||;|\|)\s*rm\b"
+    r"|\brestic\s+(?:backup|forget)\b"
 )
 
 REQUIRE_DATA = '"$PYTHON" -m data.ritual_authority require-data'
@@ -143,6 +159,13 @@ def _region(source: str, name: str) -> tuple[int, int]:
     end = source.index(f"# ---- end {name} ")
     assert start < end, name
     return start, end
+
+
+def _region_opener(source: str, name: str) -> str:
+    """The single line immediately following a region's opening marker."""
+    marker = source.index(f"# ---- {name} ")
+    body = source.index("\n", marker) + 1
+    return source[body : source.index("\n", body)]
 
 
 def _code_lines(source: str) -> list[tuple[int, str]]:
@@ -298,6 +321,54 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                 self.assertFalse(region_a[0] < offset < region_a[1])
                 self.assertFalse(region_b[0] < offset < region_b[1])
                 self.assertTrue(island[0] < offset < island[1])
+
+    def test_every_fenced_surface_lies_inside_a_full_tier_region(self):
+        """The fence must CONTAIN the H7 surfaces, not merely precede them.
+
+        P2's ordering assertion is satisfied by a gate that is evaluated early
+        and then never consulted, so ordering alone does not prove the surfaces
+        are fenced. This is the containment half.
+        """
+        source = _source()
+        region_a = _region(source, "full-tier region A")
+        region_b = _region(source, "full-tier region B")
+        for module in H7_TIER_SURFACES + GATE_GO_SURFACES:
+            with self.subTest(module=module):
+                offset = _module_site_index(source, module)
+                inside_a = region_a[0] < offset < region_a[1]
+                inside_b = region_b[0] < offset < region_b[1]
+                self.assertTrue(
+                    inside_a or inside_b,
+                    f"{module} is not inside either full-tier region",
+                )
+
+    def test_full_tier_regions_are_opened_by_the_authority_guard(self):
+        """Both regions must be guarded by FULL_AUTHORITY_RC, verbatim.
+
+        Rebinding region A's guard to the top gate's own `AUTHORITY_RC` (which
+        is always 0 past the require-data gate) would un-fence every H7 surface
+        while leaving the region markers, the ordering tests and the
+        containment test above all satisfied. Only the literal binds it.
+        Region B's `FULL_AUTHORITY_RC` conjunct is pinned here for the same
+        reason: without it the H5/H6/H8/H10 lanes run whenever GATE_GO is 1,
+        under an authority tier that never granted them.
+        """
+        source = _source()
+        self.assertEqual(
+            _region_opener(source, "full-tier region A"),
+            'if [ "$FULL_AUTHORITY_RC" -eq 0 ]; then',
+        )
+        self.assertEqual(
+            _region_opener(source, "full-tier region B"),
+            'if [ "$FULL_AUTHORITY_RC" -eq 0 ] && [ "$GATE_GO" -eq 1 ]; then',
+        )
+        # The gate is evaluated exactly once and its own return code is the
+        # only thing either region reads.
+        self.assertEqual(source.count("FULL_AUTHORITY_RC=$?"), 1)
+        self.assertLess(
+            source.index("FULL_AUTHORITY_RC=$?"),
+            _region(source, "full-tier region A")[0],
+        )
 
     def test_frozen_operator_order_is_preserved(self):
         source = _source()

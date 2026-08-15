@@ -122,6 +122,15 @@ FROZEN_INTRADAY_CAPTURE_KEYS = frozenset(
 
 class ConfigHashSurfaceTests(unittest.TestCase):
     def test_config_hash_surface_unchanged(self):
+        """Guards the NAME SET only, per spec §10.8.
+
+        `config_hash()` hashes each name's VALUE too; this test deliberately
+        freezes only the set of uppercase names, so an owner-typed change to an
+        existing constant's value is NOT caught here (it is a registered-number
+        change with its own discipline). What is caught is any ADDITION,
+        REMOVAL or RENAME of a config entry -- the blast radius this brief's
+        "config.py: zero lines" claim depends on.
+        """
         names = tuple(
             sorted(
                 name
