@@ -274,7 +274,7 @@ class ResolutionTests(unittest.TestCase):
             )
             self.assertAlmostEqual(sum(outcome.components.values()), outcome.gross_return)
 
-    def test_long_exit_rejects_crossed_zero_illiquid_and_malformed_numeric_rows(self):
+    def test_long_exit_rejects_crossed_zero_illiquid_and_malformed_structural_rows(self):
         entry_day, exit_day = "2025-01-02", "2025-01-03"
         entry = _chain([_row(right="C", expiration="2025-12-19", iv=0.4, vega=0.2)]).iloc[0]
         raw = {entry_day: 100.0, exit_day: 101.0}
@@ -282,6 +282,10 @@ class ResolutionTests(unittest.TestCase):
             _row(right="C", expiration="2025-12-19", bid=3.0, ask=2.0),
             _row(right="C", expiration="2025-12-19", bid=0.0, ask=2.0),
             _row(right="C", expiration="2025-12-19", open_interest=0),
+            _row(right="C", expiration="2025-12-19", strike="not-a-number"),
+            _row(right="C", expiration="2025-12-19", strike=float("nan")),
+            _row(right="C", expiration="2025-12-19", open_interest="not-a-number"),
+            _row(right="C", expiration="2025-12-19", open_interest=float("inf")),
         ):
             diagnostics = A2Diagnostics()
             self.assertIsNone(
@@ -573,6 +577,18 @@ class ResolutionTests(unittest.TestCase):
             selected_contracts={("AAA", "2025-01-03", "GOOD")},
         )
         self.assertNotEqual(audit.verdict, "BLOCK")
+
+    def test_audit_blocks_selected_malformed_structural_quote_fields(self):
+        for row in (
+            _row(strike="not-a-number"),
+            _row(open_interest="not-a-number"),
+        ):
+            audit = audit_historical_inputs(
+                chains={"AAA": {"2025-01-03": _chain([row])}},
+                raw_closes={"AAA": {"2025-01-03": 105.0}},
+                selected_contracts={("AAA", "2025-01-03", "AAA250221P00100000")},
+            )
+            self.assertEqual(audit.verdict, "BLOCK")
 
     def test_audit_reports_missing_canonical_metadata_as_warning(self):
         row = _row()

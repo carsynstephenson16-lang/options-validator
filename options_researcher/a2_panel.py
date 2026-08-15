@@ -43,12 +43,29 @@ def _day(value: object) -> date:
     return date.fromisoformat(str(value))
 
 
+def _finite_number(value: object) -> float | None:
+    try:
+        number = float(cast(str | float | int, value))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _safe_day(value: object) -> date | None:
+    try:
+        return _day(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _symbol(row: pd.Series) -> str:
     value = row.get("contract_symbol")
+    strike = _finite_number(row.get("strike"))
+    fallback = f"{strike:.8f}" if strike is not None else "invalid"
     return (
         value
         if isinstance(value, str) and value
-        else f"{row['right']}:{row['expiration']}:{float(row['strike']):.8f}"
+        else f"{row['right']}:{row['expiration']}:{fallback}"
     )
 
 
@@ -66,7 +83,8 @@ def _base_rows(chain: pd.DataFrame, right: str) -> pd.DataFrame:
     if not isinstance(chain, pd.DataFrame) or not required.issubset(chain):
         return pd.DataFrame()
     mask = (chain.right.astype(str).str.upper() == right) & chain.apply(
-        lambda row: quote_valid(row.bid, row.ask), axis=1
+        lambda row: _usable(row) and _finite_number(row.get("delta")) is not None,
+        axis=1,
     )
     return cast(pd.DataFrame, chain.loc[mask].copy())
 
@@ -134,10 +152,18 @@ def select_tactical_contract(chain: pd.DataFrame, as_of: str) -> pd.Series | Non
 
 
 def _usable(row: pd.Series | None) -> bool:
+    if row is None:
+        return False
+    strike = _finite_number(row.get("strike"))
+    open_interest = _finite_number(row.get("open_interest"))
+    bid, ask = _finite_number(row.get("bid")), _finite_number(row.get("ask"))
     return (
-        row is not None
-        and quote_valid(row.bid, row.ask)
-        and passes_liquidity(row.open_interest, row.bid, row.ask)
+        strike is not None
+        and open_interest is not None
+        and bid is not None
+        and ask is not None
+        and quote_valid(bid, ask)
+        and passes_liquidity(open_interest, bid, ask)
     )
 
 
@@ -147,9 +173,15 @@ def _contract_row(chain: pd.DataFrame | None, contract: pd.Series) -> pd.Series 
     required = {"expiration", "strike", "right", "bid", "ask", "open_interest"}
     if not required.issubset(chain):
         return None
+    strike = _finite_number(contract.get("strike"))
+    if strike is None:
+        return None
+    strikes = cast(pd.Series, pd.to_numeric(chain.strike, errors="coerce"))
+    finite_strikes = strikes.map(lambda value: pd.notna(value) and math.isfinite(float(value)))
     rows = chain[
         (chain.expiration.astype(str) == str(contract.expiration))
-        & (chain.strike.astype(float) == float(contract.strike))
+        & finite_strikes
+        & (strikes == strike)
         & (chain.right.astype(str).str.upper() == str(contract.right).upper())
     ]
     if rows.empty:
@@ -696,12 +728,11 @@ def audit_historical_inputs(
             for missing in sorted(expected - observed):
                 checks[1].append(f"{symbol} {missing}: missing XNYS session")
         expirations = sorted(
-            {
-                _day(row.expiration)
-                for chain in daily.values()
-                if isinstance(chain, pd.DataFrame)
-                for _, row in chain.iterrows()
-            }
+            expiry
+            for chain in daily.values()
+            if isinstance(chain, pd.DataFrame)
+            for _, row in chain.iterrows()
+            if (expiry := _safe_day(row.get("expiration"))) is not None
         )
         if audit_start is not None and audit_end is not None and expirations:
             checks[2].append(
@@ -724,7 +755,8 @@ def audit_historical_inputs(
                 checks[1].append(f"{symbol} {session}: missing columns")
                 continue
             raw_close = raw_closes.get(symbol, {}).get(session)
-            if raw_close is None:
+            close = _finite_number(raw_close)
+            if close is None:
                 checks[13].append(f"{symbol} {session}: missing independent close")
             if "timestamp" not in chain:
                 checks[9].append(f"{symbol} {session}: missing timestamp")
@@ -732,45 +764,62 @@ def audit_historical_inputs(
                 checks[5].append(f"{symbol} {session}: volume metadata unavailable")
             if "underlying_price" not in chain:
                 checks[13].append(f"{symbol} {session}: underlying_price metadata unavailable")
-            if not any(_day(row.expiration) > _day(session) for _, row in chain.iterrows()):
-                checks[2].append(f"{symbol} {session}: no reachable expiration")
-            close = raw_close
-            if close is not None and not any(
-                abs(float(row.strike) - float(close)) / float(close) <= 0.10
+            session_day = _safe_day(session)
+            if not any(
+                expiry is not None and session_day is not None and expiry > session_day
                 for _, row in chain.iterrows()
+                if (expiry := _safe_day(row.get("expiration"))) is not None
+            ):
+                checks[2].append(f"{symbol} {session}: no reachable expiration")
+            if (
+                close is not None
+                and close != 0
+                and not any(
+                    strike is not None and abs(strike - close) / abs(close) <= 0.10
+                    for _, row in chain.iterrows()
+                    if (strike := _finite_number(row.get("strike"))) is not None
+                )
             ):
                 checks[3].append(f"{symbol} {session}: no near-ATM strike")
             if chain.duplicated(["expiration", "strike", "right"], keep=False).any():
                 checks[12].append(f"{symbol} {session}: duplicate contract")
             for _, row in chain.iterrows():
-                tag, bid, ask = f"{symbol} {session} {_symbol(row)}", row.bid, row.ask
+                tag = f"{symbol} {session} {_symbol(row)}"
                 if selected and (symbol, session, _symbol(row)) not in selected:
                     continue
-                if pd.isna(bid) or pd.isna(ask):
+                strike = _finite_number(row.get("strike"))
+                open_interest = _finite_number(row.get("open_interest"))
+                bid, ask = _finite_number(row.get("bid")), _finite_number(row.get("ask"))
+                if strike is None:
+                    checks[3].append(tag)
+                if open_interest is None:
+                    checks[5].append(tag)
+                if bid is None or ask is None:
                     checks[4].append(tag)
                 if any(
-                    pd.notna(row.get(c)) and float(row[c]) < 0
+                    (value := _finite_number(row.get(c))) is None or value < 0
                     for c in ("bid", "ask", "volume", "open_interest")
+                    if c in row and row.get(c) is not None
                 ):
                     checks[5].append(tag)
-                if pd.notna(bid) and pd.notna(ask) and float(bid) > float(ask):
+                if bid is not None and ask is not None and bid > ask:
                     checks[6].append(tag)
-                if pd.notna(bid) and pd.notna(ask) and float(bid) == 0 < float(ask):
+                if bid is not None and ask is not None and bid == 0 < ask:
                     checks[7].append(tag)
-                mid = (float(bid) + float(ask)) / 2 if pd.notna(bid) and pd.notna(ask) else 0
-                if mid > 0 and (float(ask) - float(bid)) / mid > 0.20:
-                    checks[8].append(tag)
-                iv = row.get("iv")
-                if iv is None or pd.isna(iv) or not 0 < float(iv) <= 5:
+                if bid is not None and ask is not None:
+                    mid = (bid + ask) / 2
+                    if mid > 0 and (ask - bid) / mid > 0.20:
+                        checks[8].append(tag)
+                iv = _finite_number(row.get("iv"))
+                if iv is None or not 0 < iv <= 5:
                     checks[10].append(tag)
-                delta, gamma = row.get("delta"), row.get("gamma")
-                if (delta is not None and pd.notna(delta) and abs(float(delta)) > 1) or (
-                    gamma is not None and pd.notna(gamma) and float(gamma) < 0
-                ):
+                delta, gamma = _finite_number(row.get("delta")), _finite_number(row.get("gamma"))
+                if (delta is not None and abs(delta) > 1) or (gamma is not None and gamma < 0):
                     checks[11].append(tag)
-                if _day(row.expiration).weekday() >= 5:
+                expiration = _safe_day(row.get("expiration"))
+                if expiration is None or expiration.weekday() >= 5:
                     checks[14].append(tag)
-                if not calendar.is_session(_day(row.expiration)):
+                if expiration is None or not calendar.is_session(expiration):
                     checks[14].append(tag)
                 timestamp = row.get("timestamp")
                 if timestamp is not None and pd.notna(timestamp):
@@ -784,9 +833,9 @@ def audit_historical_inputs(
                             checks[9].append(tag)
                     except (TypeError, ValueError):
                         checks[9].append(tag)
-                underlying = row.get("underlying_price")
-                if raw_close is not None and underlying is not None and pd.notna(underlying):
-                    if abs(float(underlying) - float(raw_close)) / float(raw_close) > 0.005:
+                underlying = _finite_number(row.get("underlying_price"))
+                if close is not None and underlying is not None and close != 0:
+                    if abs(underlying - close) / abs(close) > 0.005:
                         checks[13].append(tag)
     warnings = tuple(f"check {n}: {x}" for n, rows in checks.items() for x in rows)
     selected_tags = {f"{symbol} {session} {contract}" for symbol, session, contract in selected}
