@@ -9,6 +9,10 @@ import unittest
 from pathlib import Path
 
 
+@unittest.skipUnless(
+    Path("/bin/zsh").is_file(),
+    "requires /bin/zsh; research_display_refresh.sh is a macOS/zsh-only wrapper",
+)
 class ResearchDisplayRefreshTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repo_root = Path(__file__).resolve().parents[1]
