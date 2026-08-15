@@ -143,3 +143,81 @@ rm ~/Library/LaunchAgents/com.carsyn.options-validator.intraday-capture.plist
 - This LaunchAgent and `tools/daily_ritual.sh`'s existing 07:10 LaunchAgent
   are independent: intraday_capture.sh never commits or pushes anything
   itself.
+
+## Display-only research views
+
+The attractiveness/composite view remains produced by the daily ritual. The
+display refresh job builds only the experiments and Wasserstein artifacts; it
+does not replace or rerun the attractiveness producer. Both jobs target the
+`/Users/carsynstephenson/options-validator-ops` checkout. The server is
+localhost-only on `127.0.0.1:8766` and serves the ops
+`.tmp/dashboard/` directory.
+
+### Replace the unmanaged listener safely
+
+Deployment is an owner operation. Immediately before replacing the existing
+listener, resolve it again:
+
+```bash
+lsof -nP -iTCP:8766 -sTCP:LISTEN
+ps -p "$PID" -o pid=,command=
+lsof -a -p "$PID" -d cwd
+```
+
+Use the PID from the first command. Send `TERM` only when the inspected
+command, cwd, bind address, and port all match the unmanaged ops-dashboard
+server. Otherwise stop and report the process that owns the port; do not kill
+it or install an ad-hoc replacement.
+
+Only after all four fields match, send the graceful termination signal:
+
+```bash
+kill -TERM "$PID"
+```
+
+### Install
+
+Run these commands from the checkout containing the reviewed templates:
+
+```bash
+mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/research_views \
+  /Users/carsynstephenson/options-validator-ops/.tmp/dashboard
+cp tools/launchagents/com.carsyn.options-validator.research-display-refresh.plist \
+  ~/Library/LaunchAgents/
+cp tools/launchagents/com.carsyn.options-validator.research-views.plist \
+  ~/Library/LaunchAgents/
+launchctl bootstrap gui/$UID \
+  ~/Library/LaunchAgents/com.carsyn.options-validator.research-display-refresh.plist
+launchctl enable gui/$UID/com.carsyn.options-validator.research-display-refresh
+launchctl bootstrap gui/$UID \
+  ~/Library/LaunchAgents/com.carsyn.options-validator.research-views.plist
+launchctl enable gui/$UID/com.carsyn.options-validator.research-views
+```
+
+### Verify
+
+Print both managed jobs, kick the refresh once, and check all four served
+artifacts:
+
+```bash
+launchctl print gui/$UID/com.carsyn.options-validator.research-display-refresh
+launchctl print gui/$UID/com.carsyn.options-validator.research-views
+launchctl kickstart gui/$UID/com.carsyn.options-validator.research-display-refresh
+curl -fsS http://127.0.0.1:8766/attractiveness.html
+curl -fsS http://127.0.0.1:8766/experiments.html
+curl -fsS http://127.0.0.1:8766/wasserstein-regime.txt
+curl -fsS http://127.0.0.1:8766/research-views-status.txt
+```
+
+### Rollback
+
+Boot out both labels and leave the generated dashboard artifacts in place:
+
+```bash
+launchctl bootout gui/$UID/com.carsyn.options-validator.research-display-refresh
+launchctl bootout gui/$UID/com.carsyn.options-validator.research-views
+```
+
+The prior server may be restored only with the exact, previously verified
+localhost ops-dashboard command (including its command, cwd, bind address,
+and port). Do not substitute an unverified process.
