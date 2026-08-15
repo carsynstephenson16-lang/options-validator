@@ -1,5 +1,51 @@
 # Dashboard and intraday LaunchAgents
 
+## Ops alignment check (15:30 ET, detection only)
+
+`com.carsyn.options-validator.alignment-check.plist` runs
+`tools/ops_alignment_check.sh` at **15:30 ET on weekdays** from the ops
+checkout — 15 minutes before the 15:45 Schwab preclose capture, whose own
+alignment gate refuses to run on a divergent checkout. Owner ruling 4 of
+`reports/2026-08-14-owner-answers-decision-menu.md` (D-6a).
+
+It **only looks**: it fetches `origin/main` (bounded, prompt-free) and compares
+HEAD. It predicts the capture's own gate instead of approximating it — that
+gate tolerates exactly one divergence shape (owner decision D-3: strictly
+ahead, with the tree differing only under evidence paths):
+
+| Result | Meaning | Exit |
+| --- | --- | --- |
+| `ALIGNED` | nothing to do | 0, log line only |
+| `AHEAD_EVIDENCE_ONLY` | evidence commits not yet pushed; **the 15:45 capture still runs** | 0, log + `INFO:` line, no alarm |
+| `AHEAD_CODE` | unpushed code; **the capture will refuse** | 1 + notification |
+| `BEHIND` / `DIVERGED` / `NOT_ON_MAIN` / `FETCH_FAILED` / `UNRESOLVED` | capture will refuse, or alignment is unknown | 1 + notification |
+
+Every result appends a dated line under `.tmp/alignment_check/`; every nonzero
+one also fires a macOS notification carrying the exact realign command. It
+never merges, pulls, resets, or pushes — that command is the owner's to run.
+
+Install (**the owner runs these; a Claude session cannot — the classifier
+denies `launchctl` to agents**):
+
+```bash
+mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/alignment_check
+cp tools/launchagents/com.carsyn.options-validator.alignment-check.plist \
+   ~/Library/LaunchAgents/
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.carsyn.options-validator.alignment-check.plist
+launchctl enable gui/$UID/com.carsyn.options-validator.alignment-check
+```
+
+Verify, fire one run now, or uninstall:
+
+```bash
+launchctl print gui/$UID/com.carsyn.options-validator.alignment-check
+launchctl kickstart gui/$UID/com.carsyn.options-validator.alignment-check
+launchctl bootout gui/$UID/com.carsyn.options-validator.alignment-check
+```
+
+A nonzero exit is the job doing its work, not a bug: it means the ops checkout
+needs the printed command before 15:45.
+
 ## Live dashboard
 
 `com.carsyn.options-validator.live-dashboard.plist` keeps the read-only
