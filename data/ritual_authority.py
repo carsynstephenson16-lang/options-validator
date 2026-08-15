@@ -38,7 +38,9 @@ class RitualAuthority:
 CURRENT_AUTHORITY = RitualAuthority(
     h7_active=False,
     exact_session_source_active=False,
-    ritual_data_phase_active=False,
+    # owner-directed in-session 2026-08-14 (brief 11 §5); asserts NO source
+    # and NO H7 authority
+    ritual_data_phase_active=True,
 )
 
 
