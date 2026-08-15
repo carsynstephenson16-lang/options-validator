@@ -356,6 +356,78 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self.assertIn("GATE PASSED", completed.stdout)
         self.assertNotIn("evidence-only", completed.stdout)
 
+    def test_alignment_gate_refuses_an_evil_merge_that_edits_code(self):
+        """`git log --name-only` emits NO paths for a merge commit.
+
+        A merge whose own resolution edits a code file therefore reads as
+        "evidence-only" under per-commit enumeration. The tree diff sees the
+        code file, because the tree really does differ from origin/main.
+        """
+        repo = self._repo_with(ahead_paths=("reports/ritual/run_status.json",))
+        # Every ordinary commit ahead of origin/main touches evidence only; the
+        # code edit is introduced by the MERGE COMMIT ITSELF, which is what
+        # makes it invisible to per-commit enumeration.
+        self._git(repo, "checkout", "-q", "-b", "side", "origin/main")
+        side_evidence = repo / "reports" / "ritual" / "side.json"
+        side_evidence.parent.mkdir(parents=True, exist_ok=True)
+        side_evidence.write_text("{}\n")
+        self._git(repo, "add", "--", "reports/ritual/side.json")
+        self._git(repo, "commit", "-qm", "side evidence")
+        self._git(repo, "checkout", "-q", "main")
+        merge = subprocess.run(
+            ["git", "-C", str(repo), "merge", "--no-commit", "--no-ff", "side"],
+            capture_output=True,
+            text=True,
+            env={"PATH": "/usr/bin:/bin", "HOME": str(repo)},
+        )
+        self.assertIn(merge.returncode, (0, 1), merge.stderr)
+        (repo / "code.py").write_text("x = 3  # smuggled in by the merge itself\n")
+        self._git(repo, "add", "code.py")
+        self._git(repo, "commit", "-qm", "evil merge")
+
+        # Precondition: the per-commit view really is blind here.
+        log_paths = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "log",
+                "--pretty=format:",
+                "--name-only",
+                "HEAD",
+                "--not",
+                "origin/main",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertNotIn("code.py", log_paths)
+
+        completed = self._run_alignment_gate(repo)
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn(
+            "REFUSED: HEAD is not aligned with origin/main", completed.stdout
+        )
+
+    def test_alignment_gate_refuses_a_code_file_renamed_into_an_evidence_path(self):
+        """`git log --name-only` reports only a rename's DESTINATION.
+
+        `git mv code.py reports/ritual/code.py` therefore reads as
+        evidence-only under per-commit enumeration; the tree diff (with
+        --no-renames) reports the deleted source path too.
+        """
+        repo = self._repo_with(ahead_paths=())
+        (repo / "reports" / "ritual").mkdir(parents=True)
+        self._git(repo, "mv", "code.py", "reports/ritual/code.py")
+        self._git(repo, "commit", "-qm", "move code into an evidence path")
+
+        completed = self._run_alignment_gate(repo)
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn(
+            "REFUSED: HEAD is not aligned with origin/main", completed.stdout
+        )
+
     def test_alignment_gate_fails_closed_when_identity_is_unresolvable(self):
         repo = self._repo_with(ahead_paths=("reports/ritual/run_status.json",))
         source = WRAPPER.read_text(encoding="utf-8")

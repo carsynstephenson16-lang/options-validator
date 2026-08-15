@@ -58,7 +58,7 @@ fi
 # A strict SHA equality also refused when the only divergence was the daily
 # ritual's own evidence commit whose fail-soft push had failed -- turning a
 # transient push failure into a PERMANENTLY lost irreplaceable capture. So:
-# refuse unless every commit in origin/main..HEAD touches only evidence
+# refuse unless HEAD's tree differs from origin/main's ONLY under evidence
 # allow-list paths. Being BEHIND origin/main still refuses exactly as before
 # (running stale code unattended is what this guard exists to prevent), and
 # anything unresolvable fails closed.
@@ -73,7 +73,16 @@ alignment_divergence_is_evidence_only() {
     ''|*[!0-9]*) return 1 ;;
   esac
   [ "$BEHIND_COUNT" -ne 0 ] && return 1
-  AHEAD_PATHS="$(git -C "$REPO" log --pretty=format: --name-only HEAD --not origin/main 2>/dev/null)" || return 1
+  # TREE diff, not per-commit enumeration. `git log --name-only` has two
+  # documented blind spots that both let a code change through: it emits NO
+  # paths at all for a merge commit (so an "evil merge" whose conflict
+  # resolution edits code shows only the evidence paths of its parents), and
+  # it reports only the DESTINATION of a rename (so `git mv` of a code file
+  # into an evidence path reads as evidence-only). Comparing the trees asks
+  # the strictly stronger question this guard actually means: does the working
+  # HEAD differ from reviewed origin/main anywhere outside the evidence
+  # paths? --no-renames forces both sides of a rename to be reported.
+  AHEAD_PATHS="$(git -C "$REPO" diff --name-only --no-renames origin/main HEAD 2>/dev/null)" || return 1
   while IFS= read -r CHANGED_PATH; do
     [ -z "$CHANGED_PATH" ] && continue
     PATH_OK=1
