@@ -652,3 +652,60 @@ class DailyRitualProvenanceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CacheEdgeZshExecutionTests(unittest.TestCase):
+    """Execute the cache-edge starvation block under the shell that runs it.
+
+    The 2026-08-14 production runs silently skipped starvation detection:
+    ``[ "$CHAIN_EDGE" \\< "$AS_OF" ]`` is a bash-ism that zsh's POSIX ``[``
+    rejects with "condition expected: <" (exit 2), and with no ``set -e`` the
+    script continued with DATA_STARVED=0. Static text assertions cannot catch
+    runtime shell semantics — this test runs the real block under zsh.
+    """
+
+    def _run_block(self, chain_file: str, as_of: str) -> str:
+        import shutil as _shutil
+        import subprocess as _sp
+        import tempfile as _tf
+
+        zsh = _shutil.which("zsh")
+        if zsh is None:  # pragma: no cover - macOS always has zsh
+            self.skipTest("zsh is required")
+        source = Path("tools/daily_ritual.sh").read_text()
+        start = source.index('CHAIN_EDGE="$(ls .cache/chains')
+        end = source.index("\nfi", source.index("STARVED", start)) + len("\nfi")
+        block = source[start:end]
+        tmp = Path(_tf.mkdtemp())
+        self.addCleanup(_shutil.rmtree, tmp, True)
+        (tmp / ".cache" / "chains").mkdir(parents=True)
+        if chain_file:
+            (tmp / ".cache" / "chains" / chain_file).write_bytes(b"")
+        script = "\n".join(
+            [
+                "set -u",
+                "note() { print -r -- \"$1\"; }",
+                f"AS_OF={as_of}",
+                "DATA_STARVED=0",
+                block,
+                'print -r -- "DATA_STARVED=$DATA_STARVED"',
+            ]
+        )
+        completed = _sp.run(
+            [zsh, "-c", script], cwd=tmp, capture_output=True, text=True, timeout=30
+        )
+        self.assertEqual(
+            completed.returncode, 0, completed.stdout + completed.stderr
+        )
+        self.assertNotIn("condition expected", completed.stderr)
+        return completed.stdout
+
+    def test_stale_edge_sets_starved_under_zsh(self):
+        out = self._run_block("VST_2026-07-27.parquet", "2026-08-13")
+        self.assertIn("DATA_STARVED=1", out)
+        self.assertIn("chain-dependent lanes are STARVED", out)
+
+    def test_current_edge_is_not_starved_under_zsh(self):
+        out = self._run_block("VST_2026-08-13.parquet", "2026-08-13")
+        self.assertIn("DATA_STARVED=0", out)
+        self.assertNotIn("STARVED:", out)
