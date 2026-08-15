@@ -1,0 +1,158 @@
+#!/bin/zsh
+# Daily reconciler: the unconditional floor under all hook-based layers.
+# For every repo it can find: back up unpushed branches, rescue dirty worktrees
+# and orphaned detached HEADs, open throttled PRs so every branch is visible,
+# and write a one-screen plain-language digest. It NEVER merges, NEVER forces,
+# NEVER deletes. Prune of fully-merged clean worktrees only with PRUNE=1.
+#
+#   DRY_RUN=1  -> report what it WOULD do, touch nothing (default: act)
+#   PRUNE=1    -> also remove worktrees that are provably merged+clean (default: off)
+set +e
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+DIGEST="$HOME/Desktop/repo-digest.md"
+LOG="$HOME/.local/log/repo-reconcile.log"
+MAX_NEW_PRS=3
+TODAY=$(date +%Y-%m-%d)
+new_prs=0
+mkdir -p "$HOME/.local/log"
+: >"$DIGEST.tmp"
+
+say()  { print -r -- "$1" >>"$DIGEST.tmp"; }
+act()  { [ "${DRY_RUN:-0}" = "1" ] && { say "  [dry-run] $1"; return 1; } || return 0; }
+logl() { print -r -- "$(date -Iseconds) $1" >>"$LOG"; }
+
+# --- repo discovery: top-level repos in ~ and ~/Documents (worktrees found per-repo)
+typeset -a REPOS
+for d in "$HOME"/*(N/) "$HOME"/Documents/*(N/); do
+  [ -e "$d/.git" ] && REPOS+=("${d%/}")
+done
+
+say "# Repo digest — $TODAY"
+say ""
+NEEDS=0
+
+for repo in "${REPOS[@]}"; do
+  name=${repo:t}
+  # ops/research checkouts: report only, never act.
+  case "$repo" in
+    "$HOME/options-validator-ops"|"$HOME/options-validator-research") ro=1;;
+    *) ro=0;;
+  esac
+
+  # Safety gate for the main options-validator checkout before anything else.
+  if [ "$name" = "options-validator" ] && [ -x "$repo/tools/irreplaceable_data_guard.py" ]; then
+    if ! (cd "$repo" && uv run python tools/irreplaceable_data_guard.py verify >/dev/null 2>&1); then
+      say "## ⛔ $name: irreplaceable-data guard FAILED — no actions taken in this repo. Investigate first."
+      NEEDS=1; logl "GUARD FAIL $repo"; continue
+    fi
+  fi
+
+  git -C "$repo" fetch origin --quiet 2>/dev/null
+
+  # --- every worktree of this repo (incl. the repo itself)
+  git -C "$repo" worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}' | while read -r wt; do
+    [ -d "$wt" ] || continue
+    br=$(git -C "$wt" symbolic-ref --quiet --short HEAD)
+
+    # Dirty tracked changes -> rescue commit (tracked only), except read-only repos.
+    if ! git -C "$wt" diff --quiet 2>/dev/null; then
+      if [ "$ro" = "1" ] || [ "$br" = "main" ] || [ "$br" = "master" ] || [[ "$br" == deploy/* ]]; then
+        say "- ⚠️  $name ${wt:t}: uncommitted changes on protected branch '${br:-detached}' — left alone, needs you."
+        NEEDS=1
+      elif [ -n "$br" ] && act "rescue-commit in $wt"; then
+        git -C "$wt" commit -a --no-verify -q -m "wip(auto): daily rescue $TODAY" 2>/dev/null \
+          && { say "- 💾 $name ${wt:t}: uncommitted work rescued into a WIP commit on $br."; logl "RESCUE $wt $br"; }
+      fi
+    fi
+
+    # Detached HEAD with commits not in main -> name it so it can't be lost.
+    if [ -z "$br" ]; then
+      sha=$(git -C "$wt" rev-parse --short HEAD 2>/dev/null)
+      if [ -n "$sha" ] && ! git -C "$repo" merge-base --is-ancestor "$sha" origin/main 2>/dev/null; then
+        if act "rescue-branch for detached $sha"; then
+          git -C "$wt" branch "rescue/detached-$sha" "$sha" 2>/dev/null \
+            && say "- 💾 $name: detached worktree ${wt:t} saved as branch rescue/detached-$sha."
+        fi
+        NEEDS=1
+      fi
+    fi
+
+    # Untracked/ignored data is REPORTED, never committed (public repos, secrets).
+    unt=$(git -C "$wt" status --short --untracked-files=all 2>/dev/null | grep -c '^??')
+    [ "${unt:-0}" != "0" ] && say "- 👀 $name ${wt:t}: $unt untracked file(s) — not committed on purpose; review them."
+  done
+
+  [ "$ro" = "1" ] && continue
+
+  # --- push every local branch with commits origin doesn't have (plain push only)
+  git -C "$repo" for-each-ref refs/heads --format='%(refname:short)' | while read -r br; do
+    case "$br" in main|master|deploy/*) continue;; esac
+    if git -C "$repo" rev-parse --verify -q "origin/$br" >/dev/null; then
+      ahead=$(git -C "$repo" rev-list --count "origin/$br..$br" 2>/dev/null)
+      behind=$(git -C "$repo" rev-list --count "$br..origin/$br" 2>/dev/null)
+    else
+      ahead=$(git -C "$repo" rev-list --count "$br" --not --remotes=origin 2>/dev/null); behind=0
+    fi
+    [ "${ahead:-0}" = "0" ] && continue
+    if [ "${behind:-0}" != "0" ]; then
+      say "- ⚠️  $name/$br: diverged from origin ($ahead local vs $behind remote) — backed up as $br-local-backup-$TODAY; reconcile when convenient."
+      act "diverged-backup push $br" && git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br-local-backup-$TODAY" 2>/dev/null
+      NEEDS=1
+    else
+      act "push $br" && { git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br" 2>/dev/null \
+        && say "- ☁️  $name/$br: $ahead commit(s) backed up to GitHub."; logl "PUSH $repo $br"; }
+    fi
+  done
+
+  # --- open PRs (throttled) so every branch with work is visible in one list
+  if command -v gh >/dev/null 2>&1 && git -C "$repo" rev-parse --verify -q origin/main >/dev/null; then
+    git -C "$repo" for-each-ref refs/heads --format='%(refname:short) %(committerdate:unix)' | sort -k2 | while read -r br ts; do
+      case "$br" in main|master|deploy/*|rescue/*|*-local-backup-*) continue;; esac
+      [ "$new_prs" -ge "$MAX_NEW_PRS" ] && break
+      git -C "$repo" rev-parse --verify -q "origin/$br" >/dev/null || continue
+      [ "$(git -C "$repo" rev-list --count "origin/main..origin/$br" 2>/dev/null)" = "0" ] && continue
+      pr=$(cd "$repo" && gh pr list --head "$br" --state all --json number -q 'length' 2>/dev/null)
+      [ "${pr:-0}" != "0" ] && continue
+      draft=""; [[ "$br" == wip/* ]] && draft="--draft"
+      if act "gh pr create for $br"; then
+        (cd "$repo" && gh pr create --fill --head "$br" --base main $draft >/dev/null 2>&1) \
+          && { say "- 📬 $name/$br: opened a PR so you can review/merge from anywhere."; new_prs=$((new_prs+1)); logl "PR $repo $br"; }
+      fi
+    done
+  fi
+
+  # --- ledger fork escalation (options-validator specific): P0, top of digest
+  if [ -d "$repo/ledger" ]; then
+    git -C "$repo" for-each-ref refs/heads --format='%(refname:short)' | while read -r br; do
+      case "$br" in main|deploy/*) continue;; esac
+      if git -C "$repo" diff --quiet "origin/main...$br" -- ledger/ 2>/dev/null; then :; else
+        age=$(( ( $(date +%s) - $(git -C "$repo" log -1 --format=%ct "$br") ) / 86400 ))
+        say "- ⛔ P0 $name/$br: touches ledger/ and is $age day(s) unmerged — chain-fork risk. Merge or drop soon."
+        NEEDS=1
+      fi
+    done
+  fi
+
+  # --- prune fully-merged, clean, no-untracked worktrees (opt-in, reversible)
+  if [ "${PRUNE:-0}" = "1" ]; then
+    git -C "$repo" worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt; do
+      [ "$wt" = "$repo" ] && continue
+      case "$wt" in "$HOME/options-validator-ops"|"$HOME/options-validator-research") continue;; esac
+      br=$(git -C "$wt" symbolic-ref --quiet --short HEAD) || continue
+      git -C "$repo" merge-base --is-ancestor "$br" origin/main 2>/dev/null || continue
+      [ -z "$(git -C "$wt" status --short --ignored=matching --untracked-files=all 2>/dev/null)" ] || continue
+      act "worktree remove $wt" && git -C "$repo" worktree remove "$wt" 2>/dev/null \
+        && say "- 🧹 $name: removed finished worktree ${wt:t} (branch $br already in main)."
+    done
+  fi
+done
+
+say ""
+if [ "$NEEDS" = "0" ]; then
+  sed -i '' "1s/.*/# ✅ Everything is backed up — $TODAY/" "$DIGEST.tmp" 2>/dev/null
+else
+  sed -i '' "1s/.*/# ⚠️ Some things need you — $TODAY/" "$DIGEST.tmp" 2>/dev/null
+fi
+mv "$DIGEST.tmp" "$DIGEST"
+command -v osascript >/dev/null && osascript -e "display notification \"Digest on Desktop: repo-digest.md\" with title \"Repo reconciler ran\"" 2>/dev/null
+exit 0
