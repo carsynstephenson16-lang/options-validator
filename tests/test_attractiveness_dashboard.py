@@ -1904,6 +1904,21 @@ class LaneBoardPresentationTests(unittest.TestCase):
             path.write_text("experiments: OK exit=0\n")
             self.assertEqual(ad.load_research_views_status(path)["state"], "malformed")
 
+            for malformed_timestamp in (
+                "2026-99-99T07:30:00-0400",
+                "2026-08-15T25:30:00-0400",
+                "2026-08-15T07:30:00+2460",
+            ):
+                with self.subTest(timestamp=malformed_timestamp):
+                    path.write_text(
+                        f"research views refresh: {malformed_timestamp}\n"
+                        "experiments: OK exit=0\n"
+                        "wasserstein: FAILED exit=2\n"
+                    )
+                    self.assertEqual(
+                        ad.load_research_views_status(path)["state"], "malformed"
+                    )
+
     def test_freshness_research_composite_and_shelf_are_visible_in_board_order(self):
         html = ad.render(
             self._data(),
@@ -1964,6 +1979,28 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("stale by 3 sessions", desk)
         self.assertIn("NVDA</strong> · no mapping-valued packet", desk)
         self.assertEqual(desk.count('class="research-coverage-row"'), 18)
+
+    def test_research_freshness_uses_later_board_evaluation_not_mixed_source_date(self):
+        data = self._data()
+        data["evaluation_date"] = "2026-08-17"
+        html = ad.render(data, context=self._context())
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        self.assertIn("Research</strong> as of 2026-08-14; researched on 2026-08-14; stale by 1 sessions; WARN", freshness)
+
+    def test_schwab_freshness_uses_stalest_constituent_date(self):
+        data = ad.assemble(
+            symbol_sections=[
+                _fresh_section("NVDA", "2026-08-11"),
+                _fresh_section("AMD", "2026-08-14"),
+            ],
+            rv21_by_symbol={},
+            today="2026-08-14",
+        )
+        html = ad.render(data)
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        schwab = freshness[freshness.index("Verified Schwab"):freshness.index("Underlying closes")]
+        self.assertIn("as of 2026-08-11; 3 sessions old", schwab)
+        self.assertIn("BLOCKED", schwab)
 
     def test_hard_chain_block_banner_survives_freshness_strip(self):
         data = ad.assemble(

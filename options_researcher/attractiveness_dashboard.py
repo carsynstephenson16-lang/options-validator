@@ -35,7 +35,7 @@ import os
 import re
 from collections.abc import Mapping
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
@@ -1078,9 +1078,18 @@ def load_research_views_status(path: str | Path = RESEARCH_VIEWS_STATUS_PATH) ->
         or second.group(1) != "wasserstein"
     ):
         return {"state": "malformed"}
+    timestamp_value = timestamp.group(1)
+    offset_hours = int(timestamp_value[-4:-2])
+    offset_minutes = int(timestamp_value[-2:])
+    try:
+        datetime.strptime(timestamp_value, "%Y-%m-%dT%H:%M:%S%z")
+    except ValueError:
+        return {"state": "malformed"}
+    if offset_hours > 23 or offset_minutes > 59:
+        return {"state": "malformed"}
     return {
         "state": "published",
-        "timestamp": timestamp.group(1),
+        "timestamp": timestamp_value,
         "experiments": first.group(2),
         "wasserstein": second.group(2),
     }
@@ -2634,15 +2643,12 @@ def _freshness_state(as_of: object, evaluation_date: object) -> tuple[str, str]:
 
 def _source_freshness_chip(
     label: str, sections: list[Mapping[str, object]], *,
-    source: str, freshest: bool, evaluation_date: object,
+    source: str, evaluation_date: object,
 ) -> str:
     present = [section for section in sections if section.get("chain_source") == source]
     dates = [_valid_iso_date(section.get("as_of")) for section in present]
     valid_dates = [value for value in dates if value is not None]
-    selected_date = (
-        (max(valid_dates) if freshest else min(valid_dates))
-        if len(valid_dates) == len(present) and valid_dates else None
-    )
+    selected_date = min(valid_dates) if len(valid_dates) == len(present) and valid_dates else None
     state, detail = _freshness_state(selected_date, evaluation_date)
     import config
 
@@ -2726,12 +2732,12 @@ def _freshness_html(
     if any(section.get("chain_source") == THETADATA_CHAIN_SOURCE for section in sections):
         chips.append(_source_freshness_chip(
             "Frozen EOD (.cache/chains)", sections, source=THETADATA_CHAIN_SOURCE,
-            freshest=False, evaluation_date=data.get("evaluation_date"),
+            evaluation_date=data.get("evaluation_date"),
         ))
     if any(section.get("chain_source") == CHAIN_SOURCE for section in sections):
         chips.append(_source_freshness_chip(
             "Verified Schwab 15:45 pre-close (.cache/schwab_chains)", sections,
-            source=CHAIN_SOURCE, freshest=True, evaluation_date=data.get("evaluation_date"),
+            source=CHAIN_SOURCE, evaluation_date=data.get("evaluation_date"),
         ))
     close_dates = [
         _valid_iso_date(section.get("closes_as_of")) for section in sections
@@ -2744,7 +2750,7 @@ def _freshness_html(
         f'<span class="meta-chip freshness-chip {close_state.lower()}"><strong>Underlying closes</strong> '
         f"{_esc(close_detail)} · {sum(value is not None for value in close_dates)}/{len(sections)} present · {close_state}</span>"
     )
-    chips.append(_research_freshness_chip(context, data.get("data_as_of")))
+    chips.append(_research_freshness_chip(context, data.get("evaluation_date")))
     chips.append(_qm_freshness_chip(qm_context))
     chips.append(_composite_freshness_chip(data.get("composite_signals")))
     return (
