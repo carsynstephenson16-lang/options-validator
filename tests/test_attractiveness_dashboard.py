@@ -1977,6 +1977,101 @@ class LaneBoardPresentationTests(unittest.TestCase):
         ):
             self.assertLess(html.index(earlier), html.index(later))
 
+    def test_registered_bets_tracker_escapes_states_and_sits_before_shelf(self):
+        """A raw receipt summary remains escaped, descriptive, and unranked."""
+        data = self._data()
+        data["family_evidence"] = [{
+            "family": "H5<script>",
+            "ritual_state": "MISSING",
+            "ritual_detail": "NO RECEIPT <unsafe>",
+            "raw_state_counts": [{"state": "UNKNOWN", "count": 2}],
+            "evaluation_session": None,
+            "run_date": None,
+            "sources": [{"path": "reports/<unsafe>.json"}],
+            "registered_window_end": None,
+            "registered_window_metadata": None,
+        }]
+
+        html = ad.render(data, context=self._context())
+
+        self.assertIn("REGISTERED-BETS TRACKER", html)
+        self.assertIn("H5&lt;script&gt;", html)
+        self.assertIn("NO RECEIPT &lt;unsafe&gt;", html)
+        self.assertIn("evidence UNKNOWN: 2", html)
+        self.assertIn("read-only receipt summary", html)
+        self.assertIn("cannot activate, rank, or place a trade", html)
+        self.assertNotIn("<script>", html)
+        self.assertLess(html.index("RESEARCH DESK"), html.index("REGISTERED-BETS TRACKER"))
+        self.assertLess(html.index("REGISTERED-BETS TRACKER"), html.index("EXPERIMENTS SHELF"))
+
+    def test_tracker_attachment_cannot_change_mechanical_selection_bytes(self):
+        """A family rollup is presentation data, never a selection input."""
+        import json
+
+        baseline = self._data()
+        tracked = self._data()
+        tracked["family_evidence"] = [{
+            "family": "H10a",
+            "ritual_state": "REFUSED",
+            "ritual_detail": "preflight exit 1",
+            "raw_state_counts": [{"state": "UNKNOWN", "count": 1}],
+            "evaluation_session": None,
+            "run_date": None,
+            "sources": [],
+            "registered_window_end": "2026-10-06",
+            "registered_window_metadata": "registered-window metadata",
+        }]
+        baseline_bytes = json.dumps(
+            ad.select_top_picks(baseline), sort_keys=True, separators=(",", ":")
+        ).encode()
+
+        ad.render(tracked)
+
+        self.assertEqual(
+            json.dumps(
+                ad.select_top_picks(tracked), sort_keys=True, separators=(",", ":")
+            ).encode(),
+            baseline_bytes,
+        )
+
+    def test_full_lane_board_order_keeps_named_sections_distinct(self):
+        """The retained QM comparison stays below movement without merging lanes."""
+        data = self._data()
+        data["family_evidence"] = [{
+            "family": "H5",
+            "ritual_state": "NO_SIGNAL",
+            "ritual_detail": "no signal",
+            "raw_state_counts": [{"state": "WAIT", "count": 1}],
+            "evaluation_session": "2026-08-14",
+            "run_date": "2026-08-14",
+            "sources": [],
+            "registered_window_end": None,
+            "registered_window_metadata": None,
+        }]
+        context = self._context()
+        context["market"] = {"summary": "Fixture market context."}
+        html = ad.render(
+            data,
+            context=context,
+            qm_context={"status": "DATA_BLOCKED"},
+            research_views_status={"state": "absent"},
+        )
+        headings = (
+            "DATA FRESHNESS",
+            "Rule-based top 3",
+            "QM MOVEMENT LANE",
+            "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3",
+            "Composite signal board",
+            "RESEARCH DESK",
+            "REGISTERED-BETS TRACKER",
+            "EXPERIMENTS SHELF",
+            "CORE NAMES",
+            "Market context",
+            "Symbol review",
+        )
+        for earlier, later in zip(headings, headings[1:]):
+            self.assertLess(html.index(earlier), html.index(later))
+
     def test_unknown_freshness_and_absent_research_are_blocked_not_ok(self):
         data = self._data()
         data["symbols"][0]["as_of"] = "not-a-date"

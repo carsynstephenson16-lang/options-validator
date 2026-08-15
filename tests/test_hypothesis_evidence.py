@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 import config
 from options_researcher.h7_cohort import (
@@ -460,6 +462,15 @@ class HypothesisEvidenceTests(unittest.TestCase):
             f"reports/h6_forward/{EVALUATION}.json",
         )
         self.assertNotIn("2026-07-23", row.sources[0].path)
+        from options_researcher.hypothesis_evidence import (
+            summarize_hypothesis_evidence,
+        )
+        h6_summary = summarize_hypothesis_evidence(evidence)[1]
+        self.assertEqual(h6_summary.ritual_state, "UNKNOWN")
+        self.assertEqual(
+            [(count.state, count.count) for count in h6_summary.raw_state_counts],
+            [("UNKNOWN", 1)],
+        )
 
     def test_h7_refuses_cross_session_or_hash_mismatched_receipt_sets(self):
         self._write_complete_fixture()
@@ -1007,6 +1018,101 @@ class HypothesisEvidenceTests(unittest.TestCase):
         row = _row(evidence, "AMZN", "H5")
         self.assertEqual(row.symbol_states[0].state, "UNKNOWN")
         self.assertIn("omits tracked symbol", row.detail)
+
+    def test_family_summary_is_stable_and_keeps_only_agreed_dates(self):
+        """A tracker rollup must not turn row disagreement into a current date."""
+        from options_researcher.hypothesis_evidence import (
+            summarize_hypothesis_evidence,
+        )
+
+        self._write_complete_fixture()
+        evidence = gather_hypothesis_evidence(
+            ("AMZN",), root=self.root, cohort_loader=_cohort
+        )
+        summaries = summarize_hypothesis_evidence(evidence)
+
+        self.assertEqual(
+            [summary.family for summary in summaries],
+            ["H5", "H6", "H7", "H8", "H10a", "H10b"],
+        )
+        h6 = summaries[1]
+        self.assertEqual(h6.ritual_state, "CAPTURED")
+        self.assertEqual(h6.evaluation_session, EVALUATION)
+        self.assertEqual(h6.run_date, RUN_DATE)
+        self.assertEqual(
+            [(count.state, count.count) for count in h6.raw_state_counts],
+            [("BLOCKED", 1), ("POST_REPORT", 1)],
+        )
+        self.assertEqual(summaries[4].registered_window_end, config.H10A_WINDOW_END)
+        self.assertEqual(
+            summaries[4].registered_window_metadata, "registered-window metadata"
+        )
+
+        changed_h6 = replace(
+            _row(evidence, "AMZN", "H6"), evaluation_session="2026-07-25"
+        )
+        changed_evidence = replace(
+            evidence["AMZN"],
+            hypotheses=tuple(
+                changed_h6 if row.family == "H6" else row
+                for row in evidence["AMZN"].hypotheses
+            ),
+        )
+        disagreed = summarize_hypothesis_evidence({
+            "AMZN": evidence["AMZN"],
+            "SECOND": changed_evidence,
+        })
+        self.assertIsNone(disagreed[1].evaluation_session)
+
+    def test_gather_and_summary_never_write_or_import_watchers(self):
+        """Receipt aggregation stays read-only even when write APIs are hostile."""
+        import ast
+        import hashlib
+        import os
+
+        from options_researcher import hypothesis_evidence
+        from options_researcher.hypothesis_evidence import (
+            summarize_hypothesis_evidence,
+        )
+
+        tree = ast.parse(Path(hypothesis_evidence.__file__).read_text(encoding="utf-8"))
+        imported = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        } | {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module is not None
+        }
+        self.assertFalse(
+            any(
+                name.endswith(("entry_watch", "h6_watch", "h7_watch", "h8_watch", "h10_watch"))
+                for name in imported
+            )
+        )
+
+        self._write_complete_fixture()
+        before = {
+            path.relative_to(self.root): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in self.root.rglob("*") if path.is_file()
+        }
+        with (
+            mock.patch.object(Path, "write_text", side_effect=AssertionError("write")),
+            mock.patch.object(Path, "write_bytes", side_effect=AssertionError("write")),
+            mock.patch.object(Path, "unlink", side_effect=AssertionError("write")),
+            mock.patch.object(Path, "rename", side_effect=AssertionError("write")),
+            mock.patch.object(os, "replace", side_effect=AssertionError("write")),
+        ):
+            summarize_hypothesis_evidence(
+                gather_hypothesis_evidence(("AMZN",), root=self.root, cohort_loader=_cohort)
+            )
+        after = {
+            path.relative_to(self.root): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in self.root.rglob("*") if path.is_file()
+        }
+        self.assertEqual(after, before)
 
 
 if __name__ == "__main__":

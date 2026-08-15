@@ -8,6 +8,7 @@
     "options_researcher/robustness",
     "options_researcher/flow",
     "options_researcher/attractiveness_dashboard.py",
+    "options_researcher/hypothesis_evidence.py",
     "options_researcher/qm_dashboard.py",
     "options_researcher/market_context.py",
     "research",

@@ -37,6 +37,10 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from options_researcher.hypothesis_evidence import SymbolEvidence
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
 RESEARCH_VIEWS_STATUS_PATH = Path(".tmp/dashboard/research-views-status.txt")
@@ -1104,7 +1108,7 @@ def assemble(
     symbol_sections: list[dict] | None = None,
     rv21_by_symbol: dict[str, float] | None = None,
     blocked: list[dict] | None = None,
-    hypothesis_evidence_by_symbol: Mapping[str, object] | None = None,
+    hypothesis_evidence_by_symbol: Mapping[str, SymbolEvidence] | None = None,
     composite_signals: list[dict] | None = None,
     today: str | None = None,
 ) -> dict:
@@ -1252,6 +1256,14 @@ def assemble(
                 if evidence is not None:
                     record["hypothesis_evidence"] = evidence
 
+    from options_researcher.hypothesis_evidence import (
+        summarize_hypothesis_evidence,
+    )
+
+    family_evidence = summarize_hypothesis_evidence(
+        hypothesis_evidence_by_symbol or {}
+    )
+
     if composite_signals is None and real_assembly:
         from options_researcher.composite_signals import build_board
 
@@ -1281,6 +1293,7 @@ def assemble(
         "evaluation_date": today,
         "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
+        "family_evidence": family_evidence,
     }
     if schwab_state is not None:
         out["schwab_lane"] = schwab_state
@@ -3626,6 +3639,76 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
     )
 
 
+def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
+    """Render already-attached family summaries without gathering evidence."""
+    raw_summaries = data.get("family_evidence")
+    summaries = (
+        raw_summaries if isinstance(raw_summaries, (list, tuple)) else ()
+    )
+    lines = []
+    for summary in summaries:
+        family = str(_evidence_attr(summary, "family", "?"))
+        ritual_state = str(_evidence_attr(summary, "ritual_state", "UNKNOWN"))
+        ritual_detail = str(_evidence_attr(summary, "ritual_detail", "NO RECEIPT"))
+        raw_counts = _evidence_attr(summary, "raw_state_counts", ())
+        raw_counts = raw_counts if isinstance(raw_counts, (list, tuple)) else ()
+        raw_html = "; ".join(
+            '<span class="status-badge'
+            + (
+                " bad"
+                if str(_evidence_attr(count, "state", "UNKNOWN"))
+                in {"UNKNOWN", "MISSING", "REFUSED", "NO RECEIPT", "NOT TRACKED"}
+                else " unknown"
+            )
+            + '">evidence '
+            + _esc(str(_evidence_attr(count, "state", "UNKNOWN")))
+            + ": "
+            + _esc(str(_evidence_attr(count, "count", 0)))
+            + "</span>"
+            for count in raw_counts
+        ) or '<span class="status-badge bad">evidence UNKNOWN: 0</span>'
+        evaluation = _evidence_attr(summary, "evaluation_session") or "UNKNOWN"
+        run_date = _evidence_attr(summary, "run_date") or "UNKNOWN"
+        raw_sources = _evidence_attr(summary, "sources", ())
+        raw_sources = raw_sources if isinstance(raw_sources, (list, tuple)) else ()
+        source_paths = [
+            str(_evidence_attr(source, "path", "?"))
+            for source in raw_sources
+            if _evidence_attr(source, "path")
+        ]
+        sources_text = (
+            f"; sources: {', '.join(source_paths)}" if source_paths else ""
+        )
+        window_end = _evidence_attr(summary, "registered_window_end")
+        window_metadata = _evidence_attr(summary, "registered_window_metadata")
+        window_text = (
+            f"; {window_metadata}: ends {window_end}"
+            if window_end and window_metadata else ""
+        )
+        conspicuous = (
+            " bad" if ritual_state in {"MISSING", "REFUSED", "UNKNOWN", "NOT TRACKED"}
+            else " unknown"
+        )
+        lines.append(
+            "<li><strong>"
+            f"{_esc(family)}</strong> — ritual <span class=\"status-badge{conspicuous}\">"
+            f"{_esc(ritual_state)}</span> ({_esc(ritual_detail)}); "
+            f"{raw_html}; evaluation {_esc(str(evaluation))}; "
+            f"run {_esc(str(run_date))}{_esc(sources_text)}{_esc(window_text)}</li>"
+        )
+    body = "".join(lines) or (
+        "<li><strong>UNKNOWN</strong> — NO RECEIPT summary attached; "
+        "tracker cannot claim current registered-bet evidence.</li>"
+    )
+    return (
+        '<section class="panel registered-bets-tracker"><div class="section-header"><div>'
+        '<div class="eyebrow">REGISTERED-BETS TRACKER</div>'
+        '<h2>Registered-bets tracker</h2>'
+        '<p>This is a read-only receipt summary and cannot activate, rank, or place a trade.</p>'
+        f"</div></div><ul>{body}</ul></section>"
+    )
+
+
 def _as_of_chip_label(data: Mapping[str, object]) -> str:
     """Header chip label. A pre-close session is never called a close.
 
@@ -3782,7 +3865,8 @@ def render(
     network, no external assets. Every value from `data` / `context` is
     html.escape()'d before embedding. Page order: compact metadata header ->
     freshness -> rule-based Top-3 -> movement lane -> descriptive QM comparison
-    -> composite -> research desk -> passive experiments -> quant/market -> pinned ->
+    -> composite -> research desk -> registered-bets tracker -> passive experiments
+    -> pinned -> quant/market ->
     per-symbol panels (card grid)."""
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
     picks_for_research = select_top_picks(data, include_csp_watch=True)
@@ -3883,10 +3967,11 @@ def render(
         f"{_hero_html(data, context, qm_context)}"
         f"{_composite_html(data)}"
         f"{_research_desk_html(data, context, context_warning, annotation_notice)}"
+        f"{_registered_bets_tracker_html(data)}"
         f"{_experiments_shelf_html(research_views_status)}"
+        f"{_pinned_html(data)}"
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
-        f"{_pinned_html(data)}"
         f"{symbols_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
         "not predictions. Income annualization uses 365 calendar days; "

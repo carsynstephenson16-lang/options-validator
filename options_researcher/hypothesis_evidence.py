@@ -65,6 +65,29 @@ class SymbolEvidence:
     intraday: EvidenceRow
 
 
+@dataclass(frozen=True, slots=True)
+class RawStateCount:
+    """One exact raw receipt state and its family-level count."""
+
+    state: str
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
+class FamilyEvidence:
+    """Read-only rollup of already-gathered rows for one hypothesis family."""
+
+    family: str
+    ritual_state: str
+    ritual_detail: str
+    raw_state_counts: tuple[RawStateCount, ...]
+    evaluation_session: str | None
+    run_date: str | None
+    sources: tuple[EvidenceSource, ...]
+    registered_window_end: str | None
+    registered_window_metadata: str | None
+
+
 CohortLoader = Callable[[Path], RegisteredCohort]
 
 _HYPOTHESIS_ORDER = ("H5", "H6", "H7", "H8", "H10a", "H10b")
@@ -1311,3 +1334,100 @@ def gather_hypothesis_evidence(
             ),
         )
     return gathered
+
+
+def summarize_hypothesis_evidence(
+    evidence_by_symbol: Mapping[str, SymbolEvidence],
+) -> tuple[FamilyEvidence, ...]:
+    """Roll up gathered receipt rows without reading artifacts or running watchers.
+
+    The tracker is descriptive presentation data only.  It deliberately uses
+    the rows provided by :func:`gather_hypothesis_evidence` (or injected test
+    fixtures) and therefore cannot select a newer receipt, mutate any ledger,
+    or infer position and runtime facts that those rows do not contain.
+    """
+    rows_by_family: dict[str, list[EvidenceRow]] = {
+        family: [] for family in _HYPOTHESIS_ORDER
+    }
+    for symbol in sorted(evidence_by_symbol):
+        evidence = evidence_by_symbol[symbol]
+        for row in evidence.hypotheses:
+            if row.family in rows_by_family:
+                rows_by_family[row.family].append(row)
+
+    summaries: list[FamilyEvidence] = []
+    for family in _HYPOTHESIS_ORDER:
+        rows = rows_by_family[family]
+        tracked_rows = [row for row in rows if row.membership != "not tracked"]
+        ritual_states = {row.family_state for row in tracked_rows}
+        ritual_details = {row.detail for row in tracked_rows}
+        ritual_state = (
+            next(iter(ritual_states))
+            if len(ritual_states) == 1
+            and ritual_states <= (_RITUAL_STATES | {"UNKNOWN", "NOT TRACKED"})
+            else "UNKNOWN"
+        )
+        ritual_detail = (
+            next(iter(ritual_details))
+            if len(ritual_details) == 1
+            else ("NO RECEIPT" if not tracked_rows else "ritual detail disagrees")
+        )
+
+        state_counts: dict[str, int] = {}
+        for row in rows:
+            for state in row.symbol_states:
+                state_counts[state.state] = state_counts.get(state.state, 0) + 1
+        raw_state_counts = (
+            tuple(
+                RawStateCount(state, state_counts[state])
+                for state in sorted(state_counts)
+            )
+            if state_counts
+            else (RawStateCount("NO RECEIPT", 0),)
+        )
+
+        evaluation_values = {row.evaluation_session for row in tracked_rows}
+        run_values = {row.run_date for row in tracked_rows}
+        evaluation_session = (
+            next(iter(evaluation_values))
+            if len(evaluation_values) == 1 and None not in evaluation_values
+            else None
+        )
+        run_date = (
+            next(iter(run_values))
+            if len(run_values) == 1 and None not in run_values
+            else None
+        )
+
+        sources: list[EvidenceSource] = []
+        seen_paths: set[str] = set()
+        for row in rows:
+            for source in row.sources:
+                if source.path not in seen_paths:
+                    seen_paths.add(source.path)
+                    sources.append(source)
+
+        configured_window = (
+            getattr(config, f"{family.upper()}_WINDOW_END", None)
+            if family in {"H10a", "H10b"}
+            else None
+        )
+        registered_window_end = _canonical_date(configured_window)
+        summaries.append(
+            FamilyEvidence(
+                family=family,
+                ritual_state=ritual_state,
+                ritual_detail=ritual_detail,
+                raw_state_counts=raw_state_counts,
+                evaluation_session=evaluation_session,
+                run_date=run_date,
+                sources=tuple(sources),
+                registered_window_end=registered_window_end,
+                registered_window_metadata=(
+                    "registered-window metadata"
+                    if registered_window_end is not None
+                    else None
+                ),
+            )
+        )
+    return tuple(summaries)
