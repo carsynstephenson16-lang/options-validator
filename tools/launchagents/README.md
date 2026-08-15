@@ -91,6 +91,37 @@ checkout. The wrapper self-selects its `session_tag` from the wall clock
 benign no-op if the machine was asleep through a scheduled moment — a missed
 snapshot is not an error, it's just a gap in a descriptive dataset.
 
+## Schwab chain pre-close (15:45 ET, durable capture)
+
+`com.carsyn.options-validator.schwab-chain-preclose.plist` runs
+`tools/schwab_chain_capture.sh` at 15:45 ET on weekdays from the **ops**
+checkout. Unlike the intraday template above, this job **is installed and
+loaded in production**.
+
+Since 2026-08-15 (rev-2.1 item 3a) the plist sets
+`OPTIONS_VALIDATOR_INVOCATION_SOURCE=launchd` so capture receipts record
+unattended provenance — the measurable input to the S1 activation bar (three
+consecutive unattended verifying sessions). Two provenance rules:
+
+- **Never** set `OPTIONS_VALIDATOR_INVOCATION_SOURCE` in a shell, wrapper, or
+  any `.env` file. A hand-run capture must record `"manual"`.
+- `launchctl kickstart` runs under launchd's environment, so an
+  operator-triggered kickstart inside the capture window records
+  `"launchd"` — S1 adjudication cross-checks receipt times against the
+  schedule for exactly this reason.
+
+The installed copy at `~/Library/LaunchAgents/` is a byte-copy; template
+edits do not propagate until it is replaced (owner step):
+
+```
+cp tools/launchagents/com.carsyn.options-validator.schwab-chain-preclose.plist \
+  ~/Library/LaunchAgents/
+launchctl bootout gui/$(id -u)/com.carsyn.options-validator.schwab-chain-preclose 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) \
+  ~/Library/LaunchAgents/com.carsyn.options-validator.schwab-chain-preclose.plist
+launchctl print gui/$(id -u)/com.carsyn.options-validator.schwab-chain-preclose | grep -A3 environment
+```
+
 ## Before installing
 
 1. Confirm `/Users/carsynstephenson/options-validator-ops` exists, is on

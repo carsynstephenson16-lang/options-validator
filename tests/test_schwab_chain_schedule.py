@@ -471,6 +471,35 @@ class SchwabChainScheduleTests(unittest.TestCase):
             "python -m options_researcher.schwab_chain_capture", source
         )
 
+    # --- rev-2.1 item 3a: unattended-vs-manual capture provenance ----------
+    #
+    # Spec §7 condition 3, option 3a: the receipt's invocation_source is "set
+    # from an environment marker the plist sets and the wrapper does not".
+    # Both halves of that sentence are load-bearing and both are pinned here,
+    # because if the wrapper ever set the marker itself, every manual run
+    # would forge unattended provenance and S1's condition 3 would be a lie.
+
+    def test_plist_sets_the_unattended_invocation_marker(self):
+        payload = plistlib.loads(PLIST.read_bytes())
+        self.assertEqual(
+            payload["EnvironmentVariables"]["OPTIONS_VALIDATOR_INVOCATION_SOURCE"],
+            "launchd",
+        )
+
+    def test_wrapper_does_not_set_the_invocation_marker(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            self.assertNotIn("OPTIONS_VALIDATOR_INVOCATION_SOURCE=", line)
+
+    def test_wrapper_env_prefix_does_not_clear_the_inherited_environment(self):
+        # `env -i` would drop the plist's marker before python ever sees it,
+        # silently turning every unattended capture into a "manual" one.
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("CAP_OUT=\"$(env LIVE_MARKET_DATA_PROVIDER=schwab", source)
+        self.assertNotIn("env -i", source)
+
 
 if __name__ == "__main__":
     unittest.main()
