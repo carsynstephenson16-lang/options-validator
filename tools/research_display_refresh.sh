@@ -2,6 +2,10 @@
 set -u
 
 REPO_ROOT="${0:A:h:h}"
+if ! cd "$REPO_ROOT"; then
+  print -u2 -r -- "failed to enter repo root: $REPO_ROOT"
+  exit 1
+fi
 PYTHON_BIN="${RESEARCH_DISPLAY_PYTHON:-${REPO_ROOT}/.venv/bin/python}"
 DASHBOARD_DIR="${RESEARCH_DISPLAY_DASHBOARD_DIR:-${REPO_ROOT}/.tmp/dashboard}"
 STATUS_PATH="${DASHBOARD_DIR}/research-views-status.txt"

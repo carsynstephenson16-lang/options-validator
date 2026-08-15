@@ -22,10 +22,12 @@ class ResearchDisplayRefreshTests(unittest.TestCase):
         self.temp_root = Path(temp_dir.name)
         self.dashboard_dir = self.temp_root / "dashboard"
         self.call_log = self.temp_root / "fake-python.log"
+        self.cwd_log = self.temp_root / "fake-python-cwd.log"
         self.fake_python = self.temp_root / "fake-python"
         self.fake_python.write_text(
             "#!/bin/zsh\n"
             'print -r -- "$@" >> "$FAKE_PYTHON_LOG"\n'
+            'print -r -- "$PWD" >> "$FAKE_PYTHON_CWD_LOG"\n'
             'if [[ "$2" == "options_researcher.regime_report" ]]; then\n'
             '  print -r -- "fresh Wasserstein report" > "$4"\n'
             "fi\n"
@@ -51,12 +53,14 @@ class ResearchDisplayRefreshTests(unittest.TestCase):
         *,
         fail_module: str | None = None,
         fail_status_publication: bool = False,
+        cwd: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         env = {
             **os.environ,
             "RESEARCH_DISPLAY_PYTHON": str(self.fake_python),
             "RESEARCH_DISPLAY_DASHBOARD_DIR": str(self.dashboard_dir),
             "FAKE_PYTHON_LOG": str(self.call_log),
+            "FAKE_PYTHON_CWD_LOG": str(self.cwd_log),
         }
         if fail_module is not None:
             env["FAKE_FAIL_MODULE"] = fail_module
@@ -65,7 +69,7 @@ class ResearchDisplayRefreshTests(unittest.TestCase):
             env["FAKE_STATUS_PATH"] = str(self.dashboard_dir / "research-views-status.txt")
         return subprocess.run(
             ["/bin/zsh", str(self.wrapper)],
-            cwd=self.repo_root,
+            cwd=self.repo_root if cwd is None else cwd,
             env=env,
             capture_output=True,
             text=True,
@@ -153,6 +157,13 @@ class ResearchDisplayRefreshTests(unittest.TestCase):
             list(self.dashboard_dir.glob("research-views-status.txt.*.tmp")),
             [],
         )
+
+    def test_builders_run_from_repo_root_regardless_of_caller_cwd(self) -> None:
+        result = self._run_wrapper(cwd=self.temp_root)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        cwds = self.cwd_log.read_text().splitlines()
+        self.assertEqual(cwds, [str(self.repo_root)] * 2)
 
     def test_returns_nonzero_when_status_path_is_a_directory(self) -> None:
         self.dashboard_dir.mkdir(parents=True)
