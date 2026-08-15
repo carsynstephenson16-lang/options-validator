@@ -652,6 +652,9 @@ def audit_historical_inputs(
             }
         )
         if audit_start is not None and audit_end is not None and expirations:
+            checks[2].append(
+                f"{symbol}: weekly cadence N/A for A2 monthly/explicit-expiry selectors"
+            )
             start, end = _day(audit_start), _day(audit_end)
             weekly = [expiry for expiry in expirations if start <= expiry <= end]
             if any((later - earlier).days > 7 for earlier, later in zip(weekly, weekly[1:])):
@@ -675,6 +678,10 @@ def audit_historical_inputs(
                 checks[13].append(f"{symbol} {session}: missing independent close")
             if "timestamp" not in chain:
                 checks[9].append(f"{symbol} {session}: missing timestamp")
+            if "volume" not in chain:
+                checks[5].append(f"{symbol} {session}: volume metadata unavailable")
+            if "underlying_price" not in chain:
+                checks[13].append(f"{symbol} {session}: underlying_price metadata unavailable")
             if not any(_day(row.expiration) > _day(session) for _, row in chain.iterrows()):
                 checks[2].append(f"{symbol} {session}: no reachable expiration")
             close = raw_close
@@ -687,6 +694,8 @@ def audit_historical_inputs(
                 checks[12].append(f"{symbol} {session}: duplicate contract")
             for _, row in chain.iterrows():
                 tag, bid, ask = f"{symbol} {session} {_symbol(row)}", row.bid, row.ask
+                if selected and (symbol, session, _symbol(row)) not in selected:
+                    continue
                 if pd.isna(bid) or pd.isna(ask):
                     checks[4].append(tag)
                 if any(

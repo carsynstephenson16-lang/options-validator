@@ -9,6 +9,7 @@ import pandas as pd
 import config
 from options_researcher.a2_panel import (
     A2Diagnostics,
+    _covered_call,
     audit_historical_inputs,
     build_historical_outcomes,
     select_income_contract,
@@ -108,6 +109,38 @@ class SelectorTests(unittest.TestCase):
 
 
 class ResolutionTests(unittest.TestCase):
+    def test_covered_call_assigned_decomposition_is_uncapped_stock_plus_short_call(self):
+        outcome = _covered_call(
+            SYMBOL,
+            "2025-01-02",
+            "2025-01-03",
+            _chain([_row(right="C", strike=100.0)]).iloc[0],
+            1.0,
+            {"2025-01-03": 90.0, "2025-02-21": 120.0},
+            A2Diagnostics(),
+            {"source": "fixture"},
+        )
+        self.assertAlmostEqual(outcome.components["stock_result"], 30 / 90)
+        self.assertAlmostEqual(outcome.components["short_call_result"], (198 - 2000) / 9000)
+        self.assertAlmostEqual(
+            outcome.components["combined_result"],
+            outcome.components["stock_result"] + outcome.components["short_call_result"],
+        )
+
+    def test_covered_call_unassigned_keeps_zero_assignment_and_lost_upside(self):
+        outcome = _covered_call(
+            SYMBOL,
+            "2025-01-02",
+            "2025-01-03",
+            _chain([_row(right="C", strike=100.0)]).iloc[0],
+            1.0,
+            {"2025-01-03": 90.0, "2025-02-21": 95.0},
+            A2Diagnostics(),
+            {"source": "fixture"},
+        )
+        self.assertEqual(outcome.components["assignment_incidence"], 0.0)
+        self.assertEqual(outcome.components["lost_upside"], 0.0)
+
     def test_csp_fixed_horizon_is_expiration_first_and_cost_preserves_bid_ask(self):
         entry = _chain([_row(expiration="2025-01-17")])
         exit_chain = _chain([_row(expiration="2025-01-17", bid=0.5, ask=0.7)])
@@ -285,6 +318,26 @@ class ResolutionTests(unittest.TestCase):
             selected_contracts={("AAA", "2025-01-03", "AAA250221P00100000")},
         )
         self.assertEqual(audit.verdict, "BLOCK")
+        self.assertTrue(audit.checks[9])
+        self.assertTrue(audit.checks[13])
+
+    def test_audit_scoped_row_failure_excludes_unscoped_bad_row(self):
+        good = _row(contract_symbol="GOOD")
+        bad = _row(contract_symbol="BAD", bid=3.0, ask=2.0)
+        audit = audit_historical_inputs(
+            chains={"AAA": {"2025-01-03": _chain([good, bad])}},
+            raw_closes={"AAA": {"2025-01-03": 105.0}},
+            selected_contracts={("AAA", "2025-01-03", "GOOD")},
+        )
+        self.assertNotEqual(audit.verdict, "BLOCK")
+
+    def test_audit_reports_missing_canonical_metadata_as_warning(self):
+        row = _row()
+        row.pop("timestamp")
+        row.pop("underlying_price")
+        audit = audit_historical_inputs(
+            chains={"AAA": {"2025-01-03": _chain([row])}}, raw_closes={"AAA": {"2025-01-03": 105.0}}
+        )
         self.assertTrue(audit.checks[9])
         self.assertTrue(audit.checks[13])
 
