@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import tempfile
 import unittest
@@ -22,6 +23,39 @@ from options_researcher.hypothesis_evidence import (
 
 EVALUATION = "2026-07-24"
 RUN_DATE = "2026-07-27"
+_FORBIDDEN_WATCHER_IMPORT_SUFFIXES = (
+    "entry_watch",
+    "h6_watch",
+    "h7_watch",
+    "h8_watch",
+    "h10_watch",
+)
+
+
+def _has_prohibited_watcher_import(source: str) -> bool:
+    """Reject direct, from-module, and package-alias watcher imports."""
+    tree = ast.parse(source)
+    candidates = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.module is not None:
+            candidates.add(node.module)
+        for alias in node.names:
+            candidates.add(
+                f"{node.module}.{alias.name}"
+                if node.module is not None
+                else alias.name
+            )
+    return any(
+        name.endswith(_FORBIDDEN_WATCHER_IMPORT_SUFFIXES)
+        for name in candidates
+    )
 
 
 def _cohort(_base_dir: Path) -> RegisteredCohort:
@@ -1066,7 +1100,6 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
     def test_gather_and_summary_never_write_or_import_watchers(self):
         """Receipt aggregation stays read-only even when write APIs are hostile."""
-        import ast
         import hashlib
         import os
 
@@ -1075,21 +1108,9 @@ class HypothesisEvidenceTests(unittest.TestCase):
             summarize_hypothesis_evidence,
         )
 
-        tree = ast.parse(Path(hypothesis_evidence.__file__).read_text(encoding="utf-8"))
-        imported = {
-            alias.name
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Import)
-            for alias in node.names
-        } | {
-            node.module
-            for node in ast.walk(tree)
-            if isinstance(node, ast.ImportFrom) and node.module is not None
-        }
         self.assertFalse(
-            any(
-                name.endswith(("entry_watch", "h6_watch", "h7_watch", "h8_watch", "h10_watch"))
-                for name in imported
+            _has_prohibited_watcher_import(
+                Path(hypothesis_evidence.__file__).read_text(encoding="utf-8")
             )
         )
 
@@ -1113,6 +1134,16 @@ class HypothesisEvidenceTests(unittest.TestCase):
             for path in self.root.rglob("*") if path.is_file()
         }
         self.assertEqual(after, before)
+
+    def test_watcher_import_guard_rejects_package_form(self):
+        """A package import alias must be treated as the watcher module it loads."""
+        for source in (
+            "import options_researcher.h6_watch\n",
+            "from options_researcher.h6_watch import run\n",
+            "from options_researcher import h6_watch\n",
+        ):
+            with self.subTest(source=source):
+                self.assertTrue(_has_prohibited_watcher_import(source))
 
 
 if __name__ == "__main__":
