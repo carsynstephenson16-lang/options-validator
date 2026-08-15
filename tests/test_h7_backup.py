@@ -242,7 +242,7 @@ class RecordedInvalidationTests(unittest.TestCase):
     PROVENANCE = "owner-directed in-session 2026-08-14 (disposition B)"
 
     def _tree(self, *, close_bytes=b"august-closes", second_close=False,
-              session="2026-07-17") -> tuple[Path, dict, Path]:
+              session="2026-07-17", variant="") -> tuple[Path, dict, Path]:
         root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, root, True)
         chain = root / ".cache/chains/one.parquet"
@@ -269,6 +269,8 @@ class RecordedInvalidationTests(unittest.TestCase):
             "scope": scope_identity(), "whole_universe_verdict": "GO",
             "go_count": len(scope_identity()["symbols"]),
             "evaluation_session": session,
+            # Changes the receipt's CONTENT hash without moving its path.
+            "source_hash": f"variant{variant}",
             "input_files": inputs,
         })
         path = (root / "reports/h7_data_gate" / scope_identity()["scope_id"]
@@ -331,6 +333,26 @@ class RecordedInvalidationTests(unittest.TestCase):
         # Same sealed hash and same label, DIFFERENT sealed receipt: a fact is
         # bound to one receipt's content hash and covers nothing else.
         self.assertNotEqual(receipt["receipt_hash"], other["receipt_hash"])
+        self._write_fact_line(root, line)
+
+        result = backup.verify_restored_tree(root)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["notes"], [])
+        self.assertTrue(any("changed input close:AMD" in problem
+                            for problem in result["problems"]))
+
+    def test_fact_from_a_different_receipt_at_the_same_path_covers_nothing(self):
+        # Isolates the receipt-hash key: same relative path, same label, same
+        # sealed hash -- only the receipt's CONTENT differs. Without the
+        # content hash in the coverage key, one receipt's recorded
+        # invalidation would silently bless another receipt's binding.
+        root, receipt, _ = self._tree(variant="a")
+        other_root, other, other_receipt_path = self._tree(variant="b")
+        [line] = self._record(other_root, other_receipt_path)
+        self.assertNotEqual(receipt["receipt_hash"], other["receipt_hash"])
+        self.assertIn(
+            "reports/h7_data_gate/h7-forward-15-v1/receipts/2026-07-17.json", line)
         self._write_fact_line(root, line)
 
         result = backup.verify_restored_tree(root)
