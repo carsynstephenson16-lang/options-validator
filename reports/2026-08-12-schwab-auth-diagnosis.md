@@ -68,3 +68,73 @@ python tools/setup_schwab.py` with exit 1.
 Until step 1 runs, every Schwab-dependent lane (intraday capture, preclose
 capture, live dashboard, H7 Monday canary) will fail — now loudly, with the
 reauth banner.
+
+---
+
+## Addendum 2026-08-15 — status correction, root-cause split, and token-lifetime upgrade
+
+*(Appended 2026-08-15, owner-directed in-session: the missing-capture week was
+being read as one long Schwab failure; it was two different failures, and the
+second was not Schwab's.)*
+
+### 1. Reauthorization happened — this report's "until step 1 runs" state is over
+
+The token was re-authorized **2026-08-12 ~00:56 ET** (Repo-verified from the
+token store's `creation_timestamp`; timestamps only, no token material read).
+Both capture lanes then verified working:
+
+| Session (ET) | Intraday quotes (5×/day) | Preclose full-chain (15:45) |
+| --- | --- | --- |
+| Mon 08-10 | BROKEN — `invalid_grant` | wrapper REFUSED (alignment) |
+| Tue 08-11 | BROKEN — `invalid_grant` | wrapper REFUSED (alignment) |
+| Wed 08-12 | OK 15/15 | wrapper REFUSED (alignment) |
+| Thu 08-13 | OK 15/15 | wrapper REFUSED (alignment) |
+| Fri 08-14 | OK 15/15 | **OK 15/15** (`reports/schwab_chains/2026-08-14/preclose.json`) |
+
+### 2. Root-cause split — the preclose gap was NOT a Schwab failure
+
+Two independent failure modes overlapped last week and must not be conflated:
+
+- **Schwab-side (auth):** the expired refresh token broke BOTH lanes on
+  08-10 and 08-11 only. Evidence: `.tmp/intraday_capture/2026-08-1{0,1}_*.log`
+  in the ops checkout (`OAuthError … invalid_grant`).
+- **Repo-side (alignment guard):** the preclose chain lane ALSO refused on
+  08-11 → 08-13 **after auth was already fixed**, with
+  `schwab_chain_capture wrapper REFUSED: HEAD is not aligned with origin/main`
+  (`.tmp/schwab_chain_capture/2026-08-1{1,2,3}_1545.log`). That is the
+  wrapper's own integrity gate (`tools/schwab_chain_capture.sh`) doing its
+  declared job on a divergent ops checkout — a sync-procedure gap, not a
+  provider failure. It cleared once ops was fast-forwarded to `origin/main`;
+  the 08-14 15:45 run then captured 15/15 first try.
+
+Consequence for staleness accounting: the 08-11→08-13 missing preclose chains
+are attributable to ops-sync procedure (since addressed by the D-6a 15:30
+alignment-check LaunchAgent + runbook rule R1), not to Schwab availability.
+
+### 3. Token lifetime — claim upgraded from Inference to Official-source
+
+This report's earlier "7-day refresh token" label of **Inference** is upgraded:
+
+- **Official-source:** Schwab Trader API Documentation — "A Trader API refresh
+  token is valid for 7 days after creation."; "A Trader API access token is
+  valid for 30 minutes." The developer portal blocks automated fetch
+  (HTTP 403, as documented earlier in this report); the quoted text was read
+  from the Internet Archive's full-text mirror of Schwab's own Trader API
+  documentation (find it on archive.org by searching the document title —
+  the item's URL is deliberately not reproduced here because its slug trips
+  this repo's live-trading string filter). Independently corroborated by an
+  accessible official secondary source, schwab-py's auth documentation
+  (<https://schwab-py.readthedocs.io/en/latest/auth.html>): "requests for a
+  new access token using a refresh token older than seven days are rejected."
+- **Test-verified (production token store, 2026-08-15):** refreshing an access
+  token does **NOT** reset the 7-day clock. File mtime 2026-08-15 00:52 ET;
+  `creation_timestamp` unchanged at 2026-08-12 00:56 ET (schwab-py's
+  `wrap_token_in_metadata` intentionally preserves the original creation time).
+
+**Operational consequence:** the current token dies ~**2026-08-19 00:56 ET**
+(Wednesday pre-market). Mon 08-17 and Tue 08-18 captures run; Wed 08-19
+onward fails unless re-authorized first. Standing habit going forward:
+re-authorize **every weekend**, which covers the full Mon–Fri week.
+There is currently no proactive age warning (`token_age()` in
+`data/schwab_credentials.py` has no callers); a day-5 warning in the daily
+ritual is proposed as follow-up work.
