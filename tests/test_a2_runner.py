@@ -22,6 +22,7 @@ from options_researcher.a2_runner import (
     CachePaths,
     OneRunError,
     _causal_earnings,
+    _causal_fomc,
     _load_close_bundle,
     _load_earnings,
     _load_feature_bundle,
@@ -524,6 +525,47 @@ class RunnerContracts(unittest.TestCase):
 
 
 class CachePathTests(unittest.TestCase):
+    def test_tracked_pit_fomc_calendar_is_causal_before_2025_decisions(self):
+        path = Path(__file__).resolve().parents[1] / "data" / "events" / "fomc_pit.csv"
+        frame = pd.read_csv(path)
+        self.assertEqual(
+            list(frame.columns),
+            ["date", "known_as_of_utc", "source_url", "captured_at_utc", "status"],
+        )
+        self.assertEqual(len(frame), 16)
+        self.assertEqual(set(frame["known_as_of_utc"]), {"2024-08-09T17:30:00+00:00"})
+        self.assertEqual(
+            set(frame["source_url"]),
+            {"https://www.federalreserve.gov/newsevents/pressreleases/monetary20240809a.htm"},
+        )
+        self.assertEqual(set(frame["captured_at_utc"]), {"2026-08-15"})
+        self.assertEqual(set(frame["status"]), {"tentative"})
+        expected = [
+            date.fromisoformat(value)
+            for value in (
+                "2025-01-29",
+                "2025-03-19",
+                "2025-05-07",
+                "2025-06-18",
+                "2025-07-30",
+                "2025-09-17",
+                "2025-10-29",
+                "2025-12-10",
+                "2026-01-28",
+                "2026-03-18",
+                "2026-04-29",
+                "2026-06-17",
+                "2026-07-29",
+                "2026-09-16",
+                "2026-10-28",
+                "2026-12-09",
+            )
+        ]
+        events = _load_fomc(path)
+        self.assertEqual([event["date"] for event in events], expected)
+        self.assertEqual(_causal_fomc(events, date(2025, 1, 28)), expected)
+        self.assertEqual(_causal_fomc(events, date(2025, 1, 30)), expected[1:])
+
     def test_cache_paths_are_absolute_and_local(self):
         paths = CachePaths.from_overrides(
             chain="/tmp/chain",
