@@ -374,11 +374,22 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self._git(repo, "add", "--", "reports/ritual/side.json")
         self._git(repo, "commit", "-qm", "side evidence")
         self._git(repo, "checkout", "-q", "main")
+        # Same hermetic identity env as _git — this call bypasses the helper
+        # only because it needs the returncode (a conflicted merge exits 1).
         merge = subprocess.run(
             ["git", "-C", str(repo), "merge", "--no-commit", "--no-ff", "side"],
             capture_output=True,
             text=True,
-            env={"PATH": "/usr/bin:/bin", "HOME": str(repo)},
+            env={
+                "PATH": "/usr/bin:/bin:/usr/local/bin",
+                "HOME": str(repo),
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@example.com",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@example.com",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_SYSTEM": "/dev/null",
+            },
         )
         self.assertIn(merge.returncode, (0, 1), merge.stderr)
         (repo / "code.py").write_text("x = 3  # smuggled in by the merge itself\n")
