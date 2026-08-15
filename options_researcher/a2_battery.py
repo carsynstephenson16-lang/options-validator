@@ -145,14 +145,8 @@ def _validate_provenance_identity(provenance: Mapping[str, object]) -> None:
         raise ValueError("A2 provenance requires a named source or receipt identity field")
     for key in identity_keys:
         value = provenance[key]
-        if isinstance(value, str):
-            if not value.strip():
-                raise ValueError("A2 provenance source/receipt identity cannot be empty")
-        elif isinstance(value, (int, float, bool)):
-            if isinstance(value, float) and not math.isfinite(value):
-                raise ValueError("A2 provenance source/receipt identity must be finite")
-        else:
-            raise ValueError("A2 provenance source/receipt identity must be scalar")
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("A2 provenance source/receipt identity must be non-empty text")
 
 
 @dataclass(frozen=True, slots=True)

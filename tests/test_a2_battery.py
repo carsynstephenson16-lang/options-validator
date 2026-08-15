@@ -112,7 +112,14 @@ class ContractTests(unittest.TestCase):
     def test_provenance_requires_nonempty_scalar_source_or_receipt_identity(self):
         for provenance in (
             {"source": ""},
+            {"source": "   "},
             {"source": None},
+            {"source": False},
+            {"source": True},
+            {"source": 0},
+            {"source": 1},
+            {"source": 0.0},
+            {"source": 1.0},
             {"source": {"path": "fixture"}},
             {"regime": "normal"},
         ):
