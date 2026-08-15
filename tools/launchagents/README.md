@@ -156,22 +156,36 @@ localhost-only on `127.0.0.1:8766` and serves the ops
 ### Replace the unmanaged listener safely
 
 Deployment is an owner operation. Immediately before replacing the existing
-listener, resolve it again:
+listener, resolve it again and assign a fresh numeric PID from that output:
 
 ```bash
-lsof -nP -iTCP:8766 -sTCP:LISTEN
+LISTENER="$(lsof -nP -iTCP:8766 -sTCP:LISTEN)"
+printf '%s\n' "$LISTENER"
+PID="$(printf '%s\n' "$LISTENER" | awk 'NR == 2 { print $2 }')"
+case "$PID" in
+  ''|*[!0-9]*) echo "stop: listener PID was not numeric: $PID" >&2; exit 1 ;;
+esac
 ps -p "$PID" -o pid=,command=
 lsof -a -p "$PID" -d cwd
 ```
 
-Use the PID from the first command. Send `TERM` only when the inspected
-command, cwd, bind address, and port all match the unmanaged ops-dashboard
-server. Otherwise stop and report the process that owns the port; do not kill
-it or install an ad-hoc replacement.
+Inspect the captured listener, command, cwd, bind address, and port. Send
+`TERM` only when all match the unmanaged ops-dashboard server. Otherwise stop
+and report the process that owns the port; do not kill it or install an ad-hoc
+replacement.
 
-Only after all four fields match, send the graceful termination signal:
+Immediately before `TERM`, re-check that same PID and require that it still
+owns the localhost listener. If this check does not show
+`127.0.0.1:8766`, stop; the process may have exited or the port may have been
+reassigned.
 
 ```bash
+FINAL_LISTENER="$(lsof -nP -a -p "$PID" -iTCP:8766 -sTCP:LISTEN)"
+printf '%s\n' "$FINAL_LISTENER"
+if ! printf '%s\n' "$FINAL_LISTENER" | grep -Fq '127.0.0.1:8766'; then
+  echo "stop: PID $PID no longer owns 127.0.0.1:8766" >&2
+  exit 1
+fi
 kill -TERM "$PID"
 ```
 
