@@ -1,7 +1,7 @@
 # Managed Display-Only Research Views Design
 
-**Status:** proposed for owner review  
-**Date:** 2026-08-15  
+**Status:** proposed for owner review
+**Date:** 2026-08-15
 **Base:** `origin/main` at `7b91ae389dd3b5dcefa0a46461a6eddcd0cb6313`
 
 ## Goal
