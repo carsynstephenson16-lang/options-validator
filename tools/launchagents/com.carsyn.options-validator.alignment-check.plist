@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  TEMPLATE ONLY; not installed or loaded by any Claude Code session; the owner
+  runs launchctl bootstrap (see tools/launchagents/README.md). Runs the
+  DETECTION-ONLY ops alignment check at 15:30 ET on weekdays from the ops
+  checkout, 15 minutes before the 15:45 Schwab preclose capture whose own
+  alignment gate would otherwise refuse with no warning.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.carsyn.options-validator.alignment-check</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/carsynstephenson/options-validator-ops/tools/ops_alignment_check.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/carsynstephenson/options-validator-ops</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TZ</key>
+    <string>America/New_York</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/alignment_check/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/alignment_check/launchd.err.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

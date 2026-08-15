@@ -732,6 +732,32 @@ class SelectQmTopPicksTests(unittest.TestCase):
             },
         }
 
+    def test_an_uncovered_pick_keeps_its_slot_instead_of_blanking_the_panel(self):
+        # brief 12 D5 gate 5: a mechanical pick the frozen study never covered
+        # is a permanent fact about that name. Dropping every slot over it hid
+        # the covered names' context forever; QM still selects nothing.
+        data = SelectTopPicksTests()._data()
+        data["data_as_of"] = "2026-07-01"
+        context = self._context()
+        context["symbols"]["BBB"] = {
+            "status": "NOT_IN_FROZEN_STUDY",
+            "reason": "BBB is not in the frozen QM study sidecar",
+        }
+        context["not_covered"] = ["BBB"]
+
+        mechanical = [(p["symbol"], p["lane"], p["strike"])
+                      for p in ad.select_top_picks(data, include_csp_watch=True)]
+        picks = ad.select_qm_top_picks(data, context, include_csp_watch=True)
+        self.assertEqual([(p["symbol"], p["lane"], p["strike"]) for p in picks],
+                         mechanical)
+        self.assertIn("BBB", {p["symbol"] for p in picks})
+
+        card_html = ad._qm_card_context_html(
+            picks[-1], context["symbols"]["BBB"])
+        self.assertIn("QM NOT COVERED", card_html)
+        self.assertIn("not in the frozen QM study", card_html)
+        self.assertNotIn("QM DATA BLOCKED", card_html)
+
     def test_qm_context_uses_exact_mechanical_picks_without_changing_selector(self):
         import json
         from pathlib import Path
@@ -1677,7 +1703,8 @@ class MainTests(unittest.TestCase):
 
         def gather():
             observed["board"] = Path.cwd()
-            return [section], {"MSFT": 1.1}, []
+            return [section], {"MSFT": 1.1}, [], {
+                "verified_sessions": [], "failures": [], "receipts_found": False}
 
         def load_context(_as_of):
             observed["output"] = Path.cwd()
@@ -1806,3 +1833,335 @@ class ChainAgeBannerTests(unittest.TestCase):
         data = self._assemble("2026-08-05", "2026-08-04")
         self.assertIsNone(data["chain_age_sessions"])
         self.assertIn("UNKNOWN", ad.render(data))
+
+
+# ---------------------------------------------------------------------------
+# Brief 12 (rev-2): Schwab pre-close display freshness.
+# ---------------------------------------------------------------------------
+
+SCHWAB_SOURCE = "schwab_preclose"
+THETA_SOURCE = "thetadata_eod"
+
+
+def _fresh_section(symbol="NVDA", as_of="2026-08-14", **overrides):
+    section = {
+        "symbol": symbol,
+        "as_of": as_of,
+        "close": 225.08,
+        "iv_rank": float("nan"),
+        "chain_source": SCHWAB_SOURCE,
+        "close_as_of": as_of,
+        "close_kind": "preclose_mid_1545",
+        "closes_as_of": "2026-08-04",
+        "technicals_as_of": "2026-08-04",
+        "features_as_of": as_of,
+        "features_stale": False,
+        "features_source": "schwab_preclose_session",
+        "atm_iv": 0.4772,
+        "feature_unavailable": [
+            {"field": "rv21",
+             "reason": "underlying closes end 2026-08-04, before this "
+                       "2026-08-14 session"},
+        ],
+        "groups": [{"kind": "put", "title": "SELL A PUT?", "cards": [],
+                    "empty": "none this cycle"}],
+    }
+    section.update(overrides)
+    return section
+
+
+def _stale_section(symbol="MSFT", as_of="2026-07-27", **overrides):
+    section = {
+        "symbol": symbol,
+        "as_of": as_of,
+        "close": 180.0,
+        "iv_rank": 0.42,
+        "chain_source": THETA_SOURCE,
+        "close_as_of": as_of,
+        "close_kind": "eod_close",
+        "features_as_of": as_of,
+        "features_stale": False,
+        "groups": [{"kind": "put", "title": "SELL A PUT?", "cards": [],
+                    "empty": "none this cycle"}],
+    }
+    section.update(overrides)
+    return section
+
+
+class SchwabFreshnessPageDateTests(unittest.TestCase):
+    """D3: one date can no longer describe two sources, so the page says both."""
+
+    def test_page_date_follows_the_newest_verified_fresh_session(self):
+        sections = [_fresh_section("NVDA", "2026-08-14"),
+                    _stale_section("MSFT", "2026-07-27")]
+        self.assertEqual(ad._page_data_as_of(sections), "2026-08-14")
+        self.assertEqual(ad._page_as_of_kind(sections), SCHWAB_SOURCE)
+        self.assertEqual(ad._stale_path_as_of(sections),
+                         ("2026-07-27", ["MSFT"]))
+
+    def test_without_a_fresh_source_the_earliest_date_still_wins(self):
+        sections = [_stale_section("MSFT", "2026-07-27"),
+                    _stale_section("CLSK", "2026-07-01")]
+        self.assertEqual(ad._page_data_as_of(sections), "2026-07-01")
+        self.assertEqual(ad._page_as_of_kind(sections), THETA_SOURCE)
+
+    def test_assemble_publishes_both_sides_of_a_mixed_board(self):
+        data = ad.assemble(
+            symbol_sections=[_fresh_section("NVDA", "2026-08-14"),
+                             _stale_section("MSFT", "2026-07-27")],
+            rv21_by_symbol={}, today="2026-08-14")
+        self.assertEqual(data["data_as_of"], "2026-08-14")
+        self.assertEqual(data["as_of_kind"], SCHWAB_SOURCE)
+        self.assertEqual(data["fresh_symbols"], ["NVDA"])
+        self.assertEqual(data["stale_symbols"], ["MSFT"])
+        self.assertEqual(data["stale_as_of"], "2026-07-27")
+        self.assertEqual(data["stale_chain_age_sessions"], 14)
+
+    def test_banner_states_the_pre_close_source_and_the_stale_names(self):
+        data = ad.assemble(
+            symbol_sections=[_fresh_section("NVDA", "2026-08-14"),
+                             _stale_section("MSFT", "2026-07-27")],
+            rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        # The BANNER's own sentence -- the per-section line carries the same
+        # label, so a page-wide substring would pass with the banner gutted.
+        self.assertIn(
+            "<strong>Option quotes: 15:45 pre-close (Schwab) session "
+            "2026-08-14</strong>", html)
+        self.assertIn("a 15:45 ET snapshot, NOT an end-of-day close", html)
+        self.assertIn("STALE BOARD for MSFT", html)
+        self.assertIn("14 trading sessions old", html)
+
+    def test_header_chip_never_calls_a_pre_close_snapshot_a_close(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("<strong>Pre-close 15:45 (Schwab)</strong> 2026-08-14",
+                      html)
+        self.assertNotIn("<strong>Market close</strong> 2026-08-14", html)
+
+    def test_thetadata_only_board_keeps_the_market_close_chip(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("<strong>Market close</strong> 2026-07-27", html)
+        self.assertNotIn("Pre-close 15:45", html)
+
+    def test_fresh_card_passes_the_wall_clock_gate_that_stale_cards_fail(self):
+        # The per-card CHAIN_STALE_VS_TODAY gate is UNCHANGED. It stands down
+        # for fresh cards because their session really is today's, and it still
+        # blocks the frozen-cache names on the same board.
+        card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
+                "credit": 400.0, "annualized_yield": 0.2,
+                "grades": {"liquidity": "GREEN"}, "verdict": "…"}
+        fresh = _fresh_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                        "cards": [dict(card)], "empty": None}])
+        stale = _stale_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                        "cards": [dict(card)], "empty": None}])
+        data = ad.assemble(symbol_sections=[fresh, stale],
+                           rv21_by_symbol={}, today="2026-08-14")
+        fresh_snapshot = data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"]
+        stale_snapshot = data["symbols"][1]["groups"][0]["cards"][0]["top3_snapshot"]
+        self.assertNotIn("CHAIN_STALE_VS_TODAY",
+                         fresh_snapshot["integrity"]["reason_codes"])
+        self.assertIn("CHAIN_STALE_VS_TODAY",
+                      stale_snapshot["integrity"]["reason_codes"])
+
+    def test_section_states_its_source_and_that_the_price_is_a_1545_mid(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("Quotes: 15:45 pre-close (Schwab) session 2026-08-14",
+                      html)
+        self.assertIn("15:45 spot mid from the same capture instant", html)
+        self.assertIn("<span>Spot 15:45 pre-close</span>", html)
+        self.assertIn("closes through 2026-08-04", html)
+
+    def test_refused_fresh_chain_is_visible_not_silent(self):
+        section = _stale_section(
+            "NVDA", "2026-07-27",
+            fresh_refusal_reason=("no verified 15:45 spot for 2026-08-14 — "
+                                  "fresh 15:45 pre-close (Schwab) chain not "
+                                  "rendered; this symbol stays on the frozen "
+                                  "cache below"))
+        html = ad.render(ad.assemble(symbol_sections=[section],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("no verified 15:45 spot for 2026-08-14", html)
+
+    def test_verification_failure_is_loud_on_the_page(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        data["schwab_lane"] = {
+            "verified_sessions": [],
+            "failures": [{"session": "2026-08-14",
+                          "reason": "SchwabChainManifestError: hash mismatch for NVDA"}],
+            "receipts_found": True,
+        }
+        html = ad.render(data)
+        self.assertIn("Schwab capture session 2026-08-14 FAILED verification",
+                      html)
+        self.assertIn("hash mismatch for NVDA", html)
+        self.assertIn("chains were NOT used", html)
+
+    def test_footer_says_the_two_dashboards_date_independently(self):
+        # rev-2 D3: mission control is out of scope and keeps its own
+        # closes-derived date, so the difference must be stated, not left to
+        # look like one of the two being broken.
+        html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("mission-control dashboard date INDEPENDENTLY", html)
+        self.assertIn("a difference between the two is expected", html)
+
+    def test_a_checkout_with_no_receipts_says_so(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        data["schwab_lane"] = {"verified_sessions": [], "failures": [],
+                               "receipts_found": False}
+        html = ad.render(data)
+        self.assertIn("No Schwab pre-close capture receipts found", html)
+
+
+class FailClosedFeatureTests(unittest.TestCase):
+    """D4a: a missing input renders UNKNOWN, never a default that reads GREEN."""
+
+    def test_missing_iv_rank_does_not_grade_a_buyer_green(self):
+        import config
+        from options_researcher.attractiveness import grade
+
+        self.assertEqual(
+            grade(0.0, config.H5_IVR_BUY_GREEN, config.H5_IVR_BUY_RED,
+                  higher_is_better=False),
+            "GREEN")
+        self.assertEqual(
+            grade(float("nan"), config.H5_IVR_BUY_GREEN, config.H5_IVR_BUY_RED,
+                  higher_is_better=False),
+            "UNKNOWN")
+
+    def test_missing_vrp_does_not_clear_a_zero_threshold(self):
+        from options_researcher.attractiveness import _vrp_seller_grade
+
+        self.assertEqual(_vrp_seller_grade(0.0), "GREEN")
+        self.assertEqual(_vrp_seller_grade(float("nan")), "UNKNOWN")
+
+    def test_missing_iv_rank_does_not_grade_a_seller(self):
+        from options_researcher.attractiveness import _iv_seller_grade
+
+        self.assertEqual(_iv_seller_grade(0.9), "GREEN")
+        self.assertEqual(_iv_seller_grade(float("nan")), "UNKNOWN")
+
+    def test_unavailable_iv_rank_is_words_not_a_number(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("<span>IV rank</span><strong>unavailable</strong>", html)
+        self.assertNotIn("<span>IV rank</span><strong>0.00</strong>", html)
+
+    def test_unavailable_features_are_named_with_their_reason(self):
+        html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("Unavailable for this session", html)
+        self.assertIn("rv21: underlying closes end 2026-08-04", html)
+        self.assertIn("show UNKNOWN (never a default value)", html)
+
+    def test_absent_scenario_table_says_why(self):
+        card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
+                "credit": 400.0, "annualized_yield": 0.2,
+                "grades": {"liquidity": "GREEN"}, "verdict": "…"}
+        section = _fresh_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                          "cards": [card], "empty": None}])
+        data = ad.assemble(symbol_sections=[section],
+                           rv21_by_symbol={"NVDA": float("nan")},
+                           today="2026-08-14")
+        enriched = data["symbols"][0]["groups"][0]["cards"][0]
+        self.assertEqual(enriched["bbb"], [])
+        self.assertIn("underlying closes end 2026-08-04", enriched["bbb_absent"])
+        html = ad.render(data)
+        self.assertIn("Scenario table unavailable", html)
+
+    def test_atm_iv_from_the_fresh_session_is_shown(self):
+        html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("<span>ATM IV</span><strong>47.7%</strong>", html)
+
+    def test_receipt_without_local_chains_is_stated_without_a_false_alarm(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        data["schwab_lane"] = {
+            "verified_sessions": [],
+            "failures": [{"session": "2026-08-14", "kind": "chains_absent",
+                          "reason": "no chain files for session 2026-08-14"}],
+            "receipts_found": True,
+        }
+        html = ad.render(data)
+        self.assertIn("are present, but its chain files are not in this checkout",
+                      html)
+        self.assertNotIn("FAILED verification", html)
+
+
+class FreshSourceAgesTests(unittest.TestCase):
+    """N1: "verified pre-close" describes the SOURCE, never the clock.
+
+    If captures stop, the newest verified session keeps its badge while
+    silently becoming days old. The fresh line and the header chip therefore
+    read the same chain_age_sessions the cards do.
+    """
+
+    def _data(self, today):
+        card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
+                "credit": 400.0, "annualized_yield": 0.2,
+                "grades": {"liquidity": "GREEN"}, "verdict": "…"}
+        section = _fresh_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                          "cards": [card], "empty": None}])
+        return ad.assemble(symbol_sections=[section], rv21_by_symbol={},
+                           today=today)
+
+    def test_same_day_capture_is_calm_info(self):
+        data = self._data("2026-08-14")
+        self.assertEqual(data["chain_age_sessions"], 0)
+        html = ad.render(data)
+        self.assertIn('<div class="notice info"><strong>Option quotes: '
+                      "15:45 pre-close (Schwab) session 2026-08-14</strong>",
+                      html)
+        self.assertNotIn("captures have STOPPED", html)
+        self.assertIn("<strong>Pre-close 15:45 (Schwab)</strong>", html)
+
+    def test_one_session_old_warns_and_says_how_old(self):
+        data = self._data("2026-08-17")           # Mon after a Fri capture
+        self.assertEqual(data["chain_age_sessions"], 1)
+        html = ad.render(data)
+        self.assertIn("now 1 trading session old", html)
+        self.assertIn('<div class="notice watch">', html)
+        self.assertIn("Pre-close 15:45 (Schwab) · 1 sessions old", html)
+        self.assertNotIn("captures have STOPPED", html)
+
+    def test_past_the_block_bar_the_fresh_line_is_loud_not_calm(self):
+        data = self._data("2026-08-20")           # 4 sessions after 08-14
+        self.assertEqual(data["chain_age_sessions"], 4)
+        html = ad.render(data)
+        self.assertIn("STALE BOARD — pre-close captures have STOPPED", html)
+        self.assertIn("newest verified session (2026-08-14) is 4 trading "
+                      "sessions old", html)
+        self.assertIn('<div class="notice bad">', html)
+        # The exact failure the reviewer demonstrated: the calm info line must
+        # be gone, not merely accompanied by a warning.
+        self.assertNotIn('<div class="notice info"><strong>Option quotes: ',
+                         html)
+        self.assertIn("STALE · Pre-close 15:45 (Schwab) · 4 sessions old", html)
+
+    def test_a_long_capture_outage_cannot_read_like_a_current_board(self):
+        data = self._data("2026-09-15")           # 22 sessions after 08-14
+        self.assertEqual(data["chain_age_sessions"], 22)
+        html = ad.render(data)
+        self.assertIn("is 22 trading sessions old", html)
+        self.assertIn("captures have STOPPED", html)
+        snapshot = data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"]
+        # The banner's tone now matches what the cards already did.
+        self.assertIn("CHAIN_STALE_VS_TODAY",
+                      snapshot["integrity"]["reason_codes"])
+
+    def test_unknown_age_on_a_fresh_source_says_unknown(self):
+        data = self._data(None)
+        self.assertIsNone(data["chain_age_sessions"])
+        html = ad.render(data)
+        self.assertIn("could NOT be compared with the evaluation date", html)
+        self.assertIn("age UNKNOWN", html)
