@@ -1085,7 +1085,11 @@ def load_research_views_status(path: str | Path = RESEARCH_VIEWS_STATUS_PATH) ->
         datetime.strptime(timestamp_value, "%Y-%m-%dT%H:%M:%S%z")
     except ValueError:
         return {"state": "malformed"}
-    if offset_hours > 23 or offset_minutes > 59:
+    if (
+        offset_minutes > 59
+        or offset_hours > 14
+        or (offset_hours == 14 and offset_minutes != 0)
+    ):
         return {"state": "malformed"}
     return {
         "state": "published",

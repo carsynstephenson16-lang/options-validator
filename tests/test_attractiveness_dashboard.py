@@ -1908,6 +1908,10 @@ class LaneBoardPresentationTests(unittest.TestCase):
                 "2026-99-99T07:30:00-0400",
                 "2026-08-15T25:30:00-0400",
                 "2026-08-15T07:30:00+2460",
+                "2026-08-15T07:30:00+2359",
+                "2026-08-15T07:30:00-2359",
+                "2026-08-15T07:30:00+1401",
+                "2026-08-15T07:30:00-1401",
             ):
                 with self.subTest(timestamp=malformed_timestamp):
                     path.write_text(
@@ -1917,6 +1921,20 @@ class LaneBoardPresentationTests(unittest.TestCase):
                     )
                     self.assertEqual(
                         ad.load_research_views_status(path)["state"], "malformed"
+                    )
+
+            for valid_timestamp in (
+                "2026-08-15T07:30:00+1400",
+                "2026-08-15T07:30:00-1400",
+            ):
+                with self.subTest(timestamp=valid_timestamp):
+                    path.write_text(
+                        f"research views refresh: {valid_timestamp}\n"
+                        "experiments: OK exit=0\n"
+                        "wasserstein: FAILED exit=2\n"
+                    )
+                    self.assertEqual(
+                        ad.load_research_views_status(path)["state"], "published"
                     )
 
     def test_freshness_research_composite_and_shelf_are_visible_in_board_order(self):
