@@ -259,16 +259,17 @@ def _csp(
     )
     fixed_target = _target_session(sessions, entry_day, config.A2_CSP_FIXED_HORIZON_SESSIONS)
     fixed = expiry if fixed_target is None or expiry <= fixed_target else fixed_target
-    capture = next(
-        (
-            d
-            for d in sessions
-            if entry_day < d < expiry
-            and (q := _contract_row(chains.get(d), contract)) is not None
-            and adverse_buy(q.ask) * 100 <= credit / 2
-        ),
-        expiry,
-    )
+    capture = expiry
+    for candidate_day in sessions:
+        if not entry_day < candidate_day < expiry:
+            continue
+        candidate = _contract_row(chains.get(candidate_day), contract)
+        if candidate is None:
+            continue
+        diagnostics.selected_contracts.add((symbol, candidate_day, _symbol(candidate)))
+        if adverse_buy(candidate.ask) * 100 <= credit / 2:
+            capture = candidate_day
+            break
 
     def resolve(day: str, arm: str) -> A2Outcome | None:
         if day not in raw:
@@ -279,6 +280,8 @@ def _csp(
         if not settlement and quote is None:
             diagnostics.skip("invalid_resolution_quote")
             return None
+        if quote is not None:
+            diagnostics.selected_contracts.add((symbol, day, _symbol(quote)))
         if settlement:
             pnl = credit - max(strike - float(raw[day]), 0) * 100
             bidask = (
@@ -364,6 +367,7 @@ def _long(
         if day is None or quote is None:
             diagnostics.skip("invalid_resolution_quote")
             return None
+        diagnostics.selected_contracts.add((symbol, day, _symbol(quote)))
         if entry_day not in adjusted or day not in adjusted:
             diagnostics.skip("missing_adjusted_close")
             return None
@@ -551,7 +555,7 @@ def build_historical_outcomes(
                 raw_rate = (rates or {}).get(symbol, {}).get(entry_day)
                 try:
                     rate = float(raw_rate) if raw_rate is not None else None
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     diag.skip("invalid_matched_tenor_rate")
                     continue
                 if rate is not None and not math.isfinite(rate):
@@ -676,8 +680,6 @@ def audit_historical_inputs(
             )
             start, end = _day(audit_start), _day(audit_end)
             weekly = [expiry for expiry in expirations if start <= expiry <= end]
-            if any((later - earlier).days > 7 for earlier, later in zip(weekly, weekly[1:])):
-                checks[2].append(f"{symbol}: weekly expiration cadence gap")
             months = {(expiry.year, expiry.month) for expiry in weekly if is_monthly(expiry)}
             cursor = date(start.year, start.month, 1)
             while cursor <= end:

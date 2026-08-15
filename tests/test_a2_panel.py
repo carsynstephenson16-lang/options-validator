@@ -222,6 +222,7 @@ class ResolutionTests(unittest.TestCase):
     def test_csp_cash_forgone_uses_actual_arm_tenor_and_mae_is_never_positive(self):
         entry = _chain([_row(expiration="2025-01-17")])
         target = _chain([_row(expiration="2025-01-17", bid=0.47, ask=0.5)])
+        diagnostics = A2Diagnostics()
         outcomes = build_historical_outcomes(
             signals={"2024-12-31": {SYMBOL: 1.0}},
             chains={SYMBOL: {"2025-01-01": entry, "2025-01-02": target}},
@@ -242,6 +243,7 @@ class ResolutionTests(unittest.TestCase):
                 }
             },
             rates={SYMBOL: {"2025-01-01": 0.365}},
+            diagnostics=diagnostics,
         )
         capture = next(row for row in outcomes if row.arm == "capture_50")
         assigned = next(row for row in outcomes if row.arm == "assignment_accepting")
@@ -249,6 +251,8 @@ class ResolutionTests(unittest.TestCase):
             capture.components["cash_return_forgone"], assigned.components["cash_return_forgone"]
         )
         self.assertLessEqual(capture.components["max_adverse_excursion"], 0.0)
+        self.assertIn((SYMBOL, "2025-01-01", "AAA250221P00100000"), diagnostics.selected_contracts)
+        self.assertIn((SYMBOL, "2025-01-02", "AAA250221P00100000"), diagnostics.selected_contracts)
 
     def test_invalid_rate_is_a_counted_skip(self):
         diagnostics = A2Diagnostics()

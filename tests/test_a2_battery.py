@@ -235,6 +235,22 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(incomplete.raw_p_value, 0.01)
         self.assertIsNone(incomplete.adjusted_p_value)
 
+    def test_nonzero_modeled_cost_has_distinct_half_base_and_one_half_stress(self):
+        rows = tuple(
+            _outcome(
+                symbol=f"C{i}",
+                score=float(20 - i),
+                gross_return=0.10,
+                modeled_cost=0.01 + i * 0.001,
+                bid_ask_cost=0.005,
+                components={**_CSP_COMPONENTS, "option_pnl": 0.10},
+            )
+            for i in range(15)
+        )
+        summary = summarize_lane(rows, lane="csp", arm="capture_50")
+        self.assertGreater(summary.cost_stress[1.5], summary.cost_stress[1.0])
+        self.assertGreater(summary.cost_stress[1.0], summary.cost_stress[0.5])
+
     def test_empty_pmcc_is_no_data(self):
         summary = summarize_lane((), lane="pmcc", arm="pmcc")
         self.assertEqual(summary.status, "no data")
