@@ -1,0 +1,81 @@
+{
+  "symbol": "NVDA",
+  "news_summary": "NVIDIA has confirmed it will report fiscal Q2 2027 results (quarter ended July 26, 2026) on Wednesday, Aug 26, 2026, after market close, following a blowout Q1 FY2027 print on May 20, 2026 (record revenue $81.6B, +85% YoY; record Data Center revenue $75.2B, +92% YoY) and guidance of roughly $91.0B (+/-2%) for Q2. The Vera Rubin AI platform is ramping into full production with shipments beginning fall 2026 across a large Taiwan-anchored supply chain. Regulatory overhang continues on the China front: Commerce Department guidance issued around May 31, 2026 closed a loophole and now requires export licenses for advanced chips (including Rubin/Blackwell) sold to China-headquartered entities even via subsidiaries outside mainland China, and Bloomberg reported on Aug 7, 2026 that the Bureau of Industry and Security is reviewing how Chinese AI firms are accessing Nvidia chips remotely/offshore following breakthroughs like Moonshot AI's Kimi K3 model.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "nvda-q2-fy27-earnings-call",
+      "what": "NVIDIA will report fiscal Q2 2027 results and hold its earnings conference call on Wednesday, Aug 26, 2026 at 2 p.m. PT / 5 p.m. ET, covering the quarter ended July 26, 2026.",
+      "date": "2026-08-26",
+      "confirmed": true,
+      "source": "https://nvidianews.nvidia.com/news/nvidia-sets-conference-call-for-second-quarter-financial-results-6927195"
+    },
+    {
+      "id": "nvda-q1-fy27-results",
+      "what": "NVIDIA reported record Q1 FY2027 revenue of $81.6B (+85% YoY) and record Data Center revenue of $75.2B (+92% YoY) on May 20, 2026, and guided Q2 FY2027 revenue to approximately $91.0B (+/-2%).",
+      "date": "2026-05-20",
+      "confirmed": true,
+      "source": "https://investor.nvidia.com/financial-info/financial-reports/default.aspx"
+    },
+    {
+      "id": "nvda-vera-rubin-full-production",
+      "what": "NVIDIA announced its Vera Rubin AI platform is ramping into full production, with production shipments beginning fall 2026 and 150+ Taiwan supply-chain partners across 350+ factories in 30 countries manufacturing Vera Rubin-based systems.",
+      "date": "2026-05-31",
+      "confirmed": true,
+      "source": "https://nvidianews.nvidia.com/news/vera-rubin-full-production-agentic-ai-factory"
+    },
+    {
+      "id": "nvda-china-offshore-chip-review",
+      "what": "Bloomberg reported the US Commerce Department's Bureau of Industry and Security is reviewing how Chinese AI firms (including Moonshot AI, tied to its Kimi K3 model release) access Nvidia chips overseas via rented/remote compute, after breakthroughs highlighted continued use of restricted hardware despite export controls.",
+      "date": "2026-08-07",
+      "confirmed": false,
+      "source": "https://www.bloomberg.com/news/articles/2026-08-07/us-reviews-china-s-offshore-access-to-nvidia-chips-after-ai-breakthroughs"
+    },
+    {
+      "id": "nvda-china-subsidiary-export-guidance",
+      "what": "US Commerce Department issued guidance closing a loophole and enforcing export-license requirements for advanced AI chips -- including Nvidia's Rubin and Blackwell processors -- to China-headquartered entities even when routed through subsidiaries outside mainland China.",
+      "date": "2026-05-31",
+      "confirmed": false,
+      "source": "https://m.investing.com/news/stock-market-news/nvidia-and-amd-face-new-export-limits-on-china-subsidiaries-4717940?ampMode=1"
+    }
+  ],
+  "move_thesis": "NVDA has been trading on continued blowout AI-datacenter demand (Q1 FY27 revenue +85% YoY, Data Center +92% YoY) with the Aug 26, 2026 Q2 FY27 print (guided ~$91B, +/-2%) as the next major catalyst, plus the Vera Rubin production ramp underpinning the next leg of compute-capacity growth. Layered against that is rising US-China export-control uncertainty -- May 2026 Commerce guidance closing the offshore-subsidiary loophole and an August 2026 BIS review of Chinese firms' remote/rented access to Nvidia chips -- which could add regulatory headline volatility into the earnings print without yet showing up as a confirmed hit to guided revenue.",
+  "sources": [
+    {
+      "url": "https://nvidianews.nvidia.com/news/nvidia-sets-conference-call-for-second-quarter-financial-results-6927195",
+      "source_tier": "issuer_ir",
+      "published_at": "2026-07-29T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:20:00Z"
+    },
+    {
+      "url": "https://investor.nvidia.com/financial-info/financial-reports/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "IR financial-reports index page is undated; it displays NVIDIA's Q1 FY2027 results (originally issued May 20, 2026) without its own page-level timestamp.",
+      "retrieved_at_utc": "2026-08-15T17:16:00Z"
+    },
+    {
+      "url": "https://nvidianews.nvidia.com/news/vera-rubin-full-production-agentic-ai-factory",
+      "source_tier": "issuer_ir",
+      "published_at": "2026-05-31T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:32:00Z"
+    },
+    {
+      "url": "https://www.bloomberg.com/news/articles/2026-08-07/us-reviews-china-s-offshore-access-to-nvidia-chips-after-ai-breakthroughs",
+      "source_tier": "secondary",
+      "published_at": "2026-08-07T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:41:00Z"
+    },
+    {
+      "url": "https://m.investing.com/news/stock-market-news/nvidia-and-amd-face-new-export-limits-on-china-subsidiaries-4717940?ampMode=1",
+      "source_tier": "secondary",
+      "published_at": "2026-05-31T20:19:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:52:00Z"
+    }
+  ],
+  "claims": []
+}

@@ -1,0 +1,73 @@
+{
+  "symbol": "VST",
+  "news_summary": "Vistra reported mixed Q2 2026 results on Aug 7, 2026 (GAAP EPS missed consensus on a large unrealized hedge mark-to-market loss, but ongoing-operations adjusted EBITDA rose 31% year-over-year and full-year guidance was reaffirmed). The same week FERC approved Vistra's roughly $4 billion acquisition of Cogentrix's 5.5 GW gas fleet over market-monitor objections, and Vistra's Q2 release confirmed it is a founding, up-to-$1 billion power-partner investor in the newly launched KKR/NVIDIA-backed Helix Digital Infrastructure venture. Sell-side reaction to earnings was split, with some price targets raised and others cut.",
+  "sentiment": "neutral",
+  "catalysts": [
+    {
+      "id": "VST_Q2_2026_EARNINGS",
+      "what": "Vistra reported Q2 2026 results: GAAP net income $305M, EPS $0.76 (missed consensus, driven by a $472M/$488M unrealized mark-to-market loss on hedges), ongoing-operations adjusted EBITDA $1.767B (+31% YoY, vs $1.35B prior year). FY2026 guidance reaffirmed at $6.8B-$7.6B adjusted EBITDA and $3.925B-$4.725B adjusted free cash flow before growth.",
+      "date": "2026-08-07",
+      "confirmed": false,
+      "source": "https://www.prnewswire.com/news-releases/vistra-reports-second-quarter-2026-results-302845874.html"
+    },
+    {
+      "id": "VST_COGENTRIX_FERC_APPROVAL",
+      "what": "FERC approved Vistra's roughly $4B acquisition of Cogentrix Energy's 5.5 GW gas-fired fleet (case EC26-63) despite objections from the ISO-NE and PJM (Monitoring Analytics) market monitors over horizontal market power. The deal still needs DOJ Hart-Scott-Rodino clearance and state approvals before closing, expected in H2 2026.",
+      "date": "2026-08-06",
+      "confirmed": false,
+      "source": "https://www.rtoinsider.com/138538-ferc-approves-vistra-cogentrix-merger-despite-monitor-concerns/"
+    },
+    {
+      "id": "VST_HELIX_LAUNCH",
+      "what": "Vistra is a founding investor and preferred power provider in Helix Digital Infrastructure, a new AI-infrastructure venture launched with KKR, Kuwait Investment Authority and NVIDIA carrying $10B+ in long-duration committed capital; Vistra has committed up to $1.0 billion.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.prnewswire.com/news-releases/vistra-reports-second-quarter-2026-results-302845874.html"
+    },
+    {
+      "id": "PJM_BRA_NEXT",
+      "what": "PJM's next Base Residual Auction (capacity auction), for the 2029/2030 Delivery Year, is scheduled for December 2026 as PJM works toward returning to its three-year-forward planning cycle; exact offer-window and results-posting dates have not yet been published. Vistra sells generation capacity into PJM's capacity market.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/"
+    }
+  ],
+  "move_thesis": "VST has been trading on the intersection of AI/data-center power demand and PJM capacity-market pricing. Bull-case drivers: adjusted EBITDA up 31% YoY, reaffirmed 2026 guidance, FERC clearance of the ~$4B Cogentrix acquisition (expanding PJM/ISO-NE/ERCOT gas capacity), and a new up-to-$1B commitment to the KKR/NVIDIA-backed Helix digital-infrastructure venture. Near-term overhangs: the quarter's GAAP EPS miss (largely a hedge mark-to-market accounting effect rather than an operating shortfall), a split round of post-earnings analyst price-target moves (Scotiabank raised, Wells Fargo and BofA cut), and press narratives questioning how durable data-center-driven power demand growth is. PJM's December 2026 Base Residual Auction (2029/2030 delivery year) is a structural forward catalyst for capacity revenue.",
+  "sources": [
+    {
+      "url": "https://www.prnewswire.com/news-releases/vistra-reports-second-quarter-2026-results-302845874.html",
+      "source_tier": "secondary",
+      "published_at": "2026-08-07T07:00:00-04:00",
+      "retrieved_at_utc": "2026-08-15T17:25:00Z"
+    },
+    {
+      "url": "https://www.rtoinsider.com/138538-ferc-approves-vistra-cogentrix-merger-despite-monitor-concerns/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 6, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T17:40:00Z"
+    },
+    {
+      "url": "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/",
+      "source_tier": "market_operator",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page (PJM Inside Lines, a pjm.com subdomain) showed only a publish date (July 14, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T18:20:00Z"
+    },
+    {
+      "url": "https://www.pjm.com/markets-and-operations/rpm",
+      "source_tier": "market_operator",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Live capacity-market (RPM) information page with rolling updates to planning documents; no single publish timestamp is displayed.",
+      "retrieved_at_utc": "2026-08-15T18:22:00Z"
+    },
+    {
+      "url": "https://stockanalysis.com/stocks/vst/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Live market-data/news-aggregation page, not a single dated publication.",
+      "retrieved_at_utc": "2026-08-15T18:15:00Z"
+    }
+  ],
+  "claims": []
+}

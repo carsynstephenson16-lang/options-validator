@@ -1,0 +1,88 @@
+{
+  "symbol": "USAR",
+  "news_summary": "USA Rare Earth (USAR) reported Q2 2026 results on Aug 10, 2026: revenue of $5.82M (below the roughly $8M consensus) and an EPS loss of $0.15, with cash and equivalents near $1.53B; shares fell after the report on the sales miss. Despite the revenue shortfall, the quarter carried a run of strategic milestones: a definitive agreement to acquire Serra Verde Group (~$2.8B, expected to close around end of August 2026) that would make USAR a top global non-Chinese rare-earth producer; finalized definitive agreements with the U.S. Department of Commerce unlocking up to $1.6B in CHIPS Act-related funding ($277M grant + $1.3B loan capacity); a definitive strategic investment in France's Carester (announced July 23, 2026); and completion of USAR's all-stock merger with Texas Mineral Resources Corp, consolidating full ownership of the Round Top heavy rare earth project. Management said on the Q2 call it expects to complete the Round Top Definitive Feasibility Study in Q4 2026.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "usar-serra-verde-agreement",
+      "what": "Definitive agreement to acquire 100% of Serra Verde Group (Pela Ema rare-earth mine/processing plant, Brazil) for ~$2.8B equity value ($300M cash + 126.849M newly issued USAR shares); deal targeted to close Q3 2026, with the Q2 2026 earnings call indicating a goal of closing by end of August 2026.",
+      "date": "2026-04-20",
+      "confirmed": true,
+      "source": "https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-announces-definitive-agreement-acquire-serra"
+    },
+    {
+      "id": "usar-commerce-funding",
+      "what": "USA Rare Earth finalized definitive agreements with the U.S. Department of Commerce unlocking up to $1.6B in CHIPS Act-related funding: up to $277M in federal grant funding plus up to $1.3B in senior secured loan capacity, disbursed against project milestones.",
+      "date": "2026-06-03",
+      "confirmed": true,
+      "source": "https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-finalizes-definitive-agreements-us-department"
+    },
+    {
+      "id": "usar-carester-investment",
+      "what": "USA Rare Earth entered definitive agreements for a strategic investment in France's Carester, strengthening its European rare-earth partnership; Carester's Caremag facility is set to begin operations in Q4 2026.",
+      "date": "2026-07-23",
+      "confirmed": false,
+      "source": "https://www.stocktitan.net/news/USAR/usa-rare-earth-announces-date-for-release-of-second-quarter-2026-qj2h8v13ntzc.html"
+    },
+    {
+      "id": "usar-q2-2026-earnings",
+      "what": "USAR reported Q2 2026 revenue of $5.82M (vs. roughly $8M consensus) and EPS of -$0.15; cash and equivalents were about $1.53B as of June 30, 2026. Shares fell after the report on the revenue miss despite the string of operating milestones.",
+      "date": "2026-08-10",
+      "confirmed": false,
+      "source": "https://www.stocktitan.net/news/USAR/usa-rare-earth-reports-second-quarter-2026-financial-dfolsz2mzdvm.html"
+    },
+    {
+      "id": "usar-tmrc-merger-completed",
+      "what": "USA Rare Earth completed its previously announced all-stock merger with Texas Mineral Resources Corp (agreement originally signed March 4, 2026), eliminating TMRC's minority interest and giving USAR full ownership and sole operatorship of the Round Top heavy rare earth project in Texas; USAR shares rose roughly 7.5% on the news.",
+      "date": "2026-08-13",
+      "confirmed": false,
+      "source": "https://www.investing.com/news/sec-filings/usa-rare-earth-completes-merger-with-texas-mineral-resources-93CH-4861525"
+    },
+    {
+      "id": "usar-round-top-dfs",
+      "what": "Management said on the Q2 2026 earnings call that it expects to complete the Round Top Definitive Feasibility Study (DFS) in Q4 2026.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://www.stocktitan.net/news/USAR/usa-rare-earth-reports-second-quarter-2026-financial-dfolsz2mzdvm.html"
+    }
+  ],
+  "move_thesis": "USAR's near-term stock moves are being driven by execution on a fast-moving rare-earth/critical-minerals consolidation strategy (Serra Verde, Carester, Texas Mineral Resources) backed by large U.S. government funding commitments (DFC and Commerce/CHIPS Act), set against a still-small, earnings-miss-prone revenue base. Catalysts to watch are the Serra Verde deal close (targeted end of August 2026), the Round Top DFS (Q4 2026), and any further DoD/Commerce/DFC funding milestones, while the Q2 revenue and cash-burn miss is a reminder the operating business is still pre-scale.",
+  "sources": [
+    {
+      "url": "https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-announces-definitive-agreement-acquire-serra",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Search-indexed page title gives date/time as 'Mon, 04/20/2026 - 06:00' with no explicit UTC offset confirmed on the fetched content; time zone not independently verified.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-finalizes-definitive-agreements-us-department",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Search-indexed page title gives date/time as 'Wed, 06/03/2026 - 08:15' with no explicit UTC offset confirmed on the fetched content; time zone not independently verified.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://www.stocktitan.net/news/USAR/usa-rare-earth-announces-date-for-release-of-second-quarter-2026-qj2h8v13ntzc.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page states publication as 'August 6, 2026, 7:00 AM' with no explicit UTC offset shown in the retrieved content.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://www.stocktitan.net/news/USAR/usa-rare-earth-reports-second-quarter-2026-financial-dfolsz2mzdvm.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; article is dated August 10-11, 2026 per surrounding coverage but exact time/zone not independently confirmed.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://www.investing.com/news/sec-filings/usa-rare-earth-completes-merger-with-texas-mineral-resources-93CH-4861525",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page states 'Published 08/14/2026, 05:08 PM' with no explicit UTC offset shown in the retrieved content.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    }
+  ],
+  "claims": []
+}

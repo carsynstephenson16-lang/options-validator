@@ -1,0 +1,88 @@
+{
+  "symbol": "NBIS",
+  "news_summary": "Nebius Group (NBIS) reported Q2 2026 results on Aug 12, 2026: revenue of $582.3M and EPS of -$0.12, alongside $236M of positive adjusted EBITDA; management raised 2026 capex guidance to $20-25B (from $16-20B) and reiterated full-year targets of $7-9B ARR, $3-3.4B group revenue, and roughly 40% adjusted EBITDA margin, citing more than 3.5GW of contracted power and a target of at least 4GW by year-end. The company continues building out its AI-cloud/inference stack: it achieved NVIDIA 'Exemplar Cloud' validation on GB300 NVL72 for training in April 2026 alongside a $2B NVIDIA strategic investment, and closed the Clarifai team/IP licensing deal on May 12, 2026 following the earlier Tavily and Eigen AI acquisitions, aimed at building a vertically integrated 'Token Factory' inference platform. Nebius is also advancing a second U.S. gigawatt-scale site: a 1.2GW AI-factory campus at Highridge Business Park in Schuylkill County, Pennsylvania (roughly 600 acres, phased from 260MW in October 2027 toward 1GW+ by late 2029), alongside its existing Missouri campus. The next earnings call is scheduled for around Nov 10, 2026.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "nbis-q2-2026-earnings",
+      "what": "Nebius reported Q2 2026 revenue of $582.3M and EPS of -$0.12, with $236M of positive adjusted EBITDA; raised FY2026 capex guidance to $20-25B and reiterated ARR target of $7-9B, group revenue of $3-3.4B, and roughly 40% adjusted EBITDA margin.",
+      "date": "2026-08-12",
+      "confirmed": true,
+      "source": "https://nebius.com/newsroom/nebius-reports-second-quarter-2026-financial-results"
+    },
+    {
+      "id": "nbis-nvidia-gb300-exemplar",
+      "what": "Nebius achieved NVIDIA 'Exemplar Cloud' status on NVIDIA GB300 NVL72 for training workloads (meeting the 95% performance threshold across NVIDIA's reference benchmarking recipes), part of a broader relationship that includes a $2B strategic investment from NVIDIA.",
+      "date": "2026-04-29",
+      "confirmed": true,
+      "source": "https://nebius.com/blog/posts/nebius-achieves-nvidia-exemplar-cloud-on-nvidia-gb300-for-training"
+    },
+    {
+      "id": "nbis-clarifai-deal",
+      "what": "Nebius brought in Clarifai's core engineering/research team (led by founder/CEO Matthew Zeiler, joining as SVP of Research) and licensed Clarifai's inference and compute-orchestration technology and patents on a non-exclusive, perpetual basis (excludes legacy computer-vision and government/defense IP); financial terms were not disclosed.",
+      "date": "2026-05-12",
+      "confirmed": true,
+      "source": "https://nebius.com/newsroom/nebius-welcomes-clarifai-s-core-team-and-licenses-inference-ip-to-strengthen-nebius-token-factory"
+    },
+    {
+      "id": "nbis-pennsylvania-campus",
+      "what": "Nebius detailed a 1.2GW, roughly 600-acre AI-factory data center campus at Highridge Business Park, Butler Township, Schuylkill County, PA (its second U.S. gigawatt-scale site after Missouri), with an initial 260MW phase targeted for October 2027 and full buildout (1GW+) by late 2029; a community open house was held Aug 6, 2026.",
+      "date": "2026-08-06",
+      "confirmed": false,
+      "source": "https://www.datacenterdynamics.com/en/news/nebius-details-plans-for-12gw-data-center-campus-in-pennsylvania/"
+    },
+    {
+      "id": "nbis-eigen-ai-acquisition",
+      "what": "Nebius acquired Eigen AI, recognized by NVIDIA as a top speed-inference provider, for approximately $643M, adding model-level inference optimization to its Token Factory stack.",
+      "date": "2026-05-01",
+      "confirmed": false,
+      "source": "https://finance.yahoo.com/sectors/technology/articles/acquisitions-strengthening-nebius-ai-cloud-140100500.html"
+    }
+  ],
+  "move_thesis": "NBIS's re-rating is being driven by demonstrated hyperscale AI-infrastructure execution -- triple-digit revenue growth, NVIDIA GB300 performance validation, a second U.S. gigawatt-scale campus in Pennsylvania, and a string of inference-stack acquisitions (Tavily, Eigen AI, Clarifai) -- set against a sharply higher capex plan ($20-25B for 2026) that raises funding and execution risk. The next checkpoints are delivery against the raised ARR/EBITDA targets and the Q3 call expected around Nov 10, 2026.",
+  "sources": [
+    {
+      "url": "https://nebius.com/newsroom/nebius-reports-second-quarter-2026-financial-results",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page confirms the release date as August 12, 2026 and references an 8:00 a.m. Eastern Time webcast, but does not give an explicit UTC offset for the release timestamp itself.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://nebius.com/blog/posts/nebius-achieves-nvidia-exemplar-cloud-on-nvidia-gb300-for-training",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page confirms the publication date as April 29, 2026 but does not display a time-of-day or UTC offset.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://nebius.com/newsroom/nebius-welcomes-clarifai-s-core-team-and-licenses-inference-ip-to-strengthen-nebius-token-factory",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page confirms the publication date as May 12, 2026 but does not display a time-of-day or UTC offset.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://nebius.com/schuylkillcountypa",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Issuer project page carries no dateline; content describes the campus plan as of the retrieval date.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://www.datacenterdynamics.com/en/news/nebius-details-plans-for-12gw-data-center-campus-in-pennsylvania/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; coverage places the article in early August 2026 around the Aug 6 community open house.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://finance.yahoo.com/sectors/technology/articles/acquisitions-strengthening-nebius-ai-cloud-140100500.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    }
+  ],
+  "claims": []
+}

@@ -1,0 +1,88 @@
+{
+  "symbol": "TEM",
+  "news_summary": "Tempus AI reported Q2 2026 results on July 30, 2026: revenue $382.5M (+22% YoY), gross profit $246.5M (+26%), and its first quarterly GAAP profit -- net income of $5.6M (which included $98.5M of unrealized gains on marketable securities and $55.6M of stock-comp/payroll-tax expense) versus a $42.8M net loss a year earlier; adjusted EBITDA was $8.0M versus -$5.6M in Q2 2025. Oncology diagnostics volume grew 31% and data-licensing revenue grew 36%, with Data and Applications revenue up 28% YoY. Tempus raised FY2026 revenue guidance to $1.595-1.605B (~25% growth), guided Q3 2026 revenue to $405-410M, and reaffirmed roughly $65M of adjusted EBITDA for the year (guidance excludes any Personalis impact). The company also completed a $460M zero-coupon convertible notes offering, secured FDA approval for its tumor-only xT CDx companion-diagnostic assay, and delivered its first oncology foundation model to AstraZeneca. Strategically, Tempus announced a definitive agreement on July 20, 2026 to acquire genomics/MRD company Personalis for about $1.5B (Personalis holders get $16.25/share, ~28% premium to unaffected 30-day VWAP, structured as up to 100% stock with an option for Tempus to pay up to 50% in cash), opening access to the roughly $20B minimal-residual-disease oncology monitoring market; closing is expected late 2026 or early 2027 subject to Personalis shareholder and regulatory approval. The market's initial reaction to the deal was negative -- both TEM and PSNL shares fell (TEM down roughly 4-6.9%) on dilution, valuation-multiple, and execution concerns, and a shareholder-rights firm is reviewing whether Tempus's pre-existing ~12.5% stake in and partnership with Personalis created a conflict of interest that disadvantaged PSNL holders in the deal terms. Elsewhere, Tempus's oncology AI/data business kept generating news: it announced a strategic lab partnership with CellCarta around Aug 6, 2026, and shares surged over 10% on Aug 7, 2026 amid a broader AI-healthcare sector rally sparked by strong Doximity earnings. Despite the operational momentum, Piper Sandler and H.C. Wainwright both cut price targets in early August (to $56, from $58 and $64 respectively), and TEM shares have fallen sharply from a 52-week high of $104.32 to roughly $52-54 by mid-August 2026.",
+  "sentiment": "neutral",
+  "catalysts": [
+    {
+      "id": "q2-2026-earnings-first-gaap-profit",
+      "what": "Q2 2026 revenue of $382.5M (+22% YoY) with Tempus's first quarterly GAAP profit ($5.6M net income vs a $42.8M loss a year earlier); FY2026 revenue guidance raised to $1.595-1.605B and Q3 2026 guided to $405-410M",
+      "date": "2026-07-30",
+      "confirmed": false,
+      "source": "https://www.theglobeandmail.com/investing/markets/stocks/TEM/pressreleases/3585894/tempus-ai-posts-strong-q2-results-raises-2026-outlook/"
+    },
+    {
+      "id": "personalis-acquisition-1-5b",
+      "what": "Tempus signed a definitive agreement to acquire genomics/MRD company Personalis for approximately $1.5B ($16.25/share, ~28% premium to unaffected 30-day VWAP; up to 100% stock with an option for Tempus to pay up to 50% in cash), expanding into the ~$20B minimal-residual-disease oncology market, with closing expected late 2026 or early 2027",
+      "date": "2026-07-20",
+      "confirmed": false,
+      "source": "https://www.businesswire.com/news/home/20260720857328/en/Tempus-to-Acquire-Personalis-More-Tightly-Integrating-Molecular-Residual-Disease-MRD-into-Its-AI-Enabled-Precision-Oncology-Platform"
+    },
+    {
+      "id": "prism2-nature-medicine-publication",
+      "what": "Tempus published results in Nature Medicine for its PRISM2 multimodal pathology foundation model (developed with Microsoft researchers), demonstrating diagnostic-grade performance for cancer detection and broader applications predicting biomarker status and patient prognosis",
+      "date": null,
+      "confirmed": false,
+      "source": "https://investors.tempus.com/news-releases/news-release-details/tempus-study-published-nature-medicine-demonstrates-best-class"
+    },
+    {
+      "id": "cellcarta-partnership-and-rally",
+      "what": "Tempus was added to CellCarta's CDx Commercialization Lab Network as its second commercial laboratory partner (announced around Aug 6, 2026); shares then surged over 10% on Aug 7, 2026 amid a broader AI-healthcare sector rally driven by strong Doximity earnings",
+      "date": "2026-08-06",
+      "confirmed": false,
+      "source": "https://www.benzinga.com/trading-ideas/movers/26/08/61052166/why-is-tempus-ai-stock-surging-on-friday"
+    },
+    {
+      "id": "analyst-price-target-cuts-early-august",
+      "what": "Piper Sandler cut its Tempus price target to $56 from $58, and H.C. Wainwright cut to $56 from $64, in early August 2026, despite the Q2 beat and Personalis deal news",
+      "date": null,
+      "confirmed": false,
+      "source": "https://stockstotrade.com/news/tempusaiinc-tem-news-2026_08_08/"
+    }
+  ],
+  "move_thesis": "Bull case: Q2 2026 showed accelerating core-business momentum (22% revenue growth, 31% oncology-diagnostics volume growth, 36% data-licensing growth) and Tempus's first quarterly GAAP profit, plus continued platform validation (FDA approval for the xT CDx companion diagnostic, an AstraZeneca foundation-model delivery, and peer-reviewed Nature Medicine results for PRISM2) and a roughly $20B new addressable market opened by the pending Personalis MRD acquisition. A sector-wide AI-healthcare rally (Doximity earnings, the new CellCarta lab partnership) drove an 11%+ single-day pop on Aug 7. Bear case: the market's initial read on the $1.5B Personalis deal was negative -- both TEM and PSNL fell on dilution, a rich valuation multiple (~15.5x estimated 2027 EV/sales per one analyst), and execution concerns, plus a shareholder-rights review into whether Tempus's pre-existing PSNL stake created a conflict of interest in setting deal terms. Multiple analysts (Piper Sandler, H.C. Wainwright) cut price targets even after the earnings beat, and the stock has fallen from a 52-week high of $104.32 to roughly $52-54 by mid-August 2026 -- a decline that has outpaced the operational improvement, suggesting the market is discounting dilution/execution risk on the acquisition and the fact that profitability remains thin on an adjusted-EBITDA basis (~$8M against $382.5M of revenue).",
+  "sources": [
+    {
+      "url": "https://investors.tempus.com/news-releases/news-release-details/tempus-reports-second-quarter-2026-results",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Direct WebFetch of this IR page timed out during this session; URL and headline content were confirmed live via search retrieval, but no page timestamp was captured.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.theglobeandmail.com/investing/markets/stocks/TEM/pressreleases/3585894/tempus-ai-posts-strong-q2-results-raises-2026-outlook/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Wire-syndicated press-release reprint; no explicit publish timestamp shown in fetched content beyond the 2026-07-30 report date referenced throughout.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.businesswire.com/news/home/20260720857328/en/Tempus-to-Acquire-Personalis-More-Tightly-Integrating-Molecular-Residual-Disease-MRD-into-Its-AI-Enabled-Precision-Oncology-Platform",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Direct WebFetch of this wire release timed out during this session; URL and content were confirmed live via search retrieval, but no page timestamp was captured.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://investors.tempus.com/news-releases/news-release-details/tempus-study-published-nature-medicine-demonstrates-best-class",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Direct WebFetch of this IR page timed out during this session; exact publication date is unconfirmed (search coverage places related coverage in early August 2026 but a same-titled fetch of a related release returned May 29, 2026 ASCO content instead).",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://www.benzinga.com/trading-ideas/movers/26/08/61052166/why-is-tempus-ai-stock-surging-on-friday",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Direct WebFetch returned HTTP 403; content confirmed live via search retrieval, no page timestamp captured.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    },
+    {
+      "url": "https://stockstotrade.com/news/tempusaiinc-tem-news-2026_08_08/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-08 publication; exact time-of-day not captured in retrieved content.",
+      "retrieved_at_utc": "2026-08-15T17:30:00Z"
+    }
+  ],
+  "claims": []
+}

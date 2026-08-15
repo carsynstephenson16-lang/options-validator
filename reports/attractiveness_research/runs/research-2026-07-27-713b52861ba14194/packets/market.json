@@ -1,0 +1,46 @@
+{
+  "market": {
+    "summary": "As of the last close (Friday, Aug 14, 2026), the S&P 500 sits near a fresh record (closed 7,785.76, -0.17% on the day) after topping 7,800 intraday on Aug 13; the index still posted a third straight weekly gain. Nasdaq Composite closed 26,729.16 (-0.28%) and the Dow closed 53,732.41 (-0.20%). The VIX is low at 14.25 (down 2.6% on the day), signaling low near-term fear, but the 10-year Treasury yield rose to 4.67% (+5bp) alongside firmer oil prices. Friday's pullback followed weaker-than-expected data: University of Michigan preliminary August consumer sentiment fell to 51 (from 55.2, below the 55 forecast) and July retail sales dropped 0.6% m/m, the steepest drop in over a year. The AI trade tone remains constructive but is consolidating into Nvidia's Aug 26 earnings report; commentary highlights hyperscaler AI-capex financing needs (including growing use of private investment-grade debt) as a structural driver for long-duration yields, which is directly relevant to power/AI-infrastructure names. Markets broadly expect the Fed to hold rates steady at the September FOMC meeting.",
+    "regime": "mixed",
+    "notes": [
+      "Key dates in the next ~6 weeks from today (2026-08-15)",
+      "Jackson Hole Economic Policy Symposium, Aug 27-29, 2026, hosted by the Kansas City Fed at Jackson Lake Lodge, theme 'Financial Innovation: Implications for Payments and Policy'; Fed Chair Kevin Warsh delivers the keynote Friday morning Aug 28 (his first Jackson Hole address as chair) -- historically the most market-moving event of the symposium",
+      "Nvidia Q2 FY27 earnings, Aug 26, 2026 -- a direct read on AI-infrastructure demand and capex, relevant to the VST/CEG/MSFT/AMZN power-and-AI anchor names",
+      "CPI report for August 2026 data, released Sep 11, 2026, 8:30am ET (BLS)",
+      "Next FOMC meeting, Sep 15-16, 2026, includes a Summary of Economic Projections (dot plot); the prior meeting (Jul 28-29, 2026) held the target range at 3.5%-3.75%",
+      "CPI report for September 2026 data, released Oct 14, 2026",
+      "Following FOMC meeting, Oct 27-28, 2026 (just past the 6-week window but flagged for continuity). Any of these can move rates, VIX, and AI-name volatility premia sharply around their dates"
+    ]
+  },
+  "symbols": {},
+  "market_sources": [
+    {
+      "url": "https://finance.yahoo.com/markets/live/stock-market-today-friday-august-14-dow-sp-500-nasdaq-102635519.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Yahoo Finance live market-recap blog page has no visible per-article byline timestamp in the fetched content; the page content is dated to the Aug 14, 2026 session by its URL slug and body text only.",
+      "retrieved_at_utc": "2026-08-15T17:15:40Z"
+    },
+    {
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "source_tier": "regulator",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Federal Reserve meeting-calendar page is a continuously maintained reference page with no per-page publication timestamp; dates are the Committee's own tentative 2026 schedule as currently posted.",
+      "retrieved_at_utc": "2026-08-15T17:13:20Z"
+    },
+    {
+      "url": "https://www.financecalendar.com/event/jackson-hole-economic-symposium-2026/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Event-calendar listing page carries no visible publication or last-updated timestamp in the fetched content.",
+      "retrieved_at_utc": "2026-08-15T17:16:05Z"
+    },
+    {
+      "url": "https://www.usinflationcalculator.com/inflation/consumer-price-index-release-schedule/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Two direct attempts to fetch the official BLS CPI schedule pages (bls.gov/cpi/ and bls.gov/news.release/cpi.nr0.htm) both returned HTTP 403; this secondary page mirrors the same BLS-published schedule (Aug 2026 data on Sep 11, Sep 2026 data on Oct 14) and has no visible per-page timestamp itself.",
+      "retrieved_at_utc": "2026-08-15T17:18:10Z"
+    }
+  ]
+}

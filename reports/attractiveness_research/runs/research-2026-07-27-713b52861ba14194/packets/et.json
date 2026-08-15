@@ -1,0 +1,74 @@
+{
+  "symbol": "ET",
+  "news_summary": "Energy Transfer posted a large Q2 2026 earnings and EBITDA beat on Aug 4, 2026, driven by data-center and power-generation natural-gas demand, and raised full-year adjusted EBITDA guidance to $18.8B-$19.1B (from $18.2B-$18.6B). Alongside earnings the partnership announced its 19th consecutive quarterly distribution increase to $0.34/unit and, in June 2026, a fully-subscribed expansion of its Nederland NGL export terminal with ethane volumes contracted into the 2040s. Separately, Shell and Phillips 66 are reportedly exploring a sale of their combined Explorer Pipeline stake (~$3.5B valuation); Energy Transfer holds a minority stake and could potentially join a sale, though no deal is confirmed.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "ET_Q2_2026_EARNINGS",
+      "what": "Energy Transfer reported Q2 2026 results: EPS $0.59 (vs ~$0.37-$0.38 consensus), adjusted EBITDA $5.07B (+31% YoY from $3.87B), distributable cash flow to partners +32% YoY to $2.59B. Raised FY2026 adjusted EBITDA guidance to $18.8B-$19.1B from $18.2B-$18.6B, citing growing data-center and power-generation gas demand.",
+      "date": "2026-08-04",
+      "confirmed": false,
+      "source": "https://247wallst.com/cards/energy-transfer-lp-q2-2026-earnings-et-01kz69jq8yjrpk4gajxxvdye1m"
+    },
+    {
+      "id": "ET_DISTRIBUTION_INCREASE",
+      "what": "Energy Transfer announced its 19th consecutive quarterly distribution increase, to $0.34 per common unit ($1.36 annualized, up more than 3% YoY), payable Aug 19, 2026 to unitholders of record as of Aug 7, 2026.",
+      "date": "2026-07-27",
+      "confirmed": false,
+      "source": "https://www.stocktitan.net/news/ET/energy-transfer-announces-nineteenth-consecutive-increase-in-o1bwt4wepjrn.html"
+    },
+    {
+      "id": "ET_NEDERLAND_EXPANSION",
+      "what": "Energy Transfer announced a fully-subscribed expansion of its Nederland NGL export terminal (Port Neches, TX): +240,000 bpd ethane and +55,000 bpd LPG export capacity, with 100% of the added ethane capacity committed under long-term contracts running into the 2040s; staged in-service beginning 2028, with additional ship docks completing mid-2029.",
+      "date": "2026-06-18",
+      "confirmed": false,
+      "source": "https://www.hydrocarbonengineering.com/tanks-terminals/29062026/energy-transfer-announces-export-expansion-project/"
+    },
+    {
+      "id": "ET_EXPLORER_PIPELINE_STAKE_TALKS",
+      "what": "Shell and Phillips 66 are reportedly weighing a sale of their combined ~61% stake in the Explorer refined-products pipeline (~$3.5B valuation), with Greenhill and RBC Capital Markets retained to run an auction. Energy Transfer and MPLX hold the remaining stake and could potentially contribute their holdings if buyer interest is strong; sources caution the process is early-stage with no guarantee of a deal.",
+      "date": null,
+      "confirmed": false,
+      "source": "https://pgjonline.com/news/2026/july/shell-phillips-66-weigh-sale-of-stakes-in-35-billion-us-pipeline-explorer-sources-say"
+    }
+  ],
+  "move_thesis": "ET has been moving on data-center and power-generation-driven natural gas demand flowing directly into results: the large Q2 EPS/EBITDA beat and a further full-year EBITDA guidance raise (the second raise so far in 2026, per prior guidance updates referenced in coverage) reflect that trend, reinforced by a 19th consecutive quarterly distribution increase and a fully-subscribed, multi-decade-contracted Nederland NGL export expansion that locks in ethane demand growth. A speculative near-term catalyst is the reported Shell/Phillips 66 exploration of a sale of Explorer Pipeline stakes, in which ET holds a minority interest and could potentially participate -- unconfirmed and described as early-stage as of late July 2026.",
+  "sources": [
+    {
+      "url": "https://247wallst.com/cards/energy-transfer-lp-q2-2026-earnings-et-01kz69jq8yjrpk4gajxxvdye1m",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 4, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T17:50:00Z"
+    },
+    {
+      "url": "https://www.stocktitan.net/news/ET/energy-transfer-announces-nineteenth-consecutive-increase-in-o1bwt4wepjrn.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (July 27, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T18:25:00Z"
+    },
+    {
+      "url": "https://www.hydrocarbonengineering.com/tanks-terminals/29062026/energy-transfer-announces-export-expansion-project/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (Monday, 29 June 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T18:30:00Z"
+    },
+    {
+      "url": "https://pgjonline.com/news/2026/july/shell-phillips-66-weigh-sale-of-stakes-in-35-billion-us-pipeline-explorer-sources-say",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (July 29, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T18:12:00Z"
+    },
+    {
+      "url": "https://finance.yahoo.com/energy/articles/energy-transfer-announces-second-quarter-170000831.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (June 30, 2026) with no time-of-day.",
+      "retrieved_at_utc": "2026-08-15T17:48:00Z"
+    }
+  ],
+  "claims": []
+}

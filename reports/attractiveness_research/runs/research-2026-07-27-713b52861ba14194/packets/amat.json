@@ -1,0 +1,74 @@
+{
+  "symbol": "AMAT",
+  "news_summary": "Applied Materials (AMAT) reported record fiscal Q3 2026 results after market close on Aug 13, 2026: revenue of $9.115B (+25% YoY), GAAP EPS of $3.17, and record non-GAAP EPS of $3.50, with non-GAAP operating margin of 34.0%. The company guided fiscal Q4 2026 revenue to $10.25B (plus or minus $500M) and non-GAAP EPS to $4.02 (plus or minus $0.20), both well above prior Street estimates (roughly $9.62B consensus), citing accelerating AI-driven demand for DRAM, leading-edge logic, and advanced packaging. China's share of AMAT revenue continues to shrink (to 28% from 35%) as the U.S. share nearly doubles, reducing but not eliminating exposure to U.S. export-control risk on chipmaking-equipment sales to China; CEO Gary Dickerson said the company is 'further raising' its calendar-2026 Semiconductor Systems revenue outlook. AMAT's EPIC Center partnership program now spans 11 engagements with chipmakers and universities. The next scheduled earnings date (fiscal Q4 2026) is expected around Nov 12, 2026 per company investor materials, though that date is currently listed as 'projected' pending a formal dedicated announcement (as was issued for the Q3 date on July 23, 2026).",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "amat-q3-fy2026-earnings",
+      "what": "AMAT reported record fiscal Q3 2026 revenue of $9.115B (+25% YoY), GAAP EPS of $3.17, and record non-GAAP EPS of $3.50 (above the roughly $3.36-3.38 guided/consensus midpoint), with non-GAAP operating margin of 34.0%.",
+      "date": "2026-08-13",
+      "confirmed": false,
+      "source": "https://www.barchart.com/story/news/3837919/applied-materials-announces-third-quarter-2026-results"
+    },
+    {
+      "id": "amat-q4-fy2026-guidance",
+      "what": "Applied Materials guided fiscal Q4 2026 revenue to $10.25B (plus or minus $500M) and non-GAAP EPS to $4.02 (plus or minus $0.20), well above the prior roughly $9.62B Street consensus, implying continued sequential acceleration into fiscal Q4.",
+      "date": "2026-08-13",
+      "confirmed": false,
+      "source": "https://www.barchart.com/story/news/3837919/applied-materials-announces-third-quarter-2026-results"
+    },
+    {
+      "id": "amat-china-exposure-decline",
+      "what": "AMAT's China revenue share eased to 28% (from 35%) while U.S. revenue share nearly doubled in the quarter, reducing relative exposure to U.S.-China chip-equipment export controls even as total company revenue climbed to a record; Semiconductor Systems segment margin expanded to 38.0% from 33.2%.",
+      "date": "2026-08-13",
+      "confirmed": false,
+      "source": "https://247wallst.com/cards/applied-materials-q3-2026-earnings-amat-01kzybvthd5qqamwrtqk59k25x"
+    },
+    {
+      "id": "amat-epic-center-expansion",
+      "what": "Applied Materials' EPIC Center partnership program, which collaborates with chipmakers and universities to accelerate AI-related technology commercialization, now totals 11 engagements.",
+      "date": "2026-08-13",
+      "confirmed": false,
+      "source": "https://www.barchart.com/story/news/3837919/applied-materials-announces-third-quarter-2026-results"
+    },
+    {
+      "id": "amat-next-earnings-date",
+      "what": "Applied Materials' fiscal Q4 2026 earnings call is listed in company investor materials as projected for Nov 12, 2026, pending a formal dedicated announcement of the kind issued for the Q3 date on July 23, 2026.",
+      "date": "2026-11-12",
+      "confirmed": false,
+      "source": "https://www.stocktitan.net/news/AMAT/applied-materials-to-report-fiscal-third-quarter-2026-results-on-aug-rksf3xoilh6u.html"
+    }
+  ],
+  "move_thesis": "AMAT's move is being driven by a much stronger-than-guided Q3 print and an above-consensus Q4 outlook, both attributed by management to accelerating AI-driven semiconductor capital spending (DRAM, leading-edge logic, advanced packaging) that is outweighing the continued, but now smaller, drag from U.S. export controls on China sales (China revenue share down to 28% from 35%). The next checkpoint is the projected Nov 12, 2026 fiscal Q4 report and any incremental China export-policy news.",
+  "sources": [
+    {
+      "url": "https://www.barchart.com/story/news/3837919/applied-materials-announces-third-quarter-2026-results",
+      "source_tier": "secondary",
+      "published_at": "2026-08-13T15:01:00-05:00",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://247wallst.com/cards/applied-materials-q3-2026-earnings-amat-01kzybvthd5qqamwrtqk59k25x",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; article covers the Aug 13, 2026 earnings report.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://www.stocktitan.net/news/AMAT/applied-materials-to-report-fiscal-third-quarter-2026-results-on-aug-rksf3xoilh6u.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched page states publication as 'July 23, 2026 at 7:30 AM' with no explicit UTC offset shown in the retrieved content.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    },
+    {
+      "url": "https://blockonomi.com/applied-materials-amat-earnings-preview-q3-results-due-thursday-august-13/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; article is a pre-earnings preview published ahead of the Aug 13, 2026 report.",
+      "retrieved_at_utc": "2026-08-15T17:26:37Z"
+    }
+  ],
+  "claims": []
+}
