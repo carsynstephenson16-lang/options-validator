@@ -15,7 +15,7 @@ import os
 import re
 import subprocess
 from dataclasses import dataclass, field, fields, is_dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -25,6 +25,7 @@ import config
 from options_researcher.a2_battery import (
     LANE_ARMS,
     A2Outcome,
+    A2VariantSummary,
     staggered_descriptive_rows,
     summarize_lane,
 )
@@ -44,6 +45,11 @@ REGISTRATION_RECORD_HASH = "684b59a2bf322a96ae375cd7b857706775eea2b971ffc456a4b0
 PIN_FACT_TOKEN = "RQ2_A2_PIN_ADDENDUM_V1"
 ENTRY_CONVENTION_FACT_TOKEN = "A2_ENTRY_CONVENTION_ADDENDUM_V1"
 ENTRY_CONVENTION_REPORT = "reports/2026-08-15-a2-entry-convention-validation.md"
+ENTRY_CONVENTION_FACT_PAYLOAD = (
+    "A2_ENTRY_CONVENTION_ADDENDUM_V1 owner-approved 2026-08-15 "
+    "source=reports/2026-08-15-a2-entry-convention-validation.md "
+    "status=historical-entry-convention-complete research-only=no-verdict"
+)
 UNSUPPORTED_FORWARD_FIELDS = (
     "forward_dates",
     "forward_adverse_gate_adjudication",
@@ -68,6 +74,7 @@ class CachePaths:
     rates: Path
     earnings: Path
     positions: Path
+    fomc: Path
 
     @classmethod
     def from_overrides(cls, **overrides: str | Path | None) -> "CachePaths":
@@ -78,7 +85,11 @@ class CachePaths:
             "rates": Path("data/rates"),
             "earnings": Path("data/earnings/gating_v3.csv"),
             "positions": Path(".cache/positions"),
+            "fomc": Path(".cache/fomc/fomc_pit.csv"),
         }
+        for name, value in overrides.items():
+            if value is not None and not Path(value).expanduser().is_absolute():
+                raise ValueError(f"A2 {name} override must be an absolute path")
         paths = {
             name: Path(overrides.get(name) or default).expanduser().resolve()
             for name, default in defaults.items()
@@ -93,6 +104,7 @@ class CachePaths:
             self.rates,
             self.earnings,
             self.positions,
+            self.fomc,
         )
 
 
@@ -102,11 +114,12 @@ class A2LocalInputs:
     chains: Mapping[str, Mapping[str, pd.DataFrame]]
     raw_closes: Mapping[str, Mapping[str, float]]
     adjusted_closes: Mapping[str, Mapping[str, float]]
-    features: Mapping[str, Any] = field(default_factory=dict)
+    features: Mapping[str, pd.DataFrame] = field(default_factory=dict)
     rates: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
     earnings_assertions: Mapping[str, Sequence[str]] = field(default_factory=dict)
     earnings_records: Mapping[str, Sequence[Mapping[str, object]]] = field(default_factory=dict)
     fomc_events: Sequence[object] | None = None
+    feature_as_of: dict[str, str] = field(default_factory=dict)
     positions: Mapping[str, object] = field(default_factory=dict)
     outcomes: tuple[A2Outcome, ...] | None = None
     diagnostics: A2Diagnostics | None = None
@@ -130,6 +143,28 @@ def _report_digest(report: Mapping[str, object]) -> str:
     body = dict(report)
     body.pop("report_sha256", None)
     return sha256_hex(canonical_json(_json_safe(body)))
+
+
+def _validate_audit(audit: A2AuditResult) -> None:
+    if set(audit.checks) != set(range(1, 15)):
+        raise A2RunnerError("A2 audit must contain exactly fourteen checks")
+
+
+def _validate_realism(
+    realism_grade: str | None, realism_receipt: str | Path | None
+) -> tuple[str, str]:
+    if not isinstance(realism_grade, str) or not realism_grade.strip():
+        raise A2RunnerError("reviewed realism grade is required")
+    if realism_receipt is None or not str(realism_receipt).strip():
+        raise A2RunnerError("reviewed realism receipt is required")
+    receipt = Path(realism_receipt)
+    if receipt.is_absolute() and receipt.exists():
+        receipt_hash = sha256_file(receipt)
+    elif isinstance(realism_receipt, Path):
+        raise A2RunnerError(f"reviewed realism receipt is unavailable: {receipt}")
+    else:
+        receipt_hash = sha256_hex(str(realism_receipt))
+    return realism_grade.strip(), receipt_hash
 
 
 def validate_report(report: Mapping[str, object]) -> None:
@@ -160,8 +195,18 @@ def validate_report(report: Mapping[str, object]) -> None:
         raise OneRunError("A2 report does not contain every registered lane/arm")
     if not isinstance(report.get("lane_statuses"), Mapping):
         raise OneRunError("A2 report lane statuses are missing")
-    if not isinstance(report.get("provenance"), Mapping):
+    provenance = report.get("provenance")
+    if not isinstance(provenance, Mapping):
         raise OneRunError("A2 report provenance is missing")
+    audit = report.get("audit")
+    if not isinstance(audit, Mapping) or set(audit.get("checks", {})) != {
+        str(i) for i in range(1, 15)
+    }:
+        raise OneRunError("A2 report audit checks are not exactly 1..14")
+    if provenance.get("realism_grade") in (None, "UNASSESSED") or not provenance.get(
+        "realism_receipt_sha256"
+    ):
+        raise OneRunError("A2 report lacks reviewed realism provenance")
     recorded = report.get("report_sha256")
     if not isinstance(recorded, str) or recorded != _report_digest(report):
         raise OneRunError("A2 report hash does not match its immutable content")
@@ -200,11 +245,19 @@ def validate_governance(
         lines = facts.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as exc:
         raise A2RunnerError("A2 facts log is unavailable") from exc
-    if not any(PIN_FACT_TOKEN in line for line in lines):
-        raise A2RunnerError(f"A2 prerequisite fact {PIN_FACT_TOKEN} is missing")
+    payloads = []
+    for line in lines:
+        timestamp, separator, payload = line.partition("\t")
+        if not separator or not timestamp.strip() or not payload.strip():
+            continue
+        payloads.append(payload.rstrip("\n"))
     if not any(
-        ENTRY_CONVENTION_FACT_TOKEN in line and ENTRY_CONVENTION_REPORT in line for line in lines
+        payload.startswith(PIN_FACT_TOKEN + " ")
+        and "source=reports/2026-07-23-pin-addendum-validation.md" in payload
+        for payload in payloads
     ):
+        raise A2RunnerError(f"A2 prerequisite fact {PIN_FACT_TOKEN} is missing")
+    if ENTRY_CONVENTION_FACT_PAYLOAD not in payloads:
         raise A2RunnerError("owner-approved A2 entry-convention fact is missing")
     return {
         "registration_seq": REGISTRATION_SEQ,
@@ -314,16 +367,40 @@ def build_report(
     governance: Mapping[str, object],
     provenance: Mapping[str, object],
     diagnostics: A2Diagnostics | None = None,
+    realism_grade: str | None = None,
+    realism_receipt: str | Path | None = None,
 ) -> dict[str, object]:
+    _validate_audit(audit)
     if audit.verdict == "BLOCK":
         raise A2RunnerError("A2 data audit BLOCK prevents report assembly")
+    grade, receipt_hash = _validate_realism(realism_grade, realism_receipt)
     variants: list[dict[str, object]] = []
     lane_statuses: dict[str, object] = {}
     for lane, arms in LANE_ARMS.items():
         lane_variants: list[dict[str, object]] = []
+        first_pass: dict[
+            str,
+            tuple[
+                tuple[A2Outcome, ...], tuple[A2Outcome, ...], dict[str, object], A2VariantSummary
+            ],
+        ] = {}
         for arm in arms:
             inference, descriptive, exclusions = _variant_rows(outcomes, signals, lane, arm)
             summary = summarize_lane(inference, lane=lane, arm=arm)
+            first_pass[arm] = (inference, descriptive, exclusions, summary)
+        family = {
+            arm: item[3].raw_p_value
+            for arm, item in first_pass.items()
+            if item[3].raw_p_value is not None
+        }
+        for arm in arms:
+            inference, descriptive, exclusions, _summary = first_pass[arm]
+            summary = summarize_lane(
+                inference,
+                lane=lane,
+                arm=arm,
+                family_raw_p_values=family,
+            )
             row = _summary_dict(summary, exclusions=exclusions, descriptive_count=len(descriptive))
             row["lane"], row["arm"] = lane, arm
             row["status"] = summary.status
@@ -350,7 +427,8 @@ def build_report(
         "registration_seq": REGISTRATION_SEQ,
         "registration_hash": REGISTRATION_RECORD_HASH,
         "max_as_of": _json_safe(dict(provenance)),
-        "realism_grade": provenance.get("realism_grade", "UNASSESSED"),
+        "realism_grade": grade,
+        "realism_receipt_sha256": receipt_hash,
     }
     if diagnostics is not None:
         provenance_payload["exclusion_counts"] = dict(diagnostics.skips)
@@ -419,6 +497,8 @@ def run_once(
     append_result: bool = False,
     governance_dir: Path = Path("ledger"),
     paths: CachePaths | None = None,
+    realism_grade: str | None = None,
+    realism_receipt: str | Path | None = None,
 ) -> dict[str, object]:
     """Execute the one-run shell, or retry a verified report publication."""
     report_path = Path(report_path)
@@ -450,7 +530,7 @@ def run_once(
             chains=inputs.chains,
             raw_closes=inputs.raw_closes,
             adjusted_closes=inputs.adjusted_closes,
-            features=inputs.features,
+            features=_panel_feature_values(inputs.features),
             rates=inputs.rates,
             earnings_assertions=inputs.earnings_assertions,
             positions=inputs.positions,
@@ -471,9 +551,19 @@ def run_once(
         governance=governance,
         provenance=inputs.provenance,
         diagnostics=diagnostics,
+        realism_grade=realism_grade,
+        realism_receipt=realism_receipt,
     )
     encoded = (canonical_json(_json_safe(report)) + "\n").encode("utf-8")
     _atomic_create(report_path, encoded)
+    try:
+        written = report_path.read_bytes()
+        if written != encoded:
+            raise OneRunError("A2 report bytes changed after exclusive create")
+        stored = json.loads(written)
+        validate_report(stored)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, OneRunError) as exc:
+        raise OneRunError("A2 report failed post-write verification") from exc
     if append_result:
         _append_ledger_result(report, report_path, ledger_dir=governance_dir)
     return report
@@ -491,6 +581,58 @@ def _files(path: Path, suffixes: tuple[str, ...] = (".parquet", ".csv")) -> list
 
 def _frame(path: Path) -> pd.DataFrame:
     return pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path)
+
+
+def _hash_path(path: Path) -> str:
+    """Hash one local input or a deterministic relative-path directory manifest."""
+    if not path.exists():
+        return sha256_hex(f"MISSING:{path}")
+    if path.is_file():
+        return sha256_file(path)
+    entries: dict[str, str] = {}
+    for item in sorted(item for item in path.rglob("*") if item.is_file()):
+        entries[item.relative_to(path).as_posix()] = sha256_file(item)
+    return sha256_hex(canonical_json(entries))
+
+
+def _load_fomc(path: Path) -> list[dict[str, object]]:
+    """Load only provenance-bearing FOMC events; legacy dates-only is refused."""
+    if not path.exists():
+        raise A2RunnerError(f"FOMC provenance-bearing input is unavailable: {path}")
+    try:
+        frame = pd.read_csv(path)
+    except (OSError, ValueError, pd.errors.ParserError) as exc:
+        raise A2RunnerError(f"FOMC input cannot be read: {path}") from exc
+    required = {"date", "known_as_of_utc"}
+    if not required.issubset(frame.columns) or not (
+        {"source_id", "source", "source_url"} & set(frame.columns)
+    ):
+        raise A2RunnerError(
+            "FOMC provenance is required (date, known_as_of_utc, and source identity)"
+        )
+    events: list[dict[str, object]] = []
+    for row_number, (_, row) in enumerate(frame.iterrows(), start=2):
+        try:
+            event_date = date.fromisoformat(str(row["date"])[:10])
+            known = datetime.fromisoformat(str(row["known_as_of_utc"]).replace("Z", "+00:00"))
+        except (TypeError, ValueError) as exc:
+            raise A2RunnerError(f"FOMC row {row_number} has malformed date provenance") from exc
+        if known.tzinfo is None or known.utcoffset() is None:
+            raise A2RunnerError(f"FOMC row {row_number} known_as_of_utc must be timezone-aware")
+        source_key = next(
+            key for key in ("source_id", "source", "source_url") if key in frame.columns
+        )
+        source = str(row[source_key]).strip()
+        if not source or source.lower() == "nan":
+            raise A2RunnerError(f"FOMC row {row_number} source identity is missing")
+        events.append(
+            {
+                "date": event_date,
+                "known_as_of_utc": known.astimezone(timezone.utc),
+                source_key: source,
+            }
+        )
+    return events
 
 
 def _symbol_from_name(path: Path) -> str:
@@ -555,7 +697,46 @@ def _load_close_bundle(
 
 
 def _load_feature_bundle(path: Path) -> dict[str, pd.DataFrame]:
-    return {_symbol_from_name(item): _frame(item).sort_index() for item in _files(path)}
+    output: dict[str, pd.DataFrame] = {}
+    for item in _files(path):
+        frame = _frame(item).copy()
+        if "date" in frame.columns:
+            frame = frame.set_index("date")
+        normalized: list[str] = []
+        for value in frame.index:
+            try:
+                day = date.fromisoformat(str(value)[:10]).isoformat()
+            except (TypeError, ValueError) as exc:
+                raise A2RunnerError(f"feature index is malformed: {item}: {value!r}") from exc
+            if day > config.BACKTEST_END:
+                raise A2RunnerError(f"feature index exceeds BACKTEST_END: {item}: {day}")
+            normalized.append(day)
+        frame.index = normalized
+        if len(set(normalized)) != len(normalized):
+            raise A2RunnerError(f"feature index contains duplicate dates: {item}")
+        output[_symbol_from_name(item)] = frame.sort_index()
+    return output
+
+
+def _panel_feature_values(
+    features: Mapping[str, pd.DataFrame],
+) -> dict[str, dict[str, dict[str, float]]]:
+    """Adapt the indexed loader view to Task 2's exact-date feature API."""
+    output: dict[str, dict[str, dict[str, float]]] = {}
+    for symbol, frame in features.items():
+        rows: dict[str, dict[str, float]] = {}
+        for index, row in frame.iterrows():
+            values: dict[str, float] = {}
+            for name, value in row.items():
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(number):
+                    values[str(name)] = number
+            rows[str(index)[:10]] = values
+        output[symbol] = rows
+    return output
 
 
 def _load_earnings(
@@ -572,6 +753,9 @@ def _load_earnings(
     except (OSError, KeyError, TypeError, ValueError) as exc:
         raise A2RunnerError(f"point-in-time earnings store failed validation: {path}") from exc
     for row in records:
+        known = row.get("known_as_of_utc")
+        if not isinstance(known, datetime) or known.tzinfo is None or known.utcoffset() is None:
+            raise A2RunnerError("earnings known_as_of_utc must be timezone-aware")
         try:
             row["event_date"] = report_date(row).isoformat()
         except (AttributeError, TypeError, ValueError) as exc:
@@ -645,6 +829,50 @@ def _causal_earnings(inputs: A2LocalInputs, symbol: str, day: str) -> tuple[str,
     return tuple(sorted(set(result)))
 
 
+def _green_fraction(grades: Mapping[str, object]) -> float | None:
+    """Frozen RQ1 card score: GREEN count divided by all grade fields."""
+    if not grades:
+        return None
+    return sum(value == "GREEN" for value in grades.values()) / len(grades)
+
+
+def _rank_cards(cards: Sequence[Mapping[str, object]]) -> list[Mapping[str, object]]:
+    """Deterministic RQ1 card ordering kept local to avoid runner imports."""
+    scored = []
+    for card in cards:
+        if "skipped" in card:
+            continue
+        grades = card.get("grades", {})
+        score = _green_fraction(grades if isinstance(grades, Mapping) else {})
+        if score is not None:
+            scored.append((score, card))
+    return [
+        card
+        for _score, card in sorted(
+            scored,
+            key=lambda pair: (pair[0], str(pair[1].get("expiry", ""))),
+            reverse=True,
+        )
+    ]
+
+
+def _causal_fomc(events: Sequence[object], day: date) -> list[date]:
+    cutoff = datetime.combine(day, datetime.max.time(), tzinfo=timezone.utc)
+    output: list[date] = []
+    for event in events:
+        if not isinstance(event, Mapping):
+            raise A2RunnerError("FOMC event lacks point-in-time provenance")
+        event_date = event.get("date")
+        known = event.get("known_as_of_utc")
+        if not isinstance(event_date, date) or not isinstance(known, datetime):
+            raise A2RunnerError("FOMC event provenance is malformed")
+        if known.tzinfo is None or known.utcoffset() is None:
+            raise A2RunnerError("FOMC event known_as_of_utc must be timezone-aware")
+        if known <= cutoff and event_date >= day:
+            output.append(event_date)
+    return sorted(output)
+
+
 def _reconstruct_signals(inputs: A2LocalInputs) -> dict[str, dict[str, float]]:
     """Copy RQ1's frozen card recipe across the registered fifteen names."""
     from options_researcher.attractiveness import (
@@ -653,7 +881,6 @@ def _reconstruct_signals(inputs: A2LocalInputs) -> dict[str, dict[str, float]]:
         long_call_card_rows,
         put_card_rows,
     )
-    from options_researcher.rq1_runner import _point_in_time_fomc, green_fraction
 
     if inputs.fomc_events is None:
         if inputs.diagnostics is not None:
@@ -666,12 +893,13 @@ def _reconstruct_signals(inputs: A2LocalInputs) -> dict[str, dict[str, float]]:
         for day, chain in sorted(inputs.chains.get(symbol, {}).items()):
             if day > config.BACKTEST_END or day not in inputs.raw_closes.get(symbol, {}):
                 continue
-            if not isinstance(features, pd.DataFrame):
+            if features is None:
                 continue
             available = features.loc[features.index.astype(str) <= day]
             if available.empty:
                 continue
             feature = available.iloc[-1]
+            inputs.feature_as_of[f"{symbol}:{day}"] = str(available.index[-1])[:10]
 
             def feature_float(name: str, default: float = 0.0) -> float:
                 value = feature.get(name, default)
@@ -679,7 +907,7 @@ def _reconstruct_signals(inputs: A2LocalInputs) -> dict[str, dict[str, float]]:
 
             try:
                 close = float(inputs.raw_closes[symbol][day])
-                fomc_dates = _point_in_time_fomc(inputs.fomc_events, date.fromisoformat(day))
+                fomc_dates = _causal_fomc(inputs.fomc_events, date.fromisoformat(day))
                 cards: list[dict[str, Any]] = []
                 cards.extend(
                     ladder_cards(
@@ -720,15 +948,12 @@ def _reconstruct_signals(inputs: A2LocalInputs) -> dict[str, dict[str, float]]:
                             bucket_room=config.H4_THESIS_MAX_PREMIUM_TOTAL,
                         )
                     )
-                scored = [
-                    (green_fraction(card.get("grades", {})), card)
-                    for card in cards
-                    if "skipped" not in card
-                ]
-                scored = [(score, card) for score, card in scored if score is not None]
-                if scored:
-                    best = max(scored, key=lambda pair: (pair[0], str(pair[1].get("expiry", ""))))
-                    signals.setdefault(day, {})[symbol] = float(best[0])
+                ordered = _rank_cards(cards)
+                if ordered:
+                    grades = ordered[0].get("grades", {})
+                    score = _green_fraction(grades if isinstance(grades, Mapping) else {})
+                    if score is not None:
+                        signals.setdefault(day, {})[symbol] = float(score)
             except (KeyError, TypeError, ValueError, IndexError, OverflowError):
                 continue
     return signals
@@ -741,14 +966,7 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
     earnings, earnings_records = _load_earnings(paths.earnings)
     rates, rate_source_dates = _load_rates(paths.rates, chains)
     positions, positions_status = _load_positions(paths.positions)
-    try:
-        from options_researcher.fomc import load_fomc
-
-        fomc_events = load_fomc()
-    except (FileNotFoundError, OSError, ValueError) as exc:
-        raise A2RunnerError("causal FOMC calendar is unavailable") from exc
-    if any(not isinstance(event, Mapping) for event in fomc_events):
-        raise A2RunnerError("causal FOMC calendar lacks provenance-bearing rows")
+    fomc_events = _load_fomc(paths.fomc)
     seed = A2LocalInputs(
         signals={},
         chains=chains,
@@ -779,6 +997,18 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
         ),
         "rate_source_dates": rate_source_dates,
         "positions_status": positions_status,
+        "input_hashes": {
+            "chains": _hash_path(paths.chain),
+            "underlying_closes": _hash_path(paths.underlying),
+            "features": _hash_path(paths.features),
+            "rates": _hash_path(paths.rates),
+            "earnings": _hash_path(paths.earnings),
+            "earnings_raw_lineage": _hash_path(paths.earnings.parent / "assertions_v2.csv"),
+            "positions": _hash_path(paths.positions),
+            "fomc": _hash_path(paths.fomc),
+        },
+        "feature_as_of": dict(seed.feature_as_of),
+        "fomc_hash": _hash_path(paths.fomc),
     }
     return A2LocalInputs(
         signals=signals,
@@ -791,6 +1021,7 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
         earnings_records=earnings_records,
         fomc_events=fomc_events,
         positions=positions,
+        feature_as_of=dict(seed.feature_as_of),
         provenance=provenance,
     )
 
@@ -800,18 +1031,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--historical", action="store_true")
     parser.add_argument("--append-result", action="store_true")
     parser.add_argument("--report", type=Path, default=Path("reports/a2/a2-v1.json"))
-    for name in ("chain", "underlying", "features", "rates", "earnings", "positions"):
-        parser.add_argument(f"--{name}-path", type=Path)
+    parser.add_argument("--realism-grade", required=True)
+    parser.add_argument("--realism-receipt", type=Path, required=True)
+    for name in ("chain", "underlying", "features", "rates", "earnings", "positions", "fomc"):
+        parser.add_argument(f"--{name}-path", type=Path, required=True)
     args = parser.parse_args(argv)
     if not args.historical:
         parser.error("A2 runner requires explicit --historical")
     paths = CachePaths.from_overrides(
         **{
             name: getattr(args, f"{name}_path")
-            for name in ("chain", "underlying", "features", "rates", "earnings", "positions")
+            for name in (
+                "chain",
+                "underlying",
+                "features",
+                "rates",
+                "earnings",
+                "positions",
+                "fomc",
+            )
         }
     )
-    report = run_once(report_path=args.report, append_result=args.append_result, paths=paths)
+    report = run_once(
+        report_path=args.report,
+        append_result=args.append_result,
+        paths=paths,
+        realism_grade=args.realism_grade,
+        realism_receipt=args.realism_receipt,
+    )
     print(
         json.dumps(
             {"schema": report["schema"], "report": str(args.report), "status": report["status"]},

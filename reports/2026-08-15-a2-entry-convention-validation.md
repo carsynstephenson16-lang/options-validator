@@ -39,6 +39,12 @@ lineage, and keeps generic positions as PMCC `no data`. It loads only local
 files, applies `config.BACKTEST_END`, and refuses ranking reconstruction when
 FOMC provenance is unavailable rather than awarding an empty-calendar badge.
 
+The tracked `data/events/fomc_dates.csv` is a legacy dates-plus-source-URL
+calendar without `known_as_of_utc` provenance. It is insufficient for the
+governed run. Task 3 therefore requires an explicit local provenance-bearing
+FOMC artifact and keeps the governed run **BLOCKED** until that artifact is
+owned and reviewed.
+
 The report carries all five lane statuses, every registered CSP arm and
 LEAPS/tactical horizon, complete-fifteen-name inference exclusions, separate
 staggered descriptive counts, cost stresses, provenance/max-as-of values,
