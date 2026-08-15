@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import unittest
 
 import pandas as pd
@@ -10,6 +11,7 @@ import config
 from options_researcher.a2_panel import (
     A2Diagnostics,
     _covered_call,
+    _long,
     audit_historical_inputs,
     build_historical_outcomes,
     select_income_contract,
@@ -109,6 +111,243 @@ class SelectorTests(unittest.TestCase):
 
 
 class ResolutionTests(unittest.TestCase):
+    def test_leaps_components_use_exact_marks_greeks_earnings_and_adjusted_drawdown(self):
+        sessions = [day.strftime("%Y-%m-%d") for day in pd.bdate_range("2025-01-02", periods=24)]
+        entry_day, resolution_day = sessions[0], sessions[21]
+        entry = _chain(
+            [
+                _row(
+                    right="C",
+                    expiration="2025-12-19",
+                    bid=2.0,
+                    ask=2.2,
+                    delta=0.6,
+                    vega=0.2,
+                    iv=0.4,
+                )
+            ]
+        ).iloc[0]
+        exit_quote = _row(
+            right="C", expiration="2025-12-19", bid=3.1, ask=3.3, delta=0.6, vega=0.2, iv=0.5
+        )
+        chains = {day: _chain([exit_quote]) for day in sessions[1:]}
+        raw = {day: 100.0 + index * 2.0 for index, day in enumerate(sessions)}
+        adjusted = dict(raw)
+        adjusted[sessions[2]] = 96.0
+        outcome = _long(
+            SYMBOL,
+            "2025-01-01",
+            entry_day,
+            entry,
+            1.0,
+            chains,
+            raw,
+            "leaps",
+            (21,),
+            A2Diagnostics(),
+            {"source": "fixture"},
+            adjusted,
+            None,
+            {SYMBOL: (sessions[2],)},
+        )[0]
+        adverse_buy_mark = lambda value: math.ceil(value * 1.01 * 100.0) / 100.0
+        adverse_sell_mark = lambda value: math.floor(value * 0.99 * 100.0) / 100.0
+        denom = adverse_buy_mark(2.2) * 100
+        option_pnl = (adverse_sell_mark(3.1) - adverse_buy_mark(2.2)) * 100
+        bid_ask = abs(adverse_buy_mark(2.2) - 2.1) * 100 + abs(adverse_sell_mark(3.1) - 3.2) * 100
+        self.assertEqual(outcome.resolution_date, resolution_day)
+        self.assertAlmostEqual(outcome.components["option_result"], option_pnl / denom)
+        stock_pnl = (raw[resolution_day] - raw[entry_day]) * 100.0
+        self.assertAlmostEqual(outcome.components["stock_result"], stock_pnl / denom)
+        self.assertAlmostEqual(
+            outcome.components["delta_adjusted_stock_result"], 0.6 * stock_pnl / denom
+        )
+        self.assertAlmostEqual(outcome.components["spread_cost"], -bid_ask / denom)
+        self.assertAlmostEqual(outcome.components["vega_contribution"], 0.2 * 0.1 / (denom / 100))
+        self.assertEqual(outcome.components["earnings_exposure_count"], 1.0)
+        self.assertAlmostEqual(outcome.components["drawdown"], -400.0 / denom)
+
+    def test_tactical_components_reconcile_each_horizon_from_derived_greeks(self):
+        sessions = [day.strftime("%Y-%m-%d") for day in pd.bdate_range("2025-01-02", periods=24)]
+        entry_day = sessions[0]
+        entry = _chain(
+            [
+                _row(
+                    right="C",
+                    expiration="2025-12-19",
+                    bid=2.0,
+                    ask=2.2,
+                    delta=0.5,
+                    gamma=0.02,
+                    theta=-0.01,
+                    vega=0.2,
+                    iv=0.4,
+                )
+            ]
+        ).iloc[0]
+        exit_ivs = {5: 0.45, 10: 0.52, 20: 0.61}
+        chains = {
+            day: _chain(
+                [
+                    _row(
+                        right="C",
+                        expiration="2025-12-19",
+                        bid=2.5 + index / 10.0,
+                        ask=2.7 + index / 10.0,
+                        delta=0.5,
+                        gamma=0.02,
+                        theta=-0.01,
+                        vega=0.2,
+                        iv=exit_ivs.get(index, 0.4),
+                    )
+                ]
+            )
+            for index, day in enumerate(sessions[1:], start=1)
+        }
+        raw = {day: 100.0 + index * 1.5 for index, day in enumerate(sessions)}
+        outcomes = _long(
+            SYMBOL,
+            "2025-01-01",
+            entry_day,
+            entry,
+            1.0,
+            chains,
+            raw,
+            "tactical_call",
+            (5, 10, 20),
+            A2Diagnostics(),
+            {"source": "fixture"},
+            raw,
+            None,
+            None,
+        )
+        adverse_buy_mark = lambda value: math.ceil(value * 1.01 * 100.0) / 100.0
+        adverse_sell_mark = lambda value: math.floor(value * 0.99 * 100.0) / 100.0
+        denom, tau = (
+            adverse_buy_mark(2.2) * 100,
+            (pd.Timestamp("2025-12-19") - pd.Timestamp(entry_day)).days / 365.0,
+        )
+
+        def normal_cdf(value: float) -> float:
+            return 0.5 * (1.0 + math.erf(value / math.sqrt(2.0)))
+
+        ratio = 0.5 / (0.02 * 100.0 * 0.4 * math.sqrt(tau))
+        low, high = -10.0, 10.0
+        for _ in range(80):
+            midpoint = (low + high) / 2.0
+            phi = math.exp(-0.5 * midpoint * midpoint) / math.sqrt(2.0 * math.pi)
+            if normal_cdf(midpoint) / phi < ratio:
+                low = midpoint
+            else:
+                high = midpoint
+        d1 = (low + high) / 2.0
+        d2 = d1 - 0.4 * math.sqrt(tau)
+        vanna = -0.02 * 100.0 * math.sqrt(tau) * d2
+        volga = 0.2 * d1 * d2 / 0.4
+        for outcome, horizon in zip(outcomes, (5, 10, 20), strict=True):
+            resolution = sessions[horizon]
+            ds, d_sigma = raw[resolution] - raw[entry_day], exit_ivs[horizon] - 0.4
+            bid, ask = 2.5 + horizon / 10.0, 2.7 + horizon / 10.0
+            option_pnl = (adverse_sell_mark(bid) - adverse_buy_mark(2.2)) * 100
+            bid_ask = (
+                abs(adverse_buy_mark(2.2) - 2.1) * 100
+                + abs(adverse_sell_mark(bid) - (bid + ask) / 2.0) * 100
+            )
+            expected = {
+                "stock_price": 0.5 * ds * 100 / denom,
+                "iv": 0.2 * d_sigma / (denom / 100),
+                "decay": -0.01
+                * (pd.Timestamp(resolution) - pd.Timestamp(entry_day)).days
+                * 100
+                / denom,
+                "cross_effects": (
+                    0.5 * 0.02 * ds * ds + 0.5 * volga * d_sigma * d_sigma + vanna * ds * d_sigma
+                )
+                * 100
+                / denom,
+                "spread_cost": -bid_ask / denom,
+            }
+            for component, value in expected.items():
+                self.assertAlmostEqual(outcome.components[component], value)
+            self.assertAlmostEqual(
+                outcome.components["residual"], option_pnl / denom - sum(expected.values())
+            )
+            self.assertAlmostEqual(sum(outcome.components.values()), outcome.gross_return)
+
+    def test_long_exit_rejects_crossed_zero_illiquid_and_malformed_numeric_rows(self):
+        entry_day, exit_day = "2025-01-02", "2025-01-03"
+        entry = _chain([_row(right="C", expiration="2025-12-19", iv=0.4, vega=0.2)]).iloc[0]
+        raw = {entry_day: 100.0, exit_day: 101.0}
+        for exit_row in (
+            _row(right="C", expiration="2025-12-19", bid=3.0, ask=2.0),
+            _row(right="C", expiration="2025-12-19", bid=0.0, ask=2.0),
+            _row(right="C", expiration="2025-12-19", open_interest=0),
+        ):
+            diagnostics = A2Diagnostics()
+            self.assertIsNone(
+                _long(
+                    SYMBOL,
+                    "2025-01-01",
+                    entry_day,
+                    entry,
+                    1.0,
+                    {exit_day: _chain([exit_row])},
+                    raw,
+                    "leaps",
+                    (1,),
+                    diagnostics,
+                    {"source": "fixture"},
+                    raw,
+                    None,
+                    None,
+                )
+            )
+            self.assertEqual(diagnostics.skips["invalid_resolution_quote"], 1)
+        diagnostics = A2Diagnostics()
+        malformed = _row(right="C", expiration="2025-12-19", iv="not-a-number", vega=0.2)
+        self.assertIsNone(
+            _long(
+                SYMBOL,
+                "2025-01-01",
+                entry_day,
+                entry,
+                1.0,
+                {exit_day: _chain([malformed])},
+                raw,
+                "leaps",
+                (1,),
+                diagnostics,
+                {"source": "fixture"},
+                raw,
+                None,
+                None,
+            )
+        )
+        self.assertEqual(diagnostics.skips["invalid_leaps_numeric_input"], 1)
+        diagnostics = A2Diagnostics()
+        tactical_malformed = _row(
+            right="C", expiration="2025-12-19", iv=float("inf"), gamma=0.02, theta=-0.01, vega=0.2
+        )
+        self.assertIsNone(
+            _long(
+                SYMBOL,
+                "2025-01-01",
+                entry_day,
+                entry,
+                1.0,
+                {exit_day: _chain([tactical_malformed])},
+                raw,
+                "tactical_call",
+                (1,),
+                diagnostics,
+                {"source": "fixture"},
+                raw,
+                None,
+                None,
+            )
+        )
+        self.assertEqual(diagnostics.skips["invalid_tactical_attribution_input"], 1)
+
     def test_covered_call_assigned_decomposition_is_uncapped_stock_plus_short_call(self):
         outcome = _covered_call(
             SYMBOL,

@@ -377,21 +377,31 @@ def _long(
             if any(column not in contract or column not in quote for column in ("iv", "vega")):
                 diagnostics.skip("missing_leaps_greek_or_iv")
                 return None
-            entry_iv, exit_iv = float(contract.iv), float(quote.iv)
+            try:
+                entry_iv, exit_iv = float(contract.iv), float(quote.iv)
+                entry_vega, entry_delta = float(contract.vega), float(contract.delta)
+                entry_spot, exit_spot = float(raw[entry_day]), float(raw[day])
+            except (TypeError, ValueError, OverflowError):
+                diagnostics.skip("invalid_leaps_numeric_input")
+                return None
+            if not all(
+                math.isfinite(value)
+                for value in (entry_iv, exit_iv, entry_vega, entry_delta, entry_spot, exit_spot)
+            ):
+                diagnostics.skip("invalid_leaps_numeric_input")
+                return None
             adjusted_marks = [
                 float(adjusted[session])
                 for session in sessions
                 if entry_day <= session <= day and session in adjusted
             ]
             components["option_result"] = pnl / denom
-            components["stock_result"] = (float(raw[day]) - float(raw[entry_day])) * 100 / denom
+            components["stock_result"] = (exit_spot - entry_spot) * 100 / denom
             components["delta_adjusted_stock_result"] = (
-                float(contract.delta) * (float(raw[day]) - float(raw[entry_day])) * 100 / denom
+                entry_delta * (exit_spot - entry_spot) * 100 / denom
             )
             components["spread_cost"] = -bidask / denom
-            components["vega_contribution"] = (
-                float(contract.vega) * (exit_iv - entry_iv) / (denom / 100)
-            )
+            components["vega_contribution"] = entry_vega * (exit_iv - entry_iv) / (denom / 100)
             assertions = (earnings_assertions or {}).get(symbol, ())
             components["earnings_exposure_count"] = float(
                 sum(entry_day < str(event) <= day for event in assertions)
@@ -404,11 +414,32 @@ def _long(
             if any(column not in contract or column not in quote for column in required):
                 diagnostics.skip("missing_tactical_attribution_input")
                 return None
-            ds = float(raw[day]) - float(raw[entry_day])
-            d_sigma = float(quote.iv) - float(contract.iv)
-            iv = float(contract.iv)
+            try:
+                entry_spot, exit_spot = float(raw[entry_day]), float(raw[day])
+                entry_iv, exit_iv = float(contract.iv), float(quote.iv)
+                entry_delta, entry_gamma = float(contract.delta), float(contract.gamma)
+                entry_theta, entry_vega = float(contract.theta), float(contract.vega)
+            except (TypeError, ValueError, OverflowError):
+                diagnostics.skip("invalid_tactical_attribution_input")
+                return None
+            values = (
+                entry_spot,
+                exit_spot,
+                entry_iv,
+                exit_iv,
+                entry_delta,
+                entry_gamma,
+                entry_theta,
+                entry_vega,
+            )
+            if not all(math.isfinite(value) for value in values):
+                diagnostics.skip("invalid_tactical_attribution_input")
+                return None
+            ds = exit_spot - entry_spot
+            d_sigma = exit_iv - entry_iv
+            iv = entry_iv
             tau = max((_day(str(contract.expiration)) - _day(entry_day)).days / 365.0, 0.0)
-            d1 = _tactical_d1(contract, float(raw[entry_day]), tau) if tau > 0 else None
+            d1 = _tactical_d1(contract, entry_spot, tau) if tau > 0 else None
             if d1 is None:
                 diagnostics.skip("invalid_tactical_delta_gamma_ratio")
                 return None
@@ -418,21 +449,19 @@ def _long(
                 d_sigma,
                 d1,
                 d2,
-                float(contract.theta),
+                entry_theta,
             )
             if not all(math.isfinite(value) for value in numeric) or iv <= 0:
                 diagnostics.skip("invalid_tactical_iv")
                 return None
-            vanna = -float(contract.gamma) * float(raw[entry_day]) * math.sqrt(tau) * d2
-            volga = float(contract.vega) * d1 * d2 / iv
-            components["stock_price"] = float(contract.delta) * ds * 100 / denom
-            components["iv"] = float(contract.vega) * d_sigma / (denom / 100)
-            components["decay"] = (
-                float(contract.theta) * (_day(day) - _day(entry_day)).days * 100 / denom
-            )
+            vanna = -entry_gamma * entry_spot * math.sqrt(tau) * d2
+            volga = entry_vega * d1 * d2 / iv
+            components["stock_price"] = entry_delta * ds * 100 / denom
+            components["iv"] = entry_vega * d_sigma / (denom / 100)
+            components["decay"] = entry_theta * (_day(day) - _day(entry_day)).days * 100 / denom
             components["cross_effects"] = (
                 (
-                    0.5 * float(contract.gamma) * ds * ds
+                    0.5 * entry_gamma * ds * ds
                     + 0.5 * volga * d_sigma * d_sigma
                     + vanna * ds * d_sigma
                 )
