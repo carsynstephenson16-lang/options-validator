@@ -321,10 +321,28 @@ def _admissible_pick_pool(data: dict, *, include_csp_watch: bool) -> list[tuple[
     return pool
 
 
+def _qm_is_not_covered(item: object) -> bool:
+    """True for a name the frozen QM study never covered (structural)."""
+    return (isinstance(item, Mapping)
+            and item.get("status") == "NOT_IN_FROZEN_STUDY")
+
+
 def _qm_context_block_reason(
     data: Mapping[str, object], qm_context: Mapping[str, object] | None
 ) -> str | None:
-    """Return a fail-closed reason unless QM covers every displayed symbol."""
+    """Fail-closed reason unless QM is current for every COVERED displayed name.
+
+    Two things changed with the pre-close chain lane, both to keep this gate
+    honest rather than to loosen it:
+
+    * the context is bound to the board by ``board_session``, not by an equal
+      ``as_of``. QM reads daily bars and the board can read a same-day 15:45
+      chain, so exact-date equality would blank the panel every capture day for
+      a reason that is not staleness. The panel prints both dates.
+    * a name the frozen study never covered is reported per name and does not
+      block the covered names, exactly as H7 v1.4 made source health per name.
+      A name the study DOES cover still blocks the panel when it is not current.
+    """
     market_date = data.get("data_as_of")
     if not isinstance(market_date, str) or not market_date:
         return "dashboard market date is unavailable"
@@ -332,10 +350,20 @@ def _qm_context_block_reason(
         return "QM context unavailable"
     if qm_context.get("status") != "CURRENT":
         return str(qm_context.get("reason") or "QM context is not current")
-    if qm_context.get("as_of") != market_date:
+    context_as_of = qm_context.get("as_of")
+    if not isinstance(context_as_of, str) or not context_as_of:
+        return "QM context date is unavailable"
+    board_session = qm_context.get("board_session")
+    if isinstance(board_session, str) and board_session:
+        if board_session != market_date:
+            return (
+                f"QM context was built for board session {board_session}, not "
+                f"the dashboard's {market_date}"
+            )
+    elif context_as_of > market_date:
         return (
-            f"QM context date {qm_context.get('as_of') or 'unknown'} does not "
-            f"match dashboard market date {market_date}"
+            f"QM context date {context_as_of} is ahead of dashboard market "
+            f"date {market_date}"
         )
     symbols = qm_context.get("symbols")
     if not isinstance(symbols, Mapping):
@@ -352,6 +380,8 @@ def _qm_context_block_reason(
         if not isinstance(symbol, str):
             continue
         item = symbols.get(symbol)
+        if _qm_is_not_covered(item):
+            continue
         if not isinstance(item, Mapping) or item.get("status") != "CURRENT":
             missing.append(symbol)
     if missing:
@@ -428,6 +458,14 @@ def select_qm_top_picks(
     contextual_picks: list[dict] = []
     for pick in picks:
         qm = symbols.get(pick["symbol"])
+        if _qm_is_not_covered(qm):
+            # Per name: a mechanical pick the frozen study never covered keeps
+            # its slot and renders its own NOT_COVERED line. Dropping the whole
+            # panel would hide the covered names' context over a permanent fact
+            # about one name -- and the mechanical membership is unchanged
+            # either way, since QM never selects or reorders anything.
+            contextual_picks.append(dict(pick))
+            continue
         if not isinstance(qm, Mapping) or qm.get("status") != "CURRENT":
             return []
         contextual_picks.append(dict(pick))
@@ -722,13 +760,54 @@ def _countdown(card: dict) -> str:
             f"{roll} days left")
 
 
+def _fresh_sections(sections: list[dict]) -> list[dict]:
+    """Sections rendered from a VERIFIED Schwab pre-close session."""
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE
+
+    return [sec for sec in sections
+            if sec.get("chain_source") == CHAIN_SOURCE and sec.get("as_of")]
+
+
 def _page_data_as_of(sections: list[dict]) -> str:
-    """Honest page-level "data as-of" date: the EARLIEST per-symbol as_of
-    date across the assembled sections (never today's wall clock). Taking
-    the earliest, not the freshest, name means a stale chain cache can never
-    hide behind a fresher one -- the banner must say the stale date."""
+    """Honest page-level "data as-of" date.
+
+    With no fresh source this is the EARLIEST per-symbol as_of date (never
+    today's wall clock): taking the earliest means a stale chain cache can
+    never hide behind a fresher one.
+
+    When at least one section rides a VERIFIED pre-close session, the page
+    date is that newest fresh session -- the date the freshest data actually
+    carries -- and the banner names the still-stale names separately with
+    their own date. One date can no longer describe two sources honestly, so
+    the page states both rather than letting the stalest name mislabel the
+    freshest (or the reverse)."""
+    fresh = _fresh_sections(sections)
+    if fresh:
+        return max(str(sec["as_of"]) for sec in fresh)
     dates = sorted({sec["as_of"] for sec in sections if sec.get("as_of")})
     return dates[0] if dates else "no cached data"
+
+
+def _page_as_of_kind(sections: list[dict]) -> str:
+    """``schwab_preclose`` when the page date is a pre-close session."""
+    from options_researcher.schwab_chain_view import (
+        CHAIN_SOURCE,
+        THETADATA_CHAIN_SOURCE,
+    )
+
+    return CHAIN_SOURCE if _fresh_sections(sections) else THETADATA_CHAIN_SOURCE
+
+
+def _stale_path_as_of(sections: list[dict]) -> tuple[str | None, list[str]]:
+    """(earliest as_of, names) for sections still on the frozen cache."""
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE
+
+    stale = [sec for sec in sections
+             if sec.get("chain_source") != CHAIN_SOURCE and sec.get("as_of")]
+    if not stale:
+        return None, []
+    return (min(str(sec["as_of"]) for sec in stale),
+            sorted(str(sec.get("symbol", "?")) for sec in stale))
 
 
 def _all_display_data_as_of(
@@ -749,6 +828,52 @@ def _all_display_data_as_of(
     return min(dates) if dates else "no cached data"
 
 
+def _schwab_state_html(data: Mapping[str, object]) -> str:
+    """Verified / failed / absent state of the Schwab pre-close capture lane.
+
+    A capture that does not verify must never degrade quietly into "the board
+    looks stale today": the page says the session and the verification error
+    out loud. A checkout with no receipts at all says that too, so silence is
+    never ambiguous between "no captures" and "captures hidden by a bug".
+    """
+    from options_researcher.schwab_chain_view import CHAINS_ABSENT, CONVENTION_LABEL
+
+    state = data.get("schwab_lane")
+    if not isinstance(state, Mapping):
+        return ""
+    parts: list[str] = []
+    failures = state.get("failures")
+    failures = failures if isinstance(failures, (list, tuple)) else ()
+    for failure in failures:
+        if not isinstance(failure, Mapping):
+            continue
+        session = _esc(str(failure.get("session", "?")))
+        if failure.get("kind") == CHAINS_ABSENT:
+            # Expected in a research checkout: the receipts are tracked in git,
+            # the chain parquet lives only in the ops execution checkout. Said
+            # plainly so it is not mistaken for an integrity failure -- and so
+            # the real red alarm below keeps its meaning.
+            parts.append(
+                '<div class="notice info">Schwab capture receipts for session '
+                f"{session} are present, but its chain files are not in this "
+                "checkout (they live in the ops execution checkout). No "
+                "pre-close quotes are available here.</div>")
+            continue
+        parts.append(
+            '<div class="notice bad"><strong>! Schwab capture session '
+            f'{session} FAILED verification'
+            f'</strong> — {_esc(str(failure.get("reason", "unknown")))}. '
+            "Its chains were NOT used; names that depend on it fall back to "
+            "the frozen cache with their own older date.</div>")
+    if not state.get("receipts_found"):
+        parts.append(
+            '<div class="notice info">No Schwab pre-close capture receipts '
+            "found in this checkout (reports/schwab_chains is empty) — every "
+            f"quote below comes from the frozen ThetaData cache, not a "
+            f"{_esc(CONVENTION_LABEL)} snapshot.</div>")
+    return "".join(parts)
+
+
 def _chain_age_html(data: Mapping[str, object]) -> str:
     """Say out loud how old the board's option quotes are.
 
@@ -757,8 +882,65 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
     nothing at all.  Without this banner a long-frozen cache renders exactly
     like a current one -- the page is rebuilt daily, so only the quote dates
     betray it.  Silence here is therefore never "fine"; unknown age says so.
+
+    With a verified pre-close source present the statement becomes two lines:
+    what the fresh names actually are (a 15:45 snapshot, never a close), and
+    the unchanged stale warning scoped to the names still on the frozen cache.
+    The per-card CHAIN_STALE_VS_TODAY gate is untouched either way.
+
+    THE FRESH LINE AGES TOO. "Verified pre-close" is a statement about the
+    SOURCE, not about the clock: if captures stop, the newest verified session
+    keeps its badge while silently becoming days old. So the fresh line reads
+    the same ``chain_age_sessions`` the cards do and changes tone at the same
+    thresholds -- at the BLOCK bar it must not render as calm info while every
+    card below it is DATA_BLOCKED.
     """
     import config
+    from options_researcher.schwab_chain_view import CONVENTION_LABEL
+
+    fresh_names = data.get("fresh_symbols")
+    fresh_names = list(fresh_names) if isinstance(fresh_names, (list, tuple)) else []
+    lane_html = _schwab_state_html(data)
+    if fresh_names:
+        count = len(fresh_names)
+        age = data.get("chain_age_sessions")
+        session = _esc(str(data.get("data_as_of") or "?"))
+        names = _esc(", ".join(str(name) for name in fresh_names))
+        subject = (f"{count} name" if count == 1 else f"{count} names")
+        head = (f"Option quotes: {CONVENTION_LABEL} session "
+                f"{data.get('data_as_of') or '?'}")
+        if not isinstance(age, int):
+            fresh_line = (
+                '<div class="notice watch"><strong>! '
+                f"{_esc(head)}</strong> for {subject} ({names}) — but its age "
+                "could NOT be compared with the evaluation date. Treat every "
+                "quote as unverified and check the live broker quote.</div>")
+        elif age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+            sessions = "session" if age == 1 else "sessions"
+            fresh_line = (
+                '<div class="notice bad"><strong>! STALE BOARD — pre-close '
+                f"captures have STOPPED. The newest verified session "
+                f"({session}) is {age} trading {sessions} old.</strong> The "
+                f"{subject} below ({names}) still carry that snapshot's "
+                "premium, delta, and moneyness figures — not today's. Cards "
+                f"past the {config.CHAIN_STALE_BLOCK_SESSIONS}-session limit "
+                "are marked DATA_BLOCKED and excluded from the shortlist. Do "
+                "not size or compare a trade from this page.</div>")
+        elif age >= config.CHAIN_STALE_WARN_SESSIONS:
+            sessions = "session" if age == 1 else "sessions"
+            fresh_line = (
+                '<div class="notice watch">! '
+                f"{_esc(head)} for {subject} ({names}) — a 15:45 ET snapshot, "
+                f"NOT an end-of-day close, and now {age} trading {sessions} "
+                "old (no newer verified capture). Verify against the live "
+                "broker quote before acting.</div>")
+        else:
+            fresh_line = (
+                f'<div class="notice info"><strong>{_esc(head)}</strong> for '
+                f"{subject} ({names}). This is a 15:45 ET snapshot, NOT an "
+                "end-of-day close.</div>")
+        stale_line = _stale_group_html(data)
+        return lane_html + fresh_line + stale_line
 
     age = data.get("chain_age_sessions")
     as_of = _esc(str(data.get("data_as_of") or "no cached data"))
@@ -766,28 +948,62 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
 
     if not isinstance(age, int):
         if not evaluation_date:
-            return ""
-        return ('<div class="notice watch">! Option-quote age UNKNOWN — the '
-                f"board's chain date ({as_of}) could not be compared with the "
-                "evaluation date. Treat every quote as unverified and check "
-                "the live broker quote.</div>")
+            return lane_html
+        return lane_html + (
+            '<div class="notice watch">! Option-quote age UNKNOWN — the '
+            f"board's chain date ({as_of}) could not be compared with the "
+            "evaluation date. Treat every quote as unverified and check "
+            "the live broker quote.</div>")
 
     sessions = "session" if age == 1 else "sessions"
     if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
-        return ('<div class="notice bad"><strong>! STALE BOARD — option quotes '
-                f"are {age} trading {sessions} old.</strong> Every premium, "
-                "delta, and moneyness figure below is from the "
-                f"{as_of} close, not today. Cards past the "
-                f"{config.CHAIN_STALE_BLOCK_SESSIONS}-session limit are marked "
-                "DATA_BLOCKED and excluded from the shortlist. Do not size or "
-                "compare a trade from this page — read the live broker quote."
-                "</div>")
+        return lane_html + (
+            '<div class="notice bad"><strong>! STALE BOARD — option quotes '
+            f"are {age} trading {sessions} old.</strong> Every premium, "
+            "delta, and moneyness figure below is from the "
+            f"{as_of} close, not today. Cards past the "
+            f"{config.CHAIN_STALE_BLOCK_SESSIONS}-session limit are marked "
+            "DATA_BLOCKED and excluded from the shortlist. Do not size or "
+            "compare a trade from this page — read the live broker quote."
+            "</div>")
     if age >= config.CHAIN_STALE_WARN_SESSIONS:
-        return ('<div class="notice watch">! Option quotes are '
-                f"{age} trading {sessions} old (chain close {as_of}). "
-                "Verify against the live broker quote before acting.</div>")
-    return (f'<div class="notice info">Option quotes are from the {as_of} '
-            "close — the most recent completed session.</div>")
+        return lane_html + (
+            '<div class="notice watch">! Option quotes are '
+            f"{age} trading {sessions} old (chain close {as_of}). "
+            "Verify against the live broker quote before acting.</div>")
+    return lane_html + (
+        f'<div class="notice info">Option quotes are from the {as_of} '
+        "close — the most recent completed session.</div>")
+
+
+def _stale_group_html(data: Mapping[str, object]) -> str:
+    """The unchanged staleness warning, scoped to the still-frozen names."""
+    import config
+
+    names = data.get("stale_symbols")
+    names = [str(name) for name in names] if isinstance(names, (list, tuple)) else []
+    as_of = data.get("stale_as_of")
+    if not names or not isinstance(as_of, str) or not as_of:
+        return ""
+    joined = _esc(", ".join(names))
+    age = data.get("stale_chain_age_sessions")
+    if not isinstance(age, int):
+        return ('<div class="notice watch">! Option-quote age UNKNOWN for '
+                f"{joined} (frozen-cache date {_esc(as_of)}). Treat every "
+                "quote for these names as unverified.</div>")
+    sessions = "session" if age == 1 else "sessions"
+    if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+        return ('<div class="notice bad"><strong>! STALE BOARD for '
+                f"{joined} — option quotes are {age} trading {sessions} old."
+                f"</strong> Their premium, delta, and moneyness figures are "
+                f"from the {_esc(as_of)} close, not today. Cards past the "
+                f"{config.CHAIN_STALE_BLOCK_SESSIONS}-session limit are marked "
+                "DATA_BLOCKED and excluded from the shortlist.</div>")
+    if age >= config.CHAIN_STALE_WARN_SESSIONS:
+        return ('<div class="notice watch">! Option quotes for '
+                f"{joined} are {age} trading {sessions} old (chain close "
+                f"{_esc(as_of)}). Verify against the live broker quote.</div>")
+    return ""
 
 
 def _page_chain_age_sessions(page_as_of: str, today: str | None) -> int | None:
@@ -834,8 +1050,9 @@ def assemble(
     injected assembly leaves it None unless passed, so fixtures stay
     deterministic and are never aged out by the calendar."""
     real_assembly = symbol_sections is None
+    schwab_state: dict | None = None
     if real_assembly:
-        symbol_sections, rv21_by_symbol, blocked = _gather_all()
+        symbol_sections, rv21_by_symbol, blocked, schwab_state = _gather_all()
         if today is None:
             from datetime import datetime as _dt
             from zoneinfo import ZoneInfo as _ZoneInfo
@@ -893,6 +1110,17 @@ def assemble(
                     enriched, kind, close=float(sec["close"]), rv21=rv21)
                 enriched["bbb"] = bbb_rows(
                     enriched, kind, close=float(sec["close"]), rv21=rv21)
+                if not enriched["bbb"]:
+                    # An absent scenario table states WHY. Silence would read
+                    # as "no scenarios worth showing" rather than "the input
+                    # this table is built from does not exist".
+                    reasons = [item.get("reason")
+                               for item in (sec.get("feature_unavailable") or [])
+                               if item.get("field") == "rv21"]
+                    enriched["bbb_absent"] = (
+                        "bull/base/bear scenarios need realized volatility "
+                        "(rv21): " + (str(reasons[0]) if reasons
+                                      else "no finite rv21 for this session"))
                 enriched["headline"] = _headline(sym, kind, enriched)
                 enriched["countdown"] = (_countdown(enriched)
                                          if kind in ("leaps", "long_call")
@@ -906,6 +1134,12 @@ def assemble(
         out_sec = {"symbol": sym, "close": float(sec["close"]),
                    "iv_rank": float(sec["iv_rank"]),
                    "as_of": sec["as_of"], "groups": out_groups}
+        for passthrough in ("chain_source", "close_as_of", "close_kind",
+                            "closes_as_of", "technicals_as_of", "atm_iv",
+                            "features_source", "feature_unavailable",
+                            "iv_rank_label", "fresh_refusal_reason"):
+            if passthrough in sec:
+                out_sec[passthrough] = sec[passthrough]
         if bool(sec.get("display_only")) or sym in display_only_names:
             out_sec["display_only"] = True
         if "features_as_of" in sec:
@@ -957,10 +1191,20 @@ def assemble(
         sec for sec in out_symbols if not sec.get("display_only")
     ]
     page_as_of = _page_data_as_of(canonical_symbols)
-    return {
+    stale_as_of, stale_symbols = _stale_path_as_of(canonical_symbols)
+    fresh_symbols = [str(sec.get("symbol", "?"))
+                     for sec in _fresh_sections(canonical_symbols)]
+    out = {
         "symbols": out_symbols,
         "blocked": out_blocked,
         "data_as_of": page_as_of,
+        "as_of_kind": _page_as_of_kind(canonical_symbols),
+        "fresh_symbols": sorted(fresh_symbols),
+        "stale_as_of": stale_as_of,
+        "stale_symbols": stale_symbols,
+        "stale_chain_age_sessions": (
+            _page_chain_age_sessions(stale_as_of, today) if stale_as_of else None
+        ),
         "display_data_as_of": _all_display_data_as_of(
             out_symbols, out_blocked
         ),
@@ -968,9 +1212,12 @@ def assemble(
         "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
     }
+    if schwab_state is not None:
+        out["schwab_lane"] = schwab_state
+    return out
 
 
-def _gather_all() -> tuple[list[dict], dict[str, float], list[dict]]:
+def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
     """Load real per-symbol candidate sections + rv21 over the display
     universe (config.ATTRACTIVENESS_UNIVERSE), mirroring
     attractiveness.main()'s data gathering (no printing).
@@ -989,6 +1236,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict]]:
 
     import config
     from data.underlying_closes import load_closes, load_closes_adjusted
+    from options_researcher import schwab_chain_view as schwab_view
     from options_researcher.attractiveness import (
         cc_card_rows,
         ladder_cards,
@@ -1047,17 +1295,48 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict]]:
             record["display_only"] = True
         blocked.append(record)
 
+    schwab_sessions, schwab_failures = schwab_view.verified_sessions()
+    schwab_state = {
+        "verified_sessions": list(schwab_sessions),
+        "failures": [dict(failure) for failure in schwab_failures],
+        "receipts_found": bool(schwab_sessions or schwab_failures),
+    }
+
     for symbol in config.ATTRACTIVENESS_UNIVERSE:
         files = sorted(glob.glob(os.path.join(".cache", "chains",
                                               f"{symbol}_*.parquet")))
-        if not files:
-            _block(symbol, "NO_CACHED_CHAINS",
-                   "no chain parquet in .cache/chains", None)
+        theta_day = (os.path.basename(files[-1]).split("_")[1]
+                     .replace(".parquet", "") if files else None)
+        # Newer of (frozen ThetaData EOD cache, newest VERIFIED Schwab
+        # pre-close session), decided by the ONE shared rule the CLI board uses
+        # too. A fresh chain is only rendered when a same-instant 15:45 spot
+        # exists for it -- pairing 15:45 quotes with the closes store (frozen
+        # well behind) misprices moneyness by several percent.
+        source = schwab_view.select_display_source(
+            symbol, theta_day, have_verified_sessions=bool(schwab_sessions))
+        fresh_refusal = source.refusal
+        is_fresh = source.kind == schwab_view.CHAIN_SOURCE
+        if not is_fresh and theta_day is None:
+            detail = ("no chain parquet in .cache/chains"
+                      + (f"; {fresh_refusal}" if fresh_refusal else ""))
+            _block(symbol, "NO_CACHED_CHAINS", detail, None)
             continue
-        day = os.path.basename(files[-1]).split("_")[1].replace(".parquet", "")
+        if is_fresh:
+            chain_frame, day = source.frame, source.session
+            preclose_spot = source.spot
+            iv_rank_preview = source.iv_rank_preview
+            chain_path, chain_source = None, schwab_view.CHAIN_SOURCE
+        else:
+            chain_frame, preclose_spot, iv_rank_preview = None, None, None
+            day, chain_path = theta_day, files[-1]
+            chain_source = schwab_view.THETADATA_CHAIN_SOURCE
         try:
             section, rv21 = _gather_symbol(
-                symbol, files[-1], day,
+                symbol, chain_path, day,
+                chain_frame=chain_frame, chain_source=chain_source,
+                preclose_spot=preclose_spot,
+                iv_rank_preview=iv_rank_preview,
+                fresh_refusal_reason=fresh_refusal,
                 holdings=holdings, held_leaps=held_leaps,
                 csp_open_count=csp_open_count, bucket_room=bucket_room,
                 v3_assertions=v3_assertions, known_now=known_now,
@@ -1084,7 +1363,7 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict]]:
             section["display_only"] = True
         sections.append(section)
         rv21_by_symbol[symbol] = rv21
-    return sections, rv21_by_symbol, blocked
+    return sections, rv21_by_symbol, blocked, schwab_state
 
 
 def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
@@ -1094,32 +1373,101 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                    technical_snapshot, technical_summary_line, ladder_cards,
                    put_card_rows, cc_card_rows, pmcc_card_rows,
                    leaps_card_rows, long_call_card_rows, attach_oi_change,
-                   date_cls, pd, config) -> tuple[dict, float]:
+                   date_cls, pd, config, chain_frame=None,
+                   chain_source=None, preclose_spot=None,
+                   iv_rank_preview=None,
+                   fresh_refusal_reason=None) -> tuple[dict, float]:
     """Build one symbol's section (extracted so _gather_all can isolate
     per-symbol failures). Dependencies are passed in to keep the lazy-import
-    pattern of the caller."""
-    chain = pd.read_parquet(chain_path)
-    # DATE-ALIGNED feature row: the row FOR the chain day when it exists,
-    # else the newest row at-or-before it (never a future row -- that
-    # would be look-ahead). A mismatch is recorded as features_as_of so
-    # the page can say the IV badges are stale instead of hiding it.
-    feats = load_features(symbol)
-    at_or_before = feats.loc[feats.index.astype(str) <= day]
-    if at_or_before.empty:
-        row = feats.iloc[0]
-        features_as_of = str(feats.index[0])
-    else:
-        row = at_or_before.iloc[-1]
-        features_as_of = str(at_or_before.index[-1])
+    pattern of the caller.
+
+    A schwab-sourced section (``chain_frame`` + ``chain_source`` +
+    ``preclose_spot``) is a 15:45 pre-close snapshot: its close is the receipt's
+    same-instant spot mid, its feature values are computed IN MEMORY for that
+    session, and every date surface carries the pre-close convention. The
+    on-disk feature store is NEVER written from here -- it is H5 entry_watch's
+    registered input path.
+    """
+    from options_researcher import schwab_chain_view as schwab_view
+
+    schwab_sourced = chain_source == schwab_view.CHAIN_SOURCE
+    chain = chain_frame if chain_frame is not None else pd.read_parquet(chain_path)
     raw_closes = load_closes(symbol, "2018-01-01", day, allow_oos=True)
     adjusted_closes = load_closes_adjusted(
         symbol, "2018-01-01", day, allow_oos=True)
-    close = float(raw_closes.iloc[-1])
+    closes_as_of = str(raw_closes.index[-1])
     technicals = technical_snapshot(adjusted_closes)
-    rv21 = float(row["rv21"])
-    iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
-    iv_minus_rv = (float(row["iv_minus_rv"])
-                   if pd.notna(row["iv_minus_rv"]) else 0.0)
+    feature_unavailable: list[dict] = []
+
+    if schwab_sourced:
+        # D4b: per-session feature values, computed in memory from the fresh
+        # chain. rv21 and iv_minus_rv need underlying closes THROUGH the
+        # session; the closes store ends earlier and its refresh is owner-gated,
+        # so they are unavailable -- never interpolated across the hole.
+        if preclose_spot is None:
+            # Unreachable from _gather_all (it refuses a fresh chain without a
+            # verified spot); explicit so a future caller cannot pair a fresh
+            # chain with a stale close by omission.
+            raise ValueError(
+                f"{symbol}: a schwab-sourced section requires a verified "
+                "15:45 spot")
+        close = float(preclose_spot)
+        close_as_of, close_kind = day, schwab_view.CLOSE_KIND
+        features_as_of, features_stale = day, False
+        features_source = "schwab_preclose_session"
+        rv21 = float("nan")
+        iv_minus_rv = float("nan")
+        iv_rank = (float(iv_rank_preview) if iv_rank_preview is not None
+                   else float("nan"))
+        iv_rank_label = ("preview (capture-lane calibration)"
+                         if iv_rank_preview is not None else None)
+        atm_iv = _session_atm_iv(chain, day)
+        gap = (f"underlying closes end {closes_as_of}, before this "
+               f"{day} session")
+        feature_unavailable.append({"field": "rv21", "reason": gap})
+        feature_unavailable.append({"field": "iv_minus_rv", "reason": gap})
+        if iv_rank_preview is None:
+            feature_unavailable.append({
+                "field": "iv_rank",
+                "reason": "no capture-lane IV-rank preview for this session"})
+    else:
+        # DATE-ALIGNED feature row: the row FOR the chain day when it exists,
+        # else the newest row at-or-before it (never a future row -- that
+        # would be look-ahead). A mismatch is recorded as features_as_of so
+        # the page can say the IV badges are stale instead of hiding it.
+        feats = load_features(symbol)
+        at_or_before = feats.loc[feats.index.astype(str) <= day]
+        if at_or_before.empty:
+            row = feats.iloc[0]
+            features_as_of = str(feats.index[0])
+        else:
+            row = at_or_before.iloc[-1]
+            features_as_of = str(at_or_before.index[-1])
+        close = float(raw_closes.iloc[-1])
+        close_as_of, close_kind = closes_as_of, schwab_view.EOD_CLOSE_KIND
+        features_stale = features_as_of != day
+        features_source = "feature_store"
+        iv_rank_label = None
+        # FAIL-CLOSED: an unavailable feature stays NaN and grades UNKNOWN.
+        # The former `else 0.0` coercions manufactured verdicts out of missing
+        # data -- iv_rank 0.0 grades iv_for_buyer GREEN ("cheapest IV this name
+        # has ever shown") and iv_minus_rv 0.0 clears the VRP GREEN threshold of
+        # exactly 0.0. Both read as evidence; neither was a measurement.
+        rv21 = float(row["rv21"]) if pd.notna(row["rv21"]) else float("nan")
+        iv_rank = (float(row["iv_rank"]) if pd.notna(row["iv_rank"])
+                   else float("nan"))
+        iv_minus_rv = (float(row["iv_minus_rv"])
+                       if pd.notna(row["iv_minus_rv"]) else float("nan"))
+        atm_iv = (float(row["atm_iv"])
+                  if "atm_iv" in row.index and pd.notna(row["atm_iv"])
+                  else float("nan"))
+        for field, value in (("rv21", rv21), ("iv_rank", iv_rank),
+                             ("iv_minus_rv", iv_minus_rv)):
+            if value != value:
+                feature_unavailable.append({
+                    "field": field,
+                    "reason": f"no finite value in the {features_as_of} "
+                              "feature row"})
     # Core names keep the curated per-symbol CSV. Watchlist names have
     # none: the ladder is built with an empty date list (every earnings
     # badge UNKNOWN) and re-graded per card from the v3 point-in-time
@@ -1246,11 +1594,47 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                "covered_shares": held_shares,
                "leaps_held": symbol in held_leaps,
                "features_as_of": features_as_of,
-               "features_stale": features_as_of != day,
+               "features_stale": features_stale,
+               "features_source": features_source,
+               "feature_unavailable": feature_unavailable,
+               "atm_iv": atm_iv,
+               "chain_source": chain_source or schwab_view.THETADATA_CHAIN_SOURCE,
+               "close_as_of": close_as_of,
+               "close_kind": close_kind,
+               "closes_as_of": closes_as_of,
+               "technicals_as_of": closes_as_of,
                "earnings_source": earnings_source,
                "technicals": technicals,
                "technicals_line": technical_summary_line(technicals)}
+    if iv_rank_label:
+        section["iv_rank_label"] = iv_rank_label
+    if fresh_refusal_reason:
+        section["fresh_refusal_reason"] = fresh_refusal_reason
     return section, rv21
+
+
+def _session_atm_iv(chain, day: str) -> float:
+    """ATM implied vol for one session, on features.py's own convention.
+
+    0.50-delta PUT on the nearest monthly expiration in the 15-60 DTE band
+    (options_researcher.features.build_daily_features). NaN when the band has
+    no monthly or no quotable ATM row -- never a substitute tenor.
+    """
+    from datetime import date as _date
+
+    from options_researcher.chains import atm_row, nearest_monthly
+
+    try:
+        expiration = nearest_monthly(chain, _date.fromisoformat(day))
+        if expiration is None:
+            return float("nan")
+        row = atm_row(chain, expiration)
+        if row is None:
+            return float("nan")
+        value = float(row["iv"])
+    except (KeyError, TypeError, ValueError):
+        return float("nan")
+    return value if value == value and value > 0 else float("nan")
 
 
 def sections_json(sections: list[dict] | None = None) -> str:
@@ -1261,7 +1645,7 @@ def sections_json(sections: list[dict] | None = None) -> str:
     blocked: list[dict] = []
     if sections is None:
         with _input_root_cwd():
-            sections, _, blocked = _gather_all()
+            sections, _rv21, blocked, _schwab_state = _gather_all()
     _dates = {s["as_of"] for s in sections} if sections else set()
     as_of = next(iter(_dates)) if len(_dates) == 1 else None
     return json.dumps({"as_of": as_of, "sections": sections,
@@ -1914,9 +2298,17 @@ def _scenario_table(rows: list[dict]) -> str:
             + "".join(trs) + "</tbody></table>")
 
 
-def _bbb_table(rows: list[dict]) -> str:
-    """Bull/base/bear mini-table with its honest framing label."""
+def _bbb_table(rows: list[dict], *, absent_reason: object = None) -> str:
+    """Bull/base/bear mini-table with its honest framing label.
+
+    An absent table states WHY when the caller knows: silence reads as "no
+    scenarios worth showing" rather than "the input this table needs does not
+    exist for this session".
+    """
     if not rows:
+        if isinstance(absent_reason, str) and absent_reason:
+            return ('<div class="notice watch">! Scenario table unavailable — '
+                    f"{_esc(absent_reason)}.</div>")
         return ""
     trs = []
     for r in rows:
@@ -2039,7 +2431,8 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
         parts.append(f'<div class="label oi-line">{_esc(card["oi_change_line"])}</div>')
     if tech_note:
         parts.append(f'<div class="tech-line">{_esc(tech_note)}</div>')
-    parts.append(_bbb_table(card.get("bbb", [])))
+    parts.append(_bbb_table(card.get("bbb", []),
+                            absent_reason=card.get("bbb_absent")))
     parts.append(f'<div class="header-sub">{_esc(card.get("verdict", ""))}</div>')
     if card.get("countdown"):
         parts.append(f'<div class="label">{_esc(card["countdown"])}</div>')
@@ -2168,6 +2561,16 @@ def _qm_card_context_html(pick: dict, symbol_context: Mapping[str, object] | Non
         return (
             '<div class="notice watch">! QM DATA BLOCKED — no exact-session '
             "context for this symbol.</div>"
+        )
+    if _qm_is_not_covered(symbol_context):
+        # Structural, not staleness: the frozen study never measured this name,
+        # and no refresh can change that. Say so per name instead of blanking
+        # the panel for the names the study does cover.
+        return (
+            '<div class="notice info">QM NOT COVERED — '
+            f"{_esc(str(symbol_context.get('reason', 'this name is not in the frozen QM study')))}"
+            ". No QM context exists for it; the mechanical card above is "
+            "unchanged.</div>"
         )
     if symbol_context.get("status") != "CURRENT":
         return (
@@ -2479,6 +2882,43 @@ def _original_hero_html(
     )
 
 
+def _qm_two_date_label_html(
+    data: Mapping[str, object], qm_context: Mapping[str, object] | None
+) -> str:
+    """Print BOTH dates: QM's daily-bar session and the board's chain session.
+
+    They are different data types with different natural frequencies (a daily
+    bar for a session that is still open does not exist), so one date cannot
+    describe both. Naming each one is what keeps the panel honest now that it
+    no longer demands they be equal.
+    """
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE, CONVENTION_LABEL
+
+    if not isinstance(qm_context, Mapping):
+        return ""
+    qm_as_of = qm_context.get("as_of")
+    board = data.get("data_as_of")
+    if not isinstance(qm_as_of, str) or not qm_as_of:
+        return ""
+    board_text = (
+        f"{CONVENTION_LABEL} {board}" if data.get("as_of_kind") == CHAIN_SOURCE
+        else f"close {board}"
+    )
+    not_covered = qm_context.get("not_covered")
+    not_covered = [str(name) for name in not_covered] if isinstance(
+        not_covered, (list, tuple)) else []
+    covered_note = (
+        f" Not covered by the frozen study: {', '.join(sorted(not_covered))} "
+        "(no QM context exists for these names)."
+        if not_covered else ""
+    )
+    return (
+        f'<div class="label">QM daily-bar context as of {_esc(qm_as_of)}; '
+        f"board option chains {_esc(str(board_text))}."
+        f"{_esc(covered_note)}</div>"
+    )
+
+
 def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, object] | None) -> str:
     """Render lower QM context on mechanical slots, or three fail-closed slots."""
     data_as_of = str(data.get("data_as_of") or "?")
@@ -2522,7 +2962,7 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
         '<p class="header-sub">A secondary research context shown after the mechanical '
         "shortlist. These are the same mechanical cards in the same mechanical order. "
         "QM does not select, rank, validate, or change the edge or verdict of any "
-        "option contract.</p></div>"
+        f"option contract.</p>{_qm_two_date_label_html(data, qm_context)}</div>"
         '<div class="hero-stats">'
         f'<div class="hero-stat good"><strong>{selected_count}</strong>'
         "<span>Shown</span></div>"
@@ -2843,6 +3283,108 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
     )
 
 
+def _as_of_chip_label(data: Mapping[str, object]) -> str:
+    """Header chip label. A pre-close session is never called a close.
+
+    The chip ages with the board: a pre-close badge next to a date that is days
+    old reads as "captured today" at a glance, which is the one thing the chip
+    must never imply. Past the WARN bar it says how old, and past the BLOCK bar
+    it says STALE.
+    """
+    import config
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE, HEADER_CHIP_LABEL
+
+    if data.get("as_of_kind") != CHAIN_SOURCE:
+        return "Market close"
+    age = data.get("chain_age_sessions")
+    if not isinstance(age, int):
+        return f"{HEADER_CHIP_LABEL} · age UNKNOWN"
+    if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+        return f"STALE · {HEADER_CHIP_LABEL} · {age} sessions old"
+    if age >= config.CHAIN_STALE_WARN_SESSIONS:
+        return f"{HEADER_CHIP_LABEL} · {age} sessions old"
+    return HEADER_CHIP_LABEL
+
+
+def _as_float(value: object, default: float = 0.0) -> float:
+    """Best-effort float for display formatting only."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    return float(value)
+
+
+def _is_fresh_section(sec: Mapping[str, object]) -> bool:
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE
+
+    return sec.get("chain_source") == CHAIN_SOURCE
+
+
+def _close_stat_label(sec: Mapping[str, object]) -> str:
+    """Name the price for what it is; a 15:45 mid is not a close."""
+    if sec.get("close_kind") == "preclose_mid_1545":
+        return "Spot 15:45 pre-close"
+    return "Close"
+
+
+def _iv_rank_text(sec: Mapping[str, object]) -> str:
+    value = sec.get("iv_rank")
+    if not isinstance(value, (int, float)) or value != value:
+        return "unavailable"
+    label = sec.get("iv_rank_label")
+    text = f"{float(value):.2f}"
+    return f"{text} {label}" if isinstance(label, str) and label else text
+
+
+def _atm_iv_stat_html(sec: Mapping[str, object]) -> str:
+    value = sec.get("atm_iv")
+    if not isinstance(value, (int, float)) or value != value:
+        return ""
+    return ('<div class="symbol-stat"><span>ATM IV</span><strong>'
+            f"{float(value):.1%}</strong></div>")
+
+
+def _section_source_html(sec: Mapping[str, object]) -> str:
+    """State each symbol's quote source and the exact instant of its price."""
+    from options_researcher.schwab_chain_view import CONVENTION_LABEL
+
+    parts: list[str] = []
+    if _is_fresh_section(sec):
+        parts.append(
+            '<div class="notice info">Quotes: '
+            f"{_esc(CONVENTION_LABEL)} session "
+            f'{_esc(str(sec.get("as_of", "?")))}; price '
+            f"${_as_float(sec.get('close')):,.2f} is the 15:45 spot mid from "
+            "the same capture instant, not a closing price. Moving averages "
+            f'and trend use closes through {_esc(str(sec.get("technicals_as_of", "?")))}.'
+            "</div>")
+    refusal = sec.get("fresh_refusal_reason")
+    if isinstance(refusal, str) and refusal:
+        parts.append(f'<div class="notice watch">! {_esc(refusal)}</div>')
+    return "".join(parts)
+
+
+def _feature_unavailable_html(sec: Mapping[str, object]) -> str:
+    """Name every feature this session could not compute, and why.
+
+    Fail-closed display: the affected badges read UNKNOWN rather than taking a
+    default value, so this line is what tells the reader the badge is missing
+    evidence rather than reporting a measured neutral.
+    """
+    items = sec.get("feature_unavailable")
+    items = items if isinstance(items, (list, tuple)) else ()
+    rows = [
+        f'{_esc(str(item.get("field", "?")))}: {_esc(str(item.get("reason", "?")))}'
+        for item in items
+        if isinstance(item, Mapping)
+    ]
+    if not rows:
+        return ""
+    return ('<div class="notice watch">! Unavailable for this session — '
+            + "; ".join(rows)
+            + ". The badges these feed show UNKNOWN (never a default value), "
+            "and scenario tables that need them state their absence.</div>")
+
+
 def _blocked_html(blocked: list[dict]) -> str:
     """Fail-visible strip: every symbol that could not be analyzed, with its
     machine-readable reason. A missing symbol must never just disappear."""
@@ -2942,11 +3484,13 @@ def render(
             '<div class="eyebrow">Symbol review</div>'
             f"<h2>{_esc(sec['symbol'])}</h2>{display_only_html}</div>"
             '<div class="symbol-stats">'
-            f'<div class="symbol-stat"><span>Close</span><strong>'
-            f"${sec['close']:,.2f}</strong></div>"
+            f'<div class="symbol-stat"><span>{_esc(_close_stat_label(sec))}'
+            f"</span><strong>${sec['close']:,.2f}</strong></div>"
             f'<div class="symbol-stat"><span>IV rank</span><strong>'
-            f"{sec['iv_rank']:.2f}</strong></div>{display_date_stat}</div></div>"
-            f'<div class="symbol-body">{stale_html}{tech_html}'
+            f"{_esc(_iv_rank_text(sec))}</strong></div>"
+            f"{_atm_iv_stat_html(sec)}{display_date_stat}</div></div>"
+            f'<div class="symbol-body">{_section_source_html(sec)}'
+            f"{_feature_unavailable_html(sec)}{stale_html}{tech_html}"
             f"{_symbol_context_html(sec['symbol'], context)}{rank_note}{groups}"
             f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
             "</section>"
@@ -2980,8 +3524,8 @@ def render(
         '<p class="header-sub">Policy-gated candidates with at-expiration '
         "scenario ranges.</p></div>"
         '<div class="meta-row">'
-        f'<span class="meta-chip"><strong>Market close</strong> '
-        f"{_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
+        f'<span class="meta-chip"><strong>{_esc(_as_of_chip_label(data))}'
+        f"</strong> {_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header><main class="page-body">'
         f"{age_html}"
@@ -2997,7 +3541,11 @@ def render(
         "not predictions. Income annualization uses 365 calendar days; "
         "realized-volatility inputs use 252 trading sessions. Quotes move "
         "intraday; verify the live broker quote before making a decision. "
-        "Annualized income is simple, not compounded.</footer>"
+        "Annualized income is simple, not compounded. This page and the "
+        "mission-control dashboard date INDEPENDENTLY: this board can ride a "
+        "15:45 pre-close capture while mission control reports its own "
+        "closes-derived date, so a difference between the two is expected, "
+        "not an error.</footer>"
         "</main></body></html>"
     )
 

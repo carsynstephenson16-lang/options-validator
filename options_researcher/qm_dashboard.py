@@ -103,6 +103,8 @@ def _blocked(
     study: Mapping[str, Any] | None = None,
     quant_want: Mapping[str, Any] | None = None,
     unexpected_symbols: Sequence[str] = (),
+    board_session: str | None = None,
+    not_covered: Sequence[str] = (),
 ) -> dict[str, Any]:
     blocked = {
         "as_of": as_of,
@@ -111,7 +113,10 @@ def _blocked(
         "symbols": symbols or {},
         "study": dict(study or {}),
         "quant_want": dict(quant_want or {}),
+        "not_covered": list(not_covered),
     }
+    if board_session is not None:
+        blocked["board_session"] = board_session
     if unexpected_symbols:
         blocked["unexpected"] = True
         blocked["unexpected_symbols"] = list(unexpected_symbols)
@@ -233,8 +238,18 @@ def build_qm_context(
     load_adjusted: Callable[[str, str], pd.DataFrame] = _default_load_adjusted,
     params: Mapping[str, Any] | None = None,
     gate: Callable[[], str | None] = qm_signals.qm_prereg_gate,
+    board_session: str | None = None,
 ) -> dict[str, Any]:
-    """Build one exact-session QM context object per ticker."""
+    """Build one exact-session QM context object per ticker.
+
+    Aggregation is PER NAME (precedent: H7 amendment v1.4 per-name source
+    health). A name the frozen study never covered is a permanent, structural
+    fact about that name -- it can never become current, so letting it block
+    every covered name's context means the panel is dark forever. Uncovered
+    names render their own NOT_COVERED line; the board only goes DATA_BLOCKED
+    when a name the study DOES cover fails at this session, or when no covered
+    name is current at all (nothing honest left to show).
+    """
     gate_reason = gate()
     if gate_reason:
         return _blocked(
@@ -242,6 +257,7 @@ def build_qm_context(
             str(gate_reason),
             study=study.get("study", {}),
             quant_want=study.get("quant_want", {}),
+            board_session=board_session,
         )
     resolved_params = qm_signals.qm_params() if params is None else params
     per_symbol: dict[str, Any] = {}
@@ -266,12 +282,14 @@ def build_qm_context(
                 "unexpected": True,
             }
     blocked = [symbol for symbol, item in per_symbol.items() if item.get("status") != "CURRENT"]
-    if blocked:
-        uncovered = [
-            symbol for symbol in blocked
-            if per_symbol[symbol].get("status") == "NOT_IN_FROZEN_STUDY"
-        ]
-        stale = [symbol for symbol in blocked if symbol not in uncovered]
+    uncovered = [
+        symbol for symbol in blocked
+        if per_symbol[symbol].get("status") == "NOT_IN_FROZEN_STUDY"
+    ]
+    stale = [symbol for symbol in blocked if symbol not in uncovered]
+    current = [symbol for symbol, item in per_symbol.items()
+               if item.get("status") == "CURRENT"]
+    if stale or not current:
         reasons = []
         if uncovered:
             reasons.append("not covered by the frozen QM study: " + ", ".join(uncovered))
@@ -284,29 +302,105 @@ def build_qm_context(
             study=study.get("study", {}),
             quant_want=study.get("quant_want", {}),
             unexpected_symbols=unexpected_symbols,
+            board_session=board_session,
+            not_covered=uncovered,
         )
-    return {
+    out = {
         "as_of": as_of,
         "status": "CURRENT",
         "symbols": per_symbol,
+        "not_covered": uncovered,
         "study": dict(study.get("study", {})),
         "source": dict(study.get("source", {})),
         "quant_want": dict(study.get("quant_want", {})),
     }
+    if board_session is not None:
+        out["board_session"] = board_session
+    return out
 
 
-def load_qm_context(as_of: str, *, sidecar_path: str | Path = DEFAULT_SIDECAR) -> dict[str, Any]:
-    """Load verified study facts and combine them with current cached OHLCV."""
+def covered_symbols(symbols: Sequence[str], study: Mapping[str, Any]) -> list[str]:
+    """Names the frozen study actually covers, in the given order."""
+    return [symbol for symbol in symbols
+            if _frozen_symbol_or_block(symbol, study) is not None]
+
+
+def newest_complete_session(
+    symbols: Sequence[str],
+    board_session: str,
+    *,
+    load_adjusted: Callable[[str, str], pd.DataFrame] = _default_load_adjusted,
+) -> tuple[str | None, dict[str, str | None]]:
+    """Newest daily-bar session at-or-before ``board_session`` that ALL the
+    given names actually have, plus each name's own last cached session.
+
+    QM reads daily OHLCV bars. A bar for the current session does not exist
+    while that session is still open -- the cache drops same-day rows by design
+    -- so on a capture day the newest complete daily session is structurally
+    the board's chain session minus one. Demanding an exact match with the
+    board's 15:45 chain session would therefore blank the panel every single
+    capture day, which is not staleness, just two data types with different
+    natural frequencies. QM targets its own newest complete session instead and
+    the panel prints BOTH dates.
+
+    Returns ``(None, lasts)`` when no name has any cached bar.
+    """
+    lasts: dict[str, str | None] = {}
+    for symbol in symbols:
+        try:
+            lasts[symbol] = _last_iso(load_adjusted(symbol, board_session))
+        except Exception:  # absent/unreadable cache is a per-name fact
+            lasts[symbol] = None
+    known = [value for value in lasts.values() if isinstance(value, str) and value]
+    if not known:
+        return None, lasts
+    return min(min(known), board_session), lasts
+
+
+def load_qm_context(
+    board_session: str,
+    *,
+    sidecar_path: str | Path = DEFAULT_SIDECAR,
+    load_adjusted: Callable[[str, str], pd.DataFrame] = _default_load_adjusted,
+) -> dict[str, Any]:
+    """Load verified study facts and combine them with current cached OHLCV.
+
+    ``board_session`` is the DASHBOARD's session. The QM panel targets its own
+    newest complete daily session at-or-before it (see
+    :func:`newest_complete_session`) and reports both dates, so a fresher chain
+    source can never silently re-freeze this panel and a stale daily cache can
+    never masquerade as the board's date.
+    """
     reason = qm_signals.qm_prereg_gate()
     if reason:
-        return _blocked(as_of, reason)
+        return _blocked(board_session, reason, board_session=board_session)
     try:
         study = load_study_sidecar(sidecar_path)
     except QmContextError as exc:
-        return _blocked(as_of, str(exc))
+        return _blocked(board_session, str(exc), board_session=board_session)
     from options_researcher.h7_scope import watch_universe
 
-    return build_qm_context(watch_universe(), as_of, study=study, gate=lambda: None)
+    symbols = watch_universe()
+    covered = covered_symbols(symbols, study)
+    target, _lasts = newest_complete_session(
+        covered, board_session, load_adjusted=load_adjusted)
+    if target is None:
+        return _blocked(
+            board_session,
+            "no covered QM symbol has cached daily OHLCV",
+            study=study.get("study", {}),
+            quant_want=study.get("quant_want", {}),
+            board_session=board_session,
+            not_covered=[s for s in symbols if s not in covered],
+        )
+    return build_qm_context(
+        symbols,
+        target,
+        study=study,
+        gate=lambda: None,
+        load_adjusted=load_adjusted,
+        board_session=board_session,
+    )
 
 
 def underlying_breakeven_frequency(
@@ -415,11 +509,19 @@ def refresh_qm_ohlcv(
         else:
             results[symbol] = {"status": "CURRENT", "refreshed": True}
 
-    blocked = [s for s, item in results.items() if item["status"] != "CURRENT"]
+    # PER NAME (see build_qm_context): a sidecar-uncovered name was never
+    # loaded or fetched, so calling the refresh incomplete because of it makes
+    # a structural coverage fact look like an operational failure and turns the
+    # ritual step permanently red.
+    not_covered = [s for s, item in results.items()
+                   if item["status"] == "NOT_IN_FROZEN_STUDY"]
+    blocked = [s for s, item in results.items()
+               if item["status"] not in ("CURRENT", "NOT_IN_FROZEN_STUDY")]
     return {
         "as_of": as_of,
         "status": "DATA_BLOCKED" if blocked else "CURRENT",
         "reason": ("QM OHLCV refresh incomplete for: " + ", ".join(blocked) if blocked else ""),
+        "not_covered": not_covered,
         "symbols": results,
     }
 
@@ -442,6 +544,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     for symbol, item in result["symbols"].items():
         suffix = f" -- {item['reason']}" if item.get("reason") else ""
         print(f"{symbol}: {item['status']}{suffix}")
+    if result.get("not_covered"):
+        print("not covered by the frozen QM study (never fetched): "
+              + ", ".join(result["not_covered"]))
+    # Exit semantics unchanged for the ritual: 0 when every COVERED name is
+    # current, 1 otherwise. Only the definition of "blocked" became per-name.
     return 0 if result["status"] == "CURRENT" else 1
 
 
