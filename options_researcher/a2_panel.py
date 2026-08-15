@@ -207,6 +207,32 @@ def _target_session(sessions: Sequence[str], entry_day: str, horizon: int) -> st
     return later[horizon - 1] if len(later) >= horizon else None
 
 
+def _tactical_d1(contract: pd.Series, spot: float, tau: float) -> float | None:
+    """Invert N(d1)/phi(d1) from the entry chain's delta/gamma relation."""
+    try:
+        sigma, delta, gamma = float(contract.iv), float(contract.delta), float(contract.gamma)
+        ratio = delta / (gamma * spot * sigma * math.sqrt(tau))
+    except (TypeError, ValueError, OverflowError, ZeroDivisionError):
+        return None
+    if (
+        not all(math.isfinite(value) for value in (sigma, delta, gamma, ratio))
+        or sigma <= 0
+        or gamma <= 0
+        or ratio <= 0
+    ):
+        return None
+    lo, hi = -10.0, 10.0
+    for _ in range(80):
+        mid = (lo + hi) / 2.0
+        phi = math.exp(-0.5 * mid * mid) / math.sqrt(2.0 * math.pi)
+        value = 0.5 * (1.0 + math.erf(mid / math.sqrt(2.0))) / phi
+        if value < ratio:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
 def _csp(
     symbol: str,
     decision: str,
@@ -374,34 +400,27 @@ def _long(
             if any(column not in contract or column not in quote for column in required):
                 diagnostics.skip("missing_tactical_attribution_input")
                 return None
-            feature = (features or {}).get(symbol, {}).get(entry_day, {})
-            sigma, d1, d2, dividend_yield = (
-                feature.get("d_sigma"),
-                feature.get("d1"),
-                feature.get("d2"),
-                feature.get("dividend_yield"),
-            )
-            if sigma is None or d1 is None or d2 is None or dividend_yield is None:
-                diagnostics.skip("missing_tactical_derived_greek_input")
-                return None
             ds = float(raw[day]) - float(raw[entry_day])
             d_sigma = float(quote.iv) - float(contract.iv)
             iv = float(contract.iv)
+            tau = max((_day(str(contract.expiration)) - _day(entry_day)).days / 365.0, 0.0)
+            d1 = _tactical_d1(contract, float(raw[entry_day]), tau) if tau > 0 else None
+            if d1 is None:
+                diagnostics.skip("invalid_tactical_delta_gamma_ratio")
+                return None
+            d2 = d1 - iv * math.sqrt(tau)
             numeric = (
                 iv,
                 d_sigma,
-                float(d1),
-                float(d2),
-                float(dividend_yield),
+                d1,
+                d2,
                 float(contract.theta),
             )
             if not all(math.isfinite(value) for value in numeric) or iv <= 0:
                 diagnostics.skip("invalid_tactical_iv")
                 return None
-            normal_density = math.exp(-0.5 * float(d1) ** 2) / math.sqrt(2.0 * math.pi)
-            tau = max((_day(str(contract.expiration)) - _day(entry_day)).days / 365.0, 0.0)
-            vanna = -math.exp(-float(dividend_yield) * tau) * normal_density * float(d2) / iv
-            volga = float(contract.vega) * float(d1) * float(d2) / iv
+            vanna = -float(contract.gamma) * float(raw[entry_day]) * math.sqrt(tau) * d2
+            volga = float(contract.vega) * d1 * d2 / iv
             components["stock_price"] = float(contract.delta) * ds * 100 / denom
             components["iv"] = float(contract.vega) * d_sigma / (denom / 100)
             components["decay"] = (
