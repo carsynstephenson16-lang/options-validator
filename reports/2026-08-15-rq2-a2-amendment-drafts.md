@@ -1,5 +1,11 @@
 # RQ2 + A2 pre-result amendment drafts — 2026-08-15 owner rulings
 
+**APPENDED 2026-08-15 ~18:21 ET** via the typed API after round-2 review:
+`RQ2_AMENDMENT_V1_2` = ledger seq 26 (record_hash prefix `8df1f3b83b52`),
+`A2_AMENDMENT_V1_1` = ledger seq 27 (record_hash prefix `ee267f17d575`);
+`ledger verify: OK`. The blocks below are the drafting record; the ledger
+entries are authoritative.
+
 **Status:** review round 1 (2026-08-15,
 `reports/2026-08-15-monday-ship-adversarial-review-receipt.md`) returned
 **FAIL on this document as then written** (blockers B-2, B-3 + fixes); the
@@ -8,8 +14,11 @@ a confirmation round. Only on a confirmation-round PASS is each block below
 appended verbatim (minus this document's headers) to
 `ledger/experiments.jsonl` via the `research/ledger.py` typed API under the
 recording provenance "owner-delegated standing 2026-07-25 (drafted by Fable
-session 2026-08-15; adversarial review round 1 FAIL → fixes applied →
-round 2 verdict recorded in the receipt)". The owner retains veto by further
+session 2026-08-15; owner rulings recorded in
+reports/2026-08-15-owner-rulings.md; independent adversarial review round 1
+FAIL → fixes applied → round 2 PASS WITH FIXES, receipt
+reports/2026-08-15-monday-ship-adversarial-review-receipt.md, round-2
+residuals closed before append)". The owner retains veto by further
 append-only amendment.
 
 **Pre-result attestation (applies to both blocks):** no RQ2 or A2 result,
@@ -39,7 +48,9 @@ seeing data.
 
 > RQ2_AMENDMENT_V1_2 2026-08-15: owner-directed in-session pre-result
 > amendment to RQ2-v1 (seq 18 owner-typed 2026-07-23; seq 25
-> RQ2_AMENDMENT_V1_1 2026-08-10). Five clauses.
+> RQ2_AMENDMENT_V1_1 2026-08-10). Owner rulings source of record:
+> reports/2026-08-15-owner-rulings.md (same-day dated report, repo
+> precedent of the 2026-08-14 decision reports). Five clauses.
 >
 > (1) B1 FIRING RULE. Seq 18's earnings gate on Badge B/B1 ("earnings-GATED")
 > is REMOVED as a gate. B1 computes and may fire daily on every universe
@@ -62,9 +73,13 @@ seeing data.
 > every name", which is the rule recorded here. B1's numeric thresholds are
 > UNCHANGED (ts_pctl >= 0.75 AND vrp_pctl <= 0.25, seq 18 owner-typed).
 >
-> (2) FORWARD WINDOW. The RQ2-v1 forward window opens 2026-08-17 (first
-> scored session) and its twelve-month backstop (seq 18, unchanged in
-> length) therefore ends 2027-08-17. Disclosure: the 2026-09-01 date that
+> (2) FORWARD WINDOW. The RQ2-v1 forward window opens 2026-08-17, with the
+> first ADMISSIBLE scored session defined as the LATER of 2026-08-17 and
+> the first session on/after this amendment's own append timestamp (so no
+> session recorded before this amendment existed can ever be counted; if
+> this amendment appends before 2026-08-17, the two dates coincide and the
+> window is simply 2026-08-17). The twelve-month backstop (seq 18,
+> unchanged in length) runs from the first admissible session. Disclosure: the 2026-09-01 date that
 > propagated through reports and README was an LLM-proposed delegated-table
 > draft never frozen in this ledger (see the 2026-08-10 attribution
 > correction in reports/2026-08-09-attractiveness-experiment-authorization.md);
@@ -173,7 +188,8 @@ seeing data.
 
 > A2_AMENDMENT_V1_1 2026-08-15: owner-directed in-session pre-result
 > amendment to A2-v1 (seq 19, registered 2026-07-23, never run — no result
-> exists). Single clause: A2-v1's board is the current 18-name
+> exists). Owner ruling source of record:
+> reports/2026-08-15-owner-rulings.md. Single clause: A2-v1's board is the current 18-name
 > config.ATTRACTIVENESS_UNIVERSE and its bucket split is terciles of the
 > frozen GREEN-fraction ranking, top 6 versus bottom 6 (was "top third
 > versus bottom third (15-name board gives 5 names per bucket)" per
