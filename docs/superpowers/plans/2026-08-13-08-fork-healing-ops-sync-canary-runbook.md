@@ -110,6 +110,38 @@ approval, is what lets the first real canary capture happen.
    (`~/options-validator-research`, branch `deploy/research`, clean, 72+
    behind) to the healed origin/main. `tools/research_refresh.sh` is tracked
    on both refs; the LaunchAgent path survives.
+9a. **[AGENT, EVERY MERGE — rule R1, brief 11 §9.1]** *Any* merge to
+    `origin/main`, by any session, agent, or the owner, is not complete until
+    **both** production checkouts are fast-forwarded. Step 9 does this once for
+    the research worktree; R1 generalizes it to every merge and both checkouts:
+
+    ```bash
+    git -C ~/options-validator-ops fetch -q origin main && git -C ~/options-validator-ops merge --ff-only origin/main
+    git -C ~/options-validator-research fetch -q origin main && git -C ~/options-validator-research merge --ff-only origin/main
+    git -C ~/options-validator-ops rev-parse HEAD          # must equal origin/main
+    git -C ~/options-validator-research rev-parse HEAD     # must equal origin/main
+    ```
+
+    If `--ff-only` refuses, **STOP** — ops has local commits (the ritual's
+    evidence commit whose push failed; brief 11 §9.2). Do not merge or reset;
+    diagnose first.
+9b. **[OPERATOR — rule R2, pre-canary self-check, brief 11 §9.1]** On every
+    trading day, confirm before 15:45 ET that after a fetch
+    `git -C ~/options-validator-ops rev-parse HEAD` equals
+    `git -C ~/options-validator-ops rev-parse origin/main`. The 15:45 wrapper
+    fetches and then refuses on a **behind**-divergence, and a refusal at 15:45
+    loses that session's chains permanently. (Since owner decision D-3, an
+    **ahead**-divergence consisting only of evidence-path commits is tolerated
+    by the wrapper — `tools/schwab_chain_capture.sh`; a code commit or being
+    behind still refuses.)
+
+    > **R2 is currently unenforced and has already failed once.** On
+    > 2026-08-14 PR #36 merged at 10:28:03 ET and ops was realigned at
+    > 14:28:10 ET — four hours behind, undetected. Whether R2 becomes a
+    > mechanism (a scheduled pre-15:45 alignment check, which needs a NEW plist
+    > and therefore an owner `launchctl bootstrap`) or stays a documented
+    > habit, or the risk is explicitly accepted, is **owner decision D-6 —
+    > PENDING** (brief 11 §12). This step is the D-6b minimum in the meantime.
 10. **[BLOCKED until `codex/h7-schwab-recovery` passes its own independent
     adversarial review and merges] Owner decision packet re-presentation.**
     The B3-compliant 2026-08-11 feasibility receipt (4/1050, expected entries
@@ -137,8 +169,17 @@ approval, is what lets the first real canary capture happen.
   on origin/main) — deletion is an owner-approved cleanup batch; run the
   irreplaceable-data guard + the untracked/ignored-files check on each
   worktree first, per the worktree rule.
-- Any change to `data/ritual_authority.py` — that flip is the owner's, last,
-  after registration.
+- ~~Any change to `data/ritual_authority.py` — that flip is the owner's, last,
+  after registration.~~ **SUPERSEDED, owner-directed 2026-08-14** (owner wording
+  in session: "I want to switch it back on"). See
+  `docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md` §1.2.
+  The supersession is **partial and named**: the owner directed that the
+  **non-verdict-bearing data/display phase** may be switched on before
+  registration, which is what the new `ritual_data_phase_active` flag
+  authorizes. `h7_active` and `exact_session_source_active` remain
+  registration-day-only and owner-only, and are untouched by brief 11 — the
+  latter now has an explicit honesty bar (spec §7, bar S1, ratified by owner
+  decision D-4 with sub-fork 3a/3b still open).
 
 ## Failure stops
 

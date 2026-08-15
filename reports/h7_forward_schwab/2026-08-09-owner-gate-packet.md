@@ -53,6 +53,19 @@ Current state: **[NO CHOICE TYPED]**.
 The patch is stored at
 `reports/h7_forward_schwab/2026-08-09-authority-flip.PREPARED.patch`. It changes
 only `exact_session_source_active=True`, `h7_active=True`, and matching tests.
+
+> **CORRECTION 2026-08-14 (brief 11 §5).** That sentence assumed **two** flags.
+> `data/ritual_authority.py` now carries **three**: the switch-on added
+> `ritual_data_phase_active`, and `evaluate_full_ritual()` is monotone — it
+> requires **all three**. A registration-day operator who flips only
+> `exact_session_source_active` and `h7_active` will be surprised by a third
+> flag and the full tier will still refuse. The stored patch is also **STALE —
+> DO NOT APPLY**: both of its hunks break at HEAD, and it must be **regenerated
+> at registration** against the then-current tree (the file itself now carries
+> that marker). Note the tests no longer need a matching edit: they run through
+> the `main(argv, authority=...)` injection seam and assert nothing about
+> `CURRENT_AUTHORITY`'s live values.
+
 It must not be applied or committed until all of these occur in order:
 
 1. Monday canary is 15/15 and its manifest verifies.
