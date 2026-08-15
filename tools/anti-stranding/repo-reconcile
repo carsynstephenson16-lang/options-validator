@@ -30,9 +30,14 @@ done
 say "# Repo digest — $TODAY"
 say ""
 NEEDS=0
+typeset -A SEEN_GITDIR
 
 for repo in "${REPOS[@]}"; do
   name=${repo:t}
+  # Linked worktrees (e.g. options-validator-ops/-research) share one git dir;
+  # process each underlying repo exactly once or every action would run N times.
+  cdir=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  [ -n "$cdir" ] && { [ -n "${SEEN_GITDIR[$cdir]}" ] && continue; SEEN_GITDIR[$cdir]=1; }
   # ops/research checkouts: report only, never act.
   case "$repo" in
     "$HOME/options-validator-ops"|"$HOME/options-validator-research") ro=1;;
@@ -114,7 +119,10 @@ for repo in "${REPOS[@]}"; do
       pr=$(cd "$repo" && gh pr list --head "$br" --state all --json number -q 'length' 2>/dev/null)
       [ "${pr:-0}" != "0" ] && continue
       draft=""; [[ "$br" == wip/* ]] && draft="--draft"
-      if act "gh pr create for $br"; then
+      if ! act "gh pr create for $br"; then
+        new_prs=$((new_prs+1)); continue   # dry-run: count so the throttle previews honestly
+      fi
+      if true; then
         (cd "$repo" && gh pr create --fill --head "$br" --base main $draft >/dev/null 2>&1) \
           && { say "- 📬 $name/$br: opened a PR so you can review/merge from anywhere."; new_prs=$((new_prs+1)); logl "PR $repo $br"; }
       fi
