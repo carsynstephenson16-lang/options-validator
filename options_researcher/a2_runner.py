@@ -150,21 +150,15 @@ def _validate_audit(audit: A2AuditResult) -> None:
         raise A2RunnerError("A2 audit must contain exactly fourteen checks")
 
 
-def _validate_realism(
-    realism_grade: str | None, realism_receipt: str | Path | None
-) -> tuple[str, str]:
+def _validate_realism(realism_grade: str | None, realism_receipt: Path | None) -> tuple[str, str]:
     if not isinstance(realism_grade, str) or not realism_grade.strip():
         raise A2RunnerError("reviewed realism grade is required")
-    if realism_receipt is None or not str(realism_receipt).strip():
-        raise A2RunnerError("reviewed realism receipt is required")
-    receipt = Path(realism_receipt)
-    if receipt.is_absolute() and receipt.exists():
-        receipt_hash = sha256_file(receipt)
-    elif isinstance(realism_receipt, Path):
+    if not isinstance(realism_receipt, Path):
+        raise A2RunnerError("reviewed realism receipt must be an absolute file path")
+    receipt = realism_receipt.expanduser()
+    if not receipt.is_absolute() or not receipt.is_file():
         raise A2RunnerError(f"reviewed realism receipt is unavailable: {receipt}")
-    else:
-        receipt_hash = sha256_hex(str(realism_receipt))
-    return realism_grade.strip(), receipt_hash
+    return realism_grade.strip(), sha256_file(receipt)
 
 
 def validate_report(report: Mapping[str, object]) -> None:
@@ -368,7 +362,7 @@ def build_report(
     provenance: Mapping[str, object],
     diagnostics: A2Diagnostics | None = None,
     realism_grade: str | None = None,
-    realism_receipt: str | Path | None = None,
+    realism_receipt: Path | None = None,
 ) -> dict[str, object]:
     _validate_audit(audit)
     if audit.verdict == "BLOCK":
@@ -498,7 +492,7 @@ def run_once(
     governance_dir: Path = Path("ledger"),
     paths: CachePaths | None = None,
     realism_grade: str | None = None,
-    realism_receipt: str | Path | None = None,
+    realism_receipt: Path | None = None,
 ) -> dict[str, object]:
     """Execute the one-run shell, or retry a verified report publication."""
     report_path = Path(report_path)
@@ -703,14 +697,16 @@ def _load_feature_bundle(path: Path) -> dict[str, pd.DataFrame]:
         if "date" in frame.columns:
             frame = frame.set_index("date")
         normalized: list[str] = []
-        for value in frame.index:
+        keep: list[int] = []
+        for position, value in enumerate(frame.index):
             try:
                 day = date.fromisoformat(str(value)[:10]).isoformat()
             except (TypeError, ValueError) as exc:
                 raise A2RunnerError(f"feature index is malformed: {item}: {value!r}") from exc
-            if day > config.BACKTEST_END:
-                raise A2RunnerError(f"feature index exceeds BACKTEST_END: {item}: {day}")
-            normalized.append(day)
+            if day <= config.BACKTEST_END:
+                keep.append(position)
+                normalized.append(day)
+        frame = frame.iloc[keep].copy()
         frame.index = normalized
         if len(set(normalized)) != len(normalized):
             raise A2RunnerError(f"feature index contains duplicate dates: {item}")
@@ -820,12 +816,14 @@ def _causal_earnings(inputs: A2LocalInputs, symbol: str, day: str) -> tuple[str,
     if not records:
         return tuple(inputs.earnings_assertions.get(symbol, ()))
     result: list[str] = []
+    cutoff = datetime.combine(date.fromisoformat(day), datetime.max.time(), tzinfo=timezone.utc)
     for record in records:
         event = str(record.get("event_date", ""))[:10]
         known = record.get("known_as_of_utc")
-        if known is None or str(known)[:10] <= day:
-            if len(event) == 10:
-                result.append(event)
+        if not isinstance(known, datetime) or known.tzinfo is None or known.utcoffset() is None:
+            raise A2RunnerError("earnings known_as_of_utc must be timezone-aware")
+        if known <= cutoff and len(event) == 10:
+            result.append(event)
     return tuple(sorted(set(result)))
 
 

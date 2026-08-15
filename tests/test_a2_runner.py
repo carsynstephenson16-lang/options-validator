@@ -21,6 +21,7 @@ from options_researcher.a2_runner import (
     A2RunnerError,
     CachePaths,
     OneRunError,
+    _causal_earnings,
     _load_close_bundle,
     _load_earnings,
     _load_feature_bundle,
@@ -34,7 +35,14 @@ from options_researcher.a2_runner import (
     validate_report,
 )
 
-_REALISM = {"realism_grade": "fixture", "realism_receipt": "fixture"}
+_REALISM = {"realism_grade": "fixture"}
+
+
+def _receipt() -> Path:
+    handle = tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8")
+    handle.write("fixture reviewed realism receipt\n")
+    handle.close()
+    return Path(handle.name)
 
 
 def _outcome(
@@ -85,7 +93,7 @@ class RunnerContracts(unittest.TestCase):
                         report_path=report,
                         governance_dir=Path(tmp),
                         realism_grade="fixture",
-                        realism_receipt="fixture",
+                        realism_receipt=_receipt(),
                     )
             gate.assert_not_called()
 
@@ -101,7 +109,7 @@ class RunnerContracts(unittest.TestCase):
                         report_path=Path(tmp) / "a2.json",
                         governance_dir=Path(tmp),
                         realism_grade="fixture",
-                        realism_receipt="fixture",
+                        realism_receipt=_receipt(),
                     )
             gate.assert_called_once()
 
@@ -143,7 +151,7 @@ class RunnerContracts(unittest.TestCase):
                 **_REALISM,
             },
             realism_grade="fixture",
-            realism_receipt="fixture",
+            realism_receipt=_receipt(),
         )
         self.assertEqual(report["schema"], "a2_outcome_battery_v1")
         self.assertEqual(
@@ -167,7 +175,7 @@ class RunnerContracts(unittest.TestCase):
             governance={"registration_seq": 19, "registration_hash": "a" * 64},
             provenance=dict(_REALISM),
             realism_grade="fixture",
-            realism_receipt="fixture",
+            realism_receipt=_receipt(),
         )
         csp = next(
             item
@@ -196,7 +204,7 @@ class RunnerContracts(unittest.TestCase):
                             report_path=report_path,
                             append_result=True,
                             realism_grade="fixture",
-                            realism_receipt="fixture",
+                            realism_receipt=_receipt(),
                         )
             with patch("options_researcher.a2_runner.validate_governance", return_value={}):
                 with patch(
@@ -207,7 +215,7 @@ class RunnerContracts(unittest.TestCase):
                         report_path=report_path,
                         append_result=True,
                         realism_grade="fixture",
-                        realism_receipt="fixture",
+                        realism_receipt=_receipt(),
                     )
             self.assertEqual(retry["schema"], "a2_outcome_battery_v1")
 
@@ -232,7 +240,7 @@ class RunnerContracts(unittest.TestCase):
                     load_inputs=lambda _: inputs,
                     report_path=report_path,
                     realism_grade="fixture",
-                    realism_receipt="fixture",
+                    realism_receipt=_receipt(),
                 )
             with patch(
                 "options_researcher.a2_runner.validate_governance",
@@ -261,7 +269,7 @@ class RunnerContracts(unittest.TestCase):
             governance={},
             provenance=dict(_REALISM),
             realism_grade="fixture",
-            realism_receipt="fixture",
+            realism_receipt=_receipt(),
         )
         self.assertEqual(before, source.read_bytes())
 
@@ -276,6 +284,31 @@ class RunnerContracts(unittest.TestCase):
                 provenance={},
             )
 
+    def test_realism_receipt_requires_existing_absolute_file(self):
+        for receipt in ("fixture", Path("relative-receipt.md")):
+            with self.subTest(receipt=receipt), self.assertRaisesRegex(A2RunnerError, "receipt"):
+                build_report(
+                    outcomes=(),
+                    signals={},
+                    audit=_audit(),
+                    governance={},
+                    provenance=dict(_REALISM),
+                    realism_grade="fixture",
+                    realism_receipt=receipt,
+                )
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing-receipt.md"
+            with self.assertRaisesRegex(A2RunnerError, "receipt"):
+                build_report(
+                    outcomes=(),
+                    signals={},
+                    audit=_audit(),
+                    governance={},
+                    provenance=dict(_REALISM),
+                    realism_grade="fixture",
+                    realism_receipt=missing,
+                )
+
     def test_audit_keys_must_be_exactly_one_through_fourteen(self):
         bad = A2AuditResult(checks={1: ()}, verdict="WARN", warnings=())
         with self.assertRaisesRegex(A2RunnerError, "fourteen"):
@@ -284,7 +317,7 @@ class RunnerContracts(unittest.TestCase):
                 signals={},
                 audit=bad,
                 governance={},
-                provenance={"realism_grade": "fixture", "realism_receipt": "fixture"},
+                provenance=dict(_REALISM),
             )
 
     def test_absolute_override_is_required_and_fomc_is_a_cache_input(self):
@@ -351,9 +384,9 @@ class RunnerContracts(unittest.TestCase):
                 },
                 audit=_audit(),
                 governance={},
-                provenance={"realism_grade": "fixture", "realism_receipt": "fixture"},
+                provenance=dict(_REALISM),
                 realism_grade="fixture",
-                realism_receipt="fixture",
+                realism_receipt=_receipt(),
             )
         csp = [item for item in report["variants"] if item["lane"] == "csp"]
         self.assertEqual({item["holm_family_size"] for item in csp}, {5})
@@ -377,7 +410,16 @@ class RunnerContracts(unittest.TestCase):
         self.assertEqual(events[0]["date"], date(2025, 1, 29))
         self.assertEqual(events[0]["source_id"], "fed-calendar-v1")
 
-    def test_feature_loader_rejects_malformed_or_post_cutoff_index(self):
+    def test_feature_loader_filters_post_cutoff_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "AAA_features.csv"
+            pd.DataFrame({"date": ["2025-01-02", "2026-07-01"], "rv21": [0.1, 0.9]}).to_csv(
+                path, index=False
+            )
+            loaded = _load_feature_bundle(Path(tmp))
+        self.assertEqual(list(loaded["AAA"].index), ["2025-01-02"])
+
+    def test_feature_loader_rejects_malformed_in_scope_index(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "AAA_features.csv"
             pd.DataFrame({"date": ["not-a-date"], "rv21": [0.1]}).to_csv(path, index=False)
@@ -394,7 +436,25 @@ class RunnerContracts(unittest.TestCase):
 
     def test_fixture_signal_reconstruction_preserves_card_snapshot(self):
         symbol = config.A2_UNIVERSE[0]
-        chain = pd.DataFrame({"expiration": ["2025-02-21"], "strike": [100.0]})
+        chain = pd.DataFrame(
+            [
+                {
+                    "expiration": expiry,
+                    "right": right,
+                    "strike": 100.0,
+                    "bid": 2.0,
+                    "ask": 2.2,
+                    "open_interest": 500,
+                    "delta": delta,
+                    "iv": 0.3,
+                    "vega": 0.1,
+                    "theta": -0.01,
+                    "gamma": 0.02,
+                }
+                for expiry in ("2025-01-17", "2025-02-07")
+                for right, delta in (("P", -0.2), ("C", 0.2))
+            ]
+        )
         features = pd.DataFrame(
             {"rv21": [0.2], "iv_rank": [0.4], "iv_minus_rv": [0.1]},
             index=["2025-01-02"],
@@ -408,23 +468,59 @@ class RunnerContracts(unittest.TestCase):
             fomc_events=[],
         )
 
-        def fixture_cards(*_args, **kwargs):
-            if kwargs.get("rank_key") == "annualized_yield":
-                return [
-                    {"grades": {"quality": "RED"}, "expiry": "2025-01-10", "id": "worse"},
-                    {
-                        "grades": {"quality": "GREEN", "timing": "GREEN"},
-                        "expiry": "2025-02-21",
-                        "id": "best",
-                    },
-                ]
-            return [{"grades": {"quality": "RED"}, "expiry": "2025-03-21", "id": "call"}]
+        from options_researcher.attractiveness import (
+            ladder_cards,
+            long_call_card_rows,
+            put_card_rows,
+        )
 
-        with patch("options_researcher.attractiveness.ladder_cards", side_effect=fixture_cards):
-            before = _reconstruct_signals(inputs)
-            after = _reconstruct_signals(inputs)
+        def card_snapshot():
+            cards = []
+            cards.extend(
+                ladder_cards(
+                    put_card_rows,
+                    symbol,
+                    chain,
+                    "2025-01-02",
+                    rank_key="annualized_yield",
+                    higher_is_better=True,
+                    close=100.0,
+                    rv21=0.2,
+                    iv_rank=0.4,
+                    iv_minus_rv=0.1,
+                    earnings_dates=[],
+                    fomc_dates=[],
+                )
+            )
+            cards.extend(
+                ladder_cards(
+                    long_call_card_rows,
+                    symbol,
+                    chain,
+                    "2025-01-02",
+                    rank_key="breakeven_move",
+                    higher_is_better=False,
+                    close=100.0,
+                    iv_rank=0.4,
+                )
+            )
+            return json.dumps(cards, sort_keys=True, default=str)
+
+        before = card_snapshot()
+        signals = _reconstruct_signals(inputs)
+        build_report(
+            outcomes=(),
+            signals={},
+            audit=_audit(),
+            governance={},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        after = card_snapshot()
         self.assertEqual(before, after)
-        self.assertEqual(before, {"2025-01-02": {symbol: 1.0}})
+        self.assertEqual(_reconstruct_signals(inputs), signals)
+        self.assertIn(symbol, signals["2025-01-02"])
 
 
 class CachePathTests(unittest.TestCase):
@@ -500,6 +596,17 @@ class CachePathTests(unittest.TestCase):
         )
         self.assertEqual(_reconstruct_signals(inputs), {})
         self.assertEqual(diagnostics.skips["missing_causal_fomc_provenance"], 1)
+
+    def test_causal_earnings_rejects_missing_known_timestamp(self):
+        inputs = A2LocalInputs(
+            signals={},
+            chains={},
+            raw_closes={},
+            adjusted_closes={},
+            earnings_records={"AAA": ({"event_date": "2025-01-20"},)},
+        )
+        with self.assertRaisesRegex(A2RunnerError, "known_as_of_utc"):
+            _causal_earnings(inputs, "AAA", "2025-01-02")
 
 
 if __name__ == "__main__":
