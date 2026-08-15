@@ -67,6 +67,36 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(float(selected["strike"]), 99.0)
         self.assertEqual(selected["contract_symbol"], "A")
 
+    def test_income_selector_rejects_malformed_entry_candidate_fields_before_monthly_lookup(self):
+        # Removing A2's pre-selector sanitization lets nearest_monthly() raise
+        # on these values before the existing unusable-entry path can run.
+        for field, value in (
+            ("bid", "not-a-number"),
+            ("ask", float("inf")),
+            ("expiration", "not-a-date"),
+            ("strike", float("nan")),
+            ("open_interest", "not-a-number"),
+            ("delta", float("inf")),
+        ):
+            with self.subTest(field=field):
+                self.assertIsNone(
+                    select_income_contract(
+                        _chain([_row(**{field: value})]), "2025-01-03", right="P"
+                    )
+                )
+
+    def test_malformed_income_entry_is_counted_as_invalid_csp_entry(self):
+        diagnostics = A2Diagnostics()
+        outcomes = build_historical_outcomes(
+            signals={"2025-01-02": {SYMBOL: 1.0}},
+            chains={SYMBOL: {"2025-01-03": _chain([_row(bid="not-a-number")])}},
+            raw_closes={SYMBOL: {"2025-01-02": 105.0, "2025-01-03": 104.0}},
+            adjusted_closes={SYMBOL: {"2025-01-02": 105.0, "2025-01-03": 104.0}},
+            diagnostics=diagnostics,
+        )
+        self.assertEqual(outcomes, ())
+        self.assertEqual(diagnostics.skips["invalid_csp_entry"], 1)
+
     def test_leaps_and_tactical_selectors_use_registered_deltas(self):
         leaps = _chain([_row(right="C", expiration="2025-12-19", delta=0.70)])
         tactical = _chain([_row(right="C", delta=0.40)])

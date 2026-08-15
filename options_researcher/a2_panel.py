@@ -78,23 +78,29 @@ def _stable(rows: pd.DataFrame, target: float) -> pd.Series | None:
     return rows.sort_values(["_d", "expiration", "strike", "right", "_s"], kind="stable").iloc[0]
 
 
-def _base_rows(chain: pd.DataFrame, right: str) -> pd.DataFrame:
+def _base_rows(chain: pd.DataFrame, right: str | None = None) -> pd.DataFrame:
     required = {"expiration", "strike", "right", "bid", "ask", "open_interest", "delta"}
     if not isinstance(chain, pd.DataFrame) or not required.issubset(chain):
         return pd.DataFrame()
-    mask = (chain.right.astype(str).str.upper() == right) & chain.apply(
+    rows = chain.copy()
+    for column in ("strike", "bid", "ask", "open_interest", "delta"):
+        rows[column] = pd.to_numeric(rows[column], errors="coerce")
+    mask = rows.expiration.map(_safe_day).notna() & rows.apply(
         lambda row: _usable(row) and _finite_number(row.get("delta")) is not None,
         axis=1,
     )
-    return cast(pd.DataFrame, chain.loc[mask].copy())
+    if right is not None:
+        mask &= rows.right.astype(str).str.upper() == right
+    return cast(pd.DataFrame, rows.loc[mask].copy())
 
 
 def select_income_contract(chain: pd.DataFrame, as_of: str, *, right: str) -> pd.Series | None:
     """Select at t only: nearest monthly, registered income delta, stable ties."""
-    expiry = nearest_monthly(chain, _day(as_of))
+    rows = _base_rows(chain)
+    expiry = nearest_monthly(rows, _day(as_of))
     if expiry is None:
         return None
-    rows = _base_rows(chain, right)
+    rows = cast(pd.DataFrame, rows.loc[rows.right.astype(str).str.upper() == right])
     rows = cast(pd.DataFrame, rows.loc[rows.expiration.astype(str) == expiry.isoformat()])
     rows = cast(
         pd.DataFrame,
