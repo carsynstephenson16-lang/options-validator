@@ -2972,10 +2972,74 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
     )
 
 
+_QM_MOVEMENT_SIGNAL_STATUSES = frozenset(
+    {"BREAKOUT", "PARABOLIC WARNING", "BREAKOUT + PARABOLIC WARNING"}
+)
+_QM_MOVEMENT_BANNER = (
+    "UNVALIDATED SIGNAL -- descriptive screen; no forward evidence exists "
+    "until the SS5 study reports; not an entry recommendation; no book path."
+)
+_QM_MOVEMENT_EMPTY = (
+    "No movement fires today. Expected — these patterns fired ~46 times in nine years "
+    "across twelve names."
+)
+
+
+def _qm_movement_lane_html(
+    data: Mapping[str, object], qm_context: Mapping[str, object] | None
+) -> str:
+    """Render read-only QM fires without attaching frozen-study evidence."""
+    movement = qm_context.get("movement_symbols") if isinstance(qm_context, Mapping) else None
+    movement = movement if isinstance(movement, Mapping) else {}
+    fires = [
+        (str(symbol), item)
+        for symbol, item in movement.items()
+        if isinstance(item, Mapping)
+        and item.get("status") == "CURRENT"
+        and item.get("signal_status") in _QM_MOVEMENT_SIGNAL_STATUSES
+    ]
+    label_context: Mapping[str, object] | None = qm_context
+    if isinstance(qm_context, Mapping) and isinstance(qm_context.get("movement_as_of"), str):
+        label_context = {**qm_context, "as_of": qm_context["movement_as_of"], "not_covered": []}
+    if not fires:
+        body = f'<p class="label">{_esc(_QM_MOVEMENT_EMPTY)}</p>'
+    else:
+        cards = []
+        for symbol, item in fires:
+            coverage = item.get("frozen_study_coverage")
+            coverage_html = (
+                '<div class="label">not covered by the frozen study</div>'
+                if coverage == "NOT_COVERED"
+                else ""
+            )
+            cards.append(
+                '<article class="movement-card">'
+                f"<h3>{_esc(symbol)}</h3>"
+                f'<div class="label">Current QM signal: {_esc(str(item["signal_status"]))}</div>'
+                f"{coverage_html}</article>"
+            )
+        body = f'<div class="card-grid">{"".join(cards)}</div>'
+    return (
+        '<section class="panel qm-movement">'
+        '<div class="section-header"><div>'
+        '<div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div>'
+        '<h2>QM MOVEMENT LANE</h2>'
+        '<p class="header-sub">Current-session mechanical fires from adjusted cached OHLCV, '
+        'shown in watch-universe order. This does not select, order, gate, or validate '
+        'a mechanical pick.</p>'
+        f'<div class="label">{_esc(_QM_MOVEMENT_BANNER)}</div>'
+        f"{_qm_two_date_label_html(data, label_context)}</div></div>{body}</section>"
+    )
+
+
 def _hero_html(
     data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None
 ) -> str:
-    return _original_hero_html(data, context, qm_context) + _qm_hero_html(data, context, qm_context)
+    return (
+        _original_hero_html(data, context, qm_context)
+        + _qm_movement_lane_html(data, qm_context)
+        + _qm_hero_html(data, context, qm_context)
+    )
 
 
 def _quant_want_html(qm_context: Mapping[str, object] | None) -> str:

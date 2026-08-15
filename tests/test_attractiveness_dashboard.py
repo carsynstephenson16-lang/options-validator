@@ -1556,6 +1556,97 @@ class V2RenderTests(unittest.TestCase):
             },
         }
 
+    @staticmethod
+    def _movement_context(*, statuses=("BREAKOUT",), uncovered=False):
+        context = V2RenderTests._qm_context()
+        context["movement_as_of"] = "2026-06-30"
+        context["movement_symbols"] = {
+            f"SYM{index}": {
+                "status": "CURRENT",
+                "signal_status": status,
+                "breakout_fire": "BREAKOUT" in status,
+                "parabolic_fire": "PARABOLIC WARNING" in status,
+                "frozen_study_coverage": "NOT_COVERED" if uncovered else "COVERED",
+                "frozen_study_reason": "SYM0 is not covered by the frozen study"
+                if uncovered and index == 0 else "",
+            }
+            for index, status in enumerate(statuses)
+        }
+        return context
+
+    def test_movement_lane_renders_current_fire_without_mechanical_card(self):
+        html = ad.render(
+            self._assembled(),
+            qm_context=self._movement_context(statuses=("BREAKOUT + PARABOLIC WARNING",)),
+        )
+
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        lane = html[movement_start:movement_end]
+        self.assertIn("SYM0", lane)
+        self.assertIn("BREAKOUT + PARABOLIC WARNING", lane)
+        self.assertIn("DESCRIPTIVE ONLY — NOT A TRADE RANKING", lane)
+        self.assertIn("UNVALIDATED SIGNAL -- descriptive screen; no forward evidence exists until the SS5 study reports; not an entry recommendation; no book path.", lane)
+
+    def test_movement_lane_uncovered_card_omits_frozen_study_evidence(self):
+        context = self._movement_context(statuses=("BREAKOUT",), uncovered=True)
+        context["movement_symbols"]["SYM0"].update({
+            "historical_breakout_fires": 99,
+            "historical_parabolic_fires": 88,
+            "thesis": "must not render",
+            "counter_case": "must not render",
+            "option_candidates": {"must-not": "render"},
+        })
+        html = ad.render(self._assembled(), qm_context=context)
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        lane = html[movement_start:movement_end]
+
+        self.assertIn("not covered by the frozen study", lane)
+        for forbidden in (
+            "99", "88", "must not render", "Frozen study evidence", "breakeven", "candidate",
+        ):
+            self.assertNotIn(forbidden, lane)
+
+    def test_movement_lane_no_fires_renders_exact_empty_state_without_placeholders(self):
+        html = ad.render(
+            self._assembled(),
+            qm_context=self._movement_context(statuses=("NO FIRE", "NO FIRE")),
+        )
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        lane = html[movement_start:movement_end]
+
+        self.assertIn(
+            "No movement fires today. Expected — these patterns fired ~46 times in nine years across twelve names.",
+            lane,
+        )
+        self.assertNotIn('class="movement-card"', lane)
+
+    def test_movement_fires_leave_canonical_mechanical_selection_bytes_unchanged(self):
+        import json
+
+        data = self._assembled()
+        baseline = json.dumps(
+            ad.select_top_picks(data), sort_keys=True, separators=(",", ":")
+        ).encode()
+        for statuses in ((), ("BREAKOUT",), ("PARABOLIC WARNING",),
+                         ("BREAKOUT + PARABOLIC WARNING",)):
+            with self.subTest(statuses=statuses):
+                ad.render(data, qm_context=self._movement_context(statuses=statuses))
+                actual = json.dumps(
+                    ad.select_top_picks(data), sort_keys=True, separators=(",", ":")
+                ).encode()
+                self.assertEqual(actual, baseline)
+
+    def test_movement_lane_sits_between_mechanical_top_three_and_retained_comparison(self):
+        html = ad.render(self._assembled(), qm_context=self._movement_context())
+        self.assertLess(html.index("ORIGINAL MECHANICAL TOP 3"), html.index("QM MOVEMENT LANE"))
+        self.assertLess(
+            html.index("QM MOVEMENT LANE"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+        )
+
     def test_six_slots_render_as_two_lists_and_duplicate_is_allowed(self):
         section = _v2_section()
         section["symbol"] = "AMZN"  # registered CSP name; appears as WATCH

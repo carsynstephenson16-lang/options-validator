@@ -74,3 +74,13 @@ range per table row from the appropriate base commit, document prerequisite
 commits, and reject a range that mixes Stage-8 authorization work with the
 QM display-only track. The two append-only facts above must remain in the
 review range for Track 4.
+
+> **Amendment 2026-08-15 (owner-directed in-session; provenance:
+> owner-delegated standing 2026-07-25):** the QM lane may render its own
+> standalone section whose membership is the set of names with a current-
+> session mechanical fire. The 2026-07-17 prohibitions are unchanged where
+> they matter: QM remains descriptive-only, renders below the mechanical
+> shortlist, never selects/orders/gates any mechanical pick, and frozen-study
+> statistics still never attach to names outside the frozen study's coverage.
+> Recorded by the implementing agent after independent adversarial review and
+> Fable sign-off (review receipt: PR review thread of this brief's PR).

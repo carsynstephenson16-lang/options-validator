@@ -147,17 +147,12 @@ def _not_in_frozen_study(symbol: str) -> dict[str, str]:
     }
 
 
-def _symbol_context(
-    symbol: str,
+def _live_signal_context(
     frame: pd.DataFrame,
     as_of: str,
     params: Mapping[str, Any],
-    study: Mapping[str, Any],
 ) -> dict[str, Any]:
-    frozen = _frozen_symbol_or_block(symbol, study)
-    if frozen is None:
-        return _not_in_frozen_study(symbol)
-
+    """Return only the current adjusted-OHLCV QM state, without study evidence."""
     last = _last_iso(frame)
     if last is None:
         return {"status": "NO_DATA", "reason": "no cached adjusted OHLCV"}
@@ -191,6 +186,77 @@ def _symbol_context(
         signal_status = "PARABOLIC WARNING"
     else:
         signal_status = "NO FIRE"
+    return {
+        "status": "CURRENT",
+        "signal_status": signal_status,
+        "breakout_fire": breakout,
+        "parabolic_fire": parabolic,
+        "price": price,
+        "sma20": smas[20],
+        "sma50": smas[50],
+        "sma200": smas[200],
+        "price_vs_sma20": price / smas[20] - 1.0,
+        "price_vs_sma50": price / smas[50] - 1.0,
+        "price_vs_sma200": price / smas[200] - 1.0,
+        "ma_supports_bullish": (price > smas[20] and price > smas[50] and price > smas[200]),
+    }
+
+
+def build_qm_movement_context(
+    symbols: Sequence[str],
+    as_of: str,
+    *,
+    study: Mapping[str, Any],
+    load_adjusted: Callable[[str, str], pd.DataFrame] = _default_load_adjusted,
+    params: Mapping[str, Any] | None = None,
+    gate: Callable[[], str | None] = qm_signals.qm_prereg_gate,
+) -> dict[str, dict[str, Any]]:
+    """Read-only live QM state for the full watch universe.
+
+    This is intentionally separate from ``symbols`` in the frozen-study
+    comparison. It reads adjusted cache data only; no refresh, option chain,
+    watcher, or frozen-study statistic is involved.
+    """
+    resolved_params = qm_signals.qm_params() if params is None else params
+    gate_reason = gate()
+    movement: dict[str, dict[str, Any]] = {}
+    for symbol in symbols:
+        covered = _frozen_symbol_or_block(symbol, study) is not None
+        coverage = "COVERED" if covered else "NOT_COVERED"
+        coverage_reason = "" if covered else f"{symbol} is not covered by the frozen study"
+        if gate_reason:
+            item: dict[str, Any] = {"status": "DATA_BLOCKED", "reason": str(gate_reason)}
+        else:
+            try:
+                item = _live_signal_context(load_adjusted(symbol, as_of), as_of, resolved_params)
+            except OSError as exc:
+                item = {"status": "NO_DATA", "reason": f"{exc.__class__.__name__}: {exc}"}
+            except Exception as exc:
+                item = {
+                    "status": "UNEXPECTED_ERROR",
+                    "reason": f"{exc.__class__.__name__}: {exc}",
+                    "unexpected": True,
+                }
+        item["frozen_study_coverage"] = coverage
+        item["frozen_study_reason"] = coverage_reason
+        movement[symbol] = item
+    return movement
+
+
+def _symbol_context(
+    symbol: str,
+    frame: pd.DataFrame,
+    as_of: str,
+    params: Mapping[str, Any],
+    study: Mapping[str, Any],
+) -> dict[str, Any]:
+    frozen = _frozen_symbol_or_block(symbol, study)
+    if frozen is None:
+        return _not_in_frozen_study(symbol)
+
+    live = _live_signal_context(frame, as_of, params)
+    if live.get("status") != "CURRENT":
+        return live
 
     breakout_dates = frozen.get("breakout_fire_dates", [])
     if not isinstance(breakout_dates, list):
@@ -207,18 +273,7 @@ def _symbol_context(
         symbol_study["evidence_status"] = frozen["evidence_status"]
 
     return {
-        "status": "CURRENT",
-        "signal_status": signal_status,
-        "breakout_fire": breakout,
-        "parabolic_fire": parabolic,
-        "price": price,
-        "sma20": smas[20],
-        "sma50": smas[50],
-        "sma200": smas[200],
-        "price_vs_sma20": price / smas[20] - 1.0,
-        "price_vs_sma50": price / smas[50] - 1.0,
-        "price_vs_sma200": price / smas[200] - 1.0,
-        "ma_supports_bullish": (price > smas[20] and price > smas[50] and price > smas[200]),
+        **live,
         "historical_breakout_fires": len(breakout_dates),
         "historical_parabolic_fires": len(parabolic_dates),
         "study": symbol_study,
@@ -381,11 +436,21 @@ def load_qm_context(
     from options_researcher.h7_scope import watch_universe
 
     symbols = watch_universe()
+    movement_target, _movement_lasts = newest_complete_session(
+        symbols, board_session, load_adjusted=load_adjusted)
+    movement_as_of = movement_target or board_session
+    movement_symbols = build_qm_movement_context(
+        symbols,
+        movement_as_of,
+        study=study,
+        load_adjusted=load_adjusted,
+        gate=lambda: None,
+    )
     covered = covered_symbols(symbols, study)
     target, _lasts = newest_complete_session(
         covered, board_session, load_adjusted=load_adjusted)
     if target is None:
-        return _blocked(
+        blocked = _blocked(
             board_session,
             "no covered QM symbol has cached daily OHLCV",
             study=study.get("study", {}),
@@ -393,7 +458,10 @@ def load_qm_context(
             board_session=board_session,
             not_covered=[s for s in symbols if s not in covered],
         )
-    return build_qm_context(
+        blocked["movement_as_of"] = movement_as_of
+        blocked["movement_symbols"] = movement_symbols
+        return blocked
+    context = build_qm_context(
         symbols,
         target,
         study=study,
@@ -401,6 +469,9 @@ def load_qm_context(
         load_adjusted=load_adjusted,
         board_session=board_session,
     )
+    context["movement_as_of"] = movement_as_of
+    context["movement_symbols"] = movement_symbols
+    return context
 
 
 def underlying_breakeven_frequency(
