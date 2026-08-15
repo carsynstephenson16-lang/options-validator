@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Mapping, Sequence, cast
 
+import exchange_calendars as xcals
 import pandas as pd
 
 import config
@@ -14,7 +16,6 @@ from data.pandas_feed import adverse_buy, adverse_sell, quote_valid
 from data.thetadata_adapter import passes_liquidity
 from options_researcher.a2_battery import LANE_COMPONENTS, A2Outcome
 from options_researcher.chains import is_monthly, nearest_monthly
-from options_researcher.studies.long_call_carry import _leaps_candidate
 
 
 @dataclass(slots=True)
@@ -81,8 +82,30 @@ def select_income_contract(chain: pd.DataFrame, as_of: str, *, right: str) -> pd
 
 
 def select_leaps_contract(chain: pd.DataFrame, as_of: str) -> pd.Series | None:
-    row = _leaps_candidate(chain, _day(as_of), config.H4_THESIS_DELTA)
-    return row if row is not None and quote_valid(row.bid, row.ask) else None
+    # Reproduce only the approved selector locally so A2's contract tie order
+    # is explicit; the shared presentation selector remains unchanged.
+    today = _day(as_of)
+    rows = _base_rows(chain, "C")
+    rows["_expiry"] = rows.expiration.map(_day)
+    rows["_dte"] = rows._expiry.map(lambda expiry: (expiry - today).days)
+    rows = cast(
+        pd.DataFrame,
+        rows.loc[rows._dte.between(*config.H4_THESIS_DTE_BAND)],
+    )
+    rows = cast(
+        pd.DataFrame,
+        rows.loc[(rows.delta.abs() - config.H4_THESIS_DELTA).abs() <= config.H5_INCOME_DELTA_BAND],
+    )
+    if rows.empty:
+        return None
+    rows = rows.copy()
+    rows["_tenor_distance"] = (rows._dte - 365).abs()
+    rows["_delta_distance"] = (rows.delta.abs() - config.H4_THESIS_DELTA).abs()
+    rows["_symbol"] = rows.apply(_symbol, axis=1)
+    return rows.sort_values(
+        ["_tenor_distance", "_delta_distance", "expiration", "strike", "right", "_symbol"],
+        kind="stable",
+    ).iloc[0]
 
 
 def select_tactical_contract(chain: pd.DataFrame, as_of: str) -> pd.Series | None:
@@ -190,7 +213,11 @@ def _csp(
     raw: Mapping[str, float],
     diagnostics: A2Diagnostics,
     provenance: Mapping[str, object],
+    rate: float | None,
 ) -> tuple[A2Outcome, ...] | None:
+    if rate is None:
+        diagnostics.skip("missing_matched_tenor_rate")
+        return None
     expiry, strike, denom = (
         str(contract.expiration),
         float(contract.strike),
@@ -210,9 +237,8 @@ def _csp(
             and (q := _contract_row(chains.get(d), contract)) is not None
             and adverse_buy(q.ask) * 100 <= credit / 2
         ),
-        close21,
+        expiry,
     )
-    breach = next((d for d in sessions if entry_day < d < expiry and float(raw[d]) < strike), None)
 
     def resolve(day: str, arm: str) -> A2Outcome | None:
         if day not in raw:
@@ -235,16 +261,23 @@ def _csp(
             pnl, bidask = _option_pnl(contract, quote, True)
             commission = 2 * config.COMMISSION_PER_CONTRACT
         components = {key: 0.0 for key in LANE_COMPONENTS["csp"]}
+        calendar_days = (_day(expiry) - _day(entry_day)).days
+        cash_forgone = denom * (math.exp(rate * calendar_days / 365.0) - 1.0)
+        marks = [float(raw[session]) for session in sessions if entry_day <= session <= day]
+        max_adverse = min((mark - strike) * 100.0 for mark in marks) if marks else 0.0
+        assigned = (
+            (float(raw[expiry]) - strike) * 100.0
+            if arm == "assignment_accepting" and float(raw[expiry]) < strike
+            else 0.0
+        )
         components.update(
             option_pnl=pnl / denom,
+            assigned_stock_result=assigned / denom,
             collateral_return=pnl / denom,
+            cash_return_forgone=-cash_forgone / denom,
+            max_adverse_excursion=max_adverse / denom,
             final_loss=min(pnl, 0) / denom,
-            tail_event_loss=min(pnl, 0) / denom,
         )
-        if arm == "breach_hold_21_dte" and breach is not None:
-            components["max_adverse_excursion"] = (
-                (float(raw[breach]) - float(raw[entry_day])) * 100 / denom
-            )
         return _make(
             symbol,
             decision,
@@ -283,6 +316,9 @@ def _long(
     horizons: Sequence[int],
     diagnostics: A2Diagnostics,
     provenance: Mapping[str, object],
+    adjusted: Mapping[str, float],
+    features: Mapping[str, Mapping[str, Mapping[str, float]]] | None,
+    earnings_assertions: Mapping[str, Sequence[str]] | None,
 ) -> tuple[A2Outcome, ...] | None:
     denom, sessions = adverse_buy(contract.ask) * 100, sorted(raw)
     rows: list[A2Outcome] = []
@@ -292,13 +328,62 @@ def _long(
         if day is None or quote is None:
             diagnostics.skip("invalid_resolution_quote")
             return None
+        if entry_day not in adjusted or day not in adjusted:
+            diagnostics.skip("missing_adjusted_close")
+            return None
         pnl, bidask = _option_pnl(contract, quote, False)
         components = {key: 0.0 for key in LANE_COMPONENTS[lane]}
         if lane == "leaps":
+            if any(column not in contract or column not in quote for column in ("iv", "vega")):
+                diagnostics.skip("missing_leaps_greek_or_iv")
+                return None
+            entry_iv, exit_iv = float(contract.iv), float(quote.iv)
+            adjusted_marks = [
+                float(adjusted[session])
+                for session in sessions
+                if entry_day <= session <= day and session in adjusted
+            ]
             components["option_result"] = pnl / denom
             components["stock_result"] = (float(raw[day]) - float(raw[entry_day])) * 100 / denom
+            components["delta_adjusted_stock_result"] = (
+                float(contract.delta) * (float(raw[day]) - float(raw[entry_day])) * 100 / denom
+            )
+            components["spread_cost"] = -bidask / denom
+            components["vega_contribution"] = (
+                float(contract.vega) * (exit_iv - entry_iv) / (denom / 100)
+            )
+            assertions = (earnings_assertions or {}).get(symbol, ())
+            components["earnings_exposure_count"] = float(
+                sum(entry_day < str(event) <= day for event in assertions)
+            )
+            components["drawdown"] = (
+                (min(adjusted_marks) - float(adjusted[entry_day])) * 100 / denom
+            )
         else:
-            components["stock_price"] = (float(raw[day]) - float(raw[entry_day])) * 100 / denom
+            required = ("iv", "vega", "theta", "gamma", "vanna", "volga", "delta")
+            if any(column not in contract or column not in quote for column in required):
+                diagnostics.skip("missing_tactical_attribution_input")
+                return None
+            feature = (features or {}).get(symbol, {}).get(entry_day, {})
+            sigma = feature.get("d_sigma")
+            if sigma is None:
+                diagnostics.skip("missing_tactical_sigma_change")
+                return None
+            ds = float(raw[day]) - float(raw[entry_day])
+            dt = (_day(day) - _day(entry_day)).days / 365.0
+            d_sigma = float(sigma)
+            components["stock_price"] = float(contract.delta) * ds * 100 / denom
+            components["iv"] = float(contract.vega) * d_sigma / (denom / 100)
+            components["decay"] = float(contract.theta) * dt * 100 / denom
+            components["cross_effects"] = (
+                (
+                    0.5 * float(contract.gamma) * ds * ds
+                    + 0.5 * float(contract.volga) * d_sigma * d_sigma
+                    + float(contract.vanna) * ds * d_sigma
+                )
+                * 100
+                / denom
+            )
             components["spread_cost"] = -bidask / denom
             components["residual"] = pnl / denom - sum(components.values())
         rows.append(
@@ -374,14 +459,14 @@ def build_historical_outcomes(
     chains: Mapping[str, Mapping[str, pd.DataFrame]],
     raw_closes: Mapping[str, Mapping[str, float]],
     adjusted_closes: Mapping[str, Mapping[str, float]],
-    features: Mapping[str, object] | None = None,
-    rates: Mapping[str, object] | None = None,
-    earnings_assertions: Mapping[str, object] | None = None,
+    features: Mapping[str, Mapping[str, Mapping[str, float]]] | None = None,
+    rates: Mapping[str, Mapping[str, float]] | None = None,
+    earnings_assertions: Mapping[str, Sequence[str]] | None = None,
     positions: Mapping[str, object] | None = None,
     diagnostics: A2Diagnostics | None = None,
 ) -> tuple[A2Outcome, ...]:
     """Build typed rows from supplied local data; PMCC remains no-data absent recorded positions."""
-    del features, rates, earnings_assertions, positions
+    del positions
     diag, out = diagnostics or A2Diagnostics(), []
     for decision, board in sorted(signals.items()):
         for symbol, score in sorted(board.items()):
@@ -408,6 +493,8 @@ def build_historical_outcomes(
             put = select_income_contract(chain, entry_day, right="P")
             if _usable(put):
                 assert put is not None
+                raw_rate = (rates or {}).get(symbol, {}).get(entry_day)
+                rate = float(raw_rate) if raw_rate is not None else None
                 rows = _csp(
                     symbol,
                     decision,
@@ -418,6 +505,7 @@ def build_historical_outcomes(
                     raw,
                     diag,
                     provenance,
+                    rate,
                 )
                 if rows:
                     out.extend(rows)
@@ -448,6 +536,9 @@ def build_historical_outcomes(
                     config.A2_LEAPS_HORIZONS,
                     diag,
                     provenance,
+                    adjusted_closes.get(symbol, {}),
+                    features,
+                    earnings_assertions,
                 )
                 if rows:
                     out.extend(rows)
@@ -466,6 +557,9 @@ def build_historical_outcomes(
                     config.A2_TACTICAL_HORIZONS,
                     diag,
                     provenance,
+                    adjusted_closes.get(symbol, {}),
+                    features,
+                    earnings_assertions,
                 )
                 if rows:
                     out.extend(rows)
@@ -481,7 +575,15 @@ def audit_historical_inputs(
 ) -> A2AuditResult:
     """Programmatic fourteen-check audit, with any selected-contract failure blocking."""
     selected, checks = selected_contracts or set(), {n: [] for n in range(1, 15)}
+    calendar = xcals.get_calendar("XNYS")
     for symbol, daily in chains.items():
+        observed = {_day(session) for session in daily}
+        if observed:
+            expected = {
+                stamp.date() for stamp in calendar.sessions_in_range(min(observed), max(observed))
+            }
+            for missing in sorted(expected - observed):
+                checks[1].append(f"{symbol} {missing}: missing XNYS session")
         for session, chain in daily.items():
             if not isinstance(chain, pd.DataFrame) or chain.empty:
                 checks[1].append(f"{symbol} {session}: missing chain")
@@ -490,13 +592,14 @@ def audit_historical_inputs(
             if not required.issubset(chain):
                 checks[1].append(f"{symbol} {session}: missing columns")
                 continue
-            if session not in raw_closes.get(symbol, {}):
+            raw_close = raw_closes.get(symbol, {}).get(session)
+            if raw_close is None:
                 checks[13].append(f"{symbol} {session}: missing independent close")
             if "timestamp" not in chain:
                 checks[9].append(f"{symbol} {session}: missing timestamp")
-            if chain.empty:
-                checks[2].append(f"{symbol} {session}: missing expirations")
-            close = raw_closes.get(symbol, {}).get(session)
+            if not any(_day(row.expiration) > _day(session) for _, row in chain.iterrows()):
+                checks[2].append(f"{symbol} {session}: no reachable expiration")
+            close = raw_close
             if close is not None and not any(
                 abs(float(row.strike) - float(close)) / float(close) <= 0.10
                 for _, row in chain.iterrows()
@@ -510,7 +613,7 @@ def audit_historical_inputs(
                     checks[4].append(tag)
                 if any(
                     pd.notna(row.get(c)) and float(row[c]) < 0
-                    for c in ("bid", "ask", "open_interest")
+                    for c in ("bid", "ask", "volume", "open_interest")
                 ):
                     checks[5].append(tag)
                 if pd.notna(bid) and pd.notna(ask) and float(bid) > float(ask):
@@ -530,8 +633,22 @@ def audit_historical_inputs(
                     checks[11].append(tag)
                 if _day(row.expiration).weekday() >= 5:
                     checks[14].append(tag)
+                if not calendar.is_session(_day(row.expiration)):
+                    checks[14].append(tag)
+                timestamp = row.get("timestamp")
+                if timestamp is not None and pd.notna(timestamp):
+                    try:
+                        if abs((_day(str(timestamp)[:10]) - _day(session)).days) > 1:
+                            checks[9].append(tag)
+                    except ValueError:
+                        checks[9].append(tag)
+                underlying = row.get("underlying_price")
+                if raw_close is not None and underlying is not None and pd.notna(underlying):
+                    if abs(float(underlying) - float(raw_close)) / float(raw_close) > 0.005:
+                        checks[13].append(tag)
     warnings = tuple(f"check {n}: {x}" for n, rows in checks.items() for x in rows)
-    block = any(contract in warning for _, _, contract in selected for warning in warnings)
+    selected_tags = {f"{symbol} {session} {contract}" for symbol, session, contract in selected}
+    block = any(warning.partition(": ")[2] in selected_tags for warning in warnings)
     result = A2AuditResult(
         {n: tuple(rows) for n, rows in checks.items()},
         "BLOCK" if block else ("PASS WITH WARNINGS" if warnings else "PASS"),

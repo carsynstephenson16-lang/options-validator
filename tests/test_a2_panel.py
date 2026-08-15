@@ -70,6 +70,28 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(float(select_leaps_contract(leaps, "2025-01-03")["delta"]), 0.70)
         self.assertEqual(float(select_tactical_contract(tactical, "2025-01-03")["delta"]), 0.40)
 
+    def test_leaps_selector_breaks_equal_delta_ties_by_contract_identity(self):
+        chain = _chain(
+            [
+                _row(
+                    right="C",
+                    expiration="2025-12-19",
+                    strike=110.0,
+                    delta=0.70,
+                    contract_symbol="Z",
+                ),
+                _row(
+                    right="C",
+                    expiration="2025-12-19",
+                    strike=100.0,
+                    delta=0.70,
+                    contract_symbol="A",
+                ),
+            ]
+        )
+        selected = select_leaps_contract(chain, "2025-01-03")
+        self.assertEqual((float(selected["strike"]), selected["contract_symbol"]), (100.0, "A"))
+
     def test_entry_uses_exact_next_session_and_never_a_later_chain_row(self):
         signal_chain = _chain([_row()])
         later_chain = _chain([_row(bid=2.5, ask=2.7)])
@@ -119,11 +141,50 @@ class ResolutionTests(unittest.TestCase):
                     "2025-01-17": 95.0,
                 }
             },
+            rates={SYMBOL: {"2025-01-01": 0.0}},
         )
         fixed = next(row for row in outcomes if row.arm == "fixed_10_sessions")
         self.assertEqual(fixed.resolution_date, "2025-01-17")
         self.assertGreater(fixed.modeled_cost, fixed.bid_ask_cost)
         self.assertAlmostEqual(fixed.cost_adjusted_return, fixed.gross_return - fixed.modeled_cost)
+
+    def test_csp_capture_50_settles_at_expiration_when_target_never_occurs(self):
+        entry = _chain([_row(expiration="2025-01-17")])
+        outcomes = build_historical_outcomes(
+            signals={"2024-12-31": {SYMBOL: 1.0}},
+            chains={SYMBOL: {"2025-01-01": entry, "2025-01-02": entry}},
+            raw_closes={
+                SYMBOL: {
+                    "2024-12-31": 105.0,
+                    "2025-01-01": 104.0,
+                    "2025-01-02": 104.0,
+                    "2025-01-17": 95.0,
+                }
+            },
+            adjusted_closes={
+                SYMBOL: {
+                    "2024-12-31": 105.0,
+                    "2025-01-01": 104.0,
+                    "2025-01-02": 104.0,
+                    "2025-01-17": 95.0,
+                }
+            },
+            rates={SYMBOL: {"2025-01-01": 0.0}},
+        )
+        capture = next(row for row in outcomes if row.arm == "capture_50")
+        self.assertEqual(capture.resolution_date, "2025-01-17")
+
+    def test_csp_requires_explicit_matched_tenor_rate(self):
+        diagnostics = A2Diagnostics()
+        outcomes = build_historical_outcomes(
+            signals={"2024-12-31": {SYMBOL: 1.0}},
+            chains={SYMBOL: {"2025-01-01": _chain([_row(expiration="2025-01-17")])}},
+            raw_closes={SYMBOL: {"2024-12-31": 105.0, "2025-01-01": 104.0}},
+            adjusted_closes={SYMBOL: {"2024-12-31": 105.0, "2025-01-01": 104.0}},
+            diagnostics=diagnostics,
+        )
+        self.assertEqual(outcomes, ())
+        self.assertEqual(diagnostics.skips["missing_matched_tenor_rate"], 1)
 
     def test_missing_or_invalid_resolution_quote_is_counted_and_not_substituted(self):
         diagnostics = A2Diagnostics()
@@ -153,6 +214,7 @@ class ResolutionTests(unittest.TestCase):
                     "2025-01-13": 95.0,
                 }
             },
+            rates={SYMBOL: {"2025-02-03": 0.0}},
             diagnostics=diagnostics,
         )
         self.assertFalse(outcomes)
@@ -166,6 +228,22 @@ class ResolutionTests(unittest.TestCase):
         )
         self.assertEqual(tuple(audit.checks), tuple(range(1, 15)))
         self.assertEqual(audit.verdict, "BLOCK")
+
+    def test_audit_blocks_selected_underlying_mismatch_and_stale_timestamp(self):
+        audit = audit_historical_inputs(
+            chains={
+                "AAA": {
+                    "2025-01-03": _chain(
+                        [_row(underlying_price=99.0, timestamp="2024-12-01T21:00:00+00:00")]
+                    )
+                }
+            },
+            raw_closes={"AAA": {"2025-01-03": 105.0}},
+            selected_contracts={("AAA", "2025-01-03", "AAA250221P00100000")},
+        )
+        self.assertEqual(audit.verdict, "BLOCK")
+        self.assertTrue(audit.checks[9])
+        self.assertTrue(audit.checks[13])
 
 
 if __name__ == "__main__":

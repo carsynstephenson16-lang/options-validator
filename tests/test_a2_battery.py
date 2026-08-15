@@ -7,6 +7,7 @@ import unittest
 from dataclasses import replace
 
 from options_researcher.a2_battery import (
+    LANE_COMPONENTS,
     A2Outcome,
     non_overlapping_inference_rows,
     staggered_descriptive_rows,
@@ -21,7 +22,6 @@ _CSP_COMPONENTS = {
     "cash_return_forgone": 0.0,
     "max_adverse_excursion": -0.02,
     "final_loss": 0.0,
-    "tail_event_loss": 0.0,
 }
 
 
@@ -66,6 +66,10 @@ def _outcome(
 
 
 class ContractTests(unittest.TestCase):
+    def test_csp_tail_loss_is_not_a_per_row_required_component(self):
+        self.assertNotIn("tail_event_loss", _CSP_COMPONENTS)
+        self.assertNotIn("tail_event_loss", LANE_COMPONENTS["csp"])
+
     def test_invalid_dates_fail_closed(self):
         for field in ("decision_date", "entry_date", "resolution_date"):
             with self.subTest(field=field):

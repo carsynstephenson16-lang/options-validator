@@ -42,7 +42,6 @@ LANE_COMPONENTS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "cash_return_forgone",
             "max_adverse_excursion",
             "final_loss",
-            "tail_event_loss",
         ),
         "covered_call": (
             "short_call_result",
