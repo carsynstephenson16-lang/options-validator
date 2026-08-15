@@ -93,39 +93,49 @@ Both capture lanes then verified working:
 
 ### 2. Root-cause split — the preclose gap was NOT a Schwab failure
 
-Two independent failure modes overlapped last week and must not be conflated:
+Two independent failure modes overlapped last week and must not be conflated
+*(corrected 2026-08-15 per adversarial-review blocker B-1 — the first draft of
+this section mixed the two lanes)*:
 
-- **Schwab-side (auth):** the expired refresh token broke BOTH lanes on
-  08-10 and 08-11 only. Evidence: `.tmp/intraday_capture/2026-08-1{0,1}_*.log`
-  in the ops checkout (`OAuthError … invalid_grant`).
-- **Repo-side (alignment guard):** the preclose chain lane ALSO refused on
-  08-11 → 08-13 **after auth was already fixed**, with
+- **Schwab-side (auth):** the expired refresh token broke the **intraday
+  quote lane only**, on 08-10 and 08-11. Evidence:
+  `.tmp/intraday_capture/2026-08-1{0,1}_*.log` in the ops checkout
+  (`OAuthError … invalid_grant`).
+- **Repo-side (alignment guard):** the preclose chain lane refused on **all
+  four days 08-10 → 08-13**, with
   `schwab_chain_capture wrapper REFUSED: HEAD is not aligned with origin/main`
-  (`.tmp/schwab_chain_capture/2026-08-1{1,2,3}_1545.log`). That is the
-  wrapper's own integrity gate (`tools/schwab_chain_capture.sh`) doing its
-  declared job on a divergent ops checkout — a sync-procedure gap, not a
-  provider failure. It cleared once ops was fast-forwarded to `origin/main`;
-  the 08-14 15:45 run then captured 15/15 first try.
+  (`.tmp/schwab_chain_capture/2026-08-1{0,1,2,3}_1545.log` — all four logs
+  carry the identical refusal line). The wrapper refuses BEFORE attempting
+  auth, so on 08-10/08-11 those captures would have failed even with a valid
+  token. This is the wrapper's own integrity gate
+  (`tools/schwab_chain_capture.sh`) doing its declared job on a divergent ops
+  checkout — a sync-procedure gap, not a provider failure. It cleared once
+  ops was fast-forwarded to `origin/main`; the 08-14 15:45 run then captured
+  15/15 first try.
 
-Consequence for staleness accounting: the 08-11→08-13 missing preclose chains
-are attributable to ops-sync procedure (since addressed by the D-6a 15:30
-alignment-check LaunchAgent + runbook rule R1), not to Schwab availability.
+Consequence for staleness accounting: **every** missing preclose chain
+capture last week (08-10→08-13) is attributable to ops-sync procedure (since
+addressed by the D-6a 15:30 alignment-check LaunchAgent + runbook rule R1),
+and **none** to Schwab availability. The token outage cost two days of the
+intraday quote lane only.
 
 ### 3. Token lifetime — claim upgraded from Inference to Official-source
 
 This report's earlier "7-day refresh token" label of **Inference** is upgraded:
 
-- **Official-source:** Schwab Trader API Documentation — "A Trader API refresh
-  token is valid for 7 days after creation."; "A Trader API access token is
-  valid for 30 minutes." The developer portal blocks automated fetch
-  (HTTP 403, as documented earlier in this report); the quoted text was read
-  from the Internet Archive's full-text mirror of Schwab's own Trader API
-  documentation (find it on archive.org by searching the document title —
-  the item's URL is deliberately not reproduced here because its slug trips
-  this repo's live-trading string filter). Independently corroborated by an
-  accessible official secondary source, schwab-py's auth documentation
-  (<https://schwab-py.readthedocs.io/en/latest/auth.html>): "requests for a
-  new access token using a refresh token older than seven days are rejected."
+- **Official-source text via third-party mirror (URL withheld):** Schwab
+  Trader API Documentation — "A Trader API refresh token is valid for 7 days
+  after creation."; "A Trader API access token is valid for 30 minutes." The
+  developer portal blocks automated fetch (HTTP 403, as documented earlier in
+  this report); the quoted text was captured 2026-08-15 ~16:20 ET from the
+  Internet Archive's full-text mirror of Schwab's own Trader API
+  documentation (archive.org; find the item by searching the document title —
+  the item slug is deliberately not reproduced in this file because it trips
+  this repo's live-trading string filter; the reader should price the claim
+  accordingly). **Secondary source (official library docs):** schwab-py's
+  auth documentation (<https://schwab-py.readthedocs.io/en/latest/auth.html>,
+  captured 2026-08-15): "requests for a new access token using a refresh
+  token older than seven days are rejected."
 - **Test-verified (production token store, 2026-08-15):** refreshing an access
   token does **NOT** reset the 7-day clock. File mtime 2026-08-15 00:52 ET;
   `creation_timestamp` unchanged at 2026-08-12 00:56 ET (schwab-py's

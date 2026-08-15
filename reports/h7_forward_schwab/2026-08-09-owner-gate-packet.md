@@ -35,7 +35,8 @@ Owner must choose and type exactly one path after review:
 - **[OWNER TYPES REDESIGN DECISION HERE]**, or
 - **[OWNER TYPES EXPLICIT STARVATION-RISK PRE-ACCEPTANCE CLAUSE HERE, quoting 3/1050, base rate 0.002857142857142857, expected entries 3.0, and the 10-loss bar].**
 
-Current state: **REDESIGN chosen** — transcription of the owner's recorded
+Current state: **REDESIGN chosen** — *TRANSCRIBED, NOT OWNER-TYPED* —
+transcription of the owner's recorded
 2026-08-13 in-session decision (this is a transcription for provenance
 hygiene, not a new decision; transcribed 2026-08-15 per decision-package
 item 7, "re-type the 08-13 redesign decision into the packet's designated

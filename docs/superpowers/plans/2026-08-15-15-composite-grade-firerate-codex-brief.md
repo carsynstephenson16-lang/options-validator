@@ -23,7 +23,11 @@ proposed as a real trigger. This stays display/diagnostic-only.
 **IN:**
 - `tools/composite_grade_firerate.py` — walks cached sessions causally,
   runs the existing `confluence_card()` per symbol-day over
-  `config.ATTRACTIVENESS_UNIVERSE` (18 names), counts grades, writes ONE
+  `config.ATTRACTIVENESS_UNIVERSE` (18 names; the `.tmp/composite_cache/`
+  contents cited below are locally verified 2026-08-15 on the main checkout
+  — `.tmp/` is gitignored local state, not verifiable at a SHA, and the
+  tool must rebuild it via the incremental builder when absent), counts
+  grades, writes ONE
   hashed JSON receipt + a small markdown summary under
   `reports/composite_firerate/`. Model the receipt mechanics EXACTLY on
   `tools/h7_schwab_feasibility.py` (`_receipt_hash`, `RECEIPT_KIND`,
@@ -53,9 +57,10 @@ GREEN-fraction baseline; no H5/H6/H7/H8/H10/RQ2/A2 paths.
 ## Work packages
 
 - **WP-A** receipt tool + receipt schema. Data source: the derived series
-  already cached in `.tmp/composite_cache/` via `composite_signals.py`'s own
-  incremental builder (36 files = 18 symbols × parquet+meta, Repo-verified
-  present) backed by `.cache/chains/` (frozen edge 2026-07-27) and
+  cached in `.tmp/composite_cache/` via `composite_signals.py`'s own
+  incremental builder (36 files = 18 symbols × parquet+meta, locally
+  verified 2026-08-15 on the main checkout) backed by `.cache/chains/`
+  (frozen edge 2026-07-27) and
   `data/underlying_closes.py`. The walk must reuse `confluence_card()`'s own
   as-of truncation — do NOT reimplement the causal logic.
 - **WP-B** dashboard grade-pill enrichment + fail-silent-absent behavior.

@@ -27,8 +27,10 @@ Repo-verified:
 - Five lanes scored separately: CSP, CC, PMCC, LEAPS, tactical.
 - CSP has five separately-registered exit arms (50% credit capture; close at
   21 DTE; fixed 10-session horizon w/ early-expiration completeness clause;
-  breach-defensive; assignment-accepting). A roll = close trade 1 + open
-  trade 2.
+  breach-defensive — meaning after a strike breach the position is HELD to
+  21 DTE and then mechanically closed, per seq 19's own wording, not any
+  other defensive scheme; assignment-accepting). A roll = close trade 1 +
+  open trade 2.
 - CC reports short-call / stock / combined / combined-minus-stock /
   assignment incidence / lost upside separately. PMCC reports both legs,
   combined, return on committed capital, per-cycle, assignment exposure;
@@ -42,16 +44,24 @@ Repo-verified:
   the statistic; the staggered book is descriptive-only.
 - Statistics: Holm step-down α=0.10, one-sided top-beats-bottom;
   `MIN_ADVERSE_BOTTOM_BUCKET = 10` — freeze this into `config.py` with
-  provenance "owner-forwarded 2026-07-23 per ledger seq 19" (it currently
-  exists only as ledger text).
-- **Universe: the current 18-name `config.ATTRACTIVENESS_UNIVERSE`, terciles
-  of 6** — owner ruling 2026-08-15 (in-session, supersedes the addendum's
-  "15-name board gives 5 per bucket" wording; growth to 18 disclosed;
-  amendment drafted in `reports/2026-08-15-rq2-a2-amendment-drafts.md`,
-  pending review then append). Implementation-time check: verify the
-  amendment record exists (grep for `A2_AMENDMENT_V1_1`, read-only); if
-  absent, run in `PENDING_AMENDMENT` mode (outputs stamped, not
-  presentable as registered-design results).
+  provenance "owner-typed 2026-07-23 (ledger seq 19)" (seq 19 is headed
+  OWNER-TYPED VALUE FREEZE; it currently exists only as ledger text).
+- **Universe (review blocker B-4 — read carefully): TERCILES IS THE RULE;
+  "top 6 vs bottom 6" is only its instantiation on the current 18-name
+  board.** Owner ruling 2026-08-15: the battery scores the board displayed
+  daily (18 names); amendment drafted in
+  `reports/2026-08-15-rq2-a2-amendment-drafts.md`. For HISTORICAL cohorts:
+  each cohort takes terciles of the names with cached data at that cohort's
+  formation date (n varies — CRWV/USAR start 2025-04, NBIS 2024-10, TEM
+  2024-07, AMAT/CLSK 2025-01), with per-cohort name counts printed in every
+  output. **MANDATORY PERMANENT DISCLOSURE on every historical output:**
+  the universe is the 2026-08 board applied retroactively; name inclusion
+  is outcome-informed (names are on this board because of what they
+  became), which biases the historical pass in unknowable directions — a
+  second reason it is exploratory-only. Implementation-time check: verify
+  `A2_AMENDMENT_V1_1` exists in the ledger (read-only grep); if absent, all
+  outputs go under `reports/a2/dryrun/` and are permanently ineligible for
+  any registered-design presentation (same fail-closed pattern as brief 14).
 
 ## Scope
 
@@ -64,8 +74,12 @@ invariance, empty-lane "no data" rendering, ±50% stress arms present,
 INSUFFICIENT_SAMPLE labeling below the adverse gate.
 
 **OUT (hard):** no ledger writes; no verdict, promotion, or rejection text
-anywhere in output; no forward-window code; no network; no changes to frozen
-cost constants; no touching the GREEN-fraction recipe; no H7 paths.
+anywhere in output — with one defined exception: the `INSUFFICIENT_SAMPLE`
+label below the adverse gate is a SAMPLE-ADEQUACY ANNOTATION on an
+exploratory pass, rendered with that exact qualifier, and is not the
+registered verdict (review fix F-8); no forward-window code; no network; no
+changes to frozen cost constants; no touching the GREEN-fraction recipe; no
+H7 paths.
 
 ## Work packages
 

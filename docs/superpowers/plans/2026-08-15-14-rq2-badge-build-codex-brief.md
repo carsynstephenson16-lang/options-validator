@@ -27,9 +27,16 @@ values (Repo-verified, `ledger/experiments.jsonl` seq 18 owner-typed
 - **B1 corner:** `ts_pctl >= 0.75` AND `vrp_pctl <= 0.25`.
 - **A1 bounce:** `dist_52w_high <= -0.20` AND `mom_1m > 0` AND
   `rv21 percentile >= 0.70`.
-- **K = 3:** B1, A1, V1 — V1 is membership-only; its scoring statistic is NOT
-  pinned; **the runner MUST refuse any V1 comparison** until a further
-  pre-result amendment pins it (seq 25 verbatim requirement).
+- **K = 3:** B1, A1, V1 (seq 25). Seq 25 required the runner to refuse any
+  V1 comparison until a pre-result amendment pins V1's statistic (faithful
+  paraphrase — read seq 25 for the exact wording). That pin is Block 1
+  clause (5) of `reports/2026-08-15-rq2-a2-amendment-drafts.md`
+  (`RQ2_AMENDMENT_V1_2`). **Gate the refusal on the pin's presence:** if
+  `RQ2_AMENDMENT_V1_2` exists in the ledger, V1 computes the pinned line-1
+  statistic (and still refuses any BLENDED comparison — the 50/50
+  destination in clause 5b needs its own future amendment); if the
+  amendment is absent, V1 refuses all comparisons, as before. Both branches
+  test-enforced.
 
 Owner rulings 2026-08-15 (in-session; amendments drafted in
 `reports/2026-08-15-rq2-a2-amendment-drafts.md`, pending adversarial review
@@ -46,13 +53,17 @@ then append via the typed ledger API — Codex does NOT touch the ledger):
   (`reports/schwab_chains/<date>/preclose.json` receipts +
   `.cache/schwab_chains/<SYM>_<date>.parquet`), verified-receipt-gated.
 
-**Implementation-time check (REQUIRED):** before wiring any of the three
-2026-08-15 rulings as active behavior, verify the corresponding amendment
-record exists in the ledger (grep `ledger/experiments.jsonl` for
-`RQ2_AMENDMENT_V1_2` — read-only). If absent, the recorder must run in
-`PENDING_AMENDMENT` mode: compute and write everything, but stamp every
-output `amendment_pending: true` and refuse to label any output as
-window-official. Fail closed, never silent.
+**Implementation-time check (REQUIRED, FAIL-CLOSED — review blocker B-5):**
+before wiring any of the three 2026-08-15 rulings as active behavior, verify
+the amendment record exists in the ledger (grep `ledger/experiments.jsonl`
+for `RQ2_AMENDMENT_V1_2` — read-only). If absent, the recorder REFUSES to
+write to the official output tree entirely. It may write diagnostics ONLY
+under `reports/rq2/dryrun/<date>/`, and any session recorded there is
+**permanently excluded from the scored window** — the future scorer must
+hard-refuse to read anything under `dryrun/` (enforce with a test). The
+scored window's first admissible session is the LATER of the registered
+open date (2026-08-17) and the first session on/after the amendment's
+append timestamp. No pre-amendment row can ever be retroactively counted.
 
 ## Scope
 
@@ -67,9 +78,14 @@ window-official. Fail closed, never silent.
   max as-of session, capture receipt path, `config_hash`, and
   `amendment_pending` flag. Idempotent per date; refuses to overwrite.
 - Constants in `config.py`, each with provenance comment citing ledger seq
-  (owner-typed) — no new invented numbers. Percentile lookbacks/min-obs reuse
-  the BS-spec conventions already cited in the 2026-07-22 brief body
-  (252 trailing / min 60, LLM-proposed 2026-07-24 delegated — label them so).
+  (owner-typed) — no new invented numbers. Percentile construction:
+  252-session trailing lookback with **min-obs 126**, ALIGNED to the repo's
+  own conventions (`features.PCT_MIN_OBS = 126`,
+  `COMPOSITE_PCTL_MIN_OBS = 126`) rather than the 2026-07-22 brief body's
+  min-60 draft — a badge firing on half the history every other lane
+  requires would be an unexplained inconsistency (review fix F-3; value
+  LLM-proposed 2026-08-15 by alignment, label it so). Names below min-obs
+  render the percentile as UNAVAILABLE, fail-visible.
 - `tests/` — unittest, offline: threshold boundary cases both sides for B1
   and A1; V1-comparison refusal test (any code path that would compare or
   rank on V1 raises); no-look-ahead invariance (future rows don't change
@@ -101,7 +117,13 @@ default view; no H7 paths.
   refusal enforced in code and tested.
 - **WP-D** wire the daily invocation into the existing preclose flow the same
   way the display-freshness lane consumes captures (read-only consumer; do
-  NOT modify `schwab_chain_capture` itself).
+  NOT modify `schwab_chain_capture` itself). HARD ISOLATION (review fix
+  F-4): a failure anywhere in `rq2_recorder` must be INCAPABLE of changing
+  the capture lane's exit status or receipts — invoke after and independent
+  of the capture's own success path, never inside it; test this. NOTE FOR
+  THE OPERATOR: this lands new code that the 15:45 ops flow runs, so the ops
+  checkout must be fast-forwarded to the merged main BEFORE the next 15:45
+  ET session, per the alignment guard and runbook rule R1.
 
 ## Acceptance / verification
 
