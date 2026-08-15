@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  TEMPLATE ONLY; not installed or loaded by this change. Runs the independent
-  durable Schwab chain lane at 15:45 ET on weekdays from the ops checkout.
-  The existing display-only intraday LaunchAgent remains unchanged.
+  Runs the independent durable Schwab chain lane at 15:45 ET on weekdays from
+  the ops checkout. This job IS installed and loaded in production; edits to
+  this template do NOT propagate until the installed copy at
+  ~/Library/LaunchAgents/ is replaced (cp + launchctl bootout/bootstrap;
+  see "Schwab chain pre-close" in tools/launchagents/README.md). The existing
+  display-only intraday LaunchAgent remains unchanged.
 -->
 <plist version="1.0">
 <dict>
