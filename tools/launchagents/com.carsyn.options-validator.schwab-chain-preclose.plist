@@ -20,6 +20,21 @@
   <dict>
     <key>TZ</key>
     <string>America/New_York</string>
+    <!--
+      rev-2.1 item 3a (spec §7 condition 3; owner-ratified 2026-08-14). This
+      marker is the ONLY thing that lets a capture receipt claim
+      invocation_source="launchd". tools/schwab_chain_capture.sh must never
+      set it, or a hand-run capture would forge unattended provenance and the
+      S1 bar's condition 3 would be worthless. Reinstalling this plist is
+      required for the field to appear on a scheduled run:
+        cp tools/launchagents/com.carsyn.options-validator.schwab-chain-preclose.plist \
+           ~/Library/LaunchAgents/
+        launchctl bootout gui/$(id -u)/com.carsyn.options-validator.schwab-chain-preclose
+        launchctl bootstrap gui/$(id -u) \
+           ~/Library/LaunchAgents/com.carsyn.options-validator.schwab-chain-preclose.plist
+    -->
+    <key>OPTIONS_VALIDATOR_INVOCATION_SOURCE</key>
+    <string>launchd</string>
   </dict>
   <key>StartCalendarInterval</key>
   <array>

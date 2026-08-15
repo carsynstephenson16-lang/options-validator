@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -80,6 +81,61 @@ ADAPTER_COLUMNS = [
     "timestamp",
     "trade_timestamp",
 ]
+
+
+
+# --- rev-2.1 item 3a: unattended-vs-manual capture provenance --------------
+#
+# Spec: docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md
+# §7 condition 3, option 3a -- "The capture receipt gains an
+# `invocation_source` field with values \"launchd\" / \"manual\", set from an
+# environment marker the plist sets and the wrapper does not."
+# Owner-ratified: reports/2026-08-14-owner-answers-decision-menu.md item 3.
+#
+# The spec names the field and its two values but not the variable, so the
+# smallest mechanism consistent with its wording is used: ONE env var, set to
+# the field's own "launchd" value by
+# tools/launchagents/com.carsyn.options-validator.schwab-chain-preclose.plist
+# and by nothing else. tools/schwab_chain_capture.sh deliberately never sets
+# it -- a wrapper-set marker would make every hand-run capture forge
+# unattended provenance, which is exactly the claim S1's condition 3 exists to
+# stop an operator asserting from memory.
+#
+# HONEST LIMIT (Inference, not Test-verified): this records a *convention*,
+# not an unforgeable proof. Anyone who exports the marker by hand gets a
+# receipt that says "launchd". It removes the from-memory assertion the S1 bar
+# was criticised for (caution C-f); it does not defeat a determined operator.
+INVOCATION_SOURCE_ENV = "OPTIONS_VALIDATOR_INVOCATION_SOURCE"
+INVOCATION_SOURCE_LAUNCHD = "launchd"
+INVOCATION_SOURCE_MANUAL = "manual"
+
+
+def resolve_invocation_source(environ: dict[str, str] | None = None) -> str:
+    """Return ``"launchd"`` only for an exact marker match, else ``"manual"``.
+
+    Fail-closed in the direction that matters: an absent, empty, misspelled,
+    or differently-cased value degrades to ``"manual"`` rather than raising.
+    This sits on the irreplaceable-capture critical path, so a bad env var
+    must cost provenance precision, never the 15:45 capture itself -- and it
+    must never round *up* to an unattended claim.
+    """
+    source = (environ if environ is not None else os.environ).get(
+        INVOCATION_SOURCE_ENV
+    )
+    if source == INVOCATION_SOURCE_LAUNCHD:
+        return INVOCATION_SOURCE_LAUNCHD
+    return INVOCATION_SOURCE_MANUAL
+
+
+def receipt_is_unattended(receipt: dict) -> bool:
+    """S1 condition 3's predicate over one capture receipt.
+
+    A receipt written before item 3a landed has NO ``invocation_source`` key.
+    That is "provenance unknown", which must count as NOT unattended -- the
+    sealed 2026-08-14 canary receipt is exactly such a receipt, and the S1 bar
+    must not credit it toward the three unattended sessions.
+    """
+    return receipt.get("invocation_source") == INVOCATION_SOURCE_LAUNCHD
 
 
 class SchwabChainCaptureError(RuntimeError):
@@ -240,6 +296,7 @@ def capture(
         "scheduled_session_tag": "preclose",
         "timing_validation": timing_reason,
         "force": bool(force),
+        "invocation_source": resolve_invocation_source(),
         "provider": getattr(client, "provider_name", "schwab"),
         "provider_version": getattr(client, "provider_version", "unknown"),
         "universe": names,
