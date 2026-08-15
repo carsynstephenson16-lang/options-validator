@@ -6,9 +6,17 @@
 # origin/main and tells the operator. It NEVER merges, pulls, resets, pushes,
 # checks out, or otherwise changes a single byte of repository state -- the
 # realign command is printed and notified, and the owner runs it. That is the
-# whole point: the 15:45 preclose capture refuses to run unless the ops
-# checkout is aligned, and every past loss of an irreplaceable capture came
-# from finding out about the divergence at 15:45 instead of at 15:30.
+# whole point: the 15:45 preclose capture REFUSES to run on a divergence its
+# own gate does not tolerate, and every past loss of an irreplaceable capture
+# came from finding that out at 15:45 instead of at 15:30.
+#
+# It predicts that gate rather than approximating it. tools/schwab_chain_capture.sh
+# tolerates exactly one divergence shape (owner decision D-3): HEAD strictly
+# AHEAD of origin/main, with the tree differing only under evidence paths --
+# typically the daily ritual's own evidence commit whose fail-soft push failed.
+# The EVIDENCE_ALLOW list and the tree-diff test below mirror that gate's
+# alignment_divergence_is_evidence_only() so this check never cries wolf about
+# a capture that will actually run, and never stays quiet about one that won't.
 #
 # The only occurrences of a mutating git verb in this file are inside the
 # HINT_* strings below (text shown to the operator). tests/
@@ -49,6 +57,32 @@ is_count() {
   return 0
 }
 
+# Kept identical to tools/schwab_chain_capture.sh's EVIDENCE_ALLOW: if the two
+# lists drift, this check starts lying about what the 15:45 gate will do.
+EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
+                reports/h7_receipts reports/h7_data_gate reports/h5
+                reports/h6_forward reports/h8_forward reports/h10
+                reports/ritual reports/intraday_capture reports/live_probe
+                reports/cache_runs reports/schwab_chains)
+
+# Tree diff, not per-commit enumeration -- same reasoning the capture wrapper
+# documents: `git log --name-only` is blind to an evil merge's own resolution
+# and reports only a rename's destination.
+ahead_is_evidence_only() {
+  AHEAD_PATHS="$(git -C "$REPO" diff --name-only --no-renames origin/main HEAD 2>/dev/null)" || return 1
+  while IFS= read -r CHANGED_PATH; do
+    [ -z "$CHANGED_PATH" ] && continue
+    PATH_OK=1
+    for ALLOWED in "${EVIDENCE_ALLOW[@]}"; do
+      case "$CHANGED_PATH" in
+        "$ALLOWED"|"$ALLOWED"/*) PATH_OK=0; break ;;
+      esac
+    done
+    [ "$PATH_OK" -eq 0 ] || return 1
+  done <<< "$AHEAD_PATHS"
+  return 0
+}
+
 AHEAD=""
 BEHIND=""
 HINT="$HINT_INSPECT"
@@ -71,9 +105,14 @@ else
     STATUS="ALIGNED"
     DETAIL="HEAD matches origin/main"
   elif [ "$BEHIND" -eq 0 ]; then
-    STATUS="AHEAD"
-    DETAIL="HEAD is ahead of origin/main by ${AHEAD} commit(s)"
     HINT="$HINT_AHEAD"
+    if ahead_is_evidence_only; then
+      STATUS="AHEAD_EVIDENCE_ONLY"
+      DETAIL="HEAD is ahead of origin/main by ${AHEAD} evidence-only commit(s); the 15:45 capture will still run (owner decision D-3)"
+    else
+      STATUS="AHEAD_CODE"
+      DETAIL="HEAD is ahead of origin/main by ${AHEAD} commit(s) touching non-evidence paths; the 15:45 capture WILL REFUSE"
+    fi
   elif [ "$AHEAD" -eq 0 ]; then
     STATUS="BEHIND"
     DETAIL="HEAD is behind origin/main by ${BEHIND} commit(s)"
@@ -90,6 +129,14 @@ echo "$LINE" >> "$LOG"
 echo "$LINE"
 
 if [ "$STATUS" = "ALIGNED" ]; then
+  exit 0
+fi
+
+# Not actionable before 15:45: the capture's own D-3 tolerance covers this
+# shape, so say it plainly, log it, and do NOT fire an alarm the operator
+# would learn to ignore.
+if [ "$STATUS" = "AHEAD_EVIDENCE_ONLY" ]; then
+  echo "INFO: ${DETAIL}. Push when convenient: ${HINT}"
   exit 0
 fi
 

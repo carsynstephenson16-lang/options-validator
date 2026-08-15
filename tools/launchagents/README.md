@@ -8,12 +8,21 @@ checkout — 15 minutes before the 15:45 Schwab preclose capture, whose own
 alignment gate refuses to run on a divergent checkout. Owner ruling 4 of
 `reports/2026-08-14-owner-answers-decision-menu.md` (D-6a).
 
-It **only looks**: it fetches `origin/main` (bounded, prompt-free), compares
-HEAD, and on ANY divergence (ahead, behind, diverged, wrong branch, or a fetch
-that failed) fires a macOS notification carrying the exact realign command,
-appends a dated line under `.tmp/alignment_check/`, and exits nonzero. When the
-checkout is aligned it exits 0 with a log line and no notification. It never
-merges, pulls, resets, or pushes — the realign command is the owner's to run.
+It **only looks**: it fetches `origin/main` (bounded, prompt-free) and compares
+HEAD. It predicts the capture's own gate instead of approximating it — that
+gate tolerates exactly one divergence shape (owner decision D-3: strictly
+ahead, with the tree differing only under evidence paths):
+
+| Result | Meaning | Exit |
+| --- | --- | --- |
+| `ALIGNED` | nothing to do | 0, log line only |
+| `AHEAD_EVIDENCE_ONLY` | evidence commits not yet pushed; **the 15:45 capture still runs** | 0, log + `INFO:` line, no alarm |
+| `AHEAD_CODE` | unpushed code; **the capture will refuse** | 1 + notification |
+| `BEHIND` / `DIVERGED` / `NOT_ON_MAIN` / `FETCH_FAILED` / `UNRESOLVED` | capture will refuse, or alignment is unknown | 1 + notification |
+
+Every result appends a dated line under `.tmp/alignment_check/`; every nonzero
+one also fires a macOS notification carrying the exact realign command. It
+never merges, pulls, resets, or pushes — that command is the owner's to run.
 
 Install (**the owner runs these; a Claude session cannot — the classifier
 denies `launchctl` to agents**):

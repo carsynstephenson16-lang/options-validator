@@ -362,6 +362,60 @@ class RecordedInvalidationTests(unittest.TestCase):
         self.assertTrue(any("changed input close:AMD" in problem
                             for problem in result["problems"]))
 
+    def test_fact_naming_the_wrong_sealed_hash_covers_nothing(self):
+        # Isolates the sealed hash in the coverage key: right receipt, right
+        # label, but the fact claims a DIFFERENT sealed hash than the one this
+        # receipt committed to, so it describes some other binding entirely.
+        root, _, receipt_path = self._tree()
+        [line] = self._record(root, receipt_path, dry_run=True)
+        payload = backup.parse_invalidation_fact(line)
+        assert payload is not None
+        wrong_sealed = hashlib.sha256(b"some-other-sealed-bytes").hexdigest()
+        self.assertNotEqual(wrong_sealed, self.SEALED)
+        mislabelled = {**payload, "bindings": {"close:AMD": wrong_sealed}}
+        index = {(payload["receipt_hash"], "close:AMD", wrong_sealed): mislabelled}
+
+        result = backup.verify_restored_tree(root, invalidations=index)
+
+        self.assertFalse(result["ok"], result)
+        self.assertEqual(result["notes"], [])
+        self.assertTrue(any("changed input close:AMD" in problem
+                            for problem in result["problems"]))
+
+    def test_a_second_change_still_passes_but_is_called_out_in_the_note(self):
+        """Characterization of the spec's "Deliberate limits" (sealed side only).
+
+        Coverage pins the hash the receipt SEALED, not the replacement bytes,
+        because the closes cache is refreshed on the ordinary operating cadence
+        and pinning the replacement would re-break the drill every refresh. The
+        price is that a later, unrelated change to the same file is accepted
+        too -- so the note says so, loudly, instead of staying silent.
+        """
+        root, _, receipt_path = self._tree()
+        [line] = self._record(root, receipt_path)
+        payload = backup.parse_invalidation_fact(line)
+        assert payload is not None
+        recorded_observed = payload["observed"]["close:AMD"]
+
+        before = backup.verify_restored_tree(root)
+        self.assertTrue(before["ok"], before)
+        self.assertNotIn("AGAIN", before["notes"][0])
+
+        # A THIRD value: neither the sealed July bytes nor the bytes observed
+        # when the invalidation was recorded.
+        (root / ".cache/underlying/AMD.parquet").write_bytes(b"september-closes")
+        after = backup.verify_restored_tree(root)
+
+        self.assertTrue(after["ok"], after)
+        self.assertEqual(after["problems"], [])
+        self.assertEqual(len(after["notes"]), 1)
+        self.assertNotEqual(after["notes"][0], before["notes"][0])
+        self.assertIn("changed AGAIN since the invalidation was recorded",
+                      after["notes"][0])
+        self.assertIn(recorded_observed[:12], after["notes"][0])
+        self.assertIn(
+            hashlib.sha256(b"september-closes").hexdigest()[:12], after["notes"][0])
+
     def test_fact_recorded_at_a_different_receipt_path_covers_nothing(self):
         root, receipt, receipt_path = self._tree()
         [line] = self._record(root, receipt_path, dry_run=True)

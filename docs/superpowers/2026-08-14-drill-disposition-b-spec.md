@@ -93,9 +93,16 @@ receipt's `verification.notes`.
   hollow the rule out. The covered binding is already unverifiable forever, so
   no additional verification is given up — but this IS a relaxation, and it is
   scoped to the seven named receipts' `close:` labels.
-- **No blanket amnesty.** A fact is bound to one receipt content hash and the
-  labels it lists. Every other receipt, every other label, every future
-  data-gate receipt, and every `chain:` binding stay strictly checked.
+- **No blanket amnesty — but be honest about today's scope.** A fact is bound
+  to one receipt content hash and the labels it lists; every other receipt,
+  every other label, every future data-gate receipt, and every `chain:` binding
+  stay strictly checked. That said, those seven receipts are **the entire
+  current data-gate receipt population** (measured: `data_gates: 7`), and their
+  `close:` bindings are all 105 of the closes-cache bindings in play. So in
+  practice the closes-cache half of this check is fully covered-by-acceptance
+  right now, and only regains real force as new data-gate receipts accumulate
+  under the current cache. The `chain:` half (another 105 bindings) is
+  unaffected and still binds today.
 - **Missing files never covered.** A vanished input is data loss, not drift.
 - **Nothing pre-authorised.** The recorder only records labels that are
   mismatched at recording time.
@@ -103,27 +110,46 @@ receipt's `verification.notes`.
   non-hex hash, absolute or traversing path, or a path that disagrees with the
   payload: covers nothing.
 
+### One more note the mechanism emits
+
+Because coverage does not pin the replacement bytes, a *later* change to the
+same file would otherwise pass silently. It does pass — and the note says so:
+`WARNING: this input has changed AGAIN since the invalidation was recorded
+(recorded observed=…, now=…)`. Tamper-visibility at zero fail-open cost.
+
 ## Tests (`tests/test_h7_backup.py::RecordedInvalidationTests`)
 
 mismatch + fact = pass-with-note naming the fact; mismatch + no fact = fail;
-another receipt's fact covers nothing; a fact claiming another path covers
-nothing; 13 malformed/partial records cover nothing; a vanished input is never
-covered; coverage is per-label; the recorder never pre-authorises an intact
-binding; facts are read from the restored tree, not the operator's disk;
+another receipt's fact covers nothing (including one at the same path with
+different content, and one naming the wrong sealed hash); a fact claiming
+another path covers nothing; 13 malformed/partial records cover nothing; a
+vanished input is never covered; coverage is per-label; a second change passes
+but is called out in a distinct note; the recorder never pre-authorises an
+intact binding; facts are read from the restored tree, not the operator's disk;
 recorder is append-only, idempotent, refuses divergence, refuses a tampered
 receipt.
 
-Mutation evidence: making the check accept an uncovered mismatch turns all 19
-tests in the file red.
+Mutation evidence: accepting an uncovered mismatch turns every test in the file
+red; dropping the receipt hash, or the sealed hash, from the coverage key each
+turns exactly its isolating test red; tolerating an unexpected field turns the
+malformed-record test red; tightening coverage to the observed side turns the
+second-change characterization test red.
 
 ## Operating consequences
 
 - The seven facts are appended on this branch; the drill only sees them once
   the branch merges and the ops checkout syncs. Run the drill after that, from
   the ops checkout, per runbook 08 step 8.
-- Expected result: `manifest OK`, `problems 0`, `notes 105`, `ok True`.
+- **The existing 2026-08-14 backup receipt can never pass this drill**, and a
+  red result on it is NOT disposition B failing. That snapshot predates the
+  facts, so the `ledger/facts.log` it restores does not contain them; and the
+  backup receipt for that session is immutable, so re-running `backup
+  --completed-session 2026-08-14` hits the write-once conflict rather than
+  producing a newer snapshot. Green is reachable only from a **fresh backup for
+  a later completed session**, taken from a checkout that carries these facts.
+- Expected result then: `manifest OK`, `problems 0`, `notes 105`, `ok True`.
   Verified read-only on 2026-08-14 against a temporary replica of the ops
   evidence tree (real receipts, real closes cache, no restic, ops untouched);
   the same tree with no recorded facts still produces 105 problems.
-- A future closes refresh does NOT re-break these seven receipts, and does NOT
-  gain any coverage for any other receipt.
+- A future closes refresh does NOT re-break these seven receipts (it does add
+  the "changed AGAIN" note), and does NOT gain coverage for any other receipt.

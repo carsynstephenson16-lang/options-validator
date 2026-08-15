@@ -360,12 +360,22 @@ def verify_restored_tree(restored_root: Path, *,
             if covering is None:
                 checks["problems"].append(f"{path}: changed input {label}")
                 continue
-            checks["notes"].append(
+            note = (
                 f"{path}: changed input {label} accepted by recorded "
                 f"{INVALIDATION_TOKEN} fact id={invalidation_fact_id(covering)} "
                 f"recorded_session={covering['recorded_session']} "
                 f"invalidated_by={covering['invalidated_by']} "
                 f"provenance={covering['provenance']} (ledger/facts.log)")
+            # Coverage deliberately does not require the replacement bytes (see
+            # the module docstring's limits), but silence about a SECOND change
+            # would hide real drift for free. Say it out loud instead.
+            recorded_observed = covering["observed"].get(label)
+            if recorded_observed and recorded_observed != actual.get("sha256"):
+                note += (
+                    " -- WARNING: this input has changed AGAIN since the "
+                    f"invalidation was recorded (recorded observed="
+                    f"{recorded_observed[:12]}, now={str(actual.get('sha256'))[:12]})")
+            checks["notes"].append(note)
     checks["ok"] = not checks["problems"] and checks["data_gates"] > 0
     return checks
 

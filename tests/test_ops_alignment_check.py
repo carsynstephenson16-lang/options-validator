@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import plistlib
 import re
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -69,17 +68,52 @@ class OpsAlignmentCheckTests(unittest.TestCase):
                 f"$HINT used outside assignment/echo/notification: {line!r}",
             )
 
-    def test_only_read_only_git_subcommands_are_invoked(self):
-        # Line continuations collapsed first, so the multi-line bounded fetch
-        # reads as one invocation and `-c key=value` options are skipped.
-        flat = re.sub(
-            r"\s+", " ", SCRIPT.read_text(encoding="utf-8").replace("\\\n", " "))
-        invoked = set(re.findall(r'git -C "\$REPO" (?:-c \S+ )*([a-z][a-z-]*)', flat))
-        self.assertTrue(invoked, "expected the script to invoke git at all")
-        self.assertTrue(
-            invoked <= {"branch", "rev-parse", "rev-list", "fetch"},
-            f"unexpected git subcommand(s): {sorted(invoked)}",
-        )
+    @staticmethod
+    def _executed_git_invocations() -> list[tuple[str, list[str]]]:
+        """Every git command the script actually runs, as (subcommand, args).
+
+        Line continuations are joined first; comments and the HINT_* strings
+        (operator-facing text, never executed) are excluded. Matches a bare
+        `git ...` too, not only `git -C "$REPO" ...`.
+        """
+        source = SCRIPT.read_text(encoding="utf-8").replace("\\\n", " ")
+        invocations = []
+        for line in source.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", "HINT_")):
+                continue
+            for match in re.finditer(
+                r"\bgit\s+((?:-[Cc]\s+\S+\s+)*)([a-z][a-z-]*)([^;|)\n]*)", stripped
+            ):
+                invocations.append((match.group(2), match.group(3).split()))
+        return invocations
+
+    def test_only_read_only_git_subcommands_and_flags_are_invoked(self):
+        # A subcommand allow-list alone is evadable: `git branch -f rescue
+        # origin/main` and `git fetch origin main:main` both mutate refs while
+        # naming a "read-only" subcommand. So the flags are checked too.
+        invocations = self._executed_git_invocations()
+        self.assertTrue(invocations, "expected the script to invoke git at all")
+        forbidden_flags = {"-f", "--force", "-D", "-d", "-m", "-M", "--delete",
+                           "--move", "--copy", "-C", "--update-head-ok"}
+        for subcommand, args in invocations:
+            with self.subTest(subcommand=subcommand, args=args):
+                self.assertIn(
+                    subcommand,
+                    {"branch", "rev-parse", "rev-list", "fetch", "diff"},
+                    f"unexpected git subcommand: {subcommand}",
+                )
+                self.assertEqual(
+                    [flag for flag in args if flag in forbidden_flags], [],
+                    f"ref-writing flag on `git {subcommand}`: {args}",
+                )
+                if subcommand == "fetch":
+                    # A refspec (`src:dst`) makes fetch write local refs.
+                    self.assertEqual(
+                        [arg for arg in args
+                         if ":" in arg and not arg.startswith("2>")], [],
+                        f"`git fetch` carries a refspec: {args}",
+                    )
 
     def test_fetch_is_bounded_and_prompt_free(self):
         source = SCRIPT.read_text(encoding="utf-8")
@@ -167,60 +201,68 @@ class OpsAlignmentCheckTests(unittest.TestCase):
             env={**GIT_ENV, "HOME": str(repo)},
         )
 
-    def _repo(self, *, ahead: int = 0, behind: int = 0, branch: str = "main") -> Path:
+    def _repo(self, *, ahead_paths: tuple[str, ...] = (), behind: int = 0,
+              branch: str = "main", break_remote: bool = False) -> Path:
+        """Fixture with a REAL local `origin` (a bare repo in tmp).
+
+        The script's own fetch preamble therefore executes under test — an
+        earlier version of these tests injected FETCH_RC by hand and never ran
+        the fetch at all.
+        """
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
+        origin = tmp / "origin.git"
+        subprocess.run(
+            ["git", "init", "-q", "--bare", "-b", "main", str(origin)],
+            check=True, capture_output=True, env={**GIT_ENV, "HOME": str(tmp)},
+        )
         repo = tmp / "checkout"
         repo.mkdir()
         self._git(repo, "init", "-q", "-b", "main")
         (repo / "code.py").write_text("x = 1\n")
         self._git(repo, "add", "code.py")
         self._git(repo, "commit", "-qm", "base")
-        # Build the REMOTE side first, pin origin/main to it by hand (so the
-        # test never touches a network), rewind, then build the LOCAL side:
-        # ahead / behind / diverged all fall out of the same three steps.
+        self._git(repo, "remote", "add", "origin", str(origin))
+        self._git(repo, "push", "-q", "origin", "main")
         for index in range(behind):
             (repo / f"remote{index}.py").write_text(f"y = {index}\n")
             self._git(repo, "add", f"remote{index}.py")
             self._git(repo, "commit", "-qm", f"remote {index}")
-        self._git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
         if behind:
-            self._git(repo, "rev-parse", "HEAD")
-            self._git(repo, "checkout", "-q", "--detach")
-            self._git(repo, "checkout", "-q", "-B", "main", f"HEAD~{behind}")
-        for index in range(ahead):
-            (repo / f"local{index}.py").write_text(f"z = {index}\n")
-            self._git(repo, "add", f"local{index}.py")
-            self._git(repo, "commit", "-qm", f"local {index}")
+            self._git(repo, "push", "-q", "origin", "main")
+            self._git(repo, "reset", "-q", "--hard", f"HEAD~{behind}")
+        for index, relative in enumerate(ahead_paths):
+            target = repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(f"payload {index}\n")
+            self._git(repo, "add", "--", relative)
+            self._git(repo, "commit", "-qm", f"ahead {relative}")
         if branch != "main":
             self._git(repo, "checkout", "-q", "-b", branch)
+        if break_remote:
+            self._git(repo, "remote", "set-url", "origin", str(tmp / "gone.git"))
         return repo
 
-    def _run(self, repo: Path, *, fetch_rc: int = 0) -> subprocess.CompletedProcess:
+    def _run(self, repo: Path) -> subprocess.CompletedProcess:
+        """Run the REAL script, from a copy inside the fixture checkout."""
         zsh = shutil.which("zsh")
         if zsh is None:
             self.skipTest("zsh is required")
-        source = SCRIPT.read_text(encoding="utf-8")
-        block = source[source.index("# --- classification"):]
-        logdir = repo / ".tmp/alignment_check"
-        logdir.mkdir(parents=True, exist_ok=True)
-        preamble = [
-            "REPO=" + shlex.quote(str(repo)),
-            "LOGDIR=" + shlex.quote(str(logdir)),
-            'LOG="$LOGDIR/test.log"',
-            "NOW=2026-08-14T15:30:00-0400",
-            f"FETCH_RC={fetch_rc}",
-            'BRANCH="$(git -C "$REPO" branch --show-current 2>/dev/null)"',
-            'LOCAL_SHA="$(git -C "$REPO" rev-parse HEAD 2>/dev/null)"',
-            'REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main 2>/dev/null)"',
-        ]
+        installed = repo / "tools" / SCRIPT.name
+        installed.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SCRIPT, installed)
         return subprocess.run(
-            [zsh, "-c", "\n".join([*preamble, block])],
+            [zsh, str(installed)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=120,
             env={**GIT_ENV, "HOME": str(repo)},
         )
+
+    @staticmethod
+    def _log_text(repo: Path) -> str:
+        logs = sorted((repo / ".tmp/alignment_check").glob("*.log"))
+        return "\n".join(path.read_text() for path in logs)
 
     def test_aligned_checkout_exits_zero_and_notifies_nobody(self):
         repo = self._repo()
@@ -229,14 +271,58 @@ class OpsAlignmentCheckTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("status=ALIGNED", completed.stdout)
         self.assertNotIn("ACTION NEEDED", completed.stdout)
-        log = (repo / ".tmp/alignment_check/test.log").read_text()
-        self.assertIn("status=ALIGNED", log)
+        self.assertIn("status=ALIGNED", self._log_text(repo))
 
-    def test_every_divergence_shape_exits_nonzero_with_the_realign_command(self):
+    def test_evidence_only_commits_ahead_are_informational_not_an_alarm(self):
+        # Owner decision D-3: the 15:45 capture RUNS in this shape, so crying
+        # wolf here would train the operator to ignore the 15:30 alarm.
+        repo = self._repo(
+            ahead_paths=("reports/ritual/run_status.json", "ledger/facts.log"))
+        completed = self._run(repo)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("status=AHEAD_EVIDENCE_ONLY", completed.stdout)
+        self.assertIn("15:45 capture will still run", completed.stdout)
+        self.assertIn("INFO:", completed.stdout)
+        self.assertNotIn("ACTION NEEDED", completed.stdout)
+        self.assertIn("push origin main", completed.stdout)
+        self.assertIn("status=AHEAD_EVIDENCE_ONLY", self._log_text(repo))
+
+    def test_code_ahead_is_an_alarm_because_the_capture_will_refuse(self):
+        for label, ahead_paths in (
+            ("code only", ("options_researcher/h7_watch.py",)),
+            ("mixed with evidence",
+             ("reports/ritual/run_status.json", "tools/daily_ritual.sh")),
+        ):
+            with self.subTest(case=label):
+                repo = self._repo(ahead_paths=ahead_paths)
+                completed = self._run(repo)
+
+                self.assertEqual(completed.returncode, 1, completed.stderr)
+                self.assertIn("status=AHEAD_CODE", completed.stdout)
+                self.assertIn("WILL REFUSE", completed.stdout)
+                self.assertIn("ACTION NEEDED", completed.stdout)
+                self.assertIn("push origin main", completed.stdout)
+
+    def test_evidence_allow_list_matches_the_capture_gate_it_predicts(self):
+        # If the two lists drift, this check lies about what happens at 15:45.
+        def allow_list(text: str) -> list[str]:
+            start = text.index("EVIDENCE_ALLOW=(")
+            return text[start + len("EVIDENCE_ALLOW=("):text.index(")", start)].split()
+
+        self.assertEqual(
+            allow_list(SCRIPT.read_text(encoding="utf-8")),
+            allow_list(
+                (ROOT / "tools" / "schwab_chain_capture.sh").read_text(encoding="utf-8")),
+        )
+
+    def test_every_refusing_divergence_shape_exits_nonzero_with_the_command(self):
         cases = {
-            "AHEAD": (self._repo(ahead=1), "push origin main"),
             "BEHIND": (self._repo(behind=1), "merge --ff-only origin/main"),
-            "DIVERGED": (self._repo(ahead=1, behind=1), "log --oneline"),
+            "DIVERGED": (
+                self._repo(behind=1, ahead_paths=("ledger/facts.log",)),
+                "log --oneline",
+            ),
         }
         for status, (repo, expected_hint) in cases.items():
             with self.subTest(status=status):
@@ -247,48 +333,50 @@ class OpsAlignmentCheckTests(unittest.TestCase):
                 self.assertIn("ACTION NEEDED", completed.stdout)
                 self.assertIn(expected_hint, completed.stdout)
                 self.assertIn("DETECTION ONLY", completed.stdout)
-                log = (repo / ".tmp/alignment_check/test.log").read_text()
-                self.assertIn(f"status={status}", log)
+                self.assertIn(f"status={status}", self._log_text(repo))
 
     def test_failed_fetch_and_wrong_branch_fail_closed(self):
-        for label, repo, fetch_rc, status in (
-            ("fetch failed", self._repo(), 1, "FETCH_FAILED"),
-            ("not on main", self._repo(branch="side"), 0, "NOT_ON_MAIN"),
+        for label, repo, status in (
+            ("fetch failed", self._repo(break_remote=True), "FETCH_FAILED"),
+            ("not on main", self._repo(branch="side"), "NOT_ON_MAIN"),
         ):
             with self.subTest(case=label):
-                completed = self._run(repo, fetch_rc=fetch_rc)
+                completed = self._run(repo)
 
                 self.assertEqual(completed.returncode, 1, completed.stderr)
                 self.assertIn(f"status={status}", completed.stdout)
                 self.assertIn("ACTION NEEDED", completed.stdout)
 
-    def test_check_leaves_the_repository_untouched(self):
-        repo = self._repo(ahead=2)
-        before = subprocess.run(
-            ["git", "-C", str(repo), "log", "--format=%H", "--all"],
-            capture_output=True, text=True, check=True, env={**GIT_ENV, "HOME": str(repo)},
-        ).stdout
-        status_before = subprocess.run(
-            ["git", "-C", str(repo), "status", "--porcelain"],
-            capture_output=True, text=True, check=True, env={**GIT_ENV, "HOME": str(repo)},
-        ).stdout
+    def _ref_state(self, repo: Path) -> tuple[str, str, str]:
+        """Refs, reflogs and worktree state — what a ref-writing git call moves."""
+        def run(*args: str) -> str:
+            return subprocess.run(
+                ["git", "-C", str(repo), *args], capture_output=True, text=True,
+                check=True, env={**GIT_ENV, "HOME": str(repo)},
+            ).stdout
+
+        reflogs = "\n".join(
+            f"{path.relative_to(repo)}::{path.read_text(errors='replace')}"
+            for path in sorted((repo / ".git/logs").rglob("*")) if path.is_file()
+        )
+        worktree = "\n".join(
+            line for line in run("status", "--porcelain").splitlines()
+            if ".tmp/" not in line and "tools/" not in line
+        )
+        return run("for-each-ref", "--format=%(refname) %(objectname)"), reflogs, worktree
+
+    def test_check_leaves_every_ref_and_reflog_untouched(self):
+        # `git log --all` alone is too weak: `git branch -f rescue origin/main`
+        # creates a ref pointing at an existing commit, so the commit graph is
+        # unchanged. Refs and reflogs are what actually move. The fixture is
+        # ahead-only, so the script's own (legitimate) fetch has nothing to
+        # update and even refs/remotes/origin/main must be byte-identical.
+        repo = self._repo(ahead_paths=("options_researcher/h7_watch.py",))
+        before = self._ref_state(repo)
 
         self._run(repo)
 
-        after = subprocess.run(
-            ["git", "-C", str(repo), "log", "--format=%H", "--all"],
-            capture_output=True, text=True, check=True, env={**GIT_ENV, "HOME": str(repo)},
-        ).stdout
-        status_after = subprocess.run(
-            ["git", "-C", str(repo), "status", "--porcelain"],
-            capture_output=True, text=True, check=True, env={**GIT_ENV, "HOME": str(repo)},
-        ).stdout
-        self.assertEqual(before, after)
-        # Only the check's own gitignored .tmp log may appear.
-        self.assertEqual(
-            [line for line in status_after.splitlines() if ".tmp/" not in line],
-            [line for line in status_before.splitlines() if ".tmp/" not in line],
-        )
+        self.assertEqual(self._ref_state(repo), before)
 
 
 if __name__ == "__main__":
