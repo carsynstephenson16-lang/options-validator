@@ -1,46 +1,76 @@
-diff --git a/data/ritual_authority.py b/data/ritual_authority.py
-index 3bc4307..0000000 100644
---- a/data/ritual_authority.py
-+++ b/data/ritual_authority.py
-@@ -16,6 +16,6 @@ class RitualAuthority:
- 
- 
- CURRENT_AUTHORITY = RitualAuthority(
--    h7_active=False,
--    exact_session_source_active=False,
-+    h7_active=True,
-+    exact_session_source_active=True,
- )
-diff --git a/tests/test_ritual_authority.py b/tests/test_ritual_authority.py
-index c326bb1..0000000 100644
---- a/tests/test_ritual_authority.py
-+++ b/tests/test_ritual_authority.py
-@@ -21,14 +21,11 @@ class RitualAuthorityContractTests(unittest.TestCase):
-         self.assertTrue(hasattr(ritual_authority, "evaluate_full_ritual"))
-         self.assertTrue(hasattr(ritual_authority, "main"))
- 
--    def test_full_ritual_is_blocked_without_source_and_h7_authority(self):
-+    def test_full_ritual_is_ready_with_source_and_h7_authority(self):
-         readiness = ritual_authority.evaluate_full_ritual()
- 
--        self.assertFalse(readiness.ready)
--        joined = " ".join(readiness.blockers)
--        self.assertIn("exact-session", joined)
--        self.assertIn("H7", joined)
--        self.assertIn("ThetaData", joined)
-+        self.assertTrue(readiness.ready)
-+        self.assertEqual(readiness.blockers, ())
- 
-     def test_status_succeeds_but_require_full_refuses(self):
-         status_out = io.StringIO()
-@@ -42,8 +39,8 @@ class RitualAuthorityContractTests(unittest.TestCase):
-         required = json.loads(require_out.getvalue())
- 
-         self.assertEqual(status_rc, 0)
--        self.assertEqual(require_rc, 1)
--        self.assertFalse(status["ready"])
-+        self.assertEqual(require_rc, 0)
-+        self.assertTrue(status["ready"])
-         self.assertEqual(required, status)
- 
- 
+################################################################################
+# STALE — DO NOT APPLY; REGENERATE AT REGISTRATION
+#
+# Marked stale 2026-08-14 by brief 11
+# (docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md §5).
+#
+# This file is deliberately NOT a valid patch any more: the diff below is
+# quoted, not applicable. A registration-day operator finding a patch that
+# silently fails to apply is a foreseeable, preventable incident, so it fails
+# loudly instead.
+#
+# WHY IT IS STALE — both hunks break at HEAD:
+#   1. Hunk 1's context is the TWO-field CURRENT_AUTHORITY(...) constructor.
+#      data/ritual_authority.py now has THREE fields
+#      (ritual_data_phase_active was added by brief 11 D1), so the context
+#      no longer matches.
+#   2. Hunk 2 rewrites two tests that no longer exist:
+#      test_full_ritual_is_blocked_without_source_and_h7_authority and
+#      test_status_succeeds_but_require_full_refuses, including the
+#      `self.assertEqual(required, status)` line retired by blocker B-7.
+#      tests/test_ritual_authority.py was rewritten around the
+#      main(argv, authority=...) injection seam and asserts nothing about
+#      CURRENT_AUTHORITY's live values, so a flip no longer needs a test edit
+#      at all.
+#
+# WHAT TO DO ON REGISTRATION DAY: regenerate this patch against the
+# then-current tree. Do not hand-repair the hunks below. Note also that the
+# flip is now THREE flags, not two — see
+# reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md and brief 11 §5.
+#
+# The original 2026-08-09 content is retained verbatim below for the record.
+################################################################################
+
+    diff --git a/data/ritual_authority.py b/data/ritual_authority.py
+    index 3bc4307..0000000 100644
+    --- a/data/ritual_authority.py
+    +++ b/data/ritual_authority.py
+    @@ -16,6 +16,6 @@ class RitualAuthority:
+
+     CURRENT_AUTHORITY = RitualAuthority(
+    -    h7_active=False,
+    -    exact_session_source_active=False,
+    +    h7_active=True,
+    +    exact_session_source_active=True,
+     )
+    diff --git a/tests/test_ritual_authority.py b/tests/test_ritual_authority.py
+    index c326bb1..0000000 100644
+    --- a/tests/test_ritual_authority.py
+    +++ b/tests/test_ritual_authority.py
+    @@ -21,14 +21,11 @@ class RitualAuthorityContractTests(unittest.TestCase):
+             self.assertTrue(hasattr(ritual_authority, "evaluate_full_ritual"))
+             self.assertTrue(hasattr(ritual_authority, "main"))
+
+    -    def test_full_ritual_is_blocked_without_source_and_h7_authority(self):
+    +    def test_full_ritual_is_ready_with_source_and_h7_authority(self):
+             readiness = ritual_authority.evaluate_full_ritual()
+
+    -        self.assertFalse(readiness.ready)
+    -        joined = " ".join(readiness.blockers)
+    -        self.assertIn("exact-session", joined)
+    -        self.assertIn("H7", joined)
+    -        self.assertIn("ThetaData", joined)
+    +        self.assertTrue(readiness.ready)
+    +        self.assertEqual(readiness.blockers, ())
+
+         def test_status_succeeds_but_require_full_refuses(self):
+             status_out = io.StringIO()
+    @@ -42,8 +39,8 @@ class RitualAuthorityContractTests(unittest.TestCase):
+             required = json.loads(require_out.getvalue())
+
+             self.assertEqual(status_rc, 0)
+    -        self.assertEqual(require_rc, 1)
+    -        self.assertFalse(status["ready"])
+    +        self.assertEqual(require_rc, 0)
+    +        self.assertTrue(status["ready"])
+             self.assertEqual(required, status)
