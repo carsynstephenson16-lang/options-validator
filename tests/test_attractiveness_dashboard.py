@@ -1977,6 +1977,96 @@ class LaneBoardPresentationTests(unittest.TestCase):
         ):
             self.assertLess(html.index(earlier), html.index(later))
 
+    def test_experiments_views_freshness_chip_is_inside_top_freshness_strip(self):
+        """A shelf-only status must not satisfy the top-strip freshness contract."""
+        html = ad.render(
+            self._data(),
+            context=self._context(),
+            research_views_status={
+                "state": "published",
+                "timestamp": "2026-08-15T07:30:00-0400",
+                "experiments": "OK",
+                "wasserstein": "FAILED",
+            },
+        )
+
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        self.assertIn("Experiments views</strong>", freshness)
+        self.assertIn("2026-08-15T07:30:00-0400", freshness)
+        self.assertIn("experiments: OK", freshness)
+        self.assertIn("wasserstein: FAILED", freshness)
+
+    def test_experiments_views_absent_chip_honestly_says_not_published(self):
+        html = ad.render(self._data(), research_views_status={"state": "absent"})
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        self.assertIn("Experiments views</strong> not published", freshness)
+        self.assertIn("BLOCKED", freshness)
+
+    def test_underlying_closes_freshness_uses_configured_store_max_not_section_date(self):
+        import tempfile
+        from unittest import mock
+
+        import pandas as pd
+
+        from data import underlying_closes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(underlying_closes, "CACHE_DIR", tmp):
+                underlying_closes.store_closes(
+                    "NVDA",
+                    pd.DataFrame({
+                        "date": ["2026-08-13", "2026-08-14"],
+                        "close": [100.0, 101.0],
+                    }),
+                )
+                freshness = ad._underlying_closes_store_freshness(("NVDA",))
+
+            data = ad.assemble(
+                symbol_sections=[
+                    _fresh_section("NVDA", "2026-08-13", closes_as_of="2026-08-13"),
+                ],
+                rv21_by_symbol={},
+                today="2026-08-14",
+                underlying_closes_freshness=freshness,
+            )
+
+        html = ad.render(data)
+        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        self.assertIn("Underlying closes</strong> max session 2026-08-14", strip)
+        self.assertNotIn("Underlying closes</strong> as of 2026-08-13", strip)
+
+    def test_underlying_closes_freshness_fails_honestly_for_missing_and_malformed_store(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        import pandas as pd
+
+        from data import underlying_closes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            with mock.patch.object(underlying_closes, "CACHE_DIR", tmp):
+                underlying_closes.store_closes(
+                    "NVDA",
+                    pd.DataFrame({"date": ["2026-08-14"], "close": [101.0]}),
+                )
+                missing = ad._underlying_closes_store_freshness(("NVDA", "MSFT"))
+                (cache / "MSFT.parquet").write_text("not a parquet file")
+                malformed = ad._underlying_closes_store_freshness(("NVDA", "MSFT"))
+
+        self.assertEqual(missing["state"], "unavailable")
+        self.assertIn("missing", missing["detail"])
+        self.assertEqual(malformed["state"], "unavailable")
+        self.assertIn("malformed", malformed["detail"])
+
+        data = self._data()
+        data["underlying_closes_freshness"] = malformed
+        html = ad.render(data)
+        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        self.assertIn("Underlying closes</strong> unavailable", strip)
+        self.assertIn("BLOCKED", strip)
+
     def test_registered_bets_tracker_escapes_states_and_sits_before_shelf(self):
         """A raw receipt summary remains escaped, descriptive, and unranked."""
         data = self._data()
@@ -2134,6 +2224,21 @@ class LaneBoardPresentationTests(unittest.TestCase):
             ]
         })
         self.assertIn("Highest agreement today: none at grade A", html)
+
+    def test_empty_composite_lane_is_rendered_with_honest_no_data_state_in_order(self):
+        data = self._data()
+        data["composite_signals"] = []
+        html = ad.render(data, context=self._context())
+        composite = html[html.index("Composite signal board"):html.index("RESEARCH DESK")]
+
+        self.assertIn("display-only", composite)
+        self.assertIn("Highest agreement today: none at grade A", composite)
+        self.assertIn("No composite cards are available for this board.", composite)
+        self.assertLess(
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("Composite signal board"),
+        )
+        self.assertLess(html.index("Composite signal board"), html.index("RESEARCH DESK"))
 
 
 class ChainAgeBannerTests(unittest.TestCase):

@@ -1103,6 +1103,56 @@ def load_research_views_status(path: str | Path = RESEARCH_VIEWS_STATUS_PATH) ->
     }
 
 
+def _underlying_closes_store_freshness(
+    symbols: tuple[str, ...] | list[str],
+) -> dict[str, str]:
+    """Read the configured close-store maximum once during assembly.
+
+    This is deliberately distinct from each rendered section's bounded
+    ``closes_as_of`` value. Rendering receives this completed summary and
+    never opens the close store itself.
+    """
+    import pandas as pd
+
+    from data import underlying_closes
+
+    requested = sorted({symbol for symbol in symbols if isinstance(symbol, str)})
+    if not requested:
+        return {"state": "unavailable", "detail": "no configured symbols"}
+
+    cache_dir = Path(underlying_closes.CACHE_DIR)
+    maximums: list[str] = []
+    missing: list[str] = []
+    malformed: list[str] = []
+    for symbol in requested:
+        path = cache_dir / f"{symbol}.parquet"
+        if not path.is_file():
+            missing.append(symbol)
+            continue
+        try:
+            frame = pd.read_parquet(path)
+        except (OSError, TypeError, ValueError):
+            malformed.append(symbol)
+            continue
+        if list(frame.columns) != ["date", "close"] or frame.empty:
+            malformed.append(symbol)
+            continue
+        dates = [_valid_iso_date(value) for value in frame["date"].tolist()]
+        if any(value is None for value in dates):
+            malformed.append(symbol)
+            continue
+        maximums.append(max(value for value in dates if value is not None))
+
+    if missing or malformed:
+        details = []
+        if missing:
+            details.append("missing store files: " + ", ".join(missing))
+        if malformed:
+            details.append("malformed store files: " + ", ".join(malformed))
+        return {"state": "unavailable", "detail": "; ".join(details)}
+    return {"state": "available", "as_of": max(maximums)}
+
+
 def assemble(
     *,
     symbol_sections: list[dict] | None = None,
@@ -1110,6 +1160,7 @@ def assemble(
     blocked: list[dict] | None = None,
     hypothesis_evidence_by_symbol: Mapping[str, SymbolEvidence] | None = None,
     composite_signals: list[dict] | None = None,
+    underlying_closes_freshness: Mapping[str, str] | None = None,
     today: str | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
@@ -1269,6 +1320,13 @@ def assemble(
 
         composite_signals = build_board()
 
+    if underlying_closes_freshness is None and real_assembly:
+        import config
+
+        underlying_closes_freshness = _underlying_closes_store_freshness(
+            config.ATTRACTIVENESS_UNIVERSE
+        )
+
     canonical_symbols = [
         sec for sec in out_symbols if not sec.get("display_only")
     ]
@@ -1294,6 +1352,9 @@ def assemble(
         "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
         "family_evidence": family_evidence,
+        "underlying_closes_freshness": dict(
+            underlying_closes_freshness or {
+                "state": "unavailable", "detail": "not assembled"}),
     }
     if schwab_state is not None:
         out["schwab_lane"] = schwab_state
@@ -2735,9 +2796,65 @@ def _composite_freshness_chip(cards: object) -> str:
     )
 
 
+def _underlying_closes_freshness_chip(
+    freshness: object, evaluation_date: object,
+) -> str:
+    """Render the assembly-time close-store summary without reopening it."""
+    summary = freshness if isinstance(freshness, Mapping) else {}
+    as_of = _valid_iso_date(summary.get("as_of"))
+    if summary.get("state") != "available" or as_of is None:
+        detail = summary.get("detail")
+        detail = str(detail) if isinstance(detail, str) and detail else "unavailable"
+        return (
+            '<span class="meta-chip freshness-chip blocked"><strong>Underlying closes</strong> '
+            f"unavailable: {_esc(detail)} · BLOCKED</span>"
+        )
+    state, detail = _freshness_state(as_of, evaluation_date)
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>Underlying closes</strong> '
+        f"max session {_esc(as_of)}; {_esc(detail)} · {state}</span>"
+    )
+
+
+def _experiments_views_freshness_chip(
+    research_views_status: Mapping[str, object] | None,
+) -> str:
+    """Render the already-parsed research-views publication state."""
+    status = research_views_status if isinstance(research_views_status, Mapping) else {}
+    if status.get("state") == "published":
+        timestamp = status.get("timestamp")
+        experiments = status.get("experiments")
+        wasserstein = status.get("wasserstein")
+        if (
+            isinstance(timestamp, str)
+            and _RESEARCH_VIEWS_TIMESTAMP.fullmatch(
+                f"research views refresh: {timestamp}"
+            )
+            and isinstance(experiments, str)
+            and isinstance(wasserstein, str)
+        ):
+            return (
+                '<span class="meta-chip freshness-chip ok"><strong>Experiments views</strong> '
+                f"published { _esc(timestamp) }; experiments: {_esc(experiments)}; "
+                f"wasserstein: {_esc(wasserstein)} · OK</span>"
+            )
+    state = status.get("state")
+    if state == "absent":
+        label = "not published"
+    elif state == "unavailable":
+        label = "unavailable"
+    else:
+        label = "unavailable (status malformed)"
+    return (
+        '<span class="meta-chip freshness-chip blocked"><strong>Experiments views</strong> '
+        f"{label} · BLOCKED</span>"
+    )
+
+
 def _freshness_html(
     data: Mapping[str, object], context: Mapping[str, object] | None,
     qm_context: Mapping[str, object] | None,
+    research_views_status: Mapping[str, object] | None,
 ) -> str:
     """One injected-data-only summary strip; no cache scan belongs in render."""
     from options_researcher.schwab_chain_view import CHAIN_SOURCE, THETADATA_CHAIN_SOURCE
@@ -2756,20 +2873,13 @@ def _freshness_html(
             "Verified Schwab 15:45 pre-close (.cache/schwab_chains)", sections,
             source=CHAIN_SOURCE, evaluation_date=data.get("evaluation_date"),
         ))
-    close_dates = [
-        _valid_iso_date(section.get("closes_as_of")) for section in sections
-    ]
-    maximum_close = max(value for value in close_dates if value is not None) if any(close_dates) else None
-    close_state, close_detail = _freshness_state(maximum_close, data.get("evaluation_date"))
-    if any(value is None for value in close_dates) and close_state == "OK":
-        close_state, close_detail = "WARN", close_detail + "; incomplete dates UNKNOWN"
-    chips.append(
-        f'<span class="meta-chip freshness-chip {close_state.lower()}"><strong>Underlying closes</strong> '
-        f"{_esc(close_detail)} · {sum(value is not None for value in close_dates)}/{len(sections)} present · {close_state}</span>"
-    )
+    chips.append(_underlying_closes_freshness_chip(
+        data.get("underlying_closes_freshness"), data.get("evaluation_date")
+    ))
     chips.append(_research_freshness_chip(context, data.get("evaluation_date")))
     chips.append(_qm_freshness_chip(qm_context))
     chips.append(_composite_freshness_chip(data.get("composite_signals")))
+    chips.append(_experiments_views_freshness_chip(research_views_status))
     return (
         '<section class="panel freshness-strip"><div class="eyebrow">DATA FRESHNESS</div>'
         '<p class="header-sub">These source timestamps describe available inputs; they do not predict, select, or authorize a trade.</p>'
@@ -3525,18 +3635,20 @@ def _composite_card_html(card: Mapping[str, object]) -> str:
 
 def _composite_html(data: dict) -> str:
     """Composite signal board panel: display-only, non-verdict-bearing
-    four-angle confluence cards (options_researcher.composite_signals).
-    Omitted honestly when nothing was assembled."""
+    four-angle confluence cards (options_researcher.composite_signals)."""
     cards = [card for card in (data.get("composite_signals") or [])
              if isinstance(card, Mapping)]
-    if not cards:
-        return ""
     grade_a = [str(card.get("symbol")) for card in cards if card.get("grade") == "A"]
     agreement = (
         f"Highest agreement today: {', '.join(grade_a)}" if grade_a
         else "Highest agreement today: none at grade A"
     )
     grid = "".join(_composite_card_html(card) for card in cards)
+    if not grid:
+        grid = (
+            '<div class="empty">No composite cards are available for this board. '
+            'The lane is display-only and no signal or verdict is implied.</div>'
+        )
     return (
         '<section class="panel"><div class="section-header"><div>'
         '<div class="eyebrow">COMPOSITE SIGNAL LANE</div>'
@@ -3960,7 +4072,7 @@ def render(
         f"</strong> {_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header><main class="page-body">'
-        f"{_freshness_html(data, context, qm_context)}"
+        f"{_freshness_html(data, context, qm_context, research_views_status)}"
         f"{age_html}"
         f"{warn_html}"
         f"{_blocked_html(data.get('blocked') or [])}"
