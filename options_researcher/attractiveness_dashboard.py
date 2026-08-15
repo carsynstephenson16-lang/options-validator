@@ -887,6 +887,13 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
     what the fresh names actually are (a 15:45 snapshot, never a close), and
     the unchanged stale warning scoped to the names still on the frozen cache.
     The per-card CHAIN_STALE_VS_TODAY gate is untouched either way.
+
+    THE FRESH LINE AGES TOO. "Verified pre-close" is a statement about the
+    SOURCE, not about the clock: if captures stop, the newest verified session
+    keeps its badge while silently becoming days old. So the fresh line reads
+    the same ``chain_age_sessions`` the cards do and changes tone at the same
+    thresholds -- at the BLOCK bar it must not render as calm info while every
+    card below it is DATA_BLOCKED.
     """
     import config
     from options_researcher.schwab_chain_view import CONVENTION_LABEL
@@ -896,13 +903,42 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
     lane_html = _schwab_state_html(data)
     if fresh_names:
         count = len(fresh_names)
-        fresh_line = (
-            '<div class="notice info"><strong>Option quotes: '
-            f"{_esc(CONVENTION_LABEL)} session "
-            f'{_esc(str(data.get("data_as_of") or "?"))}</strong> for {count} '
-            f'name{"" if count == 1 else "s"} '
-            f'({_esc(", ".join(str(name) for name in fresh_names))}). '
-            "This is a 15:45 ET snapshot, NOT an end-of-day close.</div>")
+        age = data.get("chain_age_sessions")
+        session = _esc(str(data.get("data_as_of") or "?"))
+        names = _esc(", ".join(str(name) for name in fresh_names))
+        subject = (f"{count} name" if count == 1 else f"{count} names")
+        head = (f"Option quotes: {CONVENTION_LABEL} session "
+                f"{data.get('data_as_of') or '?'}")
+        if not isinstance(age, int):
+            fresh_line = (
+                '<div class="notice watch"><strong>! '
+                f"{_esc(head)}</strong> for {subject} ({names}) — but its age "
+                "could NOT be compared with the evaluation date. Treat every "
+                "quote as unverified and check the live broker quote.</div>")
+        elif age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+            sessions = "session" if age == 1 else "sessions"
+            fresh_line = (
+                '<div class="notice bad"><strong>! STALE BOARD — pre-close '
+                f"captures have STOPPED. The newest verified session "
+                f"({session}) is {age} trading {sessions} old.</strong> The "
+                f"{subject} below ({names}) still carry that snapshot's "
+                "premium, delta, and moneyness figures — not today's. Cards "
+                f"past the {config.CHAIN_STALE_BLOCK_SESSIONS}-session limit "
+                "are marked DATA_BLOCKED and excluded from the shortlist. Do "
+                "not size or compare a trade from this page.</div>")
+        elif age >= config.CHAIN_STALE_WARN_SESSIONS:
+            sessions = "session" if age == 1 else "sessions"
+            fresh_line = (
+                '<div class="notice watch">! '
+                f"{_esc(head)} for {subject} ({names}) — a 15:45 ET snapshot, "
+                f"NOT an end-of-day close, and now {age} trading {sessions} "
+                "old (no newer verified capture). Verify against the live "
+                "broker quote before acting.</div>")
+        else:
+            fresh_line = (
+                f'<div class="notice info"><strong>{_esc(head)}</strong> for '
+                f"{subject} ({names}). This is a 15:45 ET snapshot, NOT an "
+                "end-of-day close.</div>")
         stale_line = _stale_group_html(data)
         return lane_html + fresh_line + stale_line
 
@@ -1272,32 +1308,23 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
         theta_day = (os.path.basename(files[-1]).split("_")[1]
                      .replace(".parquet", "") if files else None)
         # Newer of (frozen ThetaData EOD cache, newest VERIFIED Schwab
-        # pre-close session). A fresh chain is only rendered when a same-instant
-        # 15:45 spot exists for it -- pairing 15:45 quotes with the closes
-        # store (frozen well behind) misprices moneyness by several percent.
-        fresh: tuple | None = None
-        fresh_refusal: str | None = None
-        newest = schwab_view.newest_chain(symbol) if schwab_sessions else None
-        if newest is not None:
-            fresh_frame, fresh_session = newest
-            if theta_day is None or fresh_session > theta_day:
-                spot = schwab_view.load_preclose_spot(symbol, fresh_session)
-                if spot is None:
-                    fresh_refusal = (
-                        f"no verified 15:45 spot for {fresh_session} — fresh "
-                        f"{schwab_view.CONVENTION_LABEL} chain not rendered; "
-                        "this symbol stays on the frozen cache below")
-                else:
-                    fresh = (fresh_frame, fresh_session, spot[0],
-                             schwab_view.preclose_iv_rank_preview(
-                                 symbol, fresh_session))
-        if fresh is None and theta_day is None:
+        # pre-close session), decided by the ONE shared rule the CLI board uses
+        # too. A fresh chain is only rendered when a same-instant 15:45 spot
+        # exists for it -- pairing 15:45 quotes with the closes store (frozen
+        # well behind) misprices moneyness by several percent.
+        source = schwab_view.select_display_source(
+            symbol, theta_day, have_verified_sessions=bool(schwab_sessions))
+        fresh_refusal = source.refusal
+        is_fresh = source.kind == schwab_view.CHAIN_SOURCE
+        if not is_fresh and theta_day is None:
             detail = ("no chain parquet in .cache/chains"
                       + (f"; {fresh_refusal}" if fresh_refusal else ""))
             _block(symbol, "NO_CACHED_CHAINS", detail, None)
             continue
-        if fresh is not None:
-            chain_frame, day, preclose_spot, iv_rank_preview = fresh
+        if is_fresh:
+            chain_frame, day = source.frame, source.session
+            preclose_spot = source.spot
+            iv_rank_preview = source.iv_rank_preview
             chain_path, chain_source = None, schwab_view.CHAIN_SOURCE
         else:
             chain_frame, preclose_spot, iv_rank_preview = None, None, None
@@ -3257,12 +3284,26 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
 
 
 def _as_of_chip_label(data: Mapping[str, object]) -> str:
-    """Header chip label. A pre-close session is never called a close."""
+    """Header chip label. A pre-close session is never called a close.
+
+    The chip ages with the board: a pre-close badge next to a date that is days
+    old reads as "captured today" at a glance, which is the one thing the chip
+    must never imply. Past the WARN bar it says how old, and past the BLOCK bar
+    it says STALE.
+    """
+    import config
     from options_researcher.schwab_chain_view import CHAIN_SOURCE, HEADER_CHIP_LABEL
 
-    if data.get("as_of_kind") == CHAIN_SOURCE:
-        return HEADER_CHIP_LABEL
-    return "Market close"
+    if data.get("as_of_kind") != CHAIN_SOURCE:
+        return "Market close"
+    age = data.get("chain_age_sessions")
+    if not isinstance(age, int):
+        return f"{HEADER_CHIP_LABEL} · age UNKNOWN"
+    if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+        return f"STALE · {HEADER_CHIP_LABEL} · {age} sessions old"
+    if age >= config.CHAIN_STALE_WARN_SESSIONS:
+        return f"{HEADER_CHIP_LABEL} · {age} sessions old"
+    return HEADER_CHIP_LABEL
 
 
 def _as_float(value: object, default: float = 0.0) -> float:
@@ -3500,7 +3541,11 @@ def render(
         "not predictions. Income annualization uses 365 calendar days; "
         "realized-volatility inputs use 252 trading sessions. Quotes move "
         "intraday; verify the live broker quote before making a decision. "
-        "Annualized income is simple, not compounded.</footer>"
+        "Annualized income is simple, not compounded. This page and the "
+        "mission-control dashboard date INDEPENDENTLY: this board can ride a "
+        "15:45 pre-close capture while mission control reports its own "
+        "closes-derived date, so a difference between the two is expected, "
+        "not an error.</footer>"
         "</main></body></html>"
     )
 

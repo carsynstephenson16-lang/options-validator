@@ -360,6 +360,35 @@ class SchwabChainViewTests(unittest.TestCase):
         self.assertNotIn("close —", view.as_of_label(SESSION))
         self.assertEqual(view.CLOSE_KIND, "preclose_mid_1545")
 
+    def test_two_roots_do_not_share_one_verification_answer(self):
+        """The memo key includes the cwd AND the dirs, so a second root cannot
+        inherit the first root's verdict.
+
+        Without that, a chains-absent research checkout would inherit the ops
+        checkout's "verified" answer for the same session date and render
+        quotes it does not have.
+        """
+        _write_store(self.root, ["NVDA"])
+        self.assertEqual(view.verified_sessions(**self._dirs())[0], [SESSION])
+
+        with tempfile.TemporaryDirectory() as other:
+            other_root = Path(other)
+            _write_store(other_root, ["NVDA"])
+            other_chain = other_root / ".cache" / "schwab_chains"
+            other_reports = other_root / "reports" / "schwab_chains"
+            # Same session date, receipts present, chains absent.
+            (other_chain / f"NVDA_{SESSION}.parquet").unlink()
+
+            sessions, failures = view.verified_sessions(
+                chain_dir=other_chain, reports_dir=other_reports)
+            self.assertEqual(sessions, [])
+            self.assertEqual(failures[0]["kind"], view.CHAINS_ABSENT)
+            self.assertIsNone(view.newest_chain(
+                "NVDA", chain_dir=other_chain, reports_dir=other_reports))
+
+        # The first root is unaffected in both directions.
+        self.assertEqual(view.verified_sessions(**self._dirs())[0], [SESSION])
+
     def test_memo_does_not_leak_across_a_cwd_change(self):
         _write_store(self.root, ["NVDA"])
         self.assertEqual(view.verified_sessions(**self._dirs())[0], [SESSION])

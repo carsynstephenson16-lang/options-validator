@@ -158,23 +158,31 @@ approximately 2026-08-19 after the Mon/Tue/Wed captures. Any restart carries a
 new registration and namespace (OD-3) and must pass the 2026-07-24 feasibility
 gate.
 
+### What a research checkout sees (settled, measured 2026-08-15)
+
+The capture **receipts and manifests ARE tracked in git** (`reports/schwab_chains`,
+committed by `13d48a9` "first real Schwab preclose canary"); the chain
+**parquet is ops-only** (`.cache/schwab_chains` in `~/options-validator-ops`).
+So a research checkout holds the verification evidence but not the bytes it
+attests. That is an expected deployment fact, not an integrity failure, and the
+page says exactly that: "receipts for session S are present, but its chain
+files are not in this checkout". A genuine failure — a tampered hash, a forced
+receipt, a partially present session — still renders as a loud
+FAILED-verification notice, so the red state keeps its meaning.
+
 ### Open follow-ups this brief did not close
 
-1. **`reports/schwab_chains` is ops-only.** The capture receipts and manifests
-   exist in the production execution checkout (`~/options-validator-ops`) and
-   are not tracked in git. A research checkout therefore shows the honest "no
-   Schwab pre-close capture receipts found" page state. Whether these receipts
-   should be tracked (they are the verification evidence for a display path)
-   is an open ops question.
-2. **`CHAIN_STALE_WARN_SESSIONS` / `CHAIN_STALE_BLOCK_SESSIONS` remain
+1. **`CHAIN_STALE_WARN_SESSIONS` / `CHAIN_STALE_BLOCK_SESSIONS` remain
    LLM-asserted** (proposed 2026-08-04, owner-unconfirmed; `config.py:672-673`).
    Phase A did not touch them, and this brief made no `config.py` change at
    all — a config edit invalidates every capture receipt's `config_hash`
    (`intraday_preview.py:81`) until the next live capture.
-3. **Freshness runway.** Captures are scheduled daily; a session that fails to
-   capture leaves the board on the frozen cache with its true (large) age, and
-   the banner says so rather than degrading quietly.
-4. **The closes store (`.cache/underlying`) is still frozen at 2026-08-04.**
+2. **Freshness runway.** Captures are scheduled daily. If captures STOP, the
+   newest verified session keeps its "verified pre-close" badge while ageing:
+   the banner and header chip therefore read the same wall-clock age the cards
+   do and turn loud at the WARN/BLOCK bars, so a stopped capture lane can never
+   render as a current board.
+3. **The closes store (`.cache/underlying`) is still frozen at 2026-08-04.**
    That is why `rv21`, `iv_minus_rv`, and the technicals of a pre-close section
    are null / older-dated with named reasons rather than interpolated. Its
    refresh is the subject of the 2026-08-14 drill-RED disposition and is owner

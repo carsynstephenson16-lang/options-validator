@@ -2003,6 +2003,15 @@ class SchwabFreshnessPageDateTests(unittest.TestCase):
         self.assertIn("hash mismatch for NVDA", html)
         self.assertIn("chains were NOT used", html)
 
+    def test_footer_says_the_two_dashboards_date_independently(self):
+        # rev-2 D3: mission control is out of scope and keeps its own
+        # closes-derived date, so the difference must be stated, not left to
+        # look like one of the two being broken.
+        html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("mission-control dashboard date INDEPENDENTLY", html)
+        self.assertIn("a difference between the two is expected", html)
+
     def test_a_checkout_with_no_receipts_says_so(self):
         data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
                            rv21_by_symbol={}, today="2026-08-14")
@@ -2087,3 +2096,72 @@ class FailClosedFeatureTests(unittest.TestCase):
         self.assertIn("are present, but its chain files are not in this checkout",
                       html)
         self.assertNotIn("FAILED verification", html)
+
+
+class FreshSourceAgesTests(unittest.TestCase):
+    """N1: "verified pre-close" describes the SOURCE, never the clock.
+
+    If captures stop, the newest verified session keeps its badge while
+    silently becoming days old. The fresh line and the header chip therefore
+    read the same chain_age_sessions the cards do.
+    """
+
+    def _data(self, today):
+        card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
+                "credit": 400.0, "annualized_yield": 0.2,
+                "grades": {"liquidity": "GREEN"}, "verdict": "…"}
+        section = _fresh_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                          "cards": [card], "empty": None}])
+        return ad.assemble(symbol_sections=[section], rv21_by_symbol={},
+                           today=today)
+
+    def test_same_day_capture_is_calm_info(self):
+        data = self._data("2026-08-14")
+        self.assertEqual(data["chain_age_sessions"], 0)
+        html = ad.render(data)
+        self.assertIn('<div class="notice info"><strong>Option quotes: '
+                      "15:45 pre-close (Schwab) session 2026-08-14</strong>",
+                      html)
+        self.assertNotIn("captures have STOPPED", html)
+        self.assertIn("<strong>Pre-close 15:45 (Schwab)</strong>", html)
+
+    def test_one_session_old_warns_and_says_how_old(self):
+        data = self._data("2026-08-17")           # Mon after a Fri capture
+        self.assertEqual(data["chain_age_sessions"], 1)
+        html = ad.render(data)
+        self.assertIn("now 1 trading session old", html)
+        self.assertIn('<div class="notice watch">', html)
+        self.assertIn("Pre-close 15:45 (Schwab) · 1 sessions old", html)
+        self.assertNotIn("captures have STOPPED", html)
+
+    def test_past_the_block_bar_the_fresh_line_is_loud_not_calm(self):
+        data = self._data("2026-08-20")           # 4 sessions after 08-14
+        self.assertEqual(data["chain_age_sessions"], 4)
+        html = ad.render(data)
+        self.assertIn("STALE BOARD — pre-close captures have STOPPED", html)
+        self.assertIn("newest verified session (2026-08-14) is 4 trading "
+                      "sessions old", html)
+        self.assertIn('<div class="notice bad">', html)
+        # The exact failure the reviewer demonstrated: the calm info line must
+        # be gone, not merely accompanied by a warning.
+        self.assertNotIn('<div class="notice info"><strong>Option quotes: ',
+                         html)
+        self.assertIn("STALE · Pre-close 15:45 (Schwab) · 4 sessions old", html)
+
+    def test_a_long_capture_outage_cannot_read_like_a_current_board(self):
+        data = self._data("2026-09-15")           # 22 sessions after 08-14
+        self.assertEqual(data["chain_age_sessions"], 22)
+        html = ad.render(data)
+        self.assertIn("is 22 trading sessions old", html)
+        self.assertIn("captures have STOPPED", html)
+        snapshot = data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"]
+        # The banner's tone now matches what the cards already did.
+        self.assertIn("CHAIN_STALE_VS_TODAY",
+                      snapshot["integrity"]["reason_codes"])
+
+    def test_unknown_age_on_a_fresh_source_says_unknown(self):
+        data = self._data(None)
+        self.assertIsNone(data["chain_age_sessions"])
+        html = ad.render(data)
+        self.assertIn("could NOT be compared with the evaluation date", html)
+        self.assertIn("age UNKNOWN", html)

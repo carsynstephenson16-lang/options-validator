@@ -564,3 +564,132 @@ class FixtureSelfCheck(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CliSurfaceParityTests(unittest.TestCase):
+    """N2: the CLI board must not date, price, or grade differently.
+
+    attractiveness.py:475-476 states the two surfaces must never silently
+    diverge. Both now choose their source through
+    schwab_chain_view.select_display_source, and both keep an unavailable
+    feature NaN instead of coercing it to a value that reads as evidence.
+    """
+
+    def setUp(self):
+        view._reset_memo_for_tests()
+        self.addCleanup(view._reset_memo_for_tests)
+
+    def _run_cli(self, root: Path, universe: list[str]) -> str:
+        import io
+        from contextlib import redirect_stdout
+
+        from options_researcher import attractiveness
+
+        (root / "data" / "positions").mkdir(parents=True, exist_ok=True)
+        from options_researcher.portfolio import _FIELDS
+
+        (root / "data" / "positions" / "positions.csv").write_text(
+            ",".join(_FIELDS) + "\n")
+        (root / "data" / "events").mkdir(parents=True, exist_ok=True)
+        (root / "data" / "events" / "fomc_dates.csv").write_text(
+            "date,source_url\n")
+        closes = root / ".cache" / "underlying"
+        closes.mkdir(parents=True, exist_ok=True)
+        index = [d.date().isoformat()
+                 for d in pd.bdate_range(end="2026-08-04", periods=60)]
+        for name in universe:
+            pd.DataFrame({"date": index,
+                          "close": [211.94] * len(index)}).to_parquet(
+                closes / f"{name}.parquet")
+
+        previous = os.getcwd()
+        os.chdir(root)
+        buffer = io.StringIO()
+        try:
+            with (
+                mock.patch.object(config, "ATTRACTIVENESS_UNIVERSE", universe),
+                mock.patch.object(config, "ATTRACTIVENESS_EXTRA_NAMES", []),
+                redirect_stdout(buffer),
+            ):
+                attractiveness.main()
+        finally:
+            os.chdir(previous)
+        return buffer.getvalue()
+
+    def _fresh_root(self, tmp: str) -> Path:
+        root = Path(tmp)
+        write_schwab_store(root, ["NVDA"])
+        write_intraday_receipt(root, {"NVDA": {
+            "symbol": "NVDA", "status": "ok", "spot_mid": SPOT,
+            "spot_source": "stock_snapshot", "spot_ts": f"{SESSION}T19:45:15Z",
+            "iv_rank_preview": 0.31}})
+        cache = root / ".cache" / "chains"
+        cache.mkdir(parents=True, exist_ok=True)
+        _display_chain().to_parquet(cache / "NVDA_2026-07-27.parquet")
+        features = root / ".tmp" / "research" / "attractiveness"
+        features.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            {"close": [211.94], "rv21": [0.45], "atm_iv": [0.50],
+             "iv_minus_rv": [0.05], "monthly_dte": [35.0], "iv_rank": [0.61],
+             "earnings_week": [False]},
+            index=pd.Index(["2026-07-27"], name="date")).to_parquet(
+            features / "NVDA_features.parquet")
+        return root
+
+    def test_cli_dates_a_symbol_exactly_as_the_html_board_does(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._fresh_root(tmp)
+            output = self._run_cli(root, ["NVDA"])
+
+        self.assertIn(f"=== NVDA @ {SESSION}", output)
+        self.assertNotIn("=== NVDA @ 2026-07-27", output)
+        self.assertIn(f"${SPOT:,.2f}", output)
+        self.assertIn("15:45 pre-close (Schwab) snapshot", output)
+        self.assertIn("NOT a close", output)
+
+    def test_cli_states_what_a_pre_close_session_cannot_compute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._fresh_root(tmp)
+            output = self._run_cli(root, ["NVDA"])
+
+        self.assertIn("UNAVAILABLE this session: rv21, iv_minus_rv", output)
+        self.assertIn("IV-rank 0.31", output)
+        self.assertIn("never a default", output)
+
+    def test_cli_keeps_a_null_feature_null_instead_of_grading_it_green(self):
+        # The exact site: a NaN iv_rank coerced to 0.0 grades iv_for_buyer
+        # GREEN, and a NaN iv_minus_rv coerced to 0.0 clears the VRP threshold.
+        nan = float("nan")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / ".cache" / "chains"
+            cache.mkdir(parents=True, exist_ok=True)
+            _display_chain().to_parquet(cache / f"NVDA_{DAY}.parquet")
+            features = root / ".tmp" / "research" / "attractiveness"
+            features.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(
+                {"close": [211.94], "rv21": [nan], "atm_iv": [nan],
+                 "iv_minus_rv": [nan], "monthly_dte": [35.0], "iv_rank": [nan],
+                 "earnings_week": [False]},
+                index=pd.Index([DAY], name="date")).to_parquet(
+                features / "NVDA_features.parquet")
+            output = self._run_cli(root, ["NVDA"])
+
+        self.assertIn("IV-rank unavailable", output)
+        self.assertIn("UNAVAILABLE this session: rv21, iv_rank, iv_minus_rv",
+                      output)
+        self.assertIn("iv_for_buyer:UNKNOWN", output)
+        self.assertIn("vrp_for_seller:UNKNOWN", output)
+        self.assertNotIn("iv_for_buyer:GREEN", output)
+        self.assertNotIn("vrp_for_seller:GREEN", output)
+
+    def test_cli_says_why_it_stayed_on_the_frozen_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._fresh_root(tmp)
+            write_intraday_receipt(root, {"NVDA": {
+                "symbol": "NVDA", "status": "ok", "spot_mid": SPOT,
+                "spot_source": "parity", "spot_ts": ""}})
+            output = self._run_cli(root, ["NVDA"])
+
+        self.assertIn("no verified 15:45 spot for 2026-08-14", output)
+        self.assertIn("=== NVDA @ 2026-07-27", output)

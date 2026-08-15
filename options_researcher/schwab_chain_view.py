@@ -27,6 +27,7 @@ import json
 import math
 from datetime import date
 from pathlib import Path
+from typing import NamedTuple
 
 import pandas as pd
 
@@ -76,6 +77,7 @@ DISPLAY_COLUMNS = [
     "theta",
     "vega",
 ]
+
 
 class _ChainsAbsent(RuntimeError):
     """The receipt is present but its chain files are not in this checkout."""
@@ -357,6 +359,72 @@ def preclose_iv_rank_preview(
     return value
 
 
+class DisplaySource(NamedTuple):
+    """Which chain one display surface should show for one symbol.
+
+    ``kind`` is ``CHAIN_SOURCE`` or ``THETADATA_CHAIN_SOURCE``. A fresh source
+    always carries ``frame`` and ``spot``; a ThetaData source carries neither
+    and the caller reads its own cache. ``refusal`` is set when a NEWER
+    verified session existed but could not be rendered honestly, so every
+    surface can say why it is showing the older date.
+    """
+
+    kind: str
+    session: str | None
+    frame: pd.DataFrame | None
+    spot: float | None
+    iv_rank_preview: float | None
+    refusal: str | None
+
+
+def select_display_source(
+    symbol: str,
+    thetadata_day: str | None,
+    *,
+    chain_dir: Path | str | None = None,
+    reports_dir: Path | str | None = None,
+    intraday_dir: Path | str | None = None,
+    have_verified_sessions: bool | None = None,
+) -> DisplaySource:
+    """Pick the newer of (frozen ThetaData session, verified pre-close session).
+
+    THE one place this rule lives. Both display surfaces -- the HTML board and
+    the CLI board -- call it, because a rule duplicated in two gathers is a rule
+    that will drift, and the two surfaces would then print different dates for
+    the same symbol on the same day.
+
+    A fresh chain is only ever returned WITH a same-instant 15:45 spot: pairing
+    fresh quotes with the frozen closes store misprices moneyness by several
+    percent. Without that spot the caller is told to stay on the older cache,
+    and is handed the reason to display.
+    """
+    name = str(symbol).upper()
+    if have_verified_sessions is None:
+        sessions, _failures = verified_sessions(
+            chain_dir=chain_dir, reports_dir=reports_dir)
+        have_verified_sessions = bool(sessions)
+    thetadata = DisplaySource(
+        THETADATA_CHAIN_SOURCE, thetadata_day, None, None, None, None)
+    if not have_verified_sessions:
+        return thetadata
+    newest = newest_chain(name, chain_dir=chain_dir, reports_dir=reports_dir)
+    if newest is None:
+        return thetadata
+    frame, session = newest
+    if thetadata_day is not None and session <= thetadata_day:
+        return thetadata
+    spot = load_preclose_spot(name, session, reports_dir=intraday_dir)
+    if spot is None:
+        return thetadata._replace(refusal=(
+            f"no verified 15:45 spot for {session} — fresh "
+            f"{CONVENTION_LABEL} chain not rendered; this symbol stays on the "
+            "frozen cache below"))
+    return DisplaySource(
+        CHAIN_SOURCE, session, frame, spot[0],
+        preclose_iv_rank_preview(name, session, reports_dir=intraday_dir),
+        None)
+
+
 def as_of_label(session: str) -> str:
     """The one honest way to print a schwab session date on any surface."""
     return f"{session} · {CONVENTION_LABEL}"
@@ -370,6 +438,7 @@ __all__ = [
     "CONVENTION_LABEL",
     "DISPLAY_COLUMNS",
     "DISPLAY_EXCLUDED_SYMBOLS",
+    "DisplaySource",
     "EOD_CLOSE_KIND",
     "HEADER_CHIP_LABEL",
     "INTRADAY_REPORTS_DIR",
@@ -381,6 +450,7 @@ __all__ = [
     "load_preclose_spot",
     "newest_chain",
     "preclose_iv_rank_preview",
+    "select_display_source",
     "session_symbols",
     "verified_sessions",
 ]
