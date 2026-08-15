@@ -52,10 +52,48 @@ if [ -z "$LOCAL_SHA" ] || [ -z "$REMOTE_SHA" ]; then
   echo "schwab_chain_capture wrapper REFUSED: could not resolve local/remote identity"
   exit 1
 fi
+# --- alignment gate: evidence-only divergence tolerance -------------------
+# Owner decision D-3 (2026-08-14, reports/2026-08-14-switch-on-owner-decisions.md;
+# brief 11 §9.2). The gate's purpose is "no unreviewed CODE runs unattended".
+# A strict SHA equality also refused when the only divergence was the daily
+# ritual's own evidence commit whose fail-soft push had failed -- turning a
+# transient push failure into a PERMANENTLY lost irreplaceable capture. So:
+# refuse unless every commit in origin/main..HEAD touches only evidence
+# allow-list paths. Being BEHIND origin/main still refuses exactly as before
+# (running stale code unattended is what this guard exists to prevent), and
+# anything unresolvable fails closed.
+EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
+                reports/h7_receipts reports/h7_data_gate reports/h5
+                reports/h6_forward reports/h8_forward reports/h10
+                reports/ritual reports/intraday_capture reports/live_probe
+                reports/cache_runs reports/schwab_chains)
+alignment_divergence_is_evidence_only() {
+  BEHIND_COUNT="$(git -C "$REPO" rev-list --count HEAD..origin/main 2>/dev/null)"
+  case "$BEHIND_COUNT" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$BEHIND_COUNT" -ne 0 ] && return 1
+  AHEAD_PATHS="$(git -C "$REPO" log --pretty=format: --name-only HEAD --not origin/main 2>/dev/null)" || return 1
+  while IFS= read -r CHANGED_PATH; do
+    [ -z "$CHANGED_PATH" ] && continue
+    PATH_OK=1
+    for ALLOWED in "${EVIDENCE_ALLOW[@]}"; do
+      case "$CHANGED_PATH" in
+        "$ALLOWED"|"$ALLOWED"/*) PATH_OK=0; break ;;
+      esac
+    done
+    [ "$PATH_OK" -eq 0 ] || return 1
+  done <<< "$AHEAD_PATHS"
+  return 0
+}
 if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
-  echo "schwab_chain_capture wrapper REFUSED: HEAD is not aligned with origin/main"
-  exit 1
+  if ! alignment_divergence_is_evidence_only; then
+    echo "schwab_chain_capture wrapper REFUSED: HEAD is not aligned with origin/main"
+    exit 1
+  fi
+  echo "schwab_chain_capture: HEAD is AHEAD of origin/main by evidence-only commit(s) -- proceeding (owner decision D-3). Realign with: git -C ${REPO} push origin main"
 fi
+# --- end alignment gate ---------------------------------------------------
 
 # Provider selection is explicit. Trading remains fail-closed even if the
 # caller's environment says otherwise.
