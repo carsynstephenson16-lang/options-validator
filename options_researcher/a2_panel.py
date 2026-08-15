@@ -26,6 +26,7 @@ class A2Diagnostics:
     skips: Counter[str] = field(default_factory=Counter)
     max_as_of: str | None = None
     pmcc_status: str = "no data"
+    selected_contracts: set[tuple[str, str, str]] = field(default_factory=set)
 
     def skip(self, reason: str) -> None:
         self.skips[reason] += 1
@@ -265,7 +266,11 @@ def _csp(
             commission = 2 * config.COMMISSION_PER_CONTRACT
         components = {key: 0.0 for key in LANE_COMPONENTS["csp"]}
         calendar_days = (_day(day) - _day(entry_day)).days
-        cash_forgone = denom * (math.exp(rate * calendar_days / 365.0) - 1.0)
+        try:
+            cash_forgone = denom * (math.exp(rate * calendar_days / 365.0) - 1.0)
+        except OverflowError:
+            diagnostics.skip("invalid_matched_tenor_rate")
+            return None
         marks = [float(raw[session]) for session in sessions if entry_day <= session <= day]
         # Dollar loss per assigned 100-share lot, clamped at zero: favorable
         # marks cannot become a positive "adverse" component.
@@ -380,18 +385,28 @@ def _long(
                 diagnostics.skip("missing_tactical_derived_greek_input")
                 return None
             ds = float(raw[day]) - float(raw[entry_day])
-            dt = (_day(day) - _day(entry_day)).days / 365.0
-            d_sigma = float(sigma)
+            d_sigma = float(quote.iv) - float(contract.iv)
             iv = float(contract.iv)
-            if not math.isfinite(iv) or iv <= 0:
+            numeric = (
+                iv,
+                d_sigma,
+                float(d1),
+                float(d2),
+                float(dividend_yield),
+                float(contract.theta),
+            )
+            if not all(math.isfinite(value) for value in numeric) or iv <= 0:
                 diagnostics.skip("invalid_tactical_iv")
                 return None
             normal_density = math.exp(-0.5 * float(d1) ** 2) / math.sqrt(2.0 * math.pi)
-            vanna = -math.exp(-float(dividend_yield) * dt) * normal_density * float(d2) / iv
+            tau = max((_day(str(contract.expiration)) - _day(entry_day)).days / 365.0, 0.0)
+            vanna = -math.exp(-float(dividend_yield) * tau) * normal_density * float(d2) / iv
             volga = float(contract.vega) * float(d1) * float(d2) / iv
             components["stock_price"] = float(contract.delta) * ds * 100 / denom
             components["iv"] = float(contract.vega) * d_sigma / (denom / 100)
-            components["decay"] = float(contract.theta) * dt * 100 / denom
+            components["decay"] = (
+                float(contract.theta) * (_day(day) - _day(entry_day)).days * 100 / denom
+            )
             components["cross_effects"] = (
                 (
                     0.5 * float(contract.gamma) * ds * ds
@@ -440,16 +455,17 @@ def _covered_call(
         return None
     entry_close, final_close = float(raw[entry_day]), float(raw[expiry])
     credit = adverse_sell(contract.bid) * 100
-    stock = (min(final_close, strike) - entry_close) * 100
-    benchmark = (final_close - entry_close) * 100
+    intrinsic = max(final_close - strike, 0.0) * 100
+    short_call = credit - intrinsic
+    stock = (final_close - entry_close) * 100
     denominator = entry_close * 100
     bidask = abs(adverse_sell(contract.bid) - (float(contract.bid) + float(contract.ask)) / 2) * 100
     components = {key: 0.0 for key in LANE_COMPONENTS["covered_call"]}
     components.update(
-        short_call_result=credit / denominator,
+        short_call_result=short_call / denominator,
         stock_result=stock / denominator,
-        combined_result=(stock + credit) / denominator,
-        combined_minus_stock_only=(stock + credit - benchmark) / denominator,
+        combined_result=(stock + short_call) / denominator,
+        combined_minus_stock_only=short_call / denominator,
         assignment_incidence=float(final_close > strike),
         lost_upside=max(final_close - strike, 0) * 100 / denominator,
     )
@@ -461,7 +477,7 @@ def _covered_call(
         "covered_call",
         "covered_call",
         score,
-        stock + credit,
+        stock + short_call,
         config.COMMISSION_PER_CONTRACT,
         bidask,
         denominator,
@@ -510,6 +526,9 @@ def build_historical_outcomes(
             put = select_income_contract(chain, entry_day, right="P")
             if _usable(put):
                 assert put is not None
+                identity = _symbol(put)
+                diag.selected_contracts.add((symbol, entry_day, identity))
+                provenance = {**provenance, "contract_symbol": identity}
                 raw_rate = (rates or {}).get(symbol, {}).get(entry_day)
                 try:
                     rate = float(raw_rate) if raw_rate is not None else None
@@ -538,6 +557,9 @@ def build_historical_outcomes(
             call = select_income_contract(chain, entry_day, right="C")
             if _usable(call):
                 assert call is not None
+                identity = _symbol(call)
+                diag.selected_contracts.add((symbol, entry_day, identity))
+                provenance = {**provenance, "contract_symbol": identity}
                 row = _covered_call(
                     symbol, decision, entry_day, call, float(score), raw, diag, provenance
                 )
@@ -548,6 +570,9 @@ def build_historical_outcomes(
             leaps = select_leaps_contract(chain, entry_day)
             if _usable(leaps):
                 assert leaps is not None
+                identity = _symbol(leaps)
+                diag.selected_contracts.add((symbol, entry_day, identity))
+                provenance = {**provenance, "contract_symbol": identity}
                 rows = _long(
                     symbol,
                     decision,
@@ -569,6 +594,9 @@ def build_historical_outcomes(
             tactical = select_tactical_contract(chain, entry_day)
             if _usable(tactical):
                 assert tactical is not None
+                identity = _symbol(tactical)
+                diag.selected_contracts.add((symbol, entry_day, identity))
+                provenance = {**provenance, "contract_symbol": identity}
                 rows = _long(
                     symbol,
                     decision,
