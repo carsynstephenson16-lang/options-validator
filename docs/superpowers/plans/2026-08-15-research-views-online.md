@@ -59,7 +59,7 @@ env["FAKE_PYTHON_LOG"] = str(call_log)
 Run the RED test:
 
 ```bash
-uv run python -m unittest tests/test_research_display_refresh.py -v
+uv run python -m unittest discover -s tests -p 'test_research_display_refresh.py' -v
 ```
 
 Expected RED: failure because `tools/research_display_refresh.sh` does not yet exist.
@@ -106,7 +106,7 @@ Make the wrapper executable.
 ### Step 3: Prove GREEN and validate zsh syntax
 
 ```bash
-uv run python -m unittest tests/test_research_display_refresh.py -v
+uv run python -m unittest discover -s tests -p 'test_research_display_refresh.py' -v
 /bin/zsh -n tools/research_display_refresh.sh
 uv run ruff check tests/test_research_display_refresh.py
 uv run ruff format --check tests/test_research_display_refresh.py
@@ -172,7 +172,7 @@ Assert the refresh template has:
 Run the RED test:
 
 ```bash
-uv run python -m unittest tests/test_research_view_launchagents.py -v
+uv run python -m unittest discover -s tests -p 'test_research_view_launchagents.py' -v
 ```
 
 Expected RED: missing plist templates.
@@ -197,7 +197,7 @@ This is operator documentation; do not execute deployment in this task.
 ### Step 4: Prove GREEN and validate plist syntax
 
 ```bash
-uv run python -m unittest tests/test_research_view_launchagents.py -v
+uv run python -m unittest discover -s tests -p 'test_research_view_launchagents.py' -v
 plutil -lint tools/launchagents/com.carsyn.options-validator.research-display-refresh.plist
 plutil -lint tools/launchagents/com.carsyn.options-validator.research-views.plist
 uv run ruff check tests/test_research_view_launchagents.py
@@ -235,11 +235,10 @@ Fetch current `origin/main`, list all worktrees, compare the feature diff paths 
 ### Step 2: Run affected and repository checks
 
 ```bash
-uv run python -m unittest \
-  tests/test_research_display_refresh.py \
-  tests/test_research_view_launchagents.py \
-  tests/test_experiments_dashboard.py \
-  tests/test_regime.py -v
+uv run python -m unittest discover -s tests -p 'test_research_display_refresh.py' -v
+uv run python -m unittest discover -s tests -p 'test_research_view_launchagents.py' -v
+uv run python -m unittest discover -s tests -p 'test_experiments_dashboard.py' -v
+uv run python -m unittest discover -s tests -p 'test_regime.py' -v
 /bin/zsh -n tools/research_display_refresh.sh
 plutil -lint tools/launchagents/com.carsyn.options-validator.research-display-refresh.plist
 plutil -lint tools/launchagents/com.carsyn.options-validator.research-views.plist

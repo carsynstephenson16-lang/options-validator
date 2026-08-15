@@ -153,6 +153,10 @@ does not replace or rerun the attractiveness producer. Both jobs target the
 localhost-only on `127.0.0.1:8766` and serves the ops
 `.tmp/dashboard/` directory.
 
+The Mac system timezone must remain `America/New_York`. The refresh plist's
+`TZ=America/New_York` applies only to its child process; it does not control
+when launchd evaluates `StartCalendarInterval`.
+
 ### Replace the unmanaged listener safely
 
 Deployment is an owner operation. Immediately before replacing the existing
@@ -165,6 +169,8 @@ PID="$(printf '%s\n' "$LISTENER" | awk 'NR == 2 { print $2 }')"
 case "$PID" in
   ''|*[!0-9]*) echo "stop: listener PID was not numeric: $PID" >&2; exit 1 ;;
 esac
+EXPECTED_COMMAND='/Users/carsynstephenson/options-validator-ops/.venv/bin/python -m http.server 8766 --bind 127.0.0.1'
+EXPECTED_CWD='/Users/carsynstephenson/options-validator-ops/.tmp/dashboard'
 ps -p "$PID" -o pid=,command=
 lsof -a -p "$PID" -d cwd
 ```
@@ -174,19 +180,43 @@ Inspect the captured listener, command, cwd, bind address, and port. Send
 and report the process that owns the port; do not kill it or install an ad-hoc
 replacement.
 
-Immediately before `TERM`, re-check that same PID and require that it still
-owns the localhost listener. If this check does not show
-`127.0.0.1:8766`, stop; the process may have exited or the port may have been
-reassigned.
+Immediately before `TERM`, revalidate the same fresh numeric PID's exact
+command, cwd, bind address, and port. Stop on any mismatch; the process may
+have exited or the port may have been reassigned.
 
 ```bash
+CURRENT_COMMAND="$(ps -p "$PID" -o command= | sed -E 's/^[[:space:]]+//')"
+if [[ "$CURRENT_COMMAND" != "$EXPECTED_COMMAND" ]]; then
+  echo "stop: PID $PID command changed: $CURRENT_COMMAND" >&2
+  exit 1
+fi
+CURRENT_CWD="$(lsof -a -p "$PID" -d cwd -Fn | awk '/^n/ { print substr($0, 2); exit }')"
+if [[ "$CURRENT_CWD" != "$EXPECTED_CWD" ]]; then
+  echo "stop: PID $PID cwd changed: $CURRENT_CWD" >&2
+  exit 1
+fi
 FINAL_LISTENER="$(lsof -nP -a -p "$PID" -iTCP:8766 -sTCP:LISTEN)"
 printf '%s\n' "$FINAL_LISTENER"
-if ! printf '%s\n' "$FINAL_LISTENER" | grep -Fq '127.0.0.1:8766'; then
-  echo "stop: PID $PID no longer owns 127.0.0.1:8766" >&2
+FINAL_LISTENER_COUNT="$(printf '%s\n' "$FINAL_LISTENER" | awk 'NR > 1 { count++ } END { print count + 0 }')"
+if [[ "$FINAL_LISTENER_COUNT" -ne 1 ]] || ! printf '%s\n' "$FINAL_LISTENER" | awk -v pid="$PID" '$2 == pid && $(NF - 1) == "127.0.0.1:8766" && $NF == "(LISTEN)" { found = 1 } END { exit !found }'; then
+  echo "stop: PID $PID no longer uniquely owns 127.0.0.1:8766" >&2
   exit 1
 fi
 kill -TERM "$PID"
+
+PORT_RELEASED=0
+for _ in {1..20}; do
+  if ! lsof -nP -iTCP:8766 -sTCP:LISTEN >/dev/null 2>&1; then
+    PORT_RELEASED=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$PORT_RELEASED" -ne 1 ]]; then
+  lsof -nP -iTCP:8766 -sTCP:LISTEN
+  echo "stop: port 8766 was not released after TERM" >&2
+  exit 1
+fi
 ```
 
 ### Install
@@ -210,13 +240,54 @@ launchctl enable gui/$UID/com.carsyn.options-validator.research-views
 
 ### Verify
 
-Print both managed jobs, kick the refresh once, and check all four served
-artifacts:
+Print both managed jobs, prove the LaunchAgent server owns the localhost
+listener and its configured document root, then kick the refresh and require a
+fresh status file before checking all four served artifacts:
 
 ```bash
 launchctl print gui/$UID/com.carsyn.options-validator.research-display-refresh
-launchctl print gui/$UID/com.carsyn.options-validator.research-views
-launchctl kickstart gui/$UID/com.carsyn.options-validator.research-display-refresh
+SERVER_JOB="$(launchctl print gui/$UID/com.carsyn.options-validator.research-views)"
+printf '%s\n' "$SERVER_JOB"
+SERVER_PID="$(printf '%s\n' "$SERVER_JOB" | awk '$1 == "pid" && $2 == "=" { print $3; exit }')"
+case "$SERVER_PID" in
+  ''|*[!0-9]*) echo "stop: managed server PID was not numeric: $SERVER_PID" >&2; exit 1 ;;
+esac
+PORT_LISTENER=''
+PORT_PID=''
+for _ in {1..20}; do
+  PORT_LISTENER="$(lsof -nP -iTCP:8766 -sTCP:LISTEN)"
+  PORT_PID="$(printf '%s\n' "$PORT_LISTENER" | awk 'NR == 2 { print $2 }')"
+  case "$PORT_PID" in
+    *[!0-9]*|'') sleep 1 ;;
+    *) break ;;
+  esac
+done
+printf '%s\n' "$PORT_LISTENER"
+PORT_LISTENER_COUNT="$(printf '%s\n' "$PORT_LISTENER" | awk 'NR > 1 { count++ } END { print count + 0 }')"
+if [[ "$PORT_LISTENER_COUNT" -ne 1 ]] || [[ "$PORT_PID" != "$SERVER_PID" ]] || ! printf '%s\n' "$PORT_LISTENER" | awk -v pid="$SERVER_PID" '$2 == pid && $(NF - 1) == "127.0.0.1:8766" && $NF == "(LISTEN)" { found = 1 } END { exit !found }'; then
+  echo "stop: managed server PID and localhost listener do not match" >&2
+  exit 1
+fi
+SERVER_COMMAND="$(ps -p "$SERVER_PID" -o command= | sed -E 's/^[[:space:]]+//')"
+EXPECTED_SERVER_COMMAND='/Users/carsynstephenson/options-validator-ops/.venv/bin/python -m http.server 8766 --bind 127.0.0.1 --directory /Users/carsynstephenson/options-validator-ops/.tmp/dashboard'
+if [[ "$SERVER_COMMAND" != "$EXPECTED_SERVER_COMMAND" ]]; then
+  echo "stop: managed server document root differs: $SERVER_COMMAND" >&2
+  exit 1
+fi
+STATUS_PATH='/Users/carsynstephenson/options-validator-ops/.tmp/dashboard/research-views-status.txt'
+STATUS_STARTED_AT="$(date +%s)"
+launchctl kickstart -k gui/$UID/com.carsyn.options-validator.research-display-refresh
+for _ in {1..20}; do
+  if [[ -f "$STATUS_PATH" ]] && [[ "$(stat -f %m "$STATUS_PATH")" -ge "$STATUS_STARTED_AT" ]]; then
+    break
+  fi
+  sleep 1
+done
+if [[ ! -f "$STATUS_PATH" ]] || [[ "$(stat -f %m "$STATUS_PATH")" -lt "$STATUS_STARTED_AT" ]]; then
+  echo "stop: refresh did not publish a fresh status file" >&2
+  exit 1
+fi
+sed -n '1,3p' "$STATUS_PATH"
 curl -fsS http://127.0.0.1:8766/attractiveness.html
 curl -fsS http://127.0.0.1:8766/experiments.html
 curl -fsS http://127.0.0.1:8766/wasserstein-regime.txt
@@ -230,8 +301,11 @@ Boot out both labels and leave the generated dashboard artifacts in place:
 ```bash
 launchctl bootout gui/$UID/com.carsyn.options-validator.research-display-refresh
 launchctl bootout gui/$UID/com.carsyn.options-validator.research-views
+rm -f ~/Library/LaunchAgents/com.carsyn.options-validator.research-display-refresh.plist
+rm -f ~/Library/LaunchAgents/com.carsyn.options-validator.research-views.plist
 ```
 
-The prior server may be restored only with the exact, previously verified
-localhost ops-dashboard command (including its command, cwd, bind address,
-and port). Do not substitute an unverified process.
+These commands remove only the two installed plist copies and leave generated
+dashboard artifacts in place. The prior server may be restored only with the
+exact, previously verified localhost ops-dashboard command (including its
+command, cwd, bind address, and port). Do not substitute an unverified process.
