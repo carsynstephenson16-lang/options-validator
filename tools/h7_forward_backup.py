@@ -8,6 +8,28 @@ password on the command line. Configure ``RESTIC_REPOSITORY`` and either
 No command in this module is run by the H7 watcher or activation check. The
 owner runs ``backup`` after a completed refresh and ``restore-check`` during a
 restore drill; activation consumes the resulting immutable receipt.
+
+Recorded input-binding invalidations (drill disposition B, owner-directed
+in-session 2026-08-14, ``reports/2026-08-14-owner-answers-decision-menu.md``
+ruling 1): the restore check re-hashes every input a sealed receipt binds,
+inside the restored tree. When an owner-approved data refresh rewrites bytes a
+sealed receipt already committed to, that binding becomes permanently
+unverifiable -- the pre-refresh bytes are gone and the receipt is append-only,
+so it can never be repointed. Disposition B says: record the invalidation
+explicitly, then accept exactly what was recorded. ``record-invalidation``
+appends a typed fact through ``research/facts.py``; the restore check then turns
+a mismatch into PASS-WITH-NOTE only when a well-formed fact names that exact
+receipt (by content hash), that exact label, and that exact sealed hash. Every
+uncovered mismatch still FAILS, and a malformed or partial fact covers nothing.
+
+Deliberate limit of the mechanism, stated so nobody reads more into it: a
+recorded invalidation pins the SEALED side of the binding, not the replacement.
+The observed post-refresh hash is recorded as evidence but is not a coverage
+condition, because the closes cache is refreshed on an ordinary operating
+cadence; pinning the replacement would re-break the drill -- and invite a
+reflexive "append another fact" habit -- every refresh. The covered binding is
+already unverifiable forever, so nothing further is given up. Coverage never
+extends to a missing file: a vanished input is data loss, not drift, and fails.
 """
 from __future__ import annotations
 
@@ -19,9 +41,11 @@ import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypeGuard
 
 from options_researcher.h7_scope import scope_identity
-from research.hashing import sha256_file
+from research.facts import append_fact, read_facts
+from research.hashing import canonical_json, sha256_file, sha256_hex
 from research.receipts import (
     input_file_record,
     load_receipt,
@@ -151,6 +175,118 @@ def run_backup(*, completed_session: str, root: Path = REPO_ROOT,
     return path
 
 
+INVALIDATION_TOKEN = "H7_INPUT_BINDING_INVALIDATION"
+INVALIDATION_SCHEMA = "h7-input-binding-invalidation/v1"
+# Exact key set: a record missing a field, or carrying an unexpected one, is a
+# partial/garbled record and must cover nothing.
+INVALIDATION_KEYS = frozenset({
+    "schema", "receipt", "receipt_hash", "bindings", "observed",
+    "invalidated_by", "recorded_session", "provenance",
+})
+_HEX = frozenset("0123456789abcdef")
+
+
+def _is_sha256(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and len(value) == 64 and set(value) <= _HEX
+
+
+def _is_nonempty_text(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_hash_map(value: object, *, allow_empty: bool) -> bool:
+    if not isinstance(value, dict) or (not value and not allow_empty):
+        return False
+    return all(_is_nonempty_text(label) and _is_sha256(digest)
+               for label, digest in value.items())
+
+
+def parse_invalidation_fact(text: str) -> dict | None:
+    """Return the payload of a well-formed invalidation fact, else ``None``.
+
+    Fail closed in every direction: an unknown token, unparseable JSON, a
+    missing or extra field, a non-hex hash, an absolute or traversing receipt
+    path, or a path that disagrees with the payload all yield ``None`` (covers
+    nothing), never a partial acceptance.
+    """
+    if not isinstance(text, str) or not text.startswith(f"{INVALIDATION_TOKEN} "):
+        return None
+    receipt_path, separator, body = text[len(INVALIDATION_TOKEN) + 1:].partition(" ")
+    if not separator:
+        return None
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict) or set(payload) != INVALIDATION_KEYS:
+        return None
+    if payload["schema"] != INVALIDATION_SCHEMA:
+        return None
+    receipt = payload["receipt"]
+    if (not _is_nonempty_text(receipt) or receipt != receipt_path
+            or receipt.startswith("/") or "\\" in receipt
+            or ".." in Path(receipt).parts):
+        return None
+    if not _is_sha256(payload["receipt_hash"]):
+        return None
+    if not _is_hash_map(payload["bindings"], allow_empty=False):
+        return None
+    if not _is_hash_map(payload["observed"], allow_empty=True):
+        return None
+    if not all(_is_nonempty_text(payload[key])
+               for key in ("invalidated_by", "recorded_session", "provenance")):
+        return None
+    return payload
+
+
+def invalidation_fact_id(payload: dict) -> str:
+    """Stable short id for a fact line (facts.log itself is not hash-chained)."""
+    return sha256_hex(canonical_json(payload))[:12]
+
+
+def load_invalidations(ledger_dir: Path) -> dict[tuple[str, str, str], dict]:
+    """Index recorded invalidations by (receipt hash, label, sealed hash)."""
+    index: dict[tuple[str, str, str], dict] = {}
+    for line in read_facts(str(ledger_dir)):
+        _, separator, text = line.partition("\t")
+        if not separator:
+            continue
+        payload = parse_invalidation_fact(text.rstrip("\n"))
+        if payload is None:
+            continue
+        for label, sealed in payload["bindings"].items():
+            index[(payload["receipt_hash"], label, sealed)] = payload
+    return index
+
+
+def _covering_invalidation(*, receipt_relative: str, receipt: dict, label: str,
+                           stored: dict, actual: dict,
+                           index: dict[tuple[str, str, str], dict]) -> dict | None:
+    """Return the fact covering this exact mismatch, or ``None``.
+
+    Covers only a CHANGED hash of a still-present file whose sealed hash the
+    fact names. A missing (or newly appearing) input is never covered.
+    """
+    if stored.get("exists") is not True or actual.get("exists") is not True:
+        return None
+    sealed = stored.get("sha256")
+    if not _is_sha256(sealed) or not _is_sha256(actual.get("sha256")):
+        return None
+    receipt_hash = receipt.get("receipt_hash")
+    if not _is_sha256(receipt_hash):
+        return None
+    payload = index.get((receipt_hash, label, sealed))
+    if payload is None:
+        return None
+    # The receipt is identified by its content hash; the recorded path must
+    # still agree with where the receipt actually restored (the restore layout
+    # may carry a prefix, so a trailing-component match is what is required).
+    recorded = payload["receipt"]
+    if receipt_relative != recorded and not receipt_relative.endswith(f"/{recorded}"):
+        return None
+    return payload
+
+
 def _rebase_record(record: dict, restored_root: Path) -> dict:
     original = Path(record["path"])
     try:
@@ -161,11 +297,19 @@ def _rebase_record(record: dict, restored_root: Path) -> dict:
     return input_file_record(candidate)
 
 
-def verify_restored_tree(restored_root: Path) -> dict:
-    """Verify manifest bytes and every restored H7 receipt/data-gate input."""
+def verify_restored_tree(restored_root: Path, *,
+                         invalidations: dict | None = None) -> dict:
+    """Verify manifest bytes and every restored H7 receipt/data-gate input.
+
+    ``invalidations`` defaults to the facts recorded INSIDE the restored tree:
+    the acceptance evidence has to be part of the backup being drilled, not
+    supplied by whatever happens to be on the operator's disk today.
+    """
     restored_root = Path(restored_root).resolve()
     checks = {"manifest": "NOT_PRESENT", "receipts": 0, "data_gates": 0,
-              "problems": []}
+              "problems": [], "notes": []}
+    if invalidations is None:
+        invalidations = load_invalidations(restored_root / "ledger")
     manifest = restored_root / "data/chain_cache_manifest.txt"
     chains = restored_root / ".cache/chains"
     if manifest.exists() and chains.exists():
@@ -201,11 +345,27 @@ def verify_restored_tree(restored_root: Path) -> dict:
                 or receipt.get("whole_universe_verdict") != "GO"
                 or receipt.get("go_count") != len(scope_identity()["symbols"])):
             checks["problems"].append(f"{path}: stale scope")
-        for label, record in receipt.get("input_files", {}).items():
+        try:
+            receipt_relative = path.resolve().relative_to(restored_root).as_posix()
+        except (ValueError, OSError):
+            receipt_relative = ""
+        for label, record in sorted(receipt.get("input_files", {}).items()):
             actual = _rebase_record(record, restored_root)
-            if (actual.get("exists") != record.get("exists")
-                    or actual.get("sha256") != record.get("sha256")):
+            if (actual.get("exists") == record.get("exists")
+                    and actual.get("sha256") == record.get("sha256")):
+                continue
+            covering = _covering_invalidation(
+                receipt_relative=receipt_relative, receipt=receipt, label=label,
+                stored=record, actual=actual, index=invalidations)
+            if covering is None:
                 checks["problems"].append(f"{path}: changed input {label}")
+                continue
+            checks["notes"].append(
+                f"{path}: changed input {label} accepted by recorded "
+                f"{INVALIDATION_TOKEN} fact id={invalidation_fact_id(covering)} "
+                f"recorded_session={covering['recorded_session']} "
+                f"invalidated_by={covering['invalidated_by']} "
+                f"provenance={covering['provenance']} (ledger/facts.log)")
     checks["ok"] = not checks["problems"] and checks["data_gates"] > 0
     return checks
 
@@ -252,6 +412,8 @@ def run_restore_check(*, backup_receipt_path: Path,
         verification = verify_restored_tree(restored_root)
         if not verification["ok"]:
             raise RuntimeError(f"restored H7 state failed verification: {verification}")
+        for note in verification.get("notes", ()):
+            print(f"PASS-WITH-NOTE {note}")
     receipt = make_receipt("backup_restore", {
         "completed_session": completed_session,
         "verified_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -267,6 +429,71 @@ def run_restore_check(*, backup_receipt_path: Path,
             f"{datetime.now(timezone.utc).date().isoformat()}.json")
     write_immutable_receipt(receipt, path)
     return path
+
+
+def build_invalidation_fact(*, receipt_path: Path, label_prefix: str,
+                            invalidated_by: str, recorded_session: str,
+                            provenance: str, root: Path = REPO_ROOT) -> str | None:
+    """Build the fact line for one sealed receipt, or ``None`` if it is intact.
+
+    Only labels that are ACTUALLY mismatched right now are recorded: a fact
+    never pre-authorizes a binding that still verifies.
+    """
+    root = Path(root).resolve()
+    receipt_path = Path(receipt_path)
+    if not receipt_path.is_absolute():
+        receipt_path = root / receipt_path
+    receipt = load_receipt(receipt_path)
+    relative = receipt_path.resolve().relative_to(root).as_posix()
+    bindings, observed = {}, {}
+    for label, record in sorted(receipt.get("input_files", {}).items()):
+        if not label.startswith(label_prefix) or record.get("exists") is not True:
+            continue
+        sealed = record.get("sha256")
+        current = input_file_record(root / record["path"])
+        if (not _is_sha256(sealed) or current.get("exists") is not True
+                or current.get("sha256") == sealed):
+            continue
+        bindings[label] = sealed
+        observed[label] = current["sha256"]
+    if not bindings:
+        return None
+    payload = {
+        "schema": INVALIDATION_SCHEMA,
+        "receipt": relative,
+        "receipt_hash": receipt["receipt_hash"],
+        "bindings": bindings,
+        "observed": observed,
+        "invalidated_by": invalidated_by,
+        "recorded_session": recorded_session,
+        "provenance": provenance,
+    }
+    return f"{INVALIDATION_TOKEN} {relative} {canonical_json(payload)}"
+
+
+def record_invalidations(*, receipt_paths: list[Path], label_prefix: str,
+                         invalidated_by: str, recorded_session: str,
+                         provenance: str, root: Path = REPO_ROOT,
+                         ledger_dir: Path | None = None,
+                         dry_run: bool = False) -> list[str]:
+    """Append one typed invalidation fact per sealed receipt (append-only)."""
+    root = Path(root).resolve()
+    ledger_dir = Path(ledger_dir) if ledger_dir else root / "ledger"
+    lines = []
+    for receipt_path in receipt_paths:
+        text = build_invalidation_fact(
+            receipt_path=receipt_path, label_prefix=label_prefix,
+            invalidated_by=invalidated_by, recorded_session=recorded_session,
+            provenance=provenance, root=root)
+        if text is None:
+            continue
+        if parse_invalidation_fact(text) is None:  # never write what cannot be read
+            raise RuntimeError(f"refusing to record unparseable fact for {receipt_path}")
+        if not dry_run:
+            prefix = text[:text.index("{")]
+            append_fact(text, str(ledger_dir), dedupe_prefix=prefix)
+        lines.append(text)
+    return lines
 
 
 def backup_receipt_is_fresh(path: Path, *, completed_session: str) -> bool:
@@ -289,8 +516,34 @@ def main(argv: list[str] | None = None) -> int:
     restore.add_argument("--snapshot")
     restore.add_argument("--completed-session", required=True)
     restore.add_argument("--receipt", type=Path)
+    record = sub.add_parser(
+        "record-invalidation",
+        help="append a typed input-binding invalidation fact (disposition B)")
+    record.add_argument("--receipt", dest="receipts", type=Path, action="append",
+                        required=True, help="sealed receipt (repeatable)")
+    record.add_argument("--label-prefix", default="close:")
+    record.add_argument("--invalidated-by", required=True)
+    record.add_argument("--recorded-session", required=True)
+    record.add_argument("--provenance", required=True)
+    record.add_argument("--root", type=Path, default=REPO_ROOT,
+                        help="tree the receipts' input paths are resolved against")
+    record.add_argument("--ledger-dir", type=Path,
+                        help="ledger directory to append to (default <root>/ledger)")
+    record.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "record-invalidation":
+            lines = record_invalidations(
+                receipt_paths=args.receipts, label_prefix=args.label_prefix,
+                invalidated_by=args.invalidated_by,
+                recorded_session=args.recorded_session,
+                provenance=args.provenance, root=args.root,
+                ledger_dir=args.ledger_dir, dry_run=args.dry_run)
+            for line in lines:
+                print(line)
+            print(f"{'would record' if args.dry_run else 'recorded'} "
+                  f"{len(lines)} invalidation fact(s)")
+            return 0
         path = (run_backup(completed_session=args.completed_session,
                            receipt_path=args.receipt)
                 if args.command == "backup" else
