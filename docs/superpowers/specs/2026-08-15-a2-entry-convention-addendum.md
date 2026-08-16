@@ -46,4 +46,3 @@ A2-specific forward dates, the forward adverse-gate adjudication vocabulary,
 and any future PMCC synthetic-position convention remain unpinned. Forward
 capture and verdict code must refuse until those fields are owner-approved in
 a later registration amendment.
-

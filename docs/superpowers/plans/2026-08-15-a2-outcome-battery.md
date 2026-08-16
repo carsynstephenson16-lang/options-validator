@@ -146,4 +146,3 @@
 - [ ] **Step 7: Final verification**
 
   Run `uv run python -m unittest discover -s tests`, `uv run ruff check .`, `uv run ruff format --check .`, and `uv run pyright`. Independently review the whole diff and report any unrelated baseline warnings separately.
-
