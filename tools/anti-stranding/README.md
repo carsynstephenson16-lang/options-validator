@@ -2,7 +2,8 @@
 
 Purpose: guarantee that **no commit exists in only one place**, that **every
 branch with work is visible as a PR**, and that finished worktrees disappear —
-while every merge into main stays an owner decision (one tap on GitHub).
+while merges into main are automatic ONLY for the owner's own green-CI PRs
+that touch no owner-governed path (everything else still lands on the owner).
 
 Built 2026-08-15 after an audit found 16 commits existing only on this laptop,
 18 branches unmerged into main with just 2 open PRs, and that the remembered
@@ -19,20 +20,30 @@ weekly "branch-sweep" job had never actually been implemented.
 | L4 | Owner handles diverged branches, ledger forks, ops sync | — |
 
 **Merge policy (owner-directed 2026-08-15, in-session wording: "i want the
-merge to be an automatic decision i dont care"):** the reconciler merges any
-open non-draft PR whose checks are ALL green (CI: ruff, pyright, unittest,
-gitleaks; plus claude-review). Pending or failing checks = the PR waits.
-No merges 15:00–16:30 ET on weekdays (ops pre-capture window). The switch is
-the owner-created flag file `~/.config/repo-reconcile/automerge` (install.sh
-sets it to 1 per the directive; `echo 0 >` it to revert to owner-only merges). This supersedes the earlier
-"L4 owner merges always" design for routine PRs; diverged-branch
-reconciliation and ledger-fork resolution still land on the owner.
+merge to be an automatic decision i dont care"):** the reconciler merges an
+open PR only when ALL of these hold — it is the owner's own PR (`--author
+@me`) targeting `main` in a repo the owner owns; it is not a draft; every
+check on the exact head commit is green (merge pinned to that SHA via
+`--match-head-commit`); a PR with zero checks is reported, never merged; and
+the diff touches no owner-governed path (`ledger/`, `config.py`,
+`docs/superpowers/`, `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/` —
+those escalate to the digest for the owner). NOTE: claude-review currently
+reports green even when it skips itself (no `CLAUDE_CODE_OAUTH_TOKEN` in CI),
+so it is NOT counted as a review guarantee — CI (ruff, pyright, unittest,
+gitleaks) is the gate. No merges 15:00–16:30 ET weekdays (ops pre-capture
+window), re-checked per PR. The switch is the owner-created flag file
+`~/.config/repo-reconcile/automerge` (install.sh sets it to 1 unless the
+owner previously opted out; `echo 0 >` reverts). This supersedes the earlier
+"L4 owner merges always" design for routine PRs; owner-governed paths,
+diverged branches, and ledger forks still land on the owner.
 
 Hard rules baked into every script: never `--force`, never `git add` of
 untracked files (repos are PUBLIC — a stray secret must never auto-publish),
-never merge, never delete (worktree prune is opt-in via `PRUNE=1` and only for
-provably merged + clean trees), ops/research checkouts and `main`/`deploy/*`
-are never touched.
+never delete (worktree prune is opt-in via `PRUNE=1` and only for provably
+merged + clean trees), ops/research checkouts and `main`/`deploy/*` are never
+touched, and every side-effect loop (push, PR create, merge) acts only in
+repos whose origin belongs to the owner's GitHub account — a cloned upstream
+repo (e.g. `~/codex-plugin-cc` → `openai/codex-plugin-cc`) is inventory-only.
 
 ## Install (owner-run)
 
@@ -78,7 +89,7 @@ requires the owner to amend CLAUDE.md/AGENTS.md (they must not drift apart).
 
 ## What stays manual, permanently
 
-- Every merge into main (GitHub mobile app works).
-- Anything touching `ledger/**`, frozen numbers, registrations, verdicts.
+- Merging anything that touches `ledger/**`, `config.py`, registrations,
+  verdicts, doctrine files, or CI config (auto-merge excludes these paths).
 - Syncing `~/options-validator-ops` (it has its own 15:30 ET alignment gate).
 - Deleting anything.
