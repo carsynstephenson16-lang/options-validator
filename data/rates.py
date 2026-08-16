@@ -5,6 +5,7 @@ no fetch path: missing, malformed, stale, or not-yet-known inputs fail closed.
 Treasury CMT values are par yields; treating the interpolated par curve as a
 zero curve is an explicitly labeled approximation from the frozen design.
 """
+
 from __future__ import annotations
 
 import csv
@@ -230,9 +231,7 @@ def _load_treasury_rows(path: Path) -> list[_TreasuryRow]:
                 raise ValueError(f"{context}: captured_at_utc precedes known_as_of_utc")
             units = raw["units"].strip()
             if units != config.BS_TREASURY_UNITS:
-                raise ValueError(
-                    f"{context}: units must be {config.BS_TREASURY_UNITS!r}"
-                )
+                raise ValueError(f"{context}: units must be {config.BS_TREASURY_UNITS!r}")
             key = (source_date, known, tenor_days)
             if key in seen:
                 raise ValueError(f"{context}: duplicate curve tenor/version")
@@ -287,9 +286,7 @@ def risk_free_rate(
         )
     selected_version = max((row.source_date, row.known_as_of_utc) for row in eligible)
     selected = [
-        row
-        for row in eligible
-        if (row.source_date, row.known_as_of_utc) == selected_version
+        row for row in eligible if (row.source_date, row.known_as_of_utc) == selected_version
     ]
     metadata = {
         (
@@ -356,9 +353,7 @@ def _load_dividend_rows(path: Path) -> list[_DividendRow]:
                 context=context,
             )
             if expected < 0:
-                raise ValueError(
-                    f"{context}: expected_annual_cash_dividend must be non-negative"
-                )
+                raise ValueError(f"{context}: expected_annual_cash_dividend must be non-negative")
             known = _parse_timestamp(
                 raw["known_as_of_utc"], field="known_as_of_utc", context=context
             )
@@ -369,9 +364,7 @@ def _load_dividend_rows(path: Path) -> list[_DividendRow]:
                 raise ValueError(f"{context}: captured_at_utc precedes known_as_of_utc")
             units = raw["units"].strip()
             if units != config.BS_DIVIDEND_UNITS:
-                raise ValueError(
-                    f"{context}: units must be {config.BS_DIVIDEND_UNITS!r}"
-                )
+                raise ValueError(f"{context}: units must be {config.BS_DIVIDEND_UNITS!r}")
             key = (symbol, effective_date, known)
             if key in seen:
                 raise ValueError(f"{context}: duplicate dividend expectation/version")

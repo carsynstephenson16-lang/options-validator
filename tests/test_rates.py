@@ -115,9 +115,7 @@ class TestPointInTimeRates(unittest.TestCase):
             RATE_FIELDS,
             [rate_row(30, 0.04), rate_row(90, 0.05)],
         )
-        result = risk_free_rate(
-            date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path
-        )
+        result = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
         self.assertAlmostEqual(result.rate, math.log1p(0.045), places=12)
         self.assertAlmostEqual(result.par_yield, 0.045, places=12)
         self.assertTrue(result.par_curve_as_zero_approximation)
@@ -146,9 +144,7 @@ class TestPointInTimeRates(unittest.TestCase):
             ]
         )
         write_csv(self.rate_path, RATE_FIELDS, rows)
-        result = risk_free_rate(
-            date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path
-        )
+        result = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
         self.assertEqual(result.source_date, date(2026, 7, 16))
         self.assertAlmostEqual(result.par_yield, 0.045, places=12)
 
@@ -187,18 +183,14 @@ class TestPointInTimeRates(unittest.TestCase):
 
     def test_sourced_zero_dividend_is_allowed(self):
         write_csv(self.dividend_path, DIVIDEND_FIELDS, [dividend_row("AMZN", 0.0)])
-        result = dividend_yield(
-            "AMZN", date(2026, 7, 17), 225.0, path=self.dividend_path
-        )
+        result = dividend_yield("AMZN", date(2026, 7, 17), 225.0, path=self.dividend_path)
         self.assertEqual(result.yield_rate, 0.0)
         self.assertEqual(result.expected_annual_cash_dividend, 0.0)
         self.assertTrue(result.provenance.source_url.startswith("https://"))
 
     def test_dividend_yield_uses_expected_cash_over_synchronized_spot(self):
         write_csv(self.dividend_path, DIVIDEND_FIELDS, [dividend_row("MSFT", 4.0)])
-        result = dividend_yield(
-            "MSFT", date(2026, 7, 17), 400.0, path=self.dividend_path
-        )
+        result = dividend_yield("MSFT", date(2026, 7, 17), 400.0, path=self.dividend_path)
         self.assertAlmostEqual(result.yield_rate, 0.01, places=12)
 
     def test_expired_dividend_record_fails_closed(self):
