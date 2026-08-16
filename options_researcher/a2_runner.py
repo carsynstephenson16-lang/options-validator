@@ -26,6 +26,7 @@ from options_researcher.a2_battery import (
     LANE_ARMS,
     A2Outcome,
     A2VariantSummary,
+    non_overlapping_inference_rows,
     staggered_descriptive_rows,
     summarize_lane,
 )
@@ -218,6 +219,26 @@ def validate_report(report: Mapping[str, object]) -> None:
         len(arms) for arms in LANE_ARMS.values()
     ):
         raise OneRunError("A2 report does not contain every registered lane/arm")
+    weekly_keys = {
+        "accepted_board_not_first_session_of_week",
+        "weeks_without_complete_board",
+        "weeks_skipped_by_spacing",
+    }
+    breach_variant: Mapping[str, object] | None = None
+    for variant in variants:
+        if not isinstance(variant, Mapping):
+            raise OneRunError("A2 report variant is not an object")
+        exclusions = variant.get("exclusions")
+        if not isinstance(exclusions, Mapping) or not weekly_keys.issubset(exclusions):
+            raise OneRunError("A2 report variant lacks weekly cohort diagnostics")
+        if variant.get("lane") == "csp" and variant.get("arm") == "breach_hold_21_dte":
+            breach_variant = variant
+    if breach_variant is None or not isinstance(
+        breach_variant.get("duplication_against_close_21_dte"), Mapping
+    ):
+        raise OneRunError("A2 report lacks breach-arm duplication diagnostics")
+    if not isinstance(breach_variant.get("breach_path_skip_counts"), Mapping):
+        raise OneRunError("A2 report lacks breach-path skip diagnostics")
     if not isinstance(report.get("lane_statuses"), Mapping):
         raise OneRunError("A2 report lane statuses are missing")
     provenance = report.get("provenance")
@@ -355,15 +376,71 @@ def _variant_rows(
         else:
             incomplete += 1
             missing_by_date[decision] = missing + [f"extra:{symbol}" for symbol in extra]
-    return (
+    weekly_diagnostics: dict[str, int] = {}
+    inference = non_overlapping_inference_rows(
         tuple(complete),
+        lane=lane,
+        arm=arm,
+        expected_symbols=config.A2_UNIVERSE,
+        decision_dates=tuple(signals),
+        diagnostics=weekly_diagnostics,
+    )
+    for key in (
+        "accepted_board_not_first_session_of_week",
+        "weeks_without_complete_board",
+        "weeks_skipped_by_spacing",
+    ):
+        weekly_diagnostics.setdefault(key, 0)
+    return (
+        inference,
         rows,
         {
             "incomplete_cohorts": incomplete,
             "missing_names": missing_by_date,
             "original_bucket_identity_preserved": not incomplete and bool(grouped),
+            **weekly_diagnostics,
         },
     )
+
+
+def _breach_duplication(rows: Sequence[A2Outcome]) -> dict[str, int | float | None]:
+    by_arm: dict[str, dict[tuple[str, str, str], A2Outcome]] = {
+        "close_21_dte": {},
+        "breach_hold_21_dte": {},
+    }
+    complete_decisions: dict[str, set[str]] = {
+        "close_21_dte": set(),
+        "breach_hold_21_dte": set(),
+    }
+    expected = set(config.A2_UNIVERSE)
+    for arm in by_arm:
+        arm_rows = [row for row in rows if row.lane == "csp" and row.arm == arm]
+        decisions = {row.decision_date for row in arm_rows}
+        for decision in decisions:
+            cohort = [row for row in arm_rows if row.decision_date == decision]
+            if len(cohort) == len(expected) and {row.symbol for row in cohort} == expected:
+                complete_decisions[arm].add(decision)
+                by_arm[arm].update(
+                    {(row.symbol, row.decision_date, row.entry_date): row for row in cohort}
+                )
+    comparable_keys = set(by_arm["close_21_dte"]) & set(by_arm["breach_hold_21_dte"])
+    comparable_keys = {
+        key
+        for key in comparable_keys
+        if key[1] in complete_decisions["close_21_dte"]
+        and key[1] in complete_decisions["breach_hold_21_dte"]
+    }
+    identical = sum(
+        by_arm["close_21_dte"][key].resolution_date
+        == by_arm["breach_hold_21_dte"][key].resolution_date
+        for key in comparable_keys
+    )
+    comparable = len(comparable_keys)
+    return {
+        "comparable_count": comparable,
+        "identical_resolution_count": identical,
+        "rate": identical / comparable if comparable else None,
+    }
 
 
 def _summary_dict(
@@ -399,6 +476,20 @@ def build_report(
     if audit.verdict == "BLOCK":
         raise A2RunnerError("A2 data audit BLOCK prevents report assembly")
     grade, receipt_hash = _validate_realism(realism_grade, realism_receipt)
+    breach_duplication = _breach_duplication(outcomes)
+    breach_skips = diagnostics.skips if diagnostics is not None else {}
+    breach_path_skip_counts = {
+        "breached": sum(
+            count
+            for reason, count in breach_skips.items()
+            if reason.startswith("breach_hold_21_dte_breached_")
+        ),
+        "unbreached": sum(
+            count
+            for reason, count in breach_skips.items()
+            if reason.startswith("breach_hold_21_dte_unbreached_")
+        ),
+    }
     variants: list[dict[str, object]] = []
     lane_statuses: dict[str, object] = {}
     for lane, arms in LANE_ARMS.items():
@@ -429,6 +520,13 @@ def build_report(
             row = _summary_dict(summary, exclusions=exclusions, descriptive_count=len(descriptive))
             row["lane"], row["arm"] = lane, arm
             row["status"] = summary.status
+            if lane == "csp" and arm == "breach_hold_21_dte":
+                row["duplication_against_close_21_dte"] = breach_duplication
+                row["breach_path_skip_counts"] = breach_path_skip_counts
+                row["data_gap_propagation"] = (
+                    "one CSP arm data gap removes all five CSP arms and can make "
+                    "the weekly board incomplete"
+                )
             row["staggered_count"] = (
                 len(staggered_descriptive_rows(descriptive, lane=lane, arm=arm))
                 if descriptive

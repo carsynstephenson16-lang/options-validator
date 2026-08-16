@@ -57,6 +57,7 @@ def _outcome(
     decision: str = "2025-01-02",
     entry: str = "2025-01-03",
     resolution: str = "2025-01-10",
+    maximum_resolution: str | None = None,
     score: float = 1.0,
     arm: str = "capture_50",
 ) -> A2Outcome:
@@ -67,6 +68,7 @@ def _outcome(
         decision_date=decision,
         entry_date=entry,
         resolution_date=resolution,
+        maximum_resolution_date=maximum_resolution or resolution,
         lane="csp",
         arm=arm,
         score=score,
@@ -191,6 +193,126 @@ class RunnerContracts(unittest.TestCase):
         self.assertEqual(csp["inference_count"], 0)
         self.assertEqual(csp["descriptive_count"], 14)
         self.assertEqual(csp["exclusions"]["incomplete_cohorts"], 1)
+        self.assertEqual(csp["exclusions"]["weeks_without_complete_board"], 1)
+
+    def test_report_records_weekly_candidate_and_spacing_diagnostics(self):
+        rows = (
+            *(
+                _outcome(
+                    symbol,
+                    decision="2025-01-06",
+                    entry="2025-01-07",
+                    resolution="2025-01-08",
+                    maximum_resolution="2025-01-10",
+                )
+                for symbol in config.A2_UNIVERSE[:-1]
+            ),
+            *(
+                _outcome(
+                    symbol,
+                    decision="2025-01-07",
+                    entry="2025-01-08",
+                    resolution="2025-01-09",
+                    maximum_resolution="2025-01-14",
+                )
+                for symbol in config.A2_UNIVERSE
+            ),
+            *(
+                _outcome(
+                    symbol,
+                    decision="2025-01-13",
+                    entry="2025-01-14",
+                    resolution="2025-01-15",
+                    maximum_resolution="2025-01-17",
+                )
+                for symbol in config.A2_UNIVERSE
+            ),
+            *(
+                _outcome(
+                    symbol,
+                    decision="2025-01-27",
+                    entry="2025-01-28",
+                    resolution="2025-01-29",
+                    maximum_resolution="2025-01-31",
+                )
+                for symbol in config.A2_UNIVERSE
+            ),
+        )
+        signal_board = {symbol: 1.0 for symbol in config.A2_UNIVERSE}
+        report = build_report(
+            outcomes=rows,
+            signals={
+                day: signal_board
+                for day in (
+                    "2025-01-06",
+                    "2025-01-07",
+                    "2025-01-13",
+                    "2025-01-20",
+                    "2025-01-27",
+                )
+            },
+            audit=_audit(),
+            governance={},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        capture = next(
+            item
+            for item in report["variants"]
+            if item["lane"] == "csp" and item["arm"] == "capture_50"
+        )
+        self.assertEqual(capture["exclusions"]["accepted_board_not_first_session_of_week"], 1)
+        self.assertEqual(capture["exclusions"]["weeks_without_complete_board"], 1)
+        self.assertEqual(capture["exclusions"]["weeks_skipped_by_spacing"], 1)
+
+    def test_report_discloses_breach_duplication_and_path_specific_skips(self):
+        rows = []
+        for index, symbol in enumerate(config.A2_UNIVERSE):
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="close_21_dte",
+                    resolution="2025-01-10",
+                    maximum_resolution="2025-01-10",
+                )
+            )
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="breach_hold_21_dte",
+                    resolution="2025-01-10" if index < 10 else "2025-01-17",
+                    maximum_resolution="2025-01-17",
+                )
+            )
+        diagnostics = A2Diagnostics()
+        diagnostics.skips.update(
+            {
+                "breach_hold_21_dte_breached_invalid_resolution_quote": 2,
+                "breach_hold_21_dte_unbreached_missing_raw_close": 3,
+            }
+        )
+        report = build_report(
+            outcomes=tuple(rows),
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={},
+            provenance=dict(_REALISM),
+            diagnostics=diagnostics,
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        breach = next(
+            item
+            for item in report["variants"]
+            if item["lane"] == "csp" and item["arm"] == "breach_hold_21_dte"
+        )
+        self.assertEqual(
+            breach["duplication_against_close_21_dte"],
+            {"comparable_count": 15, "identical_resolution_count": 10, "rate": 2 / 3},
+        )
+        self.assertEqual(breach["breach_path_skip_counts"], {"breached": 2, "unbreached": 3})
+        self.assertIn("all five CSP arms", breach["data_gap_propagation"])
 
     def test_verified_report_can_retry_append_without_loader(self):
         rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)

@@ -11,6 +11,7 @@ import config
 from options_researcher.a2_panel import (
     A2Diagnostics,
     _covered_call,
+    _csp,
     _long,
     audit_historical_inputs,
     build_historical_outcomes,
@@ -141,6 +142,132 @@ class SelectorTests(unittest.TestCase):
 
 
 class ResolutionTests(unittest.TestCase):
+    def _csp_rows(
+        self,
+        raw: dict[str, float],
+        chains: dict[str, pd.DataFrame],
+        diagnostics: A2Diagnostics | None = None,
+    ):
+        return _csp(
+            SYMBOL,
+            "2025-01-30",
+            "2025-01-31",
+            pd.Series(_row(expiration="2025-03-21")),
+            1.0,
+            chains,
+            raw,
+            diagnostics or A2Diagnostics(),
+            {"source": "fixture"},
+            0.0,
+        )
+
+    def test_csp_breach_arm_holds_unbreached_path_to_expiration(self):
+        rows = self._csp_rows(
+            {
+                "2025-01-31": 105.0,
+                "2025-02-28": 104.0,
+                "2025-03-21": 103.0,
+            },
+            {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+        )
+        self.assertIsNotNone(rows)
+        by_arm = {row.arm: row for row in rows or ()}
+        self.assertEqual(by_arm["close_21_dte"].resolution_date, "2025-02-28")
+        self.assertEqual(by_arm["breach_hold_21_dte"].resolution_date, "2025-03-21")
+        self.assertEqual(by_arm["breach_hold_21_dte"].maximum_resolution_date, "2025-03-21")
+
+    def test_csp_breach_after_21_dte_closes_next_session_not_same_bar(self):
+        rows = self._csp_rows(
+            {
+                "2025-01-31": 105.0,
+                "2025-02-28": 105.0,
+                "2025-03-03": 99.0,
+                "2025-03-04": 98.0,
+                "2025-03-21": 97.0,
+            },
+            {
+                "2025-02-28": _chain([_row(expiration="2025-03-21")]),
+                "2025-03-04": _chain([_row(expiration="2025-03-21", bid=2.5, ask=2.7)]),
+            },
+        )
+        self.assertIsNotNone(rows)
+        breach = next(row for row in rows or () if row.arm == "breach_hold_21_dte")
+        self.assertEqual(breach.resolution_date, "2025-03-04")
+
+    def test_csp_breach_before_21_dte_waits_for_threshold_and_at_strike_is_not_breach(self):
+        cases = (
+            (
+                "strict breach before threshold",
+                {
+                    "2025-01-31": 105.0,
+                    "2025-02-10": 99.0,
+                    "2025-02-28": 98.0,
+                    "2025-03-21": 97.0,
+                },
+                "2025-02-28",
+            ),
+            (
+                "at strike is unbreached",
+                {
+                    "2025-01-31": 105.0,
+                    "2025-02-28": 105.0,
+                    "2025-03-03": 100.0,
+                    "2025-03-21": 101.0,
+                },
+                "2025-03-21",
+            ),
+        )
+        for label, raw, expected_resolution in cases:
+            with self.subTest(label=label):
+                rows = self._csp_rows(
+                    raw,
+                    {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+                )
+                self.assertIsNotNone(rows)
+                breach = next(row for row in rows or () if row.arm == "breach_hold_21_dte")
+                self.assertEqual(breach.resolution_date, expected_resolution)
+
+    def test_csp_breach_at_expiration_uses_expiration_settlement(self):
+        rows = self._csp_rows(
+            {
+                "2025-01-31": 105.0,
+                "2025-02-28": 105.0,
+                "2025-03-21": 99.0,
+            },
+            {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+        )
+        self.assertIsNotNone(rows)
+        breach = next(row for row in rows or () if row.arm == "breach_hold_21_dte")
+        self.assertEqual(breach.resolution_date, "2025-03-21")
+
+    def test_csp_breach_missing_exit_is_counted_by_breach_path(self):
+        diagnostics = A2Diagnostics()
+        rows = self._csp_rows(
+            {
+                "2025-01-31": 105.0,
+                "2025-02-28": 105.0,
+                "2025-03-03": 99.0,
+                "2025-03-04": 98.0,
+                "2025-03-21": 97.0,
+            },
+            {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+            diagnostics,
+        )
+        self.assertIsNone(rows)
+        self.assertEqual(
+            diagnostics.skips["breach_hold_21_dte_breached_invalid_resolution_quote"], 1
+        )
+
+    def test_csp_unbreached_missing_settlement_is_counted_by_breach_path(self):
+        diagnostics = A2Diagnostics()
+        rows = self._csp_rows(
+            {"2025-01-31": 105.0, "2025-02-28": 105.0},
+            {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+            diagnostics,
+        )
+        self.assertIsNone(rows)
+        self.assertEqual(diagnostics.skips["breach_hold_21_dte_unbreached_missing_raw_close"], 1)
+
     def test_leaps_components_use_exact_marks_greeks_earnings_and_adjusted_drawdown(self):
         sessions = [day.strftime("%Y-%m-%d") for day in pd.bdate_range("2025-01-02", periods=24)]
         entry_day, resolution_day = sessions[0], sessions[21]
@@ -479,6 +606,7 @@ class ResolutionTests(unittest.TestCase):
         )
         capture = next(row for row in outcomes if row.arm == "capture_50")
         self.assertEqual(capture.resolution_date, "2025-01-17")
+        self.assertEqual(capture.maximum_resolution_date, "2025-01-17")
 
     def test_csp_requires_explicit_matched_tenor_rate(self):
         diagnostics = A2Diagnostics()

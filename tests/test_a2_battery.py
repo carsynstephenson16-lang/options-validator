@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import unittest
+from collections import Counter
 from dataclasses import replace
 
 from options_researcher.a2_battery import (
@@ -31,6 +32,7 @@ def _outcome(
     decision_date: str = "2025-01-02",
     entry_date: str = "2025-01-03",
     resolution_date: str = "2025-01-10",
+    maximum_resolution_date: str | None = None,
     lane: str = "csp",
     arm: str = "capture_50",
     score: float = 1.0,
@@ -46,6 +48,7 @@ def _outcome(
         decision_date=decision_date,
         entry_date=entry_date,
         resolution_date=resolution_date,
+        maximum_resolution_date=maximum_resolution_date or resolution_date,
         lane=lane,
         arm=arm,
         score=score,
@@ -82,6 +85,12 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _outcome(resolution_date="2025-01-02")
 
+    def test_maximum_resolution_must_cover_realized_resolution(self):
+        with self.assertRaises(ValueError):
+            _outcome(maximum_resolution_date="2025-01-02")
+        with self.assertRaises(ValueError):
+            _outcome(maximum_resolution_date="2025-01-09")
+
     def test_unknown_lane_and_arm_fail_closed(self):
         with self.assertRaises(ValueError):
             _outcome(lane="unknown")
@@ -113,6 +122,7 @@ class ContractTests(unittest.TestCase):
             "decision": row.decision_date,
             "entry": row.entry_date,
             "resolution": row.resolution_date,
+            "maximum_resolution": row.maximum_resolution_date,
             "lane": row.lane,
             "parameter_id": row.arm,
             "score": str(row.score),
@@ -158,15 +168,83 @@ class ContractTests(unittest.TestCase):
 
 
 class ViewSeparationTests(unittest.TestCase):
-    def test_inference_accepts_only_strictly_nonoverlapping_cohorts(self):
-        rows = (
-            _outcome(symbol="AAA", entry_date="2025-01-03", resolution_date="2025-01-10"),
-            _outcome(symbol="BBB", entry_date="2025-01-03", resolution_date="2025-01-10"),
-            _outcome(symbol="CCC", entry_date="2025-01-10", resolution_date="2025-01-20"),
-            _outcome(symbol="DDD", entry_date="2025-01-21", resolution_date="2025-01-30"),
+    @staticmethod
+    def _board(
+        decision: str,
+        entry: str,
+        resolution: str,
+        maximum_resolution: str,
+        symbols: tuple[str, ...] = ("AAA", "BBB", "CCC"),
+    ) -> tuple[A2Outcome, ...]:
+        return tuple(
+            _outcome(
+                symbol=symbol,
+                decision_date=decision,
+                entry_date=entry,
+                resolution_date=resolution,
+                maximum_resolution_date=maximum_resolution,
+            )
+            for symbol in symbols
         )
-        accepted = non_overlapping_inference_rows(rows)
-        self.assertEqual(tuple(row.symbol for row in accepted), ("AAA", "BBB", "DDD"))
+
+    def test_inference_uses_earliest_complete_board_per_iso_week_and_counts_skips(self):
+        rows = (
+            *self._board("2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10", ("AAA", "BBB")),
+            *self._board("2025-01-07", "2025-01-08", "2025-01-09", "2025-01-14"),
+            *self._board("2025-01-08", "2025-01-09", "2025-01-10", "2025-01-10"),
+            *self._board("2025-01-13", "2025-01-14", "2025-01-15", "2025-01-17"),
+            *self._board("2025-01-20", "2025-01-21", "2025-01-22", "2025-01-24", ("AAA",)),
+            *self._board("2025-01-27", "2025-01-28", "2025-01-29", "2025-01-31"),
+        )
+        diagnostics: Counter[str] = Counter()
+        accepted = non_overlapping_inference_rows(
+            rows,
+            expected_symbols=("AAA", "BBB", "CCC"),
+            decision_dates=(
+                "2025-01-06",
+                "2025-01-07",
+                "2025-01-08",
+                "2025-01-13",
+                "2025-01-20",
+                "2025-01-27",
+            ),
+            diagnostics=diagnostics,
+        )
+        self.assertEqual(
+            tuple(dict.fromkeys(row.decision_date for row in accepted)),
+            ("2025-01-07", "2025-01-27"),
+        )
+        self.assertEqual(diagnostics["accepted_board_not_first_session_of_week"], 1)
+        self.assertEqual(diagnostics["weeks_without_complete_board"], 1)
+        self.assertEqual(diagnostics["weeks_skipped_by_spacing"], 1)
+
+    def test_inference_spacing_uses_ex_ante_maximum_not_realized_resolution(self):
+        first = self._board("2025-01-06", "2025-01-07", "2025-01-08", "2025-01-20")
+        overlapping = self._board("2025-01-13", "2025-01-14", "2025-01-15", "2025-01-17")
+        after_maximum = self._board("2025-01-20", "2025-01-21", "2025-01-22", "2025-01-24")
+        accepted = non_overlapping_inference_rows(
+            first + overlapping + after_maximum,
+            expected_symbols=("AAA", "BBB", "CCC"),
+        )
+        self.assertEqual(
+            tuple(dict.fromkeys(row.decision_date for row in accepted)),
+            ("2025-01-06", "2025-01-20"),
+        )
+
+    def test_spacing_failure_does_not_promote_a_later_board_in_same_week(self):
+        rows = (
+            *self._board("2025-01-06", "2025-01-07", "2025-01-08", "2025-01-15"),
+            *self._board("2025-01-13", "2025-01-14", "2025-01-14", "2025-01-14"),
+            *self._board("2025-01-14", "2025-01-16", "2025-01-16", "2025-01-16"),
+        )
+        diagnostics: Counter[str] = Counter()
+        accepted = non_overlapping_inference_rows(
+            rows,
+            expected_symbols=("AAA", "BBB", "CCC"),
+            diagnostics=diagnostics,
+        )
+        self.assertEqual({row.decision_date for row in accepted}, {"2025-01-06"})
+        self.assertEqual(diagnostics["weeks_skipped_by_spacing"], 1)
 
     def test_staggered_view_keeps_all_rows_and_is_immutable(self):
         rows = (_outcome(), replace(_outcome(), symbol="BBB"))
@@ -183,6 +261,7 @@ class ViewSeparationTests(unittest.TestCase):
             decision_date="2025-01-09",
             entry_date="2025-01-10",
             resolution_date="2025-01-20",
+            maximum_resolution_date="2025-01-20",
         )
         changed_extra = replace(
             extra,

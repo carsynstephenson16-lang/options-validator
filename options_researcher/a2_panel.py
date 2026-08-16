@@ -201,6 +201,7 @@ def _make(
     decision: str,
     entry_day: str,
     resolution: str,
+    maximum_resolution: str,
     lane: str,
     arm: str,
     score: float,
@@ -219,6 +220,7 @@ def _make(
         decision_date=decision,
         entry_date=entry_day,
         resolution_date=resolution,
+        maximum_resolution_date=maximum_resolution,
         lane=lane,
         arm=arm,
         score=score,
@@ -295,6 +297,18 @@ def _csp(
     close21 = next(
         (d for d in sessions if d > entry_day and (_day(expiry) - _day(d)).days <= 21), expiry
     )
+    breach = next(
+        (day for day in sessions if entry_day <= day <= expiry and float(raw[day]) < strike),
+        None,
+    )
+    if breach is None or breach >= expiry:
+        breach_exit = expiry
+    else:
+        candidate = next(
+            (day for day in sessions if day > breach and (_day(expiry) - _day(day)).days <= 21),
+            expiry,
+        )
+        breach_exit = expiry if candidate >= expiry else candidate
     fixed_target = _target_session(sessions, entry_day, config.A2_CSP_FIXED_HORIZON_SESSIONS)
     fixed = expiry if fixed_target is None or expiry <= fixed_target else fixed_target
     capture = expiry
@@ -309,14 +323,24 @@ def _csp(
             capture = candidate_day
             break
 
-    def resolve(day: str, arm: str) -> A2Outcome | None:
+    def resolve(
+        day: str,
+        arm: str,
+        maximum_resolution: str,
+        *,
+        skip_prefix: str | None = None,
+    ) -> A2Outcome | None:
         if day not in raw:
             diagnostics.skip("missing_raw_close")
+            if skip_prefix is not None:
+                diagnostics.skip(f"{skip_prefix}_missing_raw_close")
             return None
         settlement = day >= expiry
         quote = None if settlement else _contract_row(chains.get(day), contract)
         if not settlement and quote is None:
             diagnostics.skip("invalid_resolution_quote")
+            if skip_prefix is not None:
+                diagnostics.skip(f"{skip_prefix}_invalid_resolution_quote")
             return None
         if quote is not None:
             diagnostics.selected_contracts.add((symbol, day, _symbol(quote)))
@@ -360,6 +384,7 @@ def _csp(
             decision,
             entry_day,
             day,
+            maximum_resolution,
             "csp",
             arm,
             score,
@@ -372,11 +397,20 @@ def _csp(
         )
 
     rows = (
-        resolve(capture, "capture_50"),
-        resolve(close21, "close_21_dte"),
-        resolve(fixed, "fixed_10_sessions"),
-        resolve(close21, "breach_hold_21_dte"),
-        resolve(expiry, "assignment_accepting"),
+        resolve(capture, "capture_50", expiry),
+        resolve(close21, "close_21_dte", close21),
+        resolve(fixed, "fixed_10_sessions", fixed),
+        resolve(
+            breach_exit,
+            "breach_hold_21_dte",
+            expiry,
+            skip_prefix=(
+                "breach_hold_21_dte_breached"
+                if breach is not None
+                else "breach_hold_21_dte_unbreached"
+            ),
+        ),
+        resolve(expiry, "assignment_accepting", expiry),
     )
     return tuple(row for row in rows if row is not None) if all(rows) else None
 
@@ -514,6 +548,7 @@ def _long(
                 decision,
                 entry_day,
                 day,
+                day,
                 lane,
                 f"{horizon}_sessions",
                 score,
@@ -563,6 +598,7 @@ def _covered_call(
         symbol,
         decision,
         entry_day,
+        expiry,
         expiry,
         "covered_call",
         "covered_call",

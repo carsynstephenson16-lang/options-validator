@@ -2,7 +2,7 @@
 
 This module deliberately has no data loaders or order-path imports.  It accepts
 already-resolved, point-in-time outcomes and provides two structurally separate
-views: a greedy non-overlapping cohort view for inference and an all-row
+views: a weekly non-overlapping cohort view for inference and an all-row
 staggered view for descriptive realism.
 """
 
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from statistics import median
 from types import MappingProxyType
-from typing import Mapping, Sequence, cast
+from typing import Mapping, MutableMapping, Sequence, cast
 
 import metrics
 from options_researcher.robustness.runner import _permutation_result, _stress_metrics
@@ -166,6 +166,7 @@ class A2Outcome:
     decision_date: str
     entry_date: str
     resolution_date: str
+    maximum_resolution_date: str
     lane: str
     arm: str
     score: float
@@ -182,16 +183,20 @@ class A2Outcome:
         decision = _as_iso(self.decision_date, "decision_date")
         entry = _as_iso(self.entry_date, "entry_date")
         resolution = _as_iso(self.resolution_date, "resolution_date")
+        maximum_resolution = _as_iso(self.maximum_resolution_date, "maximum_resolution_date")
         if date.fromisoformat(entry) <= date.fromisoformat(decision):
             raise ValueError("A2 entry_date must be after decision_date")
         if date.fromisoformat(resolution) < date.fromisoformat(entry):
             raise ValueError("A2 resolution_date cannot precede entry_date")
+        if date.fromisoformat(maximum_resolution) < date.fromisoformat(resolution):
+            raise ValueError("A2 maximum_resolution_date cannot precede resolution_date")
 
         lane = _canonical_lane(self.lane)
         arm = _validate_arm(lane, self.arm)
         object.__setattr__(self, "decision_date", decision)
         object.__setattr__(self, "entry_date", entry)
         object.__setattr__(self, "resolution_date", resolution)
+        object.__setattr__(self, "maximum_resolution_date", maximum_resolution)
         object.__setattr__(self, "lane", lane)
         object.__setattr__(self, "score", _finite(self.score, "score"))
         gross = _finite(self.gross_return, "gross_return")
@@ -294,6 +299,7 @@ def _outcome_from_mapping(raw: Mapping[str, object]) -> A2Outcome:
         decision_date=required_text("decision_date", "decision"),
         entry_date=required_text("entry_date", "entry"),
         resolution_date=required_text("resolution_date", "resolution"),
+        maximum_resolution_date=required_text("maximum_resolution_date", "maximum_resolution"),
         lane=required_text("lane"),
         arm=required_text("arm", "parameter_id"),
         score=required_number("score"),
@@ -352,22 +358,73 @@ def non_overlapping_inference_rows(
     *,
     lane: str | None = None,
     arm: str | None = None,
+    expected_symbols: Sequence[str] | None = None,
+    decision_dates: Sequence[str] | None = None,
+    diagnostics: MutableMapping[str, int] | None = None,
 ) -> tuple[A2Outcome, ...]:
-    """Greedily retain entry cohorts whose prior accepted cohort has finished.
+    """Retain each ISO week's earliest complete, ex-ante non-overlapping board.
 
-    The strict ``max_resolution < next_entry`` comparison is intentional: a
-    resolution on the next cohort's entry date is still overlapping.
+    A spacing failure rejects the week's candidate rather than promoting a
+    later board.  The strict comparison is intentional: an ex-ante maximum
+    resolution on the next board's entry date is still overlapping.
     """
 
     rows = validate_outcomes(outcomes, lane=lane, arm=arm)
+    expected = None
+    if expected_symbols is not None:
+        expected = tuple(expected_symbols)
+        if (
+            not expected
+            or len(set(expected)) != len(expected)
+            or any(not isinstance(symbol, str) or not symbol for symbol in expected)
+        ):
+            raise ValueError("A2 expected_symbols must be unique non-empty text")
+
+    grouped: dict[str, list[A2Outcome]] = {}
+    for row in rows:
+        grouped.setdefault(row.decision_date, []).append(row)
+    observed_dates = set(grouped)
+    if decision_dates is not None:
+        observed_dates.update(_as_iso(value, "decision_date") for value in decision_dates)
+    weeks: dict[tuple[int, int], list[str]] = {}
+    for decision_day in sorted(observed_dates):
+        iso = date.fromisoformat(decision_day).isocalendar()
+        weeks.setdefault((iso.year, iso.week), []).append(decision_day)
+
+    def count(key: str) -> None:
+        if diagnostics is not None:
+            diagnostics[key] = diagnostics.get(key, 0) + 1
+
     accepted: list[A2Outcome] = []
     prior_max: date | None = None
-    for entry_date, cohort in _group_by_entry_date(rows):
-        entry = date.fromisoformat(entry_date)
+    for week_dates in weeks.values():
+        candidates: list[tuple[str, tuple[A2Outcome, ...]]] = []
+        for decision_day in week_dates:
+            cohort = tuple(grouped.get(decision_day, ()))
+            symbols = tuple(row.symbol for row in cohort)
+            entries = {row.entry_date for row in cohort}
+            complete = (
+                bool(cohort)
+                and len(entries) == 1
+                and (
+                    expected is None
+                    or (len(symbols) == len(expected) and set(symbols) == set(expected))
+                )
+            )
+            if complete:
+                candidates.append((decision_day, cohort))
+        if not candidates:
+            count("weeks_without_complete_board")
+            continue
+        candidate_day, cohort = candidates[0]
+        entry = date.fromisoformat(cohort[0].entry_date)
         if prior_max is not None and not prior_max < entry:
+            count("weeks_skipped_by_spacing")
             continue
         accepted.extend(cohort)
-        prior_max = max(date.fromisoformat(row.resolution_date) for row in cohort)
+        if candidate_day != week_dates[0]:
+            count("accepted_board_not_first_session_of_week")
+        prior_max = max(date.fromisoformat(row.maximum_resolution_date) for row in cohort)
     return tuple(accepted)
 
 
