@@ -4,8 +4,10 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import config
+import data.rates as rates_module
 from data.rates import (
     MissingDividendYieldError,
     dividend_yield,
@@ -148,6 +150,15 @@ class TestPointInTimeRates(unittest.TestCase):
         )
         self.assertEqual(result.source_date, date(2026, 7, 16))
         self.assertAlmostEqual(result.par_yield, 0.045, places=12)
+
+    def test_reuses_unchanged_curve_rows_across_rate_lookups(self):
+        write_csv(self.rate_path, RATE_FIELDS, [rate_row(30, 0.04), rate_row(90, 0.05)])
+        with patch(
+            "data.rates._load_treasury_rows", wraps=rates_module._load_treasury_rows
+        ) as loader:
+            risk_free_rate(date(2026, 7, 17), date(2026, 8, 15), path=self.rate_path)
+            risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
+        self.assertEqual(loader.call_count, 1)
 
     def test_missing_dividend_yield_raises_instead_of_defaulting_zero(self):
         write_csv(self.dividend_path, DIVIDEND_FIELDS, [dividend_row("MSFT", 3.32)])

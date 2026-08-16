@@ -29,9 +29,12 @@ from options_researcher.a2_runner import (
     _load_earnings,
     _load_feature_bundle,
     _load_fomc,
+    _load_local_inputs,
     _load_rates,
+    _merge_audits,
     _rank_cards,
     _reconstruct_signals,
+    _variant_rows,
     build_report,
     run_once,
     validate_governance,
@@ -677,6 +680,187 @@ class CachePathTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(A2RunnerError, "known_as_of_utc"):
             _causal_earnings(inputs, "AAA", "2025-01-02")
+
+    def test_streaming_loader_releases_each_symbol_after_aggregation(self):
+        symbols = ("AAA", "BBB")
+        frame = pd.DataFrame({"rv21": [0.2]}, index=["2025-01-02"])
+        raw = {symbol: {"2025-01-02": 100.0} for symbol in symbols}
+        seen_chain_owners: list[frozenset[str]] = []
+        seen_outcome_owners: list[frozenset[str]] = []
+        seen_audit_owners: list[frozenset[str]] = []
+
+        def load_chains(_path, **kwargs):
+            owners = frozenset(kwargs.get("symbols", config.A2_UNIVERSE))
+            seen_chain_owners.append(owners)
+            return {symbol: {"2025-01-02": pd.DataFrame({"symbol": [symbol]})} for symbol in owners}
+
+        def reconstruct(inputs):
+            return {"2025-01-02": {symbol: 1.0 for symbol in inputs.chains}}
+
+        def build(**kwargs):
+            owners = frozenset(kwargs["chains"])
+            seen_outcome_owners.append(owners)
+            return tuple(_outcome(symbol) for symbol in owners)
+
+        def audit(**kwargs):
+            owners = frozenset(kwargs["chains"])
+            seen_audit_owners.append(owners)
+            return A2AuditResult(
+                checks={
+                    number: ((f"{next(iter(owners))}-check-{number}",) if number == 1 else ())
+                    for number in range(1, 15)
+                },
+                verdict="PASS WITH WARNINGS",
+                warnings=(f"{next(iter(owners))}-warning",),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = CachePaths.from_overrides(
+                chain=f"{tmp}/chains",
+                underlying=f"{tmp}/underlying",
+                features=f"{tmp}/features",
+                rates=f"{tmp}/rates",
+                earnings=f"{tmp}/earnings.csv",
+                positions=f"{tmp}/positions",
+                fomc=f"{tmp}/fomc.csv",
+            )
+            with patch.object(config, "A2_UNIVERSE", symbols):
+                with patch(
+                    "options_researcher.a2_runner._load_feature_bundle",
+                    return_value={symbol: frame for symbol in symbols},
+                ):
+                    with patch(
+                        "options_researcher.a2_runner._common_feature_start",
+                        return_value="2025-01-01",
+                    ):
+                        with patch(
+                            "options_researcher.a2_runner._load_chain_bundle",
+                            side_effect=load_chains,
+                        ):
+                            with patch(
+                                "options_researcher.a2_runner._load_close_bundle",
+                                return_value=(raw, raw),
+                            ):
+                                with patch(
+                                    "options_researcher.a2_runner._load_earnings",
+                                    return_value=({}, {}),
+                                ):
+                                    with patch(
+                                        "options_researcher.a2_runner._load_fomc", return_value=[]
+                                    ):
+                                        with patch(
+                                            "options_researcher.a2_runner._load_positions",
+                                            return_value=({}, "no data"),
+                                        ):
+                                            with patch(
+                                                "options_researcher.a2_runner._load_rates",
+                                                return_value=({}, {}),
+                                            ):
+                                                with patch(
+                                                    "options_researcher.a2_runner._reconstruct_signals",
+                                                    side_effect=reconstruct,
+                                                ):
+                                                    with patch(
+                                                        "options_researcher.a2_runner.build_historical_outcomes",
+                                                        side_effect=build,
+                                                    ):
+                                                        with patch(
+                                                            "options_researcher.a2_runner.audit_historical_inputs",
+                                                            side_effect=audit,
+                                                        ):
+                                                            inputs = _load_local_inputs(paths)
+
+        self.assertEqual(seen_chain_owners, [frozenset({"AAA"}), frozenset({"BBB"})])
+        self.assertEqual(seen_outcome_owners, [frozenset({"AAA"}), frozenset({"BBB"})])
+        self.assertEqual(seen_audit_owners, [frozenset({"AAA"}), frozenset({"BBB"})])
+        self.assertEqual(inputs.chains, {})
+        self.assertEqual(inputs.signals, {"2025-01-02": {"AAA": 1.0, "BBB": 1.0}})
+        self.assertEqual({row.symbol for row in inputs.outcomes or ()}, {"AAA", "BBB"})
+        self.assertEqual(inputs.audit.verdict if inputs.audit else None, "PASS WITH WARNINGS")
+        self.assertEqual(
+            inputs.audit.checks[1] if inputs.audit else (), ("AAA-check-1", "BBB-check-1")
+        )
+        with patch.object(config, "A2_UNIVERSE", symbols):
+            inference, _descriptive, exclusions = _variant_rows(
+                inputs.outcomes or (), inputs.signals, "csp", "capture_50"
+            )
+        self.assertEqual({row.symbol for row in inference}, set(symbols))
+        self.assertTrue(exclusions["original_bucket_identity_preserved"])
+
+    def test_merged_symbol_audits_preserve_all_checks_and_block_severity(self):
+        first = A2AuditResult(
+            checks={number: (("first",) if number == 1 else ()) for number in range(1, 15)},
+            verdict="PASS WITH WARNINGS",
+            warnings=("first warning",),
+        )
+        second = A2AuditResult(
+            checks={number: (("second",) if number == 14 else ()) for number in range(1, 15)},
+            verdict="BLOCK",
+            warnings=("second warning",),
+        )
+        merged = _merge_audits((first, second))
+        self.assertEqual(set(merged.checks), set(range(1, 15)))
+        self.assertEqual(merged.checks[1], ("first",))
+        self.assertEqual(merged.checks[14], ("second",))
+        self.assertEqual(merged.warnings, ("first warning", "second warning"))
+        self.assertEqual(merged.verdict, "BLOCK")
+
+    def test_default_runner_does_not_rebuild_prebuilt_inputs(self):
+        rows = tuple(
+            _outcome(symbol, score=float(index))
+            for index, symbol in enumerate(config.A2_UNIVERSE, 1)
+        )
+        inputs = A2LocalInputs(
+            signals={
+                "2025-01-02": {
+                    symbol: float(index) for index, symbol in enumerate(config.A2_UNIVERSE, 1)
+                }
+            },
+            chains={},
+            raw_closes={},
+            adjusted_closes={},
+            outcomes=rows,
+            diagnostics=A2Diagnostics(),
+            audit=_audit(),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("options_researcher.a2_runner.validate_governance", return_value={}):
+                with patch(
+                    "options_researcher.a2_runner._load_local_inputs", return_value=inputs
+                ) as loader:
+                    with patch("options_researcher.a2_runner.build_historical_outcomes") as build:
+                        with patch("options_researcher.a2_runner.audit_historical_inputs") as audit:
+                            run_once(
+                                report_path=Path(tmp) / "a2.json",
+                                realism_grade="fixture",
+                                realism_receipt=_receipt(),
+                            )
+        loader.assert_called_once()
+        build.assert_not_called()
+        audit.assert_not_called()
+
+    def test_prebuilt_outcomes_do_not_trigger_signal_reconstruction(self):
+        inputs = A2LocalInputs(
+            signals={},
+            chains={},
+            raw_closes={},
+            adjusted_closes={},
+            outcomes=tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE),
+            diagnostics=A2Diagnostics(),
+            audit=_audit(),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("options_researcher.a2_runner.validate_governance", return_value={}):
+                with patch("options_researcher.a2_runner._load_local_inputs", return_value=inputs):
+                    with patch(
+                        "options_researcher.a2_runner._reconstruct_signals",
+                        side_effect=self.fail,
+                    ):
+                        run_once(
+                            report_path=Path(tmp) / "a2.json",
+                            realism_grade="fixture",
+                            realism_receipt=_receipt(),
+                        )
 
 
 if __name__ == "__main__":

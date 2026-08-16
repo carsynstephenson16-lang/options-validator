@@ -12,6 +12,7 @@ import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
+from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -250,6 +251,18 @@ def _load_treasury_rows(path: Path) -> list[_TreasuryRow]:
     return rows
 
 
+@lru_cache(maxsize=32)
+def _cached_treasury_rows(path: Path, mtime_ns: int, size: int) -> tuple[_TreasuryRow, ...]:
+    """Reuse an immutable curve only while its on-disk identity is unchanged."""
+    del mtime_ns, size
+    return tuple(_load_treasury_rows(path))
+
+
+def _treasury_rows(path: Path) -> tuple[_TreasuryRow, ...]:
+    metadata = path.stat()
+    return _cached_treasury_rows(path, metadata.st_mtime_ns, metadata.st_size)
+
+
 def risk_free_rate(
     observation_date: date,
     expiration_date: date,
@@ -264,7 +277,7 @@ def risk_free_rate(
     valuation_close = _valuation_close_utc(observation_date)
     eligible = [
         row
-        for row in _load_treasury_rows(Path(path))
+        for row in _treasury_rows(Path(path))
         if row.source_date <= observation_date <= row.valid_through
         and row.known_as_of_utc <= valuation_close
     ]

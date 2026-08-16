@@ -150,6 +150,37 @@ def _validate_audit(audit: A2AuditResult) -> None:
         raise A2RunnerError("A2 audit must contain exactly fourteen checks")
 
 
+def _merge_audits(audits: Sequence[A2AuditResult]) -> A2AuditResult:
+    """Combine symbol-scoped audits without discarding any numbered finding."""
+    checks = {number: [] for number in range(1, 15)}
+    warnings: list[str] = []
+    verdicts: list[str] = []
+    for audit in audits:
+        _validate_audit(audit)
+        verdicts.append(audit.verdict)
+        warnings.extend(audit.warnings)
+        for number, issues in audit.checks.items():
+            checks[number].extend(issues)
+    verdict = (
+        "BLOCK"
+        if "BLOCK" in verdicts
+        else "PASS WITH WARNINGS"
+        if warnings or "PASS WITH WARNINGS" in verdicts
+        else "PASS"
+    )
+    return A2AuditResult(
+        checks={number: tuple(issues) for number, issues in checks.items()},
+        verdict=verdict,
+        warnings=tuple(warnings),
+    )
+
+
+def _print_aggregate_audit(audit: A2AuditResult) -> None:
+    for number in range(1, 15):
+        print(f"A2 aggregate audit check {number}: {len(audit.checks[number])} issue(s)")
+    print(f"A2 aggregate audit verdict: {audit.verdict}")
+
+
 def _validate_realism(realism_grade: str | None, realism_receipt: Path | None) -> tuple[str, str]:
     if not isinstance(realism_grade, str) or not realism_grade.strip():
         raise A2RunnerError("reviewed realism grade is required")
@@ -517,7 +548,9 @@ def run_once(
         raise A2RunnerError("A2 data audit BLOCK prevents historical execution")
     diagnostics = inputs.diagnostics or A2Diagnostics()
     outcomes = inputs.outcomes
-    signals = inputs.signals or _reconstruct_signals(inputs)
+    signals = (
+        inputs.signals if outcomes is not None else (inputs.signals or _reconstruct_signals(inputs))
+    )
     if outcomes is None:
         outcomes = build_historical_outcomes(
             signals=signals,
@@ -639,17 +672,19 @@ def _load_chain_bundle(
     *,
     common_start: str | None = None,
     file_counts: dict[str, int] | None = None,
+    symbols: Sequence[str] | None = None,
 ) -> dict[str, dict[str, pd.DataFrame]]:
     output: dict[str, dict[str, pd.DataFrame]] = {}
     counts = file_counts if file_counts is not None else {}
-    for symbol in config.A2_UNIVERSE:
+    requested = frozenset(symbols or config.A2_UNIVERSE)
+    for symbol in requested:
         counts.setdefault(symbol, 0)
     for item in _files(path, (".parquet",)):
         match = re.match(r"^(.+?)_(\d{4}-\d{2}-\d{2})$", item.stem)
         if match is None:
             continue
         symbol, day = match.group(1).upper(), match.group(2)
-        if symbol not in config.A2_UNIVERSE:
+        if symbol not in requested:
             continue
         if day > config.BACKTEST_END or (common_start is not None and day < common_start):
             continue
@@ -983,27 +1018,86 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
     features = _load_feature_bundle(paths.features)
     common_start = _common_feature_start(features)
     chain_file_counts: dict[str, int] = {}
-    chains = _load_chain_bundle(
-        paths.chain,
-        common_start=common_start,
-        file_counts=chain_file_counts,
-    )
     raw, adjusted = _load_close_bundle(paths.underlying)
     earnings, earnings_records = _load_earnings(paths.earnings)
-    rates, rate_source_dates = _load_rates(paths.rates, chains)
     positions, positions_status = _load_positions(paths.positions)
     fomc_events = _load_fomc(paths.fomc)
-    seed = A2LocalInputs(
-        signals={},
-        chains=chains,
-        raw_closes=raw,
-        adjusted_closes=adjusted,
-        features=features,
-        earnings_assertions=earnings,
-        earnings_records=earnings_records,
-        fomc_events=fomc_events,
-    )
-    signals = _reconstruct_signals(seed)
+    signals: dict[str, dict[str, float]] = {}
+    outcomes: list[A2Outcome] = []
+    audits: list[A2AuditResult] = []
+    diagnostics = A2Diagnostics()
+    rate_source_dates: dict[str, str] = {}
+    chain_max_as_of: str | None = None
+    feature_as_of: dict[str, str] = {}
+
+    for symbol in config.A2_UNIVERSE:
+        symbol_chains = _load_chain_bundle(
+            paths.chain,
+            common_start=common_start,
+            file_counts=chain_file_counts,
+            symbols=(symbol,),
+        )
+        symbol_raw = {symbol: raw.get(symbol, {})}
+        symbol_adjusted = {symbol: adjusted.get(symbol, {})}
+        symbol_diagnostics = A2Diagnostics()
+        symbol_inputs = A2LocalInputs(
+            signals={},
+            chains=symbol_chains,
+            raw_closes=symbol_raw,
+            adjusted_closes=symbol_adjusted,
+            features={symbol: features[symbol]},
+            earnings_assertions=earnings,
+            earnings_records=earnings_records,
+            fomc_events=fomc_events,
+            diagnostics=symbol_diagnostics,
+        )
+        symbol_signals = _reconstruct_signals(symbol_inputs)
+        for decision, board in symbol_signals.items():
+            signals.setdefault(decision, {}).update(board)
+        symbol_rates, source_dates = _load_rates(paths.rates, symbol_chains)
+        rate_source_dates.update(source_dates)
+        outcomes.extend(
+            build_historical_outcomes(
+                signals=symbol_signals,
+                chains=symbol_chains,
+                raw_closes=symbol_raw,
+                adjusted_closes=symbol_adjusted,
+                features=_panel_feature_values(symbol_inputs.features),
+                rates=symbol_rates,
+                earnings_assertions=earnings,
+                positions=positions,
+                diagnostics=symbol_diagnostics,
+            )
+        )
+        audits.append(
+            audit_historical_inputs(
+                chains=symbol_chains,
+                raw_closes=symbol_raw,
+                selected_contracts=symbol_diagnostics.selected_contracts,
+                audit_start=common_start,
+                audit_end=config.BACKTEST_END,
+                eligible_universe={symbol},
+            )
+        )
+        diagnostics.skips.update(symbol_diagnostics.skips)
+        diagnostics.selected_contracts.update(symbol_diagnostics.selected_contracts)
+        diagnostics.max_as_of = max(
+            (value for value in (diagnostics.max_as_of, symbol_diagnostics.max_as_of) if value),
+            default=None,
+        )
+        feature_as_of.update(symbol_inputs.feature_as_of)
+        chain_max_as_of = max(
+            (
+                value
+                for value in (chain_max_as_of, max(symbol_chains.get(symbol, {}), default=None))
+                if value
+            ),
+            default=None,
+        )
+        del symbol_chains
+
+    audit = _merge_audits(audits)
+    _print_aggregate_audit(audit)
     provenance = {
         "chain_path": str(paths.chain),
         "underlying_path": str(paths.underlying),
@@ -1013,7 +1107,7 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
         "positions_path": str(paths.positions),
         "common_start": common_start,
         "chain_file_counts": chain_file_counts,
-        "chain_max_as_of": max((day for days in chains.values() for day in days), default=None),
+        "chain_max_as_of": chain_max_as_of,
         "close_max_as_of": max((day for days in raw.values() for day in days), default=None),
         "earnings_max_as_of": max(
             (
@@ -1035,21 +1129,24 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
             "positions": _hash_path(paths.positions),
             "fomc": _hash_path(paths.fomc),
         },
-        "feature_as_of": dict(seed.feature_as_of),
+        "feature_as_of": feature_as_of,
         "fomc_hash": _hash_path(paths.fomc),
     }
     return A2LocalInputs(
         signals=signals,
-        chains=chains,
+        chains={},
         raw_closes=raw,
         adjusted_closes=adjusted,
         features=features,
-        rates=rates,
+        rates={},
         earnings_assertions=earnings,
         earnings_records=earnings_records,
         fomc_events=fomc_events,
         positions=positions,
-        feature_as_of=dict(seed.feature_as_of),
+        feature_as_of=feature_as_of,
+        outcomes=tuple(outcomes),
+        diagnostics=diagnostics,
+        audit=audit,
         provenance=provenance,
     )
 
