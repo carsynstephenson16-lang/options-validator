@@ -129,6 +129,32 @@ for repo in "${REPOS[@]}"; do
     done
   fi
 
+  # --- auto-merge PRs whose checks all pass (owner-directed 2026-08-15,
+  # in-session wording: "i want the merge to be an automatic decision i dont care").
+  # Mechanical guards that remain: checks must be green (CI incl. gitleaks +
+  # claude-review run on PRs), drafts skipped, and no merges 15:00-16:30 ET on
+  # weekdays so a mid-afternoon main move can't race the ops 15:30 alignment
+  # gate before the 15:45 capture. Disable with AUTOMERGE=0.
+  # Default comes from an owner-created flag file (install.sh offers to set it);
+  # env var AUTOMERGE overrides either way.
+  automerge_default=$(cat "$HOME/.config/repo-reconcile/automerge" 2>/dev/null || echo 0)
+  if [ "${AUTOMERGE:-$automerge_default}" = "1" ] && command -v gh >/dev/null 2>&1; then
+    hr=$(TZ=America/New_York date +%H%M); dow=$(TZ=America/New_York date +%u)
+    if [ "$dow" -le 5 ] && [ "$hr" -ge 1500 ] && [ "$hr" -le 1630 ]; then
+      say "- ⏸  $name: auto-merge paused (ops pre-capture window)."
+    else
+      (cd "$repo" && gh pr list --state open --json number,isDraft -q '.[] | select(.isDraft|not) | .number' 2>/dev/null) | while read -r prn; do
+        # all checks must have completed successfully; pending or failing = wait
+        (cd "$repo" && gh pr checks "$prn" >/dev/null 2>&1) || continue
+        act "auto-merge PR #$prn" || continue
+        if (cd "$repo" && gh pr merge "$prn" --squash >/dev/null 2>&1); then
+          say "- ✅ $name PR #$prn: checks green → merged automatically (owner directive 2026-08-15)."
+          logl "AUTOMERGE $repo #$prn"
+        fi
+      done
+    fi
+  fi
+
   # --- ledger fork escalation (options-validator specific): P0, top of digest
   if [ -d "$repo/ledger" ]; then
     git -C "$repo" for-each-ref refs/heads --format='%(refname:short)' | while read -r br; do

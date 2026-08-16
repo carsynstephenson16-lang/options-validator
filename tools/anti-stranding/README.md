@@ -15,8 +15,18 @@ weekly "branch-sweep" job had never actually been implemented.
 | L0 | Policy: docs/reports commit to `main` directly; branches only for code | ~half of strandings never happen |
 | L1 | Global git `post-commit` hook → auto-push after every commit | Claude, Codex, AND manual commits |
 | L2 | Claude `SessionEnd` + `WorktreeRemove` hooks → rescue-commit + push | dirty tree at walk-away |
-| L3 | Daily 08:15 reconciler → push, PR (≤3/day), rescue, digest on Desktop | crashes, Codex sessions, everything else |
-| L4 | Owner merges. Always. | — |
+| L3 | Daily 08:15 reconciler → push, PR (≤3/day), rescue, auto-merge green PRs, digest | crashes, Codex sessions, everything else |
+| L4 | Owner handles diverged branches, ledger forks, ops sync | — |
+
+**Merge policy (owner-directed 2026-08-15, in-session wording: "i want the
+merge to be an automatic decision i dont care"):** the reconciler merges any
+open non-draft PR whose checks are ALL green (CI: ruff, pyright, unittest,
+gitleaks; plus claude-review). Pending or failing checks = the PR waits.
+No merges 15:00–16:30 ET on weekdays (ops pre-capture window). The switch is
+the owner-created flag file `~/.config/repo-reconcile/automerge` (install.sh
+sets it to 1 per the directive; `echo 0 >` it to revert to owner-only merges). This supersedes the earlier
+"L4 owner merges always" design for routine PRs; diverged-branch
+reconciliation and ledger-fork resolution still land on the owner.
 
 Hard rules baked into every script: never `--force`, never `git add` of
 untracked files (repos are PUBLIC — a stray secret must never auto-publish),
