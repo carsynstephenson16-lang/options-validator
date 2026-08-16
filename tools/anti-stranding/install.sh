@@ -27,6 +27,15 @@ cp "$here/com.carsyn.repo-reconcile.plist" "$HOME/Library/LaunchAgents/"
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.carsyn.repo-reconcile.plist" 2>/dev/null \
   || echo "   (already loaded — run: launchctl kickstart gui/$(id -u)/com.carsyn.repo-reconcile to test)"
 
+echo "== merge policy (owner directive 2026-08-15: automatic merges) =="
+mkdir -p "$HOME/.config/repo-reconcile"
+if [ -f "$HOME/.config/repo-reconcile/automerge" ]; then
+  echo "   auto-merge flag already '$(cat "$HOME/.config/repo-reconcile/automerge")' — left unchanged (a reinstall never reverses an opt-out)."
+else
+  echo 1 > "$HOME/.config/repo-reconcile/automerge"
+  echo "   auto-merge ENABLED: your own green-check PRs merge daily (echo 0 > ~/.config/repo-reconcile/automerge to revert)"
+fi
+
 echo ""
 echo "Done. First run is worth doing by hand in dry-run mode:"
 echo "  DRY_RUN=1 ~/bin/repo-reconcile && open ~/Desktop/repo-digest.md"
