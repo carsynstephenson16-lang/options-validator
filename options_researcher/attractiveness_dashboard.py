@@ -32,11 +32,18 @@ from __future__ import annotations
 import html as _html
 import math
 import os
+import re
 from collections.abc import Mapping
 from contextlib import contextmanager
+from datetime import date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from options_researcher.hypothesis_evidence import SymbolEvidence
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
+RESEARCH_VIEWS_STATUS_PATH = Path(".tmp/dashboard/research-views-status.txt")
 
 _PMCC_NOTE = "just the premium; LEAPS value not counted"
 DISPLAY_ONLY_LABEL = "DISPLAY-ONLY — not in any registered hypothesis"
@@ -1029,13 +1036,131 @@ def _page_chain_age_sessions(page_as_of: str, today: str | None) -> int | None:
     return trading_sessions_between(page_as_of, today)
 
 
+def _valid_iso_date(value: object) -> str | None:
+    """Return a strict ISO calendar date, never a display-friendly guess."""
+    if not isinstance(value, str):
+        return None
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return None
+    return value
+
+
+_RESEARCH_VIEWS_TIMESTAMP = re.compile(
+    r"research views refresh: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4})"
+)
+_RESEARCH_VIEWS_RESULT = re.compile(
+    r"(experiments|wasserstein): (OK|FAILED) exit=(\d+)"
+)
+
+
+def load_research_views_status(path: str | Path = RESEARCH_VIEWS_STATUS_PATH) -> dict[str, str]:
+    """Read the atomically-published display status without invoking builders.
+
+    The reader is deliberately strict: only the producer's complete three-line
+    contract can be called published; every other local filesystem condition is
+    visible but nonfatal to the independent options board.
+    """
+    status_path = Path(path)
+    if not status_path.exists() or not status_path.is_file():
+        return {"state": "absent"}
+    try:
+        lines = status_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except (OSError, UnicodeDecodeError):
+        return {"state": "unavailable"}
+    if len(lines) != 3 or any(not line.endswith("\n") for line in lines):
+        return {"state": "malformed"}
+    timestamp = _RESEARCH_VIEWS_TIMESTAMP.fullmatch(lines[0].rstrip("\n"))
+    first = _RESEARCH_VIEWS_RESULT.fullmatch(lines[1].rstrip("\n"))
+    second = _RESEARCH_VIEWS_RESULT.fullmatch(lines[2].rstrip("\n"))
+    if (
+        timestamp is None
+        or first is None
+        or second is None
+        or first.group(1) != "experiments"
+        or second.group(1) != "wasserstein"
+    ):
+        return {"state": "malformed"}
+    timestamp_value = timestamp.group(1)
+    offset_hours = int(timestamp_value[-4:-2])
+    offset_minutes = int(timestamp_value[-2:])
+    try:
+        datetime.strptime(timestamp_value, "%Y-%m-%dT%H:%M:%S%z")
+    except ValueError:
+        return {"state": "malformed"}
+    if (
+        offset_minutes > 59
+        or offset_hours > 14
+        or (offset_hours == 14 and offset_minutes != 0)
+    ):
+        return {"state": "malformed"}
+    return {
+        "state": "published",
+        "timestamp": timestamp_value,
+        "experiments": first.group(2),
+        "wasserstein": second.group(2),
+    }
+
+
+def _underlying_closes_store_freshness(
+    symbols: tuple[str, ...] | list[str],
+) -> dict[str, str]:
+    """Read the configured close-store maximum once during assembly.
+
+    This is deliberately distinct from each rendered section's bounded
+    ``closes_as_of`` value. Rendering receives this completed summary and
+    never opens the close store itself.
+    """
+    import pandas as pd
+
+    from data import underlying_closes
+
+    requested = sorted({symbol for symbol in symbols if isinstance(symbol, str)})
+    if not requested:
+        return {"state": "unavailable", "detail": "no configured symbols"}
+
+    cache_dir = Path(underlying_closes.CACHE_DIR)
+    maximums: list[str] = []
+    missing: list[str] = []
+    malformed: list[str] = []
+    for symbol in requested:
+        path = cache_dir / f"{symbol}.parquet"
+        if not path.is_file():
+            missing.append(symbol)
+            continue
+        try:
+            frame = pd.read_parquet(path)
+        except (OSError, TypeError, ValueError):
+            malformed.append(symbol)
+            continue
+        if list(frame.columns) != ["date", "close"] or frame.empty:
+            malformed.append(symbol)
+            continue
+        dates = [_valid_iso_date(value) for value in frame["date"].tolist()]
+        if any(value is None for value in dates):
+            malformed.append(symbol)
+            continue
+        maximums.append(max(value for value in dates if value is not None))
+
+    if missing or malformed:
+        details = []
+        if missing:
+            details.append("missing store files: " + ", ".join(missing))
+        if malformed:
+            details.append("malformed store files: " + ", ".join(malformed))
+        return {"state": "unavailable", "detail": "; ".join(details)}
+    return {"state": "available", "as_of": max(maximums)}
+
+
 def assemble(
     *,
     symbol_sections: list[dict] | None = None,
     rv21_by_symbol: dict[str, float] | None = None,
     blocked: list[dict] | None = None,
-    hypothesis_evidence_by_symbol: Mapping[str, object] | None = None,
+    hypothesis_evidence_by_symbol: Mapping[str, SymbolEvidence] | None = None,
     composite_signals: list[dict] | None = None,
+    underlying_closes_freshness: Mapping[str, str] | None = None,
     today: str | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
@@ -1182,10 +1307,25 @@ def assemble(
                 if evidence is not None:
                     record["hypothesis_evidence"] = evidence
 
+    from options_researcher.hypothesis_evidence import (
+        summarize_hypothesis_evidence,
+    )
+
+    family_evidence = summarize_hypothesis_evidence(
+        hypothesis_evidence_by_symbol or {}
+    )
+
     if composite_signals is None and real_assembly:
         from options_researcher.composite_signals import build_board
 
         composite_signals = build_board()
+
+    if underlying_closes_freshness is None and real_assembly:
+        import config
+
+        underlying_closes_freshness = _underlying_closes_store_freshness(
+            config.ATTRACTIVENESS_UNIVERSE
+        )
 
     canonical_symbols = [
         sec for sec in out_symbols if not sec.get("display_only")
@@ -1211,6 +1351,10 @@ def assemble(
         "evaluation_date": today,
         "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
+        "family_evidence": family_evidence,
+        "underlying_closes_freshness": dict(
+            underlying_closes_freshness or {
+                "state": "unavailable", "detail": "not assembled"}),
     }
     if schwab_state is not None:
         out["schwab_lane"] = schwab_state
@@ -2555,6 +2699,260 @@ def _research_html(annotation: Mapping[str, object] | None, *,
     return "".join(parts)
 
 
+def _freshness_state(as_of: object, evaluation_date: object) -> tuple[str, str]:
+    """Classify a source date with the one configured chain-age policy."""
+    import config
+
+    valid_as_of = _valid_iso_date(as_of)
+    valid_evaluation = _valid_iso_date(evaluation_date)
+    if valid_as_of is None:
+        return "BLOCKED", "date UNKNOWN"
+    if valid_evaluation is None:
+        return "BLOCKED", f"as of {valid_as_of}; age UNKNOWN"
+    age = _page_chain_age_sessions(valid_as_of, valid_evaluation)
+    if age is None:
+        return "BLOCKED", f"as of {valid_as_of}; age UNKNOWN"
+    if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+        return "BLOCKED", f"as of {valid_as_of}; {age} sessions old"
+    if age >= config.CHAIN_STALE_WARN_SESSIONS:
+        return "WARN", f"as of {valid_as_of}; {age} session old"
+    return "OK", f"as of {valid_as_of}; {age} sessions old"
+
+
+def _source_freshness_chip(
+    label: str, sections: list[Mapping[str, object]], *,
+    source: str, evaluation_date: object,
+) -> str:
+    present = [section for section in sections if section.get("chain_source") == source]
+    dates = [_valid_iso_date(section.get("as_of")) for section in present]
+    valid_dates = [value for value in dates if value is not None]
+    selected_date = min(valid_dates) if len(valid_dates) == len(present) and valid_dates else None
+    state, detail = _freshness_state(selected_date, evaluation_date)
+    import config
+
+    available = {str(section.get("symbol")) for section in present}
+    board_available = {str(section.get("symbol")) for section in sections}
+    unavailable = [
+        symbol for symbol in config.ATTRACTIVENESS_UNIVERSE
+        if symbol not in board_available
+    ]
+    unavailable_text = (
+        f"; unavailable: {', '.join(unavailable)}" if unavailable else ""
+    )
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>{_esc(label)}</strong> '
+        f"{_esc(detail)} · {len(available)}/{len(config.ATTRACTIVENESS_UNIVERSE)} names"
+        f"{_esc(unavailable_text)} · {state}</span>"
+    )
+
+
+def _research_freshness_chip(
+    context: Mapping[str, object] | None, evaluation_date: object
+) -> str:
+    if not isinstance(context, Mapping):
+        return '<span class="meta-chip freshness-chip blocked"><strong>Research</strong> research: none · BLOCKED</span>'
+    as_of = _valid_iso_date(context.get("as_of"))
+    researched_on = context.get("researched_on")
+    if as_of is None:
+        state, detail = "BLOCKED", "none"
+    elif as_of == _valid_iso_date(evaluation_date):
+        state, detail = "OK", "exact"
+    else:
+        age = _page_chain_age_sessions(as_of, _valid_iso_date(evaluation_date))
+        state = "WARN" if age is not None else "BLOCKED"
+        detail = f"stale by {age} sessions" if age is not None else "stale; age unknown"
+    return (
+        '<span class="meta-chip freshness-chip ' + state.lower() + '"><strong>Research</strong> '
+        + _esc(f"as of {as_of or 'unavailable'}; researched on {researched_on or 'unavailable'}; {detail}; {state}")
+        + '</span>'
+    )
+
+
+def _qm_freshness_chip(qm_context: Mapping[str, object] | None) -> str:
+    context = qm_context if isinstance(qm_context, Mapping) else {}
+    study = context.get("study")
+    study = study if isinstance(study, Mapping) else {}
+    study_date = _valid_iso_date(context.get("study_date") or study.get("data_vintage"))
+    daily_date = _valid_iso_date(context.get("as_of"))
+    state = "OK" if study_date and daily_date else "BLOCKED"
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>QM</strong> '
+        f"frozen study vintage { _esc(study_date or 'unavailable') }; exact daily computation "
+        f"{ _esc(daily_date or 'unavailable') }; {state}</span>"
+    )
+
+
+def _composite_freshness_chip(cards: object) -> str:
+    valid_dates = [
+        _valid_iso_date(card.get("max_asof"))
+        for card in (cards if isinstance(cards, (list, tuple)) else ())
+        if isinstance(card, Mapping)
+    ]
+    maximum = max(value for value in valid_dates if value is not None) if any(valid_dates) else None
+    state = "OK" if maximum else "BLOCKED"
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>Composite</strong> '
+        f"max as-of {_esc(maximum or 'unavailable')} · {state}</span>"
+    )
+
+
+def _underlying_closes_freshness_chip(
+    freshness: object, evaluation_date: object,
+) -> str:
+    """Render the assembly-time close-store summary without reopening it."""
+    summary = freshness if isinstance(freshness, Mapping) else {}
+    as_of = _valid_iso_date(summary.get("as_of"))
+    if summary.get("state") != "available" or as_of is None:
+        detail = summary.get("detail")
+        detail = str(detail) if isinstance(detail, str) and detail else "unavailable"
+        return (
+            '<span class="meta-chip freshness-chip blocked"><strong>Underlying closes</strong> '
+            f"unavailable: {_esc(detail)} · BLOCKED</span>"
+        )
+    state, detail = _freshness_state(as_of, evaluation_date)
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>Underlying closes</strong> '
+        f"max session {_esc(as_of)}; {_esc(detail)} · {state}</span>"
+    )
+
+
+def _experiments_views_freshness_chip(
+    research_views_status: Mapping[str, object] | None,
+) -> str:
+    """Render the already-parsed research-views publication state."""
+    status = research_views_status if isinstance(research_views_status, Mapping) else {}
+    if status.get("state") == "published":
+        timestamp = status.get("timestamp")
+        experiments = status.get("experiments")
+        wasserstein = status.get("wasserstein")
+        if (
+            isinstance(timestamp, str)
+            and _RESEARCH_VIEWS_TIMESTAMP.fullmatch(
+                f"research views refresh: {timestamp}"
+            )
+            and isinstance(experiments, str)
+            and isinstance(wasserstein, str)
+        ):
+            return (
+                '<span class="meta-chip freshness-chip ok"><strong>Experiments views</strong> '
+                f"published { _esc(timestamp) }; experiments: {_esc(experiments)}; "
+                f"wasserstein: {_esc(wasserstein)} · OK</span>"
+            )
+    state = status.get("state")
+    if state == "absent":
+        label = "not published"
+    elif state == "unavailable":
+        label = "unavailable"
+    else:
+        label = "unavailable (status malformed)"
+    return (
+        '<span class="meta-chip freshness-chip blocked"><strong>Experiments views</strong> '
+        f"{label} · BLOCKED</span>"
+    )
+
+
+def _freshness_html(
+    data: Mapping[str, object], context: Mapping[str, object] | None,
+    qm_context: Mapping[str, object] | None,
+    research_views_status: Mapping[str, object] | None,
+) -> str:
+    """One injected-data-only summary strip; no cache scan belongs in render."""
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE, THETADATA_CHAIN_SOURCE
+
+    raw_sections = data.get("symbols")
+    raw_sections = raw_sections if isinstance(raw_sections, (list, tuple)) else ()
+    sections = [section for section in raw_sections if isinstance(section, Mapping)]
+    chips = []
+    if any(section.get("chain_source") == THETADATA_CHAIN_SOURCE for section in sections):
+        chips.append(_source_freshness_chip(
+            "Frozen EOD (.cache/chains)", sections, source=THETADATA_CHAIN_SOURCE,
+            evaluation_date=data.get("evaluation_date"),
+        ))
+    if any(section.get("chain_source") == CHAIN_SOURCE for section in sections):
+        chips.append(_source_freshness_chip(
+            "Verified Schwab 15:45 pre-close (.cache/schwab_chains)", sections,
+            source=CHAIN_SOURCE, evaluation_date=data.get("evaluation_date"),
+        ))
+    chips.append(_underlying_closes_freshness_chip(
+        data.get("underlying_closes_freshness"), data.get("evaluation_date")
+    ))
+    chips.append(_research_freshness_chip(context, data.get("evaluation_date")))
+    chips.append(_qm_freshness_chip(qm_context))
+    chips.append(_composite_freshness_chip(data.get("composite_signals")))
+    chips.append(_experiments_views_freshness_chip(research_views_status))
+    return (
+        '<section class="panel freshness-strip"><div class="eyebrow">DATA FRESHNESS</div>'
+        '<p class="header-sub">These source timestamps describe available inputs; they do not predict, select, or authorize a trade.</p>'
+        f'<div class="meta-row freshness-row">{"".join(chips)}</div></section>'
+    )
+
+
+def _research_desk_html(
+    data: Mapping[str, object], context: Mapping[str, object] | None,
+    context_warning: str | None, annotation_notice: str | None,
+) -> str:
+    """Show research coverage separately from advisory per-symbol accordions."""
+    import config
+
+    context = context if isinstance(context, Mapping) else {}
+    packets = context.get("symbols")
+    packets = packets if isinstance(packets, Mapping) else {}
+    context_as_of = _valid_iso_date(context.get("as_of"))
+    board_as_of = _valid_iso_date(data.get("data_as_of"))
+    if context_as_of is None:
+        status = "none"
+    elif context_as_of == board_as_of:
+        status = "exact"
+    else:
+        age = _page_chain_age_sessions(context_as_of, board_as_of)
+        status = f"stale by {age} sessions" if age is not None else "stale; date unavailable"
+    rows = "".join(
+        '<div class="research-coverage-row"><strong>' + _esc(symbol) + '</strong> · '
+        + ("covered packet" if isinstance(packets.get(symbol), Mapping) else "no mapping-valued packet")
+        + '</div>'
+        for symbol in config.ATTRACTIVENESS_UNIVERSE
+    )
+    notices = "".join(
+        f'<div class="notice watch">! {_esc(notice)}</div>'
+        for notice in (context_warning, annotation_notice) if notice
+    )
+    return (
+        '<section class="panel research-desk"><div class="eyebrow">RESEARCH DESK</div>'
+        '<h2>Research context and coverage</h2>'
+        '<p class="header-sub">Research supplies context only; it cannot change the fixed shortlist, a grade, or a trade.</p>'
+        f'<div class="label">as of {_esc(context_as_of or "unavailable")} · researched on '
+        f'{_esc(str(context.get("researched_on") or "unavailable"))} · {_esc(status)} · '
+        f'{_prov_tag(dict(context))}</div>{notices}<div class="research-coverage">{rows}</div></section>'
+    )
+
+
+def _experiments_shelf_html(status: Mapping[str, object] | None) -> str:
+    """Passive local-view links only: never import or run an experiment builder."""
+    status_map = status if isinstance(status, Mapping) else {}
+    state = status_map.get("state", "absent")
+    if state == "published":
+        line = (
+            f"published {_esc(str(status_map.get('timestamp', 'unavailable')))} · experiments: "
+            f"{_esc(str(status_map.get('experiments', 'unavailable')))} · wasserstein: "
+            f"{_esc(str(status_map.get('wasserstein', 'unavailable')))}"
+        )
+    elif state == "absent":
+        line = "not published"
+    else:
+        line = f"status unavailable ({_esc(str(state))})"
+    cards = "".join(
+        f'<div class="market-card"><h3>{_esc(name)}</h3><p>Display-only research view.</p></div>'
+        for name in ("beta-to-QQQ", "tail shape", "spread stability", "T-bill carry", "short-interest context")
+    )
+    return (
+        '<section class="panel experiments-shelf"><div class="eyebrow">EXPERIMENTS SHELF</div>'
+        '<h2>Passive research views</h2><p class="header-sub">These links are display-only and cannot change registered bets, rankings, or trades.</p>'
+        f'<div class="label">{line}</div><p><a href="experiments.html">Open experiments</a> · '
+        '<a href="wasserstein-regime.txt">Open Wasserstein regime view</a></p>'
+        f'<div class="market-grid">{cards}</div></section>'
+    )
+
+
 def _qm_card_context_html(pick: dict, symbol_context: Mapping[str, object] | None) -> str:
     """Render QM/MA evidence without converting stock evidence to option P&L."""
     if not isinstance(symbol_context, Mapping):
@@ -2825,7 +3223,7 @@ def _original_hero_html(
     py_picks = select_top_picks(data, include_csp_watch=True)
     qualified_picks = select_top_picks(data)
     data_as_of = str(data.get("data_as_of") or "?")
-    annotations, annotation_warning = _research_annotation_map(py_picks, context)
+    annotations, _annotation_warning = _research_annotation_map(py_picks, context)
     notes = []
     legacy_picks = (context or {}).get("top_picks") or (context or {}).get(
         "legacy_top_picks_unusable"
@@ -2836,8 +3234,6 @@ def _original_hero_html(
             "ignored: only deterministic, policy-qualified cards "
             "may appear here.</div>"
         )
-    if annotation_warning:
-        notes.append(f'<div class="notice watch">! {_esc(annotation_warning)}</div>')
     if qualified_picks and len(qualified_picks) < len(py_picks):
         notes.append(
             f'<div class="notice watch">! {len(qualified_picks)} card(s) are fully '
@@ -2868,9 +3264,10 @@ def _original_hero_html(
         '<section class="panel hero">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">Daily shortlist · TOP 3 PICKS TODAY</div>'
-        "<h2>ORIGINAL MECHANICAL TOP 3</h2>"
-        '<p class="header-sub">The existing membership and order are unchanged. '
-        "QM context appears only in the separate descriptive section below.</p></div>"
+        '<h2>Rule-based top 3 — best policy-and-liquidity fit today</h2>'
+        '<p class="header-sub">Chosen by fixed rules (green-check fraction, one pick per stock). '
+        'This is a fit ranking, not a prediction; whether it predicts anything is exactly what '
+        'the registered RQ2/A2 studies will measure.</p></div>'
         '<div class="hero-stats">'
         f'<div class="hero-stat {qualified_cls}"><strong>{qualified_count}</strong>'
         "<span>Eligible</span></div>"
@@ -2932,9 +3329,7 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
     else:
         assert isinstance(qm_context, Mapping)
         picks = select_qm_top_picks(data, qm_context, include_csp_watch=True)
-        annotations, annotation_warning = _research_annotation_map(picks, context)
-        if annotation_warning:
-            notes.append(f'<div class="notice watch">! {_esc(annotation_warning)}</div>')
+        annotations, _annotation_warning = _research_annotation_map(picks, context)
         qm_symbols = qm_context.get("symbols")
         qm_symbols = qm_symbols if isinstance(qm_symbols, Mapping) else {}
         cards = []
@@ -2972,10 +3367,97 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
     )
 
 
+_QM_MOVEMENT_SIGNAL_STATUSES = frozenset(
+    {"BREAKOUT", "PARABOLIC WARNING", "BREAKOUT + PARABOLIC WARNING"}
+)
+_QM_MOVEMENT_BANNER = (
+    "UNVALIDATED SIGNAL -- descriptive screen; no forward evidence exists "
+    "until the SS5 study reports; not an entry recommendation; no book path."
+)
+_QM_MOVEMENT_EMPTY = (
+    "No movement fires today. Expected — these patterns fired ~46 times in nine years "
+    "across twelve names."
+)
+_QM_MOVEMENT_BLOCKED = (
+    "BLOCKED — movement state is unavailable this session; no claim about fires is made."
+)
+
+
+def _qm_movement_lane_html(
+    data: Mapping[str, object], qm_context: Mapping[str, object] | None
+) -> str:
+    """Render read-only QM fires without attaching frozen-study evidence."""
+    raw_movement = qm_context.get("movement_symbols") if isinstance(qm_context, Mapping) else None
+    has_movement = isinstance(raw_movement, Mapping)
+    movement = raw_movement if isinstance(raw_movement, Mapping) else {}
+    items = [
+        (str(symbol), item) for symbol, item in movement.items() if isinstance(item, Mapping)
+    ]
+    evaluated = [(symbol, item) for symbol, item in items if item.get("status") == "CURRENT"]
+    unavailable = [(symbol, item) for symbol, item in items if item.get("status") != "CURRENT"]
+    fires = [
+        (symbol, item)
+        for symbol, item in evaluated
+        if item.get("signal_status") in _QM_MOVEMENT_SIGNAL_STATUSES
+    ]
+    unavailable_note = ""
+    if unavailable:
+        detail = ", ".join(
+            f"{symbol} ({item.get('status', 'UNKNOWN')})" for symbol, item in unavailable
+        )
+        unavailable_note = f'<p class="label">Not evaluated this session: {_esc(detail)}.</p>'
+    label_context: Mapping[str, object] | None = qm_context
+    if isinstance(qm_context, Mapping) and isinstance(qm_context.get("movement_as_of"), str):
+        label_context = {**qm_context, "as_of": qm_context["movement_as_of"], "not_covered": []}
+    if not has_movement or not evaluated:
+        reason = (
+            str(qm_context.get("reason", "")).strip()
+            if isinstance(qm_context, Mapping)
+            else ""
+        )
+        reason_html = f'<p class="label">Reason: {_esc(reason)}</p>' if reason else ""
+        body = (
+            f'<p class="label">{_esc(_QM_MOVEMENT_BLOCKED)}</p>{reason_html}{unavailable_note}'
+        )
+    elif not fires:
+        body = f'<p class="label">{_esc(_QM_MOVEMENT_EMPTY)}</p>{unavailable_note}'
+    else:
+        cards = []
+        for symbol, item in fires:
+            coverage = item.get("frozen_study_coverage")
+            coverage_html = (
+                '<div class="label">not covered by the frozen study</div>'
+                if coverage == "NOT_COVERED"
+                else ""
+            )
+            cards.append(
+                '<article class="movement-card">'
+                f"<h3>{_esc(symbol)}</h3>"
+                f'<div class="label">Current QM signal: {_esc(str(item["signal_status"]))}</div>'
+                f"{coverage_html}</article>"
+            )
+        body = f'<div class="card-grid">{"".join(cards)}</div>{unavailable_note}'
+    return (
+        '<section class="panel qm-movement">'
+        '<div class="section-header"><div>'
+        '<div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div>'
+        '<h2>QM MOVEMENT LANE</h2>'
+        '<p class="header-sub">Current-session mechanical fires from adjusted cached OHLCV, '
+        'shown in watch-universe order. This does not select, order, gate, or validate '
+        'a mechanical pick.</p>'
+        f'<div class="label">{_esc(_QM_MOVEMENT_BANNER)}</div>'
+        f"{_qm_two_date_label_html(data, label_context)}</div></div>{body}</section>"
+    )
+
+
 def _hero_html(
     data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None
 ) -> str:
-    return _original_hero_html(data, context, qm_context) + _qm_hero_html(data, context, qm_context)
+    return (
+        _original_hero_html(data, context, qm_context)
+        + _qm_movement_lane_html(data, qm_context)
+        + _qm_hero_html(data, context, qm_context)
+    )
 
 
 def _quant_want_html(qm_context: Mapping[str, object] | None) -> str:
@@ -3176,19 +3658,28 @@ def _composite_card_html(card: Mapping[str, object]) -> str:
 
 def _composite_html(data: dict) -> str:
     """Composite signal board panel: display-only, non-verdict-bearing
-    four-angle confluence cards (options_researcher.composite_signals).
-    Omitted honestly when nothing was assembled."""
-    cards = data.get("composite_signals") or []
-    if not cards:
-        return ""
+    four-angle confluence cards (options_researcher.composite_signals)."""
+    cards = [card for card in (data.get("composite_signals") or [])
+             if isinstance(card, Mapping)]
+    grade_a = [str(card.get("symbol")) for card in cards if card.get("grade") == "A"]
+    agreement = (
+        f"Highest agreement today: {', '.join(grade_a)}" if grade_a
+        else "Highest agreement today: none at grade A"
+    )
     grid = "".join(_composite_card_html(card) for card in cards)
+    if not grid:
+        grid = (
+            '<div class="empty">No composite cards are available for this board. '
+            'The lane is display-only and no signal or verdict is implied.</div>'
+        )
     return (
         '<section class="panel"><div class="section-header"><div>'
         '<div class="eyebrow">COMPOSITE SIGNAL LANE</div>'
         '<h2>Composite signal board — display-only</h2>'
         '<p>Four independent angles (trend, vol premium, regime, options-'
         'market internals) per name. Not verdict-bearing, not FIRE-capable; '
-        'writes nothing to ledger/ or positions.</p></div></div>'
+        'writes nothing to ledger/ or positions.</p>'
+        f'<div class="label">{_esc(agreement)}</div></div></div>'
         f'<div class="card-grid">{grid}</div></section>'
     )
 
@@ -3280,6 +3771,76 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
         '<summary>Hypothesis evidence</summary>'
         '<div class="evidence-grid">'
         f"{hypothesis_rows}</div>{intraday_html}</details>"
+    )
+
+
+def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
+    """Render already-attached family summaries without gathering evidence."""
+    raw_summaries = data.get("family_evidence")
+    summaries = (
+        raw_summaries if isinstance(raw_summaries, (list, tuple)) else ()
+    )
+    lines = []
+    for summary in summaries:
+        family = str(_evidence_attr(summary, "family", "?"))
+        ritual_state = str(_evidence_attr(summary, "ritual_state", "UNKNOWN"))
+        ritual_detail = str(_evidence_attr(summary, "ritual_detail", "NO RECEIPT"))
+        raw_counts = _evidence_attr(summary, "raw_state_counts", ())
+        raw_counts = raw_counts if isinstance(raw_counts, (list, tuple)) else ()
+        raw_html = "; ".join(
+            '<span class="status-badge'
+            + (
+                " bad"
+                if str(_evidence_attr(count, "state", "UNKNOWN"))
+                in {"UNKNOWN", "MISSING", "REFUSED", "NO RECEIPT", "NOT TRACKED"}
+                else " unknown"
+            )
+            + '">evidence '
+            + _esc(str(_evidence_attr(count, "state", "UNKNOWN")))
+            + ": "
+            + _esc(str(_evidence_attr(count, "count", 0)))
+            + "</span>"
+            for count in raw_counts
+        ) or '<span class="status-badge bad">evidence UNKNOWN: 0</span>'
+        evaluation = _evidence_attr(summary, "evaluation_session") or "UNKNOWN"
+        run_date = _evidence_attr(summary, "run_date") or "UNKNOWN"
+        raw_sources = _evidence_attr(summary, "sources", ())
+        raw_sources = raw_sources if isinstance(raw_sources, (list, tuple)) else ()
+        source_paths = [
+            str(_evidence_attr(source, "path", "?"))
+            for source in raw_sources
+            if _evidence_attr(source, "path")
+        ]
+        sources_text = (
+            f"; sources: {', '.join(source_paths)}" if source_paths else ""
+        )
+        window_end = _evidence_attr(summary, "registered_window_end")
+        window_metadata = _evidence_attr(summary, "registered_window_metadata")
+        window_text = (
+            f"; {window_metadata}: ends {window_end}"
+            if window_end and window_metadata else ""
+        )
+        conspicuous = (
+            " bad" if ritual_state in {"MISSING", "REFUSED", "UNKNOWN", "NOT TRACKED"}
+            else " unknown"
+        )
+        lines.append(
+            "<li><strong>"
+            f"{_esc(family)}</strong> — ritual <span class=\"status-badge{conspicuous}\">"
+            f"{_esc(ritual_state)}</span> ({_esc(ritual_detail)}); "
+            f"{raw_html}; evaluation {_esc(str(evaluation))}; "
+            f"run {_esc(str(run_date))}{_esc(sources_text)}{_esc(window_text)}</li>"
+        )
+    body = "".join(lines) or (
+        "<li><strong>UNKNOWN</strong> — NO RECEIPT summary attached; "
+        "tracker cannot claim current registered-bet evidence.</li>"
+    )
+    return (
+        '<section class="panel registered-bets-tracker"><div class="section-header"><div>'
+        '<div class="eyebrow">REGISTERED-BETS TRACKER</div>'
+        '<h2>Registered-bets tracker</h2>'
+        '<p>This is a read-only receipt summary and cannot activate, rank, or place a trade.</p>'
+        f"</div></div><ul>{body}</ul></section>"
     )
 
 
@@ -3432,15 +3993,21 @@ def render(
     context: dict | None = None,
     context_warning: str | None = None,
     qm_context: Mapping[str, object] | None = None,
+    research_views_status: Mapping[str, object] | None = None,
 ) -> str:
     """Render the assemble() dict (plus optional research context) into one
     self-contained HTML string. Pure string templating: no file I/O, no
     network, no external assets. Every value from `data` / `context` is
     html.escape()'d before embedding. Page order: compact metadata header ->
-    original Top-3 -> descriptive QM comparison -> composite signal board ->
-    quant/market background -> pinned names ->
+    freshness -> rule-based Top-3 -> movement lane -> descriptive QM comparison
+    -> composite -> research desk -> registered-bets tracker -> passive experiments
+    -> pinned -> quant/market ->
     per-symbol panels (card grid)."""
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
+    picks_for_research = select_top_picks(data, include_csp_watch=True)
+    _annotations, annotation_notice = _research_annotation_map(
+        picks_for_research, context
+    )
     symbols_html = ""
     for sec in data["symbols"]:
         tech = sec.get("technicals")
@@ -3528,14 +4095,18 @@ def render(
         f"</strong> {_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header><main class="page-body">'
+        f"{_freshness_html(data, context, qm_context, research_views_status)}"
         f"{age_html}"
         f"{warn_html}"
         f"{_blocked_html(data.get('blocked') or [])}"
         f"{_hero_html(data, context, qm_context)}"
         f"{_composite_html(data)}"
+        f"{_research_desk_html(data, context, context_warning, annotation_notice)}"
+        f"{_registered_bets_tracker_html(data)}"
+        f"{_experiments_shelf_html(research_views_status)}"
+        f"{_pinned_html(data)}"
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
-        f"{_pinned_html(data)}"
         f"{symbols_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
         "not predictions. Income annualization uses 365 calendar days; "
@@ -3560,11 +4131,13 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
         data = assemble(**assemble_kwargs)
         qm_context = load_qm_context(data.get("data_as_of") or "")
     context, warning = load_context(data.get("data_as_of") or "")
+    research_views_status = load_research_views_status()
     out_html = render(
         data,
         context=context,
         context_warning=warning,
         qm_context=qm_context,
+        research_views_status=research_views_status,
     )
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     # tmp + os.replace so a mid-write crash can never leave a truncated page

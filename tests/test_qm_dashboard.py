@@ -156,6 +156,59 @@ class ContextBuildTests(unittest.TestCase):
         self.assertIn("option P&L", item["counter_case"])
         self.assertNotIn("breakout_mfe_20d", item)
 
+    def test_standalone_movement_state_reads_uncovered_cache_without_frozen_fields(self):
+        """A live movement fire is separate from the frozen-study evidence contract."""
+        frame = _frame()
+        with (
+            mock.patch.object(
+                qm_dashboard.qm_signals, "breakout_fires", return_value=[{"t": "2026-07-01"}]
+            ),
+            mock.patch.object(qm_dashboard.qm_signals, "parabolic_fires", return_value=[]),
+        ):
+            movement = qm_dashboard.build_qm_movement_context(
+                ["AAA", "BBB"],
+                "2026-07-01",
+                study=_study("AAA"),
+                params={"QM_HORIZONS": (5, 10, 20)},
+                gate=lambda: None,
+                load_adjusted=lambda _symbol, _as_of: frame,
+            )
+
+        self.assertEqual(list(movement), ["AAA", "BBB"])
+        uncovered = movement["BBB"]
+        self.assertEqual(uncovered["status"], "CURRENT")
+        self.assertEqual(uncovered["signal_status"], "BREAKOUT")
+        self.assertEqual(uncovered["frozen_study_coverage"], "NOT_COVERED")
+        self.assertIn("not covered by the frozen study", uncovered["frozen_study_reason"])
+        for forbidden in (
+            "historical_breakout_fires", "historical_parabolic_fires", "study",
+            "parabolic_study", "thesis", "counter_case", "provenance",
+        ):
+            self.assertNotIn(forbidden, uncovered)
+
+    def test_loaded_context_keeps_frozen_mapping_separate_from_uncovered_live_state(self):
+        """The retained comparison stays NOT_IN_FROZEN_STUDY while movement is live."""
+        frame = _frame()
+        with (
+            mock.patch.object(qm_dashboard, "load_study_sidecar", return_value=_study("AAA")),
+            mock.patch("options_researcher.h7_scope.watch_universe", return_value=["AAA", "BBB"]),
+            mock.patch.object(qm_dashboard.qm_signals, "qm_prereg_gate", return_value=None),
+            mock.patch.object(
+                qm_dashboard.qm_signals, "breakout_fires", return_value=[{"t": "2026-07-01"}]
+            ),
+            mock.patch.object(qm_dashboard.qm_signals, "parabolic_fires", return_value=[]),
+        ):
+            context = qm_dashboard.load_qm_context(
+                "2026-07-01", load_adjusted=lambda _symbol, _as_of: frame
+            )
+
+        self.assertEqual(context["symbols"]["BBB"]["status"], "NOT_IN_FROZEN_STUDY")
+        uncovered = context["movement_symbols"]["BBB"]
+        self.assertEqual(uncovered["status"], "CURRENT")
+        self.assertEqual(uncovered["signal_status"], "BREAKOUT")
+        self.assertEqual(uncovered["frozen_study_coverage"], "NOT_COVERED")
+        self.assertNotIn("historical_breakout_fires", uncovered)
+
     def test_one_stale_symbol_blocks_whole_qm_ranking_context(self):
         stale = _frame(end="2026-06-30")
         context = qm_dashboard.build_qm_context(
