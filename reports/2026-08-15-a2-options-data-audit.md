@@ -80,3 +80,51 @@ decision rather than selectively excluding them.
 ## Ledger note
 
 `A2-v1 pre-run options-data audit BLOCKED 2026-08-15: required full local-input loader did not complete after chain-stage entry; checks 1-14 NOT RUN, no selected-contract verdict; do not invoke historical A2.`
+
+## Streaming-loader rerun at `2f36c7a`
+
+The initial blocked attempt above predates the streaming refactor. At commit
+`2f36c7a5fca6f15793aab9c5639867b3de990506`, the exact same absolute paths
+were retried through the revised `_load_local_inputs(paths)` only. That code
+loads and releases one ticker's chain bundle at a time, constructs its local
+signals/outcomes, runs its per-symbol `audit_historical_inputs(...)`, and then
+merges the fifteen audit results. `run_once` was not called.
+
+The rerun command used the required cache-noise controls and printed the
+intended audit payload only after `_load_local_inputs` returned:
+
+```text
+MPLCONFIGDIR=/private/tmp/a2-audit-mpl PYTHONDONTWRITEBYTECODE=1 \
+  .venv/bin/python -c '<CachePaths.from_overrides with the paths above>; \
+  inputs = _load_local_inputs(paths); print(audit/signals/outcomes/diagnostics)'
+```
+
+It emitted only normal local startup messages and did not return the input
+object, aggregate audit, selected-contract set, outcome set, skip counts, or
+the requested payload. Consequently, no per-symbol audit print, aggregate
+check count, or final `PASS`/`PASS WITH WARNINGS`/`BLOCK` value was produced.
+
+This establishes the exact current failure boundary: **the required streaming
+`_load_local_inputs(paths)` call does not complete in this audit environment**.
+It does not establish whether the non-return occurs in a particular ticker,
+rate resolution, feature reconstruction, or audit check; the code emitted no
+stage marker or Python exception after startup, so assigning a more specific
+data cause would be unsupported.
+
+| Rerun field | Result |
+| --- | --- |
+| Git HEAD | `2f36c7a5fca6f15793aab9c5639867b3de990506` |
+| Input paths | Exact absolute paths listed above |
+| Signal dates / rows | NOT AVAILABLE — loader did not return |
+| Outcome rows | NOT AVAILABLE — loader did not return |
+| Selected contracts | NOT AVAILABLE — loader did not return |
+| Diagnostics skips / max-as-of | NOT AVAILABLE — loader did not return |
+| Warnings | NOT AVAILABLE — `audit_historical_inputs` did not return |
+| Checks 1–14 | NOT RUN / no printed counts |
+| Verdict | BLOCKED (incomplete required audit) |
+| Rerun wall time | no valid end-to-end completion time; the audit command was terminated without a result payload after its 30-second execution window |
+
+The historical A2 command remains prohibited. The next safe step is to obtain
+a completed programmatic streaming audit with its printed fourteen counts; it
+is not permissible to treat this partial attempt as a warning-only pass or to
+selectively exclude unknown rows.
