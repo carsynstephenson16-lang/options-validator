@@ -6,7 +6,8 @@
 set +e
 input=$(cat)
 wt=$(printf '%s' "$input" | /usr/bin/python3 -c \
-  'import json,sys;d=json.load(sys.stdin);print(d.get("worktree_path") or d.get("cwd") or "")' 2>/dev/null)
+  'import json,sys;d=json.load(sys.stdin);print(d.get("worktree_path") or d.get("cwd") or "")' 2>/dev/null \
+  | grep -E '^/' | tail -1)
 [ -d "$wt" ] || exit 0
 br=$(git -C "$wt" symbolic-ref --quiet --short HEAD)
 unpushed=0

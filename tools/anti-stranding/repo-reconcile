@@ -2,8 +2,10 @@
 # Daily reconciler: the unconditional floor under all hook-based layers.
 # For every repo it can find: back up unpushed branches, rescue dirty worktrees
 # and orphaned detached HEADs, open throttled PRs so every branch is visible,
-# and write a one-screen plain-language digest. It NEVER merges, NEVER forces,
-# NEVER deletes. Prune of fully-merged clean worktrees only with PRUNE=1.
+# and write a one-screen plain-language digest. It NEVER forces and NEVER
+# deletes; it merges ONLY the owner's own green-check PRs into main in repos
+# the owner owns (see README "Merge policy"). Prune of fully-merged clean
+# worktrees only with PRUNE=1.
 #
 #   DRY_RUN=1  -> report what it WOULD do, touch nothing (default: act)
 #   PRUNE=1    -> also remove worktrees that are provably merged+clean (default: off)
@@ -14,6 +16,12 @@ LOG="$HOME/.local/log/repo-reconcile.log"
 MAX_NEW_PRS=3
 TODAY=$(date +%Y-%m-%d)
 new_prs=0
+# Resolved once: side-effect loops (push/PR/merge) only ever act on repos
+# whose origin belongs to this GitHub account. ~/codex-plugin-cc is a clone
+# of openai/codex-plugin-cc — without this guard the loops would enumerate
+# and try to push/PR/merge OTHER PEOPLE'S work there (blocked today only by
+# GitHub permissions, which is not a safety design).
+GH_LOGIN=$(gh api user -q .login 2>/dev/null)
 mkdir -p "$HOME/.local/log"
 : >"$DIGEST.tmp"
 
@@ -30,9 +38,14 @@ done
 say "# Repo digest — $TODAY"
 say ""
 NEEDS=0
+typeset -A SEEN_GITDIR
 
 for repo in "${REPOS[@]}"; do
   name=${repo:t}
+  # Linked worktrees (e.g. options-validator-ops/-research) share one git dir;
+  # process each underlying repo exactly once or every action would run N times.
+  cdir=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  [ -n "$cdir" ] && { [ -n "${SEEN_GITDIR[$cdir]}" ] && continue; SEEN_GITDIR[$cdir]=1; }
   # ops/research checkouts: report only, never act.
   case "$repo" in
     "$HOME/options-validator-ops"|"$HOME/options-validator-research") ro=1;;
@@ -84,6 +97,17 @@ for repo in "${REPOS[@]}"; do
 
   [ "$ro" = "1" ] && continue
 
+  # Ownership gate for every side-effect loop below (push, PR create, merge).
+  owner_ok=0
+  origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null)
+  [ -n "$GH_LOGIN" ] && case "$origin_url" in
+    *"/$GH_LOGIN/"*|*":$GH_LOGIN/"*) owner_ok=1;;
+  esac
+  if [ "$owner_ok" != "1" ]; then
+    say "- 👀 $name: origin is not $GH_LOGIN's — inventory only, no push/PR/merge."
+    continue
+  fi
+
   # --- push every local branch with commits origin doesn't have (plain push only)
   git -C "$repo" for-each-ref refs/heads --format='%(refname:short)' | while read -r br; do
     case "$br" in main|master|deploy/*) continue;; esac
@@ -114,9 +138,59 @@ for repo in "${REPOS[@]}"; do
       pr=$(cd "$repo" && gh pr list --head "$br" --state all --json number -q 'length' 2>/dev/null)
       [ "${pr:-0}" != "0" ] && continue
       draft=""; [[ "$br" == wip/* ]] && draft="--draft"
-      if act "gh pr create for $br"; then
+      if ! act "gh pr create for $br"; then
+        new_prs=$((new_prs+1)); continue   # dry-run: count so the throttle previews honestly
+      fi
+      if true; then
         (cd "$repo" && gh pr create --fill --head "$br" --base main $draft >/dev/null 2>&1) \
           && { say "- 📬 $name/$br: opened a PR so you can review/merge from anywhere."; new_prs=$((new_prs+1)); logl "PR $repo $br"; }
+      fi
+    done
+  fi
+
+  # --- auto-merge the owner's own green PRs into main (owner-directed
+  # 2026-08-15, in-session wording: "i want the merge to be an automatic
+  # decision i dont care"). Mechanical guards, all load-bearing:
+  #   - owner_ok gate above: never touches repos this account doesn't own
+  #   - --base main --author @me: never other bases, never others' PRs
+  #   - owner-governed paths (ledger/frozen values/registrations/doctrine/CI)
+  #     are excluded and escalated to the digest instead
+  #   - checks snapshot + --match-head-commit: the merged SHA is exactly the
+  #     SHA whose checks were inspected (no race with new pushes)
+  #   - a PR with ZERO checks is reported, never merged
+  #   - blackout re-evaluated per PR: no merges 15:00-16:30 ET weekdays (ops
+  #     15:30 alignment gate / 15:45 capture)
+  #   - failures are reported in the digest, never silent
+  automerge_default=$(cat "$HOME/.config/repo-reconcile/automerge" 2>/dev/null || echo 0)
+  if [ "${AUTOMERGE:-$automerge_default}" = "1" ] && command -v gh >/dev/null 2>&1; then
+    (cd "$repo" && gh pr list --state open --base main --author "@me" --limit 100 \
+        --json number,isDraft -q '.[] | select(.isDraft|not) | .number' 2>/dev/null) | while read -r prn; do
+      hr=$(TZ=America/New_York date +%H%M); dow=$(TZ=America/New_York date +%u)
+      if [ "$dow" -le 5 ] && [ "$hr" -ge 1500 ] && [ "$hr" -le 1630 ]; then
+        say "- ⏸  $name PR #$prn: auto-merge paused (ops pre-capture window)."; continue
+      fi
+      if (cd "$repo" && gh pr diff "$prn" --name-only 2>/dev/null) | grep -Eq \
+         '^(ledger/|config\.py$|docs/superpowers/|AGENTS\.md$|CLAUDE\.md$|\.cursorrules$|\.github/)'; then
+        say "- 🔒 $name PR #$prn: touches owner-governed paths (ledger/frozen/registrations/doctrine/CI) — needs you."
+        NEEDS=1; continue
+      fi
+      snap=$(cd "$repo" && gh pr view "$prn" --json headRefOid,mergeable,statusCheckRollup \
+        -q '[.headRefOid,.mergeable,([.statusCheckRollup[]|(.conclusion//.state)]|join(","))]|join(" ")' 2>/dev/null)
+      sha=${snap%% *}; rest=${snap#* }; mrg=${rest%% *}; states=${rest#* }
+      if [ -z "$states" ] || [ "$states" = "$mrg" ]; then
+        say "- ⚠️  $name PR #$prn: no CI checks exist — never auto-merged; needs you."; NEEDS=1; continue
+      fi
+      if [ "$mrg" != "MERGEABLE" ]; then
+        say "- ⚠️  $name PR #$prn: not mergeable ($mrg) — needs you."; NEEDS=1; continue
+      fi
+      print -r -- "${states//,/$'\n'}" | grep -Eqv '^(SUCCESS|NEUTRAL|SKIPPED)$' && continue
+      act "auto-merge PR #$prn" || continue
+      if err=$(cd "$repo" && gh pr merge "$prn" --squash --match-head-commit "$sha" 2>&1); then
+        say "- ✅ $name PR #$prn: checks green → merged automatically (owner directive 2026-08-15)."
+        logl "AUTOMERGE $repo #$prn"
+      else
+        say "- ⚠️  $name PR #$prn: auto-merge FAILED — ${err//$'\n'/ }"; NEEDS=1
+        logl "AUTOMERGE-FAIL $repo #$prn"
       fi
     done
   fi
