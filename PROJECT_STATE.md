@@ -82,9 +82,17 @@ measured on ThetaData EOD; 95% CI [0.62, 8.74] expected entries vs the
 pre-acceptance). Remaining before any activation: B2, fresh feasibility,
 Monday 15/15 canary + manifest verify, backup/restore drill, owner OD-3 +
 starvation decision, guarded registration, owner-authorized flip — plus a
-working Schwab OAuth session: the production refresh token is
-**expired/revoked** (`invalid_grant`, failure window Aug 7 evening–Aug 10);
-reauth steps in `reports/2026-08-12-schwab-auth-diagnosis.md`. **Unmerged
+working Schwab OAuth session. *(Status correction 2026-08-15: the token was
+re-authorized 2026-08-12 ~00:56 ET and both capture lanes verified 15/15 on
+08-12→08-14; the 2026-08-14 15:45 preclose canary SUCCEEDED. Refresh tokens
+hard-expire 7 days after creation — Official-source; refreshing an access
+token does NOT reset the clock; see the 2026-08-15 addendum to
+`reports/2026-08-12-schwab-auth-diagnosis.md` — so the current token dies
+~2026-08-19 00:56 ET unless re-authorized over the 08-15/16 weekend. NONE of
+the missing 08-10→08-13 PRECLOSE chain captures were Schwab failures: all
+four were the wrapper's own HEAD-vs-origin/main alignment guard refusing on a
+repo-side sync gap (it refuses before attempting auth), since cleared. The
+expired token broke only the intraday QUOTE lane, on 08-10/08-11.)* **Unmerged
 post-audit branches awaiting review/owner decision (not landed here):**
 `codex/h7-schwab-recovery` (Schwab registration CLI + feasibility identity
 binding + a new 2026-08-11 primary-earnings feasibility receipt — needs its

@@ -253,8 +253,13 @@ window PAUSED per OD-3 — restart requires a new registration and namespace),
 **H8** (seq 11; zero positions), **H10a** (seq 15, window ends 2026-10-06,
 7-loss bar, zero positions), **H10b** (seq 16, window ends 2027-01-06, 7-loss
 bar, zero positions), **RQ1** (seq 17; SPENT — descriptive result recorded at
-seq 20, no verdict), **RQ2-v1** (seq 18; forward window opens 2026-09-01;
-badge modules not yet built), **A2-v1** (seq 19; not yet built). Status
+seq 20, no verdict), **RQ2-v1** (seq 18; forward window opens **2026-08-17**
+per owner ruling 2026-08-15 in-session — the previously printed 2026-09-01
+was an LLM-proposed draft date never frozen in the ledger (see the 2026-08-10
+attribution correction in
+`reports/2026-08-09-attractiveness-experiment-authorization.md`); amendment
+pending append; badge modules not yet built), **A2-v1** (seq 19; not yet
+built). Status
 rulings and the data-lane situation as of 2026-08-04 live in
 `reports/2026-08-04-composite-signal-lane-decision.md`. The **composite
 signal lane** (display-only, non-verdict-bearing) is authorized per the
@@ -271,8 +276,12 @@ the Monday canary, the backup drill, and owner-typed OD-3 + starvation
 decisions. The four **attractiveness experiments** (EXP-BETA/TAIL/SPREAD/
 TBILL) are display-only, off by default, in the standalone
 `experiments_dashboard.py`; the frozen baseline ranking is untouched. The
-production Schwab OAuth refresh token is **expired** — see
-`reports/2026-08-12-schwab-auth-diagnosis.md` for the reauth procedure.
+production Schwab OAuth refresh token was re-authorized 2026-08-12 ~00:56 ET
+and captures verified working 08-12 through 08-14 (15/15). Refresh tokens
+expire a hard **7 days after creation** (Official-source; refreshing an
+access token does NOT reset the clock) — without a weekend re-auth the token
+dies ~2026-08-19 00:56 ET. Procedure:
+`reports/2026-08-12-schwab-auth-diagnosis.md` (+ its 2026-08-15 addendum).
 Current sequencing and open owner gates: `PROJECT_STATE.md` status refresh
 2026-08-12.
 
