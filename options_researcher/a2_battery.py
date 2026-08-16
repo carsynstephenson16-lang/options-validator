@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from statistics import median
 from types import MappingProxyType
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, cast
 
 import metrics
 from options_researcher.robustness.runner import _permutation_result, _stress_metrics
@@ -130,8 +130,12 @@ def _finite(value: object, field: str) -> float:
     if isinstance(value, bool):
         raise ValueError(f"{field} must be finite")
     try:
-        result = float(value)
-    except (TypeError, ValueError) as exc:
+        # ``float`` accepts a wider runtime protocol than pyright can infer
+        # from ``object`` (for example Decimal and numpy scalar values).  The
+        # cast is type-only; the conversion and finite check remain the
+        # fail-closed runtime boundary.
+        result = float(cast(str | float | int, value))
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field} must be finite") from exc
     if not math.isfinite(result):
         raise ValueError(f"{field} must be finite")
@@ -257,28 +261,50 @@ def _outcome_from_mapping(raw: Mapping[str, object]) -> A2Outcome:
                 return raw[name]
         return default
 
-    components = value("components", "accounting")
-    provenance = value("provenance", "source_provenance")
-    if components is None or provenance is None:
-        raise ValueError("A2 outcome requires components and provenance")
-    gross = value("gross_return", "gross_forward_return", "return")
-    adjusted = value("cost_adjusted_return", "forward_cost_adjusted_return", "net_return")
-    if gross is None or adjusted is None:
-        raise ValueError("A2 outcome requires gross and cost-adjusted returns")
+    def required_text(*names: str) -> str:
+        candidate = value(*names)
+        if not isinstance(candidate, str):
+            raise ValueError(f"A2 outcome field {names[0]!r} must be text")
+        return candidate
+
+    def required_number(*names: str) -> float:
+        return _finite(value(*names), f"A2 outcome field {names[0]!r}")
+
+    def required_components() -> Mapping[str, float]:
+        candidate = value("components", "accounting")
+        if not isinstance(candidate, Mapping):
+            raise ValueError("A2 outcome components must be a mapping")
+        converted: dict[str, float] = {}
+        for key, component in candidate.items():
+            if not isinstance(key, str):
+                raise ValueError("A2 outcome component keys must be text")
+            converted[key] = _finite(component, f"component {key!r}")
+        return converted
+
+    def required_provenance() -> Mapping[str, object]:
+        candidate = value("provenance", "source_provenance")
+        if not isinstance(candidate, Mapping):
+            raise ValueError("A2 outcome provenance must be a mapping")
+        if any(not isinstance(key, str) for key in candidate):
+            raise ValueError("A2 outcome provenance keys must be text")
+        return dict(candidate)
+
     return A2Outcome(
-        symbol=value("symbol", "ticker"),
-        decision_date=value("decision_date", "decision"),
-        entry_date=value("entry_date", "entry"),
-        resolution_date=value("resolution_date", "resolution"),
-        lane=value("lane"),
-        arm=value("arm", "parameter_id"),
-        score=value("score"),
-        gross_return=gross,
-        modeled_cost=value("modeled_cost", "cost"),
-        bid_ask_cost=value("bid_ask_cost", "bid_ask"),
-        cost_adjusted_return=adjusted,
-        components=components,
-        provenance=provenance,
+        symbol=required_text("symbol", "ticker"),
+        decision_date=required_text("decision_date", "decision"),
+        entry_date=required_text("entry_date", "entry"),
+        resolution_date=required_text("resolution_date", "resolution"),
+        lane=required_text("lane"),
+        arm=required_text("arm", "parameter_id"),
+        score=required_number("score"),
+        gross_return=required_number("gross_return", "gross_forward_return", "return"),
+        modeled_cost=required_number("modeled_cost", "cost"),
+        bid_ask_cost=required_number("bid_ask_cost", "bid_ask"),
+        cost_adjusted_return=required_number(
+            "cost_adjusted_return", "forward_cost_adjusted_return", "net_return"
+        ),
+        components=required_components(),
+        provenance=required_provenance(),
     )
 
 

@@ -106,6 +106,31 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _outcome(cost_adjusted_return=0.99)  # type: ignore[call-arg]
 
+    def test_mapping_outcomes_are_coerced_and_invalid_shapes_fail_closed(self):
+        row = _outcome()
+        raw = {
+            "ticker": row.symbol,
+            "decision": row.decision_date,
+            "entry": row.entry_date,
+            "resolution": row.resolution_date,
+            "lane": row.lane,
+            "parameter_id": row.arm,
+            "score": str(row.score),
+            "return": str(row.gross_return),
+            "cost": str(row.modeled_cost),
+            "bid_ask": str(row.bid_ask_cost),
+            "net_return": str(row.cost_adjusted_return),
+            "accounting": {key: str(value) for key, value in row.components.items()},
+            "source_provenance": dict(row.provenance),
+        }
+        coerced = validate_outcomes((raw,))
+        self.assertEqual(coerced[0], row)
+
+        with self.assertRaises(ValueError):
+            validate_outcomes(({**raw, "accounting": []},))
+        with self.assertRaises(ValueError):
+            validate_outcomes(({**raw, "accounting": {1: "0.0"}},))
+
     def test_duplicate_identity_and_mixed_lanes_fail_closed(self):
         row = _outcome()
         with self.assertRaises(ValueError):
