@@ -79,7 +79,7 @@ decision rather than selectively excluding them.
 
 ## Ledger note
 
-`A2-v1 pre-run options-data audit BLOCKED 2026-08-15: required full local-input loader did not complete after chain-stage entry; checks 1-14 NOT RUN, no selected-contract verdict; do not invoke historical A2.`
+`A2-v1 pre-run options-data audit BLOCKED 2026-08-15: persistent streaming run completed 14 of 15 per-symbol audits before controlled stop; partial selected-contract check-10 IV failures=147, final merge/AMZN/exact contract rows unavailable; do not invoke historical A2.`
 
 ## Streaming-loader rerun at `2f36c7a`
 
@@ -99,30 +99,124 @@ MPLCONFIGDIR=/private/tmp/a2-audit-mpl PYTHONDONTWRITEBYTECODE=1 \
   inputs = _load_local_inputs(paths); print(audit/signals/outcomes/diagnostics)'
 ```
 
-It emitted only normal local startup messages and did not return the input
-object, aggregate audit, selected-contract set, outcome set, skip counts, or
-the requested payload. Consequently, no per-symbol audit print, aggregate
-check count, or final `PASS`/`PASS WITH WARNINGS`/`BLOCK` value was produced.
-
-This establishes the exact current failure boundary: **the required streaming
-`_load_local_inputs(paths)` call does not complete in this audit environment**.
-It does not establish whether the non-return occurs in a particular ticker,
-rate resolution, feature reconstruction, or audit check; the code emitted no
-stage marker or Python exception after startup, so assigning a more specific
-data cause would be unsupported.
+The first observation ended at the tool's 30-second output-yield boundary. It
+was **not evidence that the loader terminated**. A persistent monitored
+session was then used; its wrapper accumulated output until process exit, so
+per-symbol prints were not visible to the intermediate monitor even while the
+process was making progress.
 
 | Rerun field | Result |
 | --- | --- |
 | Git HEAD | `2f36c7a5fca6f15793aab9c5639867b3de990506` |
 | Input paths | Exact absolute paths listed above |
-| Signal dates / rows | NOT AVAILABLE — loader did not return |
-| Outcome rows | NOT AVAILABLE — loader did not return |
-| Selected contracts | NOT AVAILABLE — loader did not return |
-| Diagnostics skips / max-as-of | NOT AVAILABLE — loader did not return |
-| Warnings | NOT AVAILABLE — `audit_historical_inputs` did not return |
-| Checks 1–14 | NOT RUN / no printed counts |
+| Signal dates / rows | NOT AVAILABLE — final loader payload was not reached |
+| Outcome rows | NOT AVAILABLE — final loader payload was not reached |
+| Selected contracts | NOT AVAILABLE — final loader payload was not reached |
+| Diagnostics skips / max-as-of | NOT AVAILABLE — final loader payload was not reached |
+| Warnings | Partial per-symbol print only; no merged audit object |
+| Checks 1–14 | Partial counts below; no final merged counts |
 | Verdict | BLOCKED (incomplete required audit) |
-| Rerun wall time | no valid end-to-end completion time; the audit command was terminated without a result payload after its 30-second execution window |
+| Rerun wall time | At least 15 minutes of active processing; manually stopped at the agreed monitoring limit before final merge |
+
+### Persistent-session result
+
+The persistent session ran `_load_local_inputs(paths)` for at least 15 minutes.
+Before it was manually stopped to prevent further CPU burn, its buffered output
+showed **14 completed per-symbol programmatic audits**. The fifteenth symbol
+and `_merge_audits(...)` were not reached, so these are not a complete A2
+verdict and must not be treated as one.
+
+The partial aggregate of the 14 completed audit prints was:
+
+| Check | Partial issue count | Interpretation |
+| --- | ---: | --- |
+| 1 | 0 | partial only |
+| 2 | 14 | one cadence N/A note per completed symbol |
+| 3 | 2 | partial only |
+| 4 | 0 | partial only |
+| 5 | 4,326 | volume metadata unavailable across 309 sessions per completed symbol |
+| 6 | 0 | partial only |
+| 7 | 0 | partial only |
+| 8 | 0 | partial only |
+| 9 | 4,326 | timestamp metadata unavailable across 309 sessions per completed symbol |
+| 10 | 147 | invalid/missing IV observations on selected contracts |
+| 11 | 0 | partial only |
+| 12 | 0 | partial only |
+| 13 | 4,326 | underlying-price metadata unavailable across 309 sessions per completed symbol |
+| 14 | 0 | partial only |
+
+Thirteen of the completed per-symbol audits printed `BLOCK`; one printed
+`PASS WITH WARNINGS`. The audit implementation's selected-contract rule means
+the concrete BLOCK rows must come from the final merged check records, which
+were unavailable after the controlled stop. No exact-contract remediation is
+therefore asserted here.
+
+The corrected diagnosis is **execution-duration/output-observability**, not a
+demonstrated loader crash or a completed data-quality result. The active
+process was manually stopped after the 15-minute allowance; it did not emit a
+normal final payload or exit code. A future attempt must complete all fifteen
+per-symbol audits and the merge before any data verdict or historical A2
+invocation is considered.
+
+### Per-symbol partial order and check definitions
+
+The completed audit prints follow the frozen A2 universe order. `AMZN` was the
+fifteenth symbol and was still pending when the session was stopped.
+
+| Completed symbol | Check 3 | Check 10 | Printed verdict |
+| --- | ---: | ---: | --- |
+| CRWV | 0 | 23 | BLOCK |
+| TEM | 0 | 4 | BLOCK |
+| PLTR | 1 | 6 | BLOCK |
+| NOW | 1 | 1 | BLOCK |
+| SMCI | 0 | 7 | BLOCK |
+| NVDA | 0 | 11 | BLOCK |
+| AMD | 0 | 16 | BLOCK |
+| AVGO | 0 | 16 | BLOCK |
+| IREN | 0 | 13 | BLOCK |
+| USAR | 0 | 2 | BLOCK |
+| ET | 0 | 34 | BLOCK |
+| VST | 0 | 0 | PASS WITH WARNINGS |
+| CEG | 0 | 3 | BLOCK |
+| MSFT | 0 | 11 | BLOCK |
+| AMZN | NOT RUN | NOT RUN | NOT RUN |
+
+The implementation defines the relevant checks as follows:
+
+- **2:** a per-symbol `weekly cadence N/A for A2 monthly/explicit-expiry
+  selectors` record, plus any missing monthly expiration. The single result
+  for each completed symbol was the N/A record, not a cadence failure.
+- **3:** no finite strike within 10% of that session's independent raw close.
+- **5:** missing/negative bid, ask, volume, or open interest. The 4,326 partial
+  records are the generic `volume metadata unavailable` record for every
+  completed chain session.
+- **9:** absent/malformed/off-bar quote timestamp. The 4,326 partial records
+  are the generic `missing timestamp` record for every completed chain session.
+- **10:** selected contract has missing, non-positive, or greater-than-500% IV.
+- **13:** missing independent close or missing/mismatched `underlying_price`.
+  The 4,326 partial records are the generic `underlying_price metadata
+  unavailable` record for every completed chain session.
+
+Representative rows from the completed partial surface are:
+
+| Check | Representative row / condition | Meaning for BLOCK |
+| --- | --- | --- |
+| 2 | `CRWV: weekly cadence N/A for A2 monthly/explicit-expiry selectors` | Informational N/A; generic text cannot match a selected contract identity. |
+| 3 | `NOW 2025-12-18: no near-ATM strike`; independent close 153.3800, available strikes 280.0–340.0 | Generic session-quality warning; not itself a selected-contract identity. |
+| 5 | `CRWV 2025-04-07: volume metadata unavailable` | Generic missing-column warning, repeated once per session; it is not a selected-contract failure. |
+| 9 | `CRWV 2025-04-07: missing timestamp` | Generic missing-column warning, repeated once per session; it is not a selected-contract failure. |
+| 10 | Partial print established 23 selected-contract IV failures for CRWV (147 across the 14 completed symbols), but contract identities were lost when the run was stopped before merge. | This alone is sufficient to explain every printed BLOCK, because it is selection-scoped. Exact contracts require a completed audit. |
+| 13 | `CRWV 2025-04-07: underlying_price metadata unavailable` | Generic missing-column warning, repeated once per session; it is not a selected-contract failure. |
+
+Accordingly, checks 5, 9, and 13 are implementation-multiplied generic
+metadata warnings: they are emitted once for each chain session and cannot
+match the selected-contract tag used by the audit's `BLOCK` decision. They are
+not, on this partial evidence, the cause of a `BLOCK`. Check 10 is a confirmed
+selection-scoped material issue; check 3 could also be selection-scoped when it
+reports an invalid selected strike, but the available NOW example is generic
+and the interrupted merge did not preserve the other exact check-3 row. The
+completion requirement is exact selected-contract identities and values, not
+selective suppression of generic metadata warnings.
 
 The historical A2 command remains prohibited. The next safe step is to obtain
 a completed programmatic streaming audit with its printed fourteen counts; it
