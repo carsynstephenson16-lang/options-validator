@@ -6,7 +6,8 @@
 set +e
 input=$(cat)
 cwd=$(printf '%s' "$input" | /usr/bin/python3 -c \
-  'import json,sys;print(json.load(sys.stdin).get("cwd",""))' 2>/dev/null)
+  'import json,sys;print(json.load(sys.stdin).get("cwd",""))' 2>/dev/null \
+  | grep -E '^/' | tail -1)
 [ -z "$cwd" ] && cwd="$PWD"
 repo=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || exit 0
 
