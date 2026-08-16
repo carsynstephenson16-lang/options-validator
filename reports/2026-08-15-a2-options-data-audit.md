@@ -218,6 +218,30 @@ and the interrupted merge did not preserve the other exact check-3 row. The
 completion requirement is exact selected-contract identities and values, not
 selective suppression of generic metadata warnings.
 
+### Exact CRWV selected-contract evidence
+
+A bounded reconstruction of CRWV completed independently of the interrupted
+fifteen-symbol merge: 309 chain sessions produced 259 signal days and 1,531
+selected rows. Check 10 found exactly **23 selected-contract failures**: 21
+with `iv = 0`, and two with `iv > 5`. This establishes a formal `BLOCK` on
+actual selected contracts, regardless of the incomplete all-symbol aggregate.
+
+Representative selected rows are:
+
+| Session | Right / expiration / strike | Bid / ask / delta | IV | Other reported Greeks | Check-10 reason |
+| --- | --- | --- | ---: | --- | --- |
+| 2025-05-14 | C / 2025-05-16 / 45 | 21.60 / 23.10 / 1.0000 | 0 | vega=0, gamma=0, theta=0 | non-positive IV |
+| 2026-04-17 | C / 2026-04-17 / 87 | 29.40 / 30.85 / 0.9670 | 8.2888 | — | IV exceeds 500% |
+| 2026-04-17 | C / 2026-04-17 / 90 | 26.65 / 27.10 / 0.9953 | 5.0531 | — | IV exceeds 500% |
+
+The alternate `chains_v2` corpus preserves the same invalid IV observations
+and provides no repair: older required dates are absent, no alternate IV
+column exists, and the implied-volatility solver is inadmissible for these
+rows. Do not substitute that corpus or solve/fill IV values. The formal audit
+result is therefore **BLOCK**, and historical A2 remains prohibited until the
+selected-contract IV defects are resolved through a governed data decision and
+a complete rerun produces the final merged audit.
+
 The historical A2 command remains prohibited. The next safe step is to obtain
 a completed programmatic streaming audit with its printed fourteen counts; it
 is not permissible to treat this partial attempt as a warning-only pass or to
