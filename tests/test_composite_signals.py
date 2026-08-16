@@ -753,14 +753,16 @@ class DashboardPanelSmokeTest(unittest.TestCase):
         self.assertIn("DATA_BLOCKED", html)
         self.assertIn("GRADE C", html)
 
-    def test_panel_omitted_when_no_cards(self):
+    def test_panel_shows_honest_empty_state_when_no_cards(self):
         from options_researcher import attractiveness_dashboard as ad
 
         data = ad.assemble(symbol_sections=[], rv21_by_symbol={}, blocked=[],
                            composite_signals=[])
         self.assertEqual(data["composite_signals"], [])
         html = ad.render(data)
-        self.assertNotIn("Composite signal board", html)
+        self.assertIn("Composite signal board", html)
+        self.assertIn("Highest agreement today: none at grade A", html)
+        self.assertIn("No composite cards are available for this board.", html)
 
     def test_default_composite_signals_key_present_without_injection(self):
         from options_researcher import attractiveness_dashboard as ad

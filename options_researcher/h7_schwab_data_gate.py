@@ -9,11 +9,81 @@ from pathlib import Path
 from data.cache_schema import CacheAuditReceiptError
 from options_researcher import h7_data_gate
 from options_researcher.h7_scope import scope_identity
+from research.hashing import sha256_file
 from tools.schwab_chain_manifest import SchwabChainManifestError, verify_session
 
 EVIDENCE_MODE = "REAL-H7-SCHWAB-PRECLOSE-AUDIT"
 SCHWAB_PACKAGE_INVALID = "SCHWAB_PACKAGE_INVALID"
 logger = logging.getLogger(__name__)
+
+
+def validate_receipt_scope_closure(
+    result: dict, expected_symbols: list[str]
+) -> dict[str, str]:
+    """Re-verify the complete Schwab package used by a gate result.
+
+    Receipt construction calls this independently of ``evaluate`` so a
+    previously valid result cannot outlive manifest, capture-receipt, or
+    parquet tampering.
+    """
+    records = result.get("symbols")
+    if not isinstance(records, dict):
+        raise ValueError("data-gate result lacks a verified Schwab package")
+
+    chain_dirs: set[Path] = set()
+    manifest_paths: set[Path] = set()
+    receipt_paths: set[Path] = set()
+    claimed_bindings: dict[str, dict] = {}
+    for symbol in expected_symbols:
+        record = records.get(symbol)
+        if not isinstance(record, dict):
+            raise ValueError("data-gate result lacks a verified Schwab package")
+        chain = record.get("chain")
+        if not isinstance(chain, dict):
+            raise ValueError("data-gate result lacks a verified Schwab package")
+        expected_path = chain.get("expected_path")
+        claimed = chain.get("audit_receipt")
+        if not isinstance(expected_path, str) or not isinstance(claimed, dict):
+            raise ValueError("data-gate result lacks a verified Schwab package")
+        manifest_path = claimed.get("manifest_path")
+        receipt_path = claimed.get("receipt_path")
+        if not isinstance(manifest_path, str) or not isinstance(receipt_path, str):
+            raise ValueError("data-gate result lacks a verified Schwab package")
+        chain_dirs.add(Path(expected_path).parent)
+        manifest_paths.add(Path(manifest_path))
+        receipt_paths.add(Path(receipt_path))
+        claimed_bindings[symbol] = claimed
+
+    if len(chain_dirs) != 1 or len(manifest_paths) != 1 or len(receipt_paths) != 1:
+        raise ValueError("data-gate result lacks a verified Schwab package")
+    chain_dir = next(iter(chain_dirs))
+    manifest_path = next(iter(manifest_paths))
+    receipt_path = next(iter(receipt_paths))
+    try:
+        package = verify_session(
+            str(result.get("evaluation_session")),
+            expected_symbols,
+            chain_dir,
+            manifest_path,
+            receipt_path,
+        )
+    except SchwabChainManifestError as exc:
+        raise ValueError("data-gate result lacks a verified Schwab package") from exc
+
+    expected_binding = {"valid": True, **package}
+    if any(
+        claimed_bindings[symbol] != expected_binding for symbol in expected_symbols
+    ):
+        raise ValueError("data-gate result lacks a verified Schwab package")
+    try:
+        capture_receipt_hash = sha256_file(receipt_path)
+    except OSError as exc:
+        raise ValueError("data-gate result lacks a verified Schwab package") from exc
+    return {
+        "causal_cutoff_utc": str(result.get("causal_cutoff_utc")),
+        "schwab_manifest_hash": package["manifest_hash"],
+        "schwab_capture_receipt_hash": capture_receipt_hash,
+    }
 
 
 def _package_no_go(

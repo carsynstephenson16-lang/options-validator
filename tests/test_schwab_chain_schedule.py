@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import plistlib
 import shlex
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -33,6 +35,23 @@ class SchwabChainScheduleTests(unittest.TestCase):
         )
         self.assertNotIn("options_researcher.intraday_capture", source)
         self.assertNotIn("tools/intraday_capture.sh", source)
+
+    def test_wrapper_refreshes_origin_main_before_comparing_head(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        fetch = source.index("fetch -q origin main")
+        read_remote = source.index(
+            'REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main'
+        )
+        branch_check = source.index('if [ "$BRANCH" != "main" ]')
+
+        # Offline refusal reasons stay honest: the branch check runs before
+        # the network fetch, and the fetch is bounded and prompt-free because
+        # it sits on the irreplaceable-capture critical path.
+        self.assertLess(branch_check, fetch)
+        self.assertLess(fetch, read_remote)
+        self.assertIn("GIT_TERMINAL_PROMPT=0", source)
+        self.assertIn("http.lowSpeedLimit=1000", source)
+        self.assertIn("http.lowSpeedTime=20", source)
 
     def test_plist_runs_only_weekdays_at_1545_et(self):
         payload = plistlib.loads(PLIST.read_bytes())
@@ -219,6 +238,231 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self.assertIn("hash-match-or-refuse", source)
         self.assertIn("docs/h7-forward-operations.md", source)
 
+    # --- owner decision D-3: evidence-only divergence tolerance -------------
+    #
+    # The gate's purpose is "no unreviewed CODE runs unattended". Strict SHA
+    # equality also refused when the only divergence was the daily ritual's own
+    # evidence commit whose fail-soft push had failed, turning a transient push
+    # failure into a permanently lost irreplaceable 15:45 capture (brief 11
+    # §9.2). Behind-divergence still refuses exactly as before.
+
+    def _run_alignment_gate(self, repo: Path) -> subprocess.CompletedProcess:
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        source = WRAPPER.read_text(encoding="utf-8")
+        start = source.index("# --- alignment gate")
+        end = source.index("# --- end alignment gate")
+        block = source[start:end]
+        script = "\n".join(
+            [
+                "REPO=" + shlex.quote(str(repo)),
+                'LOCAL_SHA="$(git -C "$REPO" rev-parse HEAD)"',
+                'REMOTE_SHA="$(git -C "$REPO" rev-parse origin/main)"',
+                block,
+                'echo "GATE PASSED"',
+            ]
+        )
+        return subprocess.run(
+            [zsh, "-c", script], capture_output=True, text=True, timeout=60
+        )
+
+    @staticmethod
+    def _git(repo: Path, *args: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            capture_output=True,
+            env={
+                "PATH": "/usr/bin:/bin:/usr/local/bin",
+                "HOME": str(repo),
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@example.com",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@example.com",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_SYSTEM": "/dev/null",
+            },
+        )
+
+    def _repo_with(self, *, ahead_paths: tuple[str, ...]) -> Path:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        repo = tmp / "checkout"
+        repo.mkdir()
+        self._git(repo, "init", "-q", "-b", "main")
+        (repo / "code.py").write_text("x = 1\n")
+        self._git(repo, "add", "code.py")
+        self._git(repo, "commit", "-qm", "base")
+        self._git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        for index, relative in enumerate(ahead_paths):
+            target = repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(f"payload {index}\n")
+            self._git(repo, "add", "--", relative)
+            self._git(repo, "commit", "-qm", f"ahead {relative}")
+        return repo
+
+    def test_alignment_gate_tolerates_evidence_only_divergence(self):
+        repo = self._repo_with(
+            ahead_paths=("reports/ritual/run_status.json", "ledger/facts.log")
+        )
+        completed = self._run_alignment_gate(repo)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("GATE PASSED", completed.stdout)
+        self.assertIn("evidence-only commit(s)", completed.stdout)
+        self.assertNotIn("REFUSED", completed.stdout)
+
+    def test_alignment_gate_refuses_a_code_commit_ahead(self):
+        repo = self._repo_with(ahead_paths=("options_researcher/h7_watch.py",))
+        completed = self._run_alignment_gate(repo)
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn(
+            "REFUSED: HEAD is not aligned with origin/main", completed.stdout
+        )
+        self.assertNotIn("GATE PASSED", completed.stdout)
+
+    def test_alignment_gate_refuses_a_mixed_evidence_and_code_commit(self):
+        repo = self._repo_with(
+            ahead_paths=("reports/ritual/run_status.json", "tools/daily_ritual.sh")
+        )
+        completed = self._run_alignment_gate(repo)
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn(
+            "REFUSED: HEAD is not aligned with origin/main", completed.stdout
+        )
+
+    def test_alignment_gate_still_refuses_when_behind_origin_main(self):
+        repo = self._repo_with(ahead_paths=("reports/ritual/run_status.json",))
+        # origin/main moves ahead of this checkout: the divergence is now
+        # "unreviewed-code-may-be-missing", which must refuse exactly as before.
+        self._git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        self._git(repo, "reset", "-q", "--hard", "HEAD~1")
+        completed = self._run_alignment_gate(repo)
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn(
+            "REFUSED: HEAD is not aligned with origin/main", completed.stdout
+        )
+
+    def test_alignment_gate_is_silent_when_exactly_aligned(self):
+        repo = self._repo_with(ahead_paths=())
+        completed = self._run_alignment_gate(repo)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("GATE PASSED", completed.stdout)
+        self.assertNotIn("evidence-only", completed.stdout)
+
+    def test_alignment_gate_refuses_an_evil_merge_that_edits_code(self):
+        """`git log --name-only` emits NO paths for a merge commit.
+
+        A merge whose own resolution edits a code file therefore reads as
+        "evidence-only" under per-commit enumeration. The tree diff sees the
+        code file, because the tree really does differ from origin/main.
+        """
+        repo = self._repo_with(ahead_paths=("reports/ritual/run_status.json",))
+        # Every ordinary commit ahead of origin/main touches evidence only; the
+        # code edit is introduced by the MERGE COMMIT ITSELF, which is what
+        # makes it invisible to per-commit enumeration.
+        self._git(repo, "checkout", "-q", "-b", "side", "origin/main")
+        side_evidence = repo / "reports" / "ritual" / "side.json"
+        side_evidence.parent.mkdir(parents=True, exist_ok=True)
+        side_evidence.write_text("{}\n")
+        self._git(repo, "add", "--", "reports/ritual/side.json")
+        self._git(repo, "commit", "-qm", "side evidence")
+        self._git(repo, "checkout", "-q", "main")
+        # Same hermetic identity env as _git — this call bypasses the helper
+        # only because it needs the returncode (a conflicted merge exits 1).
+        merge = subprocess.run(
+            ["git", "-C", str(repo), "merge", "--no-commit", "--no-ff", "side"],
+            capture_output=True,
+            text=True,
+            env={
+                "PATH": "/usr/bin:/bin:/usr/local/bin",
+                "HOME": str(repo),
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@example.com",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@example.com",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_SYSTEM": "/dev/null",
+            },
+        )
+        self.assertIn(merge.returncode, (0, 1), merge.stderr)
+        (repo / "code.py").write_text("x = 3  # smuggled in by the merge itself\n")
+        self._git(repo, "add", "code.py")
+        self._git(repo, "commit", "-qm", "evil merge")
+
+        # Precondition: the per-commit view really is blind here.
+        log_paths = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "log",
+                "--pretty=format:",
+                "--name-only",
+                "HEAD",
+                "--not",
+                "origin/main",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertNotIn("code.py", log_paths)
+
+        completed = self._run_alignment_gate(repo)
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn(
+            "REFUSED: HEAD is not aligned with origin/main", completed.stdout
+        )
+
+    def test_alignment_gate_refuses_a_code_file_renamed_into_an_evidence_path(self):
+        """`git log --name-only` reports only a rename's DESTINATION.
+
+        `git mv code.py reports/ritual/code.py` therefore reads as
+        evidence-only under per-commit enumeration; the tree diff (with
+        --no-renames) reports the deleted source path too.
+        """
+        repo = self._repo_with(ahead_paths=())
+        (repo / "reports" / "ritual").mkdir(parents=True)
+        self._git(repo, "mv", "code.py", "reports/ritual/code.py")
+        self._git(repo, "commit", "-qm", "move code into an evidence path")
+
+        completed = self._run_alignment_gate(repo)
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn(
+            "REFUSED: HEAD is not aligned with origin/main", completed.stdout
+        )
+
+    def test_alignment_gate_fails_closed_when_identity_is_unresolvable(self):
+        repo = self._repo_with(ahead_paths=("reports/ritual/run_status.json",))
+        source = WRAPPER.read_text(encoding="utf-8")
+        start = source.index("# --- alignment gate")
+        end = source.index("# --- end alignment gate")
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        # A repo whose origin/main cannot be resolved must refuse, never pass.
+        script = "\n".join(
+            [
+                "REPO=" + shlex.quote(str(repo / "does-not-exist")),
+                'LOCAL_SHA="a"',
+                'REMOTE_SHA="b"',
+                source[start:end],
+                'echo "GATE PASSED"',
+            ]
+        )
+        completed = subprocess.run(
+            [zsh, "-c", script], capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertNotIn("GATE PASSED", completed.stdout)
+
     def test_no_behavior_change_to_capture_module_itself(self):
         # Guard rail for this change's own scope: the wrapper may only ever
         # invoke the module as a subprocess, never import/monkeypatch it.
@@ -226,6 +470,35 @@ class SchwabChainScheduleTests(unittest.TestCase):
         self.assertIn(
             "python -m options_researcher.schwab_chain_capture", source
         )
+
+    # --- rev-2.1 item 3a: unattended-vs-manual capture provenance ----------
+    #
+    # Spec §7 condition 3, option 3a: the receipt's invocation_source is "set
+    # from an environment marker the plist sets and the wrapper does not".
+    # Both halves of that sentence are load-bearing and both are pinned here,
+    # because if the wrapper ever set the marker itself, every manual run
+    # would forge unattended provenance and S1's condition 3 would be a lie.
+
+    def test_plist_sets_the_unattended_invocation_marker(self):
+        payload = plistlib.loads(PLIST.read_bytes())
+        self.assertEqual(
+            payload["EnvironmentVariables"]["OPTIONS_VALIDATOR_INVOCATION_SOURCE"],
+            "launchd",
+        )
+
+    def test_wrapper_does_not_set_the_invocation_marker(self):
+        source = WRAPPER.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            self.assertNotIn("OPTIONS_VALIDATOR_INVOCATION_SOURCE=", line)
+
+    def test_wrapper_env_prefix_does_not_clear_the_inherited_environment(self):
+        # `env -i` would drop the plist's marker before python ever sees it,
+        # silently turning every unattended capture into a "manual" one.
+        source = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("CAP_OUT=\"$(env LIVE_MARKET_DATA_PROVIDER=schwab", source)
+        self.assertNotIn("env -i", source)
 
 
 if __name__ == "__main__":

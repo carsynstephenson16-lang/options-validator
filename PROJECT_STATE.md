@@ -82,9 +82,17 @@ measured on ThetaData EOD; 95% CI [0.62, 8.74] expected entries vs the
 pre-acceptance). Remaining before any activation: B2, fresh feasibility,
 Monday 15/15 canary + manifest verify, backup/restore drill, owner OD-3 +
 starvation decision, guarded registration, owner-authorized flip — plus a
-working Schwab OAuth session: the production refresh token is
-**expired/revoked** (`invalid_grant`, failure window Aug 7 evening–Aug 10);
-reauth steps in `reports/2026-08-12-schwab-auth-diagnosis.md`. **Unmerged
+working Schwab OAuth session. *(Status correction 2026-08-15: the token was
+re-authorized 2026-08-12 ~00:56 ET and both capture lanes verified 15/15 on
+08-12→08-14; the 2026-08-14 15:45 preclose canary SUCCEEDED. Refresh tokens
+hard-expire 7 days after creation — Official-source; refreshing an access
+token does NOT reset the clock; see the 2026-08-15 addendum to
+`reports/2026-08-12-schwab-auth-diagnosis.md` — so the current token dies
+~2026-08-19 00:56 ET unless re-authorized over the 08-15/16 weekend. NONE of
+the missing 08-10→08-13 PRECLOSE chain captures were Schwab failures: all
+four were the wrapper's own HEAD-vs-origin/main alignment guard refusing on a
+repo-side sync gap (it refuses before attempting auth), since cleared. The
+expired token broke only the intraday QUOTE lane, on 08-10/08-11.)* **Unmerged
 post-audit branches awaiting review/owner decision (not landed here):**
 `codex/h7-schwab-recovery` (Schwab registration CLI + feasibility identity
 binding + a new 2026-08-11 primary-earnings feasibility receipt — needs its
@@ -93,6 +101,65 @@ own independent adversarial review before merge), `codex/capitaliq-ownership-inp
 analyst-review specs), `codex/local-main-eea4700`,
 `codex/options-validator-plugins-design`. LOW-finding dispositions:
 `reports/repo-audits/2026-08-12-low-findings-disposition.md`.
+
+**Status refresh (2026-08-13; PM scope session, delegable drafting — no frozen
+number newly typed):** full audit in `reports/2026-08-13-pm-scope-audit.md`
+(three read-only agent audits + Opus adversarial review of the bundle, rev 1
+FAIL → rev 2 applied). Landed via this merge train (owner-directed "go on
+runbook" + FINRA integration authorization, in-session 2026-08-13):
+`codex/pre-canary-capture-hardening` @401f78b (review items H1/H2/H3/M-c;
+suite exit 0 pre-merge), `codex/capitaliq-ownership-inputs` (supersedes the
+local-main fork commit eea4700), `codex/short-positioning-phases-1-4`
+(FINRA short-interest context lane — owner-authorized integration; capture
+remains a manual CLI, no scheduled network job), and the 2026-08-13 docs
+(brief 07 = B2 receipt path, runbook 08 rev 2 = fork healing/ops sync/canary,
+brief 09 = H7 entry redesign). **Owner decisions taken 2026-08-13:**
+starvation → REDESIGN (brief 09; menu measured on frequency only, owner
+picks + types numbers at registration); ops-checkout sync approved.
+**Schwab token outage resolved:** failures 08-10 09:31→08-11 15:45; intraday
+capture 15/15 healthy since 08-12 09:31 (recovery Repo-verified; manual-reauth
+cause is Inference). **Fork healed this session** (ops worktree merged to
+origin/main tip); first canary attempt = next trading session 15:45 ET —
+freeze origin/main until it completes (the wrapper compares against
+last-fetched origin/main; see runbook 08 step 6). Still open: B2 (brief 07,
+sole code blocker), `codex/h7-schwab-recovery` adversarial review (running
+2026-08-13, receipt to land separately), backup/restore drill with real
+canary bytes, then owner OD-3 + registration + authority flip.
+`codex/handoff` (2c8332a) pushed but unmerged — overlaps landed M1 fixes,
+reconcile-don't-blind-merge. Four stale `codex/attractive-exp-*` branches
+remain deletion candidates (owner-approved batch, guard first).
+
+### 2026-08-14 addendum (supersedes stale lines above)
+
+**The "B2 still open" line above was stale when written** — B2 closed INSIDE
+the PR #35 merge train itself (`927dddd` reviewed FAIL → fixed in-session →
+`ab7611d` + `4c759ff`); reconstructed review receipt:
+`reports/h7_forward_schwab/2026-08-13-b2-adversarial-review-receipt.md`.
+**PR #35 merged 2026-08-13 late (58b1fd9, regular merge). CANARY SUCCESS
+2026-08-14 15:45 ET:** first real preclose capture, 15/15 names, manifest
+verified offline exit 0; evidence committed to main (13d48a9). Freeze
+lifted. **Six-agent fleet day (2026-08-14):** switched-off inventory, H7
+decision dossier, financial tie-out (caps all MATCH; two findings: $16k
+LEAPS bucket vs $14k sleeve dormant contradiction; dual 3/1050-vs-4/1050
+feasibility numbers pending slice A), brief 10 switch-on FAILED adversarial
+review and was WITHDRAWN (receipt
+`reports/2026-08-14-brief-10-adversarial-review-receipt.md`), replaced by
+**rev-2.1 spec** `docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md`
+(PASS WITH FIXES, all 18 findings applied; three-flag design; owner
+decisions D-1..D-6). **Recovery branch decomposed into slices** (whole-branch
+merge rejected): slice B backup hardening = PR #38 (drill prerequisite),
+slice A earnings repair = PR #39; registration CLI deferred to registration
+day. **Brief 09 variant menu BUILT and decisive**
+(`wt/brief09-variant-menu-0814` @ccd161f, V0 byte-reproduces 4/1050):
+NO variant clears the 20-entry bar; binding blockers are the earnings gate
+and liquidity admission (integrity rails); one-position-per-name arithmetic
+caps a 70-session window at ~15 (cohort-9) / ~25 (scope-15) entries. Owner
+options (a) longer window (b) pre-accept quoting the number (c) lower loss
+bar (d) capture-only — see
+`reports/2026-08-14-owner-decision-package.md` (single consolidated
+decision list). Mid-freeze incident: owner merged PR #36 10:28 ET; ops
+realigned 14:28 ET (4-hour canary-refusal window → new owner decision D-6,
+intra-day alignment check).
 
 ## 1. Executive verdict
 

@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
+_COST_SENSITIVITY_MULTIPLIERS: tuple[float, ...] = (1.5,)
+
 
 @dataclass(frozen=True, slots=True)
 class ParameterFoldResult:
@@ -84,7 +86,9 @@ def analyze_stability(
     for item in target:
         base = item.cost_stress_metrics.get(1.0)
         stressed = [
-            value for multiplier, value in item.cost_stress_metrics.items() if multiplier > 1.0
+            item.cost_stress_metrics[multiplier]
+            for multiplier in _COST_SENSITIVITY_MULTIPLIERS
+            if multiplier in item.cost_stress_metrics
         ]
         if (
             base is not None

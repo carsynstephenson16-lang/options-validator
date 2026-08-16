@@ -1,0 +1,1004 @@
+{
+  "as_of": "2026-08-10",
+  "display_only": true,
+  "limitations": [
+    "No composite score or rank is emitted.",
+    "Manager-level 13F observations do not identify a fund product.",
+    "Missing Capital IQ rows remain data gaps rather than zero-buy evidence."
+  ],
+  "retrieved_at": "2026-08-10T23:30:00-04:00",
+  "schema_version": "ownership-context/v1",
+  "symbols": [
+    {
+      "capitaliq_id": "14399568",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 37.37,
+            "change_shares": 2252543,
+            "held_shares": 8280763,
+            "holder": "Value Aligned Research Advisors",
+            "market_value_m": 730.3,
+            "orientation": "Active",
+            "pct_outstanding": 1.52,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 17.69,
+            "change_shares": 1079107,
+            "held_shares": 7177919,
+            "holder": "Situational Awareness LP",
+            "market_value_m": 633.0,
+            "orientation": "Active",
+            "pct_outstanding": 1.32,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": null,
+            "change_shares": 7097527,
+            "held_shares": 7097527,
+            "holder": "Aspex Management (HK) Limited",
+            "market_value_m": 625.9,
+            "orientation": "Active",
+            "pct_outstanding": 1.3,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "CRWV"
+    },
+    {
+      "capitaliq_id": "6963342",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 27.13,
+            "change_shares": 2050162,
+            "held_shares": 9607745,
+            "holder": "ARK Investment Management LLC",
+            "market_value_m": 529.0,
+            "orientation": "Active",
+            "pct_outstanding": 5.32,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 94.42,
+            "change_shares": 1940843,
+            "held_shares": 3996488,
+            "holder": "UBS Group AG",
+            "market_value_m": 220.0,
+            "orientation": "Active",
+            "pct_outstanding": 2.21,
+            "position_date": "2026-03-31",
+            "source": "Aggregated 13F"
+          },
+          {
+            "change_pct": 38.68,
+            "change_shares": 720112,
+            "held_shares": 2581644,
+            "holder": "Franklin Resources, Inc.",
+            "market_value_m": 142.1,
+            "orientation": "Active",
+            "pct_outstanding": 1.43,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "TEM"
+    },
+    {
+      "capitaliq_id": "5148548",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 1.23,
+            "change_shares": 257027,
+            "held_shares": 21087333,
+            "holder": "UBS Group AG",
+            "market_value_m": 3695.1,
+            "orientation": "Active",
+            "pct_outstanding": 0.88,
+            "position_date": "2026-03-31",
+            "source": "Multiple filings"
+          },
+          {
+            "change_pct": 0.67,
+            "change_shares": 139173,
+            "held_shares": 20901773,
+            "holder": "Northern Trust Corporation",
+            "market_value_m": 3662.6,
+            "orientation": "Active",
+            "pct_outstanding": 0.87,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 7.4,
+            "change_shares": 1203652,
+            "held_shares": 17472599,
+            "holder": "Morgan Stanley",
+            "market_value_m": 3061.7,
+            "orientation": "Active",
+            "pct_outstanding": 0.73,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "PLTR"
+    },
+    {
+      "capitaliq_id": "4587650",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 5.29,
+            "change_shares": 1714225,
+            "held_shares": 34109888,
+            "holder": "T. Rowe Price Associates, Inc.",
+            "market_value_m": 4347.0,
+            "orientation": "Active",
+            "pct_outstanding": 3.3,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 8.28,
+            "change_shares": 1433851,
+            "held_shares": 18741799,
+            "holder": "UBS Group AG",
+            "market_value_m": 2388.5,
+            "orientation": "Active",
+            "pct_outstanding": 1.81,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 57.46,
+            "change_shares": 4383656,
+            "held_shares": 12012742,
+            "holder": "Amundi",
+            "market_value_m": 1530.9,
+            "orientation": "Active",
+            "pct_outstanding": 1.16,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "NOW"
+    },
+    {
+      "capitaliq_id": "4276821",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 45.47,
+            "change_shares": 4949586,
+            "held_shares": 15835116,
+            "holder": "UBS Group AG",
+            "market_value_m": 498.2,
+            "orientation": "Active",
+            "pct_outstanding": 2.45,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 15612.2,
+            "change_shares": 7142269,
+            "held_shares": 7188017,
+            "holder": "Marshall Wace LLP",
+            "market_value_m": 226.1,
+            "orientation": "Active",
+            "pct_outstanding": 1.11,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": null,
+            "change_shares": 6220438,
+            "held_shares": 6220438,
+            "holder": "Defiance ETFs, LLC",
+            "market_value_m": 195.7,
+            "orientation": "Active",
+            "pct_outstanding": 0.96,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "SMCI"
+    },
+    {
+      "capitaliq_id": "4094286",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 2.17,
+            "change_shares": 19222016,
+            "held_shares": 906542748,
+            "holder": "FMR LLC",
+            "market_value_m": 197218.4,
+            "orientation": "Active",
+            "pct_outstanding": 3.74,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 3.77,
+            "change_shares": 15477632,
+            "held_shares": 425554774,
+            "holder": "Capital Research and Management Company",
+            "market_value_m": 92579.4,
+            "orientation": "Active",
+            "pct_outstanding": 1.76,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 3.21,
+            "change_shares": 8778008,
+            "held_shares": 282147463,
+            "holder": "UBS Group AG",
+            "market_value_m": 61381.2,
+            "orientation": "Active",
+            "pct_outstanding": 1.16,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "NVDA"
+    },
+    {
+      "capitaliq_id": "4066743",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 26.42,
+            "change_shares": 7593982,
+            "held_shares": 36333199,
+            "holder": "T. Rowe Price Associates, Inc.",
+            "market_value_m": 17060.6,
+            "orientation": "Active",
+            "pct_outstanding": 2.23,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 9.33,
+            "change_shares": 2304641,
+            "held_shares": 27009527,
+            "holder": "UBS Group AG",
+            "market_value_m": 12682.6,
+            "orientation": "Active",
+            "pct_outstanding": 1.65,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 8.7,
+            "change_shares": 1338887,
+            "held_shares": 16731145,
+            "holder": "J.P. Morgan Asset Management",
+            "market_value_m": 7856.3,
+            "orientation": "Active",
+            "pct_outstanding": 1.02,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "AMD"
+    },
+    {
+      "capitaliq_id": "4970473",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 0.07,
+            "change_shares": 71545,
+            "held_shares": 106759550,
+            "holder": "FMR LLC",
+            "market_value_m": 45095.2,
+            "orientation": "Active",
+            "pct_outstanding": 2.24,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 11.39,
+            "change_shares": 6514043,
+            "held_shares": 63684851,
+            "holder": "UBS Group AG",
+            "market_value_m": 26900.5,
+            "orientation": "Active",
+            "pct_outstanding": 1.34,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 4.86,
+            "change_shares": 2302102,
+            "held_shares": 49687982,
+            "holder": "Wellington Management Group LLP",
+            "market_value_m": 20988.2,
+            "orientation": "Active",
+            "pct_outstanding": 1.04,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "AVGO"
+    },
+    {
+      "capitaliq_id": "27845249",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 897.19,
+            "change_shares": 18918539,
+            "held_shares": 21027180,
+            "holder": "Bank of America Corporation",
+            "market_value_m": 814.6,
+            "orientation": "Active",
+            "pct_outstanding": 5.88,
+            "position_date": "2026-06-30",
+            "source": "Exchange announcement"
+          },
+          {
+            "change_pct": null,
+            "change_shares": 12671028,
+            "held_shares": 12671028,
+            "holder": "Defiance ETFs, LLC",
+            "market_value_m": 490.9,
+            "orientation": "Active",
+            "pct_outstanding": 3.55,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 34.46,
+            "change_shares": 2998214,
+            "held_shares": 11698835,
+            "holder": "Situational Awareness LP",
+            "market_value_m": 453.2,
+            "orientation": "Active",
+            "pct_outstanding": 3.27,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "IREN"
+    },
+    {
+      "capitaliq_id": "19134071",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": null,
+            "change_shares": 4854970,
+            "held_shares": 4854970,
+            "holder": "Trustees of the University of Pennsylvania",
+            "market_value_m": 92.4,
+            "orientation": "Active",
+            "pct_outstanding": 1.98,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": null,
+            "change_shares": 4242941,
+            "held_shares": 4242941,
+            "holder": "Hood River Capital Management LLC",
+            "market_value_m": 80.8,
+            "orientation": "Active",
+            "pct_outstanding": 1.73,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 196.76,
+            "change_shares": 2659409,
+            "held_shares": 4010979,
+            "holder": "UBS Group AG",
+            "market_value_m": 76.4,
+            "orientation": "Active",
+            "pct_outstanding": 1.64,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "USAR"
+    },
+    {
+      "capitaliq_id": "4111501",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 97.04,
+            "change_shares": 35485508,
+            "held_shares": 72055459,
+            "holder": "JPMorgan Chase & Co.",
+            "market_value_m": 1483.6,
+            "orientation": "Active",
+            "pct_outstanding": 2.09,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 0.09,
+            "change_shares": 50572,
+            "held_shares": 54989726,
+            "holder": "Invesco Ltd.",
+            "market_value_m": 1132.2,
+            "orientation": "Active",
+            "pct_outstanding": 1.6,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 4.93,
+            "change_shares": 1860756,
+            "held_shares": 39642221,
+            "holder": "Morgan Stanley Investment Management",
+            "market_value_m": 816.2,
+            "orientation": "Active",
+            "pct_outstanding": 1.15,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "ET"
+    },
+    {
+      "capitaliq_id": "4085953",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "EXPLICIT_NO_MATCHES",
+        "eligible_purchase_count": 0,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 3.0,
+            "change_shares": 189650,
+            "held_shares": 6502249,
+            "holder": "Morgan Stanley",
+            "market_value_m": 929.0,
+            "orientation": "Active",
+            "pct_outstanding": 1.93,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 18.72,
+            "change_shares": 975700,
+            "held_shares": 6187585,
+            "holder": "Lone Pine Capital LLC",
+            "market_value_m": 884.0,
+            "orientation": "Active",
+            "pct_outstanding": 1.84,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 46.16,
+            "change_shares": 1947745,
+            "held_shares": 6167637,
+            "holder": "UBS Group AG",
+            "market_value_m": 881.2,
+            "orientation": "Active",
+            "pct_outstanding": 1.83,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "VST"
+    },
+    {
+      "capitaliq_id": "4072145",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 13.3,
+            "change_shares": 768851,
+            "held_shares": 6550484,
+            "holder": "Morgan Stanley",
+            "market_value_m": 1771.4,
+            "orientation": "Active",
+            "pct_outstanding": 1.85,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 85.79,
+            "change_shares": 2527778,
+            "held_shares": 5474323,
+            "holder": "T. Rowe Price Associates, Inc.",
+            "market_value_m": 1480.4,
+            "orientation": "Active",
+            "pct_outstanding": 1.55,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 3.37,
+            "change_shares": 119149,
+            "held_shares": 3653750,
+            "holder": "UBS Group AG",
+            "market_value_m": 988.1,
+            "orientation": "Active",
+            "pct_outstanding": 1.03,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "CEG"
+    },
+    {
+      "capitaliq_id": "4004214",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 9.81,
+            "change_shares": 8649793,
+            "held_shares": 96866844,
+            "holder": "UBS Group AG",
+            "market_value_m": 49020.4,
+            "orientation": "Active",
+            "pct_outstanding": 1.3,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 10.22,
+            "change_shares": 6046085,
+            "held_shares": 65222945,
+            "holder": "Morgan Stanley",
+            "market_value_m": 33006.7,
+            "orientation": "Active",
+            "pct_outstanding": 0.88,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": null,
+            "change_shares": 9473654,
+            "holder": "Amundi",
+            "note": "Only the captured change field was retained; uncaptured holding fields are omitted.",
+            "orientation": "Active",
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "MSFT"
+    },
+    {
+      "capitaliq_id": "3001792",
+      "display_only_extra": false,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 7.53,
+            "change_shares": 22484561,
+            "held_shares": 321143728,
+            "holder": "FMR LLC",
+            "market_value_m": 89306.9,
+            "orientation": "Active",
+            "pct_outstanding": 2.98,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 9.98,
+            "change_shares": 19503272,
+            "held_shares": 214916364,
+            "holder": "Capital Research and Management Company",
+            "market_value_m": 59766.1,
+            "orientation": "Active",
+            "pct_outstanding": 1.99,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 3.67,
+            "change_shares": 3832022,
+            "held_shares": 108278395,
+            "holder": "UBS Group AG",
+            "market_value_m": 30111.1,
+            "orientation": "Active",
+            "pct_outstanding": 1.0,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "AMZN"
+    },
+    {
+      "capitaliq_id": "4884349",
+      "display_only_extra": true,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": null,
+            "change_shares": 12410060,
+            "held_shares": 12410060,
+            "holder": "Situational Awareness LP",
+            "market_value_m": 2284.8,
+            "orientation": "Active",
+            "pct_outstanding": 4.85,
+            "position_date": "2026-05-19",
+            "source": "Exchange announcement"
+          },
+          {
+            "change_pct": 20.93,
+            "change_shares": 1661403,
+            "held_shares": 9599306,
+            "holder": "Fred Alger Management, LLC",
+            "market_value_m": 1767.3,
+            "orientation": "Active",
+            "pct_outstanding": 3.75,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 149.29,
+            "change_shares": 4979408,
+            "held_shares": 8314766,
+            "holder": "Orbis Investment Management Limited",
+            "market_value_m": 1530.8,
+            "orientation": "Active",
+            "pct_outstanding": 3.25,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "NBIS"
+    },
+    {
+      "capitaliq_id": "4073928",
+      "display_only_extra": true,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": 4.33,
+            "change_shares": 297109,
+            "held_shares": 7161621,
+            "holder": "Amundi",
+            "market_value_m": 3739.2,
+            "orientation": "Active",
+            "pct_outstanding": 0.9,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 27.43,
+            "change_shares": 1380826,
+            "held_shares": 6414029,
+            "holder": "The Goldman Sachs Group, Inc.",
+            "market_value_m": 3348.9,
+            "orientation": "Active",
+            "pct_outstanding": 0.81,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 0.62,
+            "change_shares": 39373,
+            "held_shares": 6411792,
+            "holder": "Legal & General Group Plc",
+            "market_value_m": 3347.7,
+            "orientation": "Active",
+            "pct_outstanding": 0.81,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          }
+        ]
+      },
+      "symbol": "AMAT"
+    },
+    {
+      "capitaliq_id": "4988767",
+      "display_only_extra": true,
+      "fund": {
+        "coverage": "DATA_GAP",
+        "eligible_product_count": null,
+        "events": []
+      },
+      "insider": {
+        "coverage": "NO_VISIBLE_ROWS",
+        "eligible_purchase_count": null,
+        "events": []
+      },
+      "institutional": {
+        "active_buyer_count": 3,
+        "coverage": "PARTIAL",
+        "events": [
+          {
+            "change_pct": null,
+            "change_shares": 14791062,
+            "held_shares": 14791062,
+            "holder": "The Bank of Nova Scotia",
+            "market_value_m": 171.4,
+            "orientation": "Active",
+            "pct_outstanding": 5.76,
+            "position_date": "2026-06-30",
+            "source": "Exchange announcement"
+          },
+          {
+            "change_pct": 648.36,
+            "change_shares": 10635739,
+            "held_shares": 12276139,
+            "holder": "Situational Awareness LP",
+            "market_value_m": 142.3,
+            "orientation": "Active",
+            "pct_outstanding": 4.78,
+            "position_date": "2026-03-31",
+            "source": "13F"
+          },
+          {
+            "change_pct": 82.51,
+            "change_shares": 5308191,
+            "held_shares": 11741615,
+            "holder": "D. E. Shaw & Co., L.P.",
+            "market_value_m": 136.1,
+            "orientation": "Active",
+            "pct_outstanding": 4.58,
+            "position_date": "2026-07-10",
+            "source": "Exchange announcement"
+          }
+        ]
+      },
+      "symbol": "CLSK"
+    }
+  ],
+  "universe": [
+    "CRWV",
+    "TEM",
+    "PLTR",
+    "NOW",
+    "SMCI",
+    "NVDA",
+    "AMD",
+    "AVGO",
+    "IREN",
+    "USAR",
+    "ET",
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN",
+    "NBIS",
+    "AMAT",
+    "CLSK"
+  ],
+  "verdict_eligible": false
+}

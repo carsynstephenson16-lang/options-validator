@@ -41,28 +41,68 @@ _EXPERIMENT_DEFAULTS = {
     },
 }
 
-class ExperimentBaselineTests(unittest.TestCase):
-    def test_production_dashboard_has_no_experiment_references(self):
-        source = Path(dashboard.__file__).read_text()
-        if "experiment" in source.lower():
-            self.fail("production dashboard still contains experiment markers")
 
-    def test_production_dashboard_has_no_experiment_imports(self):
-        tree = ast.parse(Path(dashboard.__file__).read_text())
-        imported_modules = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                imported_modules.extend(alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                imported_modules.append(node.module)
-        self.assertFalse(
-            any(
-                module.startswith("options_researcher.exp_")
-                or module == "options_researcher.experiments_dashboard"
-                for module in imported_modules
-            ),
-            imported_modules,
+def _experiment_boundary_violations(source: str) -> list[str]:
+    """Return prohibited experiment imports or resolved calls in Python source."""
+    tree = ast.parse(source)
+    aliases: dict[str, str] = {}
+    violations: list[str] = []
+
+    def prohibited(path: str) -> bool:
+        return (
+            path.startswith("options_researcher.exp_")
+            or path == "options_researcher.experiments_dashboard"
+            or path.startswith("options_researcher.experiments_dashboard.")
         )
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for imported in node.names:
+                local = imported.asname or imported.name.split(".")[0]
+                aliases[local] = imported.name
+                if prohibited(imported.name):
+                    violations.append(f"import {imported.name}")
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if prohibited(module):
+                violations.append(f"from {module}")
+            for imported in node.names:
+                target = f"{module}.{imported.name}" if module else imported.name
+                aliases[imported.asname or imported.name] = target
+                if prohibited(target):
+                    violations.append(f"from {target}")
+
+    def resolved_name(node: ast.expr) -> str:
+        if isinstance(node, ast.Name):
+            return aliases.get(node.id, node.id)
+        if isinstance(node, ast.Attribute):
+            parent = resolved_name(node.value)
+            return f"{parent}.{node.attr}" if parent else node.attr
+        return ""
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            called = resolved_name(node.func)
+            if prohibited(called):
+                violations.append(f"call {called}")
+    return violations
+
+
+class ExperimentBaselineTests(unittest.TestCase):
+    def test_production_dashboard_has_no_experiment_imports(self):
+        self.assertFalse(_experiment_boundary_violations(Path(dashboard.__file__).read_text()))
+
+    def test_boundary_rejects_direct_from_and_aliased_experiment_forms(self):
+        fixtures = (
+            "import options_researcher.exp_tbill_carry",
+            "from options_researcher import exp_tbill_carry\nexp_tbill_carry.main()",
+            "from options_researcher.exp_tbill_carry import main as build\nbuild()",
+            "import options_researcher.experiments_dashboard as desk\ndesk.main()",
+            "import options_researcher as research\nresearch.exp_beta_qqq.build()",
+        )
+        for source in fixtures:
+            with self.subTest(source=source):
+                self.assertTrue(_experiment_boundary_violations(source))
 
     def test_module_entry_no_args_matches_production_command(self):
         repo_root = Path(__file__).resolve().parents[1]
@@ -93,7 +133,7 @@ class ExperimentBaselineTests(unittest.TestCase):
         )
         self.assertIn("wrote ", without_experiments.stdout)
         baseline_html = output.read_text()
-        self.assertEqual(baseline_html.lower().count("experiment"), 0)
+        self.assertIn("EXPERIMENTS SHELF", baseline_html)
 
     def test_config_matches_every_module_frozen_default(self):
         source_names_by_module = {}

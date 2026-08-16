@@ -13,7 +13,7 @@ Carsyn is an options beginner. She is NOT a finance beginner — she knows equit
 2. Every options term you use gets a one-line definition the FIRST time it appears in the response. After that, use it freely.
 3. If the topic is a specific trade or strategy, always state: max profit, max loss, breakeven, and whether early assignment is possible (and what would trigger it).
 4. State the bet in one sentence: "This trade makes money if ___ and loses money if ___."
-5. Use her actual position as the example when one exists (her project trades put credit spreads on CEG, VST, MSFT, AMZN). Concrete numbers beat abstractions: "sell the $140 put, buy the $135 put" not "sell a put at strike K1."
+5. Use her actual position or a registered strategy as the example when one exists. The registered structures: H5 sells cash-secured puts and covered calls for income; H6/H8 buy calls around earnings; H7's long lanes (a/b) route on implied vs realized volatility into either a single long call (IV at or below RV) or a call debit spread (IV modestly above RV), and lane c sells put credit spreads when IV is rich — on names like VST, CEG, MSFT, AMZN. Check README.md "Scope status" before presenting any of them as currently running — a paused window may need a fresh registration to restart. Concrete numbers beat abstractions: "sell the $140 put, buy the $135 put" not "sell a put at strike K1."
 6. Never say "as you know" about options mechanics. Never assume she knows a term because it appeared in her own code — code she wrote with an agent's help is exactly where hidden gaps live.
 
 ## Output format

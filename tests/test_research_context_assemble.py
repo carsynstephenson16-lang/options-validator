@@ -1031,6 +1031,62 @@ class BoardRootTest(unittest.TestCase):
         self.assertEqual(Path.cwd(), original_cwd)
         self.assertEqual(result, ({"data_as_of": AS_OF}, AS_OF, [], []))
 
+    def test_a_pre_close_board_date_stays_coherent_downstream(self):
+        """brief 12 D3: data_as_of may now be a 15:45 pre-close session.
+
+        The artifact consumer must carry that exact date through (no
+        re-derivation, no silent substitution) and QM must be asked for the
+        board session, not for its own daily-bar session.
+        """
+        preclose_session = "2026-08-14"
+        asked: list[str] = []
+
+        def assemble():
+            return {"data_as_of": preclose_session,
+                    "as_of_kind": "schwab_preclose",
+                    "fresh_symbols": ["NVDA"],
+                    "symbols": []}
+
+        def load_qm_context(board_session):
+            asked.append(board_session)
+            return {"status": "CURRENT", "as_of": "2026-08-13",
+                    "board_session": board_session, "symbols": {}}
+
+        with tempfile.TemporaryDirectory() as temp:
+            board_root = Path(temp).resolve()
+            with (
+                mock.patch.dict(
+                    os.environ, {"RESEARCH_BOARD_ROOT": str(board_root)}
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.assemble",
+                    side_effect=assemble,
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.select_top_picks",
+                    return_value=[],
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.select_qm_top_picks",
+                    return_value=[],
+                ),
+                mock.patch(
+                    "options_researcher.attractiveness_dashboard.pinned_picks",
+                    return_value=[],
+                ),
+                mock.patch(
+                    "options_researcher.qm_dashboard.load_qm_context",
+                    side_effect=load_qm_context,
+                ),
+            ):
+                data, as_of, candidate_ids, pinned = (
+                    research_context_assemble._live_board())
+
+        self.assertEqual(as_of, preclose_session)
+        self.assertEqual(data["data_as_of"], preclose_session)
+        self.assertEqual(asked, [preclose_session])
+        self.assertEqual((candidate_ids, pinned), ([], []))
+
 
 if __name__ == "__main__":
     unittest.main()

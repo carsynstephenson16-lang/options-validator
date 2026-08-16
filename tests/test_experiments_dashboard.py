@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -42,26 +43,31 @@ def _card(experiment_id: str, symbol: str = "MSFT") -> dict:
 class ExperimentsDashboardTests(unittest.TestCase):
     def test_module_entry_builds_all_lanes_with_empty_cache(self):
         repo_root = Path(__file__).resolve().parents[1]
-        output = repo_root / ".tmp" / "dashboard" / "experiments.html"
-        original = output.read_bytes() if output.exists() else None
-
-        def restore_output() -> None:
-            if original is None:
-                output.unlink(missing_ok=True)
-            else:
-                output.parent.mkdir(parents=True, exist_ok=True)
-                output.write_bytes(original)
-
-        self.addCleanup(restore_output)
-        output.unlink(missing_ok=True)
-        env = {**os.environ, "ATTRACTIVENESS_INPUT_ROOT": str(repo_root)}
+        # Every cache path in this repo (.cache/underlying, .cache/chains,
+        # .tmp/dashboard) is cwd-relative, so an empty scratch cwd is the
+        # empty-cache contract regardless of the checkout's own .cache state
+        # (the ops deployment symlinks a fully populated cache into place).
+        scratch_ctx = tempfile.TemporaryDirectory()
+        scratch = Path(scratch_ctx.name)
+        self.addCleanup(scratch_ctx.cleanup)
+        python_path = os.pathsep.join(
+            [str(repo_root)]
+            + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
+        )
+        env = {
+            **os.environ,
+            "PYTHONPATH": python_path,
+            "OPTIONS_CACHE_DIR": str(scratch / ".cache" / "chains"),
+            "ATTRACTIVENESS_INPUT_ROOT": str(scratch),
+        }
         result = subprocess.run(
             [sys.executable, "-m", "options_researcher.experiments_dashboard"],
-            cwd=repo_root,
+            cwd=scratch,
             env=env,
             capture_output=True,
             text=True,
         )
+        output = scratch / ".tmp" / "dashboard" / "experiments.html"
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("wrote ", result.stdout)

@@ -1,0 +1,18 @@
+[
+  {
+    "accountingYearMonthNumber": 202607,
+    "averageDailyVolumeQuantity": 500000,
+    "changePercent": 31.0,
+    "changePreviousNumber": 310000,
+    "currentShortPositionQuantity": 1310000,
+    "daysToCoverQuantity": 2.62,
+    "issueName": "ZEPHYR QUANTA HOLDINGS INC COMMON STOCK",
+    "issuerServicesGroupExchangeCode": "Q",
+    "marketClassCode": "NNM",
+    "previousShortPositionQuantity": 1000000,
+    "revisionFlag": "Y",
+    "settlementDate": "2026-07-15",
+    "stockSplitFlag": null,
+    "symbolCode": "ZQXA"
+  }
+]

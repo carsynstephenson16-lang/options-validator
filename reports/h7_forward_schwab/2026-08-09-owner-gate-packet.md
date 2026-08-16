@@ -35,7 +35,23 @@ Owner must choose and type exactly one path after review:
 - **[OWNER TYPES REDESIGN DECISION HERE]**, or
 - **[OWNER TYPES EXPLICIT STARVATION-RISK PRE-ACCEPTANCE CLAUSE HERE, quoting 3/1050, base rate 0.002857142857142857, expected entries 3.0, and the 10-loss bar].**
 
-Current state: **[NO CHOICE TYPED]**.
+Current state: **REDESIGN chosen** — *TRANSCRIBED, NOT OWNER-TYPED* —
+transcription of the owner's recorded
+2026-08-13 in-session decision (this is a transcription for provenance
+hygiene, not a new decision; transcribed 2026-08-15 per decision-package
+item 7, "re-type the 08-13 redesign decision into the packet's designated
+slot"). Source of record: `PROJECT_STATE.md` 2026-08-13 status block, commit
+`74a82a8`, verbatim: "Owner decisions taken 2026-08-13: starvation →
+REDESIGN (brief 09; menu measured on frequency only, owner picks + types
+numbers at registration); ops-checkout sync approved." Subsequent owner
+ruling 2026-08-14 lowered the loss bar to **7** (feasibility bar 2×7 = 14;
+`reports/2026-08-14-owner-answers-decision-menu.md`, owner wording "lets use
+7 as well but i want to watch it fire"). The redesign menu's measured result
+(`reports/h7_forward_schwab/2026-08-14-entry-redesign-variant-menu.md`): no
+variant clears 14 once the registered one-position-per-name occupancy limit
+applies; the variant choice (or an explicit starvation pre-acceptance at the
+lowered bar) therefore remains the one open owner decision, per the bar-7
+packet draft §4.
 
 ## New numeric parameter provenance
 
@@ -53,6 +69,19 @@ Current state: **[NO CHOICE TYPED]**.
 The patch is stored at
 `reports/h7_forward_schwab/2026-08-09-authority-flip.PREPARED.patch`. It changes
 only `exact_session_source_active=True`, `h7_active=True`, and matching tests.
+
+> **CORRECTION 2026-08-14 (brief 11 §5).** That sentence assumed **two** flags.
+> `data/ritual_authority.py` now carries **three**: the switch-on added
+> `ritual_data_phase_active`, and `evaluate_full_ritual()` is monotone — it
+> requires **all three**. A registration-day operator who flips only
+> `exact_session_source_active` and `h7_active` will be surprised by a third
+> flag and the full tier will still refuse. The stored patch is also **STALE —
+> DO NOT APPLY**: both of its hunks break at HEAD, and it must be **regenerated
+> at registration** against the then-current tree (the file itself now carries
+> that marker). Note the tests no longer need a matching edit: they run through
+> the `main(argv, authority=...)` injection seam and assert nothing about
+> `CURRENT_AUTHORITY`'s live values.
+
 It must not be applied or committed until all of these occur in order:
 
 1. Monday canary is 15/15 and its manifest verifies.

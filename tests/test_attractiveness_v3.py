@@ -278,7 +278,7 @@ class RenderHonestyTests(unittest.TestCase):
         html = ad.render(self._data_one_fit_one_big())
         self.assertEqual(html.count('<div class="hero-card '), 6)
         self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", html)
-        self.assertIn("ORIGINAL MECHANICAL TOP 3", html)
+        self.assertIn("Rule-based top 3 — best policy-and-liquidity fit today", html)
         self.assertIn("Pick 3", html)
         self.assertIn("No qualifying contract", html)
         self.assertIn("not missing UI", html)

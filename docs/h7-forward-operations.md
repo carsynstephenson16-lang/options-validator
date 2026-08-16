@@ -37,8 +37,17 @@ synthetic bytes for operational durability evidence.
 uv run python tools/h7_forward_backup.py backup \
   --completed-session YYYY-MM-DD
 uv run python tools/h7_forward_backup.py restore-check \
+  --backup-receipt <path of the backup receipt written by the command above> \
   --completed-session YYYY-MM-DD
 ```
+
+`restore-check` no longer accepts `--snapshot latest` (hardening, 2026-08-14).
+`--backup-receipt` is REQUIRED: the tool reads that receipt, restores the exact
+`snapshot_id` it names, and refuses unless the restored inventory equals the
+receipt's `input_files` exactly. `--snapshot` is now optional and only asserts
+that the caller's expected id matches the receipt's; a mismatch is refused.
+"Latest" was never durability evidence — it can silently resolve to a different
+snapshot than the one being attested.
 
 Stage 8 remains closed. The only real-store writer is
 `tools/h7_manual_activate.py`; it requires the literal confirmation token,
@@ -88,3 +97,46 @@ preclose timing tolerance), `SCHWAB CHAIN RECEIPT CONFLICT`, a partial
 per-symbol `SCHWAB CHAIN PARTIAL FAILURE`, or a generic unrecognized-failure
 fallback -- and fires a single `osascript` desktop notification (a silent
 no-op off macOS) summarizing the result either way.
+
+## Checkout alignment rules R1 / R2 (brief 11 §9.1)
+
+`docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md` §9 is the
+source; these are the numbered operator steps.
+
+1. **R1 — fast-forward after every merge.** *Any* merge to `origin/main`, by
+   any session, agent, or the owner, is not complete until **both** production
+   checkouts are fast-forwarded:
+
+   ```bash
+   git -C ~/options-validator-ops fetch -q origin main && git -C ~/options-validator-ops merge --ff-only origin/main
+   git -C ~/options-validator-research fetch -q origin main && git -C ~/options-validator-research merge --ff-only origin/main
+   git -C ~/options-validator-ops rev-parse HEAD          # must equal origin/main
+   git -C ~/options-validator-research rev-parse HEAD     # must equal origin/main
+   ```
+
+   If `--ff-only` refuses, **STOP**: ops holds local commits — usually the
+   ritual's own evidence commit after a failed fail-soft push. Do not merge or
+   reset; diagnose first, and never drop the evidence commit to satisfy a
+   guard.
+
+2. **R2 — pre-canary self-check, before 15:45 ET on every trading day.**
+   Confirm, after a fetch, that `git -C ~/options-validator-ops rev-parse HEAD`
+   equals `git -C ~/options-validator-ops rev-parse origin/main`. A refusal at
+   15:45 loses that session's chains **permanently**.
+
+   Since owner decision D-3 (2026-08-14) the wrapper tolerates one specific
+   divergence: HEAD **ahead** of `origin/main` by commits that touch only
+   evidence allow-list paths (the ritual's own unpushed evidence). Everything
+   else still refuses — a code commit ahead, or being **behind** `origin/main`
+   at all. The ritual now also raises a failed push to CRITICAL with the
+   realign command in the notification, so the ahead-case is loud on the
+   morning it happens.
+
+   > **R2 is unenforced today and has already failed once.** On 2026-08-14 PR
+   > #36 merged at 10:28:03 ET and ops was realigned only at 14:28:10 ET — four
+   > hours behind `origin/main`, undetected; nothing but a human happening to
+   > act closed the gap. Whether R2 becomes a mechanism (**D-6a**: a scheduled
+   > pre-15:45 alignment check — a NEW plist, so it needs an owner
+   > `launchctl bootstrap`), stays this documented manual step (**D-6b**), or
+   > the risk is explicitly accepted and written down (**D-6c**) is **owner
+   > decision D-6 — PENDING**. This section is the D-6b minimum in the interim.
