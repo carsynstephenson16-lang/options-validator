@@ -18,10 +18,17 @@ command -v gitleaks >/dev/null 2>&1 || brew install gitleaks
 
 echo "== cache GitHub login (ownership gate for the global auto-push hook) =="
 mkdir -p "$HOME/.config/repo-reconcile"
-gh api user -q .login > "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null
-[ -s "$HOME/.config/repo-reconcile/gh-login" ] \
-  && echo "   login cached: $(cat "$HOME/.config/repo-reconcile/gh-login")" \
-  || echo "   WARNING: could not resolve gh login — auto-push stays disabled (fail closed) until this file exists"
+# Capture first, write only on success: a transient gh failure must neither
+# truncate a previously valid cache nor kill the installer via set -e.
+gh_login=$(gh api user -q .login 2>/dev/null) || gh_login=""
+if [ -n "$gh_login" ]; then
+  echo "$gh_login" > "$HOME/.config/repo-reconcile/gh-login"
+  echo "   login cached: $gh_login"
+elif [ -s "$HOME/.config/repo-reconcile/gh-login" ]; then
+  echo "   gh lookup failed — keeping existing cached login: $(cat "$HOME/.config/repo-reconcile/gh-login")"
+else
+  echo "   WARNING: could not resolve gh login — auto-push stays disabled (fail closed) until this file exists"
+fi
 
 echo "== L2 helper scripts (hooks registered manually per README) =="
 cp "$here/claude-session-rescue.sh" "$here/worktree-remove-guard.sh" "$HOME/bin/"
@@ -31,7 +38,9 @@ echo "== L3: daily reconciler =="
 cp "$here/repo-reconcile" "$HOME/bin/repo-reconcile"
 chmod +x "$HOME/bin/repo-reconcile"
 cp "$here/com.carsyn.repo-reconcile.plist" "$HOME/Library/LaunchAgents/"
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.carsyn.repo-reconcile.plist" 2>/dev/null
+# Conditional so set -e survives the routine already-loaded case; the
+# launchctl print check below is the real verdict either way.
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.carsyn.repo-reconcile.plist" 2>/dev/null || true
 # Verify the service is actually loaded: bootstrap fails for many reasons
 # besides "already loaded" (bad plist, wrong domain, permissions), and a
 # swallowed failure would silently leave the daily safety-net layer absent.

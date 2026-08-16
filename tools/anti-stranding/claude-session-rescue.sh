@@ -26,5 +26,21 @@ if ! git -C "$repo" diff --quiet 2>/dev/null || ! git -C "$repo" diff --cached -
     -m "Auto-committed by SessionEnd hook. Tracked files only; untracked files were left alone and appear in the daily reconciler digest." 2>/dev/null
 fi
 
+# Same gates as the post-commit hook — a rescue commit must not bypass them:
+# never push to an origin the owner doesn't own (fail closed without the
+# cached login), and never publish a commit gitleaks would have blocked.
+gh_login=$(cat "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null)
+[ -n "$gh_login" ] || exit 0
+origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null)
+case "$origin_url" in
+  *"/$gh_login/"*|*":$gh_login/"*) ;;
+  *) exit 0;;
+esac
+if command -v gitleaks >/dev/null 2>&1; then
+  if git -C "$repo" rev-parse --verify -q "origin/$br" >/dev/null; then range="origin/$br..$br"
+  else range="$br --not --remotes=origin"; fi
+  gitleaks git --no-banner --log-opts="$range" "$repo" >/dev/null 2>&1 || exit 0
+fi
+
 ( nohup git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br" </dev/null >/dev/null 2>&1 ) &
 exit 0

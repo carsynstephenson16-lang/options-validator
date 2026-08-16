@@ -60,9 +60,10 @@ for repo in "${REPOS[@]}"; do
     *) ro=0;;
   esac
 
-  # Safety gate for the main options-validator checkout before anything else.
+  # Safety gate before anything else, keyed on the guard file itself — a
+  # renamed or restored validator clone must not skip it on basename grounds.
   # (-f, not -x: the guard is a 644 python file, invoked via uv, never exec'd.)
-  if [ "$name" = "options-validator" ] && [ -f "$repo/tools/irreplaceable_data_guard.py" ]; then
+  if [ -f "$repo/tools/irreplaceable_data_guard.py" ]; then
     if ! (cd "$repo" && uv run python tools/irreplaceable_data_guard.py verify >/dev/null 2>&1); then
       say "## ⛔ $name: irreplaceable-data guard FAILED — no actions taken in this repo. Investigate first."
       NEEDS=1; logl "GUARD FAIL $repo"; continue
