@@ -15,11 +15,21 @@ if [ -n "$br" ] && git -C "$wt" rev-parse --verify -q "origin/$br" >/dev/null; t
   unpushed=$(git -C "$wt" rev-list --count "origin/$br..$br" 2>/dev/null)
 elif [ -n "$br" ]; then
   unpushed=$(git -C "$wt" rev-list --count "$br" --not --remotes=origin 2>/dev/null)
+else
+  # Detached HEAD: a clean detached worktree can still hold the ONLY copy of
+  # its commits. If HEAD is unreachable from every remote ref, name it so
+  # removal cannot strand it.
+  unpushed=$(git -C "$wt" rev-list --count HEAD --not --remotes 2>/dev/null)
+  if [ "${unpushed:-0}" != "0" ]; then
+    sha=$(git -C "$wt" rev-parse --short HEAD 2>/dev/null)
+    git -C "$wt" branch "rescue/wt-detached-$sha" HEAD 2>/dev/null
+  fi
 fi
 untracked=$(git -C "$wt" status --short --ignored=matching --untracked-files=all 2>/dev/null | wc -l | tr -d ' ')
 if [ "${unpushed:-0}" != "0" ] || [ "${untracked:-0}" != "0" ]; then
-  [ -n "$br" ] && ( setsid git -C "$wt" push --quiet origin "refs/heads/$br:refs/heads/$br" >/dev/null 2>&1 ) &
-  echo "{\"decision\":\"block\",\"reason\":\"Worktree $wt has ${unpushed:-0} unpushed commit(s) and ${untracked:-0} untracked/ignored file(s). Backup push attempted. Verify with: git -C $wt status --short --ignored=matching --untracked-files=all — and run the irreplaceable-data guard before removal.\"}"
+  # nohup, not setsid: setsid is not a standard macOS executable.
+  [ -n "$br" ] && ( nohup git -C "$wt" push --quiet origin "refs/heads/$br:refs/heads/$br" </dev/null >/dev/null 2>&1 ) &
+  echo "{\"decision\":\"block\",\"reason\":\"Worktree $wt has ${unpushed:-0} unpushed commit(s) and ${untracked:-0} untracked/ignored file(s). Backup push attempted; detached commits were saved to a rescue/ branch. Verify with: git -C $wt status --short --ignored=matching --untracked-files=all — and run the irreplaceable-data guard before removal.\"}"
   exit 0
 fi
 exit 0
