@@ -1,5 +1,6 @@
 import csv
 import math
+import os
 import tempfile
 import unittest
 from datetime import date
@@ -159,6 +160,20 @@ class TestPointInTimeRates(unittest.TestCase):
             risk_free_rate(date(2026, 7, 17), date(2026, 8, 15), path=self.rate_path)
             risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
         self.assertEqual(loader.call_count, 1)
+
+    def test_reloads_when_same_size_curve_is_rewritten_with_restored_mtime(self):
+        write_csv(self.rate_path, RATE_FIELDS, [rate_row(30, 0.04), rate_row(90, 0.05)])
+        original_metadata = self.rate_path.stat()
+        first = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
+        write_csv(self.rate_path, RATE_FIELDS, [rate_row(30, 0.06), rate_row(90, 0.07)])
+        self.assertEqual(self.rate_path.stat().st_size, original_metadata.st_size)
+        os.utime(
+            self.rate_path,
+            ns=(original_metadata.st_atime_ns, original_metadata.st_mtime_ns),
+        )
+        second = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
+        self.assertAlmostEqual(first.par_yield, 0.045, places=12)
+        self.assertAlmostEqual(second.par_yield, 0.065, places=12)
 
     def test_missing_dividend_yield_raises_instead_of_defaulting_zero(self):
         write_csv(self.dividend_path, DIVIDEND_FIELDS, [dividend_row("MSFT", 3.32)])

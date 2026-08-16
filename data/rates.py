@@ -8,6 +8,7 @@ zero curve is an explicitly labeled approximation from the frozen design.
 from __future__ import annotations
 
 import csv
+import hashlib
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -252,15 +253,14 @@ def _load_treasury_rows(path: Path) -> list[_TreasuryRow]:
 
 
 @lru_cache(maxsize=32)
-def _cached_treasury_rows(path: Path, mtime_ns: int, size: int) -> tuple[_TreasuryRow, ...]:
-    """Reuse an immutable curve only while its on-disk identity is unchanged."""
-    del mtime_ns, size
+def _cached_treasury_rows(path: Path, content_sha256: str) -> tuple[_TreasuryRow, ...]:
+    """Reuse a curve only while its complete local content is unchanged."""
+    del content_sha256
     return tuple(_load_treasury_rows(path))
 
 
 def _treasury_rows(path: Path) -> tuple[_TreasuryRow, ...]:
-    metadata = path.stat()
-    return _cached_treasury_rows(path, metadata.st_mtime_ns, metadata.st_size)
+    return _cached_treasury_rows(path, hashlib.sha256(path.read_bytes()).hexdigest())
 
 
 def risk_free_rate(
