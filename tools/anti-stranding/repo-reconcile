@@ -29,6 +29,15 @@ say()  { print -r -- "$1" >>"$DIGEST.tmp"; }
 act()  { [ "${DRY_RUN:-0}" = "1" ] && { say "  [dry-run] $1"; return 1; } || return 0; }
 logl() { print -r -- "$(date -Iseconds) $1" >>"$LOG"; }
 
+# Branch is safe to publish: gitleaks (when installed) scans the commits that
+# would leave the machine. A post-commit gitleaks block must not be undone by
+# an unconditional daily retry. Missing gitleaks => scan is skipped (same
+# behavior as the post-commit hook) — install it; repos are public.
+scan_ok() {  # $1 repo  $2 log-opts range
+  command -v gitleaks >/dev/null 2>&1 || return 0
+  gitleaks git --no-banner --log-opts="$2" "$1" >/dev/null 2>&1
+}
+
 # --- repo discovery: top-level repos in ~ and ~/Documents (worktrees found per-repo)
 typeset -a REPOS
 for d in "$HOME"/*(N/) "$HOME"/Documents/*(N/); do
@@ -46,14 +55,14 @@ for repo in "${REPOS[@]}"; do
   # process each underlying repo exactly once or every action would run N times.
   cdir=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
   [ -n "$cdir" ] && { [ -n "${SEEN_GITDIR[$cdir]}" ] && continue; SEEN_GITDIR[$cdir]=1; }
-  # ops/research checkouts: report only, never act.
   case "$repo" in
     "$HOME/options-validator-ops"|"$HOME/options-validator-research") ro=1;;
     *) ro=0;;
   esac
 
   # Safety gate for the main options-validator checkout before anything else.
-  if [ "$name" = "options-validator" ] && [ -x "$repo/tools/irreplaceable_data_guard.py" ]; then
+  # (-f, not -x: the guard is a 644 python file, invoked via uv, never exec'd.)
+  if [ "$name" = "options-validator" ] && [ -f "$repo/tools/irreplaceable_data_guard.py" ]; then
     if ! (cd "$repo" && uv run python tools/irreplaceable_data_guard.py verify >/dev/null 2>&1); then
       say "## ⛔ $name: irreplaceable-data guard FAILED — no actions taken in this repo. Investigate first."
       NEEDS=1; logl "GUARD FAIL $repo"; continue
@@ -63,14 +72,22 @@ for repo in "${REPOS[@]}"; do
   git -C "$repo" fetch origin --quiet 2>/dev/null
 
   # --- every worktree of this repo (incl. the repo itself)
-  git -C "$repo" worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}' | while read -r wt; do
+  # sed keeps the full path: awk '{print $2}' truncated paths containing spaces.
+  git -C "$repo" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' | while read -r wt; do
     [ -d "$wt" ] || continue
+    # Sanctioned production checkouts are never touched even when reached as
+    # linked worktrees of a read-write repo (ro is per-repo, wt is not).
+    case "$wt" in
+      "$HOME/options-validator-ops"|"$HOME/options-validator-research")
+        wt_ro=1;;
+      *) wt_ro=$ro;;
+    esac
     br=$(git -C "$wt" symbolic-ref --quiet --short HEAD)
 
-    # Dirty tracked changes -> rescue commit (tracked only), except read-only repos.
-    if ! git -C "$wt" diff --quiet 2>/dev/null; then
-      if [ "$ro" = "1" ] || [ "$br" = "main" ] || [ "$br" = "master" ] || [[ "$br" == deploy/* ]]; then
-        say "- ⚠️  $name ${wt:t}: uncommitted changes on protected branch '${br:-detached}' — left alone, needs you."
+    # Dirty tracked changes (working tree OR staged-only) -> rescue commit.
+    if ! git -C "$wt" diff --quiet 2>/dev/null || ! git -C "$wt" diff --cached --quiet 2>/dev/null; then
+      if [ "$wt_ro" = "1" ] || [ "$br" = "main" ] || [ "$br" = "master" ] || [[ "$br" == deploy/* ]]; then
+        say "- ⚠️  $name ${wt:t}: uncommitted changes on protected checkout/branch '${br:-detached}' — left alone, needs you."
         NEEDS=1
       elif [ -n "$br" ] && act "rescue-commit in $wt"; then
         git -C "$wt" commit -a --no-verify -q -m "wip(auto): daily rescue $TODAY" 2>/dev/null \
@@ -90,9 +107,12 @@ for repo in "${REPOS[@]}"; do
       fi
     fi
 
-    # Untracked/ignored data is REPORTED, never committed (public repos, secrets).
+    # Untracked AND ignored data is REPORTED, never committed (public repos,
+    # secrets; ignored data is exactly what the od1-v2 incident lost).
     unt=$(git -C "$wt" status --short --untracked-files=all 2>/dev/null | grep -c '^??')
+    ign=$(git -C "$wt" status --short --ignored=matching --untracked-files=all 2>/dev/null | grep -c '^!!')
     [ "${unt:-0}" != "0" ] && say "- 👀 $name ${wt:t}: $unt untracked file(s) — not committed on purpose; review them."
+    [ "${ign:-0}" != "0" ] && say "- 👀 $name ${wt:t}: $ign ignored file(s) (caches/data invisible to git) — check before ANY removal."
   done
 
   [ "$ro" = "1" ] && continue
@@ -114,17 +134,28 @@ for repo in "${REPOS[@]}"; do
     if git -C "$repo" rev-parse --verify -q "origin/$br" >/dev/null; then
       ahead=$(git -C "$repo" rev-list --count "origin/$br..$br" 2>/dev/null)
       behind=$(git -C "$repo" rev-list --count "$br..origin/$br" 2>/dev/null)
+      range="origin/$br..$br"
     else
       ahead=$(git -C "$repo" rev-list --count "$br" --not --remotes=origin 2>/dev/null); behind=0
+      range="$br --not --remotes=origin"
     fi
     [ "${ahead:-0}" = "0" ] && continue
+    if ! scan_ok "$repo" "$range"; then
+      say "- 🔒 $name/$br: gitleaks flagged unpushed commit(s) — NOT pushed; needs you."
+      NEEDS=1; logl "LEAK-BLOCK $repo $br"; continue
+    fi
     if [ "${behind:-0}" != "0" ]; then
       say "- ⚠️  $name/$br: diverged from origin ($ahead local vs $behind remote) — backed up as $br-local-backup-$TODAY; reconcile when convenient."
       act "diverged-backup push $br" && git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br-local-backup-$TODAY" 2>/dev/null
       NEEDS=1
     else
-      act "push $br" && { git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br" 2>/dev/null \
-        && say "- ☁️  $name/$br: $ahead commit(s) backed up to GitHub."; logl "PUSH $repo $br"; }
+      act "push $br" || continue
+      if git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br" 2>/dev/null; then
+        say "- ☁️  $name/$br: $ahead commit(s) backed up to GitHub."; logl "PUSH $repo $br"
+      else
+        say "- ⚠️  $name/$br: push FAILED — $ahead commit(s) still exist only on this machine; needs you."
+        NEEDS=1; logl "PUSH-FAIL $repo $br"
+      fi
     fi
   done
 
@@ -135,15 +166,18 @@ for repo in "${REPOS[@]}"; do
       [ "$new_prs" -ge "$MAX_NEW_PRS" ] && break
       git -C "$repo" rev-parse --verify -q "origin/$br" >/dev/null || continue
       [ "$(git -C "$repo" rev-list --count "origin/main..origin/$br" 2>/dev/null)" = "0" ] && continue
-      pr=$(cd "$repo" && gh pr list --head "$br" --state all --json number -q 'length' 2>/dev/null)
+      # Content already in main (e.g. after a squash-merge) => nothing to PR.
+      git -C "$repo" diff --quiet "origin/main" "origin/$br" -- 2>/dev/null && continue
+      # Only an OPEN PR suppresses creation: a closed/merged PR on a reused
+      # branch name must not hide new commits forever.
+      pr=$(cd "$repo" && gh pr list --head "$br" --state open --json number -q 'length' 2>/dev/null)
       [ "${pr:-0}" != "0" ] && continue
       draft=""; [[ "$br" == wip/* ]] && draft="--draft"
-      if ! act "gh pr create for $br"; then
-        new_prs=$((new_prs+1)); continue   # dry-run: count so the throttle previews honestly
-      fi
-      if true; then
+      if act "gh pr create for $br"; then
         (cd "$repo" && gh pr create --fill --head "$br" --base main $draft >/dev/null 2>&1) \
           && { say "- 📬 $name/$br: opened a PR so you can review/merge from anywhere."; new_prs=$((new_prs+1)); logl "PR $repo $br"; }
+      else
+        new_prs=$((new_prs+1))   # dry-run: count so the throttle previews honestly
       fi
     done
   fi
@@ -154,9 +188,11 @@ for repo in "${REPOS[@]}"; do
   #   - owner_ok gate above: never touches repos this account doesn't own
   #   - --base main --author @me: never other bases, never others' PRs
   #   - owner-governed paths (ledger/frozen values/registrations/doctrine/CI)
-  #     are excluded and escalated to the digest instead
+  #     are excluded and escalated to the digest; if the path inspection
+  #     itself fails, the merge is refused (fail closed)
   #   - checks snapshot + --match-head-commit: the merged SHA is exactly the
-  #     SHA whose checks were inspected (no race with new pushes)
+  #     SHA whose checks were inspected; every check run must be COMPLETED
+  #     with an accepted conclusion (a pending run blocks the merge)
   #   - a PR with ZERO checks is reported, never merged
   #   - blackout re-evaluated per PR: no merges 15:00-16:30 ET weekdays (ops
   #     15:30 alignment gate / 15:45 capture)
@@ -169,13 +205,20 @@ for repo in "${REPOS[@]}"; do
       if [ "$dow" -le 5 ] && [ "$hr" -ge 1500 ] && [ "$hr" -le 1630 ]; then
         say "- ⏸  $name PR #$prn: auto-merge paused (ops pre-capture window)."; continue
       fi
-      if (cd "$repo" && gh pr diff "$prn" --name-only 2>/dev/null) | grep -Eq \
+      # Fail closed: an API/network error inspecting the diff must not look
+      # like "no governed paths".
+      if ! files=$(cd "$repo" && gh pr diff "$prn" --name-only 2>/dev/null); then
+        say "- ⚠️  $name PR #$prn: could not inspect changed files — merge refused this run."; NEEDS=1; continue
+      fi
+      if print -r -- "$files" | grep -Eq \
          '^(ledger/|config\.py$|docs/superpowers/|AGENTS\.md$|CLAUDE\.md$|\.cursorrules$|\.github/)'; then
         say "- 🔒 $name PR #$prn: touches owner-governed paths (ledger/frozen/registrations/doctrine/CI) — needs you."
         NEEDS=1; continue
       fi
+      # CheckRuns expose status+conclusion; StatusContexts expose state only.
+      # Normalize both to STATUS:CONCLUSION and require COMPLETED + accepted.
       snap=$(cd "$repo" && gh pr view "$prn" --json headRefOid,mergeable,statusCheckRollup \
-        -q '[.headRefOid,.mergeable,([.statusCheckRollup[]|(.conclusion//.state)]|join(","))]|join(" ")' 2>/dev/null)
+        -q '[.headRefOid,.mergeable,([.statusCheckRollup[] | ((.status // "COMPLETED") + ":" + ((.conclusion // .state) // "PENDING"))] | join(","))] | join(" ")' 2>/dev/null)
       sha=${snap%% *}; rest=${snap#* }; mrg=${rest%% *}; states=${rest#* }
       if [ -z "$states" ] || [ "$states" = "$mrg" ]; then
         say "- ⚠️  $name PR #$prn: no CI checks exist — never auto-merged; needs you."; NEEDS=1; continue
@@ -183,7 +226,7 @@ for repo in "${REPOS[@]}"; do
       if [ "$mrg" != "MERGEABLE" ]; then
         say "- ⚠️  $name PR #$prn: not mergeable ($mrg) — needs you."; NEEDS=1; continue
       fi
-      print -r -- "${states//,/$'\n'}" | grep -Eqv '^(SUCCESS|NEUTRAL|SKIPPED)$' && continue
+      print -r -- "${states//,/$'\n'}" | grep -Eqv '^COMPLETED:(SUCCESS|NEUTRAL|SKIPPED)$' && continue
       act "auto-merge PR #$prn" || continue
       if err=$(cd "$repo" && gh pr merge "$prn" --squash --match-head-commit "$sha" 2>&1); then
         say "- ✅ $name PR #$prn: checks green → merged automatically (owner directive 2026-08-15)."
@@ -209,14 +252,22 @@ for repo in "${REPOS[@]}"; do
 
   # --- prune fully-merged, clean, no-untracked worktrees (opt-in, reversible)
   if [ "${PRUNE:-0}" = "1" ]; then
-    git -C "$repo" worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt; do
+    git -C "$repo" worktree list --porcelain | sed -n 's/^worktree //p' | while read -r wt; do
       [ "$wt" = "$repo" ] && continue
       case "$wt" in "$HOME/options-validator-ops"|"$HOME/options-validator-research") continue;; esac
       br=$(git -C "$wt" symbolic-ref --quiet --short HEAD) || continue
-      git -C "$repo" merge-base --is-ancestor "$br" origin/main 2>/dev/null || continue
+      # Merged = ancestor of main, OR squash-merged: a MERGED PR exists for
+      # the branch AND its tree is content-identical to origin/main.
+      merged=0
+      if git -C "$repo" merge-base --is-ancestor "$br" origin/main 2>/dev/null; then merged=1
+      elif command -v gh >/dev/null 2>&1 \
+        && [ "$(cd "$repo" && gh pr list --head "$br" --state merged --json number -q 'length' 2>/dev/null)" != "0" ] \
+        && git -C "$repo" diff --quiet "origin/main" "$br" -- 2>/dev/null; then merged=1
+      fi
+      [ "$merged" = "1" ] || continue
       [ -z "$(git -C "$wt" status --short --ignored=matching --untracked-files=all 2>/dev/null)" ] || continue
       act "worktree remove $wt" && git -C "$repo" worktree remove "$wt" 2>/dev/null \
-        && say "- 🧹 $name: removed finished worktree ${wt:t} (branch $br already in main)."
+        && say "- 🧹 $name: removed finished worktree ${wt:t} (branch $br fully landed in main)."
     done
   fi
 done

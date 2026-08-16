@@ -25,6 +25,18 @@ esac
 
 git remote get-url origin >/dev/null 2>&1 || exit 0
 
+# Ownership gate: this hook is GLOBAL, so it must never publish to an origin
+# the owner doesn't own (a cloned upstream where the owner has collaborator
+# access would otherwise receive local commits). install.sh caches the GitHub
+# login; no cached login => no auto-push (fail closed, reconciler reports).
+gh_login=$(cat "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null)
+[ -n "$gh_login" ] || exit 0
+origin_url=$(git remote get-url origin 2>/dev/null)
+case "$origin_url" in
+  *"/$gh_login/"*|*":$gh_login/"*) ;;
+  *) exit 0;;
+esac
+
 # Secret scan of the new commit before anything leaves the machine (public repos).
 if command -v gitleaks >/dev/null 2>&1; then
   if ! gitleaks git --no-banner --log-opts="-1" "$repo" >/dev/null 2>&1; then
@@ -33,7 +45,9 @@ if command -v gitleaks >/dev/null 2>&1; then
   fi
 fi
 
-# Detached so the commit never waits on the network; plain push, never forced.
-( setsid git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br" \
-    || echo "$(date -Iseconds) push FAILED $repo $br (diverged? reconciler will report)" ) &
+# Backgrounded so the commit never waits on the network; plain push, never
+# forced. nohup, not setsid: setsid is not a standard macOS executable.
+( nohup git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br" \
+    </dev/null >/dev/null 2>&1 \
+  || echo "$(date -Iseconds) push FAILED $repo $br (diverged? reconciler will report)" ) &
 exit 0
