@@ -53,12 +53,12 @@ quoted (3 vs bar 14). The owner should either:
 
 ## Owner-typed blanks
 
-| Field | Value (OWNER TYPES) |
+| Field | Value (OWNER TYPES at ratification) |
 |---|---|
 | Namespace | H10a-v2 (proposed; owner may rename) |
-| Window open | ____ |
-| Window end | ____ |
-| Feasibility disposition | pre-accept (quote number) / window-sized / decline |
+| Window open | ____ (ratification day; owner selected 2026-08-17: proceed) |
+| Window end | ____ (owner selected 2026-08-17: same-as-v1 length, ~2.5 months ⇒ ≈2026-11-01 if ratified now; exact date typed at ratification) |
+| Feasibility disposition | **pre-accept starvation** (owner selected 2026-08-17), quoting the freshly computed receipt-bound number (base rate measured on ThetaData history, labeled as such — H7 3-vs-14 precedent) |
 
 ## Ordered steps
 

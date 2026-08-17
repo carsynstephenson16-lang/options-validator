@@ -111,6 +111,33 @@ drafted reading" only if the owner says so):
   during that period under the drafted amendment. Accept the dead period, or
   change the trigger (owner-only either way).
 
+## Owner answers — recorded 2026-08-17 (in-session)
+
+The owner answered Q1–Q4 directly ("get rid of. the h5 frozen rule entry i
+want to obsereve while its testing. proceed with fresh window. ya confirm
+overrid. yes. no dont accept dead period", sic) and then selected among
+explicit multiple-choice options (N-1 confirmation-loop precedent):
+
+- **Q1 = PROCEED with H10a-v2** (fresh registration). Follow-up selections:
+  window length = **same as v1, ~2.5 months** (end ≈ 2026-11-01, exact end
+  date typed by the owner at ratification); feasibility disposition =
+  **pre-accept starvation**, quoting the freshly computed receipt-bound
+  number (measured on ThetaData history, labeled as such — H7 precedent) at
+  registration time.
+- **Q2 = CONFIRMED**: the Schwab 15:45 preclose lane is a qualifying
+  exact-session source for H10b's and H5's watch lanes (partial reversal of
+  the 2026-08-14 D-1=F1 ruling, owner-confirmed).
+- **Q3 = YES**: an AMZN fire (under any future entry rule) routes to a
+  tactical call only ($600 defined-risk cap); AMZN LEAPS remain
+  unauthorized.
+- **Q4 = DEAD PERIOD REJECTED, resolved by retiring the rule**: the frozen
+  H5 entry trigger (H5_ENTRY_TRIGGER_PREREG 2026-07-07 + V2 amendment
+  2026-07-15) is RETIRED. Explicit follow-up selection: "Retire rule;
+  observe-only" — H5 records daily observations (prices, data availability,
+  IV-history accumulation) while the Schwab lane ramps; **no fires and no
+  paper entries until the owner types a new entry rule**. The retired rule
+  stays on the record as history (append-only; named supersession).
+
 ## What remains owner-only after this session
 
 1. Type/ratify the H10a-v2 registration (packet draft prepared).
