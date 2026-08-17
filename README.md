@@ -250,8 +250,10 @@ several ledger registrations and is retained as history. The complete registry
 per `ledger/experiments.jsonl` is: **H5** (entry watch, alert-only), **H6**
 (seq 6; one open position, `INSUFFICIENT_SAMPLE`), **H7** (seq 7–10; forward
 window PAUSED per OD-3 — restart requires a new registration and namespace),
-**H8** (seq 11; zero positions), **H10a** (seq 15, window ends 2026-10-06,
-7-loss bar, zero positions), **H10b** (seq 16, window ends 2027-01-06, 7-loss
+**H8** (seq 11; zero positions), **H10a** (seq 15; **CLOSED 2026-08-15,
+INSUFFICIENT_SAMPLE — STARVED**, owner-ratified; `H10A_RESULT` fact in
+`ledger/facts.log` per the H9 precedent; retest requires a new registration),
+**H10b** (seq 16, window ends 2027-01-06, 7-loss
 bar, zero positions), **RQ1** (seq 17; SPENT — descriptive result recorded at
 seq 20, no verdict), **RQ2-v1** (seq 18; forward window opens **2026-08-17**
 per owner ruling 2026-08-15 in-session — the previously printed 2026-09-01

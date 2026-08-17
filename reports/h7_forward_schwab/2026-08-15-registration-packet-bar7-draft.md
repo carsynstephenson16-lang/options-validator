@@ -218,30 +218,39 @@ count (the H10 precedent). Silence is not an option."*
 >=7 losses (owner override of MIN_LOSSES_FOR_VERDICT=10, weaker verdict
 disclosed)."*
 
-**Filled-in pre-accept block for this registration (DRAFT — not yet
-owner-ratified; template only):**
+**Filled-in pre-accept block for this registration (OWNER-SELECTED
+2026-08-15, in-session — variant and disposition chosen; see
+`reports/2026-08-15-owner-rulings.md` §pm addendum for the exact exchange):**
 
 > **Starvation-risk pre-acceptance (H10 precedent).** This registration's
-> proposed configuration [V0 current rule / V9 / other — OWNER TO CONFIRM]
-> on the 9-name registered cohort over a 70-session window is measured at
-> **[3 / ≈7–8 / OTHER — pending final variant choice] expected entries
-> against a 14-entry bar (2× the owner-typed 7-loss verdict rule)**. The
-> registration proceeds accepting that the window may end
-> **INSUFFICIENT_SAMPLE**, the same outcome already recorded for H9 (4
-> losses vs. a 10-loss bar) and currently open for H10a/H10b. Multiple-testing
-> disclosure: this figure comes from a menu of **18 measured entry-rule
-> variants** (`reports/h7_forward_schwab/2026-08-14-entry-redesign-variant-menu.md`);
-> if a non-baseline variant is chosen, choosing the highest-firing
-> non-forbidden candidate from that set of 18 is itself a search and is
-> disclosed as such, per the menu's own multiple-testing note.
+> configuration is **V0 — the current rule, unchanged** (owner-selected
+> 2026-08-15: "Start it, shortfall in writing"; the measured menu offered
+> the higher-firing V9 OR-rule and the owner did not take it — the OR-rule
+> is honestly a different hypothesis) on the 9-name registered cohort over
+> a 70-session window, measured at **3 expected entries (receipt-bound,
+> `V14_REGISTERED_COHORT_9.json`) against a 14-entry bar (2× the
+> owner-typed 7-loss verdict rule)**. The registration proceeds accepting
+> that the window may end **INSUFFICIENT_SAMPLE**, the same outcome already
+> recorded for H9 (4 losses vs. a 10-loss bar) and for H10a (closed
+> 2026-08-15, STARVED). Multiple-testing disclosure: this figure comes from
+> a menu of **18+1 measured entry-rule variants**
+> (`reports/h7_forward_schwab/2026-08-14-entry-redesign-variant-menu.md` +
+> the 2026-08-15 V9×cohort-9 follow-up receipt); the baseline was chosen,
+> so no highest-firing-candidate search bias attaches to this
+> configuration, and the menu remains disclosed as a search that found no
+> qualifying alternative.
 >
-> **[OWNER TYPES: accept / redesign instead (longer window, shorter hold,
-> wider universe — each is its own registration decision per menu §8) /
-> other]**
+> **Owner disposition 2026-08-15: ACCEPT** (selected in-session from the
+> explicit three-way question: accept-shortfall / record-longer-first /
+> longer-window; recorded same-day in
+> `reports/2026-08-15-owner-rulings.md`).
 
-This block **must be completed by the owner** before registration — Claude
-proposes the number and the wording; the owner enters the frozen decision,
-per the standing rule in `CLAUDE.md` ("You own the numbers").
+Registration-mechanics note: this selection resolves §6's variant choice
+and starvation disclosure. The registration EVENT itself still executes
+only after the remaining preconditions complete (S1 three unattended
+sessions Mon–Wed 08-17→08-19, fresh backup drill ≥ Mon 08-17, fresh
+feasibility receipt at current config, OD-3 namespace line), through the
+guarded door, with the owner's §6 sign-off — per steps 5–9 below.
 
 ---
 
