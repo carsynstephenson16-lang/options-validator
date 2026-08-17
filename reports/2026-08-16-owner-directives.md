@@ -12,8 +12,10 @@ precedent.
 ## Directive 1 — PR #51 merge
 
 **Status: already satisfied before this session acted.** PR #51 (Brief 13,
-Lane Board dashboard) merged 2026-08-15 20:07 ET with all three CI checks
-green (Offline Quality Gates, Claude PR Review, Secret Scan). No action taken
+Lane Board dashboard) merged 2026-08-15 22:23 ET (`mergedAt`
+2026-08-16T02:23:23Z; corrected per review FX-E — the earlier "20:07" was a
+CI-check completion time, not the merge) with all three CI checks green
+(Offline Quality Gates, Claude PR Review, Secret Scan). No action taken
 here beyond verification. The ops checkout was verified in this session to sit
 exactly at `origin/main` (`f1fd4bd`), so the preclose alignment guard is
 satisfied for Monday 2026-08-17.
@@ -31,9 +33,11 @@ chain. Its verdict and the resulting Fable sign-off are recorded in
 
 ## Directive 3 — reopen H10a
 
-**Constraint (append-only ledger):** H10a's closure was ratified and recorded
-2026-08-16 (facts.log `H10A_RESULT`, PR #57): verdict INSUFFICIENT_SAMPLE —
-STARVED, 0 trades. A recorded adjudication cannot be un-recorded, and the repo
+**Constraint (append-only ledger):** H10a's closure was ratified 2026-08-15
+(owner selected "Write it today" in-session) and the `H10A_RESULT` fact was
+appended 2026-08-16T23:36Z (PR #57) — two distinct dates, stated separately
+per review FX-F; the fact's own text is internally dated 2026-08-15. Verdict:
+INSUFFICIENT_SAMPLE — STARVED, 0 trades. A recorded adjudication cannot be un-recorded, and the repo
 precedent for a restarted trial after adjudication is the H7 rule: **restart
 requires a new registration and a new namespace** (OD-3 precedent). The
 recorded H10A_RESULT stands as history and is not contradicted by reopening.
@@ -84,6 +88,28 @@ split, because the registration froze caps for only part of H5:
 **Known unresolved tension, surfaced not solved:** H5's frozen LEAPS total cap
 ($16k) exceeds the whole-portfolio risk sleeve ($14k). This predates today and
 is flagged for an owner decision; no number is changed here.
+
+## Owner confirmations required BEFORE any amendment append (review FX-G/FX-H)
+
+The five directives above derive from one owner sentence; per the 2026-08-15
+N-1 precedent, the interpretive choices are put back as explicit questions.
+No amendment is appended until these are answered (each defaults to "the
+drafted reading" only if the owner says so):
+
+- **Q1 — H10a:** proceed with a NEW registration H10a-v2 (packet prepared;
+  you type window + feasibility disposition), or did "reopen" mean something
+  else (e.g. just resume watching without a verdict-bearing window)?
+- **Q2 — D-1=F1 override for H10b (and H5's watch):** confirm the Schwab
+  15:45 preclose lane counts as a qualifying exact-session source for these
+  lanes' entry evaluation. (This reverses part of your 2026-08-14 F1 ruling;
+  the drafted amendment confronts F1's rationale rather than ignoring it.)
+- **Q3 — H5 AMZN destination:** AMZN is not an authorized LEAPS name; the
+  draft routes an AMZN fire to a tactical call only ($600 cap). Confirm, or
+  authorize AMZN LEAPS (that would be a new frozen decision — yours).
+- **Q4 — H5 IVR dead period:** the frozen IVR<=0.5 trigger cannot compute on
+  Schwab data until ~126 sessions accumulate (~6 months), so H5 cannot fire
+  during that period under the drafted amendment. Accept the dead period, or
+  change the trigger (owner-only either way).
 
 ## What remains owner-only after this session
 

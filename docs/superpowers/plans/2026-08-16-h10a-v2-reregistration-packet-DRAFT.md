@@ -19,7 +19,10 @@ earnings-skip; per-name source-health entry ban; exits +100% / 20 sessions /
 
 1. **Data source:** Schwab 15:45 ET preclose chain captures (the canary-proven
    lane) instead of the dead ThetaData feed — same substitution language as
-   H10B_AMENDMENT_V1_1 clause 2, fail-closed on missing/partial captures.
+   H10B_AMENDMENT_V1_1 clause 2 **rev 2** (review FX-I: the rev-2 clause adds
+   the declared 15:45-vs-close timing convention, the Schwab IV percent→
+   decimal normalization obligation, and fail-closed capture verification —
+   all inherited here).
 2. **Window:** new forward window, opening on the owner-typed registration
    date and ending on an owner-typed end date (blank left for the owner; the
    v1 window length was ~2.5 months; the v1 verdict said starvation, so a
@@ -60,7 +63,17 @@ quoted (3 vs bar 14). The owner should either:
 ## Ordered steps
 
 1. Independent adversarial review of this packet.
-2. Fresh feasibility computation on the Schwab-capture universe (receipt-bound).
+2. Fresh feasibility computation, receipt-bound, with its measurement window
+   and feed stated explicitly (review FX-K): as of this draft the Schwab lane
+   has only 1–2 sessions of chain history, so an honest projection must
+   either use the frozen ThetaData history for the BASE-RATE estimate
+   (labeled as measured-on-ThetaData, the H7 3-vs-14 precedent) or wait for
+   Schwab sessions to accumulate — a 2-session base rate would be no more
+   informative than v1's.
 3. Owner types the blanks and ratifies; registration appended via the typed
    ledger API by the owner or an explicitly authorized agent in that session.
-4. Watcher implementation (shared with the H10b/H5 re-pointing Codex brief).
+4. Watcher implementation (shared with the H10b/H5 re-pointing Codex brief) —
+   NOTE (review FX-J): "H10a-v2" is not a free string; `h10_watch.py` and
+   `hypothesis_evidence.py` hardcode the `{"H10a","H10b"}` namespace set and
+   ordering, so a third namespace breaks existing invariants and the brief
+   must extend those surfaces deliberately, with tests.
