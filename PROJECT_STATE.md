@@ -83,8 +83,9 @@ pre-acceptance). Remaining before any activation: B2, fresh feasibility,
 Monday 15/15 canary + manifest verify, backup/restore drill, owner OD-3 +
 starvation decision, guarded registration, owner-authorized flip — plus a
 working Schwab OAuth session. *(Status correction 2026-08-15: the token was
-re-authorized 2026-08-12 ~00:56 ET and both capture lanes verified 15/15 on
-08-12→08-14; the 2026-08-14 15:45 preclose canary SUCCEEDED. Refresh tokens
+re-authorized 2026-08-12 ~00:56 ET; the intraday quote lane verified 15/15 on
+08-12→08-14 and the preclose chain lane on 08-14 (its first clean run since
+the alignment guard cleared) — the 2026-08-14 15:45 preclose canary SUCCEEDED. Refresh tokens
 hard-expire 7 days after creation — Official-source; refreshing an access
 token does NOT reset the clock; see the 2026-08-15 addendum to
 `reports/2026-08-12-schwab-auth-diagnosis.md` — so the current token dies
