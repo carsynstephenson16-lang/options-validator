@@ -1,8 +1,10 @@
 """EXP-SHORT lane tests.
 
-The lane is disabled by default. When enabled it reads local validated
-artifacts only, keeps every failure visible, and leaves the existing lanes and
-the production ranking untouched.
+The lane is ON by default since the owner-directed flip 2026-08-14 (decision
+menu ruling 5); the disabled path is still covered, now via an explicit
+``disabled()`` patch rather than by relying on the module default. The lane
+reads local validated artifacts only, keeps every failure visible, and leaves
+the existing lanes and the production ranking untouched.
 """
 
 from __future__ import annotations
@@ -40,15 +42,22 @@ class LaneTestCase(unittest.TestCase):
     def enabled(self):
         return mock.patch.object(config, "SHORT_CONTEXT_ENABLED", True)
 
+    def disabled(self):
+        return mock.patch.object(config, "SHORT_CONTEXT_ENABLED", False)
+
 
 class BoardTests(LaneTestCase):
-    def test_the_default_configuration_keeps_the_lane_off(self):
-        self.assertIs(config.SHORT_CONTEXT_ENABLED, False)
+    def test_the_configuration_turns_the_lane_on_with_its_display_settings(self):
+        # owner-directed in-session 2026-08-14 (decision menu ruling 5): the
+        # flag flipped False -> True. The provider order and staleness setting
+        # are unchanged and still asserted.
+        self.assertIs(config.SHORT_CONTEXT_ENABLED, True)
         self.assertEqual(config.SHORT_POSITIONING_PROVIDER_ORDER, ("finra",))
         self.assertEqual(config.SHORT_POSITIONING_MAX_AGE_RELEASES, 1)
 
     def test_load_returns_nothing_while_disabled(self):
-        self.assertIsNone(lane.load_exp_short_lane(["MSFT"], asof=ASOF))
+        with self.disabled():
+            self.assertIsNone(lane.load_exp_short_lane(["MSFT"], asof=ASOF))
 
     def test_load_returns_cards_when_enabled(self):
         with self.enabled():
@@ -99,8 +108,9 @@ class BoardTests(LaneTestCase):
 
 class DashboardIntegrationTests(LaneTestCase):
     def test_disabled_render_contains_no_exp_short_text(self):
-        data = dashboard.build_experiment_lanes(["MSFT"], asof=ASOF)
-        html = dashboard.render(data, build_asof=ASOF)
+        with self.disabled():
+            data = dashboard.build_experiment_lanes(["MSFT"], asof=ASOF)
+            html = dashboard.render(data, build_asof=ASOF)
 
         self.assertNotIn("exp_short", data)
         for fragment in (LANE_HEADING, LANE_TITLE, LANE_TEXT, CARD_CAVEAT, DAYS_TO_COVER_NOTE):
@@ -116,7 +126,11 @@ class DashboardIntegrationTests(LaneTestCase):
             self.assertIn(fragment, html)
 
     def test_enabling_the_lane_leaves_the_existing_lanes_untouched(self):
-        disabled = dashboard.build_experiment_lanes(["MSFT"], asof=ASOF)
+        # Both sides are pinned explicitly: with the flag now defaulting to
+        # True this comparison would otherwise be enabled-vs-enabled and prove
+        # nothing (owner-directed flip 2026-08-14, decision menu ruling 5).
+        with self.disabled():
+            disabled = dashboard.build_experiment_lanes(["MSFT"], asof=ASOF)
         with self.enabled():
             enabled = dashboard.build_experiment_lanes(["MSFT"], asof=ASOF)
 
