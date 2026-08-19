@@ -85,3 +85,22 @@ NEW-5 closed, the reviewer's explicit condition for APPEND SAFE is met.
 standing 2026-07-25", citing this receipt's confirmation-round verdict by
 name (the F-12 lesson). The H10a-v2 registration is NOT covered by this
 sign-off.
+
+---
+
+## Post-append addendum (2026-08-18): brief-17 review + seq 30 correction
+
+The appends executed as seq 28/29 (2026-08-19T01:05:33Z = 2026-08-18 ET);
+offline suite exit 0 afterward. The independent Opus review of brief 17
+(rev 1) then returned **FAIL** (BL-1/BL-2/BL-3 + FX-1..6) and caught a
+factual defect INSIDE the appended amendment texts: the "percent→decimal
+(÷100)" IV-normalization obligation in seq 28/29 clause 2 is inverted — the
+Schwab store's `iv` is already decimal (`data/schwab_adapter.py:148-154`
+divides at capture; guard tests `tests/test_schwab_chain_view.py:222,233`).
+That wording originated in this receipt's own round-1 BL-A note and was not
+independently units-checked — recorded here as a reviewer-error lesson.
+Disposition: append-only correction **seq 30
+`H10B_H5_AMENDMENT_CORRECTION_V1`** (Fable sign-off granted 2026-08-18)
+voids the normalization clauses and replaces them with a no-double-division
+obligation; brief 17 rev 2 applies all nine review findings. Brief 17
+remains DRAFT pending re-review before hand-off.
