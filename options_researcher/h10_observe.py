@@ -119,6 +119,7 @@ def _summary(receipt: dict[str, Any]) -> dict[str, Any]:
     no_signal: list[str] = []
     skipped: dict[str, str] = {}
     seen: set[str] = set()
+    actions: list[bool] = []
     for position, row in enumerate(receipt["evaluations"], start=1):
         if not isinstance(row, dict) or set(row) != _EVALUATION_FIELDS:
             raise ObservationError(f"receipt evaluation {position} has unexpected schema")
@@ -142,21 +143,29 @@ def _summary(receipt: dict[str, Any]) -> dict[str, Any]:
                 f"receipt evaluation {position} is not a post-resumption H10b row"
             )
         status = row.get("status")
+        action = row.get("book_action_required")
+        if type(action) is not bool:
+            raise ObservationError(f"row {symbol} has invalid book_action_required")
         if status == "FIRED":
-            if row.get("reason") is not None:
-                raise ObservationError(f"FIRED row {symbol} has a skip reason")
+            if signals["H10b"] is not True or action is not True or row.get("reason") is not None:
+                raise ObservationError(f"FIRED row {symbol} has invalid signal/action semantics")
             fired.append(symbol)
         elif status == "NO_SIGNAL":
-            if row.get("reason") is not None:
-                raise ObservationError(f"NO_SIGNAL row {symbol} has a skip reason")
+            if signals["H10b"] is not False or action is not False or row.get("reason") is not None:
+                raise ObservationError(
+                    f"NO_SIGNAL row {symbol} has invalid signal/action semantics"
+                )
             no_signal.append(symbol)
         elif status == "SKIPPED":
             reason = row.get("reason")
-            if not isinstance(reason, str) or not reason:
-                raise ObservationError(f"SKIPPED row {symbol} has no reason")
+            if not isinstance(reason, str) or not reason or action is not False:
+                raise ObservationError(f"SKIPPED row {symbol} has invalid signal/action semantics")
             skipped[symbol] = reason
         else:
             raise ObservationError(f"row {symbol} has unknown status {status!r}")
+        actions.append(action)
+    if receipt["book_action_required"] != any(actions):
+        raise ObservationError("receipt book_action_required does not match evaluation rows")
     return {
         "fired": sorted(fired),
         "no_signal": sorted(no_signal),
@@ -328,6 +337,39 @@ def _read_jsonl(path: Path, *, validator: Any) -> list[dict[str, Any]]:
     return rows
 
 
+def _verify_receipt_binding(
+    *,
+    root: Path,
+    row: dict[str, Any],
+    expected_session: str,
+    source: str,
+) -> None:
+    as_of = row["as_of"]
+    expected_reference = _receipt_reference(as_of)
+    if row["receipt"] != expected_reference:
+        raise ObservationLogMalformed(
+            f"MALFORMED {source} H10 observation {as_of}: receipt reference mismatch"
+        )
+    receipt_path = root / expected_reference
+    try:
+        raw = receipt_path.read_bytes()
+        receipt = json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ObservationLogMalformed(
+            f"MALFORMED {source} H10 receipt {as_of}: {type(exc).__name__}: {exc}"
+        ) from exc
+    if hashlib.sha256(raw).hexdigest() != row["receipt_sha256"]:
+        raise ObservationLogMalformed(
+            f"MALFORMED {source} H10 receipt {as_of}: receipt hash mismatch"
+        )
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("as_of") != as_of
+        or receipt.get("evaluation_session") != expected_session
+    ):
+        raise ObservationLogMalformed(f"MALFORMED {source} H10 receipt {as_of}: session mismatch")
+
+
 def read_h10b_observation_union(
     *,
     root: Path = Path("."),
@@ -338,26 +380,23 @@ def read_h10b_observation_union(
     root = Path(root)
     legacy_rows = _read_jsonl(Path(legacy_observations_path), validator=_validate_legacy_existing)
     legacy: list[dict[str, Any]] = []
+    legacy_by_run: dict[str, dict[str, Any]] = {}
     for row in legacy_rows:
         as_of = row["as_of"]
+        if as_of in legacy_by_run:
+            raise ObservationLogMalformed(f"MALFORMED duplicate legacy H10 run {as_of}")
         expected_session = _LEGACY_H10B_SESSIONS.get(as_of)
         if expected_session is None:
             raise ObservationLogMalformed(
                 f"MALFORMED legacy H10 observation has unexpected run date {as_of}"
             )
-        receipt_path = root / str(row["receipt"])
-        try:
-            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ObservationLogMalformed(
-                f"MALFORMED legacy H10 receipt {as_of}: {type(exc).__name__}: {exc}"
-            ) from exc
-        if (
-            not isinstance(receipt, dict)
-            or receipt.get("as_of") != as_of
-            or receipt.get("evaluation_session") != expected_session
-        ):
-            raise ObservationLogMalformed(f"MALFORMED legacy H10 receipt {as_of}: session mismatch")
+        _verify_receipt_binding(
+            root=root,
+            row=row,
+            expected_session=expected_session,
+            source="legacy",
+        )
+        legacy_by_run[as_of] = row
         legacy.append(
             {
                 **row,
@@ -366,6 +405,32 @@ def read_h10b_observation_union(
             }
         )
     resumed = _read_jsonl(Path(h10b_observations_path), validator=_validate_h10b_existing)
+    if set(legacy_by_run) != set(_LEGACY_H10B_SESSIONS):
+        missing = sorted(set(_LEGACY_H10B_SESSIONS) - set(legacy_by_run))
+        unexpected = sorted(set(legacy_by_run) - set(_LEGACY_H10B_SESSIONS))
+        raise ObservationLogMalformed(
+            f"MALFORMED legacy H10 history is incomplete: missing={missing}, unexpected={unexpected}"
+        )
+    resumed_runs: set[str] = set()
+    resumed_sessions: set[str] = set()
+    for row in resumed:
+        as_of = row["as_of"]
+        evaluation_session = row["evaluation_session"]
+        if as_of in resumed_runs or evaluation_session in resumed_sessions:
+            raise ObservationLogMalformed(
+                f"MALFORMED duplicate resumed H10 identity run={as_of} session={evaluation_session}"
+            )
+        _verify_receipt_binding(
+            root=root,
+            row=row,
+            expected_session=evaluation_session,
+            source="resumed",
+        )
+        resumed_runs.add(as_of)
+        resumed_sessions.add(evaluation_session)
+    legacy_sessions = {row["evaluation_session"] for row in legacy}
+    if legacy_sessions & resumed_sessions:
+        raise ObservationLogMalformed("MALFORMED H10 union repeats a legacy evaluation session")
     observations = sorted(
         [*legacy, *resumed], key=lambda row: (row["evaluation_session"], row["as_of"])
     )

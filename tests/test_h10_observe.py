@@ -12,6 +12,12 @@ from options_researcher.h10_watch import H10A_ADJUDICATED, MIXED_TIMING_CONVENTI
 
 AS_OF = "2026-08-20"
 RECEIPT_REFERENCE = f"reports/h10/receipts/h10_watch_{AS_OF}.json"
+LEGACY_H10B_SESSIONS = {
+    "2026-07-23": "2026-07-22",
+    "2026-07-24": "2026-07-23",
+    "2026-07-27": "2026-07-24",
+    "2026-07-28": "2026-07-27",
+}
 BOOK_HEADER = (
     "id,symbol,strike,expiration,contracts,entry_date,entry_cost,"
     "entry_receipt_hash,exit_date,exit_proceeds,exit_reason,exit_receipt_hash\n"
@@ -97,6 +103,52 @@ def _run(root: Path):
             book_path=book,
         )
     return rc, stdout.getvalue(), receipt, observations, legacy, book
+
+
+def _write_complete_union_history(root: Path) -> tuple[Path, Path]:
+    legacy = root / "reports/h10/observations.jsonl"
+    legacy.parent.mkdir(parents=True)
+    legacy_rows = []
+    for run_date, evaluation_session in LEGACY_H10B_SESSIONS.items():
+        receipt_path = root / "reports/h10/receipts" / f"h10_watch_{run_date}.json"
+        payload = _receipt()
+        payload["as_of"] = run_date
+        payload["evaluation_session"] = evaluation_session
+        _write_receipt(receipt_path, payload)
+        legacy_rows.append(
+            {
+                "as_of": run_date,
+                "receipt": str(receipt_path.relative_to(root)),
+                "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+                "summary": {"fired": [], "no_signal": ["NVDA"], "skipped": {}},
+                "open_positions": 0,
+            }
+        )
+    legacy.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in legacy_rows),
+        encoding="utf-8",
+    )
+    h10b_receipt = root / RECEIPT_REFERENCE
+    _write_receipt(h10b_receipt)
+    h10b = root / "reports/h10/h10b_observations.jsonl"
+    h10b.write_text(
+        json.dumps(
+            {
+                "hypothesis": "H10b",
+                "as_of": AS_OF,
+                "evaluation_session": config.H10B_RESUME_FLOOR_SESSION,
+                "receipt": RECEIPT_REFERENCE,
+                "receipt_sha256": hashlib.sha256(h10b_receipt.read_bytes()).hexdigest(),
+                "summary": {"fired": [], "no_signal": ["NVDA"], "skipped": {}},
+                "open_positions": 0,
+                "mixed_timing_convention": MIXED_TIMING_CONVENTION,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return legacy, h10b
 
 
 class AppendTests(unittest.TestCase):
@@ -205,55 +257,51 @@ class MalformedLogTests(unittest.TestCase):
         self.assertEqual(before, after)
 
 
-class UnionTests(unittest.TestCase):
-    def test_union_returns_legacy_and_h10b_rows_with_session_axis_hole(self):
-        legacy_runs = {
-            "2026-07-23": "2026-07-22",
-            "2026-07-24": "2026-07-23",
-            "2026-07-27": "2026-07-24",
-            "2026-07-28": "2026-07-27",
-        }
+class ReceiptSemanticsTests(unittest.TestCase):
+    def _assert_refused_without_append(self, mutate) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            legacy = root / "reports/h10/observations.jsonl"
-            legacy.parent.mkdir(parents=True)
-            legacy_rows = []
-            for run_date, evaluation_session in legacy_runs.items():
-                receipt_path = root / "reports/h10/receipts" / f"h10_watch_{run_date}.json"
-                payload = _receipt()
-                payload["as_of"] = run_date
-                payload["evaluation_session"] = evaluation_session
-                _write_receipt(receipt_path, payload)
-                legacy_rows.append(
-                    {
-                        "as_of": run_date,
-                        "receipt": str(receipt_path.relative_to(root)),
-                        "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
-                        "summary": {"fired": [], "no_signal": ["NVDA"], "skipped": {}},
-                        "open_positions": 0,
-                    }
-                )
-            legacy.write_text(
-                "".join(json.dumps(row, sort_keys=True) + "\n" for row in legacy_rows),
-                encoding="utf-8",
-            )
-            h10b = root / "reports/h10/h10b_observations.jsonl"
-            h10b.write_text(
-                json.dumps(
-                    {
-                        "hypothesis": "H10b",
-                        "as_of": AS_OF,
-                        "evaluation_session": config.H10B_RESUME_FLOOR_SESSION,
-                        "receipt": RECEIPT_REFERENCE,
-                        "receipt_sha256": "b" * 64,
-                        "summary": {"fired": [], "no_signal": ["NVDA"], "skipped": {}},
-                        "open_positions": 0,
-                        "mixed_timing_convention": MIXED_TIMING_CONVENTION,
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
+            receipt_path = root / "h10_watch.json"
+            payload = _receipt()
+            mutate(payload)
+            _write_receipt(receipt_path, payload)
+            rc, output, _, observations, _, _ = _run(root)
+            observation_exists = observations.exists()
+
+        self.assertEqual(rc, 2)
+        self.assertIn("REFUSED", output)
+        self.assertFalse(observation_exists)
+
+    def test_fired_row_requires_a_true_h10b_signal_and_action(self):
+        def mutate(payload: dict) -> None:
+            payload["evaluations"][0]["signals"]["H10b"] = False
+
+        self._assert_refused_without_append(mutate)
+
+    def test_no_signal_row_requires_a_false_h10b_signal_and_no_action(self):
+        def mutate(payload: dict) -> None:
+            payload["evaluations"][1]["signals"]["H10b"] = True
+
+        self._assert_refused_without_append(mutate)
+
+    def test_skipped_row_requires_no_book_action(self):
+        def mutate(payload: dict) -> None:
+            payload["evaluations"][2]["book_action_required"] = True
+
+        self._assert_refused_without_append(mutate)
+
+    def test_receipt_action_must_equal_its_row_action_aggregate(self):
+        def mutate(payload: dict) -> None:
+            payload["book_action_required"] = False
+
+        self._assert_refused_without_append(mutate)
+
+
+class UnionTests(unittest.TestCase):
+    def test_union_returns_legacy_and_h10b_rows_with_session_axis_hole(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy, h10b = _write_complete_union_history(root)
 
             union = h10_observe.read_h10b_observation_union(
                 root=root,
@@ -273,6 +321,68 @@ class UnionTests(unittest.TestCase):
                 "before_evaluation_session": config.H10B_RESUME_FLOOR_SESSION,
             },
         )
+
+    def test_union_refuses_missing_registered_legacy_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy, h10b = _write_complete_union_history(root)
+            legacy.write_text(
+                "\n".join(legacy.read_text(encoding="utf-8").splitlines()[:-1]) + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(h10_observe.ObservationLogMalformed):
+                h10_observe.read_h10b_observation_union(
+                    root=root,
+                    legacy_observations_path=legacy,
+                    h10b_observations_path=h10b,
+                )
+
+    def test_union_refuses_duplicate_legacy_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy, h10b = _write_complete_union_history(root)
+            first = legacy.read_text(encoding="utf-8").splitlines()[0]
+            legacy.write_text(legacy.read_text(encoding="utf-8") + first + "\n", encoding="utf-8")
+
+            with self.assertRaises(h10_observe.ObservationLogMalformed):
+                h10_observe.read_h10b_observation_union(
+                    root=root,
+                    legacy_observations_path=legacy,
+                    h10b_observations_path=h10b,
+                )
+
+    def test_union_refuses_legacy_receipt_hash_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy, h10b = _write_complete_union_history(root)
+            rows = [json.loads(line) for line in legacy.read_text(encoding="utf-8").splitlines()]
+            rows[0]["receipt_sha256"] = "0" * 64
+            legacy.write_text(
+                "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(h10_observe.ObservationLogMalformed):
+                h10_observe.read_h10b_observation_union(
+                    root=root,
+                    legacy_observations_path=legacy,
+                    h10b_observations_path=h10b,
+                )
+
+    def test_union_refuses_duplicate_resumed_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy, h10b = _write_complete_union_history(root)
+            line = h10b.read_text(encoding="utf-8")
+            h10b.write_text(line + line, encoding="utf-8")
+
+            with self.assertRaises(h10_observe.ObservationLogMalformed):
+                h10_observe.read_h10b_observation_union(
+                    root=root,
+                    legacy_observations_path=legacy,
+                    h10b_observations_path=h10b,
+                )
 
     def test_h7_watchlist_is_covered_by_the_schwab_capture_universe(self):
         self.assertTrue(

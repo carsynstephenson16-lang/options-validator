@@ -13,6 +13,12 @@ AS_OF = "2026-08-19"
 RUN_DATE = "2026-08-20"
 STALE_AS_OF = "2026-08-18"
 SCOPE_ID = "h7-forward-15-v1"
+LEGACY_H10B_SESSIONS = {
+    "2026-07-23": "2026-07-22",
+    "2026-07-24": "2026-07-23",
+    "2026-07-27": "2026-07-24",
+    "2026-07-28": "2026-07-27",
+}
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -78,6 +84,32 @@ def _write_complete_artifacts(root: Path) -> None:
                 }
             ],
         },
+    )
+    legacy_rows = []
+    for legacy_run_date, legacy_evaluation_session in LEGACY_H10B_SESSIONS.items():
+        legacy_receipt = root / "reports/h10/receipts" / f"h10_watch_{legacy_run_date}.json"
+        _write_json(
+            legacy_receipt,
+            {
+                "as_of": legacy_run_date,
+                "evaluation_session": legacy_evaluation_session,
+                "evaluations": [],
+                "book_action_required": False,
+            },
+        )
+        legacy_rows.append(
+            {
+                "as_of": legacy_run_date,
+                "receipt": str(legacy_receipt.relative_to(root)),
+                "receipt_sha256": hashlib.sha256(legacy_receipt.read_bytes()).hexdigest(),
+                "summary": {"fired": [], "no_signal": [], "skipped": {}},
+                "open_positions": 0,
+            }
+        )
+    legacy_observations = root / "reports/h10/observations.jsonl"
+    legacy_observations.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in legacy_rows),
+        encoding="utf-8",
     )
     observations = root / "reports/h10/h10b_observations.jsonl"
     observations.parent.mkdir(parents=True, exist_ok=True)

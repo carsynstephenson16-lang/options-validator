@@ -29,6 +29,7 @@ from options_researcher.h7_earnings import load_assertions
 from options_researcher.h7_signals import lane_admission
 from options_researcher.h7_source_health import symbol_health
 from options_researcher.h7_watch import evaluation_session
+from tools.schwab_chain_manifest import SchwabChainManifestError
 
 BANNER = (
     "forward paper study H10b (H10a adjudicated); alerts + receipts only; never trades; "
@@ -69,7 +70,7 @@ H10A_ADJUDICATED = "ADJUDICATED"
 MIXED_TIMING_CONVENTION = "official_close_spot + 15:45_preclose_schwab_chain"
 
 FrameLoader = Callable[[str, str], pd.DataFrame | None]
-PrecloseChainLoader = Callable[[str], tuple[pd.DataFrame, str] | None]
+PrecloseChainLoader = Callable[[str, str], tuple[pd.DataFrame, str] | None]
 Gate = Callable[[], str | None]
 AssertionsLoader = Callable[[], list[dict]]
 
@@ -111,21 +112,22 @@ def _load_raw(symbol: str, eval_iso: str) -> pd.DataFrame:
     return load_ohlcv(symbol, _OHLCV_START, eval_iso, allow_oos=True)
 
 
-def _load_verified_preclose_chain(symbol: str) -> tuple[pd.DataFrame, str] | None:
-    """Return the newest VERIFIED 15:45 Schwab chain for one H10b name.
+def _load_verified_preclose_chain(
+    symbol: str, expected_session: str
+) -> tuple[pd.DataFrame, str] | None:
+    """Return one expected-session, full-universe verified Schwab chain.
 
     The verified-view boundary owns package verification; this consumer never
-    opens the capture store itself and never falls back to the ThetaData chain.
+    opens the capture store itself and never falls back to an older package or
+    the ThetaData chain.
     """
     from options_researcher import schwab_chain_view
 
-    sessions, _failures = schwab_chain_view.verified_sessions()
     name = symbol.upper()
-    for session in reversed(sessions):
-        if name not in schwab_chain_view.session_symbols(session):
-            continue
-        return schwab_chain_view.load_chain(name, session), session
-    return None
+    symbols = set(schwab_chain_view.session_symbols(expected_session))
+    if name not in symbols or not set(config.H7_WATCHLIST).issubset(symbols):
+        return None
+    return schwab_chain_view.load_chain(name, expected_session), expected_session
 
 
 def _last_iso(frame: pd.DataFrame) -> str:
@@ -148,6 +150,8 @@ def _validated_chain(chain: pd.DataFrame) -> pd.DataFrame:
             "iv",
         ):
             frame[field] = pd.to_numeric(frame[field], errors="raise")
+            if not frame[field].map(math.isfinite).all():
+                raise ValueError(f"chain {field} must be finite")
     except (TypeError, ValueError) as exc:
         raise ValueError(f"chain contains malformed values: {exc}") from exc
     frame["right"] = frame["right"].astype(str).str.upper()
@@ -176,10 +180,9 @@ def _candidate_contract(
     """
     calls = chain.loc[chain["right"].eq("C")].copy()
     calls["dte"] = calls["expiration"].map(lambda expiry: (expiry - on).days)
-    calls["abs_delta"] = calls["delta"].abs()
     calls = calls.loc[
         calls["dte"].between(config.H10_DTE_MIN, config.H10_DTE_MAX)
-        & calls["abs_delta"].between(config.H10_DELTA_MIN, config.H10_DELTA_MAX)
+        & calls["delta"].between(config.H10_DELTA_MIN, config.H10_DELTA_MAX)
         & calls["strike"].between(
             spot * (1.0 - config.H10_STRIKE_BAND_PCT),
             spot * (1.0 + config.H10_STRIKE_BAND_PCT),
@@ -206,7 +209,7 @@ def _candidate_contract(
                 "strike": float(row["strike"]),
                 "expiration": row["expiration"].isoformat(),
                 "dte": int(row["dte"]),
-                "delta": float(row["abs_delta"]),
+                "delta": float(row["delta"]),
                 "bid": bid,
                 "ask": ask,
                 "open_interest": open_interest,
@@ -335,11 +338,14 @@ def _evaluation(
         spot = float(raw["close"].iloc[-1])
         if not math.isfinite(spot) or spot <= 0:
             return result("SKIPPED", "DATA", signals=signals)
-        preclose = load_preclose_chain(symbol)
+        preclose = load_preclose_chain(symbol, eval_iso)
         if preclose is None:
             return result("SKIPPED", "SCHWAB_CAPTURE", signals=signals)
         loaded_chain, chain_session = preclose
-        date.fromisoformat(chain_session)
+        if chain_session != eval_iso:
+            return result("SKIPPED", "SCHWAB_CAPTURE", signals=signals)
+        if date.fromisoformat(chain_session).isoformat() != chain_session:
+            return result("SKIPPED", "SCHWAB_CAPTURE", signals=signals)
         if loaded_chain.empty:
             return result(
                 "SKIPPED",
@@ -356,7 +362,7 @@ def _evaluation(
             dte_band=(config.H10_DTE_MIN, config.H10_DTE_MAX),
             right="C",
         )
-    except (IndexError, KeyError, OSError, TypeError, ValueError):
+    except (SchwabChainManifestError, IndexError, KeyError, OSError, TypeError, ValueError):
         return result("SKIPPED", "SCHWAB_CAPTURE", signals=signals)
     if not admitted:
         return result(

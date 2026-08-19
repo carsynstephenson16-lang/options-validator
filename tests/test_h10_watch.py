@@ -9,9 +9,10 @@ from unittest import mock
 
 import pandas as pd
 from test_qm_signals import PARAMS, breakout_fixture, parabolic_fixture
+from test_schwab_chain_view import _write_store
 
 import config
-from options_researcher import h10_observe, h10_watch, qm_signals
+from options_researcher import h10_observe, h10_watch, qm_signals, schwab_chain_view
 from options_researcher.chains import third_friday
 from options_researcher.h7_watch import evaluation_session
 
@@ -97,6 +98,17 @@ def _chain(_symbol: str, _eval_iso: str) -> pd.DataFrame:
     )
 
 
+def _schwab_view_chain(symbol: str, eval_iso: str) -> pd.DataFrame:
+    """Fixture-backed verified-view frame with its full display schema."""
+    frame = _chain(symbol, eval_iso).copy()
+    frame["gamma"] = 0.02
+    frame["theta"] = -0.04
+    frame["vega"] = 0.12
+    farther_monthly = frame.iloc[[0]].copy()
+    farther_monthly.loc[:, "expiration"] = "2026-11-20"
+    return pd.concat([frame, farther_monthly], ignore_index=True)
+
+
 def _assertion(report: str = "2030-01-01", *, symbol: str = "PLTR") -> dict:
     return {
         "record_id": f"{symbol}-2026Q3-confirmed",
@@ -131,6 +143,7 @@ def _run(
     *,
     adjusted=_adjusted_quiet,
     preclose_loader=None,
+    use_default_preclose_adapter: bool = False,
     assertions: list[dict] | None = None,
     universe: list[str] | None = None,
 ):
@@ -139,8 +152,11 @@ def _run(
         _write_book(book)
     receipts = root / "receipts"
     stdout = io.StringIO()
-    if preclose_loader is None:
-        preclose_loader = lambda symbol: (_chain(symbol, EVAL_ISO), EVAL_ISO)
+    if preclose_loader is None and not use_default_preclose_adapter:
+        preclose_loader = lambda symbol, _session: (_chain(symbol, EVAL_ISO), EVAL_ISO)
+    preclose_kwargs = (
+        {} if use_default_preclose_adapter else {"load_preclose_chain": preclose_loader}
+    )
     with (
         mock.patch.object(h10_watch, "datetime") as watch_datetime,
         contextlib.redirect_stdout(stdout),
@@ -151,7 +167,7 @@ def _run(
             universe=["PLTR"] if universe is None else universe,
             load_adjusted=adjusted,
             load_raw=_raw,
-            load_preclose_chain=preclose_loader,
+            **preclose_kwargs,
             params=PARAMS,
             gate=lambda: None,
             load_assertions_fn=lambda: [_assertion()] if assertions is None else assertions,
@@ -205,6 +221,9 @@ class FireTests(unittest.TestCase):
             observation_rows = [
                 json.loads(line) for line in h10b_path.read_text(encoding="utf-8").splitlines()
             ]
+            output_files = sorted(
+                path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()
+            )
 
         self.assertEqual(rc, 0)
         self.assertEqual(observe_rc, 0, observe_output.getvalue())
@@ -214,8 +233,15 @@ class FireTests(unittest.TestCase):
         self.assertEqual(row["status"], "NO_SIGNAL")
         self.assertEqual(row["signals"], {"H10a": None, "H10b": False})
         self.assertEqual(row["h10a_status"], h10_watch.H10A_ADJUDICATED)
-        self.assertNotIn("h10a", receipt_path.name.lower())
         self.assertEqual([item["hypothesis"] for item in observation_rows], ["H10b"])
+        self.assertEqual(
+            output_files,
+            [
+                "h10_positions.csv",
+                "h10b_observations.jsonl",
+                f"receipts/h10_watch_{AS_OF}.json",
+            ],
+        )
 
     def test_breakout_continuation_fire_selects_a_call_from_verified_preclose(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -257,7 +283,10 @@ class FireTests(unittest.TestCase):
             rc, _, receipt, _ = _run(
                 Path(tmp),
                 adjusted=_adjusted_breakout,
-                preclose_loader=lambda _symbol: (four_contracts("PLTR", EVAL_ISO), EVAL_ISO),
+                preclose_loader=lambda _symbol, _session: (
+                    four_contracts("PLTR", EVAL_ISO),
+                    EVAL_ISO,
+                ),
             )
 
         self.assertEqual(rc, 0)
@@ -277,7 +306,7 @@ class FireTests(unittest.TestCase):
             rc, _, receipt, _ = _run(
                 Path(tmp),
                 adjusted=_adjusted_breakout,
-                preclose_loader=lambda _symbol: (expensive("PLTR", EVAL_ISO), EVAL_ISO),
+                preclose_loader=lambda _symbol, _session: (expensive("PLTR", EVAL_ISO), EVAL_ISO),
             )
 
         self.assertEqual(rc, 0)
@@ -306,7 +335,7 @@ class FireTests(unittest.TestCase):
             rc, _, receipt, _ = _run(
                 Path(tmp),
                 adjusted=_adjusted_breakout,
-                preclose_loader=lambda _symbol: (
+                preclose_loader=lambda _symbol, _session: (
                     one_wide_quote("PLTR", EVAL_ISO),
                     EVAL_ISO,
                 ),
@@ -321,7 +350,7 @@ class FireTests(unittest.TestCase):
             rc, output, receipt, _ = _run(
                 Path(tmp),
                 adjusted=_adjusted_breakout,
-                preclose_loader=lambda _symbol: None,
+                preclose_loader=lambda _symbol, _session: None,
             )
 
         self.assertEqual(rc, 0)
@@ -329,6 +358,148 @@ class FireTests(unittest.TestCase):
         self.assertEqual(row["status"], "SKIPPED")
         self.assertEqual(row["reason"], "SCHWAB_CAPTURE")
         self.assertIn("SCHWAB_CAPTURE", output)
+
+
+class PrecloseCaptureIntegrityTests(unittest.TestCase):
+    def _run_default_adapter(self, root: Path):
+        chain_dir = root / ".cache" / "schwab_chains"
+        reports_dir = root / "reports" / "schwab_chains"
+        schwab_chain_view._reset_memo_for_tests()
+        try:
+            with mock.patch.object(
+                schwab_chain_view,
+                "_dirs",
+                return_value=(chain_dir, reports_dir),
+            ):
+                return _run(
+                    root,
+                    adjusted=_adjusted_breakout,
+                    use_default_preclose_adapter=True,
+                )
+        finally:
+            schwab_chain_view._reset_memo_for_tests()
+
+    def test_default_adapter_uses_only_current_verified_full_universe_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            frame = _schwab_view_chain("PLTR", EVAL_ISO)
+            _write_store(
+                root,
+                list(config.H7_WATCHLIST),
+                session=EVAL_ISO,
+                frames={symbol: frame for symbol in config.H7_WATCHLIST},
+            )
+            rc, _, receipt, _ = self._run_default_adapter(root)
+
+        self.assertEqual(rc, 0)
+        row = receipt["evaluations"][0]
+        self.assertEqual(row["status"], "FIRED")
+        self.assertEqual(row["chain_session"], EVAL_ISO)
+        self.assertEqual(row["candidate_contract"]["iv"], 0.5753)
+
+    def test_stale_preclose_session_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda *_args: (_chain("PLTR", EVAL_ISO), "2026-08-18"),
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
+
+    def test_future_preclose_session_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda *_args: (_chain("PLTR", EVAL_ISO), "2026-08-20"),
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
+
+    def test_partial_current_capture_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_store(
+                root,
+                ["PLTR"],
+                session=EVAL_ISO,
+                frames={"PLTR": _schwab_view_chain("PLTR", EVAL_ISO)},
+            )
+            rc, _, receipt, _ = self._run_default_adapter(root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
+
+    def test_failed_current_capture_never_falls_back_to_an_older_verified_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            older_session = "2026-08-18"
+            frame = _schwab_view_chain("PLTR", older_session)
+            _write_store(
+                root,
+                list(config.H7_WATCHLIST),
+                session=older_session,
+                frames={symbol: frame for symbol in config.H7_WATCHLIST},
+            )
+            failed_current = root / "reports" / "schwab_chains" / EVAL_ISO
+            failed_current.mkdir(parents=True)
+            (failed_current / "preclose.json").write_text("{}\n", encoding="utf-8")
+            rc, _, receipt, _ = self._run_default_adapter(root)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
+
+    def test_negative_call_delta_is_not_accepted_by_the_h10b_delta_gate(self):
+        frame = _chain("PLTR", EVAL_ISO)
+        frame.loc[frame["right"] == "C", "delta"] = -0.50
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda *_args: (frame, EVAL_ISO),
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "NO_CONTRACT")
+
+    def test_nonfinite_capture_iv_is_skipped_before_receipt_serialization(self):
+        frame = _chain("PLTR", EVAL_ISO)
+        frame.loc[0, "iv"] = float("nan")
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda *_args: (frame, EVAL_ISO),
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
+
+    def test_manifest_error_from_view_is_skipped(self):
+        from tools.schwab_chain_manifest import SchwabChainManifestError
+
+        def malformed_view(*_args):
+            raise SchwabChainManifestError("fixture malformed")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=malformed_view,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
 
 
 class CapTests(unittest.TestCase):
@@ -477,7 +648,7 @@ class FutureAsOfTests(unittest.TestCase):
         future = (date.today() + timedelta(days=5)).isoformat()
         calls: list[str] = []
 
-        def spy(symbol: str):
+        def spy(symbol: str, _session: str):
             calls.append(symbol)
             raise AssertionError("future refusal must precede data loading")
 
@@ -560,7 +731,7 @@ class H10bWindowTests(unittest.TestCase):
             params=PARAMS,
             load_adjusted=_adjusted_breakout,
             load_raw=_raw,
-            load_preclose_chain=lambda _symbol: (_chain_for(eval_iso), eval_iso),
+            load_preclose_chain=lambda _symbol, _session: (_chain_for(eval_iso), eval_iso),
             assertions=[_assertion("2030-01-01")],
             known_as_of=datetime.fromisoformat(f"{eval_iso}T20:00:00+00:00"),
             open_premium=0.0,
@@ -578,7 +749,7 @@ class H10bWindowTests(unittest.TestCase):
             params=PARAMS,
             load_adjusted=_adjusted_breakout,
             load_raw=_raw,
-            load_preclose_chain=lambda _symbol: (_chain_for(eval_iso), eval_iso),
+            load_preclose_chain=lambda _symbol, _session: (_chain_for(eval_iso), eval_iso),
             assertions=[_assertion("2030-01-01")],
             known_as_of=datetime.fromisoformat(f"{eval_iso}T20:00:00+00:00"),
             open_premium=0.0,
@@ -613,7 +784,7 @@ class ResumeFloorTests(unittest.TestCase):
                     universe=["PLTR"],
                     load_adjusted=forbidden,
                     load_raw=forbidden,
-                    load_preclose_chain=lambda _symbol: None,
+                    load_preclose_chain=lambda _symbol, _session: None,
                     params=PARAMS,
                     gate=lambda: None,
                     load_assertions_fn=lambda: [],
