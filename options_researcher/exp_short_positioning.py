@@ -1,6 +1,7 @@
 """EXP-SHORT display lane.
 
-Disabled by default (``config.SHORT_CONTEXT_ENABLED``). Reads local validated
+Gated on ``config.SHORT_CONTEXT_ENABLED``, ON since the owner-directed flip
+2026-08-14 (decision menu ruling 5). Reads local validated
 artifacts only, never a provider. A lane failure becomes a visible red card
 rather than an empty lane, and nothing here can reach ranking, verdict, entry,
 sizing, book, or live-order code.

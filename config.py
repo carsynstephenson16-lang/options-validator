@@ -867,10 +867,10 @@ EXP_TBILL_TARGET_DELTA = 0.50
 EXPERIMENTS_OUTPUT_PATH = ".tmp/dashboard/experiments.html"
 
 # EXP-SHORT: issuer-level reported short positioning (FINRA Consolidated Short
-# Interest). Display-only, disabled by default, with no ranking, verdict,
+# Interest). Display-only, with no ranking, verdict,
 # entry, sizing, or execution authority. Design:
 # docs/superpowers/specs/2026-08-11-short-positioning-context-design.md
-SHORT_CONTEXT_ENABLED = False
+SHORT_CONTEXT_ENABLED = True  # owner-directed in-session 2026-08-14 (decision menu ruling 5)
 # Local, gitignored capture root. Provider rows never enter Git.
 SHORT_POSITIONING_ROOT = ".cache/short_positioning"
 # Display-health setting, NOT a predictive threshold: a symbol more than this
