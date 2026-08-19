@@ -59,11 +59,18 @@ H7_TIER_SURFACES = (
     "options_researcher.h7_watch",
     "options_researcher.h7_entry_preflight",
 )
-GATE_GO_SURFACES = (  # membership per owner decision D-1 (F1: all stay fenced)
+GATE_GO_SURFACES = (  # membership per owner decision D-1 (F1) as amended below
     "options_researcher.h6_features",
     "options_researcher.h6_watch",
-    "options_researcher.entry_watch",
     "options_researcher.h8_watch",
+)
+# Brief 17 WP-F: ledger seq 28 clause 1 + seq 29 clause 2 record the
+# owner-confirmed D-1=F1 override for H10b and H5's watch ONLY -- the verified
+# Schwab 15:45 preclose capture is a qualifying exact-session source for those
+# two lanes, so they no longer sit behind the H7 data gate. H6 and H8 stay in
+# GATE_GO_SURFACES above, unchanged.
+SCHWAB_LANE_SURFACES = (
+    "options_researcher.entry_watch",
     "options_researcher.h10_watch",
     "options_researcher.h10_observe",
 )
@@ -77,13 +84,16 @@ MODULE_SITE_RE = re.compile(r"python -m ([A-Za-z0-9_.]+)")
 # and AS_OF gates the entire data phase. A naive H7 matcher that greps for the
 # substring "h7_watch" would fail P2 on a correct script (mutation M9).
 PYTHON_DASH_C_CLASSIFICATION = {
-    115: "DATA_TIER_PERMITTED",  # AS_OF via options_researcher.h7_watch.evaluation_session
-    116: "DATA_TIER_PERMITTED",  # SCOPE_ID via options_researcher.h7_scope.scope_identity
-    194: "FULL_TIER",  # research.receipts.load_receipt — reads the gate receipt
-    301: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
-    304: "DATA_TIER",  # options_researcher.features.build_all (display extras)
-    377: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
-    388: "FULL_TIER_PROBE",  # `import options_researcher.h10_watch` availability probe
+    120: "DATA_TIER_PERMITTED",  # AS_OF via options_researcher.h7_watch.evaluation_session
+    121: "DATA_TIER_PERMITTED",  # SCOPE_ID via options_researcher.h7_scope.scope_identity
+    199: "FULL_TIER",  # research.receipts.load_receipt — reads the gate receipt
+    306: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
+    309: "DATA_TIER",  # options_researcher.features.build_all (display extras)
+    357: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
+    # Brief 17 WP-F: the Schwab lane's own read-only sites. The verified-view
+    # read is the lane's fail-closed gate; it mutates nothing.
+    386: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
+    429: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
 }
 
 # ---- registry 3: every mutation verb site ----------------------------------
@@ -108,16 +118,16 @@ MUTATION_VERB_PATTERNS = {
     "restic backup": r"\brestic\s+backup\b",
 }
 MUTATION_VERB_SITES = {
-    'mkdir -p "$LOGDIR"': (63,),  # data tier
-    'mkdir -p "$PF_RECEIPT_DIR"': (332,),  # full tier (region B)
-    "mkdir -p reports/h5": (365,),  # full tier (region B, GATE_GO)
-    "mkdir -p reports/h8_forward": (378,),  # full tier (region B, GATE_GO)
-    "git add": (475,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (478,),  # data tier
-    "git fetch": (488,),  # data tier
-    "git merge": (489,),  # data tier — mutates the working tree unattended
-    "git push": (490,),  # data tier
-    "restic backup": (507,),  # data tier
+    'mkdir -p "$LOGDIR"': (68,),  # data tier
+    'mkdir -p "$PF_RECEIPT_DIR"': (337,),  # full tier (region B)
+    "mkdir -p reports/h8_forward": (358,),  # full tier (region B, GATE_GO)
+    "mkdir -p reports/h5": (408,),  # Schwab preclose lane (brief 17 WP-F)
+    "git add": (537,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (540,),  # data tier
+    "git fetch": (550,),  # data tier
+    "git merge": (551,),  # data tier — mutates the working tree unattended
+    "git push": (552,),  # data tier
+    "restic backup": (569,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -198,7 +208,9 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         source = _source()
         self.assertIn(REQUIRE_DATA, source)
         gate = source.index(REQUIRE_DATA)
-        for module in DATA_TIER_MODULES + H7_TIER_SURFACES + GATE_GO_SURFACES:
+        for module in (
+            DATA_TIER_MODULES + H7_TIER_SURFACES + GATE_GO_SURFACES + SCHWAB_LANE_SURFACES
+        ):
             with self.subTest(module=module):
                 self.assertLess(gate, _module_site_index(source, module))
         for verb, pattern in MUTATION_VERB_PATTERNS.items():
@@ -212,7 +224,10 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         source = _source()
         self.assertIn(REQUIRE_FULL, source)
         gate = source.index(REQUIRE_FULL)
-        # Under owner decision D-1 = F1 the GATE_GO lanes stay fenced too.
+        # Under owner decision D-1 = F1 the remaining GATE_GO lanes (H6/H8)
+        # stay fenced. H10b and the H5 observer are the amended exception
+        # (brief 17 WP-F) and are asserted separately, by containment in the
+        # Schwab lane, not by this fence.
         for module in H7_TIER_SURFACES + GATE_GO_SURFACES:
             with self.subTest(module=module):
                 self.assertLess(gate, _module_site_index(source, module))
@@ -239,7 +254,12 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         module_sites = [match.group(1) for match in MODULE_SITE_RE.finditer(source)]
         self.assertEqual(
             set(module_sites),
-            set(DATA_TIER_MODULES + H7_TIER_SURFACES + GATE_GO_SURFACES),
+            set(
+                DATA_TIER_MODULES
+                + H7_TIER_SURFACES
+                + GATE_GO_SURFACES
+                + SCHWAB_LANE_SURFACES
+            ),
         )
         # The gate is not a gated surface: requiring it to precede itself is
         # incoherent. It is invoked as `"$PYTHON" -m`, so the `python -m`
@@ -286,6 +306,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         region_a = _region(source, "full-tier region A")
         island = _region(source, "data-tier island")
         region_b = _region(source, "full-tier region B")
+        schwab = _region(source, "Schwab preclose lane")
         require_full = source.index(REQUIRE_FULL)
 
         for number, classification in PYTHON_DASH_C_CLASSIFICATION.items():
@@ -299,6 +320,10 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                     self.assertFalse(region_b[0] < offset < region_b[1])
                 elif classification == "FULL_TIER":
                     self.assertTrue(region_a[0] < offset < region_a[1])
+                elif classification == "SCHWAB_LANE":
+                    self.assertTrue(schwab[0] < offset < schwab[1])
+                    self.assertFalse(region_a[0] < offset < region_a[1])
+                    self.assertFalse(region_b[0] < offset < region_b[1])
                 else:
                     self.assertEqual(classification, "FULL_TIER_PROBE")
                     self.assertTrue(region_b[0] < offset < region_b[1])
@@ -350,8 +375,8 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         while leaving the region markers, the ordering tests and the
         containment test above all satisfied. Only the literal binds it.
         Region B's `FULL_AUTHORITY_RC` conjunct is pinned here for the same
-        reason: without it the H5/H6/H8/H10 lanes run whenever GATE_GO is 1,
-        under an authority tier that never granted them.
+        reason: without it the H6/H8 lanes run whenever GATE_GO is 1, under an
+        authority tier that never granted them.
         """
         source = _source()
         self.assertEqual(
@@ -383,8 +408,13 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             _module_site_index(source, "options_researcher.h7_watch"),
             _module_site_index(source, "options_researcher.h6_features"),
             _module_site_index(source, "options_researcher.h6_watch"),
-            _module_site_index(source, "options_researcher.entry_watch"),
+            # Brief 17 WP-F moved entry_watch (now the H5 observer) and the
+            # H10b watcher into the unfenced Schwab preclose lane, which sits
+            # after region B — so the H5 observer now follows h8_watch. Every
+            # refresh-before-consumer relation the frozen order protects (QM
+            # OHLCV and the feature rebuild ahead of both consumers) is intact.
             _module_site_index(source, "options_researcher.h8_watch"),
+            _module_site_index(source, "options_researcher.entry_watch"),
             _module_site_index(source, "options_researcher.h10_watch"),
             _module_site_index(source, "options_researcher.h10_observe"),
             _module_site_index(source, "options_researcher.dashboard"),
@@ -451,7 +481,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
 
     def test_h5_rerun_failure_is_critical_before_terminal_publish(self):
         source = _source()
-        failure = 'crit "h5 entry watch: NONZERO EXIT"'
+        failure = 'crit "h5 observe: NONZERO EXIT"'
         terminal = source.index('if [ "$CRITICAL" -eq 1 ]; then')
         self.assertIn(failure, source)
         self.assertLess(source.index(failure), terminal)
@@ -557,7 +587,12 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             'elif [ "$FULL_AUTHORITY_RC" -ne 0 ]; then',
             "# ---- end full-tier region B",
         )
-        self.assertIn('note "H5/H6/H8/H10 lanes: PAUSED', region_b_else)
+        # Brief 17 WP-F: H5 and H10b left this fence, so the paused-lane line
+        # must name only the lanes still behind it. A stale "H5/H6/H8/H10"
+        # line would tell the operator two running lanes were paused.
+        self.assertIn('note "H6/H8 lanes: PAUSED', region_b_else)
+        self.assertNotIn("H5", region_b_else)
+        self.assertNotIn("H10", region_b_else)
         self.assertNotIn("crit ", region_b_else)
 
     def test_starved_label_requires_single_capture_critical(self):
@@ -709,3 +744,234 @@ class CacheEdgeZshExecutionTests(unittest.TestCase):
         out = self._run_block("VST_2026-08-13.parquet", "2026-08-13")
         self.assertIn("DATA_STARVED=0", out)
         self.assertNotIn("STARVED:", out)
+
+
+class SchwabPrecloseLaneTests(unittest.TestCase):
+    """Brief 17 WP-F: the H10b + H5-observer lane, statically and under zsh.
+
+    The lane exists because ledger seq 28 clause 1 and seq 29 clause 2 record
+    the owner-confirmed D-1=F1 override for these two lanes only: the verified
+    Schwab 15:45 ET preclose capture is a qualifying exact-session source for
+    them, so they leave the H7 data-gate fence while H6/H8 stay behind it.
+    Everything the amendments make load-bearing is asserted here -- the lane's
+    fail-closed gate, the absence of a ThetaData fallback, the retirement of
+    the trigger prose (seq 29 clause 1), and the namespaced observation store.
+    """
+
+    # ---- static structure ---------------------------------------------------
+    def _lane(self, source: str) -> str:
+        start, end = _region(source, "Schwab preclose lane")
+        return source[start:end]
+
+    def _lane_code(self, source: str) -> str:
+        """Lane text with comment-only lines removed (executable text only)."""
+        return "\n".join(
+            line
+            for line in self._lane(source).split("\n")
+            if not line.strip().startswith("#")
+        )
+
+    def test_lane_sits_outside_both_full_tier_fences(self):
+        source = _source()
+        region_a = _region(source, "full-tier region A")
+        region_b = _region(source, "full-tier region B")
+        lane = _region(source, "Schwab preclose lane")
+        self.assertLess(region_b[1], lane[0])
+        for module in SCHWAB_LANE_SURFACES:
+            with self.subTest(module=module):
+                offset = _module_site_index(source, module)
+                self.assertTrue(lane[0] < offset < lane[1])
+                self.assertFalse(region_a[0] < offset < region_a[1])
+                self.assertFalse(region_b[0] < offset < region_b[1])
+        # H6/H8 did NOT move: they stay inside the fenced region B.
+        for module in ("options_researcher.h6_watch", "options_researcher.h8_watch"):
+            with self.subTest(module=module):
+                offset = _module_site_index(source, module)
+                self.assertTrue(region_b[0] < offset < region_b[1])
+
+    def test_lane_is_gated_on_the_shared_verified_view(self):
+        source = _source()
+        lane = self._lane(source)
+        code = self._lane_code(source)
+        # The lane's first executable statement is the fail-closed default.
+        self.assertEqual(code.strip().split("\n")[0], 'SCHWAB_LANE="UNVERIFIED"')
+        self.assertIn('if [ "$SCHWAB_LANE" = "VERIFIED" ]; then', lane)
+        # The gate reads the same verified-view boundary h10_watch and
+        # entry_watch load through -- not a second, drifting loader.
+        self.assertIn("from options_researcher.schwab_chain_view import verified_sessions", lane)
+        # Fail-closed default: SCHWAB_LANE is UNVERIFIED before the probe runs,
+        # so a missing AS_OF or an unreadable view skips rather than proceeds.
+        self.assertLess(
+            code.index('SCHWAB_LANE="UNVERIFIED"'), code.index("verified_sessions")
+        )
+        self.assertLess(
+            code.index("verified_sessions"),
+            code.index('if [ "$SCHWAB_LANE" = "VERIFIED" ]; then'),
+        )
+
+    def test_lane_has_no_thetadata_fallback(self):
+        """No executable statement in the lane can reach the frozen cache."""
+        code = self._lane_code(_source())
+        for forbidden in (".cache/chains", "thetadata", "CHAIN_EDGE", "DATA_STARVED"):
+            with self.subTest(token=forbidden):
+                self.assertNotIn(forbidden, code)
+        # The one place ThetaData may appear is the skip line, saying it is NOT
+        # substituted -- an honest operator message, not a code path.
+        self.assertIn("the frozen ThetaData cache is NOT substituted", code)
+
+    def test_trigger_prose_is_retired_everywhere_in_the_ritual(self):
+        source = _source()
+        for retired in (
+            "H5 ENTRY TRIGGER FIRE",
+            "no trigger fired",
+            "evaluate per H5 CORE rules",
+            'grep -q "FIRE"',
+            "h5 entry watch",
+        ):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, source)
+        lane = self._lane(source)
+        self.assertIn("observational / non-verdict-bearing", lane)
+        self.assertIn("trigger retired per ledger seq 29", lane)
+
+    def test_h10_observe_targets_the_namespaced_store_only(self):
+        from options_researcher import h10_observe
+
+        source = _source()
+        # The ritual passes no store override, so the module default decides.
+        self.assertIn(
+            '"$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" &&',
+            source,
+        )
+        # No executable statement anywhere names the legacy store.
+        self.assertNotIn(
+            "reports/h10/observations.jsonl",
+            "\n".join(line for _number, line in _code_lines(source)),
+        )
+        import inspect
+
+        default = inspect.signature(h10_observe.main).parameters["observations_path"].default
+        self.assertEqual(default, h10_observe.H10B_OBSERVATIONS_PATH)
+        self.assertEqual(
+            Path(h10_observe.H10B_OBSERVATIONS_PATH),
+            Path("reports/h10/h10b_observations.jsonl"),
+        )
+        self.assertNotEqual(
+            Path(h10_observe.H10B_OBSERVATIONS_PATH),
+            Path(h10_observe.LEGACY_OBSERVATIONS_PATH),
+        )
+
+    # ---- behavior under the shell that actually runs it ---------------------
+    def _run_lane(self, **env: str) -> tuple[str, str]:
+        """Execute the real lane block under zsh with a stub `uv`.
+
+        Static text cannot show which commands actually run, with which
+        `--as-of`, or whether a refusal becomes a CRITICAL. The stub records
+        every invocation and returns the exit codes the caller chooses.
+        """
+        import os as _os
+        import shutil as _shutil
+        import subprocess as _sp
+        import tempfile as _tf
+
+        zsh = _shutil.which("zsh")
+        if zsh is None:  # pragma: no cover - macOS always has zsh
+            self.skipTest("zsh is required")
+        lane = self._lane(_source())
+        tmp = Path(_tf.mkdtemp())
+        self.addCleanup(_shutil.rmtree, tmp, True)
+        calls = tmp / "calls.txt"
+        stub = tmp / "uv-stub"
+        stub.write_text(
+            "#!/bin/zsh\n"
+            'case "$*" in\n'
+            '  *verified_sessions*) print -r -- "$STUB_VERIFIED"; exit 0 ;;\n'
+            "  *'import options_researcher.h10_watch'*) exit ${STUB_H10_IMPORT_RC:-0} ;;\n"
+            '  *entry_watch*) print -r -- "entry_watch $*" >> "$CALLS"; '
+            "exit ${STUB_EW_RC:-0} ;;\n"
+            '  *h10_watch*) print -r -- "h10_watch $*" >> "$CALLS"; '
+            "exit ${STUB_H10W_RC:-0} ;;\n"
+            '  *h10_observe*) print -r -- "h10_observe $*" >> "$CALLS"; '
+            "exit ${STUB_H10O_RC:-0} ;;\n"
+            '  *) print -r -- "UNEXPECTED $*" >> "$CALLS"; exit 0 ;;\n'
+            "esac\n"
+        )
+        stub.chmod(0o755)
+        script = "\n".join(
+            [
+                "set -u",
+                'note() { print -r -- "NOTE: $1"; }',
+                "CRITICAL=0",
+                'crit() { CRITICAL=1; note "CRITICAL: $1"; }',
+                f'UV="{stub}"',
+                "AS_OF=2026-08-20",
+                "RUN_DATE=2026-08-21",
+                lane,
+                'print -r -- "CRITICAL=$CRITICAL"',
+            ]
+        )
+        environment = {**_os.environ, "CALLS": str(calls), "STUB_VERIFIED": "VERIFIED"}
+        environment.update(env)
+        completed = _sp.run(
+            [zsh, "-c", script],
+            cwd=tmp,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=environment,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        recorded = calls.read_text() if calls.exists() else ""
+        return completed.stdout, recorded
+
+    def test_unverified_session_skips_both_lanes_visibly(self):
+        out, calls = self._run_lane(STUB_VERIFIED="UNVERIFIED")
+        self.assertIn("H10b + H5 observe lanes: SKIPPED", out)
+        self.assertIn("no verified Schwab 15:45 preclose capture", out)
+        self.assertIn("CRITICAL=0", out)
+        self.assertEqual(calls, "")
+
+    def test_unreadable_verified_view_also_skips(self):
+        """An empty/garbled probe answer must skip, never proceed."""
+        out, calls = self._run_lane(STUB_VERIFIED="")
+        self.assertIn("H10b + H5 observe lanes: SKIPPED", out)
+        self.assertEqual(calls, "")
+
+    def test_verified_session_runs_both_lanes_on_the_run_date(self):
+        out, calls = self._run_lane()
+        self.assertIn("entry_watch --as-of 2026-08-21", calls)
+        self.assertIn("h10_watch --as-of 2026-08-21", calls)
+        self.assertIn("h10_observe --as-of 2026-08-21", calls)
+        # The evaluation session is resolved by the modules themselves; passing
+        # AS_OF would evaluate the session BEFORE the evaluation session.
+        self.assertNotIn("--as-of 2026-08-20", calls)
+        self.assertIn("observational / non-verdict-bearing", out)
+        self.assertNotIn("FIRE", out)
+        self.assertIn("CRITICAL=0", out)
+
+    def test_pre_floor_refusals_are_noted_not_critical(self):
+        out, calls = self._run_lane(STUB_EW_RC="2", STUB_H10W_RC="2")
+        self.assertIn("h5 observe: REFUSED", out)
+        self.assertIn("H5_RESUME_FLOOR_SESSION", out)
+        self.assertIn("h10b watch: REFUSED", out)
+        self.assertIn("H10B_RESUME_FLOOR_SESSION", out)
+        # No watcher receipt exists, so nothing may be appended.
+        self.assertIn("h10_observe: SKIPPED", out)
+        self.assertNotIn("h10_observe --as-of", calls)
+        self.assertIn("CRITICAL=0", out)
+
+    def test_h5_data_gap_is_visible_and_not_critical(self):
+        out, _calls = self._run_lane(STUB_EW_RC="1")
+        self.assertIn("h5 observe: DATA GAP", out)
+        self.assertIn("CRITICAL=0", out)
+
+    def test_unexpected_exit_codes_stay_critical(self):
+        out, _calls = self._run_lane(STUB_EW_RC="3", STUB_H10W_RC="4")
+        self.assertIn("CRITICAL: h5 observe: NONZERO EXIT", out)
+        self.assertIn("CRITICAL: h10_watch: NONZERO EXIT", out)
+        self.assertIn("CRITICAL=1", out)
+
+    def test_missing_h10_module_is_critical(self):
+        out, calls = self._run_lane(STUB_H10_IMPORT_RC="1")
+        self.assertIn("CRITICAL: h10_watch: module unavailable", out)
+        self.assertNotIn("h10_watch --as-of", calls)

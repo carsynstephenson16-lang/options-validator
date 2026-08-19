@@ -78,9 +78,13 @@ class RitualRefreshBeforeConsumerOrderTests(unittest.TestCase):
     def test_attractiveness_features_rebuild_precedes_entry_watch(self):
         source = RITUAL.read_text(encoding="utf-8")
 
-        # entry_watch reads IV-rank via options_researcher/features.py
-        # load_features(), which reads the store this build_all() call writes
-        # (options_researcher/entry_watch.py _gather -> features.load_features).
+        # Historically entry_watch read IV-rank via options_researcher/
+        # features.py load_features(), which reads the store this build_all()
+        # call writes. Brief 17 (WP-E) re-pointed the H5 lane at the verified
+        # Schwab captures, so that read is gone -- but the rebuild must still
+        # precede the lane: the attractiveness dashboard and the H5 report are
+        # read side by side, and a lane running ahead of the day's rebuild is
+        # exactly the 2026-07-24 defect this class exists to prevent.
         rebuild = "from options_researcher.features import build_all; build_all("
         entry_watch = "options_researcher.entry_watch"
 
@@ -89,11 +93,22 @@ class RitualRefreshBeforeConsumerOrderTests(unittest.TestCase):
         self.assertLess(source.index(rebuild), source.index(entry_watch))
 
     def test_entry_watch_receives_exact_ritual_session(self):
+        """The H5 lane must be handed the RUN date, not the evaluation session.
+
+        Brief 17 (WP-E) made entry_watch resolve its own evaluation session
+        from a RUN date (`_resolve_evaluation_session` ->
+        `h7_watch.evaluation_session`), the same convention h10_watch already
+        used. Passing `$AS_OF` -- itself already the resolved evaluation
+        session -- would silently observe the session BEFORE the one the rest
+        of the ritual is evaluating, which is the same class of off-by-one
+        this class was created to catch.
+        """
         source = RITUAL.read_text(encoding="utf-8")
         self.assertIn(
-            'options_researcher.entry_watch --as-of "$AS_OF" --out "$EW_OUT"',
+            'options_researcher.entry_watch --as-of "$RUN_DATE" --out "$EW_OUT"',
             source,
         )
+        self.assertNotIn('options_researcher.entry_watch --as-of "$AS_OF"', source)
 
     def test_display_extra_provider_acquisition_is_removed(self):
         source = RITUAL.read_text(encoding="utf-8")
