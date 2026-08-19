@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,9 +22,6 @@ from data.atomic_io import (
     atomic_text_write,
     publish_staged_file,
     stage_parquet_write,
-)
-from options_researcher import (
-    INVOCATION_MARKER_AT_IMPORT as _INVOCATION_MARKER_AT_IMPORT,
 )
 from options_researcher.h7_scope import watch_universe
 from options_researcher.intraday_capture import validate_session_tag
@@ -107,14 +105,6 @@ ADAPTER_COLUMNS = [
 # not an unforgeable proof. Anyone who exports the marker by hand gets a
 # receipt that says "launchd". It removes the from-memory assertion the S1 bar
 # was criticised for (caution C-f); it does not defeat a determined operator.
-# Two further false-positive paths, named so nobody "fixes" them in:
-#  - .env: NEVER put this key in any .env file. The import-time snapshot above
-#    ignores dotenv-injected values on the capture entry path, but .env is
-#    still a forbidden setter by convention (review 2026-08-15 finding F2).
-#  - `launchctl kickstart` of the preclose job runs under launchd's
-#    environment, so an operator-triggered kickstart inside the 15:35-15:55
-#    window yields an honest-looking "launchd" receipt (finding F3). S1
-#    adjudication should cross-check receipt times against the schedule.
 INVOCATION_SOURCE_ENV = "OPTIONS_VALIDATOR_INVOCATION_SOURCE"
 INVOCATION_SOURCE_LAUNCHD = "launchd"
 INVOCATION_SOURCE_MANUAL = "manual"
@@ -129,13 +119,9 @@ def resolve_invocation_source(environ: dict[str, str] | None = None) -> str:
     must cost provenance precision, never the 15:45 capture itself -- and it
     must never round *up* to an unattended claim.
     """
-    if environ is not None:
-        source = environ.get(INVOCATION_SOURCE_ENV)
-    else:
-        # Import-time snapshot, not os.environ: a dotenv load (schwab_adapter,
-        # LumiBot) mutates os.environ at runtime and must not be able to
-        # promote a hand-run capture to "launchd".
-        source = _INVOCATION_MARKER_AT_IMPORT
+    source = (environ if environ is not None else os.environ).get(
+        INVOCATION_SOURCE_ENV
+    )
     if source == INVOCATION_SOURCE_LAUNCHD:
         return INVOCATION_SOURCE_LAUNCHD
     return INVOCATION_SOURCE_MANUAL

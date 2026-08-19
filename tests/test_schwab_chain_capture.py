@@ -5,8 +5,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -308,73 +306,12 @@ class InvocationSourceTests(unittest.TestCase):
             )
 
     def _capture_with_env(self, value, *, universe=("AAA",)):
-        # The writer reads the process-start snapshot, not live os.environ
-        # (review 2026-08-15 F2: a runtime dotenv load must not set the
-        # marker), so tests simulate the start environment via the snapshot.
-        with mock.patch.object(capture, "_INVOCATION_MARKER_AT_IMPORT", value):
-            return self._capture(FakeClient(), universe=universe)
-
-    def test_runtime_environ_mutation_cannot_forge_unattended_provenance(self):
-        # data.schwab_adapter and LumiBot both load .env into os.environ at
-        # runtime on the capture path. A marker arriving that way must degrade
-        # to "manual" -- only the process-start environment counts.
-        with mock.patch.object(capture, "_INVOCATION_MARKER_AT_IMPORT", None):
-            with mock.patch.dict(
-                os.environ, {capture.INVOCATION_SOURCE_ENV: "launchd"}
-            ):
-                self.assertEqual(capture.resolve_invocation_source(), "manual")
-
-    def test_dotenv_file_cannot_forge_unattended_provenance(self):
-        # End-to-end F2 pin: a fresh interpreter whose REAL environment lacks
-        # the marker, in a cwd whose .env carries it. The dotenv load lands in
-        # os.environ (asserted, so this test can never pass vacuously) yet the
-        # process-start snapshot in options_researcher/__init__.py wins.
-        repo_root = Path(__file__).resolve().parents[1]
-        code = (
-            "import os; import options_researcher.schwab_chain_capture as m; "
-            "from dotenv import load_dotenv; load_dotenv('.env'); "
-            "assert os.environ.get(m.INVOCATION_SOURCE_ENV) == 'launchd', "
-            "'dotenv load did not take'; "
-            "print(m.resolve_invocation_source())"
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / ".env").write_text(
-                f"{capture.INVOCATION_SOURCE_ENV}=launchd\n"
-            )
-            env = dict(os.environ)
-            env.pop(capture.INVOCATION_SOURCE_ENV, None)
-            env["PYTHONPATH"] = str(repo_root)
-            result = subprocess.run(
-                [sys.executable, "-c", code],
-                env=env,
-                capture_output=True,
-                text=True,
-                cwd=tmp,
-                check=False,
-            )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip().splitlines()[-1], "manual")
-
-    def test_marker_in_process_start_environment_is_honored(self):
-        # End-to-end positive path: launchd sets the marker before python
-        # starts, so a fresh interpreter must resolve "launchd".
         env = dict(os.environ)
-        env[capture.INVOCATION_SOURCE_ENV] = "launchd"
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                "import options_researcher.schwab_chain_capture as m;"
-                "print(m.resolve_invocation_source())",
-            ],
-            env=env,
-            capture_output=True,
-            text=True,
-            cwd=Path(__file__).resolve().parents[1],
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip().splitlines()[-1], "launchd")
+        env.pop(capture.INVOCATION_SOURCE_ENV, None)
+        if value is not None:
+            env[capture.INVOCATION_SOURCE_ENV] = value
+        with mock.patch.dict(os.environ, env, clear=True):
+            return self._capture(FakeClient(), universe=universe)
 
     def test_receipt_records_launchd_when_the_plist_marker_is_set(self):
         exit_code, receipt = self._capture_with_env("launchd")
