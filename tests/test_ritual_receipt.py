@@ -7,10 +7,11 @@ import unittest
 from pathlib import Path
 
 from options_researcher import ritual_receipt
+from options_researcher.h10_watch import MIXED_TIMING_CONVENTION
 
-AS_OF = "2026-07-21"
-RUN_DATE = "2026-07-22"
-STALE_AS_OF = "2026-07-20"
+AS_OF = "2026-08-19"
+RUN_DATE = "2026-08-20"
+STALE_AS_OF = "2026-08-18"
 SCOPE_ID = "h7-forward-15-v1"
 
 
@@ -72,19 +73,25 @@ def _write_complete_artifacts(root: Path) -> None:
             "evaluations": [
                 {
                     "status": "NO_SIGNAL",
-                    "signals": {"H10a": False, "H10b": False},
+                    "signals": {"H10a": None, "H10b": False},
+                    "h10a_status": "ADJUDICATED",
                 }
             ],
         },
     )
-    observations = root / "reports/h10/observations.jsonl"
+    observations = root / "reports/h10/h10b_observations.jsonl"
     observations.parent.mkdir(parents=True, exist_ok=True)
     observations.write_text(
         json.dumps(
             {
                 "as_of": RUN_DATE,
+                "evaluation_session": AS_OF,
+                "hypothesis": "H10b",
                 "receipt": f"reports/h10/receipts/h10_watch_{RUN_DATE}.json",
                 "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+                "summary": {"fired": [], "no_signal": ["PLTR"], "skipped": {}},
+                "open_positions": 0,
+                "mixed_timing_convention": MIXED_TIMING_CONVENTION,
             }
         )
         + "\n",

@@ -1,4 +1,4 @@
-"""Append one daily H10 watcher observation without changing the paper book.
+"""Append one daily H10b observation without changing the paper book.
 
 The source receipt is immutable evidence from ``h10_watch``. This recorder
 hashes it, summarizes every name, counts the separate owner-recorded book, and
@@ -18,19 +18,33 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import config
 from options_researcher.h10_watch import (
     BOOK_FIELDS,
     H10_BOOK_PATH,
     H10_RECEIPT_DIR,
+    H10A_ADJUDICATED,
+    MIXED_TIMING_CONVENTION,
 )
 
-OBSERVATIONS_PATH = Path("reports/h10/observations.jsonl")
-_OBSERVATION_FIELDS = {
+LEGACY_OBSERVATIONS_PATH = Path("reports/h10/observations.jsonl")
+H10B_OBSERVATIONS_PATH = Path("reports/h10/h10b_observations.jsonl")
+_LEGACY_OBSERVATION_FIELDS = {
     "as_of",
     "receipt",
     "receipt_sha256",
     "summary",
     "open_positions",
+}
+_H10B_OBSERVATION_FIELDS = {
+    "hypothesis",
+    "as_of",
+    "evaluation_session",
+    "receipt",
+    "receipt_sha256",
+    "summary",
+    "open_positions",
+    "mixed_timing_convention",
 }
 _SUMMARY_FIELDS = {"fired", "no_signal", "skipped"}
 _RECEIPT_FIELDS = {
@@ -42,11 +56,21 @@ _RECEIPT_FIELDS = {
 _EVALUATION_FIELDS = {
     "symbol",
     "signals",
+    "h10a_status",
+    "window_status",
     "status",
     "reason",
     "admitted_contracts",
     "candidate_contract",
     "book_action_required",
+    "chain_session",
+    "chain_timing_convention",
+}
+_LEGACY_H10B_SESSIONS = {
+    "2026-07-23": "2026-07-22",
+    "2026-07-24": "2026-07-23",
+    "2026-07-27": "2026-07-24",
+    "2026-07-28": "2026-07-27",
 }
 
 
@@ -71,17 +95,13 @@ def _load_receipt(path: Path, *, as_of: str) -> tuple[dict[str, Any], str]:
         raw = Path(path).read_bytes()
         payload = json.loads(raw)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ObservationError(
-            f"receipt unreadable: {type(exc).__name__}: {exc}"
-        ) from exc
+        raise ObservationError(f"receipt unreadable: {type(exc).__name__}: {exc}") from exc
     if not isinstance(payload, dict) or set(payload) != _RECEIPT_FIELDS:
         raise ObservationError("receipt schema does not match h10_watch")
     if payload.get("as_of") != as_of:
-        raise ObservationError(
-            f"receipt as_of {payload.get('as_of')!r} does not match {as_of}"
-        )
+        raise ObservationError(f"receipt as_of {payload.get('as_of')!r} does not match {as_of}")
     try:
-        date.fromisoformat(str(payload["evaluation_session"]))
+        evaluation_session = date.fromisoformat(str(payload["evaluation_session"]))
     except ValueError as exc:
         raise ObservationError("receipt evaluation_session is not ISO date") from exc
     evaluations = payload.get("evaluations")
@@ -89,6 +109,8 @@ def _load_receipt(path: Path, *, as_of: str) -> tuple[dict[str, Any], str]:
         raise ObservationError("receipt evaluations is not a list")
     if not isinstance(payload.get("book_action_required"), bool):
         raise ObservationError("receipt book_action_required is not boolean")
+    if evaluation_session.isoformat() < config.H10B_RESUME_FLOOR_SESSION:
+        raise ObservationError("receipt evaluation_session is before H10b resume floor")
     return payload, hashlib.sha256(raw).hexdigest()
 
 
@@ -99,9 +121,7 @@ def _summary(receipt: dict[str, Any]) -> dict[str, Any]:
     seen: set[str] = set()
     for position, row in enumerate(receipt["evaluations"], start=1):
         if not isinstance(row, dict) or set(row) != _EVALUATION_FIELDS:
-            raise ObservationError(
-                f"receipt evaluation {position} has unexpected schema"
-            )
+            raise ObservationError(f"receipt evaluation {position} has unexpected schema")
         symbol = row.get("symbol")
         if not isinstance(symbol, str) or not symbol.strip():
             raise ObservationError(f"receipt evaluation {position} has no symbol")
@@ -109,6 +129,18 @@ def _summary(receipt: dict[str, Any]) -> dict[str, Any]:
         if symbol in seen:
             raise ObservationError(f"receipt repeats symbol {symbol}")
         seen.add(symbol)
+        signals = row.get("signals")
+        if (
+            not isinstance(signals, dict)
+            or set(signals) != {"H10a", "H10b"}
+            or signals.get("H10a") is not None
+            or not isinstance(signals.get("H10b"), (bool, type(None)))
+            or row.get("h10a_status") != H10A_ADJUDICATED
+            or row.get("chain_timing_convention") != MIXED_TIMING_CONVENTION
+        ):
+            raise ObservationError(
+                f"receipt evaluation {position} is not a post-resumption H10b row"
+            )
         status = row.get("status")
         if status == "FIRED":
             if row.get("reason") is not None:
@@ -137,9 +169,7 @@ def count_open_positions(path: Path = H10_BOOK_PATH) -> int:
         with Path(path).open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
             if tuple(reader.fieldnames or ()) != BOOK_FIELDS:
-                raise ObservationError(
-                    f"book header {reader.fieldnames} != {BOOK_FIELDS}"
-                )
+                raise ObservationError(f"book header {reader.fieldnames} != {BOOK_FIELDS}")
             count = 0
             for line_number, row in enumerate(reader, start=2):
                 if not (row["id"] or "").strip():
@@ -149,77 +179,93 @@ def count_open_positions(path: Path = H10_BOOK_PATH) -> int:
     except ObservationError:
         raise
     except (OSError, KeyError, TypeError, csv.Error) as exc:
-        raise ObservationError(
-            f"book unreadable: {type(exc).__name__}: {exc}"
-        ) from exc
+        raise ObservationError(f"book unreadable: {type(exc).__name__}: {exc}") from exc
     return count
 
 
-def build_observation(
-    *, as_of: str, receipt_path: Path, book_path: Path
-) -> dict[str, Any]:
+def build_h10b_observation(*, as_of: str, receipt_path: Path, book_path: Path) -> dict[str, Any]:
     receipt, receipt_hash = _load_receipt(Path(receipt_path), as_of=as_of)
     return {
+        "hypothesis": "H10b",
         "as_of": as_of,
+        "evaluation_session": receipt["evaluation_session"],
         "receipt": _receipt_reference(as_of),
         "receipt_sha256": receipt_hash,
         "summary": _summary(receipt),
         "open_positions": count_open_positions(Path(book_path)),
+        "mixed_timing_convention": MIXED_TIMING_CONVENTION,
     }
 
 
-def _validate_existing(value: Any, *, line_number: int) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != _OBSERVATION_FIELDS:
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: observation schema mismatch"
-        )
+def _validate_legacy_existing(value: Any, *, line_number: int) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != _LEGACY_OBSERVATION_FIELDS:
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: observation schema mismatch")
     as_of = value.get("as_of")
     if not isinstance(as_of, str):
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: invalid as_of"
-        )
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid as_of")
     try:
         date.fromisoformat(as_of)
     except ValueError as exc:
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: invalid as_of"
-        ) from exc
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid as_of") from exc
     receipt = value.get("receipt")
     if not isinstance(receipt, str) or not receipt:
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: invalid receipt path"
-        )
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid receipt path")
     receipt_hash = value.get("receipt_sha256")
-    if not isinstance(receipt_hash, str) or re.fullmatch(
-        r"[0-9a-f]{64}", receipt_hash
-    ) is None:
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: invalid receipt_sha256"
-        )
+    if not isinstance(receipt_hash, str) or re.fullmatch(r"[0-9a-f]{64}", receipt_hash) is None:
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid receipt_sha256")
     summary = value.get("summary")
     if not isinstance(summary, dict) or set(summary) != _SUMMARY_FIELDS:
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: invalid summary"
-        )
-    if not isinstance(summary["fired"], list) or not isinstance(
-        summary["no_signal"], list
-    ) or not isinstance(summary["skipped"], dict):
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: invalid summary values"
-        )
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid summary")
+    if (
+        not isinstance(summary["fired"], list)
+        or not isinstance(summary["no_signal"], list)
+        or not isinstance(summary["skipped"], dict)
+    ):
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid summary values")
     open_positions = value.get("open_positions")
     if (
         not isinstance(open_positions, int)
         or isinstance(open_positions, bool)
         or open_positions < 0
     ):
-        raise ObservationLogMalformed(
-            f"MALFORMED line {line_number}: invalid open_positions"
-        )
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid open_positions")
     return value
 
 
-def append_observation(record: dict[str, Any], path: Path) -> bool:
+def _validate_h10b_existing(value: Any, *, line_number: int) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != _H10B_OBSERVATION_FIELDS:
+        raise ObservationLogMalformed(
+            f"MALFORMED line {line_number}: H10b observation schema mismatch"
+        )
+    if value.get("hypothesis") != "H10b":
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid hypothesis")
+    evaluation_session = value.get("evaluation_session")
+    if not isinstance(evaluation_session, str):
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid evaluation_session")
+    try:
+        if date.fromisoformat(evaluation_session).isoformat() != evaluation_session:
+            raise ValueError("not canonical")
+    except ValueError as exc:
+        raise ObservationLogMalformed(
+            f"MALFORMED line {line_number}: invalid evaluation_session"
+        ) from exc
+    if evaluation_session < config.H10B_RESUME_FLOOR_SESSION:
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: pre-floor H10b observation")
+    if value.get("mixed_timing_convention") != MIXED_TIMING_CONVENTION:
+        raise ObservationLogMalformed(f"MALFORMED line {line_number}: invalid timing convention")
+    checked = _validate_legacy_existing(
+        {key: value[key] for key in _LEGACY_OBSERVATION_FIELDS},
+        line_number=line_number,
+    )
+    return {**checked, **value}
+
+
+def _append_record(
+    record: dict[str, Any],
+    path: Path,
+    *,
+    validator: Any,
+) -> bool:
     """Append `record`; return False for an identical prior observation."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -232,15 +278,11 @@ def append_observation(record: dict[str, Any], path: Path) -> bool:
                 try:
                     parsed = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    raise ObservationLogMalformed(
-                        f"MALFORMED line {line_number}: {exc}"
-                    ) from exc
-                existing = _validate_existing(parsed, line_number=line_number)
+                    raise ObservationLogMalformed(f"MALFORMED line {line_number}: {exc}") from exc
+                existing = validator(parsed, line_number=line_number)
                 existing_as_of = existing["as_of"]
                 if existing_as_of in existing_by_date:
-                    raise ObservationLogMalformed(
-                        f"MALFORMED duplicate as_of {existing_as_of}"
-                    )
+                    raise ObservationLogMalformed(f"MALFORMED duplicate as_of {existing_as_of}")
                 existing_by_date[existing_as_of] = existing
 
             prior = existing_by_date.get(record["as_of"])
@@ -252,9 +294,7 @@ def append_observation(record: dict[str, Any], path: Path) -> bool:
                     f"{prior['receipt_sha256']}, not {record['receipt_sha256']}"
                 )
 
-            encoded = json.dumps(
-                record, sort_keys=True, separators=(",", ":"), allow_nan=False
-            )
+            encoded = json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False)
             handle.seek(0, os.SEEK_END)
             handle.write(encoded + "\n")
             handle.flush()
@@ -264,11 +304,86 @@ def append_observation(record: dict[str, Any], path: Path) -> bool:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def append_h10b_observation(record: dict[str, Any], path: Path) -> bool:
+    """Append one H10b record; legacy H10 observations are read-only history."""
+    _validate_h10b_existing(record, line_number=0)
+    return _append_record(record, path, validator=_validate_h10b_existing)
+
+
+def _read_jsonl(path: Path, *, validator: Any) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ObservationLogMalformed(
+            f"MALFORMED unreadable observation log: {type(exc).__name__}: {exc}"
+        ) from exc
+    rows: list[dict[str, Any]] = []
+    for line_number, line in enumerate(lines, start=1):
+        try:
+            rows.append(validator(json.loads(line), line_number=line_number))
+        except json.JSONDecodeError as exc:
+            raise ObservationLogMalformed(f"MALFORMED line {line_number}: {exc}") from exc
+    return rows
+
+
+def read_h10b_observation_union(
+    *,
+    root: Path = Path("."),
+    legacy_observations_path: Path = LEGACY_OBSERVATIONS_PATH,
+    h10b_observations_path: Path = H10B_OBSERVATIONS_PATH,
+) -> dict[str, Any]:
+    """Read H10b's legacy and resumed records with the permanent session hole."""
+    root = Path(root)
+    legacy_rows = _read_jsonl(Path(legacy_observations_path), validator=_validate_legacy_existing)
+    legacy: list[dict[str, Any]] = []
+    for row in legacy_rows:
+        as_of = row["as_of"]
+        expected_session = _LEGACY_H10B_SESSIONS.get(as_of)
+        if expected_session is None:
+            raise ObservationLogMalformed(
+                f"MALFORMED legacy H10 observation has unexpected run date {as_of}"
+            )
+        receipt_path = root / str(row["receipt"])
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ObservationLogMalformed(
+                f"MALFORMED legacy H10 receipt {as_of}: {type(exc).__name__}: {exc}"
+            ) from exc
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("as_of") != as_of
+            or receipt.get("evaluation_session") != expected_session
+        ):
+            raise ObservationLogMalformed(f"MALFORMED legacy H10 receipt {as_of}: session mismatch")
+        legacy.append(
+            {
+                **row,
+                "hypothesis": "H10b",
+                "evaluation_session": expected_session,
+            }
+        )
+    resumed = _read_jsonl(Path(h10b_observations_path), validator=_validate_h10b_existing)
+    observations = sorted(
+        [*legacy, *resumed], key=lambda row: (row["evaluation_session"], row["as_of"])
+    )
+    return {
+        "observations": observations,
+        "unobserved_evaluation_sessions": {
+            "after_evaluation_session": "2026-07-27",
+            "before_evaluation_session": config.H10B_RESUME_FLOOR_SESSION,
+        },
+    }
+
+
 def main(
     argv: list[str] | None = None,
     *,
     receipt_path: Path | None = None,
-    observations_path: Path = OBSERVATIONS_PATH,
+    observations_path: Path = H10B_OBSERVATIONS_PATH,
+    legacy_observations_path: Path = LEGACY_OBSERVATIONS_PATH,
     book_path: Path = H10_BOOK_PATH,
 ) -> int:
     import argparse
@@ -289,11 +404,14 @@ def main(
         if receipt_path is not None
         else H10_RECEIPT_DIR / f"h10_watch_{args.as_of}.json"
     )
+    if Path(observations_path) == Path(legacy_observations_path):
+        print("H10 OBSERVE REFUSED -- legacy observations are read-only history")
+        return 2
     try:
-        record = build_observation(
+        record = build_h10b_observation(
             as_of=args.as_of, receipt_path=source, book_path=Path(book_path)
         )
-        appended = append_observation(record, Path(observations_path))
+        appended = append_h10b_observation(record, Path(observations_path))
     except ObservationConflict as exc:
         print(f"H10 OBSERVE CONFLICT -- {exc}")
         return 2
@@ -306,10 +424,7 @@ def main(
     if appended:
         print(f"H10 OBSERVE appended as_of={args.as_of} to {observations_path}")
     else:
-        print(
-            f"H10 OBSERVE already recorded as_of={args.as_of} "
-            "with the same receipt hash; no-op"
-        )
+        print(f"H10 OBSERVE already recorded as_of={args.as_of} with the same receipt hash; no-op")
     return 0
 
 

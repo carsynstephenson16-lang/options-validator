@@ -94,13 +94,9 @@ _HYPOTHESIS_ORDER = ("H5", "H6", "H7", "H8", "H10a", "H10b")
 _H7_LANES = ("lane_a", "lane_b", "lane_c")
 _RITUAL_STATES = frozenset({"CAPTURED", "NO_SIGNAL", "REFUSED", "MISSING"})
 _H6_ENTRY_STATES = frozenset({"ELIGIBLE", "BLOCKED"})
-_H6_TIMING_STATES = frozenset(
-    {"UNKNOWN", "POST_REPORT", "PRE_REPORT_BANNED", "IVR_GATED"}
-)
+_H6_TIMING_STATES = frozenset({"UNKNOWN", "POST_REPORT", "PRE_REPORT_BANNED", "IVR_GATED"})
 _H8_ENTRY_STATES = frozenset({"ENTRY-OK", "BLOCKED", "OUT_OF_WINDOW"})
-_H8_WINDOW_STATES = frozenset(
-    {"UNKNOWN", "OUT_OF_WINDOW", "ESTIMATED_BLOCKED", "IN_WINDOW"}
-)
+_H8_WINDOW_STATES = frozenset({"UNKNOWN", "OUT_OF_WINDOW", "ESTIMATED_BLOCKED", "IN_WINDOW"})
 _H10_STATES = frozenset({"FIRED", "NO_SIGNAL", "SKIPPED"})
 _H10_SKIP_REASONS = frozenset(
     {
@@ -111,6 +107,7 @@ _H10_SKIP_REASONS = frozenset(
         "EARNINGS",
         "BOOK",
         "CAP",
+        "SCHWAB_CAPTURE",
     }
 )
 _H7_GATES = frozenset({"CLEAR", "BANNED", "UNKNOWN"})
@@ -235,9 +232,7 @@ def _latest_json(
             None,
             f"{type(exc).__name__}: {exc}",
         )
-    if not isinstance(loaded, dict) or not all(
-        isinstance(key, str) for key in loaded
-    ):
+    if not isinstance(loaded, dict) or not all(isinstance(key, str) for key in loaded):
         return _Artifact(path, path_date, None, "JSON root is not an object")
     return _Artifact(path, path_date, loaded, None)
 
@@ -268,9 +263,7 @@ def _latest_text(
     return _Artifact(path, path_date, {}, None), text
 
 
-def _ritual_summary(
-    root: Path, artifact: _Artifact, family: str
-) -> _RitualSummary:
+def _ritual_summary(root: Path, artifact: _Artifact, family: str) -> _RitualSummary:
     source = _source(root, artifact, kind="ritual")
     payload = artifact.payload
     if payload is None:
@@ -284,11 +277,7 @@ def _ritual_summary(
     as_of = _canonical_date(payload.get("as_of"))
     run_date = _canonical_date(payload.get("run_date"))
     hypotheses = payload.get("hypotheses")
-    if (
-        as_of != artifact.path_date
-        or run_date is None
-        or not isinstance(hypotheses, Mapping)
-    ):
+    if as_of != artifact.path_date or run_date is None or not isinstance(hypotheses, Mapping):
         return _RitualSummary(
             "UNKNOWN",
             "ritual summary malformed",
@@ -307,11 +296,7 @@ def _ritual_summary(
         )
     state = item.get("status")
     detail = item.get("detail")
-    if (
-        not isinstance(state, str)
-        or state not in _RITUAL_STATES
-        or not isinstance(detail, str)
-    ):
+    if not isinstance(state, str) or state not in _RITUAL_STATES or not isinstance(detail, str):
         return _RitualSummary(
             "UNKNOWN",
             f"ritual summary has malformed {family} state",
@@ -352,9 +337,7 @@ def _unknown_raw(
     detail: str,
     run_date: str | None = None,
 ) -> EvidenceRow:
-    family_state, aligned_run_date = _family_state(
-        summary, artifact.path_date
-    )
+    family_state, aligned_run_date = _family_state(summary, artifact.path_date)
     return EvidenceRow(
         family=family,
         membership=membership,
@@ -412,17 +395,13 @@ def _object_rows(value: object) -> list[Mapping[str, object]] | None:
         return None
     rows: list[Mapping[str, object]] = []
     for item in value:
-        if not isinstance(item, Mapping) or not all(
-            isinstance(key, str) for key in item
-        ):
+        if not isinstance(item, Mapping) or not all(isinstance(key, str) for key in item):
             return None
         rows.append(item)
     return rows
 
 
-def _one_symbol_row(
-    rows: list[Mapping[str, object]], symbol: str
-) -> Mapping[str, object] | None:
+def _one_symbol_row(rows: list[Mapping[str, object]], symbol: str) -> Mapping[str, object] | None:
     matches = [row for row in rows if row.get("symbol") == symbol]
     return matches[0] if len(matches) == 1 else None
 
@@ -439,9 +418,7 @@ def _h5_row(
         return _not_tracked(family)
     membership = "H5 registered entry trigger"
     if artifact.path is None:
-        return _missing_raw(
-            family=family, membership=membership, summary=summary
-        )
+        return _missing_raw(family=family, membership=membership, summary=summary)
     if text is None or artifact.path_date is None:
         return _unknown_raw(
             family=family,
@@ -507,9 +484,7 @@ def _h6_row(
         return _not_tracked(family)
     membership = "H6 entry scope"
     if artifact.path is None:
-        return _missing_raw(
-            family=family, membership=membership, summary=summary
-        )
+        return _missing_raw(family=family, membership=membership, summary=summary)
     payload = artifact.payload
     snapshot = payload.get("snapshot") if payload is not None else None
     evaluation_session = (
@@ -517,38 +492,20 @@ def _h6_row(
         if isinstance(snapshot, Mapping)
         else None
     )
-    entries = (
-        _object_rows(snapshot.get("entries"))
-        if isinstance(snapshot, Mapping)
-        else None
-    )
-    snapshot_errors = (
-        snapshot.get("errors") if isinstance(snapshot, Mapping) else None
-    )
+    entries = _object_rows(snapshot.get("entries")) if isinstance(snapshot, Mapping) else None
+    snapshot_errors = snapshot.get("errors") if isinstance(snapshot, Mapping) else None
     row = _one_symbol_row(entries, symbol) if entries is not None else None
     timing = row.get("timing") if row is not None else None
     status = row.get("status") if row is not None else None
     row_evaluation_session = (
-        _canonical_date(row.get("evaluation_session"))
-        if row is not None
-        else None
+        _canonical_date(row.get("evaluation_session")) if row is not None else None
     )
-    timing_state = (
-        timing.get("state") if isinstance(timing, Mapping) else None
-    )
-    timing_reason = (
-        timing.get("reason") if isinstance(timing, Mapping) else None
-    )
+    timing_state = timing.get("state") if isinstance(timing, Mapping) else None
+    timing_reason = timing.get("reason") if isinstance(timing, Mapping) else None
     reasons = row.get("reasons") if row is not None else None
-    valid_reasons = isinstance(reasons, list) and all(
-        isinstance(reason, str) for reason in reasons
-    )
-    valid_status_reasons = (
-        status == "ELIGIBLE" and reasons == []
-    ) or (
-        status == "BLOCKED"
-        and isinstance(reasons, list)
-        and bool(reasons)
+    valid_reasons = isinstance(reasons, list) and all(isinstance(reason, str) for reason in reasons)
+    valid_status_reasons = (status == "ELIGIBLE" and reasons == []) or (
+        status == "BLOCKED" and isinstance(reasons, list) and bool(reasons)
     )
     if (
         payload is None
@@ -618,55 +575,30 @@ def _h8_row(
         return _not_tracked(family)
     membership = "H8 registered scope"
     if artifact.path is None:
-        return _missing_raw(
-            family=family, membership=membership, summary=summary
-        )
+        return _missing_raw(family=family, membership=membership, summary=summary)
     payload = artifact.payload
     evaluation_session = (
-        _canonical_date(payload.get("evaluation_session"))
-        if payload is not None
-        else None
+        _canonical_date(payload.get("evaluation_session")) if payload is not None else None
     )
-    entries = (
-        _object_rows(payload.get("entries")) if payload is not None else None
-    )
+    entries = _object_rows(payload.get("entries")) if payload is not None else None
     errors = payload.get("errors") if payload is not None else None
     row = _one_symbol_row(entries, symbol) if entries is not None else None
     window = row.get("window") if row is not None else None
     status = row.get("status") if row is not None else None
     row_evaluation_session = (
-        _canonical_date(row.get("evaluation_session"))
-        if row is not None
-        else None
+        _canonical_date(row.get("evaluation_session")) if row is not None else None
     )
-    window_state = (
-        window.get("state") if isinstance(window, Mapping) else None
-    )
-    window_reason = (
-        window.get("reason") if isinstance(window, Mapping) else None
-    )
+    window_state = window.get("state") if isinstance(window, Mapping) else None
+    window_reason = window.get("reason") if isinstance(window, Mapping) else None
     reasons = row.get("reasons") if row is not None else None
-    valid_reasons = isinstance(reasons, list) and all(
-        isinstance(reason, str) for reason in reasons
-    )
+    valid_reasons = isinstance(reasons, list) and all(isinstance(reason, str) for reason in reasons)
     valid_state_pair = (
         (status == "ENTRY-OK" and window_state == "IN_WINDOW")
-        or (
-            status == "OUT_OF_WINDOW"
-            and window_state == "OUT_OF_WINDOW"
-        )
-        or (
-            status == "BLOCKED"
-            and window_state
-            in {"UNKNOWN", "ESTIMATED_BLOCKED", "IN_WINDOW"}
-        )
+        or (status == "OUT_OF_WINDOW" and window_state == "OUT_OF_WINDOW")
+        or (status == "BLOCKED" and window_state in {"UNKNOWN", "ESTIMATED_BLOCKED", "IN_WINDOW"})
     )
-    valid_status_reasons = (
-        status in {"ENTRY-OK", "OUT_OF_WINDOW"} and reasons == []
-    ) or (
-        status == "BLOCKED"
-        and isinstance(reasons, list)
-        and bool(reasons)
+    valid_status_reasons = (status in {"ENTRY-OK", "OUT_OF_WINDOW"} and reasons == []) or (
+        status == "BLOCKED" and isinstance(reasons, list) and bool(reasons)
     )
     if (
         evaluation_session != artifact.path_date
@@ -736,59 +668,32 @@ def _h10_row(
         return _not_tracked(family)
     membership = f"{family} registered scope"
     if artifact.path is None:
-        return _missing_raw(
-            family=family, membership=membership, summary=summary
-        )
+        return _missing_raw(family=family, membership=membership, summary=summary)
     payload = artifact.payload
     evaluation_session = (
-        _canonical_date(payload.get("evaluation_session"))
-        if payload is not None
-        else None
+        _canonical_date(payload.get("evaluation_session")) if payload is not None else None
     )
-    run_date = (
-        _canonical_date(payload.get("as_of"))
-        if payload is not None
-        else None
-    )
-    evaluations = (
-        _object_rows(payload.get("evaluations"))
-        if payload is not None
-        else None
-    )
-    top_level_action = (
-        payload.get("book_action_required")
-        if payload is not None
-        else None
-    )
+    run_date = _canonical_date(payload.get("as_of")) if payload is not None else None
+    evaluations = _object_rows(payload.get("evaluations")) if payload is not None else None
+    top_level_action = payload.get("book_action_required") if payload is not None else None
     valid_action_aggregate = (
         type(top_level_action) is bool
         and evaluations is not None
-        and all(
-            type(item.get("book_action_required")) is bool
-            for item in evaluations
-        )
+        and all(type(item.get("book_action_required")) is bool for item in evaluations)
         and top_level_action
         == any(item.get("book_action_required") is True for item in evaluations)
     )
-    row = (
-        _one_symbol_row(evaluations, symbol)
-        if evaluations is not None
-        else None
-    )
+    row = _one_symbol_row(evaluations, symbol) if evaluations is not None else None
     status = row.get("status") if row is not None else None
     reason = row.get("reason") if row is not None else None
     signals = row.get("signals") if row is not None else None
-    row_action = (
-        row.get("book_action_required") if row is not None else None
-    )
+    h10a_status = row.get("h10a_status") if row is not None else None
+    row_action = row.get("book_action_required") if row is not None else None
     signal = signals.get(family) if isinstance(signals, Mapping) else object()
     valid_signals = (
         isinstance(signals, Mapping)
         and set(signals) == {"H10a", "H10b"}
-        and all(
-            value is None or isinstance(value, bool)
-            for value in signals.values()
-        )
+        and all(value is None or isinstance(value, bool) for value in signals.values())
     )
     valid_status_fields = (
         (
@@ -803,7 +708,7 @@ def _h10_row(
             and reason is None
             and row_action is False
             and isinstance(signals, Mapping)
-            and all(value is False for value in signals.values())
+            and signals.get(family) is False
         )
         or (
             status == "SKIPPED"
@@ -812,6 +717,7 @@ def _h10_row(
             and row_action is False
         )
     )
+    valid_h10a_adjudication = family == "H10a" and h10a_status == "ADJUDICATED" and signal is None
     if (
         payload is None
         or run_date != artifact.path_date
@@ -820,7 +726,7 @@ def _h10_row(
         or not isinstance(status, str)
         or status not in _H10_STATES
         or not valid_signals
-        or not valid_status_fields
+        or not (valid_status_fields or valid_h10a_adjudication)
     ):
         return _unknown_raw(
             family=family,
@@ -832,9 +738,28 @@ def _h10_row(
             detail=f"UNKNOWN — malformed newest {family} receipt",
             run_date=artifact.path_date,
         )
-    family_state, ritual_run_date = _family_state(
-        summary, evaluation_session
-    )
+    family_state, ritual_run_date = _family_state(summary, evaluation_session)
+    if valid_h10a_adjudication:
+        return EvidenceRow(
+            family=family,
+            membership=membership,
+            family_state=family_state,
+            symbol_states=(EvidenceState("watcher", "ADJUDICATED"),),
+            evaluation_session=evaluation_session,
+            run_date=run_date or ritual_run_date,
+            sources=_dedupe_sources(
+                _source(
+                    root,
+                    artifact,
+                    kind="watcher",
+                    date_value=evaluation_session,
+                ),
+                summary.sources,
+            ),
+            detail=_detail("H10a adjudicated (H10A_RESULT)", summary),
+            expected_daily=True,
+            descriptive_only=False,
+        )
     signal_text = json.dumps(signal)
     raw_detail = f"reason={reason}" if isinstance(reason, str) else ""
     return EvidenceRow(
@@ -923,17 +848,9 @@ def _h7_row(
         if source_payload is not None
         else None
     )
-    symbol_map = (
-        source_payload.get("symbols")
-        if source_payload is not None
-        else None
-    )
-    source_row = (
-        symbol_map.get(symbol) if isinstance(symbol_map, Mapping) else None
-    )
-    gate = (
-        source_row.get("gate") if isinstance(source_row, Mapping) else None
-    )
+    symbol_map = source_payload.get("symbols") if source_payload is not None else None
+    source_row = symbol_map.get(symbol) if isinstance(symbol_map, Mapping) else None
+    gate = source_row.get("gate") if isinstance(source_row, Mapping) else None
     source_valid = (
         source_payload is not None
         and source_payload.get("receipt_schema") == "h7-receipt/v1"
@@ -957,25 +874,13 @@ def _h7_row(
         else None
     )
     linked_source_hash = (
-        watcher_payload.get("source_health_receipt_hash")
-        if watcher_payload is not None
-        else None
+        watcher_payload.get("source_health_receipt_hash") if watcher_payload is not None else None
     )
-    source_receipt_hash = (
-        source_payload.get("receipt_hash")
-        if source_payload is not None
-        else None
-    )
+    source_receipt_hash = source_payload.get("receipt_hash") if source_payload is not None else None
     watcher_rows = (
-        _object_rows(watcher_payload.get("rows"))
-        if watcher_payload is not None
-        else None
+        _object_rows(watcher_payload.get("rows")) if watcher_payload is not None else None
     )
-    watcher_errors = (
-        watcher_payload.get("errors")
-        if watcher_payload is not None
-        else None
-    )
+    watcher_errors = watcher_payload.get("errors") if watcher_payload is not None else None
     matching_rows = (
         [row for row in watcher_rows if row.get("symbol") == symbol]
         if watcher_rows is not None
@@ -990,10 +895,7 @@ def _h7_row(
             not isinstance(lane, str)
             or lane not in _H7_LANES
             or not isinstance(state, str)
-            or (
-                state not in _H7_LANE_STATES
-                and _H7_DISPLACED_RE.fullmatch(state) is None
-            )
+            or (state not in _H7_LANE_STATES and _H7_DISPLACED_RE.fullmatch(state) is None)
             or lane in lane_map
         ):
             lane_rows_valid = False
@@ -1018,9 +920,7 @@ def _h7_row(
         and lane_rows_valid
     )
     if not source_valid or not watcher_valid:
-        family_state, run_date = _family_state(
-            summary, watcher_artifact.path_date
-        )
+        family_state, run_date = _family_state(summary, watcher_artifact.path_date)
         return EvidenceRow(
             family="H7",
             membership=membership,
@@ -1039,11 +939,7 @@ def _h7_row(
 
     family_state, ritual_run_date = _family_state(summary, watcher_date)
     assert isinstance(gate, str)
-    source_reason = (
-        source_row.get("gate_reason")
-        if isinstance(source_row, Mapping)
-        else None
-    )
+    source_reason = source_row.get("gate_reason") if isinstance(source_row, Mapping) else None
     raw_detail = source_reason if isinstance(source_reason, str) else ""
     return EvidenceRow(
         family="H7",
@@ -1051,10 +947,7 @@ def _h7_row(
         family_state=family_state,
         symbol_states=(
             EvidenceState("source", gate),
-            *(
-                EvidenceState(lane, lane_map.get(lane, "UNKNOWN"))
-                for lane in _H7_LANES
-            ),
+            *(EvidenceState(lane, lane_map.get(lane, "UNKNOWN")) for lane in _H7_LANES),
         ),
         evaluation_session=watcher_date,
         run_date=requested_run_date or ritual_run_date,
@@ -1093,9 +986,7 @@ def _latest_intraday(root: Path) -> _Artifact:
         loaded = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return _Artifact(path, day, None, f"{type(exc).__name__}: {exc}")
-    if not isinstance(loaded, dict) or not all(
-        isinstance(key, str) for key in loaded
-    ):
+    if not isinstance(loaded, dict) or not all(isinstance(key, str) for key in loaded):
         return _Artifact(path, day, None, "JSON root is not an object")
     return _Artifact(path, day, loaded, None)
 
@@ -1140,26 +1031,17 @@ def _intraday_row(
     row_symbol = row.get("symbol") if isinstance(row, Mapping) else None
     status = row.get("status") if isinstance(row, Mapping) else None
     universe = payload.get("universe") if payload is not None else None
-    captured_at = (
-        payload.get("captured_at_et") if payload is not None else None
-    )
-    session_tag = (
-        payload.get("session_tag") if payload is not None else None
-    )
+    captured_at = payload.get("captured_at_et") if payload is not None else None
+    session_tag = payload.get("session_tag") if payload is not None else None
     try:
-        captured = (
-            datetime.fromisoformat(captured_at)
-            if isinstance(captured_at, str)
-            else None
-        )
+        captured = datetime.fromisoformat(captured_at) if isinstance(captured_at, str) else None
     except ValueError:
         captured = None
     valid = (
         payload is not None
         and payload.get("receipt_kind") == "intraday_capture/v1"
         and session_tag == artifact.path.stem
-        and payload.get("scheduled_et")
-        == config.INTRADAY_CAPTURE_TIMES.get(artifact.path.stem)
+        and payload.get("scheduled_et") == config.INTRADAY_CAPTURE_TIMES.get(artifact.path.stem)
         and isinstance(universe, list)
         and all(isinstance(item, str) for item in universe)
         and universe == list(watch_universe())
@@ -1189,9 +1071,7 @@ def _intraday_row(
     note = row.get("note") if isinstance(row, Mapping) else None
     iv_label = row.get("iv_label") if isinstance(row, Mapping) else None
     assert isinstance(status, str)
-    raw_detail = note if isinstance(note, str) else (
-        iv_label if isinstance(iv_label, str) else ""
-    )
+    raw_detail = note if isinstance(note, str) else (iv_label if isinstance(iv_label, str) else "")
     return EvidenceRow(
         family=family,
         membership=membership,
@@ -1244,12 +1124,8 @@ def gather_hypothesis_evidence(
         "entry_watch_*.txt",
         _H5_NAME,
     )
-    h6_artifact = _latest_json(
-        root / "reports" / "h6_forward", "*.json"
-    )
-    h8_artifact = _latest_json(
-        root / "reports" / "h8_forward", "*.json"
-    )
+    h6_artifact = _latest_json(root / "reports" / "h6_forward", "*.json")
+    h8_artifact = _latest_json(root / "reports" / "h8_forward", "*.json")
     h10_artifact = _latest_json(
         root / "reports" / "h10" / "receipts",
         "h10_watch_*.json",
@@ -1267,9 +1143,7 @@ def gather_hypothesis_evidence(
 
     scope_id = str(scope_identity()["scope_id"])
     h7_base = root / "reports" / "h7_receipts" / scope_id
-    source_artifact = _latest_json(
-        h7_base / "source_health", "*.json"
-    )
+    source_artifact = _latest_json(h7_base / "source_health", "*.json")
     watcher_artifact = _latest_json(h7_base / "watcher", "*.json")
     capture_scope = frozenset(watch_universe())
 
@@ -1346,9 +1220,7 @@ def summarize_hypothesis_evidence(
     fixtures) and therefore cannot select a newer receipt, mutate any ledger,
     or infer position and runtime facts that those rows do not contain.
     """
-    rows_by_family: dict[str, list[EvidenceRow]] = {
-        family: [] for family in _HYPOTHESIS_ORDER
-    }
+    rows_by_family: dict[str, list[EvidenceRow]] = {family: [] for family in _HYPOTHESIS_ORDER}
     for symbol in sorted(evidence_by_symbol):
         evidence = evidence_by_symbol[symbol]
         for row in evidence.hypotheses:
@@ -1378,10 +1250,7 @@ def summarize_hypothesis_evidence(
             for state in row.symbol_states:
                 state_counts[state.state] = state_counts.get(state.state, 0) + 1
         raw_state_counts = (
-            tuple(
-                RawStateCount(state, state_counts[state])
-                for state in sorted(state_counts)
-            )
+            tuple(RawStateCount(state, state_counts[state]) for state in sorted(state_counts))
             if state_counts
             else (RawStateCount("NO RECEIPT", 0),)
         )
@@ -1394,9 +1263,7 @@ def summarize_hypothesis_evidence(
             else None
         )
         run_date = (
-            next(iter(run_values))
-            if len(run_values) == 1 and None not in run_values
-            else None
+            next(iter(run_values)) if len(run_values) == 1 and None not in run_values else None
         )
 
         sources: list[EvidenceSource] = []
@@ -1424,9 +1291,7 @@ def summarize_hypothesis_evidence(
                 sources=tuple(sources),
                 registered_window_end=registered_window_end,
                 registered_window_metadata=(
-                    "registered-window metadata"
-                    if registered_window_end is not None
-                    else None
+                    "registered-window metadata" if registered_window_end is not None else None
                 ),
             )
         )

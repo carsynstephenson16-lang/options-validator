@@ -17,6 +17,10 @@ from typing import Literal, TypedDict
 
 import config
 from options_researcher.h7_scope import scope_identity
+from options_researcher.h10_observe import (
+    ObservationLogMalformed,
+    read_h10b_observation_union,
+)
 
 CaptureStatus = Literal["CAPTURED", "NO_SIGNAL", "REFUSED", "MISSING"]
 
@@ -257,7 +261,8 @@ def _load_observations(path: Path) -> tuple[list[dict[str, object]] | None, Capt
 
 def _h10(root: Path, as_of: str, run_date: str) -> CaptureResult:
     receipt_path = root / "reports/h10/receipts" / f"h10_watch_{run_date}.json"
-    observation_path = root / "reports/h10/observations.jsonl"
+    legacy_observation_path = root / "reports/h10/observations.jsonl"
+    h10b_observation_path = root / "reports/h10/h10b_observations.jsonl"
     receipt, failure = _load_json(receipt_path)
     if failure is not None:
         return failure
@@ -271,16 +276,35 @@ def _h10(root: Path, as_of: str, run_date: str) -> CaptureResult:
             detail="session mismatch",
         )
 
-    observations, failure = _load_observations(observation_path)
-    if failure is not None:
-        return failure
-    assert observations is not None
-    matching = [row for row in observations if row.get("as_of") == run_date]
+    try:
+        union = read_h10b_observation_union(
+            root=root,
+            legacy_observations_path=legacy_observation_path,
+            h10b_observations_path=h10b_observation_path,
+        )
+    except ObservationLogMalformed as exc:
+        return _result(
+            "REFUSED",
+            evidence=_evidence(root, h10b_observation_path),
+            detail=f"malformed H10b observation union: {exc}",
+        )
+    observations = union["observations"]
+    matching = [
+        row
+        for row in observations
+        if row.get("hypothesis") == "H10b" and row.get("as_of") == run_date
+    ]
     if not matching:
-        return _result("MISSING", detail="stale" if observations else "artifact missing")
+        observation_path = h10b_observation_path
+        return _missing_path(observation_path)
     if len(matching) != 1:
         return _result("REFUSED", detail="duplicate H10 observation")
     observation = matching[0]
+    observation_path = (
+        h10b_observation_path
+        if observation.get("evaluation_session") >= config.H10B_RESUME_FLOOR_SESSION
+        else legacy_observation_path
+    )
     expected_receipt = str(receipt_path.relative_to(root))
     try:
         receipt_hash = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
@@ -305,7 +329,7 @@ def _h10(root: Path, as_of: str, run_date: str) -> CaptureResult:
         if (
             row.get("status") == "SKIPPED"
             and isinstance(signals, dict)
-            and not any(value is True for value in signals.values())
+            and signals.get("H10b") is not True
         ):
             unresolved.append(row)
     if unresolved:
@@ -315,7 +339,7 @@ def _h10(root: Path, as_of: str, run_date: str) -> CaptureResult:
     count = 0
     for row in evaluations:
         signals = row.get("signals")
-        if isinstance(signals, dict) and any(value is True for value in signals.values()):
+        if isinstance(signals, dict) and signals.get("H10b") is True:
             count += 1
     status: CaptureStatus = "CAPTURED" if count else "NO_SIGNAL"
     detail = f"{count} signal(s) captured" if count else "no signal"

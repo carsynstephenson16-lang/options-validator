@@ -11,13 +11,14 @@ import pandas as pd
 from test_qm_signals import PARAMS, breakout_fixture, parabolic_fixture
 
 import config
-from options_researcher import h10_watch, qm_signals
+from options_researcher import h10_observe, h10_watch, qm_signals
+from options_researcher.chains import third_friday
 from options_researcher.h7_watch import evaluation_session
 
-AS_OF = "2026-07-14"
+AS_OF = "2026-08-20"
 EVAL_ISO = evaluation_session(date.fromisoformat(AS_OF)).isoformat()
 KNOWN_AS_OF = datetime.fromisoformat(f"{EVAL_ISO}T20:00:00+00:00")
-EXPIRATION = "2026-08-21"
+EXPIRATION = "2026-10-16"
 BOOK_HEADER = (
     "id,symbol,strike,expiration,contracts,entry_date,entry_cost,"
     "entry_receipt_hash,exit_date,exit_proceeds,exit_reason,exit_receipt_hash\n"
@@ -76,12 +77,12 @@ def _raw(_symbol: str, eval_iso: str) -> pd.DataFrame:
 def _chain(_symbol: str, _eval_iso: str) -> pd.DataFrame:
     return pd.DataFrame(
         [
-            (EXPIRATION, 92.0, "C", 0.60, 4.80, 5.00, 500),
-            (EXPIRATION, 96.0, "C", 0.55, 4.80, 5.00, 500),
-            (EXPIRATION, 100.0, "C", 0.50, 4.80, 5.00, 500),
-            (EXPIRATION, 104.0, "C", 0.45, 4.80, 5.00, 500),
-            (EXPIRATION, 108.0, "C", 0.40, 4.80, 5.00, 500),
-            (EXPIRATION, 100.0, "P", -0.50, 4.80, 5.00, 500),
+            (EXPIRATION, 92.0, "C", 0.60, 4.80, 5.00, 500, 0.5753),
+            (EXPIRATION, 96.0, "C", 0.55, 4.80, 5.00, 500, 0.5753),
+            (EXPIRATION, 100.0, "C", 0.50, 4.80, 5.00, 500, 0.5753),
+            (EXPIRATION, 104.0, "C", 0.45, 4.80, 5.00, 500, 0.5753),
+            (EXPIRATION, 108.0, "C", 0.40, 4.80, 5.00, 500, 0.5753),
+            (EXPIRATION, 100.0, "P", -0.50, 4.80, 5.00, 500, 0.5753),
         ],
         columns=(
             "expiration",
@@ -91,11 +92,12 @@ def _chain(_symbol: str, _eval_iso: str) -> pd.DataFrame:
             "bid",
             "ask",
             "open_interest",
+            "iv",
         ),
     )
 
 
-def _assertion(report: str, *, symbol: str = "PLTR") -> dict:
+def _assertion(report: str = "2030-01-01", *, symbol: str = "PLTR") -> dict:
     return {
         "record_id": f"{symbol}-2026Q3-confirmed",
         "symbol": symbol,
@@ -120,10 +122,7 @@ def _assertion(report: str, *, symbol: str = "PLTR") -> dict:
 def _write_book(path: Path, *, open_premium: float | None = None) -> None:
     text = BOOK_HEADER
     if open_premium is not None:
-        text += (
-            "h10-1,NVDA,100,2026-08-21,1,2026-07-01,"
-            f"{open_premium:.2f},{'a' * 64},,,,\n"
-        )
+        text += f"h10-1,NVDA,100,2026-08-21,1,2026-07-01,{open_premium:.2f},{'a' * 64},,,,\n"
     path.write_text(text, encoding="utf-8")
 
 
@@ -131,7 +130,7 @@ def _run(
     root: Path,
     *,
     adjusted=_adjusted_quiet,
-    chain_loader=_chain,
+    preclose_loader=None,
     assertions: list[dict] | None = None,
     universe: list[str] | None = None,
 ):
@@ -140,18 +139,22 @@ def _run(
         _write_book(book)
     receipts = root / "receipts"
     stdout = io.StringIO()
-    with contextlib.redirect_stdout(stdout):
+    if preclose_loader is None:
+        preclose_loader = lambda symbol: (_chain(symbol, EVAL_ISO), EVAL_ISO)
+    with (
+        mock.patch.object(h10_watch, "datetime") as watch_datetime,
+        contextlib.redirect_stdout(stdout),
+    ):
+        watch_datetime.now.return_value = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
         rc = h10_watch.main(
             ["--as-of", AS_OF],
             universe=["PLTR"] if universe is None else universe,
             load_adjusted=adjusted,
             load_raw=_raw,
-            load_chain=chain_loader,
+            load_preclose_chain=preclose_loader,
             params=PARAMS,
             gate=lambda: None,
-            load_assertions_fn=lambda: (
-                [_assertion("2026-10-01")] if assertions is None else assertions
-            ),
+            load_assertions_fn=lambda: [_assertion()] if assertions is None else assertions,
             book_path=book,
             receipt_dir=receipts,
             known_as_of=KNOWN_AS_OF,
@@ -167,28 +170,62 @@ class QuietTests(unittest.TestCase):
             rc, output, receipt, _ = _run(Path(tmp))
 
         self.assertEqual(rc, 0)
-        self.assertIn("forward paper study H10a/H10b", output)
+        self.assertIn("forward paper study H10b (H10a adjudicated)", output)
         row = receipt["evaluations"][0]
         self.assertEqual(row["status"], "NO_SIGNAL")
-        self.assertEqual(row["signals"], {"H10a": False, "H10b": False})
+        self.assertEqual(row["signals"], {"H10a": None, "H10b": False})
+        self.assertEqual(row["h10a_status"], h10_watch.H10A_ADJUDICATED)
         self.assertIsNone(row["candidate_contract"])
         self.assertFalse(row["book_action_required"])
         self.assertFalse(receipt["book_action_required"])
 
 
 class FireTests(unittest.TestCase):
-    def test_parabolic_continuation_fire_selects_a_call(self):
+    def test_closed_h10a_is_never_evaluated_inside_its_former_window(self):
+        calls: list[object] = []
+
+        def forbidden_parabolic(*_args, **_kwargs):
+            calls.append(object())
+            raise AssertionError("closed H10a must not be evaluated")
+
         with tempfile.TemporaryDirectory() as tmp:
-            rc, output, receipt, _ = _run(
-                Path(tmp), adjusted=_adjusted_parabolic
-            )
+            root = Path(tmp)
+            with mock.patch.object(qm_signals, "parabolic_fires", forbidden_parabolic):
+                rc, output, receipt, receipt_path = _run(root, adjusted=_adjusted_parabolic)
+            h10b_path = root / "h10b_observations.jsonl"
+            observe_output = io.StringIO()
+            with contextlib.redirect_stdout(observe_output):
+                observe_rc = h10_observe.main(
+                    ["--as-of", AS_OF],
+                    receipt_path=receipt_path,
+                    observations_path=h10b_path,
+                    legacy_observations_path=root / "observations.jsonl",
+                    book_path=root / "h10_positions.csv",
+                )
+            observation_rows = [
+                json.loads(line) for line in h10b_path.read_text(encoding="utf-8").splitlines()
+            ]
 
         self.assertEqual(rc, 0)
+        self.assertEqual(observe_rc, 0, observe_output.getvalue())
+        self.assertEqual(calls, [])
         self.assertIn("never trades", output)
+        row = receipt["evaluations"][0]
+        self.assertEqual(row["status"], "NO_SIGNAL")
+        self.assertEqual(row["signals"], {"H10a": None, "H10b": False})
+        self.assertEqual(row["h10a_status"], h10_watch.H10A_ADJUDICATED)
+        self.assertNotIn("h10a", receipt_path.name.lower())
+        self.assertEqual([item["hypothesis"] for item in observation_rows], ["H10b"])
+
+    def test_breakout_continuation_fire_selects_a_call_from_verified_preclose(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, output, receipt, _ = _run(Path(tmp), adjusted=_adjusted_breakout)
+
+        self.assertEqual(rc, 0)
         self.assertIn("verdict gates on losses", output)
         row = receipt["evaluations"][0]
         self.assertEqual(row["status"], "FIRED")
-        self.assertEqual(row["signals"], {"H10a": True, "H10b": False})
+        self.assertEqual(row["signals"], {"H10a": None, "H10b": True})
         self.assertEqual(row["admitted_contracts"], 5)
         self.assertTrue(row["book_action_required"])
         candidate = row["candidate_contract"]
@@ -198,6 +235,9 @@ class FireTests(unittest.TestCase):
         self.assertEqual(candidate["entry_price"], 5.05)
         self.assertEqual(candidate["exit_price"], 4.75)
         self.assertEqual(candidate["entry_cost"], 505.65)
+        self.assertEqual(candidate["iv"], 0.5753)
+        self.assertEqual(candidate["spot"], 100.0)
+        self.assertEqual(row["chain_timing_convention"], h10_watch.MIXED_TIMING_CONVENTION)
 
     def test_breakout_continuation_fire_is_recorded_as_h10b(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -206,7 +246,7 @@ class FireTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         row = receipt["evaluations"][0]
         self.assertEqual(row["status"], "FIRED")
-        self.assertEqual(row["signals"], {"H10a": False, "H10b": True})
+        self.assertEqual(row["signals"], {"H10a": None, "H10b": True})
         self.assertTrue(receipt["book_action_required"])
 
     def test_failed_h7_admission_is_an_explicit_skip(self):
@@ -215,7 +255,9 @@ class FireTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             rc, _, receipt, _ = _run(
-                Path(tmp), adjusted=_adjusted_breakout, chain_loader=four_contracts
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda _symbol: (four_contracts("PLTR", EVAL_ISO), EVAL_ISO),
             )
 
         self.assertEqual(rc, 0)
@@ -233,7 +275,9 @@ class FireTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             rc, _, receipt, _ = _run(
-                Path(tmp), adjusted=_adjusted_breakout, chain_loader=expensive
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda _symbol: (expensive("PLTR", EVAL_ISO), EVAL_ISO),
             )
 
         self.assertEqual(rc, 0)
@@ -241,6 +285,50 @@ class FireTests(unittest.TestCase):
         self.assertEqual(row["status"], "SKIPPED")
         self.assertEqual(row["reason"], "NO_CONTRACT")
         self.assertIsNone(row["candidate_contract"])
+
+    def test_preclose_contract_selection_excludes_spreads_wider_than_five_percent(self):
+        def one_wide_quote(symbol: str, eval_iso: str) -> pd.DataFrame:
+            frame = _chain(symbol, eval_iso)
+            frame.loc[0, ["bid", "ask"]] = [4.65, 5.0]
+            frame.loc[len(frame)] = [
+                EXPIRATION,
+                102.0,
+                "C",
+                0.50,
+                4.80,
+                5.00,
+                500,
+                0.5753,
+            ]
+            return frame
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda _symbol: (
+                    one_wide_quote("PLTR", EVAL_ISO),
+                    EVAL_ISO,
+                ),
+            )
+
+        self.assertEqual(rc, 0)
+        candidate = receipt["evaluations"][0]["candidate_contract"]
+        self.assertEqual(candidate["strike"], 96.0)
+
+    def test_missing_verified_preclose_capture_skips_and_logs_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, output, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda _symbol: None,
+            )
+
+        self.assertEqual(rc, 0)
+        row = receipt["evaluations"][0]
+        self.assertEqual(row["status"], "SKIPPED")
+        self.assertEqual(row["reason"], "SCHWAB_CAPTURE")
+        self.assertIn("SCHWAB_CAPTURE", output)
 
 
 class CapTests(unittest.TestCase):
@@ -253,8 +341,8 @@ class CapTests(unittest.TestCase):
                 adjusted=_adjusted_breakout,
                 universe=["PLTR", "NVDA"],
                 assertions=[
-                    _assertion("2026-10-01"),
-                    _assertion("2026-10-01", symbol="NVDA"),
+                    _assertion("2030-01-01"),
+                    _assertion("2030-01-01", symbol="NVDA"),
                 ],
             )
 
@@ -292,7 +380,7 @@ class EarningsSkipTests(unittest.TestCase):
             rc, _, receipt, _ = _run(
                 Path(tmp),
                 adjusted=_adjusted_breakout,
-                assertions=[_assertion("2026-08-10")],
+                assertions=[_assertion("2026-09-01")],
             )
 
         self.assertEqual(rc, 0)
@@ -303,9 +391,7 @@ class EarningsSkipTests(unittest.TestCase):
 
     def test_unhealthy_source_is_a_per_name_entry_ban(self):
         with tempfile.TemporaryDirectory() as tmp:
-            rc, _, receipt, _ = _run(
-                Path(tmp), adjusted=_adjusted_breakout, assertions=[]
-            )
+            rc, _, receipt, _ = _run(Path(tmp), adjusted=_adjusted_breakout, assertions=[])
 
         self.assertEqual(rc, 0)
         row = receipt["evaluations"][0]
@@ -328,17 +414,20 @@ class ReceiptTests(unittest.TestCase):
             {
                 "symbol",
                 "signals",
+                "h10a_status",
                 "window_status",
                 "status",
                 "reason",
                 "admitted_contracts",
                 "candidate_contract",
                 "book_action_required",
+                "chain_session",
+                "chain_timing_convention",
             },
         )
         self.assertEqual(set(row["signals"]), {"H10a", "H10b"})
-        self.assertEqual(set(row["window_status"]), {"H10a", "H10b"})
-        self.assertEqual(row["window_status"], {"H10a": "OPEN", "H10b": "OPEN"})
+        self.assertEqual(set(row["window_status"]), {"H10b"})
+        self.assertEqual(row["window_status"], {"H10b": "OPEN"})
         self.assertEqual(
             set(row["candidate_contract"]),
             {
@@ -355,6 +444,7 @@ class ReceiptTests(unittest.TestCase):
                 "entry_price",
                 "exit_price",
                 "entry_cost",
+                "iv",
             },
         )
 
@@ -370,9 +460,7 @@ class ReceiptTests(unittest.TestCase):
             second_bytes = second_path.read_bytes()
             after_book = book.read_bytes()
             files = sorted(
-                item.relative_to(root).as_posix()
-                for item in root.rglob("*")
-                if item.is_file()
+                item.relative_to(root).as_posix() for item in root.rglob("*") if item.is_file()
             )
 
         self.assertEqual((first_rc, second_rc), (0, 0))
@@ -389,7 +477,7 @@ class FutureAsOfTests(unittest.TestCase):
         future = (date.today() + timedelta(days=5)).isoformat()
         calls: list[str] = []
 
-        def spy(symbol: str, _eval_iso: str):
+        def spy(symbol: str):
             calls.append(symbol)
             raise AssertionError("future refusal must precede data loading")
 
@@ -403,7 +491,7 @@ class FutureAsOfTests(unittest.TestCase):
                     universe=["PLTR"],
                     load_adjusted=spy,
                     load_raw=spy,
-                    load_chain=spy,
+                    load_preclose_chain=spy,
                     params=PARAMS,
                     gate=lambda: None,
                     load_assertions_fn=lambda: [],
@@ -421,15 +509,16 @@ class FutureAsOfTests(unittest.TestCase):
 def _chain_for(eval_iso: str) -> pd.DataFrame:
     """Same shape as `_chain` above, but with an expiration relative to
     `eval_iso` so the DTE band still admits candidates far from AS_OF."""
-    expiration = (date.fromisoformat(eval_iso) + timedelta(days=45)).isoformat()
+    target = date.fromisoformat(eval_iso) + timedelta(days=45)
+    expiration = third_friday(target.year, target.month).isoformat()
     return pd.DataFrame(
         [
-            (expiration, 92.0, "C", 0.60, 4.80, 5.00, 500),
-            (expiration, 96.0, "C", 0.55, 4.80, 5.00, 500),
-            (expiration, 100.0, "C", 0.50, 4.80, 5.00, 500),
-            (expiration, 104.0, "C", 0.45, 4.80, 5.00, 500),
-            (expiration, 108.0, "C", 0.40, 4.80, 5.00, 500),
-            (expiration, 100.0, "P", -0.50, 4.80, 5.00, 500),
+            (expiration, 92.0, "C", 0.60, 4.80, 5.00, 500, 0.5753),
+            (expiration, 96.0, "C", 0.55, 4.80, 5.00, 500, 0.5753),
+            (expiration, 100.0, "C", 0.50, 4.80, 5.00, 500, 0.5753),
+            (expiration, 104.0, "C", 0.45, 4.80, 5.00, 500, 0.5753),
+            (expiration, 108.0, "C", 0.40, 4.80, 5.00, 500, 0.5753),
+            (expiration, 100.0, "P", -0.50, 4.80, 5.00, 500, 0.5753),
         ],
         columns=(
             "expiration",
@@ -439,51 +528,17 @@ def _chain_for(eval_iso: str) -> pd.DataFrame:
             "bid",
             "ask",
             "open_interest",
+            "iv",
         ),
     )
 
 
-class WindowEndTests(unittest.TestCase):
-    """H10A_WINDOW_END / H10B_WINDOW_END boundary handling (Codex PR #14
-    review finding: config.py defines these but h10_watch never checked
-    them, so the watcher could fire past a hypothesis's registered window).
+class H10bWindowTests(unittest.TestCase):
+    def test_window_status_open_on_h10b_end_date(self):
+        self.assertEqual(h10_watch._window_status(config.H10B_WINDOW_END), {"H10b": "OPEN"})
 
-    Boundary choice: the ledger seq 15/16 registration text (checked
-    `ledger/experiments.jsonl` and docs/) says only "window ends <date>" and
-    never states whether the end date itself is included. This repo's
-    choice, recorded here: the window-end date is INCLUSIVE -- fires/entries
-    are still allowed ON the end date; suppression begins the session
-    strictly AFTER it.
-    """
-
-    def test_window_status_open_on_and_before_end_date(self):
-        self.assertEqual(
-            h10_watch._window_status(config.H10A_WINDOW_END)["H10a"], "OPEN"
-        )
-        self.assertEqual(h10_watch._window_status("2026-10-05")["H10a"], "OPEN")
-        self.assertEqual(
-            h10_watch._window_status(config.H10B_WINDOW_END)["H10b"], "OPEN"
-        )
-
-    def test_window_status_closed_strictly_after_end_date(self):
-        self.assertEqual(
-            h10_watch._window_status("2026-10-07")["H10a"], "WINDOW_CLOSED"
-        )
-        self.assertEqual(
-            h10_watch._window_status("2027-01-07")["H10b"], "WINDOW_CLOSED"
-        )
-
-    def test_parabolic_fire_allowed_on_h10a_window_end_date(self):
-        eval_iso = config.H10A_WINDOW_END
-        frame = _adjusted_parabolic("PLTR", eval_iso)
-        signals = h10_watch._signals_at_session(frame, eval_iso, PARAMS)
-        self.assertTrue(signals["H10a"])
-
-    def test_parabolic_fire_suppressed_the_session_after_h10a_window_end(self):
-        eval_iso = "2026-10-07"  # the trading day after H10A_WINDOW_END
-        frame = _adjusted_parabolic("PLTR", eval_iso)
-        signals = h10_watch._signals_at_session(frame, eval_iso, PARAMS)
-        self.assertFalse(signals["H10a"])
+    def test_window_status_closed_strictly_after_h10b_end_date(self):
+        self.assertEqual(h10_watch._window_status("2027-01-07"), {"H10b": "WINDOW_CLOSED"})
 
     def test_breakout_fire_allowed_on_h10b_window_end_date(self):
         eval_iso = config.H10B_WINDOW_END
@@ -498,83 +553,86 @@ class WindowEndTests(unittest.TestCase):
         self.assertFalse(signals["H10b"])
 
     def test_evaluation_row_fires_and_reports_open_on_window_end_date(self):
-        eval_iso = config.H10A_WINDOW_END
+        eval_iso = config.H10B_WINDOW_END
         row = h10_watch._evaluation(
             "PLTR",
             eval_iso=eval_iso,
             params=PARAMS,
-            load_adjusted=_adjusted_parabolic,
+            load_adjusted=_adjusted_breakout,
             load_raw=_raw,
-            load_chain=lambda symbol, iso: _chain_for(iso),
+            load_preclose_chain=lambda _symbol: (_chain_for(eval_iso), eval_iso),
             assertions=[_assertion("2030-01-01")],
             known_as_of=datetime.fromisoformat(f"{eval_iso}T20:00:00+00:00"),
             open_premium=0.0,
         )
 
         self.assertEqual(row["status"], "FIRED")
-        self.assertEqual(row["signals"], {"H10a": True, "H10b": False})
-        self.assertEqual(row["window_status"], {"H10a": "OPEN", "H10b": "OPEN"})
+        self.assertEqual(row["signals"], {"H10a": None, "H10b": True})
+        self.assertEqual(row["window_status"], {"H10b": "OPEN"})
 
     def test_evaluation_row_suppresses_fire_and_reports_window_closed(self):
-        eval_iso = "2026-10-07"  # the trading day after H10A_WINDOW_END
+        eval_iso = "2027-01-07"  # the trading day after H10B_WINDOW_END
         row = h10_watch._evaluation(
             "PLTR",
             eval_iso=eval_iso,
             params=PARAMS,
-            load_adjusted=_adjusted_parabolic,
+            load_adjusted=_adjusted_breakout,
             load_raw=_raw,
-            load_chain=lambda symbol, iso: _chain_for(iso),
+            load_preclose_chain=lambda _symbol: (_chain_for(eval_iso), eval_iso),
             assertions=[_assertion("2030-01-01")],
             known_as_of=datetime.fromisoformat(f"{eval_iso}T20:00:00+00:00"),
             open_premium=0.0,
         )
 
         self.assertEqual(row["status"], "NO_SIGNAL")
-        self.assertEqual(row["signals"], {"H10a": False, "H10b": False})
+        self.assertEqual(row["signals"], {"H10a": None, "H10b": False})
         self.assertFalse(row["book_action_required"])
         self.assertIsNone(row["candidate_contract"])
-        self.assertEqual(
-            row["window_status"], {"H10a": "WINDOW_CLOSED", "H10b": "OPEN"}
-        )
+        self.assertEqual(row["window_status"], {"H10b": "WINDOW_CLOSED"})
 
-    def test_console_output_surfaces_window_closed_explicitly(self):
-        # window-end dates fall after this repo's real system clock, so the
-        # CLI's own (unrelated) "--as-of is in the future" guard has to be
-        # cleared by pinning main()'s notion of "today" -- everything else
-        # in main() still runs for real.
-        eval_iso = "2026-10-07"  # the trading day after H10A_WINDOW_END
-        as_of = (date.fromisoformat(eval_iso) + timedelta(days=1)).isoformat()
+
+class ResumeFloorTests(unittest.TestCase):
+    def test_pre_floor_evaluation_refuses_before_loaders_or_receipt(self):
+        calls: list[str] = []
+
+        def forbidden(_symbol: str, _eval_iso: str):
+            calls.append("adjusted")
+            raise AssertionError("floor refusal must precede data loading")
+
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            book = root / "h10_positions.csv"
-            _write_book(book)
-            receipts = root / "receipts"
+            _write_book(root / "h10_positions.csv")
             stdout = io.StringIO()
             with (
-                mock.patch.object(h10_watch, "datetime") as mock_datetime,
+                mock.patch.object(h10_watch, "datetime") as watch_datetime,
                 contextlib.redirect_stdout(stdout),
             ):
-                mock_datetime.now.return_value = datetime(
-                    2026, 10, 9, 12, 0, tzinfo=timezone.utc
-                )
+                watch_datetime.now.return_value = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
                 rc = h10_watch.main(
-                    ["--as-of", as_of],
+                    ["--as-of", "2026-08-19"],
                     universe=["PLTR"],
-                    load_adjusted=_adjusted_parabolic,
-                    load_raw=_raw,
-                    load_chain=lambda symbol, iso: _chain_for(iso),
+                    load_adjusted=forbidden,
+                    load_raw=forbidden,
+                    load_preclose_chain=lambda _symbol: None,
                     params=PARAMS,
                     gate=lambda: None,
-                    load_assertions_fn=lambda: [_assertion("2030-01-01")],
-                    book_path=book,
-                    receipt_dir=receipts,
-                    known_as_of=datetime.fromisoformat(
-                        f"{eval_iso}T20:00:00+00:00"
-                    ),
+                    load_assertions_fn=lambda: [],
+                    book_path=root / "h10_positions.csv",
+                    receipt_dir=root / "receipts",
+                    known_as_of=KNOWN_AS_OF,
                 )
 
+        self.assertEqual(rc, 2)
+        self.assertEqual(calls, [])
+        self.assertIn("evaluation_session=2026-08-18", stdout.getvalue())
+        self.assertFalse((root / "receipts").exists())
+
+    def test_floor_session_records_the_evaluated_session_not_cli_date(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(Path(tmp), adjusted=_adjusted_breakout)
+
         self.assertEqual(rc, 0)
-        self.assertIn("window_closed=H10a", stdout.getvalue())
+        self.assertEqual(receipt["evaluation_session"], config.H10B_RESUME_FLOOR_SESSION)
 
 
 if __name__ == "__main__":
