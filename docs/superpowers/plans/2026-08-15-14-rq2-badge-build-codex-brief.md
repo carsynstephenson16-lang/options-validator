@@ -3,7 +3,18 @@
 **Date:** 2026-08-15
 **Author:** orchestrating Claude session (Fable), 2026-08-15 owner-directed batch
 **Executor:** Codex (high reasoning)
-**Status:** DRAFT — pending independent adversarial review before hand-off
+**Status:** NOT READY FOR HAND-OFF — round-3 adversarial review (2026-08-16,
+independent Opus pass) returned FAIL with two feasibility blockers that text
+edits cannot close: **BL-1** (B1's `ts_pctl`/`vrp_pctl` need a 252-session
+IV/percentile history; the Schwab preclose lane has ~1 session as of 08-16
+and splicing ThetaData IV onto Schwab IV is fabrication per
+`schwab_chain_view.py` — B1 is UNAVAILABLE-by-construction for months unless
+a further pre-result amendment sets its disposition) and **BL-2** (the
+preclose capture universe is 15 names; AMAT/CLSK/NBIS of the registered
+18-name board are never captured, so the executable options-derived board is
+15 — needs an owner-gated capture-universe expansion or a further amendment).
+Round-3 text fixes BL-3/BL-4 are applied in this revision. Do not hand to
+Codex until BL-1/BL-2 have a recorded disposition.
 **Provenance:** Repo-verified against `origin/main` @`58701e9` and branch
 `claude/monday-ship-2026-08-15` @`22e801d` unless labeled otherwise.
 
@@ -45,7 +56,11 @@ then append via the typed ledger API — Codex does NOT touch the ledger):
 - **B1 fires daily on every name.** The earnings gate is removed as a gate;
   earnings proximity is recorded as a mandatory per-row study column
   (`earnings_tag`: "event-priced" / "no earnings in window" / "UNKNOWN",
-  fail-visible on unknown). Owner wording: "i dont want that to fire if
+  fail-visible on unknown). Source (round-3 fix FX-2): the existing
+  `options_researcher/h7_earnings.py` promoted store with its provenance
+  labels — do NOT invent a new earnings loader or window; the event-window
+  definition is the frozen one (evaluation date < report date < near-leg
+  expiration) and gets a unit test. Owner wording: "i dont want that to fire if
   theres confirmed earnings i want that fired daily and studied."
 - **Forward window opens 2026-08-17** (first scored session). The
   2026-09-01 date printed in older docs was never a ledger value.
@@ -73,7 +88,10 @@ append timestamp. No pre-amendment row can ever be retroactively counted.
   `bounce_flag` (A1); V1 calibration pair series (display values only).
 - `options_researcher/rq2_recorder.py` — daily runner: loads the newest
   verified preclose capture + `data/underlying_closes.py`, computes all three
-  badges for `config.ATTRACTIVENESS_UNIVERSE` (18 names), writes one dated
+  badges for `config.ATTRACTIVENESS_UNIVERSE` (18 names; round-3 fix FX-3:
+  stamp a universe hash in every output like brief 15 does, and add a freeze
+  test so a display-layer edit to the list cannot silently change this
+  registered forward window's universe), writes one dated
   JSON + one markdown row-table under `reports/rq2/<date>/`, stamped with
   max as-of session, capture receipt path, `config_hash`, and
   `amendment_pending` flag. Idempotent per date; refuses to overwrite.
@@ -87,8 +105,11 @@ append timestamp. No pre-amendment row can ever be retroactively counted.
   LLM-proposed 2026-08-15 by alignment, label it so). Names below min-obs
   render the percentile as UNAVAILABLE, fail-visible.
 - `tests/` — unittest, offline: threshold boundary cases both sides for B1
-  and A1; V1-comparison refusal test (any code path that would compare or
-  rank on V1 raises); no-look-ahead invariance (future rows don't change
+  and A1; V1 gated-refusal tests matching the K=3 bullet above (round-3 fix
+  BL-3: with `RQ2_AMENDMENT_V1_2` present, V1 computes the pinned line-1
+  statistic and any RANKING or BLENDED-comparison path raises; with the
+  amendment absent, ALL V1 comparison paths raise — both branches
+  test-enforced); no-look-ahead invariance (future rows don't change
   historical values — mirror `tests/test_composite_signals.py`
   `test_no_look_ahead_invariance`); PENDING_AMENDMENT fail-closed test;
   missing/stale capture ⇒ per-name `DATA_BLOCKED`, never a silent skip.
@@ -110,11 +131,16 @@ default view; no H7 paths.
   + `amendment_pending` logic. Acceptance: run against the real 2026-08-14
   capture produces 18 rows (or honest per-name `DATA_BLOCKED`), stamped and
   idempotent.
-- **WP-C** V1 display series (median implied-vs-realized gap over completed
-  cycles + post-earnings IV-drop history, exactly as described in the
-  2026-07-22 brief §V1) with `min completed cycles = 6` (LLM-proposed
-  2026-07-24, label it) — rendered as columns, NEVER ranked or compared;
-  refusal enforced in code and tested.
+- **WP-C** V1 display series. BINDING SPEC (round-3 fix BL-3): ledger seq 26
+  clause (5a) — NOT the 2026-07-22 brief §V1, whose cycle definition,
+  `VRP_CAL_*` constants, and UNKNOWN-earnings handling are SUPERSEDED. The
+  pinned line-1 statistic: monthly `E_k→E_k+1` earnings-to-earnings cycles,
+  median implied-vs-realized gap, sample std ddof=1, 252-session
+  annualization, 24-cycle cap, UNKNOWN earnings dates render fail-visible
+  (never guessed, never silently excluded); `min completed cycles = 6`
+  (pinned by seq 25, 2026-08-10; originally LLM-proposed). Rendered as
+  columns; ranking/blended-comparison refusal per the K=3 bullet's gated
+  rule, enforced in code and tested.
 - **WP-D** wire the daily invocation into the existing preclose flow the same
   way the display-freshness lane consumes captures (read-only consumer; do
   NOT modify `schwab_chain_capture` itself). HARD ISOLATION (review fix
