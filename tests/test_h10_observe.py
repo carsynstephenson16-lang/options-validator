@@ -6,11 +6,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from test_h10_watch import AS_OF, EVAL_ISO
+
 import config
 from options_researcher import h10_observe, schwab_chain_capture
 from options_researcher.h10_watch import H10A_ADJUDICATED, MIXED_TIMING_CONVENTION
 
-AS_OF = "2026-08-20"
+# AS_OF / EVAL_ISO are DERIVED from config.H10B_RESUME_FLOOR_SESSION (see
+# tests/test_h10_watch.py): the floor is mechanical (seq 28 clause 5) and is
+# updated at merge, so pinning either date here would red the suite for a
+# reason unrelated to the behavior under test.
 RECEIPT_REFERENCE = f"reports/h10/receipts/h10_watch_{AS_OF}.json"
 LEGACY_H10B_SESSIONS = {
     "2026-07-23": "2026-07-22",
@@ -49,7 +54,7 @@ def _evaluation(
         "admitted_contracts": 5 if status != "NO_SIGNAL" else 0,
         "candidate_contract": {"symbol": symbol} if status != "NO_SIGNAL" else None,
         "book_action_required": action,
-        "chain_session": "2026-08-19" if status != "NO_SIGNAL" else None,
+        "chain_session": EVAL_ISO if status != "NO_SIGNAL" else None,
         "chain_timing_convention": MIXED_TIMING_CONVENTION,
     }
 
@@ -57,7 +62,7 @@ def _evaluation(
 def _receipt() -> dict:
     return {
         "as_of": AS_OF,
-        "evaluation_session": "2026-08-19",
+        "evaluation_session": EVAL_ISO,
         "evaluations": [
             _evaluation("PLTR", "FIRED", action=True),
             _evaluation("NVDA", "NO_SIGNAL"),
@@ -236,7 +241,7 @@ class IdempotenceTests(unittest.TestCase):
             first_rc, _, receipt, observations, _, _ = _run(root)
             before = observations.read_bytes()
             changed = _receipt()
-            changed["evaluation_session"] = "2026-08-20"
+            changed["evaluation_session"] = AS_OF
             _write_receipt(receipt, changed)
             second_rc, output, _, _, _, _ = _run(root)
             after = observations.read_bytes()
@@ -340,7 +345,7 @@ class UnionTests(unittest.TestCase):
         self.assertEqual(len(union["observations"]), 5)
         self.assertEqual(
             [row["evaluation_session"] for row in union["observations"]],
-            ["2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-08-19"],
+            ["2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", EVAL_ISO],
         )
         self.assertEqual(
             union["unobserved_evaluation_sessions"],

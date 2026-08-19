@@ -3,7 +3,7 @@ import io
 import json
 import tempfile
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -16,10 +16,28 @@ from options_researcher import h10_observe, h10_watch, qm_signals, schwab_chain_
 from options_researcher.chains import third_friday
 from options_researcher.h7_watch import evaluation_session
 
-AS_OF = "2026-08-20"
-EVAL_ISO = evaluation_session(date.fromisoformat(AS_OF)).isoformat()
+
+def _next_session(iso: str) -> str:
+    """The first XNYS session strictly after `iso`."""
+    from data.cache_runner import trading_days
+
+    start = date.fromisoformat(iso)
+    days = trading_days(iso, (start + timedelta(days=14)).isoformat())
+    return next(day for day in days if day > iso)
+
+
+# Every date below is DERIVED from the registered resume floor so a merge-time
+# floor update (seq 28 clause 5 makes the constant mechanical, not frozen)
+# cannot turn this suite red for a reason that has nothing to do with the
+# behavior under test.
+EVAL_ISO = config.H10B_RESUME_FLOOR_SESSION
+AS_OF = _next_session(EVAL_ISO)  # the RUN date whose evaluated session is the floor
+PRE_FLOOR_RUN = EVAL_ISO  # running ON the floor evaluates the session BEFORE it
+PRE_FLOOR_EVAL = evaluation_session(date.fromisoformat(PRE_FLOOR_RUN)).isoformat()
+_WALL_CLOCK = datetime.fromisoformat(f"{_next_session(AS_OF)}T12:00:00+00:00")
 KNOWN_AS_OF = datetime.fromisoformat(f"{EVAL_ISO}T20:00:00+00:00")
-EXPIRATION = "2026-10-16"
+_EXPIRY_TARGET = date.fromisoformat(EVAL_ISO) + timedelta(days=45)
+EXPIRATION = third_friday(_EXPIRY_TARGET.year, _EXPIRY_TARGET.month).isoformat()
 BOOK_HEADER = (
     "id,symbol,strike,expiration,contracts,entry_date,entry_cost,"
     "entry_receipt_hash,exit_date,exit_proceeds,exit_reason,exit_receipt_hash\n"
@@ -161,7 +179,7 @@ def _run(
         mock.patch.object(h10_watch, "datetime") as watch_datetime,
         contextlib.redirect_stdout(stdout),
     ):
-        watch_datetime.now.return_value = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
+        watch_datetime.now.return_value = _WALL_CLOCK
         rc = h10_watch.main(
             ["--as-of", AS_OF],
             universe=["PLTR"] if universe is None else universe,
@@ -315,9 +333,22 @@ class FireTests(unittest.TestCase):
         self.assertEqual(row["reason"], "NO_CONTRACT")
         self.assertIsNone(row["candidate_contract"])
 
-    def test_preclose_contract_selection_excludes_spreads_wider_than_five_percent(self):
+    def test_five_percent_spread_gate_counts_admission_and_never_filters_selection(self):
+        """The 5% figure is the ADMISSION COUNT gate, not a selection filter.
+
+        Registered design: admission counts NTM monthly contracts with
+        spread <= H7_ADMIT_MAX_SPREAD_PCT (5%); the SELECTED contract is gated
+        by the execution surface only (`passes_liquidity`, MAX_SPREAD_PCT 10%
+        + MIN_OPEN_INTEREST, both legs). A 2026-08 change had applied the 5%
+        figure to selection too, which silently tightened the registered entry
+        stack; this pins the reverted behavior on both halves at once.
+        """
+
         def one_wide_quote(symbol: str, eval_iso: str) -> pd.DataFrame:
             frame = _chain(symbol, eval_iso)
+            # 7.25% spread: over the 5% admission gate, under the 10%
+            # execution gate. It is the highest-delta call, so a selection
+            # filter at 5% is the only thing that could displace it.
             frame.loc[0, ["bid", "ask"]] = [4.65, 5.0]
             frame.loc[len(frame)] = [
                 EXPIRATION,
@@ -342,8 +373,14 @@ class FireTests(unittest.TestCase):
             )
 
         self.assertEqual(rc, 0)
-        candidate = receipt["evaluations"][0]["candidate_contract"]
-        self.assertEqual(candidate["strike"], 96.0)
+        row = receipt["evaluations"][0]
+        candidate = row["candidate_contract"]
+        # Selection keeps the wide-but-executable 0.60-delta call.
+        self.assertEqual(candidate["strike"], 92.0)
+        self.assertEqual(candidate["delta"], 0.60)
+        # Admission still applies the 5% gate: 6 calls in the band, the wide
+        # one excluded.
+        self.assertEqual(row["admitted_contracts"], 5)
 
     def test_missing_verified_preclose_capture_skips_and_logs_session(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -402,7 +439,7 @@ class PrecloseCaptureIntegrityTests(unittest.TestCase):
             rc, _, receipt, _ = _run(
                 Path(tmp),
                 adjusted=_adjusted_breakout,
-                preclose_loader=lambda *_args: (_chain("PLTR", EVAL_ISO), "2026-08-18"),
+                preclose_loader=lambda *_args: (_chain("PLTR", EVAL_ISO), PRE_FLOOR_EVAL),
             )
 
         self.assertEqual(rc, 0)
@@ -414,7 +451,7 @@ class PrecloseCaptureIntegrityTests(unittest.TestCase):
             rc, _, receipt, _ = _run(
                 Path(tmp),
                 adjusted=_adjusted_breakout,
-                preclose_loader=lambda *_args: (_chain("PLTR", EVAL_ISO), "2026-08-20"),
+                preclose_loader=lambda *_args: (_chain("PLTR", EVAL_ISO), AS_OF),
             )
 
         self.assertEqual(rc, 0)
@@ -439,7 +476,7 @@ class PrecloseCaptureIntegrityTests(unittest.TestCase):
     def test_failed_current_capture_never_falls_back_to_an_older_verified_session(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            older_session = "2026-08-18"
+            older_session = PRE_FLOOR_EVAL
             frame = _schwab_view_chain("PLTR", older_session)
             _write_store(
                 root,
@@ -456,7 +493,14 @@ class PrecloseCaptureIntegrityTests(unittest.TestCase):
         self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
         self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
 
-    def test_negative_call_delta_is_not_accepted_by_the_h10b_delta_gate(self):
+    def test_delta_gate_is_on_absolute_delta_as_registered(self):
+        """H10's registered band is |delta| 0.40-0.60 (`abs_delta`).
+
+        A sign-flipped call quote is a provider defect, not a different
+        contract: the registered wording bands the magnitude, and the recorded
+        delta is that magnitude. A 2026-08 change had dropped the `.abs()`,
+        which silently narrowed the registered band.
+        """
         frame = _chain("PLTR", EVAL_ISO)
         frame.loc[frame["right"] == "C", "delta"] = -0.50
         with tempfile.TemporaryDirectory() as tmp:
@@ -467,12 +511,68 @@ class PrecloseCaptureIntegrityTests(unittest.TestCase):
             )
 
         self.assertEqual(rc, 0)
-        self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
-        self.assertEqual(receipt["evaluations"][0]["reason"], "NO_CONTRACT")
+        row = receipt["evaluations"][0]
+        self.assertEqual(row["status"], "FIRED")
+        self.assertEqual(row["candidate_contract"]["delta"], 0.50)
 
-    def test_nonfinite_capture_iv_is_skipped_before_receipt_serialization(self):
+    def test_nonfinite_iv_inside_the_candidate_band_is_its_own_skip_reason(self):
+        """A malformed band row is NOT reported as a missing capture."""
         frame = _chain("PLTR", EVAL_ISO)
-        frame.loc[0, "iv"] = float("nan")
+        frame.loc[0, "iv"] = float("nan")  # 92-strike call, inside the band
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, output, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda *_args: (frame, EVAL_ISO),
+            )
+
+        self.assertEqual(rc, 0)
+        row = receipt["evaluations"][0]
+        self.assertEqual(row["status"], "SKIPPED")
+        self.assertEqual(row["reason"], "MALFORMED_ROWS")
+        self.assertNotEqual(row["reason"], "SCHWAB_CAPTURE")
+        self.assertIn("MALFORMED_ROWS", output)
+
+    def test_nonfinite_field_outside_the_candidate_band_does_not_skip_the_session(self):
+        """One garbage row elsewhere in a 3000-row chain is not a lost session."""
+        frame = _chain("PLTR", EVAL_ISO)
+        far = date.fromisoformat(EXPIRATION) + timedelta(days=365)
+        frame.loc[len(frame)] = [
+            far.isoformat(),  # far outside the 30-60 DTE band
+            200.0,  # and outside the +/-10% strike band
+            "C",
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+            float("nan"),
+        ]
+        frame.loc[frame["right"].eq("P"), "iv"] = float("nan")  # puts are never candidates
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, _, receipt, _ = _run(
+                Path(tmp),
+                adjusted=_adjusted_breakout,
+                preclose_loader=lambda *_args: (frame, EVAL_ISO),
+            )
+
+        self.assertEqual(rc, 0)
+        row = receipt["evaluations"][0]
+        self.assertEqual(row["status"], "FIRED")
+        self.assertEqual(row["candidate_contract"]["strike"], 92.0)
+
+    def test_nonfinite_strike_on_a_band_dated_call_is_malformed_not_ignored(self):
+        """A NaN strike cannot be ruled out of the band, so it fails closed."""
+        frame = _chain("PLTR", EVAL_ISO)
+        frame.loc[len(frame)] = [
+            EXPIRATION,
+            float("nan"),
+            "C",
+            0.50,
+            4.80,
+            5.00,
+            500,
+            0.5753,
+        ]
         with tempfile.TemporaryDirectory() as tmp:
             rc, _, receipt, _ = _run(
                 Path(tmp),
@@ -482,7 +582,7 @@ class PrecloseCaptureIntegrityTests(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(receipt["evaluations"][0]["status"], "SKIPPED")
-        self.assertEqual(receipt["evaluations"][0]["reason"], "SCHWAB_CAPTURE")
+        self.assertEqual(receipt["evaluations"][0]["reason"], "MALFORMED_ROWS")
 
     def test_manifest_error_from_view_is_skipped(self):
         from tools.schwab_chain_manifest import SchwabChainManifestError
@@ -778,9 +878,9 @@ class ResumeFloorTests(unittest.TestCase):
                 mock.patch.object(h10_watch, "datetime") as watch_datetime,
                 contextlib.redirect_stdout(stdout),
             ):
-                watch_datetime.now.return_value = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
+                watch_datetime.now.return_value = _WALL_CLOCK
                 rc = h10_watch.main(
-                    ["--as-of", "2026-08-19"],
+                    ["--as-of", PRE_FLOOR_RUN],
                     universe=["PLTR"],
                     load_adjusted=forbidden,
                     load_raw=forbidden,
@@ -795,7 +895,7 @@ class ResumeFloorTests(unittest.TestCase):
 
         self.assertEqual(rc, 2)
         self.assertEqual(calls, [])
-        self.assertIn("evaluation_session=2026-08-18", stdout.getvalue())
+        self.assertIn(f"evaluation_session={PRE_FLOOR_EVAL}", stdout.getvalue())
         self.assertFalse((root / "receipts").exists())
 
     def test_floor_session_records_the_evaluated_session_not_cli_date(self):

@@ -132,6 +132,9 @@ _H7_DISPLACED_RE = re.compile(
 _INTRADAY_STATES = frozenset({"ok", "unavailable"})
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _H5_NAME = re.compile(r"entry_watch_(\d{4}-\d{2}-\d{2})\.txt")
+# Ledger seq 29 clause 1: WAIT/FIRE are RETIRED H5 vocabulary. A persisted
+# report that still speaks them is drift to surface, never a state to render.
+_H5_RETIRED_VOCABULARY = re.compile(r"(?m)^[A-Z0-9.-]+:\s+(?:WAIT|FIRE)\b")
 _PLAIN_DATE_NAME = re.compile(r"(\d{4}-\d{2}-\d{2})\.json")
 _H10_NAME = re.compile(r"h10_watch_(\d{4}-\d{2}-\d{2})\.json")
 _RITUAL_NAME = re.compile(r"capture_receipt_(\d{4}-\d{2}-\d{2})\.json")
@@ -416,7 +419,11 @@ def _h5_row(
     family = "H5"
     if symbol not in config.H5_ENTRY_TRIGGERS:
         return _not_tracked(family)
-    membership = "H5 registered entry trigger"
+    # Ledger seq 29 clause 1 RETIRED H5's entry trigger; clause 2 converted the
+    # lane to a daily observer. The membership label and the state vocabulary
+    # below therefore describe an observation, never an entry verdict: this row
+    # can render OBSERVING or DATA_GAP, and can never render WAIT or FIRE.
+    membership = "H5 observe mode (entry trigger retired, ledger seq 29)"
     if artifact.path is None:
         return _missing_raw(family=family, membership=membership, summary=summary)
     if text is None or artifact.path_date is None:
@@ -429,8 +436,20 @@ def _h5_row(
             source_kind="entry_watch",
             detail="UNKNOWN — malformed newest H5 receipt",
         )
+    if _H5_RETIRED_VOCABULARY.search(text):
+        # A persisted report still speaking the retired vocabulary is drift,
+        # not a signal: surface it instead of rendering its verdict.
+        return _unknown_raw(
+            family=family,
+            membership=membership,
+            summary=summary,
+            artifact=artifact,
+            root=root,
+            source_kind="entry_watch",
+            detail="UNKNOWN — newest H5 receipt uses the retired trigger vocabulary",
+        )
     match = re.search(
-        rf"(?m)^{re.escape(symbol)}:\s+(WAIT|FIRE)\b(.*)$",
+        rf"(?m)^{re.escape(symbol)}:\s+(OBSERVED|DATA_GAP)\b(.*)$",
         text,
     )
     if match is None:
@@ -444,23 +463,26 @@ def _h5_row(
             detail="UNKNOWN — newest H5 receipt omits tracked symbol",
         )
     row_detail = match.group(2).strip()
-    as_of = re.search(r"\(as of (\d{4}-\d{2}-\d{2})\)", row_detail)
-    if as_of is None or _canonical_date(as_of.group(1)) != artifact.path_date:
-        return _unknown_raw(
-            family=family,
-            membership=membership,
-            summary=summary,
-            artifact=artifact,
-            root=root,
-            source_kind="entry_watch",
-            detail="UNKNOWN — newest H5 receipt has mismatched session",
-        )
+    observed = match.group(1) == "OBSERVED"
+    if observed:
+        as_of = re.search(r"\(as of (\d{4}-\d{2}-\d{2})\)", row_detail)
+        if as_of is None or _canonical_date(as_of.group(1)) != artifact.path_date:
+            return _unknown_raw(
+                family=family,
+                membership=membership,
+                summary=summary,
+                artifact=artifact,
+                root=root,
+                source_kind="entry_watch",
+                detail="UNKNOWN — newest H5 receipt has mismatched session",
+            )
+    state = "OBSERVING (trigger retired seq 29)" if observed else "DATA_GAP"
     family_state, run_date = _family_state(summary, artifact.path_date)
     return EvidenceRow(
         family=family,
         membership=membership,
         family_state=family_state,
-        symbol_states=(EvidenceState("entry", match.group(1)),),
+        symbol_states=(EvidenceState("observe", state),),
         evaluation_session=artifact.path_date,
         run_date=run_date,
         sources=_dedupe_sources(
@@ -469,7 +491,7 @@ def _h5_row(
         ),
         detail=_detail(row_detail, summary),
         expected_daily=True,
-        descriptive_only=False,
+        descriptive_only=True,
     )
 
 

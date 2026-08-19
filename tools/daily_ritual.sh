@@ -512,8 +512,18 @@ fi
 #
 # The allow-list is TIER-SCOPED (brief 11 §6.4): under the data tier the ritual
 # produces NO H7 evidence, so H7 paths are neither staged nor described.
+#
+# reports/h5 and reports/h10 are DATA-TIER paths (brief 17 review, 2026-08-19).
+# The Schwab preclose lane runs OUTSIDE the H7 data-gate fence -- H10b and the
+# H5 observer produce evidence on data-tier days, when FULL_AUTHORITY_RC is
+# non-zero -- so leaving them in the full-tier branch meant a registered
+# hypothesis's forward-window evidence was generated and then never committed
+# on exactly the days the lane is most likely to be the only lane that ran.
+# The tier LABEL on the commit message is unchanged: these are data(ritual)
+# artifacts, not H7 evidence.
 # ---------------------------------------------------------------------------
-DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs)
+DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs
+                 reports/h5 reports/h10)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
 EVIDENCE_COMMIT_MSG="data(ritual): daily ritual data-phase artifacts ${RUN_DATE}
 
@@ -523,8 +533,8 @@ artifacts are persisted. Written by tools/daily_ritual.sh under an
 evidence-path allow-list; this commit never contains code."
 if [ "$FULL_AUTHORITY_RC" -eq 0 ]; then
   FULL_TIER_PATHS=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
-                   reports/h7_receipts reports/h7_data_gate reports/h5
-                   reports/h6_forward reports/h8_forward reports/h10
+                   reports/h7_receipts reports/h7_data_gate
+                   reports/h6_forward reports/h8_forward
                    reports/schwab_chains)
   GIT_ADD_PATHS=("${GIT_ADD_PATHS[@]}" "${FULL_TIER_PATHS[@]}")
   EVIDENCE_COMMIT_MSG="data(h7): daily ritual evidence ${RUN_DATE}

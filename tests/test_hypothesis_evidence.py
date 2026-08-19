@@ -23,6 +23,47 @@ from options_researcher.hypothesis_evidence import (
 
 EVALUATION = "2026-07-24"
 RUN_DATE = "2026-07-27"
+H5_OBSERVE_STATE = "OBSERVING (trigger retired seq 29)"
+
+
+def _h5_observer_row(
+    symbol: str,
+    *,
+    session: str = EVALUATION,
+    state: str = "OBSERVED",
+    reason: str | None = None,
+) -> dict:
+    """One `entry_watch._gather()` row in its real shape."""
+    return {
+        "symbol": symbol,
+        "state": state,
+        "verdict": "OBSERVE" if state == "OBSERVED" else "DATA_GAP",
+        "close": 230.0,
+        "close_asof": session if state == "OBSERVED" else None,
+        "capture_available": state == "OBSERVED",
+        "capture_session": session if state == "OBSERVED" else None,
+        "atm_schwab_iv": 0.4321 if state == "OBSERVED" else None,
+        "atm_schwab_iv_state": "OK" if state == "OBSERVED" else "NOT_OBSERVED",
+        "finite_schwab_iv_observations": 3 if state == "OBSERVED" else None,
+        "finite_schwab_iv_observations_state": (
+            "COUNTED" if state == "OBSERVED" else "NOT_COUNTED"
+        ),
+        "iv_observations_required": 126,
+        "evaluation_session": session,
+        "max_asof_session": session if state == "OBSERVED" else None,
+        "reason": reason,
+    }
+
+
+def _h5_observer_text(rows: list[dict], *, session: str = EVALUATION) -> str:
+    """Byte-identical to what `entry_watch` writes: rendered by the emitter.
+
+    Hand-written H5 fixture prose is what let this consumer keep demanding the
+    RETIRED WAIT/FIRE vocabulary while every test stayed green.
+    """
+    from options_researcher.entry_watch import report_lines
+
+    return "\n".join(report_lines(session, rows)) + "\n"
 _FORBIDDEN_WATCHER_IMPORT_SUFFIXES = (
     "entry_watch",
     "h6_watch",
@@ -297,12 +338,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         )
         h5 = self.root / "reports" / "h5" / f"entry_watch_{EVALUATION}.txt"
         h5.parent.mkdir(parents=True, exist_ok=True)
-        h5.write_text(
-            "H5 LEAPS ENTRY TRIGGER WATCH\n"
-            f"AMZN: WAIT  close $230 (as of {EVALUATION}) "
-            "-- waiting on: <trigger>\n",
-            encoding="utf-8",
-        )
+        h5.write_text(_h5_observer_text([_h5_observer_row("AMZN")]), encoding="utf-8")
         _write_json(
             self.root / "reports" / "h6_forward" / f"{EVALUATION}.json",
             _h6(status="BLOCKED"),
@@ -387,8 +423,11 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
         h5 = _row(evidence, "AMZN", "H5")
         self.assertEqual(h5.family_state, "NO_SIGNAL")
-        self.assertEqual(h5.symbol_states[0].state, "WAIT")
-        self.assertIn("<trigger>", h5.detail)
+        self.assertEqual(h5.symbol_states[0].state, H5_OBSERVE_STATE)
+        self.assertEqual(h5.symbol_states[0].label, "observe")
+        self.assertIn("entry trigger retired", h5.membership)
+        self.assertTrue(h5.descriptive_only)
+        self.assertIn("finite Schwab observations", h5.detail)
         self.assertEqual(h5.evaluation_session, EVALUATION)
         self.assertEqual(h5.run_date, RUN_DATE)
 
@@ -814,7 +853,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         path = self.root / "reports" / "h5" / f"entry_watch_{friday}.txt"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            f"AMZN: WAIT close $230 (as of {friday})\n",
+            _h5_observer_text([_h5_observer_row("AMZN", session=friday)], session=friday),
             encoding="utf-8",
         )
 
@@ -987,6 +1026,47 @@ class HypothesisEvidenceTests(unittest.TestCase):
         row = _row(evidence, "AMZN", "H5")
         self.assertEqual(row.symbol_states[0].state, "UNKNOWN")
         self.assertIn("omits tracked symbol", row.detail)
+
+    def test_h5_never_renders_the_retired_wait_or_fire_vocabulary(self):
+        """seq 29 clause 1: a WAIT/FIRE report is drift, surfaced as UNKNOWN."""
+        for retired in ("WAIT", "FIRE"):
+            with self.subTest(state=retired):
+                path = self.root / "reports" / "h5" / f"entry_watch_{EVALUATION}.txt"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    f"AMZN: {retired} close $230 (as of {EVALUATION})\n",
+                    encoding="utf-8",
+                )
+
+                evidence = gather_hypothesis_evidence(
+                    ("AMZN",),
+                    root=self.root,
+                    cohort_loader=_cohort,
+                )
+
+                row = _row(evidence, "AMZN", "H5")
+                self.assertEqual(row.symbol_states[0].state, "UNKNOWN")
+                self.assertIn("retired trigger vocabulary", row.detail)
+
+    def test_h5_data_gap_rows_render_as_a_data_gap_not_an_entry_state(self):
+        path = self.root / "reports" / "h5" / f"entry_watch_{EVALUATION}.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            _h5_observer_text(
+                [_h5_observer_row("AMZN", state="DATA_GAP", reason="capture missing")]
+            ),
+            encoding="utf-8",
+        )
+
+        evidence = gather_hypothesis_evidence(
+            ("AMZN",),
+            root=self.root,
+            cohort_loader=_cohort,
+        )
+
+        row = _row(evidence, "AMZN", "H5")
+        self.assertEqual(row.symbol_states[0].state, "DATA_GAP")
+        self.assertIn("capture missing", row.detail)
 
     def test_family_summary_is_stable_and_keeps_only_agreed_dates(self):
         """A tracker rollup must not turn row disagreement into a current date."""

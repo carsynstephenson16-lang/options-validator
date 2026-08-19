@@ -122,12 +122,12 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$PF_RECEIPT_DIR"': (337,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (358,),  # full tier (region B, GATE_GO)
     "mkdir -p reports/h5": (408,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (537,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (540,),  # data tier
-    "git fetch": (550,),  # data tier
-    "git merge": (551,),  # data tier — mutates the working tree unattended
-    "git push": (552,),  # data tier
-    "restic backup": (569,),  # data tier
+    "git add": (547,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (550,),  # data tier
+    "git fetch": (560,),  # data tier
+    "git merge": (561,),  # data tier — mutates the working tree unattended
+    "git push": (562,),  # data tier
+    "restic backup": (579,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -527,10 +527,8 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             "ledger/h7_forward_schwab",
             "reports/h7_receipts",
             "reports/h7_data_gate",
-            "reports/h5",
             "reports/h6_forward",
             "reports/h8_forward",
-            "reports/h10",
             "reports/schwab_chains",
         ):
             with self.subTest(path=path):
@@ -539,14 +537,29 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                 self.assertLess(durability.index(path), git_add)
 
         # Data-tier paths are staged unconditionally, ahead of the branch.
+        # reports/h5 and reports/h10 belong here (brief 17 review 2026-08-19):
+        # the Schwab preclose lane runs OUTSIDE the H7 data-gate fence, so it
+        # produces H10b/H5 evidence on data-tier days. Staging them only inside
+        # the FULL_AUTHORITY_RC branch meant a registered forward window's
+        # evidence was written and then never committed on exactly those days.
         for path in (
             "reports/ritual",
             "reports/intraday_capture",
             "reports/live_probe",
             "reports/cache_runs",
+            "reports/h5",
+            "reports/h10",
         ):
             with self.subTest(path=path):
+                self.assertIn(path, durability)
                 self.assertLess(durability.index(path), full_branch)
+
+        # ...and they must NOT be re-listed inside the full-tier branch: a
+        # duplicate would hide a future accidental removal from the data tier.
+        full_branch_body = durability[full_branch:git_add]
+        for path in ("reports/h5", "reports/h10"):
+            with self.subTest(path=path, where="full-tier branch"):
+                self.assertNotIn(path, full_branch_body)
 
         # The commit message must not describe data-phase artifacts as H7
         # evidence (caution C6).

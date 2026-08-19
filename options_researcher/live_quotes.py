@@ -2,11 +2,12 @@
 
 READ-ONLY, PREVIEW-ONLY. This module never writes positions, the ledger, or
 any report other than its own schema-probe record; it never places orders.
-The words WAIT/FIRE and the official H5 verdict belong EXCLUSIVELY to
-options_researcher.entry_watch, which grades completed-session closes
-(H5_ENTRY_TRIGGER_PREREG / amendment v2). Everything produced here is a
+There is no H5 entry verdict anywhere in this repo any more:
+ledger seq 29 clause 1 (2026-08-17) RETIRED H5_ENTRY_TRIGGER_PREREG and
+amendment v2, and options_researcher.entry_watch is now a completed-session
+OBSERVER with no FIRE path. Everything produced here is a
 "LIVE PREVIEW (awaiting close)" lane: it may prompt a fresh manual review,
-it can never fire a trigger. FIRE stays with entry_watch.
+and it can never fire a trigger -- because no trigger exists to fire.
 
 Design: docs/superpowers/specs/2026-07-16-live-dashboard-design.md.
 

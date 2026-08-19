@@ -134,28 +134,66 @@ def _last_iso(frame: pd.DataFrame) -> str:
     return str(frame.index[-1])[:10]
 
 
+_NUMERIC_FIELDS = ("strike", "delta", "bid", "ask", "open_interest", "iv")
+
+
 def _validated_chain(chain: pd.DataFrame) -> pd.DataFrame:
+    """Structural validation of one capture: schema and parseable types.
+
+    Deliberately NOT a whole-chain finiteness gate. A single non-finite cell
+    anywhere in a 3000-row capture used to fail the entire symbol-session with
+    the same `SCHWAB_CAPTURE` reason a MISSING capture gets, which made a
+    malformed row indistinguishable from no capture at all. Finiteness is
+    enforced where it can change a decision -- the candidate-relevant band --
+    by `_malformed_band_reason` below, with its own distinct reason.
+    """
     missing = _CHAIN_FIELDS - set(chain.columns)
     if missing:
         raise ValueError(f"chain missing required fields: {sorted(missing)}")
     frame = chain.loc[:, sorted(_CHAIN_FIELDS)].copy()
     try:
         frame["expiration"] = pd.to_datetime(frame["expiration"], errors="raise").dt.date
-        for field in (
-            "strike",
-            "delta",
-            "bid",
-            "ask",
-            "open_interest",
-            "iv",
-        ):
+        for field in _NUMERIC_FIELDS:
             frame[field] = pd.to_numeric(frame[field], errors="raise")
-            if not frame[field].map(math.isfinite).all():
-                raise ValueError(f"chain {field} must be finite")
     except (TypeError, ValueError) as exc:
         raise ValueError(f"chain contains malformed values: {exc}") from exc
     frame["right"] = frame["right"].astype(str).str.upper()
     return frame
+
+
+def _candidate_band(chain: pd.DataFrame, *, on: date, spot: float) -> pd.Series:
+    """Rows a candidate could be drawn from, defined WITHOUT the delta gate.
+
+    A row whose delta is non-finite cannot be excluded by the delta gate, and a
+    row whose strike is non-finite cannot be excluded by the strike band, so
+    both stay inside the band and are caught as malformed. The band is a strict
+    superset of `_candidate_contract`'s selection set, so nothing selectable can
+    escape the finiteness check.
+    """
+    dte = chain["expiration"].map(lambda expiry: (expiry - on).days)
+    strike = chain["strike"]
+    return (
+        chain["right"].eq("C")
+        & dte.between(config.H10_DTE_MIN, config.H10_DTE_MAX)
+        & (
+            strike.isna()
+            | strike.between(
+                spot * (1.0 - config.H10_STRIKE_BAND_PCT),
+                spot * (1.0 + config.H10_STRIKE_BAND_PCT),
+            )
+        )
+    )
+
+
+def _malformed_band_reason(chain: pd.DataFrame, *, on: date, spot: float) -> str | None:
+    """Name the first non-finite field inside the candidate-relevant band."""
+    band = chain.loc[_candidate_band(chain, on=on, spot=spot)]
+    if band.empty:
+        return None
+    for field in _NUMERIC_FIELDS:
+        if not band[field].map(lambda value: math.isfinite(float(value))).all():
+            return field
+    return None
 
 
 def _signals_at_session(
@@ -180,9 +218,10 @@ def _candidate_contract(
     """
     calls = chain.loc[chain["right"].eq("C")].copy()
     calls["dte"] = calls["expiration"].map(lambda expiry: (expiry - on).days)
+    calls["abs_delta"] = calls["delta"].abs()
     calls = calls.loc[
         calls["dte"].between(config.H10_DTE_MIN, config.H10_DTE_MAX)
-        & calls["delta"].between(config.H10_DELTA_MIN, config.H10_DELTA_MAX)
+        & calls["abs_delta"].between(config.H10_DELTA_MIN, config.H10_DELTA_MAX)
         & calls["strike"].between(
             spot * (1.0 - config.H10_STRIKE_BAND_PCT),
             spot * (1.0 + config.H10_STRIKE_BAND_PCT),
@@ -193,10 +232,12 @@ def _candidate_contract(
         bid = float(row["bid"])
         ask = float(row["ask"])
         open_interest = float(row["open_interest"])
+        # Execution liquidity only (MAX_SPREAD_PCT + MIN_OPEN_INTEREST, both
+        # legs). The stricter H7_ADMIT_MAX_SPREAD_PCT 5% figure belongs to the
+        # ADMISSION COUNT gate (`lane_admission`) as registered -- it is not a
+        # selection filter, and applying it here would have silently tightened
+        # the registered entry stack.
         if not quote_valid(bid, ask) or not passes_liquidity(open_interest, bid, ask):
-            continue
-        midpoint = (bid + ask) / 2.0
-        if (ask - bid) / midpoint > config.H7_ADMIT_MAX_SPREAD_PCT:
             continue
         entry_price = adverse_buy(ask)
         entry_cost = round(entry_price * 100.0 + config.COMMISSION_PER_CONTRACT, 2)
@@ -209,7 +250,7 @@ def _candidate_contract(
                 "strike": float(row["strike"]),
                 "expiration": row["expiration"].isoformat(),
                 "dte": int(row["dte"]),
-                "delta": float(row["delta"]),
+                "delta": float(row["abs_delta"]),
                 "bid": bid,
                 "ask": ask,
                 "open_interest": open_interest,
@@ -344,8 +385,6 @@ def _evaluation(
         loaded_chain, chain_session = preclose
         if chain_session != eval_iso:
             return result("SKIPPED", "SCHWAB_CAPTURE", signals=signals)
-        if date.fromisoformat(chain_session).isoformat() != chain_session:
-            return result("SKIPPED", "SCHWAB_CAPTURE", signals=signals)
         if loaded_chain.empty:
             return result(
                 "SKIPPED",
@@ -355,6 +394,13 @@ def _evaluation(
             )
         chain = _validated_chain(loaded_chain)
         on = date.fromisoformat(eval_iso)
+        if _malformed_band_reason(chain, on=on, spot=spot) is not None:
+            return result(
+                "SKIPPED",
+                "MALFORMED_ROWS",
+                signals=signals,
+                chain_session=chain_session,
+            )
         admitted, admitted_count = lane_admission(
             chain,
             spot=spot,
