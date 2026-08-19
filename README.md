@@ -247,14 +247,19 @@ paper-trading window.
 
 *Registry correction (2026-08-04, docs-truth repair):* the prose below predates
 several ledger registrations and is retained as history. The complete registry
-per `ledger/experiments.jsonl` is: **H5** (entry watch, alert-only), **H6**
+per `ledger/experiments.jsonl` is: **H5** (seq 5; entry trigger RETIRED and
+lane converted to Schwab-ramp OBSERVE mode per seq 29 `H5_AMENDMENT_V1`,
+owner-directed 2026-08-17 — no fires, no paper entries until an owner-typed
+new rule; observe mode takes effect at the seq-29 implementation floor), **H6**
 (seq 6; one open position, `INSUFFICIENT_SAMPLE`), **H7** (seq 7–10; forward
 window PAUSED per OD-3 — restart requires a new registration and namespace),
 **H8** (seq 11; zero positions), **H10a** (seq 15; **CLOSED 2026-08-15,
 INSUFFICIENT_SAMPLE — STARVED**, owner-ratified; `H10A_RESULT` fact in
 `ledger/facts.log` per the H9 precedent; retest requires a new registration),
 **H10b** (seq 16, window ends 2027-01-06, 7-loss
-bar, zero positions), **RQ1** (seq 17; SPENT — descriptive result recorded at
+bar, zero positions; observation RESUMES on the Schwab 15:45 preclose lane
+per seq 28 `H10B_AMENDMENT_V1_1`, owner-confirmed D-1=F1 override — effect
+gated on the brief-17 implementation landing + no-backfill floor), **RQ1** (seq 17; SPENT — descriptive result recorded at
 seq 20, no verdict), **RQ2-v1** (seq 18; forward window opens **2026-08-17**
 per owner ruling 2026-08-15 in-session — the previously printed 2026-09-01
 was an LLM-proposed draft date never frozen in the ledger (see the 2026-08-10

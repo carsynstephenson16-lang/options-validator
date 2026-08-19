@@ -81,7 +81,7 @@ second was not Schwab's.)*
 
 The token was re-authorized **2026-08-12 ~00:56 ET** (Repo-verified from the
 token store's `creation_timestamp`; timestamps only, no token material read).
-Both capture lanes then verified working:
+Both capture lanes were then exercised, with different results:
 
 | Session (ET) | Intraday quotes (5×/day) | Preclose full-chain (15:45) |
 | --- | --- | --- |
