@@ -1,15 +1,18 @@
 """tests/test_entry_watch.py"""
 import contextlib
+import io
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
 
 import pandas as pd
+from test_schwab_chain_view import _chain_frame, _write_store
 
 import config
 from options_researcher import entry_watch as ew
+from options_researcher import schwab_chain_view
 
 
 def _leaps_row(oi=500, bid=40.0, ask=41.0):
@@ -86,6 +89,7 @@ class TriggerStatusTests(unittest.TestCase):
         self.assertNotEqual(no_cand["unmet"], no_file["unmet"])
 
 
+@unittest.skip("retired injected-trigger report API; observer tests cover the real path")
 class MainTests(unittest.TestCase):
     def _rows(self):
         return [{"symbol": "VST", "close": 158.63, "trigger": 140.0,
@@ -136,6 +140,7 @@ class MainTests(unittest.TestCase):
         self.assertIn("chain as of 2026-07-06", output)
 
 
+@unittest.skip("retired cache/feature gather API; observer tests cover verified Schwab")
 class ExactAsOfGatherTests(unittest.TestCase):
     EVALUATION = date(2026, 7, 15)
 
@@ -255,6 +260,168 @@ class ExactAsOfGatherTests(unittest.TestCase):
         rows = self._gather(chain_frame=self._chain().iloc[0:0])
         self.assertTrue(all(row["verdict"] == "DATA_GAP" for row in rows))
         self.assertTrue(all("empty" in " ".join(row["data_gaps"]) for row in rows))
+
+
+class H5SchwabObserverTests(unittest.TestCase):
+    RUN_DATE = "2026-08-20"
+    EVALUATION = "2026-08-19"
+
+    def _run(self, root: Path, *, run_date: str = RUN_DATE,
+             close_loader=None) -> tuple[int, str]:
+        if close_loader is None:
+            close_loader = lambda *_args, **_kwargs: pd.Series(
+                [100.0], index=[self.EVALUATION])
+        stdout = io.StringIO()
+        schwab_chain_view._reset_memo_for_tests()
+        try:
+            with (
+                mock.patch.object(
+                    schwab_chain_view, "_dirs",
+                    return_value=(root / ".cache" / "schwab_chains",
+                                  root / "reports" / "schwab_chains")),
+                mock.patch("data.underlying_closes.load_closes",
+                           side_effect=close_loader),
+                mock.patch.object(ew, "datetime") as watch_datetime,
+                contextlib.redirect_stdout(stdout),
+            ):
+                watch_datetime.now.return_value = datetime(
+                    2026, 8, 21, 12, 0, tzinfo=timezone.utc)
+                rc = ew.main(as_of=run_date)
+        finally:
+            schwab_chain_view._reset_memo_for_tests()
+        return rc, stdout.getvalue()
+
+    def test_real_path_uses_unscaled_schwab_atm_iv_without_a_fire_output(self):
+        """A feature-store read or a second IV divide breaks this report."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            frames = {symbol: _chain_frame(iv=0.43210)
+                      for symbol in config.H5_ENTRY_TRIGGERS}
+            _write_store(root, sorted(config.H5_ENTRY_TRIGGERS),
+                         session=self.EVALUATION, frames=frames)
+            with mock.patch("options_researcher.features.load_features",
+                            side_effect=AssertionError("feature IV is forbidden")):
+                rc, output = self._run(root)
+
+        self.assertEqual(rc, 0, output)
+        self.assertIn("observational / non-verdict-bearing", output)
+        self.assertIn("max_asof_session=2026-08-19", output)
+        self.assertIn("capture_available=True", output)
+        self.assertIn("ATM Schwab IV 0.44210", output)
+        self.assertIn("1/126 finite Schwab observations", output)
+        self.assertNotIn("FIRE", output)
+
+    def test_pre_floor_run_refuses_before_loading_inputs(self):
+        calls: list[str] = []
+
+        def forbidden(*_args, **_kwargs):
+            calls.append("close")
+            raise AssertionError("floor refusal must precede source loading")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, output = self._run(Path(tmp), run_date="2026-08-19",
+                                   close_loader=forbidden)
+
+        self.assertEqual(rc, 2, output)
+        self.assertEqual(calls, [])
+        self.assertIn("evaluation_session=2026-08-18", output)
+        self.assertIn(config.H5_RESUME_FLOOR_SESSION, output)
+        self.assertNotIn("OBSERVED", output)
+
+    def test_verified_history_counts_one_h5_atm_iv_per_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            symbols = sorted((*config.H5_ENTRY_TRIGGERS, "PLTR"))
+            frames = {symbol: _chain_frame(iv=0.43210) for symbol in symbols}
+            _write_store(root, symbols, session="2026-08-18", frames=frames)
+            _write_store(root, symbols, session=self.EVALUATION, frames=frames)
+            rc, output = self._run(root)
+
+        self.assertEqual(rc, 0, output)
+        self.assertIn("2/126 finite Schwab observations", output)
+        self.assertIn("VST: OBSERVED", output)
+        self.assertIn("AMZN: OBSERVED", output)
+        self.assertNotIn("PLTR:", output)
+
+    def test_stale_or_future_capture_cannot_substitute_for_the_exact_session(self):
+        for session in ("2026-08-18", "2026-08-20"):
+            with self.subTest(session=session), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _write_store(root, sorted(config.H5_ENTRY_TRIGGERS), session=session)
+                rc, output = self._run(root)
+            self.assertEqual(rc, 1, output)
+            self.assertIn("exact verified Schwab capture", output)
+            self.assertIn("capture_available=False", output)
+            self.assertNotIn("OBSERVED", output)
+
+    def test_missing_stale_future_or_nonfinite_price_fails_closed(self):
+        sources = {
+            "missing": FileNotFoundError("close missing"),
+            "stale": pd.Series([100.0], index=["2026-08-18"]),
+            "future": pd.Series([100.0], index=["2026-08-20"]),
+            "nonfinite": pd.Series([float("nan")], index=[self.EVALUATION]),
+        }
+        for name, source in sources.items():
+            with self.subTest(source=name), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _write_store(root, sorted(config.H5_ENTRY_TRIGGERS),
+                             session=self.EVALUATION)
+                if isinstance(source, Exception):
+                    loader = mock.Mock(side_effect=source)
+                else:
+                    loader = mock.Mock(return_value=source)
+                rc, output = self._run(root, close_loader=loader)
+
+            self.assertEqual(rc, 1, output)
+            self.assertIn("close", output)
+            self.assertIn("capture_available=True", output)
+            self.assertNotIn("OBSERVED", output)
+
+    def test_partial_and_unverified_exact_packages_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_store(root, ["VST"], session=self.EVALUATION)
+            partial_rc, partial_output = self._run(root)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_store(root, sorted(config.H5_ENTRY_TRIGGERS),
+                         session=self.EVALUATION)
+            _chain_frame(iv=0.61).to_parquet(
+                root / ".cache" / "schwab_chains" / f"VST_{self.EVALUATION}.parquet")
+            unverified_rc, unverified_output = self._run(root)
+
+        self.assertEqual(partial_rc, 1, partial_output)
+        self.assertIn("partial H5 universe", partial_output)
+        self.assertNotIn("OBSERVED", partial_output)
+        self.assertEqual(unverified_rc, 1, unverified_output)
+        self.assertIn("unverified", unverified_output)
+        self.assertNotIn("OBSERVED", unverified_output)
+
+    def test_malformed_verified_chain_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            malformed = _chain_frame().drop(columns=["gamma"])
+            frames = {symbol: malformed for symbol in config.H5_ENTRY_TRIGGERS}
+            _write_store(root, sorted(config.H5_ENTRY_TRIGGERS),
+                         session=self.EVALUATION, frames=frames)
+            rc, output = self._run(root)
+
+        self.assertEqual(rc, 1, output)
+        self.assertIn("malformed", output)
+        self.assertNotIn("OBSERVED", output)
+
+    def test_nonfinite_atm_iv_does_not_increment_the_schwab_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            frames = {symbol: _chain_frame(iv=float("nan"))
+                      for symbol in config.H5_ENTRY_TRIGGERS}
+            _write_store(root, sorted(config.H5_ENTRY_TRIGGERS),
+                         session=self.EVALUATION, frames=frames)
+            rc, output = self._run(root)
+
+        self.assertEqual(rc, 0, output)
+        self.assertIn("ATM Schwab IV unavailable", output)
+        self.assertIn("0/126 finite Schwab observations", output)
 
 
 
