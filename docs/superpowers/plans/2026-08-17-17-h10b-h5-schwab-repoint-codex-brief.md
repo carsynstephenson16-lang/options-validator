@@ -1,4 +1,4 @@
-# Brief 17 — H10b resume + H5 observe mode on the Schwab preclose lane (rev 2)
+# Brief 17 — H10b resume + H5 observe mode on the Schwab preclose lane (rev 3)
 
 **Date:** 2026-08-17 (rev 2: 2026-08-18)
 **Author:** orchestrating Claude session (Fable), 2026-08-16/17 owner-directed batch
@@ -99,7 +99,7 @@ obligation in WP-D. Do NOT implement a ÷100. Do NOT touch
     no-append test must drive the real recording path (not a grep), e.g.
     run a post-floor session end-to-end and assert the legacy file's bytes
     are unchanged.
-  - RECEIPT schema (review BL-3): receipts carry
+  - RECEIPT schema (review BL-3 + rev-2 BL-4): receipts carry
     `"signals": {"H10a": ..., "H10b": ...}`;
     `hypothesis_evidence.py:787-791` asserts the exact key set AND that
     every value is `None` or `bool` — a string marker like `"ADJUDICATED"`
@@ -107,15 +107,32 @@ obligation in WP-D. Do NOT implement a ÷100. Do NOT touch
     UNKNOWN (`hypothesis_evidence.py:815-833`, consumed per family at
     `:1311-1323`). Post-resumption receipts therefore emit
     `"H10a": None` (type-legal "not evaluated") plus a separate
-    discriminator field (e.g. `"h10a_status": "ADJUDICATED"`), with a test
-    that the evidence layer still renders H10b correctly.
-  - UNION READER + hole disclosure (seq 28 clause 3, review FX-6): H10b's
-    record is the union of the pre-starvation receipts (4 rows in the
-    legacy store, sessions 2026-07-23/24/27/28, receipts
+    discriminator field (e.g. `"h10a_status": "ADJUDICATED"`). BUT
+    (rev-2 review BL-4): the status predicates at
+    `hypothesis_evidence.py:793-814` must be read in full — the NO_SIGNAL
+    branch (`:801-807`) requires `all(value is False for value in
+    signals.values())`, so `"H10a": None` fails it and collapses every
+    NO_SIGNAL receipt (the dominant status) to UNKNOWN via `:823`. The
+    AUTHORIZED change set therefore explicitly includes editing
+    `valid_status_fields` so the NO_SIGNAL branch evaluates only the live
+    family (`signals.get(family) is False`) instead of `all(...)`; the
+    FIRED branch (`:794-800`, `any(value is True ...)`) survives `None`
+    but gets pinned by a test too. The evidence-render test MUST use a
+    **NO_SIGNAL** fixture (a SKIPPED-only fixture is vacuous — the SKIPPED
+    branch at `:808-813` constrains `signals` not at all) and additionally
+    a FIRED fixture; both assert H10b renders correctly with
+    `"H10a": None` present.
+  - UNION READER + hole disclosure (seq 28 clause 3, review FX-6; axes per
+    rev-2 FX-7): H10b's record is the union of the pre-starvation receipts
+    (4 rows in the legacy store; RUN dates 2026-07-23/24/27/28 =
+    EVALUATION sessions 2026-07-22/23/24/27, receipts
     `reports/h10/receipts/h10_watch_*.json`) and the new store; any
-    consumer/rollup reads both and stamps the permanent
-    2026-07-29→first-capture hole; nothing interpolated. Test: union view
-    returns 4 legacy + N new rows with the hole disclosed.
+    consumer/rollup reads both and stamps the permanent hole; nothing
+    interpolated. The hole is stated on the SESSION axis (the same axis as
+    the floor constant): evaluation sessions after 2026-07-27 and before
+    the floor are permanently unobserved. Test: union view returns 4
+    legacy + N new rows and discloses the hole with both boundary sessions
+    named on the session axis.
   - COVERAGE assertion (seq 28 clause 2): test that
     `config.py:391-392` H7_WATCHLIST (11 names, consumed at
     `h10_watch.py:485`) is a subset of
@@ -160,7 +177,14 @@ obligation in WP-D. Do NOT implement a ÷100. Do NOT touch
   exactly the keys of `config.py:321` `H5_ENTRY_TRIGGERS` ({VST, AMZN}) —
   no expansion. Per name, record price, capture availability, and the count
   of finite single-source Schwab IV observations toward the 126 needed for
-  a computable IV rank (`features.py:25` `PCT_MIN_OBS = 126`). NO fire
+  a computable IV rank (`features.py:25` `PCT_MIN_OBS = 126`). Per-name
+  extraction rule (rev-2 FX-8 — one `iv` exists per CONTRACT per session,
+  `schwab_chain_capture.py:182`, so "an observation for VST" must be
+  pinned): one observation per name per session = the ATM row of the
+  nearest monthly expiration, selected with the SAME helpers `features.py`
+  already imports from `options_researcher/chains` (`features.py:21`) — no
+  new selection convention; count a session only if that row's `iv` is
+  finite. NO fire
   path: trigger evaluation is hard-disabled with a test proving no FIRE
   output can be produced — while `config.py:321-322` themselves REMAIN
   (frozen history; see OUT). Note the real rework surface: the IV-rank
