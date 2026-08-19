@@ -3,8 +3,10 @@
 **Status: DRAFT. Nothing here is registered.** Provenance: owner directive
 2026-08-16 ("reopen h10a"), recorded in
 `reports/2026-08-16-owner-directives.md`. Because H10a (seq 15) was
-adjudicated 2026-08-16 (facts.log `H10A_RESULT`: INSUFFICIENT_SAMPLE —
-STARVED, 0 trades), the append-only ledger and the H7/OD-3 precedent require
+adjudicated — ratified 2026-08-15, fact appended 2026-08-16 (facts.log
+`H10A_RESULT`: INSUFFICIENT_SAMPLE — STARVED, 0 trades; two dates stated
+separately per review FX-F/NEW-8) — the append-only ledger and the H7/OD-3
+precedent require
 a **new registration under a new namespace**, not an un-close. New
 registrations are owner-typed — this packet only prepares the decision.
 
@@ -44,8 +46,11 @@ project 14+ entries. The fresh precedent is the H7 owner ruling recorded
 quoted (3 vs bar 14). The owner should either:
 
 - **(a)** pre-accept starvation for H10a-v2, quoting a freshly computed
-  receipt-bound expected-entries number over the chosen window (a
-  feasibility run against the Schwab-capture universe is required first), or
+  receipt-bound expected-entries number over the chosen window (per step 2 /
+  review FX-K: the base rate is measured on the frozen ThetaData history and
+  labeled as such — the Schwab lane's 1–2 sessions cannot support a base
+  rate; NEW-8 alignment) — **OWNER SELECTED 2026-08-17**, pending the
+  computed number; or
 - **(b)** choose a window long enough that the computed projection clears the
   bar, or
 - **(c)** decline to re-register (the v1 STARVED verdict already stands as a

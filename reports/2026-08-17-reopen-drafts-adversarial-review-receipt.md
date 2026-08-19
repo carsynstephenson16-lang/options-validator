@@ -53,3 +53,35 @@ redesign was required. **Nothing is appended to the ledger.** Appending
 remains blocked on the owner answering Q1–Q4 in
 `reports/2026-08-16-owner-directives.md` and on a confirmation pass of rev 2.
 Fable sign-off on the amendments is therefore DEFERRED, not granted.
+
+---
+
+## Confirmation round (same reviewer, 2026-08-17/18, against @d5da03a)
+
+Owner answers Q1–Q4 were recorded and rev 3 rewrote the H5 amendment to the
+actual ruling (trigger retirement + observe mode). Confirmation-round
+verdicts: directives report PASS WITH FIXES (NEW-7 stale §5); amendments
+PASS WITH FIXES but **APPEND UNSAFE as written** pending two blocker-grade
+one-liners — NEW-4 (H10b timing convention inverted vs the code it cites:
+signal/spot are close-based, only admission/selection/fill move to the 15:45
+chain) and NEW-5 (AMZN <=220 belongs to the PREREG, not V2; V2 changed VST
+only); packet PASS WITH FIXES (NEW-8 stale dates + feasibility-feed
+alignment). Additional required-in-same-pass items: NEW-1 (receipt-schema +
+`{"H10a","H10b"}` invariant coverage), NEW-2 (floor = later of landing and
+append date, seq-26 precedent), NEW-3 (disable/relabel `entry_watch` trigger
+output in the same landing), NEW-6 (H5 target = seq 5, trial_count 6,
+hypothesis_id null), clause-3(a) red-green test tightening. The delegation
+analysis held: retiring owner-frozen numbers on explicit owner direction is
+recording-under-delegation; floors are mechanical dates; `trial_intent` is
+the right entry type; H10a-v2 stays owner-typed and unappended.
+
+## Fable sign-off
+
+All eight items above were applied in the follow-up commit. With NEW-4 and
+NEW-5 closed, the reviewer's explicit condition for APPEND SAFE is met.
+**Fable sign-off GRANTED 2026-08-18** for appending H10B_AMENDMENT_V1_1
+(rev 2 text as corrected) and H5_AMENDMENT_V1 (rev 3 text as corrected) via
+`research.experiments.log_trial_intent`, provenance "owner-delegated
+standing 2026-07-25", citing this receipt's confirmation-round verdict by
+name (the F-12 lesson). The H10a-v2 registration is NOT covered by this
+sign-off.

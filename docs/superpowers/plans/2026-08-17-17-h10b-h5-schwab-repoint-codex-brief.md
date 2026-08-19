@@ -3,10 +3,11 @@
 **Date:** 2026-08-17
 **Author:** orchestrating Claude session (Fable), 2026-08-16/17 owner-directed batch
 **Executor:** Codex (high reasoning)
-**Status:** DRAFT — pending independent adversarial review before hand-off,
-AND pending the ledger append of H10B_AMENDMENT_V1_1 + H5_AMENDMENT_V1
-(rev 3 texts in `reports/2026-08-16-h10b-h5-amendment-drafts.md`) — do not
-start work before both amendments exist in the ledger.
+**Status:** DRAFT — pending independent adversarial review before hand-off.
+The amendment precondition is MET: H10B_AMENDMENT_V1_1 (seq 28) and
+H5_AMENDMENT_V1 (seq 29) were appended 2026-08-18 via the typed API after
+the confirmation-round review + Fable sign-off
+(`reports/2026-08-17-reopen-drafts-adversarial-review-receipt.md`).
 **Provenance:** Repo-verified against branch
 `claude/reopen-directives-2026-08-16` @`d5da03a` (base `origin/main`
 @`f1fd4bd`) unless labeled otherwise.
@@ -55,16 +56,26 @@ writes; no network calls in tests; no modification of
   `H10A_RESULT` fact of 2026-08-15/16) such that the watcher refuses to
   evaluate or record H10a in any mode. Test: attempting an H10a evaluation
   raises/refuses; the refusal names the adjudication.
-- **WP-B — namespaced H10b store (closes BL-B).** Post-resumption H10b
-  observations go to `reports/h10/h10b_observations.jsonl` with a per-row
-  `hypothesis` field. `reports/h10/observations.jsonl` (rows have no
-  hypothesis discriminator — Repo-verified) becomes read-only history; a
-  test proves no code path appends to it.
+- **WP-B — namespaced H10b store + receipt schema (closes BL-B incl.
+  confirmation-round NEW-1).** Post-resumption H10b observations go to
+  `reports/h10/h10b_observations.jsonl` with a per-row `hypothesis` field.
+  `reports/h10/observations.jsonl` (rows have no hypothesis discriminator —
+  Repo-verified) becomes read-only history; a test proves no code path
+  appends to it. Per-session RECEIPTS carry
+  `"signals": {"H10a": ..., "H10b": ...}` and
+  `hypothesis_evidence.py:787` asserts that exact key set with a fixed
+  `_HYPOTHESIS_ORDER` (Repo-verified) — post-resumption receipts must not
+  contain a live H10a evaluation: emit an explicit `"H10a": "ADJUDICATED"`
+  marker (or deliberately update the schema AND the invariant together),
+  test-covered, so no receipt constitutes a post-adjudication H10a
+  evaluation and the invariant does not silently break.
 - **WP-C — no-backfill floors (closes BL-C).** `h10_watch.py:428-449`
   currently refuses only FUTURE `--as-of` dates (Repo-verified). Add
   `H10B_RESUME_FLOOR_SESSION` / `H5_RESUME_FLOOR_SESSION` to `config.py`
-  (value = first session on/after this brief's landing merge; label
-  "mechanical landing date, amendment clause 5"): any evaluation or record
+  (value = the LATER of the first session on/after this brief's landing
+  merge and the amendments' ledger append date 2026-08-18 — amendment
+  clause 5 as corrected by confirmation-round NEW-2; label "mechanical
+  date, amendment clause 5"): any evaluation or record
   with `as_of` before the floor refuses, regardless of run time or receipt
   date. Tests both sides of the boundary.
 - **WP-D — Schwab source adapter.** H10b admission checks (>=5 NTM monthly

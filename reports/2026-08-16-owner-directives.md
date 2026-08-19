@@ -67,27 +67,31 @@ that lands, H10b remains observation-paused in fact even once amended in form.
 
 ## Directive 5 — H5 no longer alert-only
 
-H5's alert-only character is part of its registered design (2026-07-04) and
-its watcher is read-only by construction. The directive is read as: H5 alerts
-should become recordable paper positions, not just terminal messages. Honest
-split, because the registration froze caps for only part of H5:
+*(Section rewritten 2026-08-17/18 per confirmation-round NEW-7 — the original
+rev-1 reading, "H5 alerts should become recordable paper positions," was
+SUPERSEDED by the owner's Q4 answer below and is retained only in git
+history.)*
 
-- **Defined-risk side (LEAPS core + tactical calls):** frozen caps exist
-  (owner-typed 2026-07-04: $10k/name, $16k LEAPS total; $600 defined-risk per
-  tactical trade). A pre-result amendment (H5_AMENDMENT_V1: paper-position
-  recording path for these structures) is drafted in
-  `reports/2026-08-16-h10b-h5-amendment-drafts.md` and is delegable.
-- **Income side (cash-secured puts / covered calls / PMCC):** collateral-scale
-  risk with **no owner-typed cap in existence** (the $600 cap structurally
-  does not apply; see config.py CSP collateral note and the 2026-07-23
-  program's cap-class distinction). Inventing that cap is prohibited
-  (owner-typed numbers only), so the income side **stays alert-only until the
-  owner types a collateral cap**. The amendment draft states this boundary
-  explicitly.
+The owner's ruling (Q4 + explicit option selection, recorded below): the
+frozen H5 entry trigger is RETIRED and H5 becomes a daily OBSERVER on the
+Schwab lane while it ramps — no fires, no paper entries, until the owner
+types a new entry rule. `H5_AMENDMENT_V1` (rev 3 in
+`reports/2026-08-16-h10b-h5-amendment-drafts.md`) records exactly that:
+trigger retirement with a named supersession, observe mode, no recording
+path enacted.
 
-**Known unresolved tension, surfaced not solved:** H5's frozen LEAPS total cap
-($16k) exceeds the whole-portfolio risk sleeve ($14k). This predates today and
-is flagged for an owner decision; no number is changed here.
+Cap facts, correctly attributed (review FX-B): the $10k/name and $16k total
+thesis-bucket caps are `H4_THESIS_MAX_PREMIUM_PER_NAME`/`_TOTAL` — a SHARED
+H4/H5 bucket, the $16k dated 2026-07-06, provenance advisory/un-chained per
+its own config comment; not H5-specific owner-typed caps of 2026-07-04. The
+income side (cash-secured puts / covered calls / PMCC) remains display-only
+with **no owner-typed collateral cap in existence**; inventing one is
+prohibited.
+
+**Known unresolved tension, surfaced not solved:** the shared thesis-bucket
+total cap ($16k) exceeds the whole-portfolio risk sleeve ($14k). This
+predates today and is flagged for an owner decision; no number is changed
+here.
 
 ## Owner confirmations required BEFORE any amendment append (review FX-G/FX-H)
 
@@ -140,7 +144,11 @@ explicit multiple-choice options (N-1 confirmation-loop precedent):
 
 ## What remains owner-only after this session
 
-1. Type/ratify the H10a-v2 registration (packet draft prepared).
+1. Type/ratify the H10a-v2 registration (packet draft prepared; owner
+   selections of 2026-08-17 recorded — ~2.5-month window, starvation
+   pre-accepted pending the quoted feasibility number).
 2. Type a collateral cap if the H5 income side should ever record positions.
-3. Resolve the $16k-vs-$14k cap tension.
-4. Weekend Schwab re-auth before ~2026-08-19 00:56 ET token death.
+3. Type any FUTURE H5 entry rule (the retired trigger is not coming back
+   without a new owner-typed decision; AMZN routes tactical-only per Q3).
+4. Resolve the $16k-vs-$14k cap tension.
+5. Schwab re-auth before ~2026-08-19 00:56 ET token death.

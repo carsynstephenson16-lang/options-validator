@@ -35,15 +35,18 @@ Clauses:
    are skipped (clause 2). All other lanes' D-1=F1 pause is unchanged.
    Owner confirmation RECEIVED 2026-08-17 (directives §"Owner answers", Q2:
    "ya confirm overrid").
-2. **Data-source substitution + timing convention (review FX-A).** H10b's
-   daily entry evaluation reads the Schwab 15:45 ET preclose chain captures
-   in place of the frozen ThetaData cache (ended 2026-07-27). This changes
-   TWO things and both are declared: the quote feed, and the decision
-   timestamp — entry evaluation moves from EOD marks to the 15:45 snapshot,
-   while exit/mark accounting that reads official closes
-   (`_load_adjusted`) stays on closes; the mixed convention is disclosed and
-   conservative-direction rules are unchanged (mid-or-worse +
-   SLIPPAGE_HAIRCUT + COMMISSION_PER_CONTRACT). Schwab-source IV is stored
+2. **Data-source substitution + timing convention (review FX-A; corrected
+   per confirmation-round NEW-4).** H10b's daily entry evaluation reads the
+   Schwab 15:45 ET preclose chain captures in place of the frozen ThetaData
+   cache (ended 2026-07-27). The post-substitution timing convention,
+   stated precisely: the QM breakout SIGNAL stays on completed-session
+   OHLCV (`_load_adjusted` → `_signals_at_session`); the reference SPOT is
+   `_load_raw`'s official close; ADMISSION, contract selection (delta
+   0.40–0.60 within +/-10 pct of that spot), and FILL pricing come from the
+   15:45 chain snapshot. The genuine mixed-timing hazard — a 15:45 chain
+   priced against an official close — is disclosed here and stamped in
+   every output row; conservative-direction rules are unchanged
+   (mid-or-worse + SLIPPAGE_HAIRCUT + COMMISSION_PER_CONTRACT). Schwab-source IV is stored
    in percent and MUST be normalized (÷100) to the repo's decimal
    convention before any comparison (`schwab_chain_view.py:223`) — a
    normalization test is a named obligation. All registered admission
@@ -51,16 +54,25 @@ Clauses:
    exits are UNCHANGED. Missing/partial/unverified captures ⇒ session
    skipped and logged, fail-closed. Coverage: H7_WATCHLIST (11 names) is a
    verified strict subset of the 15-name capture universe — no coverage gap.
-3. **Closed-trial guard (review BL-B — named test obligation).** The H10
-   watcher and observation store are shared between H10a and H10b today
-   (`h10_watch.py`, single `observations.jsonl`, no hypothesis
-   discriminator, no adjudication guard). Before resumption: (a) the
-   watcher MUST refuse to evaluate or record H10a — H10a is ADJUDICATED
-   (facts.log `H10A_RESULT` 2026-08-15/16) and its record is complete at 4
-   receipts; a CLOSED-state guard with a test is required; (b)
-   post-resumption H10b observations go to a NAMESPACED store
-   (`reports/h10/h10b_observations.jsonl` or a per-row hypothesis field) so
-   no write can extend H10a's closed record. H10b's record is then the
+3. **Closed-trial guard (review BL-B — named test obligation; extended per
+   confirmation-round NEW-1 + test tightening).** The H10 watcher and
+   observation store are shared between H10a and H10b today (`h10_watch.py`,
+   single `observations.jsonl`, no hypothesis discriminator, no
+   adjudication guard). Before resumption: (a) the watcher MUST refuse to
+   evaluate or record H10a — H10a is ADJUDICATED (facts.log `H10A_RESULT`
+   2026-08-15/16) and its record is complete at 4 receipts; the guard's
+   test obligation is concrete and red-green: run the watcher for a session
+   inside H10a's old window and assert BOTH zero H10a evaluation AND zero
+   write to any H10a record; (b) post-resumption H10b observations go to a
+   NAMESPACED store (`reports/h10/h10b_observations.jsonl` or a per-row
+   hypothesis field) so no write can extend H10a's closed record; (c) the
+   per-session RECEIPT schema is covered too, not just the rollup:
+   receipts today carry `"signals": {"H10a": ..., "H10b": ...}` and
+   `hypothesis_evidence.py` asserts that exact key set — post-resumption
+   receipts must drop live H10a evaluation without breaking that invariant
+   (e.g. an explicit `"H10a": "ADJUDICATED"` marker or a deliberate,
+   test-covered schema/invariant update), so no receipt constitutes a
+   post-adjudication H10a evaluation. H10b's record is then the
    union of its pre-starvation receipts (through 2026-07-28) and its own
    post-resumption receipts; the 2026-07-29 → first-capture hole is
    permanent and disclosed; nothing is interpolated.
@@ -70,18 +82,24 @@ Clauses:
 5. **Implementation gate + hard no-backfill floor (review BL-C — named test
    obligation).** The amendment takes observational effect only when the
    reviewed watcher change lands (Codex brief, suite green). A frozen
-   constant `H10B_RESUME_FLOOR_SESSION` = the first session ON OR AFTER
-   that landing; the watcher MUST refuse to evaluate or record ANY session
-   with `as_of` earlier than the floor, regardless of when the command
-   runs and regardless of receipt date — closing the existing `--as-of`
-   past-session hole (`h10_watch.py:428-449` refuses only future dates
-   today). Enforced by the constant plus a test (the brief-14 `dryrun/`
-   quarantine pattern). The floor date itself is mechanical (the landing
-   session), not an invented frozen number.
+   constant `H10B_RESUME_FLOOR_SESSION` = the LATER of (i) the first
+   session on/after the implementation landing and (ii) this amendment's
+   ledger append date (confirmation-round NEW-2, matching the seq-26
+   append-timestamp precedent so no agent-chosen merge date can start a
+   verdict-bearing record); the watcher MUST refuse to evaluate or record
+   ANY session with `as_of` earlier than the floor, regardless of when the
+   command runs and regardless of receipt date — closing the existing
+   `--as-of` past-session hole (`h10_watch.py:428-449` refuses only future
+   dates today). Enforced by the constant plus a test (the brief-14
+   `dryrun/` quarantine pattern). The floor date itself is mechanical, not
+   an invented frozen number.
 
 ## H5_AMENDMENT_V1 — entry-trigger retirement + observe mode (rev 3, owner-ruled 2026-08-17)
 
-Target: H5 Sector Income Core (ledger trial 6, registered 2026-07-04).
+Target: H5 Sector Income Core — ledger seq 5, trial_count 6, registered
+2026-07-04 (`hypothesis_id` is null in that entry's original schema, so this
+amendment binds its target by seq number explicitly; confirmation-round
+NEW-6 — note seq 6 is H6, a different hypothesis).
 
 **What the owner ruled (2026-08-17, in-session + explicit option
 selection):** "get rid of the h5 frozen rule entry i want to observe while
@@ -93,10 +111,15 @@ so the recording-path machinery of rev 1/2 is NOT enacted here.
 
 Clauses:
 
-1. **Trigger retirement (NAMED SUPERSESSION).** `H5_ENTRY_TRIGGER_PREREG`
-   (2026-07-07, owner-frozen: VST <=140, IVR <=0.5) and
-   `H5_ENTRY_TRIGGER_AMENDMENT_V2` (2026-07-15, VST 140→160; AMZN <=220)
-   are RETIRED as entry rules, owner-directed 2026-08-17. They remain on
+1. **Trigger retirement (NAMED SUPERSESSION; attribution corrected per
+   confirmation-round NEW-5).** `H5_ENTRY_TRIGGER_PREREG` (2026-07-07,
+   owner-frozen: VST <=140, AMZN <=220, IVR <=0.5) and
+   `H5_ENTRY_TRIGGER_AMENDMENT_V2` (2026-07-15, which changed ONE number:
+   VST 140→160; AMZN 220 and IVR 0.5 unchanged) are RETIRED as entry
+   rules, owner-directed 2026-08-17. In the same landing as observe mode,
+   `entry_watch`'s trigger evaluation output is disabled or relabeled
+   (confirmation-round NEW-3) so the daily ritual cannot print trigger
+   prose the ledger says is retired. They remain on
    the append-only record as history; any fire-like output computed from
    them after this amendment is void. No replacement rule is created here
    — a future entry rule is a new owner-typed frozen decision, and per
