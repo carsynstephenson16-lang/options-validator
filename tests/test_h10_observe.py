@@ -30,14 +30,12 @@ def _evaluation(
     *,
     reason: str | None = None,
     action: bool = False,
+    h10b_signal: bool | None = None,
 ) -> dict:
-    h10b_signal: bool | None
     if status == "FIRED":
         h10b_signal = True
     elif status == "NO_SIGNAL":
         h10b_signal = False
-    else:
-        h10b_signal = None
     return {
         "symbol": symbol,
         "signals": {
@@ -63,8 +61,8 @@ def _receipt() -> dict:
         "evaluations": [
             _evaluation("PLTR", "FIRED", action=True),
             _evaluation("NVDA", "NO_SIGNAL"),
-            _evaluation("AMD", "SKIPPED", reason="CAP"),
-            _evaluation("TEM", "SKIPPED", reason="EARNINGS"),
+            _evaluation("AMD", "SKIPPED", reason="DATA"),
+            _evaluation("TEM", "SKIPPED", reason="CAP", h10b_signal=True),
         ],
         "book_action_required": True,
     }
@@ -192,7 +190,7 @@ class AppendTests(unittest.TestCase):
             {
                 "fired": ["PLTR"],
                 "no_signal": ["NVDA"],
-                "skipped": {"AMD": "CAP", "TEM": "EARNINGS"},
+                "skipped": {"AMD": "DATA", "TEM": "CAP"},
             },
         )
         self.assertEqual(record["open_positions"], 2)
@@ -265,6 +263,23 @@ class MalformedLogTests(unittest.TestCase):
 
 
 class ReceiptSemanticsTests(unittest.TestCase):
+    def test_real_skipped_signal_states_append(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rc, _, receipt_path, observations, _, _ = _run(root)
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            record = json.loads(observations.read_text(encoding="utf-8"))
+
+        skipped = {
+            row["symbol"]: row for row in receipt["evaluations"] if row["status"] == "SKIPPED"
+        }
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            {symbol: (row["reason"], row["signals"]["H10b"]) for symbol, row in skipped.items()},
+            {"AMD": ("DATA", None), "TEM": ("CAP", True)},
+        )
+        self.assertEqual(record["summary"]["skipped"], {"AMD": "DATA", "TEM": "CAP"})
+
     def _assert_refused_without_append(self, mutate) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
