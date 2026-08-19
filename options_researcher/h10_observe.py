@@ -158,7 +158,12 @@ def _summary(receipt: dict[str, Any]) -> dict[str, Any]:
             no_signal.append(symbol)
         elif status == "SKIPPED":
             reason = row.get("reason")
-            if not isinstance(reason, str) or not reason or action is not False:
+            if (
+                not isinstance(reason, str)
+                or not reason
+                or action is not False
+                or signals["H10b"] is False
+            ):
                 raise ObservationError(f"SKIPPED row {symbol} has invalid signal/action semantics")
             skipped[symbol] = reason
         else:

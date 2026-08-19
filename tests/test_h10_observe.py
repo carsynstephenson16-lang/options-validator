@@ -31,11 +31,18 @@ def _evaluation(
     reason: str | None = None,
     action: bool = False,
 ) -> dict:
+    h10b_signal: bool | None
+    if status == "FIRED":
+        h10b_signal = True
+    elif status == "NO_SIGNAL":
+        h10b_signal = False
+    else:
+        h10b_signal = None
     return {
         "symbol": symbol,
         "signals": {
             "H10a": None,
-            "H10b": status == "FIRED",
+            "H10b": h10b_signal,
         },
         "h10a_status": H10A_ADJUDICATED,
         "window_status": {"H10b": "OPEN"},
@@ -284,9 +291,15 @@ class ReceiptSemanticsTests(unittest.TestCase):
 
         self._assert_refused_without_append(mutate)
 
-    def test_skipped_row_requires_no_book_action(self):
+    def test_skipped_row_requires_no_book_action_or_false_h10b_signal(self):
         def mutate(payload: dict) -> None:
             payload["evaluations"][2]["book_action_required"] = True
+
+        self._assert_refused_without_append(mutate)
+
+    def test_skipped_row_refuses_an_impossible_false_h10b_signal(self):
+        def mutate(payload: dict) -> None:
+            payload["evaluations"][2]["signals"]["H10b"] = False
 
         self._assert_refused_without_append(mutate)
 
