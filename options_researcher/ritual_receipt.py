@@ -13,10 +13,15 @@ import json
 import re
 from datetime import date
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 import config
+from options_researcher.entry_watch import OBSERVATION_LABEL
 from options_researcher.h7_scope import scope_identity
+from options_researcher.h10_observe import (
+    ObservationLogMalformed,
+    read_h10b_observation_union,
+)
 
 CaptureStatus = Literal["CAPTURED", "NO_SIGNAL", "REFUSED", "MISSING"]
 
@@ -25,6 +30,11 @@ class CaptureResult(TypedDict):
     status: CaptureStatus
     evidence: str | None
     detail: str
+    # H10 only (seq 28 clause 3): the permanent unobserved-session hole between
+    # the pre-starvation record and the resume floor. Stamped on every H10
+    # result the union reader can produce one for, so a consumer can never read
+    # H10b's record as continuous.
+    unobserved_evaluation_sessions: NotRequired[dict[str, str]]
 
 
 class CaptureReceipt(TypedDict):
@@ -99,41 +109,66 @@ def _object_list(value: object) -> list[dict[str, object]] | None:
     return rows
 
 
+_H5_OBSERVER_BANNER = "H5 SCHWAB OBSERVER"
+_H5_RETIRED_VOCABULARY = re.compile(r"(?m)^[A-Z0-9.-]+:\s+(?:WAIT|FIRE)\b")
+_H5_OBSERVER_ROW = re.compile(r"(?m)^([A-Z0-9.-]+):\s+(OBSERVED|DATA_GAP)\b(.*)$")
+
+
 def _h5(root: Path, as_of: str) -> CaptureResult:
+    """Read the H5 OBSERVER report (ledger seq 29: the entry trigger is retired).
+
+    This consumer parses what `options_researcher.entry_watch` actually emits --
+    OBSERVED / DATA_GAP rows carrying the observational, non-verdict-bearing
+    label -- and refuses, fail-visible, on anything else. It deliberately also
+    refuses a report that still speaks the RETIRED trigger vocabulary
+    (`WAIT` / `FIRE`): the ledger says those verdicts no longer exist, so a
+    report producing one is evidence of drift, not a signal to record.
+    """
     path = root / "reports/h5" / f"entry_watch_{as_of}.txt"
     text, failure = _load_text(path)
     if failure is not None:
         return failure
     assert text is not None
+    evidence = _evidence(root, path)
+    if _H5_OBSERVER_BANNER not in text:
+        return _result("REFUSED", evidence=evidence, detail="not an H5 observer report")
+    if re.search(rf"(?m)^{_H5_OBSERVER_BANNER} REFUSED\b", text):
+        return _result("REFUSED", evidence=evidence, detail="observer refused")
+    if _H5_RETIRED_VOCABULARY.search(text):
+        return _result("REFUSED", evidence=evidence, detail="retired trigger vocabulary")
+    if OBSERVATION_LABEL not in text:
+        return _result("REFUSED", evidence=evidence, detail="missing observational label")
     session = re.search(r"\bevaluation_session=(\d{4}-\d{2}-\d{2})\b", text)
     if session is None or session.group(1) != as_of:
-        return _result("REFUSED", evidence=_evidence(root, path), detail="session mismatch")
-    rows = re.findall(r"(?m)^([A-Z0-9.-]+):\s+(WAIT|FIRE|DATA_GAP)\b(.*)$", text)
+        return _result("REFUSED", evidence=evidence, detail="session mismatch")
+    rows = _H5_OBSERVER_ROW.findall(text)
     if len(rows) != len(config.H5_ENTRY_TRIGGERS) or {symbol for symbol, _, _ in rows} != set(
         config.H5_ENTRY_TRIGGERS
     ):
         return _result(
             "REFUSED",
-            evidence=_evidence(root, path),
+            evidence=evidence,
             detail="tracked-name coverage mismatch",
         )
     if any(status == "DATA_GAP" for _, status, _ in rows):
-        return _result("REFUSED", evidence=_evidence(root, path), detail="data gap")
+        return _result("REFUSED", evidence=evidence, detail="data gap")
+    if any("ATM Schwab IV MALFORMED" in detail for _, _, detail in rows):
+        return _result("REFUSED", evidence=evidence, detail="malformed ATM chain row")
     required_asof_labels = (
         f"(as of {as_of})",
-        f"feature as of {as_of}",
-        f"chain as of {as_of}",
+        f"verified Schwab capture session {as_of}",
+        f"max_asof_session={as_of}",
     )
     if any(any(label not in detail for label in required_asof_labels) for _, _, detail in rows):
-        return _result("REFUSED", evidence=_evidence(root, path), detail="session mismatch")
-    count = sum(status == "FIRE" for _, status, _ in rows)
-    if count:
-        return _result(
-            "CAPTURED",
-            evidence=_evidence(root, path),
-            detail=f"{count} signal(s) captured",
-        )
-    return _result("NO_SIGNAL", evidence=_evidence(root, path), detail="no signal")
+        return _result("REFUSED", evidence=evidence, detail="session mismatch")
+    return _result(
+        "CAPTURED",
+        evidence=evidence,
+        detail=(
+            f"{len(rows)} observation(s) captured "
+            "(observe mode; H5 entry trigger retired, ledger seq 29)"
+        ),
+    )
 
 
 def _h6(root: Path, as_of: str) -> CaptureResult:
@@ -257,69 +292,116 @@ def _load_observations(path: Path) -> tuple[list[dict[str, object]] | None, Capt
 
 def _h10(root: Path, as_of: str, run_date: str) -> CaptureResult:
     receipt_path = root / "reports/h10/receipts" / f"h10_watch_{run_date}.json"
-    observation_path = root / "reports/h10/observations.jsonl"
+    legacy_observation_path = root / "reports/h10/observations.jsonl"
+    h10b_observation_path = root / "reports/h10/h10b_observations.jsonl"
+
+    # Read the union FIRST so the permanent unobserved-session hole is
+    # available to every return below. The union reader is the only place that
+    # knows it, and a consumer that drops it can silently read H10b's record as
+    # a continuous series (seq 28 clause 3: "the hole is permanent and
+    # disclosed; nothing is interpolated").
+    hole: dict[str, str] | None = None
+    union: dict[str, object] | None = None
+    union_error: str | None = None
+    try:
+        union = read_h10b_observation_union(
+            root=root,
+            legacy_observations_path=legacy_observation_path,
+            h10b_observations_path=h10b_observation_path,
+        )
+        raw_hole = union["unobserved_evaluation_sessions"]
+        if isinstance(raw_hole, dict):
+            hole = {str(key): str(value) for key, value in raw_hole.items()}
+    except ObservationLogMalformed as exc:
+        union_error = str(exc)
+
+    def stamped(result: CaptureResult) -> CaptureResult:
+        if hole is not None:
+            result["unobserved_evaluation_sessions"] = dict(hole)
+        return result
+
     receipt, failure = _load_json(receipt_path)
     if failure is not None:
-        return failure
+        return stamped(failure)
     assert receipt is not None
     if receipt.get("as_of") != run_date:
-        return _result("MISSING", detail="stale")
+        return stamped(_result("MISSING", detail="stale"))
     if receipt.get("evaluation_session") != as_of:
-        return _result(
-            "REFUSED",
-            evidence=_evidence(root, receipt_path),
-            detail="session mismatch",
+        return stamped(
+            _result(
+                "REFUSED",
+                evidence=_evidence(root, receipt_path),
+                detail="session mismatch",
+            )
         )
 
-    observations, failure = _load_observations(observation_path)
-    if failure is not None:
-        return failure
-    assert observations is not None
-    matching = [row for row in observations if row.get("as_of") == run_date]
+    if union is None:
+        return _result(
+            "REFUSED",
+            evidence=_evidence(root, h10b_observation_path),
+            detail=f"malformed H10b observation union: {union_error}",
+        )
+    observations = union["observations"]
+    assert isinstance(observations, list)
+    matching = [
+        row
+        for row in observations
+        if row.get("hypothesis") == "H10b" and row.get("as_of") == run_date
+    ]
     if not matching:
-        return _result("MISSING", detail="stale" if observations else "artifact missing")
+        observation_path = h10b_observation_path
+        return stamped(_missing_path(observation_path))
     if len(matching) != 1:
-        return _result("REFUSED", detail="duplicate H10 observation")
+        return stamped(_result("REFUSED", detail="duplicate H10 observation"))
     observation = matching[0]
+    observation_path = (
+        h10b_observation_path
+        if observation.get("evaluation_session") >= config.H10B_RESUME_FLOOR_SESSION
+        else legacy_observation_path
+    )
     expected_receipt = str(receipt_path.relative_to(root))
     try:
         receipt_hash = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
     except (OSError, PermissionError):
-        return _result("MISSING", detail="receipt unreadable")
+        return stamped(_result("MISSING", detail="receipt unreadable"))
     if (
         observation.get("receipt") != expected_receipt
         or observation.get("receipt_sha256") != receipt_hash
     ):
-        return _result(
-            "REFUSED",
-            evidence=_evidence(root, observation_path),
-            detail="H10 observation receipt binding mismatch",
+        return stamped(
+            _result(
+                "REFUSED",
+                evidence=_evidence(root, observation_path),
+                detail="H10 observation receipt binding mismatch",
+            )
         )
 
     evaluations = _object_list(receipt.get("evaluations"))
     if not evaluations:
-        return _result("MISSING", detail="invalid H10 JSON")
+        return stamped(_result("MISSING", detail="invalid H10 JSON"))
     unresolved: list[dict[str, object]] = []
     for row in evaluations:
         signals = row.get("signals")
         if (
             row.get("status") == "SKIPPED"
             and isinstance(signals, dict)
-            and not any(value is True for value in signals.values())
+            and signals.get("H10b") is not True
         ):
             unresolved.append(row)
     if unresolved:
         reason = unresolved[0].get("reason")
         detail = f"watcher skipped: {reason}" if isinstance(reason, str) else "watcher skipped"
-        return _result("REFUSED", evidence=_evidence(root, receipt_path), detail=detail)
+        return stamped(
+            _result("REFUSED", evidence=_evidence(root, receipt_path), detail=detail)
+        )
     count = 0
     for row in evaluations:
         signals = row.get("signals")
-        if isinstance(signals, dict) and any(value is True for value in signals.values()):
+        if isinstance(signals, dict) and signals.get("H10b") is True:
             count += 1
     status: CaptureStatus = "CAPTURED" if count else "NO_SIGNAL"
     detail = f"{count} signal(s) captured" if count else "no signal"
-    return _result(status, evidence=_evidence(root, receipt_path), detail=detail)
+    return stamped(_result(status, evidence=_evidence(root, receipt_path), detail=detail))
 
 
 def build_capture_receipt(
@@ -372,6 +454,13 @@ def main(
     for hypothesis in ("H5", "H6", "H7", "H8", "H10"):
         result = receipt["hypotheses"][hypothesis]
         print(f"{hypothesis}: {result['status']} - {result['detail']}")
+        hole = result.get("unobserved_evaluation_sessions")
+        if hole:
+            print(
+                f"{hypothesis}: permanently unobserved evaluation sessions after "
+                f"{hole['after_evaluation_session']} and before "
+                f"{hole['before_evaluation_session']} (never interpolated)"
+            )
     print(f"receipt={_evidence(Path(root), output)}")
     return int(
         any(result["status"] in {"MISSING", "REFUSED"} for result in receipt["hypotheses"].values())

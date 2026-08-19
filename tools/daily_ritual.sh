@@ -2,12 +2,17 @@
 # Automated daily ritual — frozen operator order per H7 amendment v1.4
 # (2026-07-14): source health -> data gate (HARD) -> h7 exit
 # management -> QM OHLCV refresh -> attractiveness feature rebuild ->
-# h7_watch -> h6_features -> h6_watch -> h5 entry_watch [-> h8_watch if
-# built] -> h10_watch/h10_observe -> dashboards. The QM OHLCV refresh and
-# attractiveness feature rebuild moved ahead of h10_watch/h10_observe and
-# h5 entry_watch on 2026-07-24 (H10_RITUAL_ORDER_FIX, facts.log): each
-# consumer was running BEFORE its own data refresh, producing false
-# DATA/stale-IV-rank skips (see the 2026-07-24 07:10 production log).
+# h7_watch -> h6_features -> h6_watch [-> h8_watch if built] -> h5
+# entry_watch observer -> h10_watch/h10_observe -> dashboards. The QM OHLCV
+# refresh and attractiveness feature rebuild moved ahead of
+# h10_watch/h10_observe and h5 entry_watch on 2026-07-24
+# (H10_RITUAL_ORDER_FIX, facts.log): each consumer was running BEFORE its own
+# data refresh, producing false DATA/stale-IV-rank skips (see the 2026-07-24
+# 07:10 production log). Brief 17 (WP-F, ledger seq 28/29) then moved the H5
+# observer and the H10b watcher OUT of the gated region and into their own
+# Schwab preclose lane below, which places them after h8_watch; every
+# refresh-before-consumer relation the frozen order exists to protect is
+# unchanged.
 # A read-only tracked authority preflight runs before log creation or any
 # receipt, ledger, paper-book, Git, backup, or provider surface. It never
 # places a broker order. TWO TIERS gate this script (brief 11 §6.2):
@@ -348,53 +353,110 @@ if [ "$FULL_AUTHORITY_RC" -eq 0 ] && [ "$GATE_GO" -eq 1 ]; then
   "$UV" run python -m options_researcher.h6_watch --as-of "$AS_OF" \
     --write-receipt "reports/h6_forward/${AS_OF}.json" && note "h6_watch: ran" || crit "h6_watch: NONZERO EXIT"
 
-  # Step 4b — H5 LEAPS entry-trigger watch (alert-only; never auto-enters).
-  # Reads the attractiveness feature store rebuilt above, which is why that
-  # rebuild now runs ahead of the GATE_GO block instead of after it.
-  #
-  # --out (not `| tee`): banner-pollution guard, same class as the
-  # 2026-07-23 H8 fix. `| tee "$EW_OUT"` would have captured LumiBot
-  # v4.5.63's import-time banner line into the persisted FIRE-signal receipt
-  # `grep -q "FIRE"` reads below -- and in zsh (no `setopt PIPE_FAIL`), `if
-  # cmd | tee file; then` checks tee's exit status, not cmd's, so a real
-  # entry_watch failure could have been silently swallowed by a
-  # successful tee. The module now writes its own report file directly;
-  # its normal stdout still reaches $LOG via the script-level exec
-  # redirect, and $? below is entry_watch's own exit code.
-  EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
-  mkdir -p reports/h5
-  if "$UV" run python -m options_researcher.entry_watch --as-of "$AS_OF" --out "$EW_OUT"; then
-    if grep -q "FIRE" "$EW_OUT"; then
-      crit "H5 ENTRY TRIGGER FIRE — read $EW_OUT and evaluate per H5 CORE rules"
-    else
-      note "h5 entry watch: WAIT (no trigger fired)"
-    fi
-  else
-    crit "h5 entry watch: NONZERO EXIT"
-  fi
-
   # Step 5 — H8 watcher, only once its tooling exists (registered lanes only).
   if "$UV" run python -c 'import options_researcher.h8_watch' 2>/dev/null; then
     mkdir -p reports/h8_forward
     "$UV" run python -m options_researcher.h8_watch --as-of "$AS_OF" --json --out \
       "reports/h8_forward/${AS_OF}.json" && note "h8_watch: ran" || crit "h8_watch: NONZERO EXIT"
   fi
+elif [ "$FULL_AUTHORITY_RC" -ne 0 ]; then
+  note "H6/H8 lanes: PAUSED — gated behind the H7 data gate; see brief 11 §6.1"
+fi
+# ---- end full-tier region B ----
 
-  # Step 5b — H10a/b watcher + observation append (forward paper, no orders).
+# ---- Schwab preclose lane (brief 17 WP-F) ----
+# H10b and the H5 observer run OUTSIDE the H7 data-gate fence, and ONLY they
+# do: ledger seq 28 clause 1 and seq 29 clause 2 record the owner-confirmed
+# D-1=F1 override (2026-08-17 Q2, "ya confirm overrid"), which declares the
+# verified Schwab 15:45 ET preclose capture a qualifying exact-session source
+# for these two lanes' evaluation. H6 and H8 stay paused inside region B
+# exactly as before; nothing here touches H7.
+#
+# Fail-closed, no fallback: the lane runs only when the SHARED verified view
+# (options_researcher/schwab_chain_view.verified_sessions -- the same boundary
+# h10_watch and entry_watch load through, so there is no second loader) lists
+# the evaluation session as VERIFIED. Anything else -- missing package,
+# failed verification, an unreadable view, no evaluation session -- SKIPS both
+# lanes with a visible line. The frozen ThetaData cache (ended 2026-07-27) is
+# never substituted; that substitution is precisely what the amendments
+# forbid. Per-name partial coverage inside a verified session is handled
+# fail-closed by the lanes themselves (SKIPPED / DATA_GAP rows).
+SCHWAB_LANE="UNVERIFIED"
+if [ -n "$AS_OF" ]; then
+  SCHWAB_LANE="$("$UV" run python -c 'import sys; from options_researcher.schwab_chain_view import verified_sessions; print("VERIFIED" if sys.argv[1] in verified_sessions()[0] else "UNVERIFIED")' "$AS_OF" 2>/dev/null | grep -E '^(VERIFIED|UNVERIFIED)$' | tail -1)"
+fi
+if [ "$SCHWAB_LANE" = "VERIFIED" ]; then
+  # Step 4b — H5 OBSERVER (seq 29: the entry trigger is RETIRED; this lane
+  # fires nothing, alerts nothing as an entry signal, records no position).
+  # Its output is observational / non-verdict-bearing, so a WAIT/FIRE verdict
+  # is never printed and $EW_OUT is never grepped for "FIRE".
+  #
+  # --out (not `| tee`): banner-pollution guard, same class as the
+  # 2026-07-23 H8 fix. `| tee "$EW_OUT"` would have captured LumiBot
+  # v4.5.63's import-time banner line into the persisted observer report --
+  # and in zsh (no `setopt PIPE_FAIL`), `if cmd | tee file; then` checks
+  # tee's exit status, not cmd's, so a real entry_watch failure could have
+  # been silently swallowed by a successful tee. The module writes its own
+  # report file directly; its normal stdout still reaches $LOG via the
+  # script-level exec redirect, and $? below is entry_watch's own exit code.
+  #
+  # --as-of takes the RUN date: the observer resolves the prior completed
+  # session itself (entry_watch._resolve_evaluation_session), the same
+  # convention h10_watch uses. Passing $AS_OF would evaluate the session
+  # BEFORE the evaluation session.
+  EW_OUT="reports/h5/entry_watch_${AS_OF}.txt"
+  mkdir -p reports/h5
+  "$UV" run python -m options_researcher.entry_watch --as-of "$RUN_DATE" --out "$EW_OUT"
+  EW_RC=$?
+  if [ "$EW_RC" -eq 0 ]; then
+    note "h5 observe: recorded (observational / non-verdict-bearing; trigger retired per ledger seq 29) — see $EW_OUT"
+  elif [ "$EW_RC" -eq 1 ]; then
+    note "h5 observe: DATA GAP — a name had no exact-session verified input; nothing observed for it (fail-visible) — see $EW_OUT"
+  elif [ "$EW_RC" -eq 2 ]; then
+    # Expected every day until H5_RESUME_FLOOR_SESSION passes. A crit here
+    # would fire daily and train the operator to ignore CRITICAL lines.
+    note "h5 observe: REFUSED — evaluation session is before H5_RESUME_FLOOR_SESSION (or unresolvable); nothing observed"
+  else
+    crit "h5 observe: NONZERO EXIT"
+  fi
+
+  # Step 5b — H10b watcher + observation append (forward paper, no orders).
+  # H10a is ADJUDICATED and is not evaluated or recorded by the watcher.
   # H10's --as-of is a requested RUN date and evaluates the prior completed
   # session, so pass RUN_DATE (not the already-resolved session in AS_OF).
   # Reads underlying OHLCV via the QM refresh above (data/underlying_ohlcv.py),
-  # which is why that refresh now runs ahead of this block instead of after it.
+  # which is why that refresh runs ahead of this block.
   if "$UV" run python -c 'import options_researcher.h10_watch' 2>/dev/null; then
-    "$UV" run python -m options_researcher.h10_watch --as-of "$RUN_DATE" && note "h10_watch: ran" || crit "h10_watch: NONZERO EXIT"
-    "$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" && note "h10_observe: appended" || crit "h10_observe: NONZERO EXIT"
+    "$UV" run python -m options_researcher.h10_watch --as-of "$RUN_DATE"
+    H10_WATCH_RC=$?
+    if [ "$H10_WATCH_RC" -eq 0 ]; then
+      note "h10_watch: ran"
+    elif [ "$H10_WATCH_RC" -eq 2 ]; then
+      # Same reasoning as the H5 refusal above: pre-floor refusal is the
+      # amendment working, not a break.
+      note "h10b watch: REFUSED — evaluation session is before H10B_RESUME_FLOOR_SESSION (or the run was refused); no observation recorded"
+    else
+      crit "h10_watch: NONZERO EXIT"
+    fi
+    # The appender reads the receipt the watcher just wrote and appends ONLY
+    # to the namespaced H10b store (options_researcher/h10_observe.py's
+    # H10B_OBSERVATIONS_PATH default = reports/h10/h10b_observations.jsonl);
+    # the legacy reports/h10/observations.jsonl is read-only history and the
+    # module refuses to be pointed at it. Without a fresh receipt there is
+    # nothing to append, so a refused watch skips the append rather than
+    # manufacturing a CRITICAL.
+    if [ "$H10_WATCH_RC" -eq 0 ]; then
+      "$UV" run python -m options_researcher.h10_observe --as-of "$RUN_DATE" && note "h10_observe: appended" || crit "h10_observe: NONZERO EXIT"
+    else
+      note "h10_observe: SKIPPED — no watcher receipt for this run"
+    fi
   else
     crit "h10_watch: module unavailable"
   fi
-elif [ "$FULL_AUTHORITY_RC" -ne 0 ]; then
-  note "H5/H6/H8/H10 lanes: PAUSED — gated behind the H7 data gate; see brief 11 §6.1"
+else
+  note "H10b + H5 observe lanes: SKIPPED — no verified Schwab 15:45 preclose capture for evaluation session ${AS_OF:-none} (fail-closed; the frozen ThetaData cache is NOT substituted)"
 fi
-# ---- end full-tier region B ----
+# ---- end Schwab preclose lane ----
 
 # Dashboards rebuild regardless of gate state — they display cached truth
 # and carry their own honest data-as-of banner.
@@ -450,8 +512,18 @@ fi
 #
 # The allow-list is TIER-SCOPED (brief 11 §6.4): under the data tier the ritual
 # produces NO H7 evidence, so H7 paths are neither staged nor described.
+#
+# reports/h5 and reports/h10 are DATA-TIER paths (brief 17 review, 2026-08-19).
+# The Schwab preclose lane runs OUTSIDE the H7 data-gate fence -- H10b and the
+# H5 observer produce evidence on data-tier days, when FULL_AUTHORITY_RC is
+# non-zero -- so leaving them in the full-tier branch meant a registered
+# hypothesis's forward-window evidence was generated and then never committed
+# on exactly the days the lane is most likely to be the only lane that ran.
+# The tier LABEL on the commit message is unchanged: these are data(ritual)
+# artifacts, not H7 evidence.
 # ---------------------------------------------------------------------------
-DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs)
+DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs
+                 reports/h5 reports/h10)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
 EVIDENCE_COMMIT_MSG="data(ritual): daily ritual data-phase artifacts ${RUN_DATE}
 
@@ -461,8 +533,8 @@ artifacts are persisted. Written by tools/daily_ritual.sh under an
 evidence-path allow-list; this commit never contains code."
 if [ "$FULL_AUTHORITY_RC" -eq 0 ]; then
   FULL_TIER_PATHS=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
-                   reports/h7_receipts reports/h7_data_gate reports/h5
-                   reports/h6_forward reports/h8_forward reports/h10
+                   reports/h7_receipts reports/h7_data_gate
+                   reports/h6_forward reports/h8_forward
                    reports/schwab_chains)
   GIT_ADD_PATHS=("${GIT_ADD_PATHS[@]}" "${FULL_TIER_PATHS[@]}")
   EVIDENCE_COMMIT_MSG="data(h7): daily ritual evidence ${RUN_DATE}

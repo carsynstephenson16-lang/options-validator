@@ -612,6 +612,9 @@ H10_DTE_EXIT = 21  # ledger/experiments.jsonl seq 15/16
 H10_MIN_LOSSES_FOR_VERDICT = 7  # ledger/experiments.jsonl seq 15/16
 H10A_WINDOW_END = "2026-10-06"  # ledger/experiments.jsonl seq 15
 H10B_WINDOW_END = "2027-01-06"  # ledger/experiments.jsonl seq 16
+# mechanical floor per seq 28/29 clause 5; append date 2026-08-18 ET; updated at merge by the orchestrating session if the merge lands later
+H10B_RESUME_FLOOR_SESSION = "2026-08-19"
+H5_RESUME_FLOOR_SESSION = "2026-08-19"
 
 # ---------------------------------------------------------------------------
 # --- ATTRACTIVENESS DASHBOARD v2 TECHNICALS (presentation layer ONLY) ---
