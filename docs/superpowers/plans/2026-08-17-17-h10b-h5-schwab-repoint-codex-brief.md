@@ -1,11 +1,11 @@
 # Brief 17 — H10b resume + H5 observe mode on the Schwab preclose lane (rev 3)
 
-**Date:** 2026-08-17 (rev 2: 2026-08-18)
+**Date:** 2026-08-17 (rev 2 + rev 3: 2026-08-18)
 **Author:** orchestrating Claude session (Fable), 2026-08-16/17 owner-directed batch
 **Executor:** Codex (high reasoning)
-**Status:** DRAFT — rev 1 FAILED independent adversarial review 2026-08-18
-(3 blockers, 6 fixes — all applied in this rev 2); pending re-review before
-hand-off. The amendment precondition is MET: H10B_AMENDMENT_V1_1 (seq 28)
+**Status:** **PASS — CLEAR FOR HAND-OFF** (independent adversarial review,
+three rounds 2026-08-18: rev 1 FAIL 3 blockers + 6 fixes; rev 2 FAIL BL-4 +
+FX-7/FX-8; rev 3 PASS with all findings closed and citations re-verified). The amendment precondition is MET: H10B_AMENDMENT_V1_1 (seq 28)
 and H5_AMENDMENT_V1 (seq 29) were appended 2026-08-19T01:05:33Z (=
 2026-08-18 ~21:05 ET) via the typed API after confirmation-round review +
 Fable sign-off (`reports/2026-08-17-reopen-drafts-adversarial-review-receipt.md`).
@@ -121,7 +121,11 @@ obligation in WP-D. Do NOT implement a ÷100. Do NOT touch
     **NO_SIGNAL** fixture (a SKIPPED-only fixture is vacuous — the SKIPPED
     branch at `:808-813` constrains `signals` not at all) and additionally
     a FIRED fixture; both assert H10b renders correctly with
-    `"H10a": None` present.
+    `"H10a": None` present. Display watch-item (rev-3 reviewer note,
+    non-blocking): after the edit, H10a's own evidence row would render
+    "UNKNOWN — malformed" daily even though its state is deliberate —
+    render the honest label from the `h10a_status` discriminator instead
+    so the fail-visible channel doesn't cry wolf.
   - UNION READER + hole disclosure (seq 28 clause 3, review FX-6; axes per
     rev-2 FX-7): H10b's record is the union of the pre-starvation receipts
     (4 rows in the legacy store; RUN dates 2026-07-23/24/27/28 =
