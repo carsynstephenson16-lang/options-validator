@@ -19,6 +19,7 @@ import tools.research_context_assemble as research_context_assemble
 from options_researcher.attractiveness_research_v2 import (
     CHAIN_STARVED_HYPOTHESES,
     PJM_CATALYST_ID,
+    RITUAL_HYPOTHESES,
     ResearchArtifactError,
     UpstreamBlocked,
     finalize_bundle,
@@ -205,9 +206,9 @@ def _write_packets(root: Path) -> Path:
 
 class RitualPreflightTest(unittest.TestCase):
     def test_chain_starved_set_covers_only_registered_chain_lanes(self):
-        self.assertLessEqual(CHAIN_STARVED_HYPOTHESES, frozenset(("H5", "H6", "H7", "H8", "H10")))
+        self.assertLessEqual(CHAIN_STARVED_HYPOTHESES, frozenset(RITUAL_HYPOTHESES))
         self.assertEqual(
-            frozenset(("H5", "H6", "H7", "H8", "H10")) - CHAIN_STARVED_HYPOTHESES,
+            frozenset(RITUAL_HYPOTHESES) - CHAIN_STARVED_HYPOTHESES,
             frozenset(("H5", "H10")),
         )
 
