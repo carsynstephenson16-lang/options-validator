@@ -87,13 +87,14 @@ PYTHON_DASH_C_CLASSIFICATION = {
     120: "DATA_TIER_PERMITTED",  # AS_OF via options_researcher.h7_watch.evaluation_session
     121: "DATA_TIER_PERMITTED",  # SCOPE_ID via options_researcher.h7_scope.scope_identity
     199: "FULL_TIER",  # research.receipts.load_receipt — reads the gate receipt
-    306: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
-    309: "DATA_TIER",  # options_researcher.features.build_all (display extras)
-    357: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
+    290: "DATA_TIER",  # data.recent_topup.refresh_closes_guarded
+    314: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
+    317: "DATA_TIER",  # options_researcher.features.build_all (display extras)
+    365: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
     # Brief 17 WP-F: the Schwab lane's own read-only sites. The verified-view
     # read is the lane's fail-closed gate; it mutates nothing.
-    386: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
-    429: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
+    394: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
+    437: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
 }
 
 # ---- registry 3: every mutation verb site ----------------------------------
@@ -119,15 +120,15 @@ MUTATION_VERB_PATTERNS = {
 }
 MUTATION_VERB_SITES = {
     'mkdir -p "$LOGDIR"': (68,),  # data tier
-    'mkdir -p "$PF_RECEIPT_DIR"': (337,),  # full tier (region B)
-    "mkdir -p reports/h8_forward": (358,),  # full tier (region B, GATE_GO)
-    "mkdir -p reports/h5": (408,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (547,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (550,),  # data tier
-    "git fetch": (560,),  # data tier
-    "git merge": (561,),  # data tier — mutates the working tree unattended
-    "git push": (562,),  # data tier
-    "restic backup": (579,),  # data tier
+    'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
+    "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
+    "mkdir -p reports/h5": (416,),  # Schwab preclose lane (brief 17 WP-F)
+    "git add": (557,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (560,),  # data tier
+    "git fetch": (570,),  # data tier
+    "git merge": (571,),  # data tier — mutates the working tree unattended
+    "git push": (572,),  # data tier
+    "restic backup": (589,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -514,6 +515,51 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertIn('RITUAL_TERMINAL_STATUS="BROKEN"', source)
         self.assertIn('RITUAL_TERMINAL_STATUS="OK"', source)
 
+    def test_terminal_status_marks_only_single_starved_capture_critical(self):
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        source = _source()
+        start = source.index('  if [ "$CRITICAL" -eq 0 ]; then')
+        end = source.index('\n  "$UV" run python -m options_researcher.ritual_status', start)
+        block = source[start:end]
+        cases = (
+            (0, 1, 1, 1, "OK"),
+            (1, 1, 1, 1, "OK_STARVED"),
+            (1, 1, 1, 2, "BROKEN"),
+            (1, 0, 1, 1, "BROKEN"),
+        )
+        for critical, data_starved, starved_crit, crit_count, expected in cases:
+            with self.subTest(critical=critical, crit_count=crit_count):
+                script = "\n".join(
+                    [
+                        f"CRITICAL={critical}",
+                        f"DATA_STARVED={data_starved}",
+                        f"STARVED_CRIT={starved_crit}",
+                        f"CRIT_COUNT={crit_count}",
+                        block,
+                        'print -r -- "$RITUAL_TERMINAL_STATUS"',
+                    ]
+                )
+                completed = subprocess.run(
+                    [zsh, "-c", script], capture_output=True, text=True, timeout=30
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stdout.strip(), expected)
+
+    def test_guarded_closes_step_precedes_features_and_fails_soft(self):
+        source = _source()
+        closes_step = (
+            '"$UV" run python -c "from data.recent_topup import '
+            'refresh_closes_guarded; import json;'
+        )
+        features_step = '"$UV" run python -c "from options_researcher.features import build_all;'
+        self.assertIn(closes_step, source)
+        self.assertIn(features_step, source)
+        self.assertLess(source.index(closes_step), source.index(features_step))
+        closes_end = source.index("\n\n", source.index(closes_step))
+        self.assertNotIn("crit ", source[source.index(closes_step) : closes_end])
+
     def test_durability_allow_list_is_tier_scoped(self):
         source = _source()
         durability = source[source.index("# Step 8 — DURABILITY"):]
@@ -522,7 +568,6 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertLess(full_branch, git_add)
 
         for path in (
-            "ledger/facts.log",
             "ledger/h7_forward",
             "ledger/h7_forward_schwab",
             "reports/h7_receipts",
@@ -549,6 +594,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             "reports/cache_runs",
             "reports/h5",
             "reports/h10",
+            "ledger/facts.log",
         ):
             with self.subTest(path=path):
                 self.assertIn(path, durability)

@@ -17,6 +17,10 @@ ORCHESTRATOR-ONLY network path: run_topup / the CLI are executed by the
 controlling session after review, exactly like data/underlying_closes.
 fetch_underlying_eod. Tests cover only the pure day-selection and audit logic.
 
+Scheduled guarded path authorized by owner in-session 2026-08-20 (Decision 2 =
+yes: automate the Yahoo closes refresh as a guarded daily ritual step); see
+docs/superpowers/plans/2026-08-20-18-ok-starved-and-closes-cadence-codex-brief.md.
+
 Run from the repo root:
     python data/recent_topup.py --dry-run
     python data/recent_topup.py --scope h7 --dry-run
@@ -30,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -70,26 +75,166 @@ def scope_symbols(scope: str) -> list[str]:
     raise ValueError(f"unknown top-up scope: {scope!r}")
 
 
+def _append_closes_fact(text: str, *, ledger_dir: str) -> None:
+    from research import facts
+
+    facts.append_fact(text, base_dir=ledger_dir)
+
+
 def refresh_closes(symbols, *, today: str, ledger_dir: str = "ledger", fetch_fn=None) -> dict:
     """Refresh independent Yahoo closes for exactly the selected scope.
 
     This is an explicit network path used by the owner-run cancellation
     workflow. It never runs during ``--dry-run`` and is injectable so tests
-    remain offline.
+    remain offline. Scheduled guarded path authorized by owner in-session
+    2026-08-20 (Decision 2 = yes: automate the Yahoo closes refresh as a
+    guarded daily ritual step); see
+    docs/superpowers/plans/2026-08-20-18-ok-starved-and-closes-cadence-codex-brief.md.
     """
     if fetch_fn is None:
         from data.underlying_closes import fetch_underlying_eod_yahoo
 
         fetch_fn = fetch_underlying_eod_yahoo
     result = {symbol: fetch_fn(symbol) for symbol in symbols}
-    from research import facts
-
-    facts.append_fact(
+    _append_closes_fact(
         f"DATA_PULL {today}: Yahoo closes refresh for forward scope "
         f"({'/'.join(symbols)}); same-day partial rows excluded by fetcher.",
-        base_dir=ledger_dir,
+        ledger_dir=ledger_dir,
     )
     return result
+
+
+def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=None) -> dict:
+    """Refresh every existing Yahoo closes cache with a retroactive-change guard.
+
+    Each symbol is read before fetching and again afterward. If a fetched
+    history changes an existing date beyond the relative tolerance, or drops
+    an existing date entirely (a truncated provider response), the old frame
+    is restored and the first differing or missing date is reported. A restored
+    symbol stays stale until the owner amends ``SPLITS``; the closes freshness
+    chip surfaces that designed, fail-visible outcome. Scheduled guarded path
+    authorized by owner in-session 2026-08-20 (Decision 2 = yes: automate the
+    Yahoo closes refresh as a guarded daily ritual step); see
+    docs/superpowers/plans/2026-08-20-18-ok-starved-and-closes-cadence-codex-brief.md.
+
+    Per-symbol read, fetch, and restore failures are recorded and do not abort
+    the remaining symbols. Exactly one descriptive DATA_PULL fact is appended
+    for every invocation, including when every symbol fails.
+    """
+    from data import underlying_closes
+
+    cache_dir = Path(underlying_closes.CACHE_DIR)
+    symbols = sorted(
+        path.stem for path in cache_dir.glob("*.parquet") if path.is_file()
+    )
+    if fetch_fn is None:
+        fetch_fn = underlying_closes.fetch_underlying_eod_yahoo
+
+    max_dates: dict[str, str | None] = {}
+    restored_symbols: dict[str, str] = {}
+    restore_failed: dict[str, str] = {}
+    fetch_errors: dict[str, list[str]] = {}
+    ok_count = 0
+
+    def _read_frame(path: Path, phase: str) -> pd.DataFrame:
+        frame = pd.read_parquet(path)
+        if list(frame.columns) != ["date", "close"]:
+            raise ValueError(
+                f"{phase}: expected columns ['date','close'], got {list(frame.columns)}"
+            )
+        return frame
+
+    def _max_date(frame: pd.DataFrame) -> str | None:
+        if frame.empty:
+            return None
+        return max(str(value) for value in frame["date"])
+
+    def _values_by_date(frame: pd.DataFrame) -> dict[str, float]:
+        return {
+            str(day): float(close)
+            for day, close in zip(frame["date"], frame["close"])
+        }
+
+    for symbol in symbols:
+        path = cache_dir / f"{symbol}.parquet"
+        try:
+            before = _read_frame(path, "pre-read")
+        except Exception as error:
+            fetch_errors[symbol] = [f"pre-read: {type(error).__name__}: {error}"]
+            max_dates[symbol] = None
+            continue
+
+        try:
+            fetch_fn(symbol)
+        except Exception as error:
+            fetch_errors[symbol] = [f"fetch: {type(error).__name__}: {error}"]
+            max_dates[symbol] = _max_date(before)
+            continue
+
+        try:
+            after = _read_frame(path, "post-read")
+        except Exception as error:
+            fetch_errors[symbol] = [f"post-read: {type(error).__name__}: {error}"]
+            max_dates[symbol] = None
+            continue
+
+        try:
+            before_by_date = _values_by_date(before)
+            after_by_date = _values_by_date(after)
+        except Exception as error:
+            fetch_errors[symbol] = [
+                f"post-read: {type(error).__name__}: {error}"
+            ]
+            max_dates[symbol] = _max_date(after)
+            continue
+        first_difference: str | None = None
+        for day in sorted(set(before_by_date) & set(after_by_date)):
+            old_close = before_by_date[day]
+            new_close = after_by_date[day]
+            if math.isnan(old_close) or math.isnan(new_close):
+                changed = not (math.isnan(old_close) and math.isnan(new_close))
+            else:
+                changed = not math.isclose(
+                    old_close, new_close, rel_tol=1e-4, abs_tol=0.0
+                )
+            if changed:
+                first_difference = day
+                break
+        if first_difference is None:
+            # A date present before but absent after is a truncated provider
+            # response (observed live: Yahoo range=max returning 34-233 rows);
+            # a pure intersection check would let it silently shorten the
+            # cached history, so deletion counts as a retroactive change.
+            deleted = sorted(set(before_by_date) - set(after_by_date))
+            if deleted:
+                first_difference = deleted[0]
+
+        if first_difference is not None:
+            try:
+                underlying_closes.store_closes(symbol, before)
+            except Exception as error:
+                restore_failed[symbol] = f"{type(error).__name__}: {error}"
+                max_dates[symbol] = _max_date(after)
+            else:
+                restored_symbols[symbol] = first_difference
+                max_dates[symbol] = _max_date(before)
+        else:
+            max_dates[symbol] = _max_date(after)
+            ok_count += 1
+
+    _append_closes_fact(
+        f"DATA_PULL {today}: Yahoo closes guarded refresh for cached symbols; "
+        f"guard: {ok_count} ok, {len(restored_symbols)} restored, "
+        f"{len(restore_failed)} restore failures, "
+        f"{len(fetch_errors)} fetch errors.",
+        ledger_dir=ledger_dir,
+    )
+    return {
+        "max_dates": max_dates,
+        "restored_symbols": restored_symbols,
+        "restore_failed": restore_failed,
+        "fetch_errors": fetch_errors,
+    }
 
 
 def topup_days(last_cached: str, today: str, *, trading_days_fn=None) -> list[str]:

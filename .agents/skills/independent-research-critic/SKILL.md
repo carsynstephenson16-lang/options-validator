@@ -37,7 +37,9 @@ files, or manifests. Do not recommend trades or change a repository verdict.
    uncommitted or mismatched bytes as if they were trusted input.
 6. Require the manifest ritual block to bind both the capture receipt and the
    mutable `daily_ritual/run_status/v1` projection. Its status must still be
-   `OK`, and its capture-receipt path/SHA must match. Per-hypothesis
+   `OK` or `OK_STARVED`, and its capture-receipt path/SHA must match. On
+   `OK_STARVED` days the `evidence_sha256` map contains only the non-excused
+   lanes, which is expected rather than broken lineage. Per-hypothesis
    `CAPTURED|NO_SIGNAL` statuses do not override a globally `BROKEN` ritual.
 7. Run the producer's read-only verifier when the authoritative ritual root is
    available:

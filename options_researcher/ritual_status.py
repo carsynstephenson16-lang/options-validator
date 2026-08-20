@@ -55,8 +55,8 @@ def build_status(
 ) -> dict:
     date.fromisoformat(as_of)
     date.fromisoformat(run_date)
-    if status not in {"RUNNING", "OK", "BROKEN"}:
-        raise ValueError("status must be RUNNING, OK, or BROKEN")
+    if status not in {"RUNNING", "OK", "OK_STARVED", "BROKEN"}:
+        raise ValueError("status must be RUNNING, OK, OK_STARVED, or BROKEN")
     if not _SHA1_RE.fullmatch(code_sha):
         raise ValueError("code_sha must be a 40-character lowercase Git SHA")
     if not re.fullmatch(r"[0-9a-f]{64}", capture_receipt_sha256):
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of", required=True)
     parser.add_argument("--run-date", required=True)
     parser.add_argument(
-        "--status", choices=("RUNNING", "OK", "BROKEN"), required=True
+        "--status", choices=("RUNNING", "OK", "OK_STARVED", "BROKEN"), required=True
     )
     parser.add_argument("--log-path", required=True)
     args = parser.parse_args(argv)
