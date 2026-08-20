@@ -34,7 +34,7 @@ Both are required durable lineage.
    this repeat prevents a time-of-check/time-of-use gap. The gate requires both
    the per-hypothesis capture receipt and
    `reports/ritual/run_status_<data_as_of>.json` with
-   `schema_version: daily_ritual/run_status/v1`, `status: OK`, a full ritual
+   `schema_version: daily_ritual/run_status/v1`, `status: OK` or `OK_STARVED`, a full ritual
    `code_sha`, and the matching capture-receipt path and SHA. Successful
    per-hypothesis statuses alone are insufficient.
 

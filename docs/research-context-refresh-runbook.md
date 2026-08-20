@@ -18,7 +18,7 @@ The producer must use:
 - timezone semantics: `America/New_York`
 
 Before any paid LLM invocation, the producer requires the exact market
-session's `daily_ritual/run_status/v1` projection to be globally `OK`, bound by
+session's `daily_ritual/run_status/v1` projection to be globally `OK` or `OK_STARVED`, bound by
 path and SHA-256 to its capture receipt. The required H5, H6, H7, H8, and H10
 evidence must also be readable and hashable. A globally `BROKEN` ritual blocks
 research even if individual hypothesis rows say `CAPTURED` or `NO_SIGNAL`.

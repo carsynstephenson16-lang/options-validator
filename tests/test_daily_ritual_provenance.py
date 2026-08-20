@@ -80,10 +80,11 @@ PYTHON_DASH_C_CLASSIFICATION = {
     115: "DATA_TIER_PERMITTED",  # AS_OF via options_researcher.h7_watch.evaluation_session
     116: "DATA_TIER_PERMITTED",  # SCOPE_ID via options_researcher.h7_scope.scope_identity
     194: "FULL_TIER",  # research.receipts.load_receipt — reads the gate receipt
-    301: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
-    304: "DATA_TIER",  # options_researcher.features.build_all (display extras)
-    377: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
-    388: "FULL_TIER_PROBE",  # `import options_researcher.h10_watch` availability probe
+    285: "DATA_TIER",  # data.recent_topup.refresh_closes_guarded
+    309: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
+    312: "DATA_TIER",  # options_researcher.features.build_all (display extras)
+    385: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
+    396: "FULL_TIER_PROBE",  # `import options_researcher.h10_watch` availability probe
 }
 
 # ---- registry 3: every mutation verb site ----------------------------------
@@ -109,15 +110,15 @@ MUTATION_VERB_PATTERNS = {
 }
 MUTATION_VERB_SITES = {
     'mkdir -p "$LOGDIR"': (63,),  # data tier
-    'mkdir -p "$PF_RECEIPT_DIR"': (332,),  # full tier (region B)
-    "mkdir -p reports/h5": (365,),  # full tier (region B, GATE_GO)
-    "mkdir -p reports/h8_forward": (378,),  # full tier (region B, GATE_GO)
-    "git add": (475,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (478,),  # data tier
-    "git fetch": (488,),  # data tier
-    "git merge": (489,),  # data tier — mutates the working tree unattended
-    "git push": (490,),  # data tier
-    "restic backup": (507,),  # data tier
+    'mkdir -p "$PF_RECEIPT_DIR"': (340,),  # full tier (region B)
+    "mkdir -p reports/h5": (373,),  # full tier (region B, GATE_GO)
+    "mkdir -p reports/h8_forward": (386,),  # full tier (region B, GATE_GO)
+    "git add": (485,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (488,),  # data tier
+    "git fetch": (498,),  # data tier
+    "git merge": (499,),  # data tier — mutates the working tree unattended
+    "git push": (500,),  # data tier
+    "restic backup": (517,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -484,6 +485,51 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertIn('RITUAL_TERMINAL_STATUS="BROKEN"', source)
         self.assertIn('RITUAL_TERMINAL_STATUS="OK"', source)
 
+    def test_terminal_status_marks_only_single_starved_capture_critical(self):
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        source = _source()
+        start = source.index('  if [ "$CRITICAL" -eq 0 ]; then')
+        end = source.index('\n  "$UV" run python -m options_researcher.ritual_status', start)
+        block = source[start:end]
+        cases = (
+            (0, 1, 1, 1, "OK"),
+            (1, 1, 1, 1, "OK_STARVED"),
+            (1, 1, 1, 2, "BROKEN"),
+            (1, 0, 1, 1, "BROKEN"),
+        )
+        for critical, data_starved, starved_crit, crit_count, expected in cases:
+            with self.subTest(critical=critical, crit_count=crit_count):
+                script = "\n".join(
+                    [
+                        f"CRITICAL={critical}",
+                        f"DATA_STARVED={data_starved}",
+                        f"STARVED_CRIT={starved_crit}",
+                        f"CRIT_COUNT={crit_count}",
+                        block,
+                        'print -r -- "$RITUAL_TERMINAL_STATUS"',
+                    ]
+                )
+                completed = subprocess.run(
+                    [zsh, "-c", script], capture_output=True, text=True, timeout=30
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stdout.strip(), expected)
+
+    def test_guarded_closes_step_precedes_features_and_fails_soft(self):
+        source = _source()
+        closes_step = (
+            '"$UV" run python -c "from data.recent_topup import '
+            'refresh_closes_guarded; import json;'
+        )
+        features_step = '"$UV" run python -c "from options_researcher.features import build_all;'
+        self.assertIn(closes_step, source)
+        self.assertIn(features_step, source)
+        self.assertLess(source.index(closes_step), source.index(features_step))
+        closes_end = source.index("\n\n", source.index(closes_step))
+        self.assertNotIn("crit ", source[source.index(closes_step) : closes_end])
+
     def test_durability_allow_list_is_tier_scoped(self):
         source = _source()
         durability = source[source.index("# Step 8 — DURABILITY"):]
@@ -492,7 +538,6 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertLess(full_branch, git_add)
 
         for path in (
-            "ledger/facts.log",
             "ledger/h7_forward",
             "ledger/h7_forward_schwab",
             "reports/h7_receipts",
@@ -514,6 +559,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             "reports/intraday_capture",
             "reports/live_probe",
             "reports/cache_runs",
+            "ledger/facts.log",
         ):
             with self.subTest(path=path):
                 self.assertLess(durability.index(path), full_branch)

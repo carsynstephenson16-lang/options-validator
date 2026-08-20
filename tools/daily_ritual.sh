@@ -264,6 +264,7 @@ fi
 
 # ---- data-tier island (brief 11 §6.2) — UNFENCED, runs every day ----
 # These are the only steps that actually produce anything under the data tier.
+# The guarded closes step also produces one descriptive DATA_PULL fact per day.
 # Fencing them behind require-full would leave a "switch-on" that switches
 # nothing on, so they deliberately sit BETWEEN the two full-tier regions.
 #
@@ -277,6 +278,13 @@ fi
 # moments later, and running the refresh first (not after) is the fix.
 # They stay unconditional on GATE_GO -- dashboards must rebuild off cached
 # truth regardless of gate state -- only their position moved.
+
+# Guarded Yahoo closes refresh: refresh before any consumer rebuilds features,
+# and fail soft so a stale closes chip remains visible without making the run
+# CRITICAL.
+"$UV" run python -c "from data.recent_topup import refresh_closes_guarded; import json; print(json.dumps(refresh_closes_guarded(today='$RUN_DATE'), default=str))" \
+  && note "underlying closes: guarded refresh ran" \
+  || note "underlying closes: refresh FAILED — closes chip will show stale"
 
 # QM dashboard context requires the exact completed session. Refresh only
 # missing/stale OHLCV for names covered by the frozen QM sidecar; an uncovered
@@ -423,10 +431,12 @@ fi
 # to be OK and hash-bound to the capture receipt; all-NO_SIGNAL lanes alone do
 # not prove that exit management or another deterministic step succeeded.
 if [ -n "$AS_OF" ]; then
-  if [ "$CRITICAL" -eq 1 ]; then
-    RITUAL_TERMINAL_STATUS="BROKEN"
-  else
+  if [ "$CRITICAL" -eq 0 ]; then
     RITUAL_TERMINAL_STATUS="OK"
+  elif [ "$DATA_STARVED" -eq 1 ] && [ "$STARVED_CRIT" -eq 1 ] && [ "$CRIT_COUNT" -eq 1 ]; then
+    RITUAL_TERMINAL_STATUS="OK_STARVED"
+  else
+    RITUAL_TERMINAL_STATUS="BROKEN"
   fi
   "$UV" run python -m options_researcher.ritual_status \
     --root "$REPO" --as-of "$AS_OF" --run-date "$RUN_DATE" \
@@ -451,7 +461,7 @@ fi
 # The allow-list is TIER-SCOPED (brief 11 §6.4): under the data tier the ritual
 # produces NO H7 evidence, so H7 paths are neither staged nor described.
 # ---------------------------------------------------------------------------
-DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs)
+DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs ledger/facts.log)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
 EVIDENCE_COMMIT_MSG="data(ritual): daily ritual data-phase artifacts ${RUN_DATE}
 
