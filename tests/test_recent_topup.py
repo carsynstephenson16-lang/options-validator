@@ -427,6 +427,60 @@ class RefreshClosesGuardedTests(unittest.TestCase):
         self.assertEqual(restored.to_dict("records"), [{"date": "2026-07-28", "close": 100.0}])
         self.assertEqual(len(facts.read_facts(str(self.ledger_dir))), 1)
 
+    def test_truncated_history_is_restored_like_a_retroactive_change(self):
+        self._store("MSFT", [("2026-07-25", 99.0), ("2026-07-28", 100.0)])
+        self._store("AMZN", [("2026-07-28", 200.0)])
+
+        def fetch(symbol):
+            if symbol == "MSFT":
+                # Truncated response: overlap matches perfectly but an older
+                # date vanished (observed Yahoo degradation mode).
+                self._store(symbol, [("2026-07-28", 100.0), ("2026-07-29", 101.0)])
+            else:
+                self._store(symbol, [("2026-07-28", 200.0), ("2026-07-29", 201.0)])
+
+        result = recent_topup.refresh_closes_guarded(
+            today="2026-07-30", ledger_dir=str(self.ledger_dir), fetch_fn=fetch
+        )
+        self.assertEqual(result["restored_symbols"], {"MSFT": "2026-07-25"})
+        self.assertEqual(result["max_dates"]["MSFT"], "2026-07-28")
+        self.assertEqual(result["max_dates"]["AMZN"], "2026-07-29")
+        restored = pd.read_parquet(self.cache_dir / "MSFT.parquet")
+        self.assertEqual(
+            restored.to_dict("records"),
+            [
+                {"date": "2026-07-25", "close": 99.0},
+                {"date": "2026-07-28", "close": 100.0},
+            ],
+        )
+        self.assertEqual(len(facts.read_facts(str(self.ledger_dir))), 1)
+
+    def test_restore_failure_is_reported_under_its_own_key(self):
+        self._store("MSFT", [("2026-07-28", 100.0)])
+
+        def fetch(symbol):
+            # Write directly so the store_closes patch below only affects the
+            # production restore path, not this fake fetch.
+            pd.DataFrame(
+                [("2026-07-28", 101.0), ("2026-07-29", 102.0)],
+                columns=["date", "close"],
+            ).to_parquet(self.cache_dir / f"{symbol}.parquet", index=False)
+
+        def failing_store(symbol, frame):
+            raise OSError("disk full")
+
+        with mock.patch.object(underlying_closes, "store_closes", failing_store):
+            result = recent_topup.refresh_closes_guarded(
+                today="2026-07-30", ledger_dir=str(self.ledger_dir), fetch_fn=fetch
+            )
+        self.assertEqual(result["restored_symbols"], {})
+        self.assertIn("MSFT", result["restore_failed"])
+        self.assertIn("disk full", result["restore_failed"]["MSFT"])
+        self.assertEqual(result["max_dates"]["MSFT"], "2026-07-29")
+        fact_lines = facts.read_facts(str(self.ledger_dir))
+        self.assertEqual(len(fact_lines), 1)
+        self.assertIn("1 restore failures", str(fact_lines[0]))
+
     def test_fetch_exception_is_recorded_and_other_symbols_continue(self):
         self._store("MSFT", [("2026-07-28", 100.0)])
         self._store("AMZN", [("2026-07-28", 200.0)])

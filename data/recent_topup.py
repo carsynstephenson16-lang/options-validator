@@ -108,8 +108,9 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
     """Refresh every existing Yahoo closes cache with a retroactive-change guard.
 
     Each symbol is read before fetching and again afterward. If a fetched
-    history changes an existing date beyond the relative tolerance, the old
-    frame is restored and the first differing date is reported. A restored
+    history changes an existing date beyond the relative tolerance, or drops
+    an existing date entirely (a truncated provider response), the old frame
+    is restored and the first differing or missing date is reported. A restored
     symbol stays stale until the owner amends ``SPLITS``; the closes freshness
     chip surfaces that designed, fail-visible outcome. Scheduled guarded path
     authorized by owner in-session 2026-08-20 (Decision 2 = yes: automate the
@@ -131,6 +132,7 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
 
     max_dates: dict[str, str | None] = {}
     restored_symbols: dict[str, str] = {}
+    restore_failed: dict[str, str] = {}
     fetch_errors: dict[str, list[str]] = {}
     ok_count = 0
 
@@ -155,7 +157,6 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
 
     for symbol in symbols:
         path = cache_dir / f"{symbol}.parquet"
-        errors: list[str] = []
         try:
             before = _read_frame(path, "pre-read")
         except Exception as error:
@@ -199,12 +200,20 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
             if changed:
                 first_difference = day
                 break
+        if first_difference is None:
+            # A date present before but absent after is a truncated provider
+            # response (observed live: Yahoo range=max returning 34-233 rows);
+            # a pure intersection check would let it silently shorten the
+            # cached history, so deletion counts as a retroactive change.
+            deleted = sorted(set(before_by_date) - set(after_by_date))
+            if deleted:
+                first_difference = deleted[0]
 
         if first_difference is not None:
             try:
                 underlying_closes.store_closes(symbol, before)
             except Exception as error:
-                errors.append(f"restore: {type(error).__name__}: {error}")
+                restore_failed[symbol] = f"{type(error).__name__}: {error}"
                 max_dates[symbol] = _max_date(after)
             else:
                 restored_symbols[symbol] = first_difference
@@ -212,18 +221,18 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
         else:
             max_dates[symbol] = _max_date(after)
             ok_count += 1
-        if errors:
-            fetch_errors[symbol] = errors
 
     _append_closes_fact(
         f"DATA_PULL {today}: Yahoo closes guarded refresh for cached symbols; "
         f"guard: {ok_count} ok, {len(restored_symbols)} restored, "
+        f"{len(restore_failed)} restore failures, "
         f"{len(fetch_errors)} fetch errors.",
         ledger_dir=ledger_dir,
     )
     return {
         "max_dates": max_dates,
         "restored_symbols": restored_symbols,
+        "restore_failed": restore_failed,
         "fetch_errors": fetch_errors,
     }
 
