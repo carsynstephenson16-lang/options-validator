@@ -19449,3 +19449,4 @@
 2026-08-20T11:10:24.672418+00:00	DATA_PULL_OHLCV 2026-08-20: Yahoo OHLCV refresh AMZN rows=2420 path=.cache/underlying_ohlcv/AMZN.parquet
 2026-08-20T19:45:46.960372+00:00	SCHWAB_CHAIN_CAPTURE session=2026-08-20 manifest_hash=69ec698ad2335fd88758ebcc305e85dca2f2bd29373e2c74e74aa155ca9d9450 receipt_hash=8c2acadc70d6de9a1fc77c21999e46ba44bdb176feae6138af488309f7857991
 2026-08-20T13:59:02.246671+00:00	DATA_PULL 2026-08-20: Yahoo closes refresh for forward scope (AMAT/AMD/AMZN/AVGO/BE/CEG/CLSK/CRWD/CRWV/ET/HIMS/IREN/MSFT/NBIS/NOW/NVDA/PLTR/QQQ/SMCI/SPY/TEM/UBER/USAR/VST/ZS); same-day partial rows excluded by fetcher.
+2026-08-21T11:55:15.373496+00:00	DATA_PULL 2026-08-21: Yahoo closes guarded refresh for cached symbols; guard: 0 ok, 0 restored, 0 restore failures, 25 fetch errors.
