@@ -1,0 +1,17 @@
+{
+  "receipt_kind": "intraday_capture/v1",
+  "session_tag": "preclose",
+  "scheduled_et": "15:45",
+  "captured_at_et": "2026-08-21T15:45:00-04:00",
+  "captured_at_utc": "2026-08-21T19:45:00+00:00",
+  "force": false,
+  "universe": ["CEG", "VST"],
+  "probe_receipt_path": "reports/live_probe/2026-08-21.json",
+  "probe_healed_this_run": false,
+  "config_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "iv_rank_calibration": null,
+  "names": {
+    "CEG": {"symbol": "CEG", "status": "ok"},
+    "VST": {"symbol": "VST", "status": "ok"}
+  }
+}
