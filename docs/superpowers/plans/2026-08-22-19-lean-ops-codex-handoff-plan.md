@@ -15,7 +15,7 @@ This plan routes every remediation to the right executor. **Codex gets only tigh
 
 | # | Work | Executor | Where | Order gate |
 |---|---|---|---|---|
-| 1 | Push laptop-only branches (OV: `rescue/detached-fca78a0` — the only unpushed OV branch as of 2026-08-22; `claude/merge-sweep-2026-08-22` verified already pushed; kalshi: both checkouts to GitHub; tik tok: create remote + push; equity-research: 15 no-upstream branches) | Owner or Claude session (mechanical git, no code) | per-repo | FIRST — before any deletion anywhere |
+| 1 | Push laptop-only branches. **OV portion COMPLETE 2026-08-23:** `rescue/detached-fca78a0` was pushed, then deleted locally as an exact duplicate of `origin/claude/options-validator-research-review-e27946` (tip verified on origin under both names); every remaining OV branch is pushed. **Still open:** kalshi (both checkouts → GitHub), tik tok (create remote + push), equity-research (15 no-upstream branches) | Owner or Claude session (mechanical git, no code) | per-repo | FIRST — before any deletion anywhere |
 | 2 | Extend backup allow-list to all guard namespaces + drill | **Codex** | brief 20 (this repo) | before any pruning of OV data |
 | 3 | Off-machine backup destination (drive/cloud) + run backup | Owner (spend/hardware decision) + Claude session | — | after #2 merges |
 | 4 | Job-health digest tool (receipt readers, not exit codes) | **Codex** | brief 21 (this repo) | independent |
