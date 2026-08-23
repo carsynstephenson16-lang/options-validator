@@ -949,13 +949,20 @@ class LoadLatestCalibrationReceiptTests(unittest.TestCase):
             # pass_splices_rank for the same discipline).
             with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
                 current_hash = config_hash()
+                # Freshness must be relative to now: the original hardcoded
+                # 2026-07-24 run_at_utc values silently crossed
+                # IV_CALIBRATION_MAX_AGE_DAYS on 2026-08-23 and turned the
+                # gate assertions into a calendar time-bomb. The 34-minute
+                # strict->retro gap from the incident is preserved.
+                retro_run_at = datetime.now(timezone.utc) - timedelta(hours=2)
                 strict = {
-                    "run_at_utc": "2026-07-24T14:54:20.993776+00:00",
+                    "run_at_utc": (
+                        retro_run_at - timedelta(minutes=34)).isoformat(),
                     "inputs_mode": None, "config_hash": current_hash,
                     "names_passed": [],
                 }
                 retro = {
-                    "run_at_utc": "2026-07-24T15:28:17.508115+00:00",
+                    "run_at_utc": retro_run_at.isoformat(),
                     "inputs_mode": "retrospective_official",
                     "config_hash": current_hash,
                     "names_passed": ["VST", "CEG"],
@@ -993,7 +1000,10 @@ class LoadLatestCalibrationReceiptTests(unittest.TestCase):
             with mock.patch.object(config, "IV_CALIBRATION_RECEIPT_DIR", tmp):
                 current_hash = config_hash()
                 good = {
-                    "run_at_utc": "2026-07-24T15:28:17.508115+00:00",
+                    # Relative timestamp: a hardcoded date here expired at
+                    # IV_CALIBRATION_MAX_AGE_DAYS and broke the gate assert.
+                    "run_at_utc": (datetime.now(timezone.utc)
+                                   - timedelta(hours=1)).isoformat(),
                     "config_hash": current_hash, "names_passed": ["VST"],
                 }
                 # Not valid JSON at all.
