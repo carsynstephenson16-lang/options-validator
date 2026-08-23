@@ -73,9 +73,27 @@ def _missing(job: str, path: str) -> HealthRow:
     return HealthRow(job, HealthStatus.MISSING, "receipt absent", path)
 
 
+def _contained_path(root: Path, relative: str) -> tuple[Path | None, str | None]:
+    candidate = root / relative
+    try:
+        resolved = candidate.resolve(strict=False)
+    except (OSError, RuntimeError) as exc:
+        return None, f"unsafe receipt path: {type(exc).__name__}"
+    if resolved != root and root not in resolved.parents:
+        return None, "receipt path escapes root"
+    return candidate, None
+
+
 def _ritual_overall(root: Path, as_of: str) -> HealthRow:
     relative = f"reports/ritual/run_status_{as_of}.json"
-    path = root / relative
+    path, path_error = _contained_path(root, relative)
+    if path_error is not None or path is None:
+        return HealthRow(
+            "Ritual overall",
+            HealthStatus.FAILED,
+            path_error or "unsafe receipt path",
+            relative,
+        )
     if not path.is_file():
         return _missing("Ritual overall", relative)
     payload, error = _read_object(path)
@@ -108,7 +126,14 @@ def _ritual_overall(root: Path, as_of: str) -> HealthRow:
 
 def _ritual_hypotheses(root: Path, as_of: str) -> HealthRow:
     relative = f"reports/ritual/capture_receipt_{as_of}.json"
-    path = root / relative
+    path, path_error = _contained_path(root, relative)
+    if path_error is not None or path is None:
+        return HealthRow(
+            "Ritual hypotheses",
+            HealthStatus.FAILED,
+            path_error or "unsafe receipt path",
+            relative,
+        )
     if not path.is_file():
         return _missing("Ritual hypotheses", relative)
     payload, error = _read_object(path)
@@ -174,14 +199,29 @@ def _receipt_timestamp(payload: dict[str, object]) -> datetime | None:
 
 def _intraday_capture(root: Path, as_of: str) -> HealthRow:
     directory_relative = f"reports/intraday_capture/{as_of}"
-    directory = root / directory_relative
+    directory, directory_error = _contained_path(root, directory_relative)
+    if directory_error is not None or directory is None:
+        return HealthRow(
+            "Intraday capture",
+            HealthStatus.FAILED,
+            directory_error or "unsafe receipt directory",
+            directory_relative,
+        )
     candidates = sorted(directory.glob("*.json")) if directory.is_dir() else []
     if not candidates:
         return _missing("Intraday capture", f"{directory_relative}/*.json")
     parsed: list[tuple[datetime, Path, dict[str, object]]] = []
     for candidate in candidates:
-        payload, error = _read_object(candidate)
         relative = candidate.relative_to(root).as_posix()
+        safe_candidate, path_error = _contained_path(root, relative)
+        if path_error is not None or safe_candidate is None:
+            return HealthRow(
+                "Intraday capture",
+                HealthStatus.FAILED,
+                path_error or "unsafe receipt path",
+                relative,
+            )
+        payload, error = _read_object(safe_candidate)
         if error is not None or payload is None:
             return HealthRow(
                 "Intraday capture", HealthStatus.FAILED, error or "invalid receipt", relative
@@ -278,7 +318,14 @@ def _intraday_capture(root: Path, as_of: str) -> HealthRow:
 
 def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
     relative = f"reports/schwab_chains/{as_of}/preclose.json"
-    path = root / relative
+    path, path_error = _contained_path(root, relative)
+    if path_error is not None or path is None:
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            path_error or "unsafe receipt path",
+            relative,
+        )
     if not path.is_file():
         return _missing("Schwab preclose", relative)
     payload, error = _read_object(path)
@@ -301,7 +348,14 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
 
 def _alignment_check(root: Path, as_of: str) -> HealthRow:
     relative = f".tmp/alignment_check/{as_of}.log"
-    path = root / relative
+    path, path_error = _contained_path(root, relative)
+    if path_error is not None or path is None:
+        return HealthRow(
+            "Alignment check",
+            HealthStatus.FAILED,
+            path_error or "unsafe receipt path",
+            relative,
+        )
     if not path.is_file():
         return _missing("Alignment check", relative)
     try:
@@ -332,7 +386,15 @@ def _alignment_check(root: Path, as_of: str) -> HealthRow:
 
 def _research_refresh(root: Path, as_of: str) -> HealthRow:
     relative = f".tmp/research_refresh/receipt_v2_{as_of}_premarket.json"
-    if not (root / relative).is_file():
+    path, path_error = _contained_path(root, relative)
+    if path_error is not None or path is None:
+        return HealthRow(
+            "Research refresh (premarket)",
+            HealthStatus.FAILED,
+            path_error or "unsafe receipt path",
+            relative,
+        )
+    if not path.is_file():
         return _missing("Research refresh (premarket)", relative)
     return HealthRow(
         "Research refresh (premarket)",

@@ -146,6 +146,50 @@ class JobHealthDigestTests(unittest.TestCase):
         self.assertEqual(rows["Ritual overall"].status, HealthStatus.FAILED)
         self.assertEqual(rows["Ritual hypotheses"].status, HealthStatus.FAILED)
 
+    def test_fixed_receipt_symlinks_cannot_escape_root(self):
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        cases = (
+            (
+                "Ritual overall",
+                "run_status.json",
+                f"reports/ritual/run_status_{AS_OF}.json",
+            ),
+            (
+                "Ritual hypotheses",
+                "capture_receipt.json",
+                f"reports/ritual/capture_receipt_{AS_OF}.json",
+            ),
+            (
+                "Schwab preclose",
+                "schwab_preclose.json",
+                f"reports/schwab_chains/{AS_OF}/preclose.json",
+            ),
+            (
+                "Alignment check",
+                "alignment.log",
+                f".tmp/alignment_check/{AS_OF}.log",
+            ),
+            (
+                "Research refresh (premarket)",
+                "research_refresh.json",
+                f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json",
+            ),
+        )
+        for _job, fixture, relative in cases:
+            external = external_dir / fixture
+            shutil.copyfile(FIXTURES / fixture, external)
+            link = self.root / relative
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(external)
+
+        rows = self._by_job(collect_health(self.root, AS_OF))
+
+        for job, _fixture, _relative in cases:
+            with self.subTest(job=job):
+                self.assertEqual(rows[job].status, HealthStatus.FAILED)
+                self.assertIn("escapes root", rows[job].reason)
+
     def test_alignment_evidence_only_is_degraded(self):
         self._install_all_ok()
         path = self.root / f".tmp/alignment_check/{AS_OF}.log"
@@ -215,6 +259,36 @@ class JobHealthDigestTests(unittest.TestCase):
 
         self.assertEqual(row.status, HealthStatus.FAILED)
         self.assertIn("symbol identity mismatch", row.reason)
+
+    def test_intraday_receipt_symlink_cannot_escape_root(self):
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        external = external_dir / "preclose.json"
+        shutil.copyfile(FIXTURES / "intraday_preclose.json", external)
+        directory = self.root / f"reports/intraday_capture/{AS_OF}"
+        directory.mkdir(parents=True)
+        (directory / "preclose.json").symlink_to(external)
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Intraday capture"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertIn("escapes root", row.reason)
+
+    def test_intraday_directory_symlink_cannot_escape_root(self):
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        shutil.copyfile(
+            FIXTURES / "intraday_preclose.json",
+            external_dir / "preclose.json",
+        )
+        parent = self.root / "reports" / "intraday_capture"
+        parent.mkdir(parents=True)
+        (parent / AS_OF).symlink_to(external_dir, target_is_directory=True)
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Intraday capture"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertIn("escapes root", row.reason)
 
     def test_research_refresh_uses_existence_only(self):
         self._install_all_ok()
