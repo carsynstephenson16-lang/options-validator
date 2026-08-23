@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -101,6 +102,28 @@ def _ritual_overall(root: Path, as_of: str) -> HealthRow:
         return HealthRow(
             "Ritual overall", HealthStatus.FAILED, error or "invalid receipt", relative
         )
+    if payload.get("schema_version") != "daily_ritual/run_status/v1":
+        return HealthRow(
+            "Ritual overall",
+            HealthStatus.FAILED,
+            "schema_version mismatch",
+            relative,
+        )
+    if payload.get("as_of") != as_of:
+        return HealthRow(
+            "Ritual overall",
+            HealthStatus.FAILED,
+            f"session mismatch: expected {as_of}",
+            relative,
+        )
+    capture_relative = f"reports/ritual/capture_receipt_{as_of}.json"
+    if payload.get("capture_receipt_path") != capture_relative:
+        return HealthRow(
+            "Ritual overall",
+            HealthStatus.FAILED,
+            "capture_receipt_path mismatch",
+            relative,
+        )
     value = payload.get("status")
     mapping = {
         "OK": HealthStatus.OK,
@@ -115,6 +138,38 @@ def _ritual_overall(root: Path, as_of: str) -> HealthRow:
             f"unknown status {value!r}",
             relative,
         )
+    if value != "RUNNING":
+        capture_path, capture_path_error = _contained_path(root, capture_relative)
+        if capture_path_error is not None or capture_path is None:
+            return HealthRow(
+                "Ritual overall",
+                HealthStatus.FAILED,
+                capture_path_error or "unsafe capture receipt path",
+                relative,
+            )
+        if not capture_path.is_file():
+            return HealthRow(
+                "Ritual overall",
+                HealthStatus.FAILED,
+                "bound capture receipt absent",
+                relative,
+            )
+        try:
+            capture_sha256 = hashlib.sha256(capture_path.read_bytes()).hexdigest()
+        except OSError as exc:
+            return HealthRow(
+                "Ritual overall",
+                HealthStatus.FAILED,
+                f"unreadable capture receipt: {type(exc).__name__}",
+                relative,
+            )
+        if payload.get("capture_receipt_sha256") != capture_sha256:
+            return HealthRow(
+                "Ritual overall",
+                HealthStatus.FAILED,
+                "capture_receipt_sha256 mismatch",
+                relative,
+            )
     reasons = {
         "OK": "ritual completed",
         "OK_STARVED": "ritual completed with starved hypotheses",

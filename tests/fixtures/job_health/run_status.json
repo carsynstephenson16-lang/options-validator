@@ -1,7 +1,7 @@
 {
   "as_of": "2026-08-21",
   "capture_receipt_path": "reports/ritual/capture_receipt_2026-08-21.json",
-  "capture_receipt_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "capture_receipt_sha256": "8f6bd3c88c20ad655bbda8e5399cc4a91b6a1b1cb3ffc6c6419b4a7a5654bed5",
   "code_sha": "accd165bd2a7aeacf8ff6f1630d0b3b815b39703",
   "log_path": ".tmp/daily_ritual/2026-08-21_0721.log",
   "run_at_et": "2026-08-21T08:41:05.547897-04:00",

@@ -129,6 +129,40 @@ class JobHealthDigestTests(unittest.TestCase):
 
                 self.assertEqual(row.status, health_status)
 
+    def test_ritual_overall_verifies_capture_receipt_hash(self):
+        self._install_all_ok()
+        capture = self.root / f"reports/ritual/capture_receipt_{AS_OF}.json"
+        capture.write_text(capture.read_text() + "\n")
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Ritual overall"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertIn("capture_receipt_sha256 mismatch", row.reason)
+
+    def test_ritual_overall_validates_status_receipt_identity(self):
+        self._install_all_ok()
+        path = self.root / f"reports/ritual/run_status_{AS_OF}.json"
+        cases = (
+            ("schema_version", "daily_ritual/run_status/v0", "schema_version mismatch"),
+            ("as_of", "2026-08-20", "session mismatch"),
+            (
+                "capture_receipt_path",
+                "reports/ritual/capture_receipt_other.json",
+                "capture_receipt_path mismatch",
+            ),
+        )
+        original = json.loads(path.read_text())
+        for field, value, reason in cases:
+            with self.subTest(field=field):
+                payload = dict(original)
+                payload[field] = value
+                path.write_text(json.dumps(payload))
+
+                row = self._by_job(collect_health(self.root, AS_OF))["Ritual overall"]
+
+                self.assertEqual(row.status, HealthStatus.FAILED)
+                self.assertIn(reason, row.reason)
+
     def test_wrong_typed_status_fields_fail_closed(self):
         self._install_all_ok()
         overall_path = self.root / f"reports/ritual/run_status_{AS_OF}.json"
