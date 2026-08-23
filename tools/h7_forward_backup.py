@@ -52,15 +52,13 @@ from research.receipts import (
     make_receipt,
     write_immutable_receipt,
 )
+from tools.irreplaceable_data_guard import DEFAULT_NAMESPACES
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKUP_TAG = "options-validator-h7-forward"
 
 # Explicit allow-list: no broad .cache/ or repository-root backup is allowed.
-BACKUP_PATHS = (
-    Path(".cache/chains"),
-    Path(".cache/schwab_chains"),
-    Path(".cache/underlying"),
+BACKUP_PATHS = tuple(Path(namespace) for namespace in DEFAULT_NAMESPACES) + (
     Path("data/earnings/gating_v3.csv"),
     Path("data/earnings/assertions_v2.csv"),
     Path("data/earnings/assertions.csv"),
@@ -69,7 +67,6 @@ BACKUP_PATHS = (
     Path("reports/h7_data_gate"),
     Path("reports/h7_receipts"),
     Path("reports/h7_forward"),
-    Path("reports/schwab_chains"),
     Path("reports/h7_forward_schwab"),
     Path("ledger/h7_forward_schwab"),
 )
@@ -86,6 +83,17 @@ def backup_paths(root: Path = REPO_ROOT) -> list[Path]:
             if (root / relative).exists()]
 
 
+def _included_directory_files(path: Path, root: Path):
+    for child in sorted(candidate for candidate in path.rglob("*")
+                        if candidate.is_file()):
+        child_rel = child.relative_to(root).as_posix()
+        if any(fnmatch.fnmatch(child_rel, pattern)
+               or fnmatch.fnmatch(child.name, pattern)
+               for pattern in EXCLUDE_PATTERNS):
+            continue
+        yield child
+
+
 def backup_inventory(root: Path = REPO_ROOT) -> dict[str, dict]:
     """Hash files and directory contents included in the Restic allow-list."""
     root = Path(root).resolve()
@@ -94,12 +102,8 @@ def backup_inventory(root: Path = REPO_ROOT) -> dict[str, dict]:
         relative = path.relative_to(root).as_posix()
         if path.is_dir():
             files = {}
-            for child in sorted(p for p in path.rglob("*") if p.is_file()):
+            for child in _included_directory_files(path, root):
                 child_rel = child.relative_to(root).as_posix()
-                if any(fnmatch.fnmatch(child_rel, pattern)
-                       or fnmatch.fnmatch(child.name, pattern)
-                       for pattern in EXCLUDE_PATTERNS):
-                    continue
                 files[child_rel] = {
                     "sha256": sha256_file(child), "size": child.stat().st_size,
                 }
@@ -110,6 +114,28 @@ def backup_inventory(root: Path = REPO_ROOT) -> dict[str, dict]:
                 "size": path.stat().st_size,
             }
     return inventory
+
+
+def backup_payload_size(root: Path = REPO_ROOT) -> int:
+    """Return the total byte size of existing, included backup files."""
+    root = Path(root).resolve()
+    total = 0
+    for path in backup_paths(root):
+        if path.is_dir():
+            total += sum(child.stat().st_size
+                         for child in _included_directory_files(path, root))
+        else:
+            total += path.stat().st_size
+    return total
+
+
+def _format_bytes(total: int) -> str:
+    value = float(total)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024 or unit == "TiB":
+            return f"{int(value)} {unit}" if unit == "B" else f"{value:.2f} {unit}"
+        value /= 1024
+    raise AssertionError("unreachable")
 
 
 def _require_restic_environment() -> None:
@@ -150,6 +176,11 @@ def run_backup(*, completed_session: str, root: Path = REPO_ROOT,
     paths = backup_paths(root)
     if not paths:
         raise RuntimeError("no H7 backup inputs exist; refusing empty backup")
+    payload_bytes = backup_payload_size(root)
+    print(
+        "H7 BACKUP PREFLIGHT -- expected payload: "
+        f"{payload_bytes:,} bytes ({_format_bytes(payload_bytes)})"
+    )
     relative_paths = [str(path.relative_to(root)) for path in paths]
     args = ["backup", "--json", "--tag", BACKUP_TAG,
             *[item for pattern in EXCLUDE_PATTERNS
