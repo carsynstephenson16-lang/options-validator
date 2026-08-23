@@ -6,6 +6,8 @@
 
 **Checkout audited:** `/Users/carsynstephenson/options-validator`, branch `sfix`, HEAD `217a4c5e5e44303f98acb5e0f4f3913a6e208c59`.
 
+**Status refresh (2026-08-23; PR #63–#68 reconciliation, docs-only):** `main` now leads at `8a5d5c4` (PR #68 merge). PRs #63–#68 merged 2026-08-23: #63 H7 Schwab restart brief (docs); #64/#65 land the `attractive-exp-spread-stability`/`tbill-carry` lanes that §3.1/older lines list as deletion candidates — those two are no longer deletion candidates; #66 rewrites the H7 backup allow-list to derive from `tools/irreplaceable_data_guard.DEFAULT_NAMESPACES` (closing the chains_v2/future_tickers/intraday/underlying_ohlcv backup hole); #67 lands `tools/job_health_digest.py` v1 (receipt-backed job health; PR-68 review hardenings queued in brief 21 rev 2); #68 lands the watcher-flip commit + lean-ops handoff docs. Owner override 2026-08-23 flipped `exact_session_source_active=True` (`data/ritual_authority.py`); this flag gates only the future full H7-registration tier (`evaluate_full_ritual()`, still blocked on `h7_active=False`) — the H5/H10b lane runs on `schwab_chain_view.verified_sessions()` and has been live since 08-19 (ops receipts: `reports/h5/entry_watch_2026-08-19.txt and _2026-08-20.txt`, `h10b_observations.jsonl`). **V1's statistic has been pinned since ledger seq 26 (`RQ2_AMENDMENT_V1_2`, 2026-08-15)** — median tenor-matched VRP over up to 24 completed monthly cycles (24-cycle cap is LLM-proposed 2026-08-15, not owner-typed); older "not pinned" lines below are superseded. Owner rulings 2026-08-23: H7 = 3-month window + starvation pre-accept + dashboard visibility, any extension pre-declared at registration (owner still types the frozen numbers); BL-2 = AMAT/CLSK/NBIS via a separate non-H7 capture lane, frozen `h7-forward-15-v1` scope untouched (brief pending); BL-1 unruled. Branch cleanup 2026-08-23: worktrees+branches deleted for `codex/attractive-exp-{beta-qqq,spread-stability,tail-shape,tbill-carry}` plus duplicate ref `rescue/detached-fca78a0` (all tips on origin; guard OK before/after; `attractive-exp-hardening`/`-wiring` were KEPT); 22 unmerged branches remain (46 local total) — dispositions summarized in `reports/2026-08-22-owner-decision-package-finishing-ov.md` (the full 27-row table was not written to disk). Schwab token re-authorized 2026-08-23 (7-day hard expiry, next ~08-30). 2026-08-21 was a no-network day — no preclose capture; the gap is permanent. Lean-ops routing doc: `docs/superpowers/plans/2026-08-22-19-lean-ops-codex-handoff-plan.md` (kalshi and equity-research briefs live in their own repos).
+
 **Original audit boundary:** read-only except for this file. No provider call,
 package change, ledger/facts append, cache mutation, one-run mutation, live-book
 mutation, Git write, or branch switch occurred during the planning audit.
@@ -55,8 +57,9 @@ frozen number below is newly typed):** the 2026-08-11 three-day audit
 RESIDUALS) is the map for the 2026-08-05→08-11 window; this session resolved
 its residuals. Landed on this branch: the owner-ruled **RQ2 K=3 amendment
 (ledger seq 25, `RQ2_AMENDMENT_V1_1`)** — RQ2-v1 badges are K=3 (B1, A1, V1
-membership-only; V1's statistic is NOT pinned and the runner must refuse V1
-comparisons until a further pre-result amendment); the **August ops evidence**
+membership-only; V1's statistic was later pinned by ledger seq 26
+`RQ2_AMENDMENT_V1_2`, 2026-08-15 — see the 2026-08-23 status refresh above;
+only BLENDED V1 comparisons still refuse); the **August ops evidence**
 (Aug 5–7 intraday receipts + 2026-08-05 probe + 20 facts.log lines) folded
 back from `evidence/ops-august-2026-08-09` — the raw `.cache/intraday`
 parquet bytes for those dates exist only on the production disk and their
@@ -127,8 +130,11 @@ sole code blocker), `codex/h7-schwab-recovery` adversarial review (running
 2026-08-13, receipt to land separately), backup/restore drill with real
 canary bytes, then owner OD-3 + registration + authority flip.
 `codex/handoff` (2c8332a) pushed but unmerged — overlaps landed M1 fixes,
-reconcile-don't-blind-merge. Four stale `codex/attractive-exp-*` branches
-remain deletion candidates (owner-approved batch, guard first).
+reconcile-don't-blind-merge. *(2026-08-23 correction: the four
+`codex/attractive-exp-*` branches are resolved — `spread-stability` and
+`tbill-carry` merged via PR #64/#65; all four local worktrees+branches were
+deleted in the 2026-08-23 cleanup, tips preserved on origin; see the
+2026-08-23 status refresh above.)*
 
 ### 2026-08-14 addendum (supersedes stale lines above)
 
@@ -242,6 +248,8 @@ options-flow study remains DATA-GATED because no real trade/quote panel exists.
   `codex/cache-schema-v2` (`8fa0637`), `codex/causal-fill-convention`
   (`5165144`), dashboard freshness, two Luna lanes, evidence packet 8, and root
   cache hardening. Attachment itself is a preservation signal until classified.
+  *(2026-08-23: this worktree/branch inventory is superseded — current
+  22-branch-kept table in `reports/2026-08-22-owner-decision-package-finishing-ov.md`.)*
 
 ### 3.2 Current verification
 
