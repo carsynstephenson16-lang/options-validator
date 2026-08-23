@@ -46,6 +46,14 @@ D5: ratify / park
 D9, D10, D11: <ruling or "later">
 ```
 
+## OWNER RULINGS RECEIVED 2026-08-23 (in-session, plain-language wording preserved)
+
+- **D1 (H7):** "keep h7 as 3 but i want it to show on the dashboard i can always extend" → interpreted as option (b): normal ~3-month window with starvation pre-accepted, plus H7 lane visibility on the dashboard. NOTE recorded for the registration packet: under pre-registration rules an extension must be pre-declared at registration time (e.g. "one owner-typed extension of up to N sessions permitted if entries < X at midpoint") — a mid-window extension invented after seeing results would not be honest. Owner still types the frozen numbers.
+- **D6:** "overule the watcher switch and turn those on" → S1 streak bar overruled by owner; sub-fork resolved 3a (already in code); `exact_session_source_active` flipped True in `data/ritual_authority.py` this session.
+- **D3:** delegated to subagents → 5 local deletions executed 2026-08-23 (4 × attractive-exp worktrees+branches per prior owner approval; `rescue/detached-fca78a0` as an exact duplicate ref of `claude/options-validator-research-review-e27946`, tip verified on origin under both names). All other 22 branches KEPT. `codex/h7-schwab-recovery`'s worktree holds gitignored review artifacts (`.superpowers/sdd/h7-schwab-recovery-plan/`) — DO-NOT-DELETE flag recorded.
+- **D4/BL-2:** "add the extra 3 names if we have options for them" → CONFLICT FOUND: AMAT/CLSK/NBIS are already on the 18-name board but are test-pinned as excluded from the frozen 15-name H7 capture scope (`h7_scope.py:25-27` hard 15-name invariant, scope id `h7-forward-15-v1`; `tests/test_attractiveness_universe.py:34-44` disjointness invariant). Adding them INTO H7 scope would break a frozen contract. Proposed implementation honoring intent without breaking the freeze: a separate non-H7 capture lane for the 3 extras (Codex brief to follow). BL-1 remains unruled.
+- **D2:** OBE — discovered already pinned by ledger seq 26 (2026-08-15): V1 = median tenor-matched volatility-risk-premium over up to 24 monthly cycles. README.md:274-277 and PROJECT_STATE.md:56-58 are stale (they reflect seq 25 only) — doc refresh needed.
+
 ## Appendix — D3 branch-ruling table (Repo-verified 2026-08-22)
 
 `git branch --no-merged main` = **27 branches; 51 local total.** All pushed and matching origin EXCEPT `rescue/detached-fca78a0` (laptop-only, confirmed 3× via `git ls-remote`). Summary: **0 merge-ready** (nothing carries explicit review approval at its current tip), **4 deletion-approved but worktree-blocked** (the `codex/attractive-exp-{beta-qqq,spread-stability,tail-shape,tbill-carry}` lanes — owner-approved deletion per PROJECT_STATE.md:130, but each is checked out in a `.tmp/worktrees/` worktree that must be guard-checked and removed first), **14 need their own review**, **13 worktree/WIP**. Notable rows:
