@@ -273,8 +273,10 @@ signal lane** (display-only, non-verdict-bearing) is authorized per the
 2026-08-03 owner-directed amendment recorded in `.cursorrules`.
 *Registry update (2026-08-12, audit-repair session):* **RQ2-v1 is K=3** (B1,
 A1, V1 membership-only) per ledger seq 25 `RQ2_AMENDMENT_V1_1` (owner-ruled
-2026-08-10); V1's candidate statistic is not pinned — a further pre-result
-amendment must pin it before any V1 comparison. **H7** adds a prepared Schwab
+2026-08-10); V1's candidate statistic was pinned 2026-08-15 by ledger seq 26
+(`RQ2_AMENDMENT_V1_2`): median tenor-matched VRP over up to 24 completed
+monthly cycles (24-cycle cap is LLM-proposed 2026-08-15, not owner-typed), line-1 only, higher-toward-top; only the future BLENDED
+(line-1+line-2) variant still requires its own pre-result amendment. **H7** adds a prepared Schwab
 restart lane `h7-forward-schwab-v1`: PREPARED / NOT REGISTERED / NOT
 ACTIVATED — independent adversarial review resolved 2026-08-12 (PASS WITH
 FIXES; `reports/h7_forward_schwab/2026-08-12-adversarial-review-receipt.md`);
