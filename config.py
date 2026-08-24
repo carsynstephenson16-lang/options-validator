@@ -835,6 +835,21 @@ COMPOSITE_GRADE_A_MIN_ALIGNED = 3 # aligned non-neutral angles needed for grade 
 COMPOSITE_GRADE_B_MIN_ALIGNED = 2 # aligned non-neutral angles needed for grade B
 
 # ---------------------------------------------------------------------------
+# Chain-consistency shadow flags 2026-08-24. LLM-proposed, not owner-typed;
+# display-only — bind no hypothesis, verdict, gate, or trigger. Delta's
+# threshold is a corruption-target Assumption per brief 22 WP-0 (set by the
+# smallest corruption it must catch; clean-pair rates are recorded in the PR).
+# IV_JUMP was removed under WP-0's pre-declared kill criterion: on the only
+# available adjacent clean pair (2026-08-19 to 2026-08-20), it hit 131 of
+# 8,611 evaluated yesterday-admitted contracts (1.5213%, above 1%). It was
+# removed rather than widened.
+# ---------------------------------------------------------------------------
+CONSISTENCY_DELTA_JUMP_ABS = 0.30
+CONSISTENCY_UNDERLYING_SMALL_MOVE = 0.01
+CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO = 2.0
+CONSISTENCY_MAX_EXAMPLES = 20
+
+# ---------------------------------------------------------------------------
 # ATTRACTIVENESS EXPERIMENT LANES -- display-only, cached-data-only, and
 # disabled by default. LLM-proposed 2026-08-09; standard-from-literature or
 # repo conventions; not owner-ratified. Nothing here changes Top-3 ranking,
