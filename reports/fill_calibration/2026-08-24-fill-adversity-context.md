@@ -1,6 +1,6 @@
 # Fill-adversity context study
 
-Max as-of session: 2026-08-20.
+Max as-of session: 2026-08-24.
 
 ## Scope and honesty statement
 
@@ -16,7 +16,7 @@ At least one qualifying bucket is out of scale with the frozen haircut under the
 
 ### Tier 1
 
-Max as-of session: 2026-08-20; n=35216.
+Max as-of session: 2026-08-24; n=35216.
 
 | bucket | n | half-spread share p50 | haircut share p50 | cent-rounding share p50 |
 |---|---:|---:|---:|---:|
@@ -76,7 +76,7 @@ Max as-of session: 2026-07-31; n=2236735.
 
 ### Tier 1
 
-Max as-of session: 2026-08-20; n=10707.
+Max as-of session: 2026-08-24; n=10707.
 
 | bucket | n | p50 | p75 | p90 | p95 | p99 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -142,7 +142,7 @@ Up/down/flat: {'up': 795271, 'down': 906162, 'flat': 11890}. The frozen haircut 
 
 ### Tier 1
 
-Max as-of session: 2026-08-20; n=3909. One-sided adverse fraction using `A_ENTRY_CREDIT_TOLERANCE`: 0.35558966487592736.
+Max as-of session: 2026-08-24; n=3909. One-sided adverse fraction using `A_ENTRY_CREDIT_TOLERANCE`: 0.35558966487592736.
 
 | bucket | n | p50 | p75 | p90 | p95 | p99 | adverse fraction |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -201,7 +201,7 @@ The one-sided adverse fraction below uses the configured `A_ENTRY_CREDIT_TOLERAN
 
 ### Tier 1
 
-Max as-of session: 2026-08-20; n=0. bid_size p50/p90=unavailable/unavailable; ask_size p50/p90=unavailable/unavailable; fraction bid_size >= 1=unavailable; fraction ask_size >= 1=unavailable; size-weighted mean spread fraction=unavailable.
+Max as-of session: 2026-08-24; n=0. bid_size p50/p90=unavailable/unavailable; ask_size p50/p90=unavailable/unavailable; fraction bid_size >= 1=unavailable; fraction ask_size >= 1=unavailable; size-weighted mean spread fraction=unavailable.
 
 Tier 1 has no touch-size fields; not applicable.
 
@@ -250,7 +250,7 @@ overnight-drift definition; headline tables remain pooled across symbols.
 
 ### Tier 1
 
-Max as-of session: 2026-08-20; symbol breakdown is appendix-only.
+Max as-of session: 2026-08-24; symbol breakdown is appendix-only.
 
 | symbol / DTE band | n | p50 | p75 | p90 | p95 | p99 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -422,4 +422,4 @@ Max as-of session: 2026-07-31; symbol breakdown is appendix-only.
 
 Exceedance fractions are appendix-only and must not be read as headline findings. They are saturated in the available dollar-priced option data: a one-cent dollar threshold is often one tick, so its fraction is a tick-size artifact. Tier 1 `|Δmid|/mid > haircut`: 65.8%. Tier 2 `|Δmid|/mid > haircut`: 91.6%. Tier 1 `|Δmid| > $0.01`: 98.1%; Tier 2 `|Δmid| > $0.01`: 98.9%.
 
-Receipt hash: 5c52893cae57260820e60a5a2e74e7358aa9f3b0169ed6bcd528dce18d09b971.
+Receipt hash: 4614cb4238d5ad0253cbec1217b5b5fcee29879bff739619c0ee8a214e613ec5.
