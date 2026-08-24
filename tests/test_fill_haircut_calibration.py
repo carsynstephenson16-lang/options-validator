@@ -64,15 +64,31 @@ class TierLoaderTests(unittest.TestCase):
             root = Path(temp)
             path = root / "SYN_2026-07-31.parquet"
             _frame("2026-07-31").to_parquet(path)
+            quarantine = root / "quarantine.json"
+            quarantine.write_text(
+                json.dumps({"schema": "v2-partition-quarantine/v1", "entries": []})
+            )
             with self.assertRaisesRegex(RuntimeError, "parked.*2026-08-24"):
-                study.load_tier("tier2", tier2_dir=root, quarantine_path=root / "none.json")
+                study.load_tier("tier2", tier2_dir=root, quarantine_path=quarantine)
             loaded = study.load_tier(
                 "tier2",
                 allow_parked_chains_v2=True,
                 tier2_dir=root,
-                quarantine_path=root / "none.json",
+                quarantine_path=quarantine,
             )
             self.assertEqual(list(loaded.frames), [("SYN", "2026-07-31")])
+
+    def test_tier2_refuses_missing_quarantine_registry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _frame("2026-07-31").to_parquet(root / "SYN_2026-07-31.parquet")
+            with self.assertRaisesRegex(FileNotFoundError, "quarantine registry"):
+                study.load_tier(
+                    "tier2",
+                    allow_parked_chains_v2=True,
+                    tier2_dir=root,
+                    quarantine_path=root / "missing-quarantine.json",
+                )
 
     def test_quarantine_exclusion_holds_with_tier2_flag(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -306,6 +322,34 @@ class ReportAndBoundaryTests(unittest.TestCase):
             self.assertEqual(stage["missing_close_dropped"], 1)
             self.assertEqual(receipt["measurements"]["Tier 1"]["decomposition"]["n"], 0)
             self.assertEqual(receipt["numeric_tables"]["Tier 1"]["decomposition"], {})
+
+    def test_report_discloses_missing_close_and_measurement_asof(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _frame("2026-08-20").to_parquet(root / "SYN_2026-08-20.parquet")
+            _frame("2026-08-24").to_parquet(root / "SYN_2026-08-24.parquet")
+
+            def raw_close(_symbol, _start, end, *, allow_oos):
+                self.assertTrue(allow_oos)
+                if end == "2026-08-20":
+                    return pd.Series([100.0], index=[end])
+                return pd.Series(dtype=float)
+
+            with mock.patch.object(study.underlying_closes, "load_closes", side_effect=raw_close):
+                report_payload, _receipt = study.run_study(
+                    tier1_dir=root,
+                    quarantine_path=root / "none.json",
+                )
+            report = study.render_report(report_payload)
+            self.assertIn("Cache max-as-of session: 2026-08-24", report)
+            self.assertIn("Tier 1 measurement-eligible latest session: 2026-08-20", report)
+            self.assertIn(
+                "Tier 1 missing raw close partitions: SYN@2026-08-24 "
+                "(1 partition; 1 admitted row excluded from decomposition)",
+                report,
+            )
+            self.assertIn("Max as-of session: 2026-08-20; n=1.", report)
+            self.assertNotIn("Max as-of session: 2026-08-24; n=1.", report)
 
     def test_cli_is_behaviorally_offline_and_does_not_import_reveal_path(self):
         self.assertNotIn("research.experiments", inspect.getsource(study))
