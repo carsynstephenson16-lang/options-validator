@@ -298,3 +298,19 @@ Plus (review finding 13, mandatory):
   grep evidence that no production module imports the new code.
 
 Merge timing stays with the owner (standing policy).
+
+## Post-implementation addendum — SPREAD_BLOWOUT disposition (owner-ruled 2026-08-24)
+
+Implemented as PR #72 (merged `aed7af0`; fix round `7a97e82` applied all
+independent-review findings). WP-0's kill criterion fired for real: IV_JUMP
+measured 1.5213% (131/8,611) > 1% on the only adjacent clean pair and was
+removed, not widened. SPREAD_BLOWOUT measured 2.2124% (256/11,571) and
+saturated the headline `status` (15/15 symbols on a clean day).
+
+**Owner disposition A (in-session, 2026-08-24, wording "go with option A"):**
+SPREAD_BLOWOUT stays computed, counted, and receipted, but is demoted from
+the worst-wins headline status (`data.chain_consistency.HEADLINE_DEMOTED_FLAGS`);
+receipts carry a `headline_demoted_flags` marker. Threshold unchanged —
+widening remains forbidden. **Pre-declared review:** if no SPREAD_BLOWOUT
+observation has been acted on after ~30 captured sessions, remove the flag
+per parent plan §10 item 6 rather than tune it.

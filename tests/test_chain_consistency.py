@@ -128,8 +128,28 @@ class ChainConsistencyPureTests(unittest.TestCase):
 
         report = _audit(_chain(), cur)
 
-        self.assertEqual(report.status, "SPREAD_BLOWOUT")
         self.assertEqual(report.flag_counts["SPREAD_BLOWOUT"], 1)
+        self.assertEqual(report.status, "OK")
+        self.assertIn("SPREAD_BLOWOUT", report.headline_demoted_flags)
+
+    def test_spread_blowout_is_demoted_from_headline_status_per_disposition_a(self):
+        # Owner disposition A (2026-08-24): a fired SPREAD_BLOWOUT never
+        # becomes the headline status, but its count/examples stay receipted
+        # and a fired non-demoted flag still wins the headline.
+        spread_only = _chain()
+        spread_only.loc[0, ["bid", "ask"]] = [0.50, 1.50]
+        report = _audit(_chain(), spread_only)
+        self.assertEqual(report.status, "OK")
+        self.assertEqual(report.flag_counts["SPREAD_BLOWOUT"], 1)
+        self.assertEqual(len(report.flag_examples["SPREAD_BLOWOUT"]), 1)
+        self.assertEqual(
+            report.as_dict()["headline_demoted_flags"], ["SPREAD_BLOWOUT"]
+        )
+
+        spread_and_vanished = spread_only.iloc[:1].copy()
+        vanished_report = _audit(_chain(), spread_and_vanished)
+        self.assertEqual(vanished_report.flag_counts["SPREAD_BLOWOUT"], 1)
+        self.assertEqual(vanished_report.status, "STRIKE_VANISHED")
 
     def test_spread_doubling_without_cap_breach_is_not_a_blowout(self):
         cur = _chain()

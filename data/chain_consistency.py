@@ -23,6 +23,15 @@ FLAG_PRECEDENCE = (
     "DELTA_JUMP",
     "SPREAD_BLOWOUT",
 )
+# Owner disposition A (2026-08-24): SPREAD_BLOWOUT is computed, counted, and
+# receipted in full but excluded from the worst-wins headline status — its
+# 2.2124% clean-pair rate saturated `status` (15/15 symbols on the only clean
+# adjacent pair), destroying the field's information value for the corruption
+# flags. The threshold is unchanged; demotion, not widening, is the sanctioned
+# response. Pre-declared review: if no SPREAD_BLOWOUT observation has been
+# acted on after ~30 captured sessions, remove the flag entirely (parent plan
+# §10 item 6) rather than tune it.
+HEADLINE_DEMOTED_FLAGS = ("SPREAD_BLOWOUT",)
 _KEY_COLUMNS = ("expiration", "strike", "right")
 _LIQUIDITY_COLUMNS = ("open_interest", "bid", "ask")
 
@@ -40,6 +49,7 @@ class ConsistencyReport:
     flag_examples: Mapping[str, tuple[Mapping[str, object], ...]]
     not_evaluable_flags: tuple[str, ...]
     condition_not_met_flags: tuple[str, ...]
+    headline_demoted_flags: tuple[str, ...]
 
     def as_dict(self) -> dict[str, object]:
         """JSON-ready deterministic representation for a read-only receipt."""
@@ -56,6 +66,7 @@ class ConsistencyReport:
             },
             "not_evaluable_flags": list(self.not_evaluable_flags),
             "condition_not_met_flags": list(self.condition_not_met_flags),
+            "headline_demoted_flags": list(self.headline_demoted_flags),
         }
 
 
@@ -142,6 +153,8 @@ def _small_move(prev_close: float, cur_close: float) -> bool | None:
 
 def _status(flag_counts: Mapping[str, int], not_evaluable: set[str]) -> str:
     for flag in FLAG_PRECEDENCE:
+        if flag in HEADLINE_DEMOTED_FLAGS:
+            continue
         if flag_counts[flag] > 0:
             return flag
     return "NOT_EVALUABLE" if not_evaluable else "OK"
@@ -172,6 +185,7 @@ def _report(
         flag_examples=frozen_examples,
         not_evaluable_flags=ordered_not_evaluable,
         condition_not_met_flags=ordered_condition_not_met,
+        headline_demoted_flags=HEADLINE_DEMOTED_FLAGS,
     )
 
 
