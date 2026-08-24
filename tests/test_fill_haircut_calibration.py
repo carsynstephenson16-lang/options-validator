@@ -13,6 +13,7 @@ from unittest import mock
 import pandas as pd
 
 from data import thetadata_adapter
+from research.receipts import load_receipt
 from tools import fill_haircut_calibration as study
 
 
@@ -275,21 +276,38 @@ class ReportAndBoundaryTests(unittest.TestCase):
         self.assertEqual(missing, [("SYN", "2026-08-19")])
         self.assertTrue(spots[("SYN", "2026-08-19")]["spot"].isna().all())
 
-    def test_receipt_has_expected_type_no_wall_clock_and_stage_counts(self):
+    def test_emitted_receipt_proves_missing_close_exclusion_and_stage_count(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            _frame("2026-08-19").to_parquet(root / "SYN_2026-08-19.parquet")
+            chain_path = root / "SYN_2026-08-19.parquet"
+            _frame("2026-08-19").to_parquet(chain_path)
+            report_path = root / "report.md"
+            receipt_path = root / "receipt.json"
             with mock.patch.object(
                 study.underlying_closes, "load_closes", return_value=pd.Series(dtype=float)
             ):
-                _report, receipt = study.run_study(
-                    tier1_dir=root,
-                    quarantine_path=root / "none.json",
+                code = study.main(
+                    [
+                        "--tier1-dir",
+                        str(root),
+                        "--report",
+                        str(report_path),
+                        "--receipt",
+                        str(receipt_path),
+                    ]
                 )
-            self.assertEqual(receipt["receipt_type"], "fill_adversity_context")
+            self.assertEqual(code, 0)
+            receipt = load_receipt(receipt_path, expected_type="fill_adversity_context")
             self.assertNotIn("wall_clock", receipt)
-            self.assertIn("stage_counts", receipt)
-            self.assertIn("missing_close_sessions", receipt)
+            self.assertEqual(
+                receipt["missing_close_sessions"]["Tier 1"], [["SYN", "2026-08-19"]]
+            )
+            stage = receipt["stage_counts"]["Tier 1"]["SYN@2026-08-19"]
+            self.assertEqual(stage["admitted_rows"], 1)
+            self.assertTrue(stage["missing_close"])
+            self.assertEqual(stage["missing_close_dropped"], 1)
+            self.assertEqual(receipt["measurements"]["Tier 1"]["decomposition"]["n"], 0)
+            self.assertEqual(receipt["numeric_tables"]["Tier 1"]["decomposition"], {})
 
     def test_cli_is_behaviorally_offline_and_does_not_import_reveal_path(self):
         self.assertNotIn("research.experiments", inspect.getsource(study))

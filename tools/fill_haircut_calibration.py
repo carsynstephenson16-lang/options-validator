@@ -210,6 +210,7 @@ def prepare_frame(
         "admitted_rows": int(len(admitted)),
         "excluded_from_drift": excluded,
         "missing_close": False,
+        "missing_close_dropped": 0,
     }
     admitted["tier"] = tier_name
     admitted["mid"] = (admitted["bid"] + admitted["ask"]) / 2.0
@@ -305,6 +306,7 @@ def load_tier(
         result.frames, result.missing_close_sessions = attach_tier1_spots(result.frames)
         for key in result.missing_close_sessions:
             result.stage_counts[key]["missing_close"] = True
+            result.stage_counts[key]["missing_close_dropped"] = int(len(result.frames[key]))
     if tier_name == "Tier 2":
         result.warning_counts, result.warning_profile_available = _warning_profile(
             Path(audit_path), result.sessions
