@@ -836,13 +836,20 @@ COMPOSITE_GRADE_B_MIN_ALIGNED = 2 # aligned non-neutral angles needed for grade 
 
 # ---------------------------------------------------------------------------
 # Chain-consistency shadow flags 2026-08-24. LLM-proposed, not owner-typed;
-# display-only — bind no hypothesis, verdict, gate, or trigger. Delta's
-# threshold is a corruption-target Assumption per brief 22 WP-0 (set by the
-# smallest corruption it must catch; clean-pair rates are recorded in the PR).
-# IV_JUMP was removed under WP-0's pre-declared kill criterion: on the only
-# available adjacent clean pair (2026-08-19 to 2026-08-20), it hit 131 of
-# 8,611 evaluated yesterday-admitted contracts (1.5213%, above 1%). It was
-# removed rather than widened.
+# display-only — bind no hypothesis, verdict, gate, or trigger.
+# CONSISTENCY_DELTA_JUMP_ABS=0.30 is a corruption-target Assumption per brief
+# 22 WP-0. CONSISTENCY_UNDERLYING_SMALL_MOVE=0.01 is an Assumption defining
+# "near-flat" conditioning. CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO=2.0 is an
+# Assumption defining a blowout relative to yesterday.
+# CONSISTENCY_MAX_EXAMPLES=20 is receipt ergonomics. Frozen all-pair
+# observations, columns GAP/EXPIRY/STRIKE/DELTA/SPREAD:
+#   2026-08-14->2026-08-19 (non-adjacent): 15/0/0/0/596
+#   2026-08-14->2026-08-20 (non-adjacent): 15/0/0/0/582
+#   2026-08-19->2026-08-20 (adjacent):      0/0/0/0/256
+# On that only adjacent clean pair, evaluated rates were GAP 0/15, EXPIRY
+# 0/237, STRIKE 0/11,571, DELTA 0/8,611, and SPREAD 256/11,571 (2.2124%).
+# IV_JUMP was removed under WP-0's pre-declared kill criterion after hitting
+# 131/8,611 (1.5213%, above 1%); its threshold was not widened.
 # ---------------------------------------------------------------------------
 CONSISTENCY_DELTA_JUMP_ABS = 0.30
 CONSISTENCY_UNDERLYING_SMALL_MOVE = 0.01

@@ -39,6 +39,7 @@ class ConsistencyReport:
     evaluated_counts: Mapping[str, int]
     flag_examples: Mapping[str, tuple[Mapping[str, object], ...]]
     not_evaluable_flags: tuple[str, ...]
+    condition_not_met_flags: tuple[str, ...]
 
     def as_dict(self) -> dict[str, object]:
         """JSON-ready deterministic representation for a read-only receipt."""
@@ -54,6 +55,7 @@ class ConsistencyReport:
                 for flag, examples in self.flag_examples.items()
             },
             "not_evaluable_flags": list(self.not_evaluable_flags),
+            "condition_not_met_flags": list(self.condition_not_met_flags),
         }
 
 
@@ -153,11 +155,13 @@ def _report(
     evaluated: dict[str, int],
     examples: dict[str, list[dict[str, object]]],
     not_evaluable: set[str],
+    condition_not_met: set[str],
 ) -> ConsistencyReport:
     frozen_examples = MappingProxyType({flag: _bounded(examples[flag]) for flag in FLAG_PRECEDENCE})
     frozen_counts = MappingProxyType(dict(counts))
     frozen_evaluated = MappingProxyType(dict(evaluated))
     ordered_not_evaluable = tuple(flag for flag in FLAG_PRECEDENCE if flag in not_evaluable)
+    ordered_condition_not_met = tuple(flag for flag in FLAG_PRECEDENCE if flag in condition_not_met)
     return ConsistencyReport(
         prev_session=prev_session,
         cur_session=cur_session,
@@ -167,6 +171,7 @@ def _report(
         evaluated_counts=frozen_evaluated,
         flag_examples=frozen_examples,
         not_evaluable_flags=ordered_not_evaluable,
+        condition_not_met_flags=ordered_condition_not_met,
     )
 
 
@@ -194,6 +199,7 @@ def audit_pair(
     evaluated = {flag: 0 for flag in FLAG_PRECEDENCE}
     examples: dict[str, list[dict[str, object]]] = {flag: [] for flag in FLAG_PRECEDENCE}
     not_evaluable: set[str] = set()
+    condition_not_met: set[str] = set()
 
     if cur_iso not in sessions or sessions.index(cur_iso) == 0:
         not_evaluable.add("GAP_SESSION")
@@ -214,6 +220,7 @@ def audit_pair(
             evaluated=evaluated,
             examples=examples,
             not_evaluable=not_evaluable,
+            condition_not_met=condition_not_met,
         )
 
     previous = _prepare_chain(prev_chain, context="previous chain")
@@ -249,31 +256,31 @@ def audit_pair(
         not_evaluable.add("DELTA_JUMP")
     elif not structural_ready:
         not_evaluable.add("DELTA_JUMP")
+    elif _missing_columns(previous, current, required=("delta",)):
+        not_evaluable.add("DELTA_JUMP")
+    elif not small_move:
+        condition_not_met.add("DELTA_JUMP")
     else:
-        if _missing_columns(previous, current, required=("delta",)):
-            not_evaluable.add("DELTA_JUMP")
-        if small_move:
-            for _, prev_row in previous_admitted.sort_values(
-                list(_KEY_COLUMNS), kind="stable"
-            ).iterrows():
-                cur_row = current_by_key.get(_contract_key(prev_row))
-                if cur_row is None:
-                    continue
-                if "DELTA_JUMP" not in not_evaluable:
-                    prev_delta = _numeric(prev_row, "delta")
-                    cur_delta = _numeric(cur_row, "delta")
-                    if prev_delta is not None and cur_delta is not None:
-                        evaluated["DELTA_JUMP"] += 1
-                        if abs(cur_delta - prev_delta) > config.CONSISTENCY_DELTA_JUMP_ABS:
-                            counts["DELTA_JUMP"] += 1
-                            examples["DELTA_JUMP"].append(
-                                _contract_example(
-                                    prev_row,
-                                    previous_delta=prev_delta,
-                                    current_delta=cur_delta,
-                                    absolute_change=abs(cur_delta - prev_delta),
-                                )
-                            )
+        for _, prev_row in previous_admitted.sort_values(
+            list(_KEY_COLUMNS), kind="stable"
+        ).iterrows():
+            cur_row = current_by_key.get(_contract_key(prev_row))
+            if cur_row is None:
+                continue
+            prev_delta = _numeric(prev_row, "delta")
+            cur_delta = _numeric(cur_row, "delta")
+            if prev_delta is not None and cur_delta is not None:
+                evaluated["DELTA_JUMP"] += 1
+                if abs(cur_delta - prev_delta) > config.CONSISTENCY_DELTA_JUMP_ABS:
+                    counts["DELTA_JUMP"] += 1
+                    examples["DELTA_JUMP"].append(
+                        _contract_example(
+                            prev_row,
+                            previous_delta=prev_delta,
+                            current_delta=cur_delta,
+                            absolute_change=abs(cur_delta - prev_delta),
+                        )
+                    )
 
     if not structural_ready or _missing_columns(current, required=("bid", "ask")):
         not_evaluable.add("SPREAD_BLOWOUT")
@@ -315,4 +322,5 @@ def audit_pair(
         evaluated=evaluated,
         examples=examples,
         not_evaluable=not_evaluable,
+        condition_not_met=condition_not_met,
     )

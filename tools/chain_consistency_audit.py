@@ -100,6 +100,8 @@ def _constants() -> dict[str, float | int]:
         "CONSISTENCY_UNDERLYING_SMALL_MOVE": config.CONSISTENCY_UNDERLYING_SMALL_MOVE,
         "CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO": config.CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO,
         "CONSISTENCY_MAX_EXAMPLES": config.CONSISTENCY_MAX_EXAMPLES,
+        "MAX_SPREAD_PCT": config.MAX_SPREAD_PCT,
+        "MIN_OPEN_INTEREST": config.MIN_OPEN_INTEREST,
     }
 
 
@@ -253,6 +255,8 @@ def main(argv: list[str] | None = None, *, root: Path = REPO_ROOT) -> int:
         pair = None
         if args.pair is not None:
             pair = tuple(date.fromisoformat(value).isoformat() for value in args.pair)
+            if pair[0] >= pair[1]:
+                raise ValueError("--pair PREV must be earlier than CUR")
         payload, latest_session = run_audit(root=root, pair=pair)
         receipt = make_receipt(RECEIPT_TYPE, payload)
         out_dir = _output_dir(Path(root), args.out_dir)

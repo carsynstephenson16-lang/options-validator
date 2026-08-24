@@ -111,6 +111,17 @@ class ChainConsistencyPureTests(unittest.TestCase):
         self.assertEqual(report.status, "DELTA_JUMP")
         self.assertEqual(report.flag_counts["DELTA_JUMP"], 1)
 
+    def test_large_underlying_move_visibly_marks_delta_condition_not_met(self):
+        cur = _chain()
+        cur.loc[0, "delta"] = -0.75
+
+        report = _audit(_chain(), cur, prev_close=100.0, cur_close=102.0)
+
+        self.assertEqual(report.status, "OK")
+        self.assertEqual(report.evaluated_counts["DELTA_JUMP"], 0)
+        self.assertEqual(report.condition_not_met_flags, ("DELTA_JUMP",))
+        self.assertEqual(report.as_dict()["condition_not_met_flags"], ["DELTA_JUMP"])
+
     def test_spread_blowout_requires_double_prior_fraction_and_max_spread_breach(self):
         cur = _chain()
         cur.loc[0, ["bid", "ask"]] = [0.50, 1.50]
@@ -119,6 +130,26 @@ class ChainConsistencyPureTests(unittest.TestCase):
 
         self.assertEqual(report.status, "SPREAD_BLOWOUT")
         self.assertEqual(report.flag_counts["SPREAD_BLOWOUT"], 1)
+
+    def test_spread_doubling_without_cap_breach_is_not_a_blowout(self):
+        cur = _chain()
+        cur.loc[0, ["bid", "ask"]] = [0.9505, 1.0495]
+
+        report = _audit(_chain(), cur)
+
+        self.assertEqual(report.status, "OK")
+        self.assertEqual(report.flag_counts["SPREAD_BLOWOUT"], 0)
+
+    def test_spread_cap_breach_without_doubling_is_not_a_blowout(self):
+        prev = _chain()
+        prev.loc[0, ["bid", "ask"]] = [0.96, 1.04]
+        cur = _chain()
+        cur.loc[0, ["bid", "ask"]] = [0.94, 1.06]
+
+        report = _audit(prev, cur)
+
+        self.assertEqual(report.status, "OK")
+        self.assertEqual(report.flag_counts["SPREAD_BLOWOUT"], 0)
 
     def test_ok_has_no_fired_flags(self):
         report = _audit()
@@ -251,6 +282,16 @@ class ChainConsistencyCliTests(unittest.TestCase):
         ):
             return self.cli.main(["--out-dir", str(self.out_dir), *(args or [])], root=self.root)
 
+    def _run_with_real_closes(self, args: list[str] | None = None) -> int:
+        from data import underlying_closes
+
+        close_dir = self.root / ".cache" / "underlying"
+        with (
+            mock.patch.object(underlying_closes, "CACHE_DIR", str(close_dir)),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            return self.cli.main(["--out-dir", str(self.out_dir), *(args or [])], root=self.root)
+
     def test_receipt_is_deterministic_and_loads_with_expected_type(self):
         from research.hashing import canonical_json
         from research.receipts import load_receipt
@@ -295,6 +336,28 @@ class ChainConsistencyCliTests(unittest.TestCase):
             next(self.out_dir.glob("*.json")), expected_type="chain_consistency_audit"
         )
         self.assertEqual(receipt["symbols"]["SYN"]["report"]["status"], "GAP_SESSION")
+
+    def test_explicit_pair_mode_audits_the_requested_sessions(self):
+        from research.receipts import load_receipt
+
+        older = "2026-08-18"
+        self._write_pair(sessions=(older, PREV, CUR))
+
+        self.assertEqual(self._run_with_real_closes(["--pair", older, PREV]), 0)
+
+        receipt = load_receipt(
+            next(self.out_dir.glob("*.json")), expected_type="chain_consistency_audit"
+        )
+        self.assertEqual(
+            receipt["symbols"]["SYN"]["pair"],
+            {"previous_session": older, "current_session": PREV},
+        )
+
+    def test_pair_mode_rejects_reversed_session_order(self):
+        self._write_pair()
+
+        self.assertEqual(self._run(["--pair", CUR, PREV]), 1)
+        self.assertEqual(list(self.out_dir.glob("*.json")), [])
 
     def test_one_session_symbol_reports_insufficient_history(self):
         self._write_pair(symbol="ONE", sessions=(CUR,))
@@ -341,6 +404,27 @@ class ChainConsistencyCliTests(unittest.TestCase):
         self.assertEqual(close_record["path"], ".cache/underlying/SYN.parquet")
         self.assertEqual(
             close_record["sha256"], hashlib.sha256(close_path.read_bytes()).hexdigest()
+        )
+
+    def test_receipt_binds_every_load_bearing_consistency_constant(self):
+        from research.receipts import load_receipt
+
+        self._write_pair()
+        self.assertEqual(self._run(), 0)
+        receipt = load_receipt(
+            next(self.out_dir.glob("*.json")), expected_type="chain_consistency_audit"
+        )
+
+        self.assertEqual(
+            receipt["constants"],
+            {
+                "CONSISTENCY_DELTA_JUMP_ABS": 0.30,
+                "CONSISTENCY_MAX_EXAMPLES": 20,
+                "CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO": 2.0,
+                "CONSISTENCY_UNDERLYING_SMALL_MOVE": 0.01,
+                "MAX_SPREAD_PCT": 0.10,
+                "MIN_OPEN_INTEREST": 100,
+            },
         )
 
     def test_output_dir_rejects_traversal_outside_permitted_root(self):
@@ -401,14 +485,15 @@ class ChainConsistencyCliTests(unittest.TestCase):
         from data import thetadata_adapter, underlying_closes
 
         self._write_pair()
+        close_dir = self.root / ".cache" / "underlying"
         with (
             mock.patch.object(socket, "socket", side_effect=AssertionError("network attempted")),
+            mock.patch.object(underlying_closes, "CACHE_DIR", str(close_dir)),
             mock.patch.object(underlying_closes, "fetch_underlying_eod") as fetch_eod,
             mock.patch.object(underlying_closes, "fetch_underlying_eod_av") as fetch_av,
             mock.patch.object(underlying_closes, "fetch_underlying_eod_yahoo") as fetch_yahoo,
             mock.patch.object(thetadata_adapter, "get_eod_chain") as get_chain,
             mock.patch.object(thetadata_adapter, "blind_cache_chain") as blind_cache,
-            mock.patch.object(self.cli, "load_closes", side_effect=self._closes),
             contextlib.redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(self.cli.main(["--out-dir", str(self.out_dir)], root=self.root), 0)
