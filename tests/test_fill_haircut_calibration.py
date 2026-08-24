@@ -299,9 +299,7 @@ class ReportAndBoundaryTests(unittest.TestCase):
             self.assertEqual(code, 0)
             receipt = load_receipt(receipt_path, expected_type="fill_adversity_context")
             self.assertNotIn("wall_clock", receipt)
-            self.assertEqual(
-                receipt["missing_close_sessions"]["Tier 1"], [["SYN", "2026-08-19"]]
-            )
+            self.assertEqual(receipt["missing_close_sessions"]["Tier 1"], [["SYN", "2026-08-19"]])
             stage = receipt["stage_counts"]["Tier 1"]["SYN@2026-08-19"]
             self.assertEqual(stage["admitted_rows"], 1)
             self.assertTrue(stage["missing_close"])
