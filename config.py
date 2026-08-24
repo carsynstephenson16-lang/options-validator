@@ -850,6 +850,13 @@ COMPOSITE_GRADE_B_MIN_ALIGNED = 2 # aligned non-neutral angles needed for grade 
 # 0/237, STRIKE 0/11,571, DELTA 0/8,611, and SPREAD 256/11,571 (2.2124%).
 # IV_JUMP was removed under WP-0's pre-declared kill criterion after hitting
 # 131/8,611 (1.5213%, above 1%); its threshold was not widened.
+# Owner disposition A (2026-08-24, in-session): SPREAD_BLOWOUT stays computed
+# and fully receipted but is demoted from the worst-wins headline status (its
+# 2.2124% clean-pair rate read status=SPREAD_BLOWOUT on 15/15 symbols on a
+# clean day). Threshold unchanged. Pre-declared review: if no SPREAD_BLOWOUT
+# observation has been acted on after ~30 captured sessions, remove the flag
+# (plan §10 item 6) rather than tune it. See
+# data.chain_consistency.HEADLINE_DEMOTED_FLAGS.
 # ---------------------------------------------------------------------------
 CONSISTENCY_DELTA_JUMP_ABS = 0.30
 CONSISTENCY_UNDERLYING_SMALL_MOVE = 0.01
