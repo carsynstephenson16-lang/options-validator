@@ -1,0 +1,35 @@
+{
+  "as_of": "2026-08-21",
+  "hypotheses": {
+    "H10": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING",
+      "unobserved_evaluation_sessions": {
+        "after_evaluation_session": "2026-07-27",
+        "before_evaluation_session": "2026-08-19"
+      }
+    },
+    "H5": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H6": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H7": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H8": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    }
+  },
+  "run_date": "2026-08-24"
+}
