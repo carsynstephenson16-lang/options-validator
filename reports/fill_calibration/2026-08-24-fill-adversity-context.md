@@ -1,6 +1,6 @@
 # Fill-adversity context study
 
-Max as-of session: 2026-08-24.
+Cache max-as-of session: 2026-08-24.
 
 ## Scope and honesty statement
 
@@ -16,7 +16,7 @@ At least one qualifying bucket is out of scale with the frozen haircut under the
 
 ### Tier 1
 
-Max as-of session: 2026-08-24; n=35216.
+Max as-of session: 2026-08-20; n=35216.
 
 | bucket | n | half-spread share p50 | haircut share p50 | cent-rounding share p50 |
 |---|---:|---:|---:|---:|
@@ -76,7 +76,7 @@ Max as-of session: 2026-07-31; n=2236735.
 
 ### Tier 1
 
-Max as-of session: 2026-08-24; n=10707.
+Max as-of session: 2026-08-20; n=10707.
 
 | bucket | n | p50 | p75 | p90 | p95 | p99 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -142,7 +142,7 @@ Up/down/flat: {'up': 795271, 'down': 906162, 'flat': 11890}. The frozen haircut 
 
 ### Tier 1
 
-Max as-of session: 2026-08-24; n=3909. One-sided adverse fraction using `A_ENTRY_CREDIT_TOLERANCE`: 0.35558966487592736.
+Max as-of session: 2026-08-20; n=3909. One-sided adverse fraction using `A_ENTRY_CREDIT_TOLERANCE`: 0.35558966487592736.
 
 | bucket | n | p50 | p75 | p90 | p95 | p99 | adverse fraction |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -201,7 +201,7 @@ The one-sided adverse fraction below uses the configured `A_ENTRY_CREDIT_TOLERAN
 
 ### Tier 1
 
-Max as-of session: 2026-08-24; n=0. bid_size p50/p90=unavailable/unavailable; ask_size p50/p90=unavailable/unavailable; fraction bid_size >= 1=unavailable; fraction ask_size >= 1=unavailable; size-weighted mean spread fraction=unavailable.
+Max as-of session: 2026-08-20; n=0. bid_size p50/p90=unavailable/unavailable; ask_size p50/p90=unavailable/unavailable; fraction bid_size >= 1=unavailable; fraction ask_size >= 1=unavailable; size-weighted mean spread fraction=unavailable.
 
 Tier 1 has no touch-size fields; not applicable.
 
@@ -237,7 +237,12 @@ Quoted size is not fill evidence; it bounds 1-lot plausibility only. Owner rulin
 
 ## Data quality and source lineage
 
-Tier-2 staleness filtering keeps timestamps on the row's session date between 09:30 and 16:15 ET. Rows dropped at each stage and sessions losing more than half their admitted rows are listed in the receipt. The Tier-2 full-audit warning profile is consumed and warning counts are recorded per used session. Missing Tier-1 raw closes exclude the affected session from moneyness tables; no interpolation is performed.
+Tier-2 staleness filtering keeps timestamps on the row's session date between 09:30 and 16:15 ET. Rows dropped at each stage and sessions losing more than half their admitted rows are listed in the receipt. The Tier-2 full-audit warning profile is consumed and warning counts are recorded per used session. Cache max-as-of is distinct from the latest measurement-eligible session used by the stamped tables.
+Tier 1 measurement-eligible latest session: 2026-08-20.
+Tier 2 measurement-eligible latest session: 2026-07-31.
+Missing Tier-1 raw closes exclude the affected session from moneyness tables; no interpolation is performed.
+
+Tier 1 missing raw close partitions: AMD@2026-08-24, AMZN@2026-08-24, AVGO@2026-08-24, CEG@2026-08-24, CRWV@2026-08-24, ET@2026-08-24, IREN@2026-08-24, MSFT@2026-08-24, NOW@2026-08-24, NVDA@2026-08-24, PLTR@2026-08-24, SMCI@2026-08-24, TEM@2026-08-24, USAR@2026-08-24, VST@2026-08-24 (15 partitions; 11863 admitted rows excluded from decomposition).
 
 ## What this is not
 
@@ -250,7 +255,7 @@ overnight-drift definition; headline tables remain pooled across symbols.
 
 ### Tier 1
 
-Max as-of session: 2026-08-24; symbol breakdown is appendix-only.
+Max as-of session: 2026-08-20; symbol breakdown is appendix-only.
 
 | symbol / DTE band | n | p50 | p75 | p90 | p95 | p99 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -422,4 +427,4 @@ Max as-of session: 2026-07-31; symbol breakdown is appendix-only.
 
 Exceedance fractions are appendix-only and must not be read as headline findings. They are saturated in the available dollar-priced option data: a one-cent dollar threshold is often one tick, so its fraction is a tick-size artifact. Tier 1 `|Δmid|/mid > haircut`: 65.8%. Tier 2 `|Δmid|/mid > haircut`: 91.6%. Tier 1 `|Δmid| > $0.01`: 98.1%; Tier 2 `|Δmid| > $0.01`: 98.9%.
 
-Receipt hash: 4614cb4238d5ad0253cbec1217b5b5fcee29879bff739619c0ee8a214e613ec5.
+Receipt hash: b6191b02abee55b90d7dae4ff3d91e99ccffaf4d2b20a08a35ca0a21a1882904.

@@ -103,9 +103,13 @@ def _parse_path(path: Path) -> tuple[str, str] | None:
 
 
 def _load_quarantine(path: Path) -> set[tuple[str, str]]:
-    if not Path(path).is_file():
-        return set()
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"quarantine registry missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"unreadable v2 quarantine registry: {path}") from exc
     if not isinstance(payload, dict) or payload.get("schema") != "v2-partition-quarantine/v1":
         raise ValueError(f"invalid v2 quarantine registry: {path}")
     entries = payload.get("entries")
@@ -113,12 +117,13 @@ def _load_quarantine(path: Path) -> set[tuple[str, str]]:
         raise ValueError(f"invalid v2 quarantine entries: {path}")
     result = set()
     for entry in entries:
-        if (
+        if not (
             isinstance(entry, dict)
             and isinstance(entry.get("symbol"), str)
             and isinstance(entry.get("session"), str)
         ):
-            result.add((entry["symbol"].upper(), entry["session"]))
+            raise ValueError(f"invalid v2 quarantine entry: {path}")
+        result.add((entry["symbol"].upper(), entry["session"]))
     return result
 
 
@@ -1036,6 +1041,43 @@ def _table_with_stamp(table: str, max_session: str | None, n: int) -> str:
     return f"Max as-of session: {max_session or 'none'}; n={n}.\n\n{table}"
 
 
+def _measurement_asof(receipt: dict, tier: str) -> str | None:
+    candidates: list[str] = []
+    for key, stats in receipt.get("stage_counts", {}).get(tier, {}).items():
+        if not isinstance(key, str) or "@" not in key or not isinstance(stats, dict):
+            continue
+        if tier == "Tier 1" and stats.get("missing_close"):
+            continue
+        if int(stats.get("admitted_rows", 0)) <= 0:
+            continue
+        candidates.append(key.rsplit("@", 1)[1])
+    return max(candidates) if candidates else None
+
+
+def _missing_close_facts(receipt: dict) -> dict[str, dict]:
+    result: dict[str, dict] = {}
+    sessions_by_tier = receipt.get("missing_close_sessions", {})
+    stages_by_tier = receipt.get("stage_counts", {})
+    for tier, sessions in sessions_by_tier.items():
+        partitions: list[str] = []
+        excluded_rows = 0
+        stages = stages_by_tier.get(tier, {})
+        for pair in sessions:
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                continue
+            symbol, session = str(pair[0]), str(pair[1])
+            key = f"{symbol}@{session}"
+            partitions.append(key)
+            stats = stages.get(key, {})
+            excluded_rows += int(stats.get("missing_close_dropped", 0))
+        result[tier] = {
+            "partitions": partitions,
+            "count": len(partitions),
+            "excluded_rows": excluded_rows,
+        }
+    return result
+
+
 def _symbol_dte_appendix(data: dict) -> str:
     lines = [
         f"### {data.get('label', 'Tier')}\n",
@@ -1069,9 +1111,28 @@ def render_report(payload: dict) -> str:
     tier2_headline = tier2.get("headline", "INSUFFICIENT")
     tier1_exceedance = tier1.get("exceedance", "unavailable")
     tier2_exceedance = tier2.get("exceedance", "unavailable")
+    measurement_asof = payload.get("measurement_asof", {})
+    missing_close = payload.get("missing_close", {})
+    missing_lines = []
+    for tier in ("Tier 1", "Tier 2"):
+        details = missing_close.get(tier, {})
+        partitions = details.get("partitions", [])
+        if partitions:
+            partition_count = details.get("count", len(partitions))
+            excluded_rows = details.get("excluded_rows", 0)
+            partition_word = "partition" if partition_count == 1 else "partitions"
+            row_word = "row" if excluded_rows == 1 else "rows"
+            missing_lines.append(
+                f"{tier} missing raw close partitions: {', '.join(partitions)} "
+                f"({partition_count} {partition_word}; "
+                f"{excluded_rows} admitted {row_word} excluded from decomposition)."
+            )
+    missing_disclosure = (
+        "\n".join(missing_lines) or "No missing raw close partitions were recorded."
+    )
     return f"""# Fill-adversity context study
 
-Max as-of session: {max_asof}.
+Cache max-as-of session: {max_asof}.
 
 ## Scope and honesty statement
 
@@ -1121,7 +1182,12 @@ Quoted size is not fill evidence; it bounds 1-lot plausibility only. {TIER2_RULI
 
 ## Data quality and source lineage
 
-Tier-2 staleness filtering keeps timestamps on the row's session date between 09:30 and 16:15 ET. Rows dropped at each stage and sessions losing more than half their admitted rows are listed in the receipt. The Tier-2 full-audit warning profile is consumed and warning counts are recorded per used session. Missing Tier-1 raw closes exclude the affected session from moneyness tables; no interpolation is performed.
+Tier-2 staleness filtering keeps timestamps on the row's session date between 09:30 and 16:15 ET. Rows dropped at each stage and sessions losing more than half their admitted rows are listed in the receipt. The Tier-2 full-audit warning profile is consumed and warning counts are recorded per used session. Cache max-as-of is distinct from the latest measurement-eligible session used by the stamped tables.
+Tier 1 measurement-eligible latest session: {measurement_asof.get("Tier 1", "none")}.
+Tier 2 measurement-eligible latest session: {measurement_asof.get("Tier 2", "none")}.
+Missing Tier-1 raw closes exclude the affected session from moneyness tables; no interpolation is performed.
+
+{missing_disclosure}
 
 ## What this is not
 
@@ -1261,9 +1327,12 @@ def run_study(
 
 
 def _report_payload(data: dict[str, TieredData], measurements: dict, receipt: dict) -> dict:
+    measurement_asof = {tier: _measurement_asof(receipt, tier) for tier in measurements}
     result = {
         "max_asof": max(item.max_session for item in data.values() if item.max_session),
         "receipt_hash": receipt["receipt_hash"],
+        "measurement_asof": measurement_asof,
+        "missing_close": _missing_close_facts(receipt),
         "finding": _success_finding(
             measurements, int(receipt["study_parameters"]["min_bucket_obs"])
         ),
@@ -1275,12 +1344,12 @@ def _report_payload(data: dict[str, TieredData], measurements: dict, receipt: di
             "headline": _headline_from_measurement(measure, config.SLIPPAGE_HAIRCUT),
             "decomposition_table": _table_with_stamp(
                 measure["decomposition"]["table"],
-                item.max_session,
+                measurement_asof[tier],
                 measure["decomposition"]["n"],
             ),
             "drift_table": _table_with_stamp(
                 _headline_from_measurement(measure, config.SLIPPAGE_HAIRCUT),
-                item.max_session,
+                measurement_asof[tier],
                 drift["n"],
             ),
             "up_down_flat": drift["up_down_flat"],
@@ -1296,12 +1365,12 @@ def _report_payload(data: dict[str, TieredData], measurements: dict, receipt: di
     touch_lines = []
     for tier, measure in measurements.items():
         two_leg_lines.append(
-            f"### {tier}\n\nMax as-of session: {data[tier].max_session}; n={measure['two_leg']['n']}. One-sided adverse fraction using `A_ENTRY_CREDIT_TOLERANCE`: {measure['two_leg']['adverse_fraction'] if measure['two_leg']['n'] else 'unavailable'}.\n"
+            f"### {tier}\n\nMax as-of session: {measurement_asof[tier] or 'none'}; n={measure['two_leg']['n']}. One-sided adverse fraction using `A_ENTRY_CREDIT_TOLERANCE`: {measure['two_leg']['adverse_fraction'] if measure['two_leg']['n'] else 'unavailable'}.\n"
         )
         two_leg_lines.append(measure["two_leg"].get("table", "INSUFFICIENT\n"))
         depth = measure["touch_depth"]
         touch_lines.append(
-            f"### {tier}\n\nMax as-of session: {data[tier].max_session}; n={depth['n']}. "
+            f"### {tier}\n\nMax as-of session: {measurement_asof[tier] or 'none'}; n={depth['n']}. "
             f"bid_size p50/p90={depth.get('bid_size_p50', 'unavailable')}/{depth.get('bid_size_p90', 'unavailable')}; "
             f"ask_size p50/p90={depth.get('ask_size_p50', 'unavailable')}/{depth.get('ask_size_p90', 'unavailable')}; "
             f"fraction bid_size >= 1={depth.get('bid_ge_one', 'unavailable')}; "
@@ -1315,7 +1384,7 @@ def _report_payload(data: dict[str, TieredData], measurements: dict, receipt: di
         _symbol_dte_appendix(
             {
                 "label": tier,
-                "max_asof": data[tier].max_session,
+                "max_asof": measurement_asof[tier],
                 "by_symbol_dte": result[tier.lower().replace(" ", "")]["by_symbol_dte"],
             }
         )
