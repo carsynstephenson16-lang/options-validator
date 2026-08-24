@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import config  # noqa: E402
+from data import underlying_closes  # noqa: E402
 from data.chain_consistency import audit_pair  # noqa: E402
 from data.underlying_closes import load_closes  # noqa: E402
 from research.receipts import make_receipt, write_immutable_receipt  # noqa: E402
@@ -102,6 +103,13 @@ def _constants() -> dict[str, float | int]:
     }
 
 
+def _underlying_close_path(symbol: str, *, root: Path) -> Path:
+    cache_dir = Path(underlying_closes.CACHE_DIR)
+    if not cache_dir.is_absolute():
+        cache_dir = root / cache_dir
+    return cache_dir / f"{symbol}.parquet"
+
+
 def _record_for_pair(
     symbol: str,
     prev_session: str,
@@ -113,6 +121,7 @@ def _record_for_pair(
 ) -> dict[str, object]:
     prev_path = chain_dir / f"{symbol}_{prev_session}.parquet"
     cur_path = chain_dir / f"{symbol}_{cur_session}.parquet"
+    close_path = _underlying_close_path(symbol, root=root)
     previous = pd.read_parquet(prev_path)
     current = pd.read_parquet(cur_path)
     closes = load_closes(symbol, prev_session, cur_session, allow_oos=True)
@@ -131,6 +140,7 @@ def _record_for_pair(
         "input_files": {
             "previous_chain": _file_record(prev_path, root=root),
             "current_chain": _file_record(cur_path, root=root),
+            "underlying_close": _file_record(close_path, root=root),
         },
         "report": report.as_dict(),
     }
@@ -148,18 +158,11 @@ def build_receipt_payload(
     symbols: dict[str, dict[str, object]],
     *,
     calendar_sessions: Sequence[str],
+    max_as_of_session: str,
 ) -> dict[str, object]:
-    max_as_of = max(
-        (
-            str(record["report"]["max_as_of_session"])
-            for record in symbols.values()
-            if record.get("status") == "AUDITED"
-        ),
-        default=None,
-    )
     return {
         "receipt_type_note": "display-only chain-consistency observations; no gate, rank, or trade authority",
-        "max_as_of_session": max_as_of,
+        "max_as_of_session": max_as_of_session,
         "constants": _constants(),
         "constant_provenance": (
             "Brief 22 WP-0 corruption-target assumptions; IV_JUMP was removed after its pre-declared 1% clean-rate kill criterion failed."
@@ -171,14 +174,24 @@ def build_receipt_payload(
 
 
 def _output_dir(root: Path, requested: str | None) -> Path:
+    root = Path(root).resolve()
     relative = DEFAULT_OUT_DIR if requested is None else Path(requested)
     output = relative if relative.is_absolute() else root / relative
-    allowed = (root / DEFAULT_OUT_DIR, root / OPT_IN_REPORTS_DIR)
-    if not any(output == candidate or candidate in output.parents for candidate in allowed):
+    canonical_output = output.resolve()
+    allowed_paths = tuple(root / candidate for candidate in (DEFAULT_OUT_DIR, OPT_IN_REPORTS_DIR))
+    allowed = tuple(candidate.resolve() for candidate in allowed_paths)
+    if any(path != candidate for path, candidate in zip(allowed_paths, allowed, strict=True)):
         raise ValueError(
             "--out-dir must be under .tmp/chain_consistency/ or reports/chain_consistency/"
         )
-    return output
+    if not any(
+        canonical_output == candidate or canonical_output.is_relative_to(candidate)
+        for candidate in allowed
+    ):
+        raise ValueError(
+            "--out-dir must be under .tmp/chain_consistency/ or reports/chain_consistency/"
+        )
+    return canonical_output
 
 
 def run_audit(
@@ -214,7 +227,15 @@ def run_audit(
             root=root,
             calendar_sessions=calendar,
         )
-    return build_receipt_payload(symbols, calendar_sessions=calendar), max(all_sessions)
+    latest_session = max(all_sessions)
+    return (
+        build_receipt_payload(
+            symbols,
+            calendar_sessions=calendar,
+            max_as_of_session=latest_session,
+        ),
+        latest_session,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

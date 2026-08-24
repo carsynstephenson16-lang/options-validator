@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import socket
 import subprocess
@@ -230,6 +231,14 @@ class ChainConsistencyCliTests(unittest.TestCase):
             if session == CUR and cur is not None:
                 frame = cur
             frame.to_parquet(self.chain_dir / f"{symbol}_{session}.parquet", index=False)
+        close_dir = self.root / ".cache" / "underlying"
+        close_dir.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            {
+                "date": list(sessions),
+                "close": [100.0 + index * 0.5 for index, _ in enumerate(sessions)],
+            }
+        ).to_parquet(close_dir / f"{symbol}.parquet", index=False)
 
     def _closes(self, _symbol: str, _start: str, _end: str, *, allow_oos: bool):
         self.assertTrue(allow_oos)
@@ -296,6 +305,76 @@ class ChainConsistencyCliTests(unittest.TestCase):
             next(self.out_dir.glob("*.json")), expected_type="chain_consistency_audit"
         )
         self.assertEqual(receipt["symbols"]["ONE"]["status"], "INSUFFICIENT_HISTORY")
+
+    def test_singleton_receipt_max_as_of_session_covers_available_input(self):
+        self._write_pair(symbol="ONE", sessions=(CUR,))
+        self.assertEqual(self._run(), 0)
+        from research.receipts import load_receipt
+
+        receipt = load_receipt(
+            next(self.out_dir.glob("*.json")), expected_type="chain_consistency_audit"
+        )
+        self.assertEqual(receipt["max_as_of_session"], CUR)
+
+    def test_receipt_binds_the_exact_cached_underlying_close_input(self):
+        from data import underlying_closes
+        from research.receipts import load_receipt
+
+        self._write_pair()
+        close_dir = self.root / ".cache" / "underlying"
+        close_dir.mkdir(parents=True, exist_ok=True)
+        close_path = close_dir / "SYN.parquet"
+        pd.DataFrame({"date": [PREV, CUR], "close": [100.0, 100.5]}).to_parquet(
+            close_path, index=False
+        )
+
+        with (
+            mock.patch.object(underlying_closes, "CACHE_DIR", str(close_dir)),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(self.cli.main(["--out-dir", str(self.out_dir)], root=self.root), 0)
+
+        receipt = load_receipt(
+            next(self.out_dir.glob("*.json")), expected_type="chain_consistency_audit"
+        )
+        close_record = receipt["symbols"]["SYN"]["input_files"]["underlying_close"]
+        self.assertEqual(close_record["path"], ".cache/underlying/SYN.parquet")
+        self.assertEqual(
+            close_record["sha256"], hashlib.sha256(close_path.read_bytes()).hexdigest()
+        )
+
+    def test_output_dir_rejects_traversal_outside_permitted_root(self):
+        escaped = self.root / ".tmp" / "escape"
+
+        with self.assertRaisesRegex(ValueError, "must be under"):
+            self.cli._output_dir(self.root, ".tmp/chain_consistency/../escape")
+
+        self.assertFalse(escaped.exists())
+
+    def test_output_dir_rejects_symlink_parent_escape(self):
+        allowed = self.root / ".tmp" / "chain_consistency"
+        allowed.mkdir(parents=True)
+        escaped = self.root / "escaped"
+        escaped.mkdir()
+        (allowed / "link").symlink_to(escaped, target_is_directory=True)
+        escaped_receipt = escaped / "receipt.json"
+
+        with self.assertRaisesRegex(ValueError, "must be under"):
+            self.cli._output_dir(self.root, ".tmp/chain_consistency/link/receipt")
+
+        self.assertFalse(escaped_receipt.exists())
+
+    def test_output_dir_rejects_symlinked_permitted_root_escape(self):
+        temporary = self.root / ".tmp"
+        temporary.mkdir()
+        escaped = self.root / "escaped"
+        escaped.mkdir()
+        (temporary / "chain_consistency").symlink_to(escaped, target_is_directory=True)
+
+        with self.assertRaisesRegex(ValueError, "must be under"):
+            self.cli._output_dir(self.root, None)
+
+        self.assertFalse((escaped / "receipt.json").exists())
 
     def test_exit_zero_when_flags_are_present_and_nonzero_for_unreadable_input(self):
         self._write_pair(sessions=("2026-08-19", "2026-08-21"))
