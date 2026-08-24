@@ -835,6 +835,35 @@ COMPOSITE_GRADE_A_MIN_ALIGNED = 3 # aligned non-neutral angles needed for grade 
 COMPOSITE_GRADE_B_MIN_ALIGNED = 2 # aligned non-neutral angles needed for grade B
 
 # ---------------------------------------------------------------------------
+# Chain-consistency shadow flags 2026-08-24. LLM-proposed, not owner-typed;
+# display-only — bind no hypothesis, verdict, gate, or trigger.
+# CONSISTENCY_DELTA_JUMP_ABS=0.30 is a corruption-target Assumption per brief
+# 22 WP-0. CONSISTENCY_UNDERLYING_SMALL_MOVE=0.01 is an Assumption defining
+# "near-flat" conditioning. CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO=2.0 is an
+# Assumption defining a blowout relative to yesterday.
+# CONSISTENCY_MAX_EXAMPLES=20 is receipt ergonomics. Frozen all-pair
+# observations, columns GAP/EXPIRY/STRIKE/DELTA/SPREAD:
+#   2026-08-14->2026-08-19 (non-adjacent): 15/0/0/0/596
+#   2026-08-14->2026-08-20 (non-adjacent): 15/0/0/0/582
+#   2026-08-19->2026-08-20 (adjacent):      0/0/0/0/256
+# On that only adjacent clean pair, evaluated rates were GAP 0/15, EXPIRY
+# 0/237, STRIKE 0/11,571, DELTA 0/8,611, and SPREAD 256/11,571 (2.2124%).
+# IV_JUMP was removed under WP-0's pre-declared kill criterion after hitting
+# 131/8,611 (1.5213%, above 1%); its threshold was not widened.
+# Owner disposition A (2026-08-24, in-session): SPREAD_BLOWOUT stays computed
+# and fully receipted but is demoted from the worst-wins headline status (its
+# 2.2124% clean-pair rate read status=SPREAD_BLOWOUT on 15/15 symbols on a
+# clean day). Threshold unchanged. Pre-declared review: if no SPREAD_BLOWOUT
+# observation has been acted on after ~30 captured sessions, remove the flag
+# (plan §10 item 6) rather than tune it. See
+# data.chain_consistency.HEADLINE_DEMOTED_FLAGS.
+# ---------------------------------------------------------------------------
+CONSISTENCY_DELTA_JUMP_ABS = 0.30
+CONSISTENCY_UNDERLYING_SMALL_MOVE = 0.01
+CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO = 2.0
+CONSISTENCY_MAX_EXAMPLES = 20
+
+# ---------------------------------------------------------------------------
 # ATTRACTIVENESS EXPERIMENT LANES -- display-only, cached-data-only, and
 # disabled by default. LLM-proposed 2026-08-09; standard-from-literature or
 # repo conventions; not owner-ratified. Nothing here changes Top-3 ranking,
