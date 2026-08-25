@@ -3,7 +3,7 @@
 **Date:** 2026-08-25 (rev 4, same day)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 4 — adversarial review round 3 verdict PASS WITH FIXES (NEW-1 measured acceptance, NEW-5 test names, NEW-6 staleness reference — applied in this rev, plus the rev-4 liquidity-panel design decision in WP-C.1 responding to NEW-1's measurement, which has NOT itself been re-reviewed). Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
+**Status:** HANDED OFF TO CODEX — owner-directed 2026-08-25 in-session ("hand brief 26 to codex"). Review history: round 3 PASS WITH FIXES, all applied in rev 4; the rev-4 liquidity-panel design decision in WP-C.1 was NOT itself re-reviewed — Codex should treat that one clause with extra care and flag any doubt rather than improvise. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`. Landing order still binds: this brief lands FIRST (26 → 25 → 27).
 **Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise (line numbers re-verified at this SHA; the 2026-08-25 input-root-default fix `OPS_CHECKOUT_FALLBACK` is COMMITTED at `attractiveness_dashboard.py:57` — WP-D.3 depends on it and on nothing uncommitted). Landing order is binding: **this brief lands first, then brief 25, then brief 27.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed.
 
