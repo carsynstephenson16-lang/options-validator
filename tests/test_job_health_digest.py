@@ -494,7 +494,7 @@ class JobHealthDigestTests(unittest.TestCase):
                 self.assertEqual(row.status, HealthStatus.FAILED)
                 self.assertIn("escapes root", row.reason)
 
-    def test_research_refresh_uses_existence_only(self):
+    def test_research_refresh_ignores_payload_after_freshness_check(self):
         self._install_all_ok()
         path = self.root / f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json"
         path.write_text("this is deliberately not JSON\n")
