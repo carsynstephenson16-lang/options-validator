@@ -75,7 +75,7 @@
 
 - [x] Dispatch one independent reviewer focused on contradictions, atomicity, acceptance, ops/hash handling, and authority boundaries.
 - [x] Apply the four required corrections and return them to the same reviewer.
-- [ ] Record written PASS; do not activate hand-off status without it.
+- [x] Record written PASS; hand-off becomes authorized only if the owner lands the draft documentation PR.
 
 ### Task 5: Validate and publish the documentation PR
 

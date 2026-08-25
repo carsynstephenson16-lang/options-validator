@@ -3,7 +3,7 @@
 **Date:** 2026-08-25 (rev 5, Wave 0 reconciliation)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 5 — pending one focused independent review with written PASS. The owner-directed hand-off recorded by source commit `839ddb3` becomes effective only when this Wave 0 documentation PR lands after that PASS; until then canonical `main` remains DRAFT. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`. Landing order still binds: this brief lands FIRST (26 → 25 → 27).
+**Status:** REVIEW PASS — HAND-OFF AUTHORIZED ON LANDING, not before. One focused independent Wave 0 review issued written PASS on rev 5 at `99b7bba`; the owner-directed hand-off recorded by source commit `839ddb3` becomes effective only if the owner lands this draft documentation PR. Until then canonical `main` remains DRAFT. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`. Landing order still binds: this brief lands FIRST (26 → 25 → 27).
 **Provenance:** Repo-verified against current reconciliation base `origin/main@77b1a46` unless labeled otherwise. Round-4 parameter decisions are transplanted from `7908919`; the owner-directed hand-off is transplanted from `839ddb3`. The relevant Brief 26 implementation surfaces are unchanged from its prior `720a20e` anchor except for unrelated later `config.py` additions; all cited symbols and six slot literals were re-verified on `77b1a46`. The committed ops-input fallback remains `options_researcher/attractiveness_dashboard.py:57`. Landing order is binding: **this brief lands first, then brief 25, then brief 27.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed.
 
@@ -413,5 +413,5 @@ change any ledger, or flip any authority.
   stop gate is not an acceptance floor.
 - Immutable-generation publication, one-pointer commit, allow-listed relative
   paths, and SHA-256/size verification: Inference from filesystem atomicity and
-  fail-closed repository policy; the focused Wave 0 review must explicitly
-  PASS this protocol before hand-off.
+  fail-closed repository policy; the focused Wave 0 review explicitly PASSED
+  this protocol at `99b7bba` before hand-off authorization.

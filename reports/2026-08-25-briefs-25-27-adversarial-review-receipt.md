@@ -125,3 +125,35 @@ with what's best." Focused audit of the four values, with measurements:
 All amendments applied same-day; owner-typed registration values remain
 owner-typed (the approvals are spoken selections of proposals, not typed
 registrations).
+
+## Wave 0 focused independent review — Brief 26 rev 5
+
+**Date:** 2026-08-25
+
+**Reviewer:** one independent Codex GPT-5.6 high-reasoning review agent,
+read-only and scoped to Brief 26's contradictions, atomic publication,
+acceptance language, ops/copy/hash protocol, and worker authority boundaries.
+
+**Review base:** `origin/main@77b1a46`; initial reviewed head `9c46f93`;
+final reviewed head `99b7bba`.
+
+The first pass correctly withheld PASS for four blockers: generation identity,
+containment, timestamp ordering, locking, and fsync were underspecified; the
+hash chain and copy provenance were inconsistent; builder CLI and failure
+semantics were not executable against current code; and the dashboard did not
+carry `_input_root_cwd()`'s resolved source root into the copy step. After
+those corrections, the same reviewer found one remaining failure-receipt
+causality issue. Rev 5 then made the durable current pointer the sole success
+receipt and introduced a lock-ordered, UTC-completed `last-failure` channel
+that copies independently even when the ops generation is unchanged.
+
+**Final written verdict on `99b7bba`: PASS.** The reviewer confirmed all four
+original findings closed, coherent failure causality, explicit crash,
+concurrency, integrity, copy, and compatibility tests, a documentation-only
+branch, clean `git diff --check`, and unchanged hashes for the concurrent
+untracked drafts.
+
+This PASS authorizes the owner-directed Brief 26 hand-off only if the Wave 0
+documentation PR lands. The PR remains draft; the reviewer did not authorize
+merge, deployment, ops mutation, ledger mutation, authority changes, or making
+any PR ready.
