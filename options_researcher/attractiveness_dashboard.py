@@ -33,6 +33,7 @@ import html as _html
 import math
 import os
 import re
+import sys
 from collections.abc import Mapping
 from contextlib import contextmanager
 from datetime import date, datetime
@@ -49,6 +50,13 @@ _PMCC_NOTE = "just the premium; LEAPS value not counted"
 DISPLAY_ONLY_LABEL = "DISPLAY-ONLY — not in any registered hypothesis"
 
 
+# Capture receipts are written only by the ops execution checkout (its
+# LaunchAgents pin WorkingDirectory there); a research/dev checkout that
+# reads its own reports/ renders a falsely stale board.  Sanctioned standing
+# path per CLAUDE.md "Worktree location rule".
+OPS_CHECKOUT_FALLBACK = Path.home() / "options-validator-ops"
+
+
 @contextmanager
 def _input_root_cwd():
     """Read deterministic board inputs from an explicitly configured root.
@@ -56,16 +64,30 @@ def _input_root_cwd():
     Research deployments write their own reports and dashboard, but consume
     the runtime board from the clean ops checkout.  Keep the cwd switch narrow
     so every output path remains rooted in the deployment checkout.
+
+    When ATTRACTIVENESS_INPUT_ROOT is unset, default to the ops checkout if it
+    exists (owner-directed 2026-08-25: repo builds read ops inputs by default).
+    An explicit env value always wins; set it to "." to force the cwd.
     """
     configured = os.environ.get("ATTRACTIVENESS_INPUT_ROOT")
     if not configured:
-        yield Path.cwd()
-        return
-    input_root = Path(configured).expanduser().resolve()
-    if not input_root.is_dir():
-        raise FileNotFoundError(
-            f"ATTRACTIVENESS_INPUT_ROOT is not a directory: {input_root}"
-        )
+        fallback = OPS_CHECKOUT_FALLBACK
+        if fallback.is_dir() and fallback.resolve() != Path.cwd().resolve():
+            input_root = fallback.resolve()
+            print(
+                f"board inputs: defaulting to ops checkout {input_root} "
+                "(set ATTRACTIVENESS_INPUT_ROOT=. to read this checkout)",
+                file=sys.stderr,
+            )
+        else:
+            yield Path.cwd()
+            return
+    else:
+        input_root = Path(configured).expanduser().resolve()
+        if not input_root.is_dir():
+            raise FileNotFoundError(
+                f"ATTRACTIVENESS_INPUT_ROOT is not a directory: {input_root}"
+            )
     previous = Path.cwd()
     os.chdir(input_root)
     try:
