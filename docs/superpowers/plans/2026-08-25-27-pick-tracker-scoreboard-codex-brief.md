@@ -295,7 +295,9 @@ path is `.tmp`).
    that the entry window's first admissible session is the LATER of the
    registration append and the flip (the seq-26 clause-2 construction), so
    the contrast can neither open with a permanently empty arm nor cover a
-   self-selected sub-window.
+   self-selected sub-window. STATUS: D-1 was RULED 2026-08-25 (owner
+   in-session: enable at landing — see brief 25 WP-E.5), so this
+   precondition is satisfied the day brief 25 merges.
 4. **Entry-count AND cancellation-rate projection (rev-2 N-6; round-3
    NEW-4):** before the packet is presented for owner typing, compute:
    (a) a base-rate estimate of membership-entry events per arm per week —

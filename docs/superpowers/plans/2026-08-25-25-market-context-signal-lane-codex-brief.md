@@ -198,9 +198,15 @@ registration.
    removal = delete `context_lane.py`, the render branch, and the config
    block — no other surface touches them.
 5. Owner decisions this brief surfaces (Codex does NOT act on these):
-   - **D-1:** when to flip `CONTEXT_LANE_ENABLED = True` (proposal: after
-     brief 27's dry-run recorder is live, so the lane's picks are recorded
-     from day one — but the flip itself is the owner's).
+   - **D-1 — RULED (owner-directed in-session 2026-08-25, spoken: "switch
+     context lane"):** the lane is to be ENABLED as soon as it lands. Ship
+     mechanics unchanged for integrity: the constant still defaults `False`
+     in the feature commit (preserving the flag-OFF golden byte-identity
+     test and the rollback path), then a separate follow-up commit in the
+     same PR sets `CONTEXT_LANE_ENABLED = True` with the comment
+     "owner-directed in-session 2026-08-25 (spoken, not owner-typed)". This
+     also satisfies brief 27 WP-F.3's flip-before-registration precondition
+     from day one. The owner retains veto by flipping it back.
    - **D-2:** whether research bundles should annotate `PICK_TOP_N`+pinned
      candidates (≈66% more packets per run against the plist's
      $8.00/attempt, $200.00/month budgets —
