@@ -123,12 +123,12 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
     "mkdir -p reports/h5": (416,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (557,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (560,),  # data tier
-    "git fetch": (570,),  # data tier
-    "git merge": (571,),  # data tier — mutates the working tree unattended
-    "git push": (572,),  # data tier
-    "restic backup": (589,),  # data tier
+    "git add": (564,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (567,),  # data tier
+    "git fetch": (577,),  # data tier
+    "git merge": (578,),  # data tier — mutates the working tree unattended
+    "git push": (579,),  # data tier
+    "restic backup": (596,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -574,7 +574,6 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             "reports/h7_data_gate",
             "reports/h6_forward",
             "reports/h8_forward",
-            "reports/schwab_chains",
         ):
             with self.subTest(path=path):
                 self.assertIn(path, durability)
@@ -587,6 +586,10 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         # produces H10b/H5 evidence on data-tier days. Staging them only inside
         # the FULL_AUTHORITY_RC branch meant a registered forward window's
         # evidence was written and then never committed on exactly those days.
+        # reports/schwab_chains belongs here for the same reason (2026-08-25):
+        # the 15:45 capture wrapper has no commit step of its own, so the
+        # ritual is the receipts' only automatic durability path and it must
+        # stage them on data-tier days too.
         for path in (
             "reports/ritual",
             "reports/intraday_capture",
@@ -594,6 +597,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             "reports/cache_runs",
             "reports/h5",
             "reports/h10",
+            "reports/schwab_chains",
             "ledger/facts.log",
         ):
             with self.subTest(path=path):
@@ -603,7 +607,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         # ...and they must NOT be re-listed inside the full-tier branch: a
         # duplicate would hide a future accidental removal from the data tier.
         full_branch_body = durability[full_branch:git_add]
-        for path in ("reports/h5", "reports/h10"):
+        for path in ("reports/h5", "reports/h10", "reports/schwab_chains"):
             with self.subTest(path=path, where="full-tier branch"):
                 self.assertNotIn(path, full_branch_body)
 
