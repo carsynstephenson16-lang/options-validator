@@ -165,11 +165,17 @@ Wave 0 atomicity repair)
    JSON sidecar named **`wasserstein-regime.json`** (rev-2 finding N-7):
    `{"schema": "regime_report/v1", "as_of_written": <ISO ts>, "symbols":
    {SYM: {"label", "high_dispersion", "max_asof", "skipped_reason"}}}`.
-   One invocation writes the text and JSON into the same caller-supplied
-   staging generation; a failure writing either returns nonzero and cannot
-   publish the other. The report's markdown layout ALSO moves tables below a
-   per-symbol "— details —" separator (latest label + dispersion + as-of stay
-   on top). The dashboard never parses markdown.
+   Add `regime_report --json-out <path>` alongside its existing `--out`; the
+   wrapper passes both paths inside one caller-supplied staging generation.
+   Add `experiments_dashboard --out <path>` with
+   `config.EXPERIMENTS_OUTPUT_PATH` preserved as its default, and have the
+   wrapper pass the staging `experiments.html` path. Both CLIs use
+   `main(argv: Sequence[str] | None = None)` so argument parsing is unit
+   testable. A builder may leave a partial file only inside unpublished
+   staging; any nonzero builder exit aborts the generation in WP-D.4. The
+   report's markdown layout ALSO moves tables below a per-symbol "— details —"
+   separator (latest label + dispersion + as-of stay on top). The dashboard
+   never parses markdown.
 2. Shared disclaimer constant: move the DISCLAIMER string to
    `options_researcher/regime_constants.py` (no heavy imports); both
    `regime_report.py` and the dashboard import it — no duplicated drifting
@@ -186,41 +192,88 @@ Wave 0 atomicity repair)
    shelf". Per-symbol lines always show their own `max_asof`.
    Strip always carries the shared DISCLAIMER sentence.
 4. **Single-commit publication protocol (replaces the impossible two-rename
-   design):** `tools/research_display_refresh.sh` publishes an immutable
-   generation under
-   `.tmp/dashboard/research-views-generations/<generation_id>/`. Build all
-   four logical artifacts — `experiments.html`, `wasserstein-regime.txt`,
-   `wasserstein-regime.json`, and `research-views-status.txt` — inside a
-   same-filesystem `.staging-<generation_id>` directory. The status file
-   records the generation id, NY publication timestamp, both builder exit
-   codes, and the SHA-256 plus byte size of the other three artifacts. A
-   canonical-JSON `research-views-manifest.json` repeats that identity and
-   file map and includes its own schema (`research_views_manifest/v1`) and
-   producer commit. After every required file exists, recompute and verify
-   each hash, fsync the files and staging directory, and rename the staging
-   directory once to its immutable final generation name. Only then write a
-   temporary `research-views-current.json` pointer containing the generation
-   id and atomically rename that ONE file over the old pointer. A failure
-   before the pointer rename leaves the complete previous generation current;
-   no published generation is edited in place. Clean abandoned staging
-   directories, but never delete a published generation in this brief.
-5. **Reader and ops-copy hash protocol:** a reader snapshots
-   `research-views-current.json` once, resolves that exact immutable generation
-   (never re-reads the pointer mid-operation), validates manifest schema,
-   generation id, relative-file allow-list, byte sizes, and SHA-256 hashes,
-   then uses the JSON sidecar and exact-generation links. Missing, malformed,
-   path-escaping, hash-mismatched, or split generations fail visibly as
-   `unpublished/integrity failed`; they never fall back to loose root files.
-   For a non-ops build whose `_input_root_cwd` points at the ops checkout,
-   validate the source generation, copy that entire generation into a local
-   staging directory, validate it again, rename it to the same immutable
-   generation id, and only then atomically update the local pointer. Compare
-   `(published_at, generation_id)` from validated manifests, never mtimes; do
-   not clobber a newer local generation. The manifest records
-   `copied_from_root` for a copied generation, and the Experiments shelf shows
-   "views copied from ops checkout, published <ts>". This is a read/copy
-   protocol only: the implementation worker may not run an ops deployment or
-   mutate the ops checkout.
+   design):** add a stdlib-only
+   `options_researcher/research_views_publication.py` helper for canonical JSON,
+   validation, hashing, fsync, locking, publication, and copy. The shell
+   wrapper orchestrates builders but delegates filesystem commit semantics to
+   this helper. A `generation_id` is exactly UTC basic time plus UUID hex,
+   regex `^[0-9]{8}T[0-9]{12}Z-[0-9a-f]{32}$`; `published_at` is canonical UTC
+   RFC 3339 with six fractional digits and `Z`. Parse it as timezone-aware
+   UTC, never order timestamp strings or accept offsets. The helper rejects an
+   ID that fails the regex, disagrees across pointer/manifest/status/directory,
+   resolves outside the generations root, or collides with an existing final
+   directory (collision is a hard error, never overwrite).
+
+   Build inside same-filesystem
+   `.tmp/dashboard/research-views-generations/.staging-<generation_id>/`.
+   Run BOTH builders to collect both exits. If either is nonzero, atomically
+   write and fsync `.tmp/dashboard/research-views-last-attempt.json` with the
+   attempted id/time, both exits, `outcome: FAILED`, and no hashes from partial
+   outputs; remove only that attempt's staging directory; leave the current
+   pointer and immutable generations unchanged; exit nonzero. On success,
+   create four logical artifacts — `experiments.html`,
+   `wasserstein-regime.txt`, `wasserstein-regime.json`, and
+   `research-views-status.txt`. Status records the id, timestamp, both zero
+   exits, and SHA-256/byte size for the first three.
+
+   Canonical `research-views-manifest.json` has schema
+   `research_views_manifest/v1`, generation id, parsed publication time,
+   producer commit, and an EXACT four-entry allow-listed file map with
+   SHA-256/byte size for all four logical artifacts, including status. Verify
+   that status identity/outcomes and its three file hashes/sizes equal the
+   manifest entries. Canonical `research-views-current.json` has schema
+   `research_views_current/v1`, generation id, publication time, and the
+   manifest's SHA-256/byte size; for a copied generation it may additionally
+   carry `copied_from_root`, but the immutable source manifest and generation
+   bytes remain byte-identical.
+
+   Flush and fsync every artifact plus manifest and the staging directory;
+   under an exclusive `fcntl` lock at
+   `.tmp/dashboard/.research-views.lock`, rename staging once to the final
+   immutable generation, fsync the generations parent, write+fsync a temporary
+   current pointer, rename that ONE pointer over the old pointer, then fsync
+   the dashboard parent. Publish an atomic `last-attempt` receipt with
+   `outcome: PUBLISHED` only after pointer durability. A failure before pointer
+   rename leaves the prior complete generation current; a failure after it is
+   resolved by the durable pointer+manifest hash chain, never rollback by a
+   second rename. Never edit or delete a published generation in this brief.
+5. **Reader and ops-copy hash/locking protocol:** a reader snapshots and parses
+   the current pointer once, verifies the pointer's manifest hash/size, then
+   resolves that exact immutable generation (never re-reads the pointer
+   mid-operation). Validate strict schemas, UTC timestamp, id equality and
+   containment, exact relative-file allow-list, sizes, hashes, and
+   status/manifest agreement before using the sidecar or emitting links to
+   `research-views-generations/<validated_id>/...`. Missing, malformed,
+   path-escaping, hash-mismatched, or split generations render visibly as
+   `unpublished/integrity failed`; no loose-root-file or previous-generation
+   fallback is allowed after the pointer has been read.
+
+   In `_build_and_write`, capture `deployment_root = Path.cwd().resolve()`
+   before entering `_input_root_cwd()`, bind its yielded value as
+   `input_root`, and after exiting call the helper explicitly with
+   `source_root=input_root` and `destination_root=deployment_root` BEFORE
+   loading local research-view status. If the roots resolve equal, perform no
+   copy and load locally. Otherwise snapshot/validate the source pointer and
+   immutable generation, copy its bytes into destination staging, validate
+   again, and commit under the destination's SAME lock/protocol. Under that
+   lock, re-read the destination pointer immediately before commit: source
+   time newer means install; destination newer means skip; identical id means
+   idempotent no-op; equal parsed timestamps with different ids means
+   `GENERATION_CONFLICT` and no pointer change. This locked recheck is the
+   compare-and-swap that prevents a stale copy from clobbering a concurrent
+   local publish. The local pointer records `copied_from_root`; source manifest
+   and generation stay byte-identical. Copy/integrity failure is visible but
+   nonfatal to the independent board build. The implementation worker may not
+   run an ops deployment or mutate the ops checkout.
+6. **Consumer migration (no hidden compatibility gap):** change
+   `load_research_views_status` and the regime-sidecar loader to the validated
+   pointer/manifest helper; have `_experiments_shelf_html` link to exact
+   generation paths; update the freshness chip and strip to show last-attempt
+   failure separately from the still-current generation. Update
+   `tools/launchagents/README.md` operator curl examples to fetch the pointer,
+   then its exact manifest/generation paths. Do not keep individual loose-file
+   aliases: they cannot provide set atomicity and must not be treated as a
+   compatibility surface.
 
 ### WP-E — coordinated test updates (rev-1 findings 15, 36 applied)
 
@@ -249,6 +302,18 @@ Intentional updates (same commit as the feature that breaks them):
   expected to pass unmodified; verify rather than edit).
 - `tests/test_research_context_assemble.py` mocks that patch
   `select_top_picks` (locate by grep) — confirm they are n-agnostic.
+- `tests/test_experiments_dashboard.py`: preserve the default output-path test
+  and add the explicit `--out` staging-path contract.
+- `tests/test_regime_report.py`: add paired `--out` / `--json-out` schema and
+  partial-staging failure coverage.
+- `tests/test_research_display_refresh.py`: replace loose-file and partial
+  success expectations. On either builder failure, both builders still run,
+  the prior current pointer/generation remain byte-identical, the staging
+  directory is removed, `last-attempt` records both exits and FAILED, and the
+  wrapper exits nonzero. On success, assert exact generation files, manifest
+  chain, pointer swap, PUBLISHED attempt receipt, and no loose aliases. Replace
+  the old status-rename failure case with pointer-rename/fsync failure cases
+  that preserve the old current generation.
 - NEW tests (names track the rev-3/rev-4 rules — round-3 finding NEW-5):
   dominance partition units (incomparable-never-dominated,
   **liquidity-RED-never-hidden**, blocked-never-hidden,
@@ -258,10 +323,13 @@ Intentional updates (same commit as the feature that breaks them):
   liquidity-RED-only panel COLLAPSED with its card outside the dominated
   block, clean panel collapsed); regime strip present/absent-is-loud;
   sidecar schema round-trip; generation publish/copy (failure before pointer
-  swap preserves the prior generation; a reader pinned to one generation
-  cannot observe a split pair; path traversal, size mismatch, and one-byte
-  hash mutation all fail closed; fresher local never clobbered; no loose-file
-  fallback).
+  swap preserves the prior generation; pointer temp and both parent-directory
+  fsyncs are exercised through injected failures; a reader pinned to one
+  generation cannot observe a split pair; invalid id, directory escape,
+  manifest mutation, status/manifest disagreement, size mismatch, and one-byte
+  artifact mutation all fail closed; same-id is idempotent, newer-local wins,
+  equal-time/different-id conflicts, a lock-delayed stale copier cannot clobber
+  a concurrent publish, same-root skips copy, and no loose-file fallback).
 - MUST NOT change: `SelectTopPicksTests` recipe tests except the n default;
   fail-visible pins `:1116`, `:1126`, `:1137` (the exact
   `DISPLAY_ONLY_LABEL` count of 2 must survive WP-B/WP-C); AST boundary

@@ -73,8 +73,8 @@
 - Consumes: final rev-5 Brief 26 text and current-main code evidence.
 - Produces: one focused reviewer verdict recorded verbatim enough to establish written PASS or a blocking finding list.
 
-- [ ] Dispatch one independent reviewer focused on contradictions, atomicity, acceptance, ops/hash handling, and authority boundaries.
-- [ ] Apply any required correction and return it to the same reviewer.
+- [x] Dispatch one independent reviewer focused on contradictions, atomicity, acceptance, ops/hash handling, and authority boundaries.
+- [x] Apply the four required corrections and return them to the same reviewer.
 - [ ] Record written PASS; do not activate hand-off status without it.
 
 ### Task 5: Validate and publish the documentation PR
