@@ -1,9 +1,9 @@
-# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 3)
+# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 4)
 
-**Date:** 2026-08-25 (rev 3, same day)
+**Date:** 2026-08-25 (rev 4, same day)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 3 — adversarial review round 2 verdict FAIL (N-4 safety-badge nullification, N-5, N-7, N-10, N-11 — all applied in this rev); re-review required before hand-off. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
+**Status:** DRAFT rev 4 — adversarial review round 3 verdict PASS WITH FIXES (NEW-1 measured acceptance, NEW-5 test names, NEW-6 staleness reference — applied in this rev, plus the rev-4 liquidity-panel design decision in WP-C.1 responding to NEW-1's measurement, which has NOT itself been re-reviewed). Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
 **Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise (line numbers re-verified at this SHA; the 2026-08-25 input-root-default fix `OPS_CHECKOUT_FALLBACK` is COMMITTED at `attractiveness_dashboard.py:57` — WP-D.3 depends on it and on nothing uncommitted). Landing order is binding: **this brief lands first, then brief 25, then brief 27.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed.
 
@@ -142,10 +142,15 @@ report demoted to a link.
 
 1. Wrap each per-symbol panel body in `<details>` with the symbol heading +
    one-line summary visible (close, as-of, best card headline, panel
-   status). Panels containing any DATA_BLOCKED card, stale banner, or
-   liquidity-RED card render OPEN by default; all other panels collapsed
-   (rev-2 finding N-4: an "any RED" open rule would force ~every panel open
-   — `portfolio`/`fits_cap` REDs are assessments, not safety states).
+   status). Panels containing any DATA_BLOCKED card or stale banner render
+   OPEN by default; all other panels collapsed. Rev-4 design decision
+   (responding to round-3 finding NEW-1, LLM-proposed 2026-08-25): a
+   liquidity-RED card does NOT force its panel open — 14 of 18 live panels
+   contain one, so a liquidity-open rule would nullify WP-C. The safety
+   guarantee liquidity-RED keeps is WP-B.3's: such a card is never buried a
+   second level down inside the dominated-cards block; a collapsed panel is
+   one click from visible and its summary line states the panel status.
+   Fail-visible law stays absolute for DATA_BLOCKED/stale.
 2. No content change inside panels beyond WP-B.
 
 ### WP-D — regime view (rev-1 findings 19, 20 applied)
@@ -169,11 +174,14 @@ report demoted to a link.
    string, no regime-math import into the dashboard.
 3. Compact strip: new dashboard section "REGIME (descriptive)" — one line per
    `REGIME_SYMBOLS` name from the SIDECAR: label, high-dispersion yes/no, max
-   as-of. Staleness rule (rev-2 finding N-7 pin): the strip-level banner
-   fires when the NEWEST per-symbol `max_asof` across the sidecar is more
-   than 5 sessions old (threshold LLM-proposed, display-only) OR the sidecar
-   is absent/malformed — rendering loudly: "regime view unpublished/stale —
-   see Experiments shelf". Per-symbol lines always show their own `max_asof`.
+   as-of. Staleness rule (rev-2 N-7; round-3 NEW-6 pins the reference): the
+   strip-level banner fires when the NEWEST per-symbol `max_asof` across the
+   sidecar is more than 5 trading sessions older than the BUILD's NY
+   evaluation date — computed with `trading_sessions_between`, the same
+   convention `_page_chain_age_sessions` uses for chain age (threshold
+   LLM-proposed, display-only) — OR the sidecar is absent/malformed;
+   rendering loudly: "regime view unpublished/stale — see Experiments
+   shelf". Per-symbol lines always show their own `max_asof`.
    Strip always carries the shared DISCLAIMER sentence.
 4. Publication for non-ops builds: when the deployment checkout's
    `.tmp/dashboard/research-views-status.txt` is absent AND board inputs were
@@ -215,12 +223,16 @@ Intentional updates (same commit as the feature that breaks them):
   expected to pass unmodified; verify rather than edit).
 - `tests/test_research_context_assemble.py` mocks that patch
   `select_top_picks` (locate by grep) — confirm they are n-agnostic.
-- NEW tests: dominance partition units (incomparable-never-dominated,
-  RED-badge-never-hidden, blocked-never-hidden, ≤2-card lane exemption,
-  fixpoint shown-dominator property); collapsed-panel default states
-  (blocked/RED panel open, clean panel closed); regime strip
-  present/absent-is-loud; sidecar schema round-trip; atomic set-copy
-  (fresher-local never clobbered; status and artifacts never split).
+- NEW tests (names track the rev-3/rev-4 rules — round-3 finding NEW-5):
+  dominance partition units (incomparable-never-dominated,
+  **liquidity-RED-never-hidden**, blocked-never-hidden,
+  **portfolio-RED-only-card-IS-hideable** (positive case), ≤2-card lane
+  exemption, pmcc exemption, fixpoint shown-dominator property);
+  collapsed-panel default states (**DATA_BLOCKED/stale panel open**,
+  liquidity-RED-only panel COLLAPSED with its card outside the dominated
+  block, clean panel collapsed); regime strip present/absent-is-loud;
+  sidecar schema round-trip; atomic set-copy (fresher-local never
+  clobbered; status and artifacts never split).
 - MUST NOT change: `SelectTopPicksTests` recipe tests except the n default;
   fail-visible pins `:1116`, `:1126`, `:1137` (the exact
   `DISPLAY_ONLY_LABEL` count of 2 must survive WP-B/WP-C); AST boundary
@@ -232,17 +244,21 @@ Intentional updates (same commit as the feature that breaks them):
 uv run python -m unittest discover -s tests    # exit 0, offline
 uv run ruff check . && uv run pyright          # exit 0
 ```
-Plus, on the REAL board (rev-1 finding 15; rev-2 finding N-4 — a
-threshold-free "falls" cannot fail): (a) BEFORE coding, run one dry
-measurement of candidate cards rendered outside any `<details>` on the
-current live board and record the number in the PR; acceptance requires
-that count reduced by **at least 50%** after WP-B+WP-C (threshold
-LLM-proposed 2026-08-25; if the measured composition makes 50% unreachable
-without violating the exclusion rules, STOP and report the measured ceiling
-instead of loosening an exclusion); (b) every `candidate_id` present in the
-payload before the change is still present after; (c) Top-5 membership
-equals the first 5 of the unchanged admission+order pipeline; (d) the
-hidden-card shown-dominator property test from WP-E passes.
+Plus, on the REAL board (rev-1 finding 15; rev-2 N-4; round-3 NEW-1 — no
+speculative percentage): the display metric is "candidate cards visible
+without user interaction" (i.e., not inside any CLOSED `<details>`).
+(a) BEFORE implementation, run a dry rule-application over the current live
+board (round-3 measured basis: 18 panels, 14 with a liquidity-RED card, 222
+badge blocks, 82 liquidity-RED) computing exactly which cards the WP-B/WP-C
+rules hide/collapse; record the predicted before/after counts in the PR.
+(b) Acceptance = the implementation reproduces the dry run's predicted set
+EXACTLY (rule-faithfulness, not a percentage); if the predicted reduction
+is below 30%, STOP and report the measured ceiling to the owner before
+building — never loosen an exclusion to manufacture a number.
+(c) Every `candidate_id` present in the payload before the change is still
+present after. (d) Top-5 membership equals the first 5 of the unchanged
+admission+order pipeline. (e) The hidden-card shown-dominator property test
+from WP-E passes.
 
 ## Claim-discipline register
 

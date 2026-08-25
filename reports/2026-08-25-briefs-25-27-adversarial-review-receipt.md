@@ -1,4 +1,4 @@
-# Adversarial review receipt — Codex briefs 25/26/27 (rev 1)
+# Adversarial review receipt — Codex briefs 25/26/27 (three rounds, 2026-08-25)
 
 **Date:** 2026-08-25
 **Reviewer:** independent Opus adversarial-review agent (spawned by the
@@ -81,5 +81,30 @@ Rev 3 of all three briefs written 2026-08-25, applying N-1..N-12 (brief 25:
 renames; brief 27: `render()` selection-sink design, seq-19 mark-schedule
 honesty with owner-typed CSP/CC/PMCC points, flip-before-registration
 ordering with later-of admissibility, retitle + mandatory entry-count
-projection with sparsity pre-acceptance). Briefs 26 and 27 require a
-round-3 re-review before hand-off; brief 25 requires a confirmation pass.
+projection with sparsity pre-acceptance).
+
+## Round 3 (same reviewer, same day, on rev 3 @9708a90)
+
+All twelve N-findings verified CLOSED. Six new findings in the changed
+passages: NEW-1 (MAJOR — 50% acceptance floor near-certainly unreachable:
+measured 14/18 panels contain a liquidity-RED card, 82/222 blocks
+liquidity-RED), NEW-2 (MAJOR — picks-artifact test pinned the
+watch-inclusive hero list while the scored arm excludes WATCH), NEW-3
+(MINOR — stale rev-2 mark-schedule prose), NEW-4 (MAJOR — capture-density
+figure wrong: verified sessions are 2 in repo / 4 receipt dirs in ops, not
+"~6"; cancellation rate unprojected; ops-health only a "should"), NEW-5
+(MINOR — WP-E test names encoded the replaced blanket-RED rule), NEW-6
+(MINOR — staleness reference date unpinned).
+
+**Round-3 verdicts: brief 25 PASS (ready for hand-off); brief 26 PASS WITH
+FIXES (NEW-1, NEW-5, NEW-6); brief 27 PASS WITH FIXES (NEW-2, NEW-3,
+NEW-4).**
+
+Rev 4 of briefs 26 and 27 written 2026-08-25 applying all six. Brief 26
+rev 4 additionally narrows the panel-open rule to DATA_BLOCKED/stale only
+(a liquidity-RED card no longer forces its panel open, only its
+never-dominance-hidden guarantee remains) — an orchestrating-session design
+decision responding to NEW-1's measurement, NOT itself re-reviewed; flagged
+in the brief's Status line for the implementing reviewer. Acceptance
+switched from a percentage floor to dry-run rule-faithfulness with a <30%
+STOP-and-report-to-owner clause.

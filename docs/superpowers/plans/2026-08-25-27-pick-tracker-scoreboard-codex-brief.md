@@ -1,9 +1,9 @@
-# Codex brief 27 — daily pick recorder + entry-window scoreboard, decision/fill split, registration-gated (rev 3)
+# Codex brief 27 — daily pick recorder + entry-window scoreboard, decision/fill split, registration-gated (rev 4)
 
-**Date:** 2026-08-25 (rev 3, same day)
+**Date:** 2026-08-25 (rev 4, same day)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 3 — adversarial review round 2 verdict FAIL (N-3, N-6, N-8, N-9, N-10 — all applied in this rev); re-review required before hand-off. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
+**Status:** DRAFT rev 4 — adversarial review round 3 verdict PASS WITH FIXES (NEW-2 sink-key split, NEW-3 stale prose, NEW-4 density/cancellation projection + hard ops precondition — applied in this rev). Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
 **Duration honesty (rev-2 finding N-6):** the owner asked for "two months." Two months is the ENTRY window (proposed 42 sessions, owner-typed at registration). Positions entered late in the window then run out their mark schedules — a LEAPS pick entered on the final day reaches its longest registered mark ~126 sessions (≈6 months) later. The scoreboard reports progressively from week one; the FINAL settled answer for every lane arrives months after the entry window closes. Say this to the owner plainly; do not sell a 6-month tail as a 2-month study.
 **Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. Landing order is binding: **brief 26, then brief 25, then this brief.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("each day the system should thoroughly run through each experiment and different standards and choose the top 5 for the day and track its picks for 2 months to see if it actually has been picking correctly") — spoken, not owner-typed.
@@ -52,8 +52,10 @@ design answers each one head-on:
    2026-08-17). Rev 2 (a) hard-gates all scored output on an owner-typed
    registration — until then every row goes to
    `reports/pick_tracker/dryrun/` and is permanently excluded from any
-   scored window; (b) adopts A2-v1's registered per-lane mark schedule
-   instead of inventing a rival convention (rev-1 finding 22); (c) states in
+   scored window; (b) uses seq 19's registered mark points where they exist
+   (LEAPS, tactical calls) and routes the unregistered CSP/CC/PMCC mark
+   points to the owner for typing (WP-C.3; round-3 finding NEW-3 removed the
+   earlier overclaim that the whole schedule was registered); (c) states in
    every report header that A2-v1 retains interpretive authority for
    board-level questions and this tracker answers only the shortlist-level
    question.
@@ -160,10 +162,21 @@ renders); `_build_and_write` passes the sink and persists its contents to
 ordered candidate lists with `candidate_id`, contract identity (symbol,
 lane kind, strike, expiry, right), quote sides from the board's capture,
 board `data_as_of`, capture receipt path + sha256, and `config_hash`
-surface. Atomic write. NAMED TEST: the artifact's candidate_ids equal the
-hero block's rendered candidate_ids on the same build. The dashboard
-imports nothing new (frozen + context arms only — no `exp_*`). Fixture
-builds write it too (harmless, path is `.tmp`).
+surface. Atomic write. Arm-to-call mapping is explicit (round-3 finding
+NEW-2 — the board makes THREE `select_top_picks` calls that differ):
+- sink key `frozen_baseline` ← the policy-qualified call
+  `select_top_picks(data)` at `attractiveness_dashboard.py:3246`;
+- sink key `frozen_baseline_watch_inclusive` ← the hero-block call
+  `select_top_picks(data, include_csp_watch=True)` at `:3245`;
+- the research-bundle call at `:4029` is not a new arm — note in code that
+  it remains a separate consumer.
+NAMED TESTS: (1) the `frozen_baseline_watch_inclusive` key equals the hero
+block's rendered candidate_ids on the same build; (2) on a fixture with a
+CSP WATCH card present, `frozen_baseline` excludes it while
+`…_watch_inclusive` contains it. The primary contrast reads ONLY
+`frozen_baseline` (§Scored arms). The dashboard imports nothing new (frozen
++ context arms only — no `exp_*`). Fixture builds write it too (harmless,
+path is `.tmp`).
 
 ### WP-B — recorder (`options_researcher/pick_tracker.py`)
 
@@ -248,8 +261,12 @@ builds write it too (harmless, path is `.tmp`).
    NOTE (Repo-verified 2026-08-25): the ops ritual is currently unhealthy
    (receipts uncommitted since 08-20; run-status stale/RUNNING at
    07:40-08:10). The separate ops-health investigation (task chip
-   2026-08-25) should land BEFORE this brief's deploy step; the recorder
-   itself degrades cleanly (SESSION_UNVERIFIED) if captures are missing.
+   2026-08-25) is a HARD PRECONDITION of this brief's deploy step (round-3
+   finding NEW-4 upgraded it from "should"): do not deploy the ritual hook
+   until the repair has landed and ≥5 consecutive daily receipts have
+   committed cleanly (WP-F.4 binds the registration to the same evidence).
+   The recorder itself degrades cleanly (SESSION_UNVERIFIED) if captures
+   are missing — dry-run development and tests are NOT blocked.
 
 ### WP-F — pre-registration packet (hard precondition for scored rows)
 
@@ -257,7 +274,8 @@ builds write it too (harmless, path is `.tmp`).
    modeled on the H10a-v2 packet shape
    (`docs/superpowers/plans/2026-08-16-h10a-v2-reregistration-packet-DRAFT.md`):
    study question; the two scored arms; membership-entry event definition;
-   decision/fill convention (citing seq 21); A2-schedule mark points; weekly
+   decision/fill convention (citing seq 21); mark points (registered
+   LEAPS/tactical values + owner-typed CSP/CC/PMCC per WP-C.3); weekly
    cohorts; bootstrap-CI reporting; the single primary contrast; entry
    window length (owner types the number — proposal 42 trading sessions ≈ 2
    calendar months of ENTRIES, positions then run out their mark schedule;
@@ -278,18 +296,32 @@ builds write it too (harmless, path is `.tmp`).
    registration append and the flip (the seq-26 clause-2 construction), so
    the contrast can neither open with a permanently empty arm nor cover a
    self-selected sub-window.
-4. **Entry-count projection (rev-2 finding N-6):** before the packet is
-   presented for owner typing, compute a base-rate estimate of
-   membership-entry events per arm per week. Verified-capture history is
-   thin (~6 sessions), so the projection uses the frozen ThetaData-cache
-   board history as a PROXY, labeled as such in the packet (proxy regime ≠
-   current regime; the label is mandatory). The packet must either state a
-   minimum expected entry count the owner accepts, or carry an explicit
-   sparsity pre-acceptance clause quoting the computed number (H10
-   precedent) — silence is not an option. The gate's stated failure mode —
-   "a window that costs months and answers nothing" — is this design's
-   risk, and the packet must face it with the number, not the not-loss-gated
-   escape.
+4. **Entry-count AND cancellation-rate projection (rev-2 N-6; round-3
+   NEW-4):** before the packet is presented for owner typing, compute:
+   (a) a base-rate estimate of membership-entry events per arm per week —
+   verified-capture history is FAR too thin to use (Repo-verified 2026-08-25:
+   `verified_sessions()` returns 2 sessions in the repo checkout
+   [08-14, 08-19]; the ops working tree holds 4 receipt dirs
+   [08-14, 08-19, 08-20, 08-24], two uncommitted), so the projection uses
+   the frozen ThetaData-cache board history as a PROXY, labeled as such
+   (proxy regime ≠ current regime; the label is mandatory);
+   (b) the expected CANCELLATION rate under the decision/fill split at
+   recent real capture density — the actual gaps (08-14→08-19 is 3
+   sessions; 08-21/08-22 missing between 08-20 and 08-24) mean that at
+   recent density MOST decisions would cancel rather than fill, making
+   cancellations the study's dominant output;
+   (c) the minimum capture density the design needs (state it as
+   sessions-with-verified-capture per week).
+   The packet must either state minimums the owner accepts or carry an
+   explicit sparsity pre-acceptance clause quoting the computed numbers
+   (H10 precedent) — silence is not an option. The gate's stated failure
+   mode — "a window that costs months and answers nothing" — is this
+   design's risk, and the packet must face it with the numbers, not the
+   not-loss-gated escape. **Hard precondition (upgraded from "should",
+   round-3 NEW-4): the ops-health repair (task chip 2026-08-25 — receipts
+   uncommitted, ritual status stale/RUNNING) must land and show ≥5
+   consecutive committed daily receipts before the registration is
+   presented for owner typing.**
 5. Until the owner-typed registration exists, the recorder REFUSES to write
    outside `dryrun/` (enforced in code + test, not by convention).
 

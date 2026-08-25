@@ -3,7 +3,7 @@
 **Date:** 2026-08-25 (rev 3, same day)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 3 — adversarial review round 2 verdict PASS WITH FIXES (N-1, N-2, N-10, N-12 — all applied in this rev); one confirmation pass pending before hand-off. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
+**Status:** READY FOR HAND-OFF — adversarial review round 3 verdict **PASS** (rounds 1-3 recorded in `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`). Hand-off still waits on brief 26 landing first (binding order 26 → 25 → 27).
 **Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. Landing order is binding: **brief 26 lands first, then this brief, then brief 27** (shared constants and heading strings flow 26 → 25 → 27).
 **Owner directive source:** Carsyn in-session 2026-08-25 ("market context i want that updated daily and actually contributing to the signals") — spoken, not owner-typed.
 
