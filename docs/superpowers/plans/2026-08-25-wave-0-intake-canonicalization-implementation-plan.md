@@ -90,3 +90,21 @@
 - [x] Confirm the primary-checkout draft hashes are unchanged.
 - [x] Push `codex/wave0-intake-canonicalization`.
 - [x] Create the PR with `gh pr create --draft`; verify `isDraft=true`; stop.
+
+### Task 6: Post-submission Git audit
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-08-25-26-board-declutter-top5-codex-brief.md`
+- Modify: `.agents/skills/codex-brief-writing/SKILL.md`
+- Modify: `AGENTS.md`
+- Modify: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`
+
+**Interfaces:**
+- Consumes: PR #80 remote head, current `origin/main`, CI, tracked reconciler behavior, and primary-checkout draft hashes.
+- Produces: corrected test citation and enforced worker-facing reservation/draft rules, while leaving the concurrently owned reconciler lane untouched.
+
+- [x] Verify ancestry, source/transplant patch IDs, docs-only scope, CI, and protected draft hashes.
+- [x] Correct the nonexistent regime-report test path.
+- [x] Route brief numbering through the central registry and conflict stop.
+- [x] Put the draft-PR authority hold in Codex's repository instructions.
+- [x] Record the separate reconciler-code gap and its concurrent owner instead of overlapping that worktree.

@@ -322,8 +322,8 @@ Intentional updates (same commit as the feature that breaks them):
   `select_top_picks` (locate by grep) — confirm they are n-agnostic.
 - `tests/test_experiments_dashboard.py`: preserve the default output-path test
   and add the explicit `--out` staging-path contract.
-- `tests/test_regime_report.py`: add paired `--out` / `--json-out` schema and
-  partial-staging failure coverage.
+- `tests/test_regime.py` (the existing regime + report suite): add paired
+  `--out` / `--json-out` schema and partial-staging failure coverage.
 - `tests/test_research_display_refresh.py`: replace loose-file and partial
   success expectations. On either builder failure, both builders still run,
   the prior current pointer/generation remain byte-identical, the staging

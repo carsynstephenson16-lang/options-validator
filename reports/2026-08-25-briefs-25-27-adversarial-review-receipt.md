@@ -157,3 +157,31 @@ This PASS authorizes the owner-directed Brief 26 hand-off only if the Wave 0
 documentation PR lands. The PR remains draft; the reviewer did not authorize
 merge, deployment, ops mutation, ledger mutation, authority changes, or making
 any PR ready.
+
+## Post-submission Git audit — PR #80
+
+**Date:** 2026-08-25
+
+After the draft PR was pushed, a fresh Git/GitHub audit verified its ancestry,
+exact patch-id equivalence for source commits `7908919` and `839ddb3`, changed
+paths, CI, review/comment state, and protected untracked-draft hashes. Two
+documentation gaps were corrected before the audit-fix commit:
+
+1. Brief 26 named nonexistent `tests/test_regime_report.py`; the existing
+   regime-report coverage is in `tests/test_regime.py`, now cited correctly.
+2. The central number registry was not routed from the canonical
+   `codex-brief-writing` skill, and the draft-only worker rule was not present
+   in `AGENTS.md`. Both entry points now carry the reservation/collision and
+   draft-PR authority rules.
+
+Post-fix validation used unittest discovery (the repository's required test
+shape): regime/report 23/23 PASS, experiments-dashboard 4/4 PASS, and
+research-display-refresh 7/7 PASS; `git diff --check` was clean.
+
+One separate implementation gap remains outside this documentation PR:
+`tools/anti-stranding/repo-reconcile` still creates non-`wip/*` PRs ready by
+default, although its merge loop correctly excludes drafts. That script is
+already concurrently modified in the dedicated
+`codex/repo-reconcile-publish` worktree/branch. PR #80 does not overlap that
+owned worktree or deploy a reconciler change; the default-draft code change
+must be reconciled in that lane before its next deployment.
