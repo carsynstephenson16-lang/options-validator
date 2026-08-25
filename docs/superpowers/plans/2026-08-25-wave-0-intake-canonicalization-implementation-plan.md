@@ -86,7 +86,7 @@
 - Consumes: reviewed documentation-only diff.
 - Produces: one pushed branch and one GitHub draft PR; no merge or deployment.
 
-- [ ] Run whitespace, conflict-marker, link/path, reservation-hash, and docs-only diff checks.
-- [ ] Confirm the primary-checkout draft hashes are unchanged.
-- [ ] Push `codex/wave0-intake-canonicalization`.
-- [ ] Create the PR with `gh pr create --draft`; verify `isDraft=true`; stop.
+- [x] Run whitespace, conflict-marker, link/path, reservation-hash, and docs-only diff checks.
+- [x] Confirm the primary-checkout draft hashes are unchanged.
+- [x] Push `codex/wave0-intake-canonicalization`.
+- [x] Create the PR with `gh pr create --draft`; verify `isDraft=true`; stop.
