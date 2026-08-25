@@ -531,9 +531,17 @@ fi
 # on exactly the days the lane is most likely to be the only lane that ran.
 # The tier LABEL on the commit message is unchanged: these are data(ritual)
 # artifacts, not H7 evidence.
+#
+# reports/schwab_chains is a DATA-TIER path for the same reason (2026-08-25):
+# the 15:45 preclose capture wrapper writes the chain receipts but has no
+# commit step of its own, so this ritual is their ONLY automatic durability
+# path -- and the capture runs every session regardless of H7 authority.
+# Leaving it in the full-tier branch meant no receipt was auto-committed on
+# any data-tier day (2026-08-20 and 2026-08-24 survived only by manual
+# rescue commits c9e74cc / 378230f / 13d48a9).
 # ---------------------------------------------------------------------------
 DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs
-                 reports/h5 reports/h10 ledger/facts.log)
+                 reports/h5 reports/h10 reports/schwab_chains ledger/facts.log)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
 EVIDENCE_COMMIT_MSG="data(ritual): daily ritual data-phase artifacts ${RUN_DATE}
 
@@ -544,8 +552,7 @@ evidence-path allow-list; this commit never contains code."
 if [ "$FULL_AUTHORITY_RC" -eq 0 ]; then
   FULL_TIER_PATHS=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
                    reports/h7_receipts reports/h7_data_gate
-                   reports/h6_forward reports/h8_forward
-                   reports/schwab_chains)
+                   reports/h6_forward reports/h8_forward)
   GIT_ADD_PATHS=("${GIT_ADD_PATHS[@]}" "${FULL_TIER_PATHS[@]}")
   EVIDENCE_COMMIT_MSG="data(h7): daily ritual evidence ${RUN_DATE}
 

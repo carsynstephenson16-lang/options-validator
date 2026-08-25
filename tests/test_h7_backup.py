@@ -34,7 +34,10 @@ class BackupTests(unittest.TestCase):
 
     def test_backup_prints_expected_payload_size_before_restic(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            # run_backup resolves its root, and on macOS the tempdir lives
+            # behind the /var -> /private/var symlink; resolve up front so the
+            # cwd assertion below compares like with like.
+            root = Path(temp).resolve()
             chain = root / ".cache/chains/one.parquet"
             chain.parent.mkdir(parents=True)
             chain.write_bytes(b"chain")

@@ -1805,7 +1805,105 @@ class V2RenderTests(unittest.TestCase):
         )
 
 
+class InputRootFallbackTests(unittest.TestCase):
+    """ATTRACTIVENESS_INPUT_ROOT unset -> default to the ops checkout.
+
+    Owner-directed 2026-08-25: a repo/dev build must read board inputs
+    (receipts, caches) from the ops checkout by default, because capture
+    receipts are written only there; reading the dev checkout's own
+    reports/ renders a falsely stale board.
+    """
+
+    def _run(self, fallback, env_value=None):
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        del tempfile  # helper signature symmetry; dirs made by callers
+        with mock.patch.dict(os.environ):
+            os.environ.pop("ATTRACTIVENESS_INPUT_ROOT", None)
+            if env_value is not None:
+                os.environ["ATTRACTIVENESS_INPUT_ROOT"] = env_value
+            with mock.patch.object(ad, "OPS_CHECKOUT_FALLBACK", fallback):
+                before = Path.cwd()
+                with ad._input_root_cwd() as root:
+                    inside = Path.cwd()
+                after = Path.cwd()
+        return before, root, inside, after
+
+    def test_unset_env_defaults_to_existing_ops_checkout(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ops = Path(tmp) / "options-validator-ops"
+            ops.mkdir()
+            before, root, inside, after = self._run(ops)
+        self.assertEqual(root, ops.resolve())
+        self.assertEqual(inside, ops.resolve())
+        self.assertEqual(after, before)
+
+    def test_unset_env_without_ops_checkout_stays_in_cwd(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "no-such-checkout"
+            before, root, inside, after = self._run(missing)
+        self.assertEqual(root, before)
+        self.assertEqual(inside, before)
+        self.assertEqual(after, before)
+
+    def test_explicit_env_wins_over_ops_fallback(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ops = Path(tmp) / "options-validator-ops"
+            ops.mkdir()
+            explicit = Path(tmp) / "explicit-root"
+            explicit.mkdir()
+            before, root, inside, after = self._run(
+                ops, env_value=str(explicit))
+        self.assertEqual(root, explicit.resolve())
+        self.assertEqual(inside, explicit.resolve())
+        self.assertEqual(after, before)
+
+    def test_env_dot_forces_current_checkout(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ops = Path(tmp) / "options-validator-ops"
+            ops.mkdir()
+            before, root, inside, after = self._run(ops, env_value=".")
+        self.assertEqual(root, before.resolve())
+        self.assertEqual(inside, before.resolve())
+        self.assertEqual(after, before)
+
+    def test_fallback_equal_to_cwd_does_not_chdir(self):
+        from pathlib import Path
+
+        before, root, inside, after = self._run(Path.cwd())
+        self.assertEqual(root, before)
+        self.assertEqual(inside, before)
+        self.assertEqual(after, before)
+
+
 class MainTests(unittest.TestCase):
+    def setUp(self):
+        # Hermeticity: keep env-unset builds in the test cwd even on the
+        # machine where the real ops checkout exists (the default-input-root
+        # fallback is covered by InputRootFallbackTests above).
+        from pathlib import Path
+        from unittest import mock
+
+        patcher = mock.patch.object(
+            ad, "OPS_CHECKOUT_FALLBACK", Path("/nonexistent-ops-checkout"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_main_reads_external_board_and_restores_output_cwd(self):
         import os
         import tempfile
