@@ -207,11 +207,19 @@ registration.
      "owner-directed in-session 2026-08-25 (spoken, not owner-typed)". This
      also satisfies brief 27 WP-F.3's flip-before-registration precondition
      from day one. The owner retains veto by flipping it back.
-   - **D-2:** whether research bundles should annotate `PICK_TOP_N`+pinned
-     candidates (≈66% more packets per run against the plist's
-     $8.00/attempt, $200.00/month budgets —
-     `tools/launchd/com.carsyn.options-validator.research-refresh.plist:24-27`,
-     Repo-verified) or stay at 3+pinned.
+   - **D-2 — RULED (owner-directed in-session 2026-08-25, spoken:
+     "annotate all 5 picks"):** research bundles annotate
+     `PICK_TOP_N`+pinned. The 2026-08-25 parameter audit confirmed this is
+     the no-edit path — the research tool inherits the selector default and
+     no verifier pins a count (`tools/research_context_assemble.py:66,68`;
+     `attractiveness_research_v2.required_symbols` derives the set). One
+     audited line for the runbook/packet: the annotated-candidate count is
+     DERIVED from the live board, never pinned in the research path; if the
+     derived required-symbol set cannot be covered within the per-attempt
+     budget (`plist:24-27`; the job runs on the owner's Claude Max login,
+     so the practical constraint is plan usage, not dollars), the run fails
+     closed and reports the shortfall — it never annotates a subset
+     silently.
 
 ## Acceptance / verification
 

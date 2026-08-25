@@ -182,9 +182,21 @@ path is `.tmp`).
 
 1. Consumes the picks artifact + `verified_sessions()`; refuses to record a
    session absent from the verified list (`SESSION_UNVERIFIED`, fail-closed).
-2. Membership-entry events: a (arm, candidate_id) pair opens ONCE — on the
-   session it first appears in that arm's top-N — and is not re-recorded
-   while continuously present; re-entry after an exit opens a new event.
+2. Membership-entry events are keyed on **(arm, symbol, lane)** — a
+   shortlist SLOT — NOT on `candidate_id` (2026-08-25 parameter audit,
+   measured on the frozen cache 2026-05-01→2026-07-27: the winning
+   expiry+strike changes on ~90% of consecutive session pairs, median
+   candidate_id run length 1 session, ~38 candidate_id-keyed events per
+   symbol-lane per 42 sessions — candidate_id keying would flood the study
+   with re-struck near-duplicates of one economic bet, defeating the
+   rev-2 fix for review finding 4). The slot opens ONCE, on the session
+   its symbol-lane first enters the arm's top-N; the contract recorded is
+   the one displayed on that opening session and it runs its own
+   mark/settlement schedule. While the slot stays continuously in the
+   top-N, a strike/expiry change is recorded as a `RESTRIKE` annotation on
+   the open slot, never a new event. A new event opens only after the
+   symbol-lane exits the top-N and later re-enters. The WP-F.4 projection
+   must quote base rates under THIS keying.
 3. Append-only JSONL under `reports/pick_tracker/dryrun/` (until WP-F's
    registration flips the path), fcntl-locked, idempotent: same
    (session, arm, content-hash) re-append is a no-op; same-session
@@ -203,21 +215,35 @@ path is `.tmp`).
    conservative close-out side (sells marked at ask to buy back, buys at
    bid). Missing name in a capture → `MARK_GAP` (never a stale carry —
    `.cursorrules` EOD-gap rule).
-3. Mark/settlement schedule (rev-2 finding N-3 — honesty about what seq 19
-   actually registers): ledger seq 19 registers mark points for exactly TWO
+3. Mark/settlement schedule (rev-2 finding N-3; REVISED by the 2026-08-25
+   parameter audit): ledger seq 19 registers mark points for exactly TWO
    lanes — "LEAPS marks are 21, 63, and 126 sessions; tactical call marks
    are 5, 10, and 20 sessions" (Repo-verified). For CSP it registers exit
    ARMS (strategy rules, no mark schedule); for CC/PMCC it registers
-   accounting decompositions with NO horizons. Therefore: LEAPS and tactical
-   calls use the registered 21/63/126 and 5/10/20 marks; CSP/CC/PMCC mark
-   points are LLM-PROPOSED here (proposal: 5/10/21 sessions, mirroring the
-   tactical grid plus the 21-DTE convention) and are moved into the WP-F
-   packet for the OWNER to type at registration — Codex must not freeze
-   them in `config.py` as registered values. A pick's terminal settlement is
-   the earlier of contract expiry (intrinsic at `data/underlying_closes.py`
-   close) or its lane's longest mark point — no single 42-session close-out
-   across all lanes (rev-1 finding 22). Both legs' costs each way. Data-edge
-   terminations labeled `terminal_conservative_mark` (seq 21 convention).
+   accounting decompositions with NO horizons. LEAPS and tactical calls use
+   the registered marks. CSP/CC/PMCC use an LLM-PROPOSED,
+   elapsed-SESSION-denominated grid — **5 and 10 sessions, plus 21 sessions
+   applied ONLY to entries whose DTE at fill exceeds 30 calendar days** —
+   owner-typed via the WP-F packet; Codex must not freeze them in
+   `config.py` as registered values. This grid is explicitly NOT seq 19's
+   CSP "close at 21 DTE" exit arm: that is a remaining-tenor rule (like
+   `config.py` H10_DTE_EXIT), not an elapsed clock, and conflating the two
+   is the seq-30 IV-units defect pattern — the audit found the modal board
+   pick (~11 DTE, ladder bucket 1 target 14 DTE / window 10-21 calendar
+   days) can NEVER reach 21 elapsed sessions and is already past 21
+   remaining DTE at entry. Every pick settles at the EARLIER of contract
+   expiry (intrinsic at `data/underlying_closes.py` close) or its lane's
+   longest applicable mark; an interior mark falling after expiry is
+   recorded `MARK_AFTER_EXPIRY` and omitted, never carried — this applies
+   to the registered tactical 10/20 marks too, which an ~11-DTE tactical
+   pick also cannot reach. The scoreboard prints, per lane, the count of
+   entries whose marks were unreachable, and a lane with zero entries over
+   the window reports "no data", never a result — the audit's badge census
+   (sell lanes carry 7 gradeable badges vs 3 on buy lanes; FOMC/VRP/
+   earnings badges currently AMBER/UNKNOWN on most sell cards) means income
+   lanes may rarely enter the shortlist at all. Both legs' costs each way.
+   Data-edge terminations labeled `terminal_conservative_mark` (seq 21
+   convention).
 4. Outputs per pick: P&L after costs at each mark point, max drawdown while
    open, and the plain-language outcome word ("gained/lost after costs" —
    vocabulary discipline; never "worked"/"proven").
@@ -281,6 +307,16 @@ path is `.tmp`).
    calendar months of ENTRIES, positions then run out their mark schedule;
    LLM-proposed, provenance table); dry-run exclusion; no-extension clause;
    owner-typed wording block with blanks.
+   OWNER SELECTION 2026-08-25 (spoken in-session, then audited at the
+   owner's direction "audit your proposals then go with what's best"): the
+   owner approved the 42-session window, the income-lane mark proposal, and
+   the pre-accept route, and delegated adoption of the audit's amendments.
+   The audited final proposals are: window 42 sessions (unchanged; audit
+   verdict — length was fine, the entry KEYING was the defect, fixed in
+   WP-B.2); income-lane marks 5/10 sessions + conditional 21 (WP-C.3, the
+   audited replacement for the defective flat 21); pre-accept per WP-F.4's
+   audited clause below. These remain proposals until the owner TYPES them
+   in the registration.
 2. The packet quotes the feasibility gate's ban verbatim
    (`2026-07-24-registration-feasibility-gate.md:71-73`) and states the
    design's answer: two arms fixed in advance, one pre-registered contrast,
@@ -314,12 +350,19 @@ path is `.tmp`).
    cancellations the study's dominant output;
    (c) the minimum capture density the design needs (state it as
    sessions-with-verified-capture per week).
-   The packet must either state minimums the owner accepts or carry an
-   explicit sparsity pre-acceptance clause quoting the computed numbers
-   (H10 precedent) — silence is not an option. The gate's stated failure
-   mode — "a window that costs months and answers nothing" — is this
-   design's risk, and the packet must face it with the numbers, not the
-   not-loss-gated escape. **Hard precondition (upgraded from "should",
+   The owner ruled the PRE-ACCEPT route 2026-08-25 — but ruled it EX ANTE,
+   before (a)/(b)/(c) exist. Per the parameter audit, the packet's
+   pre-acceptance clause is therefore incomplete until ALL THREE numbers —
+   (a), (b), AND (c), not just "the computed numbers" loosely — are
+   inserted and quoted verbatim (H10 precedent is pre-accept QUOTING the
+   number). Guard against pre-accepting blind: if computed (b) exceeds 50%
+   or (a) falls below one event per arm per week (slot keying, WP-B.2),
+   the packet RETURNS to the owner for re-confirmation before typing —
+   an advance pre-acceptance does not extend to numbers materially worse
+   than the design assumed. The gate's stated failure mode — "a window
+   that costs months and answers nothing" — is this design's risk, and
+   the packet must face it with the numbers, not the not-loss-gated
+   escape. **Hard precondition (upgraded from "should",
    round-3 NEW-4): the ops-health repair (task chip 2026-08-25 — receipts
    uncommitted, ritual status stale/RUNNING) must land and show ≥5
    consecutive committed daily receipts before the registration is
@@ -362,8 +405,16 @@ scoreboard header contains the concentration + A2-authority sentences.
   `COMMISSION_PER_CONTRACT`, `SLIPPAGE_HAIRCUT` exist in `config.py`.
 - Ops ritual currently unhealthy: Repo-verified 2026-08-25 (untracked
   receipts 08-20/08-24 in ops; producer logs showing stale/RUNNING status).
-- 42-session entry window, 2-session fill bound: LLM-proposed 2026-08-25;
-  the owner types the registered numbers.
+- 42-session entry window, 2-session fill bound, 5/10/+conditional-21
+  income-lane marks, slot keying: LLM-proposed 2026-08-25, owner-approved
+  in-session (spoken) with audit amendments owner-delegated ("go with
+  what's best"); the owner types the registered numbers.
+- Candidate churn measurement (winning expiry+strike changes ~90% of
+  consecutive session pairs; median candidate_id run 1 session; ~38
+  candidate_id events per symbol-lane per 42 sessions): Test-verified
+  2026-08-25 on the frozen cache 2026-05-01→2026-07-27 (7 dense symbols;
+  single-regime proxy caveat; parameter-audit receipt in the review
+  receipt file).
 - Broker paper fills optimistic vs this repo's standard: Inference (no
   official source consulted); the against-Robinhood recommendation rests
   primarily on the Repo-verified validator-only guardrail.

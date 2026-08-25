@@ -108,3 +108,20 @@ decision responding to NEW-1's measurement, NOT itself re-reviewed; flagged
 in the brief's Status line for the implementing reviewer. Acceptance
 switched from a percentage floor to dry-run rule-faithfulness with a <30%
 STOP-and-report-to-owner clause.
+
+## Round 4 (2026-08-25 pm — parameter audit, fresh Opus agent)
+
+Owner approved the packet proposals in-session ("42 / 21 / pre-accept is
+good and annotate all 5 picks") and directed "audit your proposals then go
+with what's best." Focused audit of the four values, with measurements:
+
+| Value | Verdict | Disposition |
+|---|---|---|
+| 42-session entry window | DEFECTIVE (keying, not length) — measured on the frozen cache 2026-05-01→2026-07-27: winning expiry+strike changes ~90% of consecutive session pairs, median candidate_id run 1 session → candidate_id-keyed "once-only" events would flood with re-struck duplicates | Entry events re-keyed to (arm, symbol, lane) SLOTS with RESTRIKE annotations (brief 27 WP-B.2); window 42 retained |
+| 21-session income-lane mark | DEFECTIVE — units conflation (seq 19's "close at 21 DTE" is remaining tenor, not elapsed sessions; seq-30 IV-units pattern) AND unreachable for the modal ~11-DTE pick; income lanes may rarely enter the shortlist at all (badge census: sell cards can't reach GREEN-fraction 1.0 while FOMC/VRP/earnings sit AMBER/UNKNOWN) | Replaced with 5/10 sessions + 21 only for DTE>30 entries; MARK_AFTER_EXPIRY handling incl. registered tactical marks; per-lane unreachable-mark counts; zero-entry lanes report "no data" (brief 27 WP-C.3) |
+| Pre-accept clause | SOUND WITH CAVEAT — projection duty survives, but (c) could be dropped and the owner ruled ex ante, before numbers exist | Clause hardened: all three numbers quoted verbatim; return-to-owner trigger if cancellations >50% or entries <1/arm/week (brief 27 WP-F.4) |
+| 5-pick research annotations | SOUND — count is derived, nothing pins 3; verifier derives required symbols | Recorded as ruled D-2 with the fail-closed budget line (brief 25 WP-E.5) |
+
+All amendments applied same-day; owner-typed registration values remain
+owner-typed (the approvals are spoken selections of proposals, not typed
+registrations).
