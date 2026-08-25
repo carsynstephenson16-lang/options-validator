@@ -2,8 +2,18 @@
 
 **Status:** refreshed high-level plan; review-only; no implementation authority.
 This update reconciles the original plan with work already completed on `main`.
-It changes no production behavior, opens no pull request, consumes no OOS look,
-and is intentionally uncommitted.
+It changes no production behavior and consumes no OOS look. This version
+supersedes the 2026-08-24 original first committed in `3f5dccf` (whose §12
+decisions and §2 wording are corrected below and in the addendum).
+
+> **Verification addendum (read with this plan):**
+> `docs/plans/2026-08-25-research-integration-plan-verification-addendum.md` —
+> a four-auditor verification pass (2026-08-25) confirmed this plan's evidence
+> and data inventory, found reasoning defects, and carries the **owner-ratified
+> corrected final decision table** (notably: A split with calibration BLOCKED BY
+> DATA; B → BLOCKED BY DATA; G → PARK with reopen trigger; F's acceptance
+> criterion made falsifiable). Where §4/§12 below disagree with the addendum,
+> the addendum governs.
 
 ## Audit identity and evidence rules
 
