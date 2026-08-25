@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
+from contextlib import redirect_stdout
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import cast
+from zoneinfo import ZoneInfo
 
 import pandas_market_calendars as mcal
+
+import config
 
 
 class HealthStatus(StrEnum):
@@ -46,6 +51,8 @@ _SORT_ORDER = {
     HealthStatus.NOT_INSTRUMENTED: 5,
 }
 _ALIGNMENT_STATUS = re.compile(r"(?:^|\s)status=([A-Z_]+)(?:\s|$)")
+_EXPECTED_HYPOTHESES = frozenset(("H5", "H6", "H7", "H8", "H10"))
+_NY_TZ = ZoneInfo("America/New_York")
 
 
 def _is_xnys_session(as_of: str) -> bool:
@@ -204,6 +211,21 @@ def _ritual_hypotheses(root: Path, as_of: str) -> HealthRow:
             "missing hypotheses object",
             relative,
         )
+    actual_hypotheses = set(hypotheses)
+    if actual_hypotheses != _EXPECTED_HYPOTHESES:
+        missing = ",".join(sorted(_EXPECTED_HYPOTHESES - actual_hypotheses))
+        unexpected = ",".join(sorted(actual_hypotheses - _EXPECTED_HYPOTHESES))
+        details = []
+        if missing:
+            details.append(f"missing={missing}")
+        if unexpected:
+            details.append(f"unexpected={unexpected}")
+        return HealthRow(
+            "Ritual hypotheses",
+            HealthStatus.FAILED,
+            "hypothesis key mismatch: " + "; ".join(details),
+            relative,
+        )
     healthy = {"CAPTURED", "NO_SIGNAL"}
     degraded = {"REFUSED", "MISSING"}
     problems: list[str] = []
@@ -252,67 +274,46 @@ def _receipt_timestamp(payload: dict[str, object]) -> datetime | None:
     return timestamp
 
 
-def _intraday_capture(root: Path, as_of: str) -> HealthRow:
-    directory_relative = f"reports/intraday_capture/{as_of}"
-    directory, directory_error = _contained_path(root, directory_relative)
-    if directory_error is not None or directory is None:
+def _intraday_capture(root: Path, as_of: str, tag: str) -> HealthRow:
+    job = f"Intraday capture ({tag})"
+    relative = f"reports/intraday_capture/{as_of}/{tag}.json"
+    path, path_error = _contained_path(root, relative)
+    if path_error is not None or path is None:
         return HealthRow(
-            "Intraday capture",
+            job,
             HealthStatus.FAILED,
-            directory_error or "unsafe receipt directory",
-            directory_relative,
+            path_error or "unsafe receipt path",
+            relative,
         )
-    candidates = sorted(directory.glob("*.json")) if directory.is_dir() else []
-    if not candidates:
-        return _missing("Intraday capture", f"{directory_relative}/*.json")
-    parsed: list[tuple[datetime, Path, dict[str, object]]] = []
-    for candidate in candidates:
-        relative = candidate.relative_to(root).as_posix()
-        safe_candidate, path_error = _contained_path(root, relative)
-        if path_error is not None or safe_candidate is None:
-            return HealthRow(
-                "Intraday capture",
-                HealthStatus.FAILED,
-                path_error or "unsafe receipt path",
-                relative,
-            )
-        payload, error = _read_object(safe_candidate)
-        if error is not None or payload is None:
-            return HealthRow(
-                "Intraday capture", HealthStatus.FAILED, error or "invalid receipt", relative
-            )
-        timestamp = _receipt_timestamp(payload)
-        if timestamp is None:
-            return HealthRow(
-                "Intraday capture",
-                HealthStatus.FAILED,
-                "invalid captured_at_utc",
-                relative,
-            )
-        parsed.append((timestamp, candidate, payload))
-    _timestamp, newest_path, newest = max(parsed, key=lambda item: item[0])
-    relative = newest_path.relative_to(root).as_posix()
-    universe = newest.get("universe")
+    if not path.is_file():
+        return _missing(job, relative)
+    payload, error = _read_object(path)
+    if error is not None or payload is None:
+        return HealthRow(job, HealthStatus.FAILED, error or "invalid receipt", relative)
+    if _receipt_timestamp(payload) is None:
+        return HealthRow(
+            job,
+            HealthStatus.FAILED,
+            "invalid captured_at_utc",
+            relative,
+        )
+    universe = payload.get("universe")
     if (
         not isinstance(universe, list)
         or not universe
         or not all(isinstance(symbol, str) and symbol for symbol in universe)
         or len(set(universe)) != len(universe)
     ):
-        return HealthRow(
-            "Intraday capture", HealthStatus.FAILED, "invalid symbol universe", relative
-        )
-    names = newest.get("names")
+        return HealthRow(job, HealthStatus.FAILED, "invalid symbol universe", relative)
+    names = payload.get("names")
     if not isinstance(names, dict):
-        return HealthRow(
-            "Intraday capture", HealthStatus.FAILED, "missing per-symbol statuses", relative
-        )
+        return HealthRow(job, HealthStatus.FAILED, "missing per-symbol statuses", relative)
     expected = set(universe)
     actual = set(names)
     missing = sorted(expected - actual)
     if missing:
         return HealthRow(
-            "Intraday capture",
+            job,
             HealthStatus.FAILED,
             "missing symbol rows: " + ", ".join(missing),
             relative,
@@ -320,13 +321,12 @@ def _intraday_capture(root: Path, as_of: str) -> HealthRow:
     unexpected = sorted(actual - expected)
     if unexpected:
         return HealthRow(
-            "Intraday capture",
+            job,
             HealthStatus.FAILED,
             "unexpected symbol rows: " + ", ".join(unexpected),
             relative,
         )
     covered = 0
-    unavailable = 0
     unknown: list[str] = []
     identity_mismatches: list[str] = []
     for symbol in sorted(universe):
@@ -339,19 +339,19 @@ def _intraday_capture(root: Path, as_of: str) -> HealthRow:
         if status == "ok":
             covered += 1
         elif status == "unavailable":
-            unavailable += 1
+            continue
         else:
             unknown.append(f"{symbol}={status}")
     if identity_mismatches:
         return HealthRow(
-            "Intraday capture",
+            job,
             HealthStatus.FAILED,
             "symbol identity mismatch: " + ", ".join(identity_mismatches),
             relative,
         )
     if unknown:
         return HealthRow(
-            "Intraday capture",
+            job,
             HealthStatus.FAILED,
             "unknown symbol status: " + ", ".join(unknown),
             relative,
@@ -364,7 +364,7 @@ def _intraday_capture(root: Path, as_of: str) -> HealthRow:
     else:
         status = HealthStatus.DEGRADED
     return HealthRow(
-        "Intraday capture",
+        job,
         status,
         f"{covered}/{total} symbols captured",
         relative,
@@ -389,14 +389,84 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
             "Schwab preclose", HealthStatus.FAILED, error or "invalid receipt", relative
         )
     value = payload.get("overall_status")
-    if value == "ok":
-        return HealthRow("Schwab preclose", HealthStatus.OK, "overall_status=ok", relative)
     if value == "failed":
         return HealthRow("Schwab preclose", HealthStatus.FAILED, "overall_status=failed", relative)
+    if value != "ok":
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            f"unknown overall_status {value!r}",
+            relative,
+        )
+    if payload.get("force") is not False:
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.DEGRADED,
+            "force must be false; require force=false",
+            relative,
+        )
+    if payload.get("invocation_source") != "launchd":
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.DEGRADED,
+            "invocation_source must be launchd",
+            relative,
+        )
+    universe = payload.get("universe")
+    if not isinstance(universe, list) or not all(isinstance(symbol, str) for symbol in universe):
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            "invalid universe for manifest verification",
+            relative,
+        )
+    manifest_relative = f"reports/schwab_chains/{as_of}/manifest.json"
+    manifest_path, manifest_error = _contained_path(root, manifest_relative)
+    if manifest_error is not None or manifest_path is None:
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            manifest_error or "unsafe manifest path",
+            manifest_relative,
+        )
+    chain_dir_relative = ".cache/schwab_chains"
+    chain_dir, chain_dir_error = _contained_path(root, chain_dir_relative)
+    if chain_dir_error is not None or chain_dir is None:
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            chain_dir_error or "unsafe chain directory",
+            chain_dir_relative,
+        )
+    for symbol in universe:
+        chain_relative = f"{chain_dir_relative}/{symbol}_{as_of}.parquet"
+        _chain_path, chain_error = _contained_path(root, chain_relative)
+        if chain_error is not None:
+            return HealthRow(
+                "Schwab preclose",
+                HealthStatus.FAILED,
+                chain_error,
+                chain_relative,
+            )
+    # The existing verifier imports the capture module, whose dependencies emit
+    # import-time informational lines to stdout. Keep the digest's stdout contract
+    # exact while still reusing the canonical offline verification implementation.
+    with redirect_stdout(io.StringIO()):
+        from tools import schwab_chain_manifest
+
+    try:
+        schwab_chain_manifest.verify_session(as_of, universe, chain_dir, manifest_path, path)
+    except (schwab_chain_manifest.SchwabChainManifestError, OSError) as exc:
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            f"manifest verification failed: {exc}",
+            relative,
+        )
     return HealthRow(
         "Schwab preclose",
-        HealthStatus.FAILED,
-        f"unknown overall_status {value!r}",
+        HealthStatus.OK,
+        "overall_status=ok; force=false; invocation_source=launchd; manifest verified",
         relative,
     )
 
@@ -439,7 +509,7 @@ def _alignment_check(root: Path, as_of: str) -> HealthRow:
     return HealthRow("Alignment check", status, f"status={value}", relative)
 
 
-def _research_refresh(root: Path, as_of: str) -> HealthRow:
+def _research_refresh(root: Path, as_of: str, invocation_date: date) -> HealthRow:
     relative = f".tmp/research_refresh/receipt_v2_{as_of}_premarket.json"
     path, path_error = _contained_path(root, relative)
     if path_error is not None or path is None:
@@ -451,10 +521,26 @@ def _research_refresh(root: Path, as_of: str) -> HealthRow:
         )
     if not path.is_file():
         return _missing("Research refresh (premarket)", relative)
+    try:
+        receipt_date = datetime.fromtimestamp(path.stat().st_mtime, _NY_TZ).date()
+    except OSError as exc:
+        return HealthRow(
+            "Research refresh (premarket)",
+            HealthStatus.FAILED,
+            f"unreadable receipt mtime: {type(exc).__name__}",
+            relative,
+        )
+    if receipt_date != invocation_date:
+        return HealthRow(
+            "Research refresh (premarket)",
+            HealthStatus.MISSING,
+            f"receipt mtime {receipt_date} not fresh for invocation date {invocation_date}",
+            relative,
+        )
     return HealthRow(
         "Research refresh (premarket)",
         HealthStatus.OK,
-        "expected slot receipt exists",
+        f"expected slot receipt is fresh for invocation date {invocation_date}",
         relative,
     )
 
@@ -477,12 +563,15 @@ def _session_rows(status: HealthStatus, reason: str, as_of: str) -> list[HealthR
             reason,
             f"reports/ritual/capture_receipt_{as_of}.json",
         ),
-        HealthRow(
-            "Intraday capture",
-            status,
-            reason,
-            f"reports/intraday_capture/{as_of}/*.json",
-        ),
+        *[
+            HealthRow(
+                f"Intraday capture ({tag})",
+                status,
+                reason,
+                f"reports/intraday_capture/{as_of}/{tag}.json",
+            )
+            for tag in config.INTRADAY_CAPTURE_TIMES
+        ],
         HealthRow(
             "Schwab preclose",
             status,
@@ -499,10 +588,18 @@ def _session_rows(status: HealthStatus, reason: str, as_of: str) -> list[HealthR
     ]
 
 
-def collect_health(root: Path, as_of: str) -> list[HealthRow]:
-    """Read receipt state under ``root`` without mutating it."""
+def collect_health(
+    root: Path,
+    as_of: str,
+    *,
+    research_root: Path | None = None,
+    invocation_date: date | None = None,
+) -> list[HealthRow]:
+    """Read receipt state under both roots without mutating either one."""
     date.fromisoformat(as_of)
     root = Path(root).resolve()
+    research_root = Path(research_root if research_root is not None else root).resolve()
+    invocation_date = invocation_date or datetime.now(_NY_TZ).date()
     if not _is_xnys_session(as_of):
         return [
             *_session_rows(HealthStatus.NO_SESSION, "not an XNYS session", as_of),
@@ -512,10 +609,10 @@ def collect_health(root: Path, as_of: str) -> list[HealthRow]:
     return [
         _ritual_overall(root, as_of),
         _ritual_hypotheses(root, as_of),
-        _intraday_capture(root, as_of),
+        *[_intraday_capture(root, as_of, tag) for tag in config.INTRADAY_CAPTURE_TIMES],
         _schwab_preclose(root, as_of),
         _alignment_check(root, as_of),
-        _research_refresh(root, as_of),
+        _research_refresh(research_root, as_of, invocation_date),
         _research_display_refresh(),
     ]
 
@@ -555,18 +652,34 @@ def render_digest(as_of: str, rows: list[HealthRow]) -> str:
 def write_digest(
     *,
     root: Path,
+    research_root: Path,
     as_of: str,
-    output_root: Path,
-    allow_output_in_root: bool = False,
+    out_dir: Path,
+    invocation_date: date,
+    cwd: Path,
 ) -> Path:
-    output = output_root / ".tmp" / "job_health" / f"digest_{as_of}.md"
     resolved_root = root.resolve()
-    resolved_output = output.resolve()
-    if not allow_output_in_root and (
-        resolved_output == resolved_root or resolved_root in resolved_output.parents
+    resolved_research_root = research_root.resolve()
+    resolved_out_dir = out_dir.resolve()
+    resolved_cwd = cwd.resolve()
+    for label, read_root in (
+        ("--root", resolved_root),
+        ("--research-root", resolved_research_root),
     ):
-        raise ValueError("digest output would be written inside explicit --root")
-    digest = render_digest(as_of, collect_health(resolved_root, as_of))
+        if read_root != resolved_cwd and (
+            resolved_out_dir == read_root or read_root in resolved_out_dir.parents
+        ):
+            raise ValueError(f"--out-dir resolves inside {label} for a different checkout")
+    output = resolved_out_dir / f"digest_{as_of}.md"
+    digest = render_digest(
+        as_of,
+        collect_health(
+            resolved_root,
+            as_of,
+            research_root=resolved_research_root,
+            invocation_date=invocation_date,
+        ),
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(digest, encoding="utf-8")
     print(digest, end="")
@@ -577,14 +690,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--as-of", required=True, type=date.fromisoformat)
     parser.add_argument("--root", type=Path)
+    parser.add_argument(
+        "--research-root",
+        type=Path,
+        default=Path("~/options-validator-research").expanduser(),
+    )
+    parser.add_argument("--out-dir", type=Path)
     args = parser.parse_args(argv)
-    output_root = Path.cwd()
+    cwd = Path.cwd()
     try:
         write_digest(
-            root=args.root if args.root is not None else output_root,
+            root=args.root if args.root is not None else cwd,
+            research_root=args.research_root,
             as_of=args.as_of.isoformat(),
-            output_root=output_root,
-            allow_output_in_root=args.root is None,
+            out_dir=args.out_dir if args.out_dir is not None else cwd / ".tmp" / "job_health",
+            invocation_date=datetime.now(_NY_TZ).date(),
+            cwd=cwd,
         )
     except ValueError as exc:
         parser.error(str(exc))
