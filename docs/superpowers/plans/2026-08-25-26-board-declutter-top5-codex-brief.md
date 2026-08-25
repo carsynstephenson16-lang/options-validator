@@ -206,11 +206,17 @@ Wave 0 atomicity repair)
 
    Build inside same-filesystem
    `.tmp/dashboard/research-views-generations/.staging-<generation_id>/`.
-   Run BOTH builders to collect both exits. If either is nonzero, atomically
-   write and fsync `.tmp/dashboard/research-views-last-attempt.json` with the
-   attempted id/time, both exits, `outcome: FAILED`, and no hashes from partial
-   outputs; remove only that attempt's staging directory; leave the current
-   pointer and immutable generations unchanged; exit nonzero. On success,
+   Run BOTH builders to collect both exits. If either is nonzero, acquire the
+   same publication lock and atomically write+fsync
+   `.tmp/dashboard/research-views-last-failure.json` with strict schema
+   `research_views_failure/v1`, attempt id, UTC attempted/completed timestamps,
+   producer commit/root, both exits, and `outcome: FAILED`; include no hashes
+   from partial outputs. Mint `completed_at` while holding the lock. Re-read
+   any existing failure under the lock and replace it only when the new parsed
+   completion is later; identical attempt id is an idempotent no-op and equal
+   completion with a different id is `ATTEMPT_CONFLICT`. Remove only that
+   attempt's staging directory; leave current pointer and immutable generations
+   unchanged; exit nonzero. On success,
    create four logical artifacts — `experiments.html`,
    `wasserstein-regime.txt`, `wasserstein-regime.json`, and
    `research-views-status.txt`. Status records the id, timestamp, both zero
@@ -232,11 +238,12 @@ Wave 0 atomicity repair)
    `.tmp/dashboard/.research-views.lock`, rename staging once to the final
    immutable generation, fsync the generations parent, write+fsync a temporary
    current pointer, rename that ONE pointer over the old pointer, then fsync
-   the dashboard parent. Publish an atomic `last-attempt` receipt with
-   `outcome: PUBLISHED` only after pointer durability. A failure before pointer
-   rename leaves the prior complete generation current; a failure after it is
-   resolved by the durable pointer+manifest hash chain, never rollback by a
-   second rename. Never edit or delete a published generation in this brief.
+   the dashboard parent. The durable current pointer IS the success receipt;
+   do not write a second PUBLISHED-attempt file. A failure before pointer rename
+   leaves the prior complete generation current; a crash after pointer
+   durability cannot make an older failure look current because readers apply
+   WP-D.5's timestamp rule. Never rollback by a second rename, and never edit
+   or delete a published generation in this brief.
 5. **Reader and ops-copy hash/locking protocol:** a reader snapshots and parses
    the current pointer once, verifies the pointer's manifest hash/size, then
    resolves that exact immutable generation (never re-reads the pointer
@@ -259,7 +266,14 @@ Wave 0 atomicity repair)
    lock, re-read the destination pointer immediately before commit: source
    time newer means install; destination newer means skip; identical id means
    idempotent no-op; equal parsed timestamps with different ids means
-   `GENERATION_CONFLICT` and no pointer change. This locked recheck is the
+   `GENERATION_CONFLICT` and no pointer change. Snapshot and strictly validate
+   the source `research-views-last-failure.json` independently of the current
+   generation. Under the destination lock, reconcile it by parsed
+   `completed_at` using the same newer/idempotent/equal-time-conflict rules as
+   the producer, even when source and destination generation ids are identical.
+   Copy the byte-identical source failure BEFORE any destination pointer update;
+   a crash after pointer durability therefore cannot omit a source failure that
+   was newer than that source publication. This locked recheck is the
    compare-and-swap that prevents a stale copy from clobbering a concurrent
    local publish. The local pointer records `copied_from_root`; source manifest
    and generation stay byte-identical. Copy/integrity failure is visible but
@@ -268,8 +282,12 @@ Wave 0 atomicity repair)
 6. **Consumer migration (no hidden compatibility gap):** change
    `load_research_views_status` and the regime-sidecar loader to the validated
    pointer/manifest helper; have `_experiments_shelf_html` link to exact
-   generation paths; update the freshness chip and strip to show last-attempt
-   failure separately from the still-current generation. Update
+   generation paths. Parse the local last-failure record strictly and show it
+   separately only when `failure.completed_at` is later than the validated
+   current pointer's `published_at` (or when no valid current publication
+   exists); suppress an older failure as stale history. A malformed failure
+   channel renders its own integrity warning but cannot invalidate a valid
+   current generation. Update
    `tools/launchagents/README.md` operator curl examples to fetch the pointer,
    then its exact manifest/generation paths. Do not keep individual loose-file
    aliases: they cannot provide set atomicity and must not be treated as a
@@ -309,9 +327,9 @@ Intentional updates (same commit as the feature that breaks them):
 - `tests/test_research_display_refresh.py`: replace loose-file and partial
   success expectations. On either builder failure, both builders still run,
   the prior current pointer/generation remain byte-identical, the staging
-  directory is removed, `last-attempt` records both exits and FAILED, and the
+  directory is removed, `last-failure` records both exits and FAILED, and the
   wrapper exits nonzero. On success, assert exact generation files, manifest
-  chain, pointer swap, PUBLISHED attempt receipt, and no loose aliases. Replace
+  chain, pointer swap, no second success receipt, and no loose aliases. Replace
   the old status-rename failure case with pointer-rename/fsync failure cases
   that preserve the old current generation.
 - NEW tests (names track the rev-3/rev-4 rules — round-3 finding NEW-5):
@@ -330,6 +348,11 @@ Intentional updates (same commit as the feature that breaks them):
   artifact mutation all fail closed; same-id is idempotent, newer-local wins,
   equal-time/different-id conflicts, a lock-delayed stale copier cannot clobber
   a concurrent publish, same-root skips copy, and no loose-file fallback).
+  Failure-channel tests: a crash after durable pointer commit needs no second
+  success receipt; a failure older than current publication is suppressed; a
+  newer failure with an unchanged source generation is copied and rendered;
+  concurrent failure writers cannot regress `completed_at`; equal completion
+  with different attempt ids fails closed.
 - MUST NOT change: `SelectTopPicksTests` recipe tests except the n default;
   fail-visible pins `:1116`, `:1126`, `:1137` (the exact
   `DISPLAY_ONLY_LABEL` count of 2 must survive WP-B/WP-C); AST boundary
