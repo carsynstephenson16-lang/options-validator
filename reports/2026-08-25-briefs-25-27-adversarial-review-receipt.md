@@ -185,3 +185,49 @@ already concurrently modified in the dedicated
 `codex/repo-reconcile-publish` worktree/branch. PR #80 does not overlap that
 owned worktree or deploy a reconciler change; the default-draft code change
 must be reconciled in that lane before its next deployment.
+
+## Full-PR Wave 1 readiness audit — PR #80
+
+**Date:** 2026-08-25
+
+CodeRabbit's review skill was used, but its CLI was not installed; no
+CodeRabbit verdict is claimed. The fallback audit combined Git/GitHub state,
+current source inspection, executable command/path checks, and repeated
+read-only review by the same independent Codex reviewer.
+
+The first full-PR pass found two blockers and seven warnings outside Brief
+26's already-passed atomic protocol: Brief 27 delegated ops deployment to its
+worker and lacked enough CC/PMCC identity to compute its promised P&L; Brief
+25 omitted the real MIXED trend state, contradicted its own full-pool ranking,
+hardcoded a time-sensitive failure cause, and delegated a flag flip; Brief 27
+pooled incomparable raw dollars, lacked a cohort sufficiency rule, and still
+required later landing-order review; the Wave 0 transplant constraint was
+stale. All were corrected.
+
+Follow-up review then caught and closed four executable-contract defects:
+repo-wide Ruff formatting failed on the 281-file baseline and was narrowed to
+new files only; research-refresh evidence could not prove failure states;
+put assignment-capital provenance was not present in the snapshot; and the
+CI contract overstated independence. The briefs now use scoped formatting,
+strike-derived put provenance, lane-normalized incremental-option returns,
+and an exploratory two-week moving-block CI only after eight chronological
+cohorts. A final review caught one publication-cycle circularity in Brief 25;
+the freshness chip now snapshots board and context from one input root and
+reports only evidence-derived EXACT/STALE/UNAVAILABLE/INTEGRITY_FAILED states,
+without consulting PENDING/FINAL publication state, guard state, or logs.
+
+**Final written reviewer verdict: PASS.** No Critical or Warning findings
+remain. Brief 26 rev 6 is authorized for hand-off only after the owner lands
+this still-draft documentation PR. Brief 25 rev 4 waits for Brief 26's
+implementation to land. Brief 27 rev 5 remains DRAFT until Briefs 26 and 25
+land, it is rebased/reverified, and it receives its own fresh written PASS.
+The reviewer authorized no readiness transition, merge, deployment, ops or
+ledger mutation, registration, flag enablement, or authority change.
+
+Fresh pre-commit validation after the final receipt/status edits: regime/report
+23/23 PASS, experiments-dashboard 4/4 PASS, research-display-refresh 7/7 PASS,
+Ruff PASS, Pyright 0 errors, `git diff --check` PASS, no conflict markers, and
+all three protected untracked-draft SHA-256 values unchanged. The repo-wide
+Ruff formatter baseline remains noncompliant (281 pre-existing files); the
+implementation briefs therefore check formatting only on their genuinely new
+Python modules and do not authorize a mass rewrite.

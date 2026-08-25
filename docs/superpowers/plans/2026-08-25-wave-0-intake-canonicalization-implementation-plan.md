@@ -12,7 +12,10 @@
 
 ## Global Constraints
 
-- The branch starts at current `origin/main`; transplant only the documentation deltas from `7908919` and `839ddb3`.
+- The branch starts at current `origin/main`; reconcile the documentation deltas
+  from `7908919` and `839ddb3` without importing unrelated source-branch
+  content. In-scope Wave 0 repairs, review receipts, registry/skill routing,
+  and authority corrections may be layered only with their own audit evidence.
 - Brief 28 is event awareness and Brief 29 is Schwab inventory binding.
 - Do not rename, stage, commit, delete, or otherwise mutate any concurrent untracked draft before ownership confirmation.
 - Brief 26 requires one focused independent written PASS before hand-off status is effective.
@@ -108,3 +111,19 @@
 - [x] Route brief numbering through the central registry and conflict stop.
 - [x] Put the draft-PR authority hold in Codex's repository instructions.
 - [x] Record the separate reconciler-code gap and its concurrent owner instead of overlapping that worktree.
+
+### Task 7: Full-PR Wave 1 readiness audit
+
+**Files:**
+- Modify: Briefs 25, 26, and 27.
+- Modify: this plan and the adversarial-review receipt.
+
+**Interfaces:**
+- Consumes: complete PR #80 diff, current code contracts, worker-authority rules, and repeated independent review findings.
+- Produces: executable rev-4/rev-6/rev-5 briefs with conditional handoff gates and one final written PASS; no merge, deploy, flag, ops, or ledger action.
+
+- [x] Remove Brief 25's false MIXED-state, fixed-staleness, shortlist-membership, and worker-enable contracts.
+- [x] Preserve Brief 26's reviewed atomic protocol while making grep and formatter acceptance executable on the current baseline.
+- [x] Make Brief 27 worker scope draft-only and owner-run for ops; define complete position provenance, incremental-leg P&L, lane-normalized paired contrasts, dependence-aware CI gating, and slot-key tests.
+- [x] Keep Brief 27 DRAFT until Briefs 26 and 25 implement, rebase, and receive a separate fresh PASS.
+- [x] Obtain final independent written PASS with no Critical or Warning findings.

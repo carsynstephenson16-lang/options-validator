@@ -1,9 +1,9 @@
-# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 5)
+# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 6)
 
-**Date:** 2026-08-25 (rev 5, Wave 0 reconciliation)
+**Date:** 2026-08-25 (rev 6, post-submission command audit)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** REVIEW PASS — HAND-OFF AUTHORIZED ON LANDING, not before. One focused independent Wave 0 review issued written PASS on rev 5 at `99b7bba`; the owner-directed hand-off recorded by source commit `839ddb3` becomes effective only if the owner lands this draft documentation PR. Until then canonical `main` remains DRAFT. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`. Landing order still binds: this brief lands FIRST (26 → 25 → 27).
+**Status:** REVIEW PASS rev 6 — HAND-OFF AUTHORIZED ON OWNER LANDING, not before. The focused rev-5 reviewer PASS at `99b7bba` remains valid for the unchanged atomic protocol, and the fresh Wave 0 full-PR re-review issued written PASS after rev 6 corrected the acceptance commands. The owner-directed hand-off recorded by source commit `839ddb3` becomes effective only if the owner lands this draft documentation PR. Until then canonical `main` remains DRAFT. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`. Landing order still binds: this brief lands FIRST (26 → 25 → 27).
 **Provenance:** Repo-verified against current reconciliation base `origin/main@77b1a46` unless labeled otherwise. Round-4 parameter decisions are transplanted from `7908919`; the owner-directed hand-off is transplanted from `839ddb3`. The relevant Brief 26 implementation surfaces are unchanged from its prior `720a20e` anchor except for unrelated later `config.py` additions; all cited symbols and six slot literals were re-verified on `77b1a46`. The committed ops-input fallback remains `options_researcher/attractiveness_dashboard.py:57`. Landing order is binding: **this brief lands first, then brief 25, then brief 27.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed.
 
@@ -81,8 +81,10 @@ report demoted to a link.
    - `:3350` `selected_count, open_count = 0, 3`
    - `:3371` `for slot in range(len(cards) + 1, 4):`
    - `:3373` `selected_count, open_count = len(picks), max(0, 3 - len(picks))`
-   After editing, grep `range(1, 4)|range(len(|, 4)|0, 3` in the module to
-   confirm no seventh site exists at the final SHA.
+   After editing, run
+   `rg -n 'range\(1, 4\)|range\(len\([^)]*\) \+ 1, 4\)|max\(0, 3 -|open_count = 0, 3' options_researcher/attractiveness_dashboard.py`
+   and classify every remaining match; no shortlist/QM slot literal may be
+   left at 3 at the final SHA.
 3. Copy updates (this brief owns them): "TOP 3 PICKS TODAY" → "TOP 5 PICKS
    TODAY"; "Rule-based top 3" → "Rule-based top 5"; "…FOR MECHANICAL TOP 3"
    → "…FOR MECHANICAL TOP 5". Then grep user-visible "top 3"/"Top-3"/"Pick 3"
@@ -362,7 +364,9 @@ Intentional updates (same commit as the feature that breaks them):
 
 ```bash
 uv run python -m unittest discover -s tests    # exit 0, offline
-uv run ruff check . && uv run pyright          # exit 0
+uv run ruff check .                            # exit 0
+uv run ruff format --check options_researcher/research_views_publication.py options_researcher/regime_constants.py
+uv run pyright                                 # exit 0
 ```
 Plus, on one frozen copy of the REAL board input (rev-1 finding 15; rev-2 N-4;
 round-3 NEW-1), record the input root, source artifact SHA-256, data/evaluation
