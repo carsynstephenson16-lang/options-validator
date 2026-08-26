@@ -1,10 +1,10 @@
-# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 6)
+# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 7)
 
-**Date:** 2026-08-25 (rev 6, post-submission command audit)
+**Date:** 2026-08-26 (rev 7, execution-intake repair)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** REVIEW PASS rev 6 — HAND-OFF AUTHORIZED ON OWNER LANDING, not before. The focused rev-5 reviewer PASS at `99b7bba` remains valid for the unchanged atomic protocol, and the fresh Wave 0 full-PR re-review issued written PASS after rev 6 corrected the acceptance commands. The owner-directed hand-off recorded by source commit `839ddb3` becomes effective only if the owner lands this draft documentation PR. Until then canonical `main` remains DRAFT. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`. Landing order still binds: this brief lands FIRST (26 → 25 → 27).
-**Provenance:** Repo-verified against current reconciliation base `origin/main@77b1a46` unless labeled otherwise. Round-4 parameter decisions are transplanted from `7908919`; the owner-directed hand-off is transplanted from `839ddb3`. The relevant Brief 26 implementation surfaces are unchanged from its prior `720a20e` anchor except for unrelated later `config.py` additions; all cited symbols and six slot literals were re-verified on `77b1a46`. The committed ops-input fallback remains `options_researcher/attractiveness_dashboard.py:57`. Landing order is binding: **this brief lands first, then brief 25, then brief 27.**
+**Status:** DRAFT rev 7 — Terra execution-intake review round 1 returned FAIL; its deterministic dry-projection, evaluation-date, stale/unavailable, panel-status, sidecar-schema, TDD, and formatting findings are repaired below and await correction review on this exact hash. Prior PASS receipts remain historical context and do not authorize implementation of rev 7. Landing order still binds: this brief lands FIRST (26 → 25 → 28 → 27).
+**Provenance:** Repo-verified against implementation base `origin/main@69a2e1508036644b3f5ae4104eb6081b337d73ef` unless labeled otherwise. Round-4 parameter decisions are transplanted from `7908919`; the owner-directed hand-off is transplanted from `839ddb3`. The relevant Brief 26 implementation surfaces and six slot literals were re-verified on the implementation base; the three intervening upstream commits changed only Brief 29, Candidate F receipts, and its runbook. The committed ops-input fallback remains `options_researcher/attractiveness_dashboard.py:57`. Landing order is binding: **this brief lands first, then brief 25, then brief 28, then brief 27.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed.
 
 ## Why this exists (plain language)
@@ -126,10 +126,12 @@ report demoted to a link.
    numeric axis or at least one badge (single strictness clause — rev-1
    finding 40). Cards with a missing/None value on any compared axis are
    NEVER dominated (incomparable ≠ worse).
-2. **Fixpoint against the retained set** (rev-1 finding 17): iterate — a card
-   may be hidden only if a card that REMAINS SHOWN dominates it; recompute
-   until stable. Named test: every hidden card's dominator is in the shown
-   set (no hidden-by-a-hidden-card chains).
+2. **Deterministic retained-dominator set** (rev-1 finding 17): compute the
+   lane's Pareto front against all comparable cards first. Hide a nonprotected
+   card only when a Pareto-front card directly dominates it; show every other
+   card. This is the only permitted fixed point: every hidden card records a
+   deterministic shown dominator (lowest original card index when several
+   front members dominate it), and hidden-by-hidden chains are impossible.
 3. Exclusions from hiding (never collapsed): DATA_BLOCKED/skipped cards;
    `rank_leader` cards; Top-5 or pinned picks; **any card carrying a RED
    grade on a SAFETY badge — `liquidity` only** (rev-2 finding N-4
@@ -147,26 +149,45 @@ report demoted to a link.
 
 ### WP-C — collapsed symbol panels
 
-1. Wrap each per-symbol panel body in `<details>` with the symbol heading +
-   one-line summary visible (close, as-of, best card headline, panel
-   status). Panels containing any DATA_BLOCKED card or stale banner render
-   OPEN by default; all other panels collapsed. Rev-4 design decision
+1. Convert each `<section class="panel symbol-panel">` to
+   `<details class="panel symbol-panel">`. Its summary contains symbol,
+   close, section `as_of`, and the best non-skipped headline by the existing
+   minimum `_group_candidate_sort_key`. The pure panel-status helper emits
+   every applicable label in this precedence: `DATA_BLOCKED`, `STALE`,
+   `SKIPPED`, `LIQUIDITY WARNING`; if none applies it emits `CURRENT`.
+   `DATA_BLOCKED` means any card has
+   `_display_policy_tier(card) == _DISPLAY_POLICY_TIER["DATA_BLOCKED"]`
+   (including a missing/malformed snapshot). `STALE` means
+   `section["features_stale"] is True` OR the symbol occurs in the assembled
+   board's `stale_symbols`. `SKIPPED` means any card contains a `skipped` key.
+   `LIQUIDITY WARNING` means any card has `grades.liquidity == "RED"`.
+   DATA_BLOCKED, STALE, or SKIPPED makes the panel open by default; all other
+   panels are closed. Rev-4 design decision
    (responding to round-3 finding NEW-1, LLM-proposed 2026-08-25): a
    liquidity-RED card does NOT force its panel open — 14 of 18 live panels
    contain one, so a liquidity-open rule would nullify WP-C. The safety
    guarantee liquidity-RED keeps is WP-B.3's: such a card is never buried a
    second level down inside the dominated-cards block; a collapsed panel is
    one click from visible and its summary line states the panel status.
-   Fail-visible law stays absolute for DATA_BLOCKED/stale.
+   Fail-visible law stays absolute for DATA_BLOCKED/stale/skipped.
 2. No content change inside panels beyond WP-B.
 
 ### WP-D — regime view and generation publication (rev-1 findings 19, 20;
 Wave 0 atomicity repair)
 
 1. **Machine-readable sidecar, not text parsing:** `regime_report.py` gains a
-   JSON sidecar named **`wasserstein-regime.json`** (rev-2 finding N-7):
-   `{"schema": "regime_report/v1", "as_of_written": <ISO ts>, "symbols":
-   {SYM: {"label", "high_dispersion", "max_asof", "skipped_reason"}}}`.
+   JSON sidecar named **`wasserstein-regime.json`** (rev-2 finding N-7), with
+   exactly the top-level keys `schema`, `as_of_written`, and `symbols`.
+   `schema` is exactly `regime_report/v1`; `as_of_written` is a timezone-aware
+   ISO-8601 timestamp; and `symbols` has exactly the `config.REGIME_SYMBOLS`
+   keys. Each successful row has exactly `label` (integer, never bool),
+   `high_dispersion` (bool), `max_asof` (strict `YYYY-MM-DD`), and
+   `skipped_reason` (null). Each skipped row has null `label` and
+   `high_dispersion`, `max_asof` as a strict date when a last cached close is
+   known (else null), and a nonempty string `skipped_reason`. Unknown keys,
+   missing/extra symbols, other type/null combinations, future `max_asof`, or
+   a non-timezone-aware timestamp invalidate the whole sidecar and render the
+   configured-symbol unavailable lines plus the loud integrity warning.
    Add `regime_report --json-out <path>` alongside its existing `--out`; the
    wrapper passes both paths inside one caller-supplied staging generation.
    Add `experiments_dashboard --out <path>` with
@@ -365,20 +386,74 @@ Intentional updates (same commit as the feature that breaks them):
 ```bash
 uv run python -m unittest discover -s tests    # exit 0, offline
 uv run ruff check .                            # exit 0
-uv run ruff format --check options_researcher/research_views_publication.py options_researcher/regime_constants.py
+uv run ruff format --check .                   # exit 0
 uv run pyright                                 # exit 0
+git diff --check                               # exit 0
 ```
-Plus, on one frozen copy of the REAL board input (rev-1 finding 15; rev-2 N-4;
-round-3 NEW-1), record the input root, source artifact SHA-256, data/evaluation
-dates, base commit, and the metric definition: "candidate cards visible
-without user interaction" means cards not inside any closed `<details>`.
 
-**Pre-implementation stop gate:** run the WP-B/WP-C rules as a dry projection
-against that frozen input and write the predicted visible-card identity set and
-before/after counts to the draft PR. The prior 18-panel / 14-liquidity-RED-panel
-measurement is context, not an acceptance fixture. If the newly predicted
-reduction is below **30%**, stop before implementation and report the measured
-ceiling to the owner; do not weaken an exclusion or reinterpret the metric.
+### Pre-code dry-projection command and immutable boundary
+
+No tracked or production file may be edited before this gate. The controller
+uses the reviewed, ignored one-shot simulator at
+`.tmp/controller/brief26_projection.py` (its SHA-256 is recorded beside the
+brief hash) and runs exactly:
+
+```bash
+ATTRACTIVENESS_INPUT_ROOT=/Users/carsynstephenson/options-validator-ops \
+uv run python .tmp/controller/brief26_projection.py \
+  --base-sha 69a2e1508036644b3f5ae4104eb6081b337d73ef \
+  --evaluation-date 2026-08-26
+```
+
+The command performs no network calls and no writes. It resolves the explicit
+input root, calls `assemble(today=<pinned date>)` once, and emits canonical
+JSON only to stdout: sorted keys, compact separators for the payload hash,
+two-space receipt indentation, and one trailing newline. Its immutable input
+boundary is the deterministically serialized assembled `symbols`, `blocked`,
+`data_as_of`, `evaluation_date`, `chain_age_sessions`, `fresh_symbols`, and
+`stale_symbols`; the receipt records that SHA-256 plus the latest matching
+Schwab manifest path/SHA-256 when present. Any later verification must
+reassemble with the recorded root/date and hard-refuse if the payload SHA
+differs.
+
+Receipt schema `brief26_declutter_projection/v1` records: exact base and brief
+hashes; simulator hash; resolved input root; evaluation/data dates; chain age;
+payload and manifest hashes; every real candidate ID with multiplicity;
+protected IDs; per-lane shown/hidden IDs and each hidden ID's shown dominator;
+per-panel status labels/open state/group count; baseline and predicted
+initial-chrome counts; reduction numerator/denominator/percentage; and a
+`gate` object with `board_available`, `board_fresh`, `reduction_at_least_30`,
+and `proceed` booleans plus reason codes.
+
+`board_available` requires: readable explicit root; successful assembly; at
+least one symbol panel and one real candidate ID; a strict `data_as_of`; the
+exact pinned `evaluation_date`; and an integer nonnegative
+`chain_age_sessions`. `board_fresh` additionally requires
+`chain_age_sessions < config.CHAIN_STALE_BLOCK_SESSIONS`. Per-symbol stale
+fallback panels remain fail-visible/open and do not by themselves make the
+whole mixed-source board stale. Any unavailable predicate, a stale board, or
+an unexpected exception sets `proceed=false` and stops the lane.
+
+**Pre-implementation stop gate:** baseline initial chrome is one symbol header
+plus every group summary in every panel. Predicted chrome is one symbol
+summary for a closed panel, or that symbol summary plus its group summaries
+for an open panel. Run the reviewed command above and retain its exact stdout.
+The prior 18-panel / 14-liquidity-RED-panel measurement is context, not an
+acceptance fixture. Proceed only when all three gate booleans are true. If the
+predicted reduction is below **30%**, stop and report the measured ceiling;
+never weaken an exclusion or reinterpret the metric.
+
+### TDD execution order after the gate passes
+
+For each work package, add the smallest behavior test first, name the
+production mutation it catches, run it and confirm the expected failure, then
+write only the minimum production code to pass it and rerun the focused test.
+WP-B/WP-C pure-helper tests precede dashboard changes; sidecar/CLI tests
+precede report changes; publication corruption/concurrency tests precede the
+publication helper/wrapper changes. A test that passes before its production
+change is rewritten until it proves the missing behavior. Refactor only while
+green. Commit messages/PR evidence record the RED and GREEN commands; no
+feature and its test may first appear together without a recorded RED run.
 
 **Acceptance after the stop gate clears:** build against the SAME frozen input.
 The rendered visible-card identity set must equal the dry projection exactly;
