@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 from collections import Counter
+from contextlib import redirect_stdout
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -19,8 +20,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import config  # noqa: E402
-from options_researcher import attractiveness_dashboard as ad  # noqa: E402
+with redirect_stdout(sys.stderr):
+    import config  # noqa: E402
+    from options_researcher import attractiveness_dashboard as ad  # noqa: E402
 
 BRIEF_RELATIVE = Path("docs/superpowers/plans/2026-08-25-26-board-declutter-top5-codex-brief.md")
 SIMULATOR_RELATIVE = Path(".tmp/controller/brief26_projection.py")
@@ -208,7 +210,7 @@ def main() -> int:
         raise SystemExit(f"pre-code diff is not control-only: {changed}")
 
     try:
-        with ad._input_root_cwd() as resolved:
+        with redirect_stdout(sys.stderr), ad._input_root_cwd() as resolved:
             data = ad.assemble(today=args.evaluation_date)
     except Exception as exc:
         return _emit_unavailable(

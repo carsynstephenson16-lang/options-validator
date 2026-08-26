@@ -434,7 +434,7 @@ No production file may be edited before this gate. The only permitted
 pre-gate tracked changes are this brief and the deliberately force-tracked
 controller at `.tmp/controller/brief26_projection.py`; the controller's
 SHA-256 is
-`7adbd618b565f6407037076759c7bef64575114b893972e4d6b87f13fb72e8f2`.
+`7e98f37ad2386e239e75756ac1e624cc0bb4452b2eea694ceba8fb12575abdc8`.
 The controller hard-refuses any other base diff and runs exactly:
 
 ```bash
