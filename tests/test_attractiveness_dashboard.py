@@ -2229,6 +2229,95 @@ class ContextLaneRenderTests(unittest.TestCase):
         )
         self.assertNotIn("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL", html)
 
+    def test_render_is_pure_and_preserves_selection_and_event_inputs(self):
+        """Characterize the Brief 28 render boundary before tracker wiring.
+
+        Catches a render-time file read/write, mutation of candidate sections,
+        selection drift between identical calls, or mutation of the frozen
+        EventView supplied by the caller.
+        """
+        from unittest import mock
+
+        from options_researcher.event_calendar import EventView
+
+        data = self._data(count=2)
+        data["composite_signals"] = [
+            self._composite("S0", count=3),
+            self._composite("S1", count=4),
+        ]
+        sections_before = ad.sections_json(data["symbols"])
+        picks_before = json.dumps(
+            ad.select_top_picks(data, include_csp_watch=True),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        view = EventView.create(
+            [],
+            {"S0": {"events": ["fixture"]}},
+            {"S0": {"text": "UNAVAILABLE", "reason": "fixture"}},
+            {},
+        )
+        view_before = (
+            tuple(view.calendar),
+            repr(view.complex_map),
+            repr(view.implied_moves),
+            repr(view.failures),
+        )
+
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch("builtins.open", side_effect=AssertionError("render touched a file")),
+        ):
+            first = ad.render(data, event_view=view)
+            second = ad.render(data, event_view=view)
+
+        self.assertIsInstance(first, str)
+        self.assertEqual(first, second)
+        self.assertEqual(ad.sections_json(data["symbols"]), sections_before)
+        self.assertEqual(
+            json.dumps(
+                ad.select_top_picks(data, include_csp_watch=True),
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            picks_before,
+        )
+        self.assertEqual(
+            (
+                tuple(view.calendar),
+                repr(view.complex_map),
+                repr(view.implied_moves),
+                repr(view.failures),
+            ),
+            view_before,
+        )
+
+    def test_context_membership_is_independent_of_event_view(self):
+        """Characterize events as presentation-only, never a ranking input."""
+        import re
+        from unittest import mock
+
+        data = self._data(count=6)
+        data["composite_signals"] = [
+            self._composite(f"S{index}", count=(4 if index == 5 else 3))
+            for index in range(6)
+        ]
+        plain_view = {"calendar": (), "complex_map": {}, "implied_moves": {}, "failures": {}}
+        noisy_view = {
+            "calendar": (),
+            "complex_map": {"S0": {"events": ("fixture",)}},
+            "implied_moves": {"S0": {"text": "99%"}},
+            "failures": {"S1": "FixtureFailure"},
+        }
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            plain = ad.render(data, event_view=plain_view)
+            noisy = ad.render(data, event_view=noisy_view)
+
+        pattern = r'data-context-symbol="([^"]+)"'
+        self.assertEqual(re.findall(pattern, noisy), re.findall(pattern, plain))
+        self.assertEqual(re.findall(pattern, plain), ["S5", "S0", "S1", "S2", "S3"])
+
     def test_flag_on_reorders_full_pool_and_diagnoses_displaced_frozen_name(self):
         from unittest import mock
 
