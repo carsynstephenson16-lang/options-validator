@@ -176,9 +176,10 @@ def _enforce_write_path(
     registration_validator: Callable[[Mapping[str, object]], bool] | None,
 ) -> None:
     if reports_root is None:
-        if "dryrun" in journal_path.resolve().parent.parts:
-            return
-    elif _is_below(journal_path, reports_root / "dryrun"):
+        raise RegistrationRequired(
+            "explicit reports_root is required; writes must remain under its dryrun/"
+        )
+    if _is_below(journal_path, reports_root / "dryrun"):
         return
     registration_confirmed = bool(
         _registration_valid(registration)
@@ -274,7 +275,7 @@ def append_membership(
     *,
     journal_path: Path,
     verified_sessions: Iterable[str],
-    reports_root: Path | None = None,
+    reports_root: Path | None = REPORTS_ROOT,
     registration: Mapping[str, object] | None = None,
     registration_validator: Callable[[Mapping[str, object]], bool] | None = None,
 ) -> dict[str, object]:

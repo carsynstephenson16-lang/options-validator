@@ -148,6 +148,7 @@ class SnapshotAndMembershipTests(unittest.TestCase):
                 tracker.append_membership(
                     snapshot("2026-08-25", [candidate("VST:long_call:one")]),
                     journal_path=journal,
+                    reports_root=journal.parent.parent,
                     verified_sessions=["2026-08-22"],
                 )
             self.assertFalse(journal.exists())
@@ -164,21 +165,25 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             first = tracker.append_membership(
                 snapshot(sessions[0], [candidate("VST:long_call:one")]),
                 journal_path=journal,
+                reports_root=journal.parent.parent,
                 verified_sessions=sessions,
             )
             second = tracker.append_membership(
                 snapshot(sessions[1], [candidate("VST:long_call:two")]),
                 journal_path=journal,
+                reports_root=journal.parent.parent,
                 verified_sessions=sessions,
             )
             exited = tracker.append_membership(
                 snapshot(sessions[2], []),
                 journal_path=journal,
+                reports_root=journal.parent.parent,
                 verified_sessions=sessions,
             )
             reentered = tracker.append_membership(
                 snapshot(sessions[3], [candidate("VST:long_call:three")]),
                 journal_path=journal,
+                reports_root=journal.parent.parent,
                 verified_sessions=sessions,
             )
 
@@ -202,6 +207,7 @@ class SnapshotAndMembershipTests(unittest.TestCase):
                         [candidate(f"VST:long_call:restrike-{index}")],
                     ),
                     journal_path=journal,
+                    reports_root=journal.parent.parent,
                     verified_sessions=sessions,
                 )
                 for index, session in enumerate(sessions)
@@ -217,11 +223,13 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             first = tracker.append_membership(
                 payload,
                 journal_path=journal,
+                reports_root=journal.parent.parent,
                 verified_sessions=["2026-08-25"],
             )
             second = tracker.append_membership(
                 payload,
                 journal_path=journal,
+                reports_root=journal.parent.parent,
                 verified_sessions=["2026-08-25"],
             )
             self.assertEqual(second, first)
@@ -231,6 +239,7 @@ class SnapshotAndMembershipTests(unittest.TestCase):
                 tracker.append_membership(
                     changed,
                     journal_path=journal,
+                    reports_root=journal.parent.parent,
                     verified_sessions=["2026-08-25"],
                 )
 
@@ -267,6 +276,12 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             with self.assertRaisesRegex(tracker.RegistrationRequired, "dryrun"):
                 tracker.append_membership(
                     snapshot("2026-08-25", []),
+                    journal_path=Path(tmp) / "dryrun/scored/events.jsonl",
+                    verified_sessions=["2026-08-25"],
+                )
+            with self.assertRaisesRegex(tracker.RegistrationRequired, "dryrun"):
+                tracker.append_membership(
+                    snapshot("2026-08-25", []),
                     journal_path=Path(tmp) / "scored/events.jsonl",
                     verified_sessions=["2026-08-25"],
                 )
@@ -295,6 +310,7 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             record = tracker.append_membership(
                 payload,
                 journal_path=Path(tmp) / "dryrun/events.jsonl",
+                reports_root=Path(tmp),
                 verified_sessions=["2026-08-25"],
             )
             self.assertEqual(record["arms"]["context_lane"]["state"], "DISABLED")
