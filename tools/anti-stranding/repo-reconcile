@@ -285,9 +285,12 @@ publish_failed=0
 if ! mv "$DIGEST_CANON.tmp" "$DIGEST_CANON"; then
   publish_failed=1
   logl "PUBLISH-FAIL $DIGEST_CANON: mv failed"
-elif ! cp "$DIGEST_CANON" "$DIGEST_DESKTOP"; then
+elif ! cp "$DIGEST_CANON" "$DIGEST_DESKTOP.tmp"; then
   publish_failed=1
   logl "PUBLISH-FAIL $DIGEST_DESKTOP: cp failed"
+elif ! mv "$DIGEST_DESKTOP.tmp" "$DIGEST_DESKTOP"; then
+  publish_failed=1
+  logl "PUBLISH-FAIL $DIGEST_DESKTOP: mv failed"
 fi
 if [ "$publish_failed" = "1" ]; then
   command -v osascript >/dev/null && osascript -e "display notification \"Digest could not be delivered — canonical: $DIGEST_CANON; Desktop: $DIGEST_DESKTOP\" with title \"Repo reconciler publish failed\"" 2>/dev/null
