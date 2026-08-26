@@ -1,11 +1,11 @@
-# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 7)
+# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 8)
 
-**Date:** 2026-08-26 (rev 7, execution-intake repair)
+**Date:** 2026-08-26 (rev 8, correction-review repair)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 7 — Terra execution-intake review round 1 returned FAIL; its deterministic dry-projection, evaluation-date, stale/unavailable, panel-status, sidecar-schema, TDD, and formatting findings are repaired below and await correction review on this exact hash. Prior PASS receipts remain historical context and do not authorize implementation of rev 7. Landing order still binds: this brief lands FIRST (26 → 25 → 28 → 27).
+**Status:** DRAFT rev 8 — the independent rev-7 correction review returned FAIL; its runnable/durable projection, stale-card, exact-publication-schema, shared-evaluation-date, and authority findings are repaired below and await correction review on this exact hash. Prior PASS receipts remain historical context and do not authorize implementation of rev 8. Landing order still binds: this brief lands FIRST (26 → 25 → 28 → 27).
 **Provenance:** Repo-verified against implementation base `origin/main@69a2e1508036644b3f5ae4104eb6081b337d73ef` unless labeled otherwise. Round-4 parameter decisions are transplanted from `7908919`; the owner-directed hand-off is transplanted from `839ddb3`. The relevant Brief 26 implementation surfaces and six slot literals were re-verified on the implementation base; the three intervening upstream commits changed only Brief 29, Candidate F receipts, and its runbook. The committed ops-input fallback remains `options_researcher/attractiveness_dashboard.py:57`. Landing order is binding: **this brief lands first, then brief 25, then brief 28, then brief 27.**
-**Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed.
+**Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed. Carsyn in-session 2026-08-26 ("find brief 26 implement then merge then start brief 25") explicitly authorizes the primary controller to implement, make the Brief 26 PR ready, and merge it after every acceptance and independent-review gate passes; it does not authorize deployment, ops sync, registration, a flag flip, or any Brief 25 authority beyond the already-stated draft-PR boundary.
 
 ## Why this exists (plain language)
 
@@ -38,11 +38,12 @@ report demoted to a link.
   DISPLAY, not how candidates are ordered or admitted.
 - No ledger writes, no registration/amendment, no authority flips, no
   live-order paths, no network providers.
-- The worker may create only a **draft PR**. It may not merge, deploy, sync an
-  ops/research checkout, enable a flag or LaunchAgent, modify a ledger, make a
-  PR ready for review, or otherwise exercise owner authority. A green draft
-  remains owner-held work; it is not permission for the repository reconciler
-  or any worker to land it.
+- The implementation worker may create only a **draft PR** and may not deploy,
+  sync an ops/research checkout, enable a flag or LaunchAgent, modify a ledger,
+  or otherwise exercise owner authority. The primary controller has the narrow
+  owner authorization recorded above to make this Brief 26 PR ready and merge
+  it only after all acceptance checks and independent review pass. No
+  repository reconciler, automation, or other worker inherits that authority.
 - No deletion of any card from the assembled payload — pruning is
   presentation-layer collapse; `sections_json()` stays complete.
 - No `options_researcher.exp_*` import into `attractiveness_dashboard.py`
@@ -133,7 +134,10 @@ report demoted to a link.
    deterministic shown dominator (lowest original card index when several
    front members dominate it), and hidden-by-hidden chains are impossible.
 3. Exclusions from hiding (never collapsed): DATA_BLOCKED/skipped cards;
-   `rank_leader` cards; Top-5 or pinned picks; **any card carrying a RED
+   every card in a section whose `features_stale is True` or whose symbol is
+   in the assembled board's `stale_symbols` (the call site bypasses dominance
+   collapse for that whole section); `rank_leader` cards; Top-5 or pinned
+   picks; **any card carrying a RED
    grade on a SAFETY badge — `liquidity` only** (rev-2 finding N-4
    correcting rev-1 finding 18: 77% of live cards carry a RED somewhere,
    dominated by `portfolio` (143/222) and `fits_cap` (53/222)
@@ -177,22 +181,27 @@ Wave 0 atomicity repair)
 
 1. **Machine-readable sidecar, not text parsing:** `regime_report.py` gains a
    JSON sidecar named **`wasserstein-regime.json`** (rev-2 finding N-7), with
-   exactly the top-level keys `schema`, `as_of_written`, and `symbols`.
-   `schema` is exactly `regime_report/v1`; `as_of_written` is a timezone-aware
-   ISO-8601 timestamp; and `symbols` has exactly the `config.REGIME_SYMBOLS`
+   exactly the top-level keys `schema`, `as_of_written`, `evaluation_date`,
+   and `symbols`. `schema` is exactly `regime_report/v1`; `as_of_written` is
+   canonical UTC RFC 3339 with six fractional digits and `Z`;
+   `evaluation_date` is the strict NY build date supplied by the wrapper; and
+   `symbols` has exactly the `config.REGIME_SYMBOLS`
    keys. Each successful row has exactly `label` (integer, never bool),
    `high_dispersion` (bool), `max_asof` (strict `YYYY-MM-DD`), and
    `skipped_reason` (null). Each skipped row has null `label` and
    `high_dispersion`, `max_asof` as a strict date when a last cached close is
    known (else null), and a nonempty string `skipped_reason`. Unknown keys,
-   missing/extra symbols, other type/null combinations, future `max_asof`, or
-   a non-timezone-aware timestamp invalidate the whole sidecar and render the
+   missing/extra symbols, other type/null combinations, a `max_asof` later than
+   `evaluation_date`, or a noncanonical timestamp invalidate the whole
+   sidecar and render the
    configured-symbol unavailable lines plus the loud integrity warning.
-   Add `regime_report --json-out <path>` alongside its existing `--out`; the
-   wrapper passes both paths inside one caller-supplied staging generation.
-   Add `experiments_dashboard --out <path>` with
-   `config.EXPERIMENTS_OUTPUT_PATH` preserved as its default, and have the
-   wrapper pass the staging `experiments.html` path. Both CLIs use
+   Add `regime_report --json-out <path>` alongside its existing `--out`; add
+   `--evaluation-date <YYYY-MM-DD>` and use it as the cached-data end bound.
+   The wrapper computes one NY evaluation date once and passes it to both
+   builders plus both regime paths inside one caller-supplied staging
+   generation. Add `experiments_dashboard --out <path>` and the same
+   wrapper-supplied/test-injectable `--evaluation-date`, with
+   `config.EXPERIMENTS_OUTPUT_PATH` preserved as its default. Both CLIs use
    `main(argv: Sequence[str] | None = None)` so argument parsing is unit
    testable. A builder may leave a partial file only inside unpublished
    staging; any nonzero builder exit aborts the generation in WP-D.4. The
@@ -212,7 +221,9 @@ Wave 0 atomicity repair)
    convention `_page_chain_age_sessions` uses for chain age (threshold
    LLM-proposed, display-only) — OR the sidecar is absent/malformed;
    rendering loudly: "regime view unpublished/stale — see Experiments
-   shelf". Per-symbol lines always show their own `max_asof`.
+   shelf". The sidecar loader receives the assembled board's strict
+   `evaluation_date`; it rejects a sidecar evaluation date later than that
+   board date. Per-symbol lines always show their own `max_asof`.
    Strip always carries the shared DISCLAIMER sentence.
 4. **Single-commit publication protocol (replaces the impossible two-rename
    design):** add a stdlib-only
@@ -245,16 +256,42 @@ Wave 0 atomicity repair)
    `research-views-status.txt`. Status records the id, timestamp, both zero
    exits, and SHA-256/byte size for the first three.
 
-   Canonical `research-views-manifest.json` has schema
-   `research_views_manifest/v1`, generation id, parsed publication time,
-   producer commit, and an EXACT four-entry allow-listed file map with
-   SHA-256/byte size for all four logical artifacts, including status. Verify
-   that status identity/outcomes and its three file hashes/sizes equal the
-   manifest entries. Canonical `research-views-current.json` has schema
-   `research_views_current/v1`, generation id, publication time, and the
-   manifest's SHA-256/byte size; for a copied generation it may additionally
-   carry `copied_from_root`, but the immutable source manifest and generation
-   bytes remain byte-identical.
+   Every JSON record in this protocol is UTF-8 canonical JSON produced with
+   `sort_keys=True`, separators `(',', ':')`, `ensure_ascii=False`,
+   `allow_nan=False`, and exactly one trailing newline. Unknown or missing
+   keys fail closed. A file metadata object has exactly `sha256` (64 lowercase
+   hex characters) and `bytes` (integer >= 0, never bool).
+
+   `research-views-status.txt` contains JSON despite the retained filename and
+   has exactly: `schema="research_views_status/v1"`, `generation_id`,
+   `published_at`, `experiments_exit=0`, `wasserstein_exit=0`, and `files`.
+   `files` has exactly the three keys `experiments.html`,
+   `wasserstein-regime.txt`, and `wasserstein-regime.json`, each mapped to file
+   metadata.
+
+   Canonical `research-views-manifest.json` has exactly:
+   `schema="research_views_manifest/v1"`, `generation_id`, `published_at`,
+   `producer_commit` (40 lowercase hex characters), and `files`. `files` is an
+   EXACT four-entry allow-list for the three builder artifacts plus
+   `research-views-status.txt`, each mapped to file metadata. Verify that
+   status identity/outcomes and its three file hashes/sizes equal the manifest
+   entries.
+
+   Canonical `research-views-current.json` has exactly:
+   `schema="research_views_current/v1"`, `generation_id`, `published_at`, and
+   `manifest`; a copied generation additionally and only has
+   `copied_from_root` (an absolute resolved path string). `manifest` has exactly
+   `path`, `sha256`, and `bytes`; `path` must equal
+   `research-views-generations/<generation_id>/research-views-manifest.json`.
+   The immutable source manifest and generation bytes remain byte-identical.
+
+   `research-views-last-failure.json` has exactly:
+   `schema="research_views_failure/v1"`, `attempt_id`, `attempted_at`,
+   `completed_at`, `producer_commit`, `producer_root`, `experiments_exit`,
+   `wasserstein_exit`, and `outcome="FAILED"`. IDs/timestamps/commit obey the
+   same strict rules as success records; `producer_root` is an absolute
+   resolved path string; exits are integer, never bool, and at least one is
+   nonzero. It contains no file metadata or hashes.
 
    Flush and fsync every artifact plus manifest and the staging directory;
    under an exclusive `fcntl` lock at
@@ -393,10 +430,12 @@ git diff --check                               # exit 0
 
 ### Pre-code dry-projection command and immutable boundary
 
-No tracked or production file may be edited before this gate. The controller
-uses the reviewed, ignored one-shot simulator at
-`.tmp/controller/brief26_projection.py` (its SHA-256 is recorded beside the
-brief hash) and runs exactly:
+No production file may be edited before this gate. The only permitted
+pre-gate tracked changes are this brief and the deliberately force-tracked
+controller at `.tmp/controller/brief26_projection.py`; the controller's
+SHA-256 is
+`7adbd618b565f6407037076759c7bef64575114b893972e4d6b87f13fb72e8f2`.
+The controller hard-refuses any other base diff and runs exactly:
 
 ```bash
 ATTRACTIVENESS_INPUT_ROOT=/Users/carsynstephenson/options-validator-ops \
@@ -464,10 +503,12 @@ dominator must be in the shown set; and the generation/hash failure tests in
 WP-E must pass. The 30% figure is only the pre-implementation stop gate — it is
 not a target that can substitute for exact rule-faithfulness.
 
-The implementation ends at a green **draft PR** with the frozen-input receipt,
-predicted and actual identity sets, manifest/hash test evidence, and command
-exit codes. The worker must not make it ready, merge it, deploy it, update ops,
-change any ledger, or flip any authority.
+The implementation first reaches a green **draft PR** with the frozen-input
+receipt, predicted and actual identity sets, manifest/hash test evidence, and
+command exit codes. The implementation worker stops there. Under the explicit
+2026-08-26 owner directive recorded above, the primary controller then makes
+the PR ready and merges it only after the green checks and independent review;
+it still must not deploy, update ops, change any ledger, or flip any authority.
 
 ## Claim-discipline register
 
