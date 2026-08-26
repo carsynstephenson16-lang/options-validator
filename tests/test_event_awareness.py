@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -152,10 +153,10 @@ class EventCalendarTests(unittest.TestCase):
         # Catches paraphrased source quotes that cannot be verified in a diff.
         expected = {
             "nvda-fy27q2-results-2026-08-26": "This material will be posted to investor.nvidia.com immediately after the company’s results are publicly announced at approximately 1:20 p.m. PT.",
-            "bea-gdp-q2-second-estimate-2026-08-26": "August 26 8:30 AM | GDP (Second Estimate) and Corporate Profits, 2nd Quarter 2026.",
-            "bea-personal-income-outlays-july-2026-08-26": "August 26 8:30 AM | Personal Income and Outlays, July 2026.",
+            "bea-gdp-q2-second-estimate-2026-08-26": "GDP (Second Estimate) and Corporate Profits, 2nd Quarter 2026",
+            "bea-personal-income-outlays-july-2026-08-26": "Personal Income and Outlays, July 2026",
             "jackson-hole-symposium-2026": "Jackson Hole Economic Policy Symposium, August 27–29, 2026",
-            "warsh-jackson-hole-keynote-2026-08-28": "10:00 a.m. | Speech - Chairman Kevin Warsh | Keynote Remarks",
+            "warsh-jackson-hole-keynote-2026-08-28": "Speech - Chairman Kevin Warsh",
             "avgo-fy26q3-results-2026-09-02": "Broadcom Inc. to Announce Third Quarter Fiscal Year 2026 Financial Results on Wednesday, September 2, 2026",
             "iren-fy26-results-2026-08-27": "IREN to Release FY26 Results on August 27, 2026",
         }
@@ -176,6 +177,7 @@ class EventChipTests(unittest.TestCase):
         self.calendar = self._calendar(
             [
                 _event(event_id="nvda-results", date="2026-08-27"),
+                _event(event_id="macro-third", date="2026-08-29"),
                 _event(event_id="expiry", date="2026-08-30"),
             ]
         )
@@ -203,11 +205,11 @@ class EventChipTests(unittest.TestCase):
             self.calendar,
             {"clusters": {"x": {"members": ["NVDA", "MSFT"], "events_propagate_from": ["NVDA"]}}},
         )
-        self.assertEqual([chip["marker"] for chip in own], ["cal", "cal"])
+        self.assertEqual([chip["marker"] for chip in own], ["cal", "cal", "cal"])
         self.assertIn("complex", [chip["marker"] for chip in related])
         self.assertEqual(
             ad.event_chips({"expiry": "2026-08-29"}, "NVDA", "2026-08-26", self.calendar, {}),
-            [own[0]],
+            own[:2],
         )
 
     def test_pure_render_all_card_surfaces_and_failure_notice(self):
@@ -305,6 +307,102 @@ class EventChipTests(unittest.TestCase):
         ):
             self.assertIsNone(ad.build_event_view(data, "2026-08-26"))
         self.assertEqual(ad.render(data), ad.render(data, event_view=None))
+
+    def test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list(self):
+        # Catches a consumer drifting from the single event-chip join contract.
+        def card(symbol):
+            return {
+                "headline": f"{symbol} call",
+                "expiry": "2026-09-06",
+                "strike": 100.0,
+                "dte": 11,
+                "cost": 100.0,
+                "breakeven": 101.0,
+                "breakeven_move": 0.01,
+                "grades": {
+                    "fits_bucket": "GREEN",
+                    "fits_cap": "GREEN",
+                    "iv_for_buyer": "GREEN",
+                    "liquidity": "GREEN",
+                },
+                "scenarios": [],
+                "bbb": [],
+                "verdict": "x",
+                "risk": {},
+                "top3_snapshot": {
+                    "candidate_id": f"{symbol}:long_call:100",
+                    "rank_eligible": True,
+                    "selection_status": "ELIGIBLE",
+                    "policy": {"status": "ELIGIBLE", "reason_codes": []},
+                },
+            }
+
+        symbols = ["NVDA", "AMD", "AVGO"]
+        data = {
+            "evaluation_date": "2026-08-26",
+            "data_as_of": "2026-08-26",
+            "blocked": [],
+            "stale_symbols": [],
+            "symbols": [
+                {
+                    "symbol": symbol,
+                    "as_of": "2026-08-26",
+                    "close": 100.0,
+                    "groups": [{"kind": "long_call", "title": "Calls", "cards": [card(symbol)]}],
+                }
+                for symbol in symbols
+            ],
+            "composite_signals": [
+                {
+                    "symbol": symbol,
+                    "grade": "A",
+                    "aligned_count": 1,
+                    "max_asof": "2026-08-26",
+                    "trend": {"state": "UP", "data_blocked": False},
+                    "vol_premium": {"data_blocked": True},
+                    "regime": {"data_blocked": True},
+                    "internals": {"data_blocked": True},
+                }
+                for symbol in symbols
+            ],
+        }
+        grades_before = [
+            dict(section["groups"][0]["cards"][0]["grades"]) for section in data["symbols"]
+        ]
+        picks_before = json.dumps(ad.select_top_picks(data), sort_keys=True, separators=(",", ":"))
+        sections_before = ad.sections_json(data["symbols"])
+        view = {"calendar": self.calendar, "complex_map": {}, "implied_moves": {}, "failures": {}}
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"]),
+        ):
+            html = ad.render(data, event_view=view)
+
+        def chips(fragment):
+            return re.findall(r'<span class="event-chip">(.*?)</span>', fragment)
+
+        lane = html[html.index('data-candidate-id="NVDA:long_call:100"') :]
+        hero = html[html.index('<div class="hero-card good">') :]
+        context = html[html.index('data-context-symbol="NVDA"') :]
+        pinned = html[html.index('<div class="pinned-card good">') :]
+        expected = chips(lane)[:3]
+        self.assertGreaterEqual(len(expected), 3)
+        self.assertEqual(chips(hero)[: len(expected)], expected)
+        self.assertEqual(chips(context)[: len(expected)], expected)
+        self.assertEqual(chips(pinned)[: len(expected)], expected)
+        self.assertGreaterEqual(html.count('<div class="hero-card good">'), 3)
+        self.assertEqual(
+            len(chips(html[html.index("empty-slot") : html.index("empty-slot") + 350])), 0
+        )
+        self.assertEqual(
+            [section["groups"][0]["cards"][0]["grades"] for section in data["symbols"]],
+            grades_before,
+        )
+        self.assertEqual(
+            json.dumps(ad.select_top_picks(data), sort_keys=True, separators=(",", ":")),
+            picks_before,
+        )
+        self.assertEqual(ad.sections_json(data["symbols"]), sections_before)
 
     def test_chip_exception_is_contained_and_explicit_event_date_is_required(self):
         # Catches a renderer crash or stale data_as_of fallback in the event boundary.
