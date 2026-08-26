@@ -11,7 +11,9 @@
 #   PRUNE=1    -> also remove worktrees that are provably merged+clean (default: off)
 set +e
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-DIGEST="$HOME/Desktop/repo-digest.md"
+export GIT_TERMINAL_PROMPT=0
+DIGEST_CANON="${DIGEST_CANON:-$HOME/.local/state/repo-reconcile/digest.md}"
+DIGEST_DESKTOP="${DIGEST_DESKTOP:-$HOME/Desktop/repo-digest.md}"
 LOG="$HOME/.local/log/repo-reconcile.log"
 MAX_NEW_PRS=3
 TODAY=$(date +%Y-%m-%d)
@@ -22,10 +24,10 @@ new_prs=0
 # and try to push/PR/merge OTHER PEOPLE'S work there (blocked today only by
 # GitHub permissions, which is not a safety design).
 GH_LOGIN=$(gh api user -q .login 2>/dev/null)
-mkdir -p "$HOME/.local/log"
-: >"$DIGEST.tmp"
+mkdir -p "$HOME/.local/log" "${DIGEST_CANON:h}"
+: >"$DIGEST_CANON.tmp"
 
-say()  { print -r -- "$1" >>"$DIGEST.tmp"; }
+say()  { print -r -- "$1" >>"$DIGEST_CANON.tmp"; }
 act()  { [ "${DRY_RUN:-0}" = "1" ] && { say "  [dry-run] $1"; return 1; } || return 0; }
 logl() { print -r -- "$(date -Iseconds) $1" >>"$LOG"; }
 
@@ -275,10 +277,24 @@ done
 
 say ""
 if [ "$NEEDS" = "0" ]; then
-  sed -i '' "1s/.*/# ✅ Everything is backed up — $TODAY/" "$DIGEST.tmp" 2>/dev/null
+  sed -i '' "1s/.*/# ✅ Everything is backed up — $TODAY/" "$DIGEST_CANON.tmp" 2>/dev/null
 else
-  sed -i '' "1s/.*/# ⚠️ Some things need you — $TODAY/" "$DIGEST.tmp" 2>/dev/null
+  sed -i '' "1s/.*/# ⚠️ Some things need you — $TODAY/" "$DIGEST_CANON.tmp" 2>/dev/null
 fi
-mv "$DIGEST.tmp" "$DIGEST"
-command -v osascript >/dev/null && osascript -e "display notification \"Digest on Desktop: repo-digest.md\" with title \"Repo reconciler ran\"" 2>/dev/null
+publish_failed=0
+if ! mv "$DIGEST_CANON.tmp" "$DIGEST_CANON"; then
+  publish_failed=1
+  logl "PUBLISH-FAIL $DIGEST_CANON: mv failed"
+elif ! cp "$DIGEST_CANON" "$DIGEST_DESKTOP.tmp"; then
+  publish_failed=1
+  logl "PUBLISH-FAIL $DIGEST_DESKTOP: cp failed"
+elif ! mv "$DIGEST_DESKTOP.tmp" "$DIGEST_DESKTOP"; then
+  publish_failed=1
+  logl "PUBLISH-FAIL $DIGEST_DESKTOP: mv failed"
+fi
+if [ "$publish_failed" = "1" ]; then
+  command -v osascript >/dev/null && osascript -e "display notification \"Digest could not be delivered — canonical: $DIGEST_CANON; Desktop: $DIGEST_DESKTOP\" with title \"Repo reconciler publish failed\"" 2>/dev/null
+  exit 1
+fi
+command -v osascript >/dev/null && osascript -e "display notification \"Digest delivered — canonical: $DIGEST_CANON; Desktop: $DIGEST_DESKTOP\" with title \"Repo reconciler ran\"" 2>/dev/null
 exit 0
