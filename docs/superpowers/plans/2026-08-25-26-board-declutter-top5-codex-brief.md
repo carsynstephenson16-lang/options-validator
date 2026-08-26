@@ -400,7 +400,7 @@ brief hash) and runs exactly:
 
 ```bash
 ATTRACTIVENESS_INPUT_ROOT=/Users/carsynstephenson/options-validator-ops \
-uv run python .tmp/controller/brief26_projection.py \
+uv run python -B .tmp/controller/brief26_projection.py \
   --base-sha 69a2e1508036644b3f5ae4104eb6081b337d73ef \
   --evaluation-date 2026-08-26
 ```
