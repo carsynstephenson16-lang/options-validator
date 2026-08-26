@@ -2252,9 +2252,16 @@ class ContextLaneRenderTests(unittest.TestCase):
         self.assertEqual(frozen, ["S0", "S1", "S2", "S3", "S4"])
         self.assertIn('data-context-symbol="S5"', section)
         self.assertNotIn('data-context-symbol="S4"', section)
-        self.assertIn('data-diagnostic-symbol="S4">DISPLACED', section)
-        for symbol in frozen:
+        expected_reasons = {
+            "S0": "TREND, VOL_PREMIUM, REGIME",
+            "S1": "TREND, VOL_PREMIUM, REGIME",
+            "S2": "TREND, VOL_PREMIUM, REGIME",
+            "S3": "TREND, VOL_PREMIUM, REGIME",
+            "S4": "DISPLACED",
+        }
+        for symbol, reason in expected_reasons.items():
             self.assertIn(f'data-diagnostic-symbol="{symbol}"', section)
+            self.assertIn(f'>{symbol} — {reason}</span>', section)
         self.assertLess(html.index("Rule-based top 5"), section_start)
         self.assertLess(section_start, html.index("QM MOVEMENT LANE"))
         self.assertIn(

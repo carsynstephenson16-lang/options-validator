@@ -3903,13 +3903,14 @@ def _context_lane_html(data: dict) -> str:
 
     diagnostics = []
     for pick in select_top_picks(data, include_csp_watch=True):
+        symbol = str(pick["symbol"])
         snapshot = pick["card"].get("top3_snapshot")
         candidate_id = snapshot.get("candidate_id") if isinstance(snapshot, Mapping) else None
         row = selected_by_id.get(candidate_id) if isinstance(candidate_id, str) else None
         reason = str(row["context_reason"]) if row is not None else "DISPLACED"
         diagnostics.append(
             f'<span class="status-badge unknown" data-diagnostic-symbol="'
-            f'{_esc(str(pick["symbol"]))}">{_esc(reason)}</span>'
+            f'{_esc(symbol)}">{_esc(symbol)} — {_esc(reason)}</span>'
         )
     return (
         '<section class="panel hero context-lane">'

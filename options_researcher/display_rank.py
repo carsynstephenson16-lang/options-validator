@@ -14,8 +14,7 @@ def display_quality_key(
     tech: Mapping[str, object] | None,
 ) -> tuple[float, int, int]:
     """Return the frozen lane-neutral quality tuple; better sorts first."""
-    grades_value = card.get("grades")
-    grades = grades_value if isinstance(grades_value, Mapping) else {}
+    grades = card.get("grades") or {}
     greens = sum(1 for value in grades.values() if value == "GREEN")
     fraction = greens / len(grades) if grades else 0.0
     leader = 1 if card.get("rank_leader") else 0

@@ -37,6 +37,7 @@ class DisplayQualityKeyTests(unittest.TestCase):
                 (-1.0, 0, 0),
             ),
             ("put", {"grades": {}}, None, (-0.0, 0, 0)),
+            ("put", {}, None, (-0.0, 0, 0)),
         )
 
         for lane, card, technicals, expected in cases:
@@ -49,6 +50,14 @@ class DisplayQualityKeyTests(unittest.TestCase):
                     dashboard._display_quality_key(card, lane, technicals),
                     expected,
                 )
+
+    def test_truthy_malformed_grades_preserves_pre_extraction_failure(self) -> None:
+        card = {"grades": "GREEN", "rank_leader": True}
+
+        with self.assertRaises(AttributeError):
+            display_rank.display_quality_key(card, "put", None)
+        with self.assertRaises(AttributeError):
+            dashboard._display_quality_key(card, "put", None)
 
     def test_lane_sets_are_the_frozen_dashboard_sets(self) -> None:
         self.assertEqual(display_rank.SELL_LANES, ("put", "cc", "pmcc"))
