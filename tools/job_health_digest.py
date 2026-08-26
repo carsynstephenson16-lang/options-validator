@@ -300,6 +300,13 @@ def _intraday_capture(root: Path, as_of: str, tag: str) -> HealthRow:
             "invalid captured_at_utc",
             relative,
         )
+    if payload.get("receipt_kind") != "intraday_capture/v1":
+        return HealthRow(
+            job,
+            HealthStatus.FAILED,
+            "receipt_kind mismatch: expected intraday_capture/v1",
+            relative,
+        )
     if payload.get("session_tag") != tag:
         return HealthRow(
             job,
