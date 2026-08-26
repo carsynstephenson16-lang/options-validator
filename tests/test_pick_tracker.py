@@ -264,6 +264,25 @@ class SnapshotAndMembershipTests(unittest.TestCase):
                     journal_path=root / "scored/bypass.jsonl",
                     verified_sessions=["2026-08-25"],
                 )
+            with self.assertRaisesRegex(tracker.RegistrationRequired, "dryrun"):
+                tracker.append_membership(
+                    snapshot("2026-08-25", []),
+                    journal_path=Path(tmp) / "scored/events.jsonl",
+                    verified_sessions=["2026-08-25"],
+                )
+
+    def test_record_cli_checks_session_before_reading_snapshot(self):
+        from unittest import mock
+
+        with (
+            mock.patch(
+                "options_researcher.schwab_chain_view.verified_sessions",
+                return_value=([], []),
+            ),
+            mock.patch.object(tracker, "SNAPSHOT_PATH", Path("/definitely/missing/snapshot.json")),
+            self.assertRaisesRegex(tracker.TrackerError, "SESSION_UNVERIFIED"),
+        ):
+            tracker.record_cli("2026-08-25")
 
     def test_disabled_context_arm_is_loud_and_refuses_primary_contrast(self):
         with tempfile.TemporaryDirectory() as tmp:

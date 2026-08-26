@@ -5220,32 +5220,54 @@ def _write_dashboard_result(
     data_as_of = str(payload.get("data_as_of") or "")
     receipt_reference = Path("reports/schwab_chains") / data_as_of / "preclose.json"
     receipt_path = input_root / receipt_reference
+    unavailable_reason = None
     try:
         receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
-    except OSError as exc:
-        raise ValueError(
-            f"capture receipt is required for the pick snapshot: {receipt_reference}"
-        ) from exc
+    except OSError:
+        receipt_sha256 = None
+        unavailable_reason = "CAPTURE_RECEIPT_UNAVAILABLE"
     snapshot_arms = (
         "frozen_baseline",
         "frozen_baseline_watch_inclusive",
         "context_lane",
     )
-    for arm_name in snapshot_arms:
-        for candidate in _snapshot_candidates(payload.get(arm_name)):
-            quote = candidate.get("raw_quote")
-            source_hash = candidate.get("source_row_hash")
-            if (
-                not isinstance(quote, Mapping)
-                or _finite_number(quote.get("bid")) is None
-                or _finite_number(quote.get("ask")) is None
-                or not isinstance(source_hash, str)
-                or not source_hash
-            ):
-                raise ValueError(
-                    f"raw quote provenance is required for {arm_name} candidate "
-                    f"{candidate.get('candidate_id')!r}"
-                )
+    if unavailable_reason is None:
+        for arm_name in snapshot_arms:
+            for candidate in _snapshot_candidates(payload.get(arm_name)):
+                quote = candidate.get("raw_quote")
+                source_hash = candidate.get("source_row_hash")
+                if (
+                    not isinstance(quote, Mapping)
+                    or _finite_number(quote.get("bid")) is None
+                    or _finite_number(quote.get("ask")) is None
+                    or not isinstance(source_hash, str)
+                    or not source_hash
+                ):
+                    unavailable_reason = "RAW_QUOTE_PROVENANCE_UNAVAILABLE"
+                    break
+            if unavailable_reason is not None:
+                break
+    if unavailable_reason is not None:
+        unavailable = {
+            "schema": "picks_snapshot/unavailable",
+            "state": "UNAVAILABLE",
+            "reason_code": unavailable_reason,
+            "evaluation_date": payload.get("evaluation_date"),
+            "data_as_of": data_as_of,
+            "html_sha256": html_sha256,
+        }
+        _atomic_replace_bytes(html_path, html_bytes)
+        _atomic_replace_bytes(
+            snapshot_path,
+            json.dumps(
+                unavailable,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode()
+            + b"\n",
+        )
+        return unavailable
     source_hashes = sorted(
         {
             str(candidate.get("source_row_hash"))

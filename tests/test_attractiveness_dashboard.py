@@ -2422,37 +2422,40 @@ class ContextLaneRenderTests(unittest.TestCase):
             )
             self.assertEqual(list(html_path.parent.glob("*.tmp")), [])
 
-    def test_dashboard_refuses_to_persist_snapshot_without_receipt_or_raw_quote(self):
+    def test_dashboard_publishes_html_but_marks_snapshot_unavailable_without_provenance(self):
         from unittest import mock
 
         data = self._data(count=1)
         result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            with (
-                mock.patch("research.hashing.config_hash", return_value="e" * 64),
-                self.assertRaisesRegex(ValueError, "capture receipt"),
-            ):
-                ad._write_dashboard_result(
+            html_path = root / "attractiveness.html"
+            snapshot_path = root / "picks_snapshot.json"
+            with mock.patch("research.hashing.config_hash", return_value="e" * 64):
+                unavailable = ad._write_dashboard_result(
                     result,
-                    html_path=root / "attractiveness.html",
-                    snapshot_path=root / "picks_snapshot.json",
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
                     input_root=root,
                 )
+            self.assertEqual(unavailable["state"], "UNAVAILABLE")
+            self.assertEqual(unavailable["reason_code"], "CAPTURE_RECEIPT_UNAVAILABLE")
+            self.assertEqual(html_path.read_text(), result.html)
+            self.assertEqual(json.loads(snapshot_path.read_text()), unavailable)
 
             receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
             receipt.parent.mkdir(parents=True)
             receipt.write_text('{"schema":"fixture"}\n')
-            with (
-                mock.patch("research.hashing.config_hash", return_value="e" * 64),
-                self.assertRaisesRegex(ValueError, "raw quote"),
-            ):
-                ad._write_dashboard_result(
+            with mock.patch("research.hashing.config_hash", return_value="e" * 64):
+                unavailable = ad._write_dashboard_result(
                     result,
-                    html_path=root / "attractiveness.html",
-                    snapshot_path=root / "picks_snapshot.json",
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
                     input_root=root,
                 )
+            self.assertEqual(unavailable["state"], "UNAVAILABLE")
+            self.assertEqual(unavailable["reason_code"], "RAW_QUOTE_PROVENANCE_UNAVAILABLE")
+            self.assertEqual(html_path.read_text(), result.html)
 
     def test_snapshot_carries_frozen_coverage_basis_without_changing_sections_json(self):
         data = self._data(count=1)

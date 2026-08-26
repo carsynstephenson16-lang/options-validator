@@ -176,14 +176,9 @@ def _enforce_write_path(
     registration_validator: Callable[[Mapping[str, object]], bool] | None,
 ) -> None:
     if reports_root is None:
-        resolved = journal_path.resolve()
-        parts = resolved.parts
-        indexes = [index for index, part in enumerate(parts) if part == "pick_tracker"]
-        if not indexes:
+        if "dryrun" in journal_path.resolve().parent.parts:
             return
-        reports_root = Path(*parts[: indexes[-1] + 1])
-    dryrun = reports_root / "dryrun"
-    if _is_below(journal_path, dryrun):
+    elif _is_below(journal_path, reports_root / "dryrun"):
         return
     registration_confirmed = bool(
         _registration_valid(registration)
@@ -1247,12 +1242,14 @@ def _load_json(path: Path) -> dict[str, object]:
 def record_cli(as_of: str) -> None:
     from options_researcher.schwab_chain_view import verified_sessions
 
+    sessions, _failures = verified_sessions()
+    if as_of not in set(sessions):
+        raise TrackerError(f"SESSION_UNVERIFIED: {as_of!r}")
     payload = validate_snapshot(
         _load_json(SNAPSHOT_PATH), HTML_PATH.read_bytes(), input_root=Path(".")
     )
     if payload.get("evaluation_date") != as_of:
         raise TrackerError("snapshot evaluation_date does not match --as-of")
-    sessions, _failures = verified_sessions()
     append_membership(
         payload,
         journal_path=DRYRUN_ROOT / "events.jsonl",
