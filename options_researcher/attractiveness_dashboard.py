@@ -88,7 +88,9 @@ def _input_root_cwd():
     else:
         input_root = Path(configured).expanduser().resolve()
         if not input_root.is_dir():
-            raise FileNotFoundError(f"ATTRACTIVENESS_INPUT_ROOT is not a directory: {input_root}")
+            raise FileNotFoundError(
+                f"ATTRACTIVENESS_INPUT_ROOT is not a directory: {input_root}"
+            )
     previous = Path.cwd()
     os.chdir(input_root)
     try:
@@ -101,9 +103,8 @@ def _round_cents(x: float) -> float:
     return round(float(x), 2)
 
 
-def _price_ladder(
-    *, close: float, rv21: float, strike: float, breakeven: float | None
-) -> list[dict]:
+def _price_ladder(*, close: float, rv21: float, strike: float,
+                  breakeven: float | None) -> list[dict]:
     """Ascending, deduped, positive-only price rows with anchor tags.
 
     Uses +/-1 and +/-2 monthly moves around close when rv21 gives a finite
@@ -143,9 +144,8 @@ def _cc_pnl(price: float, strike: float, credit: float, close: float) -> float:
     return credit + 100.0 * (min(price, strike) - close)
 
 
-def _pmcc_pnl(
-    price: float, short_strike: float, leaps_strike: float, leaps_cost: float, credit: float
-) -> tuple[float, str]:
+def _pmcc_pnl(price: float, short_strike: float, leaps_strike: float,
+              leaps_cost: float, credit: float) -> tuple[float, str]:
     if price >= short_strike:
         return ((short_strike - leaps_strike) * 100.0 - leaps_cost + credit, "")
     return (credit, _PMCC_NOTE)
@@ -154,9 +154,8 @@ def _pmcc_pnl(
 _PMCC_PREVIEW_NOTE = "full two-leg P&L (LEAPS at expiration intrinsic)"
 
 
-def _pmcc_full_pnl(
-    price: float, short_strike: float, leaps_strike: float, leaps_cost: float, credit: float
-) -> tuple[float, str]:
+def _pmcc_full_pnl(price: float, short_strike: float, leaps_strike: float,
+                   leaps_cost: float, credit: float) -> tuple[float, str]:
     """FULL two-leg PMCC P&L at expiration (LEAPS intrinsic minus its cost,
     plus the short-call leg). Used for PREVIEW structures, where the LEAPS is
     not actually held: showing credit-only there would hide the dominant risk
@@ -170,31 +169,34 @@ def _leaps_pnl(price: float, strike: float, cost: float) -> float:
     return max(0.0, price - strike) * 100.0 - cost
 
 
-def scenario_rows(card: dict, structure: str, *, close: float, rv21: float) -> list[dict]:
+def scenario_rows(card: dict, structure: str, *, close: float,
+                  rv21: float) -> list[dict]:
     """At-expiration payoff rows for one candidate. `structure` is one of
     'put', 'cc', 'pmcc', 'leaps'."""
     strike = float(card["strike"])
     if structure == "put":
         credit = float(card["credit"])
         breakeven = strike - credit / 100.0
-        ladder = _price_ladder(close=close, rv21=rv21, strike=strike, breakeven=breakeven)
-        return [
-            {**row, "pnl": _round_cents(_put_pnl(row["price"], strike, credit)), "note": ""}
-            for row in ladder
-        ]
+        ladder = _price_ladder(close=close, rv21=rv21, strike=strike,
+                               breakeven=breakeven)
+        return [{**row, "pnl": _round_cents(_put_pnl(row["price"], strike,
+                                                     credit)), "note": ""}
+                for row in ladder]
     if structure == "cc":
         credit = float(card["credit"])
-        ladder = _price_ladder(close=close, rv21=rv21, strike=strike, breakeven=None)
-        return [
-            {**row, "pnl": _round_cents(_cc_pnl(row["price"], strike, credit, close)), "note": ""}
-            for row in ladder
-        ]
+        ladder = _price_ladder(close=close, rv21=rv21, strike=strike,
+                               breakeven=None)
+        return [{**row, "pnl": _round_cents(_cc_pnl(row["price"], strike,
+                                                    credit, close)), "note": ""}
+                for row in ladder]
     if structure == "pmcc":
         credit = float(card["credit"])
         lk, lc = float(card["leaps_strike"]), float(card["leaps_cost"])
         pnl_fn = _pmcc_full_pnl if card.get("preview") else _pmcc_pnl
-        breakeven = lk + (lc - credit) / 100.0 if card.get("preview") else None
-        ladder = _price_ladder(close=close, rv21=rv21, strike=strike, breakeven=breakeven)
+        breakeven = (lk + (lc - credit) / 100.0 if card.get("preview")
+                     else None)
+        ladder = _price_ladder(close=close, rv21=rv21, strike=strike,
+                               breakeven=breakeven)
         out = []
         for row in ladder:
             pnl, note = pnl_fn(row["price"], strike, lk, lc, credit)
@@ -203,11 +205,11 @@ def scenario_rows(card: dict, structure: str, *, close: float, rv21: float) -> l
     if structure in ("leaps", "long_call"):
         cost = float(card["cost"])
         breakeven = float(card["breakeven"])
-        ladder = _price_ladder(close=close, rv21=rv21, strike=strike, breakeven=breakeven)
-        return [
-            {**row, "pnl": _round_cents(_leaps_pnl(row["price"], strike, cost)), "note": ""}
-            for row in ladder
-        ]
+        ladder = _price_ladder(close=close, rv21=rv21, strike=strike,
+                               breakeven=breakeven)
+        return [{**row, "pnl": _round_cents(_leaps_pnl(row["price"], strike,
+                                                      cost)), "note": ""}
+                for row in ladder]
     raise ValueError(f"unknown structure {structure!r}")
 
 
@@ -217,7 +219,8 @@ _SELL_LANES = display_rank.SELL_LANES
 _BUY_LANES = display_rank.BUY_LANES
 
 
-def bbb_rows(card: dict, structure: str, *, close: float, rv21: float) -> list[dict]:
+def bbb_rows(card: dict, structure: str, *, close: float,
+             rv21: float) -> list[dict]:
     """Deterministic bull/base/bear at-expiration rows for one candidate.
 
     base = close (flat); bull/bear = close * (1 +/- k * monthly_move) where
@@ -229,11 +232,9 @@ def bbb_rows(card: dict, structure: str, *, close: float, rv21: float) -> list[d
     dte = int(card["dte"])
     monthly_move = float(rv21) / math.sqrt(12.0)
     k = min(2.0, math.sqrt(dte / 30.0))
-    points = [
-        ("bear", max(0.0, close * (1 - k * monthly_move))),
-        ("base", close),
-        ("bull", close * (1 + k * monthly_move)),
-    ]
+    points = [("bear", max(0.0, close * (1 - k * monthly_move))),
+              ("base", close),
+              ("bull", close * (1 + k * monthly_move))]
 
     strike = float(card["strike"])
     out = []
@@ -245,20 +246,15 @@ def bbb_rows(card: dict, structure: str, *, close: float, rv21: float) -> list[d
             pnl = _cc_pnl(price, strike, float(card["credit"]), close)
         elif structure == "pmcc":
             pnl_fn = _pmcc_full_pnl if card.get("preview") else _pmcc_pnl
-            pnl, note = pnl_fn(
-                price,
-                strike,
-                float(card["leaps_strike"]),
-                float(card["leaps_cost"]),
-                float(card["credit"]),
-            )
+            pnl, note = pnl_fn(price, strike, float(card["leaps_strike"]),
+                               float(card["leaps_cost"]),
+                               float(card["credit"]))
         elif structure in ("leaps", "long_call"):
             pnl = _leaps_pnl(price, strike, float(card["cost"]))
         else:
             raise ValueError(f"unknown structure {structure!r}")
-        out.append(
-            {"scenario": tag, "price": _round_cents(price), "pnl": _round_cents(pnl), "note": note}
-        )
+        out.append({"scenario": tag, "price": _round_cents(price),
+                    "pnl": _round_cents(pnl), "note": note})
     return out
 
 
@@ -275,38 +271,31 @@ def risk_economics(card: dict, structure: str, *, close: float) -> dict:
     if structure == "put":
         strike = float(card["strike"])
         credit = float(card["credit"])
-        return {
-            "capital_required": strike * 100.0,
-            "max_loss": _round_cents(strike * 100.0 - credit),
-            "breakeven": _round_cents(strike - credit / 100.0),
-        }
+        return {"capital_required": strike * 100.0,
+                "max_loss": _round_cents(strike * 100.0 - credit),
+                "breakeven": _round_cents(strike - credit / 100.0)}
     if structure == "cc":
         credit = float(card["credit"])
         # against shares already held: the option leg adds no capital, but
         # the covered position's worst case is the shares to zero less the
         # credit -- hiding the share leg would be credit-only optimism.
-        return {
-            "capital_required": 0.0,
-            "max_loss": _round_cents(close * 100.0 - credit),
-            "breakeven": _round_cents(close - credit / 100.0),
-        }
+        return {"capital_required": 0.0,
+                "max_loss": _round_cents(close * 100.0 - credit),
+                "breakeven": _round_cents(close - credit / 100.0)}
     if structure == "pmcc":
         credit = float(card["credit"])
         lk, lc = float(card["leaps_strike"]), float(card["leaps_cost"])
         short_k = float(card["strike"])
-        return {
-            "capital_required": _round_cents(lc),
-            "max_loss": _round_cents(lc - credit),
-            "breakeven": _round_cents(lk + (lc - credit) / 100.0),
-            "max_profit": _round_cents((short_k - lk) * 100.0 - lc + credit),
-        }
+        return {"capital_required": _round_cents(lc),
+                "max_loss": _round_cents(lc - credit),
+                "breakeven": _round_cents(lk + (lc - credit) / 100.0),
+                "max_profit": _round_cents(
+                    (short_k - lk) * 100.0 - lc + credit)}
     if structure in ("leaps", "long_call"):
         cost = float(card["cost"])
-        return {
-            "capital_required": _round_cents(cost),
-            "max_loss": _round_cents(cost),
-            "breakeven": _round_cents(float(card["breakeven"])),
-        }
+        return {"capital_required": _round_cents(cost),
+                "max_loss": _round_cents(cost),
+                "breakeven": _round_cents(float(card["breakeven"]))}
     raise ValueError(f"unknown structure {structure!r}")
 
 
@@ -366,7 +355,8 @@ def _admissible_pick_pool(data: dict, *, include_csp_watch: bool) -> list[tuple[
 
 def _qm_is_not_covered(item: object) -> bool:
     """True for a name the frozen QM study never covered (structural)."""
-    return isinstance(item, Mapping) and item.get("status") == "NOT_IN_FROZEN_STUDY"
+    return (isinstance(item, Mapping)
+            and item.get("status") == "NOT_IN_FROZEN_STUDY")
 
 
 def _qm_context_block_reason(
@@ -403,7 +393,10 @@ def _qm_context_block_reason(
                 f"the dashboard's {market_date}"
             )
     elif context_as_of > market_date:
-        return f"QM context date {context_as_of} is ahead of dashboard market date {market_date}"
+        return (
+            f"QM context date {context_as_of} is ahead of dashboard market "
+            f"date {market_date}"
+        )
     symbols = qm_context.get("symbols")
     if not isinstance(symbols, Mapping):
         return "QM context symbols are unavailable"
@@ -429,11 +422,8 @@ def _qm_context_block_reason(
 
 
 def select_top_picks(
-    data: dict,
-    n: int = config.PICK_TOP_N,
-    *,
-    policy_veto: bool | None = None,
-    include_csp_watch: bool = False,
+    data: dict, n: int = config.PICK_TOP_N, *, policy_veto: bool | None = None,
+    include_csp_watch: bool = False
 ) -> list[dict]:
     """Transparent quantitative shortlist over EVERY non-skipped card across
     all symbols/lanes in an assemble() dict. Display ordering only (weights =
@@ -482,11 +472,8 @@ def select_top_picks(
 
 
 def select_qm_top_picks(
-    data: dict,
-    qm_context: Mapping[str, object],
-    n: int = config.PICK_TOP_N,
-    *,
-    include_csp_watch: bool = False,
+    data: dict, qm_context: Mapping[str, object], n: int = config.PICK_TOP_N, *,
+    include_csp_watch: bool = False
 ) -> list[dict]:
     """Return the exact mechanical picks for the lower descriptive QM panel.
 
@@ -585,9 +572,11 @@ def pinned_picks(data: dict) -> list[dict]:
 
     out: list[dict] = []
     for symbol in getattr(config, "PICK_PINNED_SYMBOLS", []):
-        sub = {"symbols": [s for s in data.get("symbols", []) if s.get("symbol") == symbol]}
+        sub = {"symbols": [s for s in data.get("symbols", [])
+                           if s.get("symbol") == symbol]}
         picks = select_top_picks(sub, n=1, include_csp_watch=True)
-        out.append({"symbol": symbol, "pick": picks[0] if picks else None})
+        out.append({"symbol": symbol,
+                    "pick": picks[0] if picks else None})
     return out
 
 
@@ -615,7 +604,8 @@ def _display_score(card: dict, kind: str, tech: dict | None) -> int:
     if card.get("rank_leader"):
         score += config.PICK_RANK_LEADER_BONUS
     if tech:
-        if kind in _BUY_LANES and (tech.get("trend") == "up" or tech.get("breakout_20d")):
+        if kind in _BUY_LANES and (tech.get("trend") == "up"
+                                   or tech.get("breakout_20d")):
             score += config.PICK_TECH_BONUS
         elif kind in _SELL_LANES and tech.get("ma_posture") != "below_all":
             score += config.PICK_TECH_BONUS
@@ -645,13 +635,9 @@ def _display_policy_tier(card: dict) -> int:
     selection_status = snapshot.get("selection_status")
     policy = snapshot.get("policy")
     policy_status = policy.get("status") if isinstance(policy, Mapping) else None
-    status = (
-        selection_status
-        if isinstance(selection_status, str)
-        else policy_status
-        if isinstance(policy_status, str)
-        else "DATA_BLOCKED"
-    )
+    status = (selection_status if isinstance(selection_status, str)
+              else policy_status if isinstance(policy_status, str)
+              else "DATA_BLOCKED")
     return _DISPLAY_POLICY_TIER.get(status, _DISPLAY_POLICY_TIER["DATA_BLOCKED"])
 
 
@@ -663,7 +649,8 @@ def _finite_sort_value(value: object, *, default: float = float("inf")) -> float
     return number if math.isfinite(number) else default
 
 
-def _group_candidate_sort_key(card: dict, kind: str, tech: dict | None) -> tuple:
+def _group_candidate_sort_key(card: dict, kind: str,
+                              tech: dict | None) -> tuple:
     """Sort key for one card when ordering visible strategy sections.
 
     Liquidity-RED cards sit below every liquid card, matching the Top-3 hard
@@ -681,16 +668,13 @@ def _group_candidate_sort_key(card: dict, kind: str, tech: dict | None) -> tuple
         tie = -annualized_yield if math.isfinite(annualized_yield) else annualized_yield
     else:
         tie = _finite_sort_value(card.get("breakeven_move"))
-    return (
-        tier,
-        *_display_quality_key(card, kind, tech),
-        tie,
-        _finite_sort_value(card.get("dte")),
-        _finite_sort_value(card.get("strike")),
-    )
+    return (tier, *_display_quality_key(card, kind, tech), tie,
+            _finite_sort_value(card.get("dte")),
+            _finite_sort_value(card.get("strike")))
 
 
-def _rank_groups_for_display(groups: list[dict], *, tech: dict | None = None) -> list[dict]:
+def _rank_groups_for_display(groups: list[dict], *,
+                             tech: dict | None = None) -> list[dict]:
     """Return groups best-to-worst by their strongest visible candidate.
 
     Empty or skipped-only sections remain visible but sort after sections with
@@ -706,7 +690,8 @@ def _rank_groups_for_display(groups: list[dict], *, tech: dict | None = None) ->
             for card in group.get("cards", [])
             if "skipped" not in card
         ]
-        ranked.append((min(card_keys) if card_keys else empty_key, original_index, group))
+        ranked.append((min(card_keys) if card_keys else empty_key,
+                       original_index, group))
     ranked.sort(key=lambda item: (item[0], item[1]))
     return [group for _key, _original_index, group in ranked]
 
@@ -720,9 +705,8 @@ _DOMINANCE_AXES = {
 }
 
 
-def _dominance_axis_values(
-    card: Mapping[str, object], lane_kind: str, close: float
-) -> tuple[float, ...] | None:
+def _dominance_axis_values(card: Mapping[str, object], lane_kind: str,
+                           close: float) -> tuple[float, ...] | None:
     values: list[float] = []
     for name, _direction in _DOMINANCE_AXES[lane_kind]:
         if name == "breakeven_distance":
@@ -738,17 +722,15 @@ def _dominance_axis_values(
     return tuple(values)
 
 
-def _dominates(
-    y: Mapping[str, object], x: Mapping[str, object], lane_kind: str, close: float
-) -> bool:
+def _dominates(y: Mapping[str, object], x: Mapping[str, object],
+               lane_kind: str, close: float) -> bool:
     y_values = _dominance_axis_values(y, lane_kind, close)
     x_values = _dominance_axis_values(x, lane_kind, close)
     if y_values is None or x_values is None:
         return False
     weak, strict = True, False
     for (_name, direction), y_value, x_value in zip(
-        _DOMINANCE_AXES[lane_kind], y_values, x_values, strict=True
-    ):
+            _DOMINANCE_AXES[lane_kind], y_values, x_values, strict=True):
         if direction > 0:
             weak = weak and y_value >= x_value
             strict = strict or y_value > x_value
@@ -767,10 +749,7 @@ def _dominates(
 
 
 def dominated_partition(
-    cards: list[dict],
-    lane_kind: str,
-    close: float,
-    *,
+    cards: list[dict], lane_kind: str, close: float, *,
     protected_indexes: frozenset[int] = frozenset(),
 ) -> tuple[list[dict], list[tuple[dict, dict]]]:
     """Return shown cards and hidden-card/front-dominator pairs.
@@ -784,12 +763,10 @@ def dominated_partition(
     if lane_kind == "pmcc" or lane_kind not in _DOMINANCE_AXES or len(cards) <= 2:
         return list(cards), []
     front_indexes = [
-        index
-        for index, card in enumerate(cards)
-        if not any(
-            index != other_index and _dominates(other, card, lane_kind, close)
-            for other_index, other in enumerate(cards)
-        )
+        index for index, card in enumerate(cards)
+        if not any(index != other_index
+                   and _dominates(other, card, lane_kind, close)
+                   for other_index, other in enumerate(cards))
     ]
     front_set = set(front_indexes)
     shown: list[dict] = []
@@ -798,18 +775,13 @@ def dominated_partition(
         grades_value = card.get("grades")
         grades = grades_value if isinstance(grades_value, Mapping) else {}
         protected = (
-            index in protected_indexes
-            or index in front_set
-            or "skipped" in card
-            or card.get("rank_leader") is True
+            index in protected_indexes or index in front_set
+            or "skipped" in card or card.get("rank_leader") is True
             or grades.get("liquidity") == "RED"
             or _display_policy_tier(card) == _DISPLAY_POLICY_TIER["DATA_BLOCKED"]
         )
-        dominators = [
-            front_index
-            for front_index in front_indexes
-            if _dominates(cards[front_index], card, lane_kind, close)
-        ]
+        dominators = [front_index for front_index in front_indexes
+                      if _dominates(cards[front_index], card, lane_kind, close)]
         if protected or not dominators:
             shown.append(card)
         else:
@@ -817,28 +789,23 @@ def dominated_partition(
     return shown, hidden
 
 
-def _panel_status(section: Mapping[str, object], stale_symbols: set[str]) -> tuple[list[str], bool]:
+def _panel_status(section: Mapping[str, object],
+                  stale_symbols: set[str]) -> tuple[list[str], bool]:
     """Return ordered status labels and the fail-visible default-open state."""
     groups_value = section.get("groups")
     groups = groups_value if isinstance(groups_value, (list, tuple)) else ()
-    cards = [
-        card
-        for group in groups
-        if isinstance(group, Mapping)
-        for card in group.get("cards", [])
-        if isinstance(card, dict)
-    ]
+    cards = [card for group in groups if isinstance(group, Mapping)
+             for card in group.get("cards", []) if isinstance(card, dict)]
     labels: list[str] = []
-    if any(_display_policy_tier(card) == _DISPLAY_POLICY_TIER["DATA_BLOCKED"] for card in cards):
+    if any(_display_policy_tier(card) == _DISPLAY_POLICY_TIER["DATA_BLOCKED"]
+           for card in cards):
         labels.append("DATA_BLOCKED")
     if section.get("features_stale") is True or section.get("symbol") in stale_symbols:
         labels.append("STALE")
     if any("skipped" in card for card in cards):
         labels.append("SKIPPED")
-    if any(
-        isinstance(card.get("grades"), Mapping) and card["grades"].get("liquidity") == "RED"
-        for card in cards
-    ):
+    if any(isinstance(card.get("grades"), Mapping)
+           and card["grades"].get("liquidity") == "RED" for card in cards):
         labels.append("LIQUIDITY WARNING")
     if not labels:
         labels.append("CURRENT")
@@ -854,11 +821,8 @@ def load_context_evidence(
     import json
 
     unavailable = {
-        "state": "unavailable",
-        "context": None,
-        "warning": None,
-        "source_path": None,
-        "sha256": None,
+        "state": "unavailable", "context": None, "warning": None,
+        "source_path": None, "sha256": None,
     }
     if _valid_iso_date(as_of) is None:
         return unavailable
@@ -885,7 +849,8 @@ def load_context_evidence(
             "state": "integrity_failed",
             "context": None,
             "warning": (
-                f"research context file {unresolved.name} escapes context root — ignoring it"
+                f"research context file {unresolved.name} escapes context root "
+                "— ignoring it"
             ),
             "source_path": str(unresolved.absolute()),
             "sha256": None,
@@ -906,25 +871,18 @@ def load_context_evidence(
         context = json.loads(raw)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return {
-            "state": "integrity_failed",
-            "context": None,
-            "warning": (
-                f"research context file {selected.name} is unreadable "
-                f"({exc.__class__.__name__}) — ignoring it"
-            ),
-            "source_path": str(selected),
-            "sha256": None,
+            "state": "integrity_failed", "context": None,
+            "warning": (f"research context file {selected.name} is unreadable "
+                        f"({exc.__class__.__name__}) — ignoring it"),
+            "source_path": str(selected), "sha256": None,
         }
     digest = hashlib.sha256(raw).hexdigest()
     if not isinstance(context, dict):
         return {
-            "state": "integrity_failed",
-            "context": None,
-            "warning": (
-                f"research context file {selected.name} is not a JSON object — ignoring it"
-            ),
-            "source_path": str(selected),
-            "sha256": digest,
+            "state": "integrity_failed", "context": None,
+            "warning": (f"research context file {selected.name} is not a JSON "
+                        "object — ignoring it"),
+            "source_path": str(selected), "sha256": digest,
         }
     warning = None
     if selected_date != as_of:
@@ -934,11 +892,8 @@ def load_context_evidence(
             "exact-date check)"
         )
     return {
-        "state": "loaded",
-        "context": context,
-        "warning": warning,
-        "source_path": str(selected),
-        "sha256": digest,
+        "state": "loaded", "context": context, "warning": warning,
+        "source_path": str(selected), "sha256": digest,
     }
 
 
@@ -955,14 +910,15 @@ def _verify_context_evidence(evidence: Mapping[str, object]) -> dict[str, object
         raw = Path(str(source)).read_bytes()
     except OSError:
         raw = None
-    if raw is None or not isinstance(expected, str) or hashlib.sha256(raw).hexdigest() != expected:
-        result.update(
-            {
-                "state": "integrity_failed",
-                "context": None,
-                "warning": "research context integrity failed (hash drift after load)",
-            }
-        )
+    if (
+        raw is None
+        or not isinstance(expected, str)
+        or hashlib.sha256(raw).hexdigest() != expected
+    ):
+        result.update({
+            "state": "integrity_failed", "context": None,
+            "warning": "research context integrity failed (hash drift after load)",
+        })
     return result
 
 
@@ -980,13 +936,11 @@ def load_context(
 
 
 def _headline(symbol: str, kind: str, card: dict) -> str:
-    verbs = {
-        "put": "Sell the {sym} ${k:.0f} put",
-        "cc": "Sell the {sym} ${k:.0f} covered call",
-        "pmcc": "Sell the {sym} ${k:.0f} call vs your LEAPS",
-        "leaps": "Buy the {sym} ${k:.0f} LEAPS",
-        "long_call": "Buy the {sym} ${k:.0f} call",
-    }
+    verbs = {"put": "Sell the {sym} ${k:.0f} put",
+             "cc": "Sell the {sym} ${k:.0f} covered call",
+             "pmcc": "Sell the {sym} ${k:.0f} call vs your LEAPS",
+             "leaps": "Buy the {sym} ${k:.0f} LEAPS",
+             "long_call": "Buy the {sym} ${k:.0f} call"}
     k = float(card["strike"])
     lead = verbs[kind].format(sym=symbol, k=k)
     if kind in ("leaps", "long_call"):
@@ -994,24 +948,29 @@ def _headline(symbol: str, kind: str, card: dict) -> str:
     else:
         money = f"collect ${float(card['credit']):,.0f} now"
         if card.get("annualized_yield") is not None:
-            money += f" (~{100 * card['annualized_yield']:.0f}%/yr) (simple, not compounded)"
+            money += (
+                f" (~{100 * card['annualized_yield']:.0f}%/yr) "
+                "(simple, not compounded)"
+            )
     star = "★ " if card.get("rank_leader") else ""
-    return f"{star}{lead} — {money} — result by {card['expiry']} ({card['dte']} days out)"
+    return (f"{star}{lead} — {money} — result by {card['expiry']} "
+            f"({card['dte']} days out)")
 
 
 def _countdown(card: dict) -> str:
     import config
-
     dte = int(card["dte"])
     roll = config.H4_THESIS_ROLL_DTE
-    return f"{dte} days until expiration · roll reminder kicks in with {roll} days left"
+    return (f"{dte} days until expiration · roll reminder kicks in with "
+            f"{roll} days left")
 
 
 def _fresh_sections(sections: list[dict]) -> list[dict]:
     """Sections rendered from a VERIFIED Schwab pre-close session."""
     from options_researcher.schwab_chain_view import CHAIN_SOURCE
 
-    return [sec for sec in sections if sec.get("chain_source") == CHAIN_SOURCE and sec.get("as_of")]
+    return [sec for sec in sections
+            if sec.get("chain_source") == CHAIN_SOURCE and sec.get("as_of")]
 
 
 def _page_data_as_of(sections: list[dict]) -> str:
@@ -1048,18 +1007,17 @@ def _stale_path_as_of(sections: list[dict]) -> tuple[str | None, list[str]]:
     """(earliest as_of, names) for sections still on the frozen cache."""
     from options_researcher.schwab_chain_view import CHAIN_SOURCE
 
-    stale = [
-        sec for sec in sections if sec.get("chain_source") != CHAIN_SOURCE and sec.get("as_of")
-    ]
+    stale = [sec for sec in sections
+             if sec.get("chain_source") != CHAIN_SOURCE and sec.get("as_of")]
     if not stale:
         return None, []
-    return (
-        min(str(sec["as_of"]) for sec in stale),
-        sorted(str(sec.get("symbol", "?")) for sec in stale),
-    )
+    return (min(str(sec["as_of"]) for sec in stale),
+            sorted(str(sec.get("symbol", "?")) for sec in stale))
 
 
-def _all_display_data_as_of(sections: list[dict], blocked: list[dict]) -> str:
+def _all_display_data_as_of(
+    sections: list[dict], blocked: list[dict]
+) -> str:
     """Earliest known date across successful and blocked display records."""
     dates = {
         str(sec["as_of"])
@@ -1069,7 +1027,8 @@ def _all_display_data_as_of(sections: list[dict], blocked: list[dict]) -> str:
     dates.update(
         str(rec["last_known_date"])
         for rec in blocked
-        if isinstance(rec.get("last_known_date"), str) and rec.get("last_known_date")
+        if isinstance(rec.get("last_known_date"), str)
+        and rec.get("last_known_date")
     )
     return min(dates) if dates else "no cached data"
 
@@ -1103,23 +1062,20 @@ def _schwab_state_html(data: Mapping[str, object]) -> str:
                 '<div class="notice info">Schwab capture receipts for session '
                 f"{session} are present, but its chain files are not in this "
                 "checkout (they live in the ops execution checkout). No "
-                "pre-close quotes are available here.</div>"
-            )
+                "pre-close quotes are available here.</div>")
             continue
         parts.append(
             '<div class="notice bad"><strong>! Schwab capture session '
-            f"{session} FAILED verification"
-            f"</strong> — {_esc(str(failure.get('reason', 'unknown')))}. "
+            f'{session} FAILED verification'
+            f'</strong> — {_esc(str(failure.get("reason", "unknown")))}. '
             "Its chains were NOT used; names that depend on it fall back to "
-            "the frozen cache with their own older date.</div>"
-        )
+            "the frozen cache with their own older date.</div>")
     if not state.get("receipts_found"):
         parts.append(
             '<div class="notice info">No Schwab pre-close capture receipts '
             "found in this checkout (reports/schwab_chains is empty) — every "
             f"quote below comes from the frozen ThetaData cache, not a "
-            f"{_esc(CONVENTION_LABEL)} snapshot.</div>"
-        )
+            f"{_esc(CONVENTION_LABEL)} snapshot.</div>")
     return "".join(parts)
 
 
@@ -1155,15 +1111,15 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
         age = data.get("chain_age_sessions")
         session = _esc(str(data.get("data_as_of") or "?"))
         names = _esc(", ".join(str(name) for name in fresh_names))
-        subject = f"{count} name" if count == 1 else f"{count} names"
-        head = f"Option quotes: {CONVENTION_LABEL} session {data.get('data_as_of') or '?'}"
+        subject = (f"{count} name" if count == 1 else f"{count} names")
+        head = (f"Option quotes: {CONVENTION_LABEL} session "
+                f"{data.get('data_as_of') or '?'}")
         if not isinstance(age, int):
             fresh_line = (
                 '<div class="notice watch"><strong>! '
                 f"{_esc(head)}</strong> for {subject} ({names}) — but its age "
                 "could NOT be compared with the evaluation date. Treat every "
-                "quote as unverified and check the live broker quote.</div>"
-            )
+                "quote as unverified and check the live broker quote.</div>")
         elif age >= config.CHAIN_STALE_BLOCK_SESSIONS:
             sessions = "session" if age == 1 else "sessions"
             fresh_line = (
@@ -1174,8 +1130,7 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
                 "premium, delta, and moneyness figures — not today's. Cards "
                 f"past the {config.CHAIN_STALE_BLOCK_SESSIONS}-session limit "
                 "are marked DATA_BLOCKED and excluded from the shortlist. Do "
-                "not size or compare a trade from this page.</div>"
-            )
+                "not size or compare a trade from this page.</div>")
         elif age >= config.CHAIN_STALE_WARN_SESSIONS:
             sessions = "session" if age == 1 else "sessions"
             fresh_line = (
@@ -1183,14 +1138,12 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
                 f"{_esc(head)} for {subject} ({names}) — a 15:45 ET snapshot, "
                 f"NOT an end-of-day close, and now {age} trading {sessions} "
                 "old (no newer verified capture). Verify against the live "
-                "broker quote before acting.</div>"
-            )
+                "broker quote before acting.</div>")
         else:
             fresh_line = (
                 f'<div class="notice info"><strong>{_esc(head)}</strong> for '
                 f"{subject} ({names}). This is a 15:45 ET snapshot, NOT an "
-                "end-of-day close.</div>"
-            )
+                "end-of-day close.</div>")
         stale_line = _stale_group_html(data)
         return lane_html + fresh_line + stale_line
 
@@ -1205,8 +1158,7 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
             '<div class="notice watch">! Option-quote age UNKNOWN — the '
             f"board's chain date ({as_of}) could not be compared with the "
             "evaluation date. Treat every quote as unverified and check "
-            "the live broker quote.</div>"
-        )
+            "the live broker quote.</div>")
 
     sessions = "session" if age == 1 else "sessions"
     if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
@@ -1218,18 +1170,15 @@ def _chain_age_html(data: Mapping[str, object]) -> str:
             f"{config.CHAIN_STALE_BLOCK_SESSIONS}-session limit are marked "
             "DATA_BLOCKED and excluded from the shortlist. Do not size or "
             "compare a trade from this page — read the live broker quote."
-            "</div>"
-        )
+            "</div>")
     if age >= config.CHAIN_STALE_WARN_SESSIONS:
         return lane_html + (
             '<div class="notice watch">! Option quotes are '
             f"{age} trading {sessions} old (chain close {as_of}). "
-            "Verify against the live broker quote before acting.</div>"
-        )
+            "Verify against the live broker quote before acting.</div>")
     return lane_html + (
         f'<div class="notice info">Option quotes are from the {as_of} '
-        "close — the most recent completed session.</div>"
-    )
+        "close — the most recent completed session.</div>")
 
 
 def _stale_group_html(data: Mapping[str, object]) -> str:
@@ -1244,27 +1193,21 @@ def _stale_group_html(data: Mapping[str, object]) -> str:
     joined = _esc(", ".join(names))
     age = data.get("stale_chain_age_sessions")
     if not isinstance(age, int):
-        return (
-            '<div class="notice watch">! Option-quote age UNKNOWN for '
-            f"{joined} (frozen-cache date {_esc(as_of)}). Treat every "
-            "quote for these names as unverified.</div>"
-        )
+        return ('<div class="notice watch">! Option-quote age UNKNOWN for '
+                f"{joined} (frozen-cache date {_esc(as_of)}). Treat every "
+                "quote for these names as unverified.</div>")
     sessions = "session" if age == 1 else "sessions"
     if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
-        return (
-            '<div class="notice bad"><strong>! STALE BOARD for '
-            f"{joined} — option quotes are {age} trading {sessions} old."
-            f"</strong> Their premium, delta, and moneyness figures are "
-            f"from the {_esc(as_of)} close, not today. Cards past the "
-            f"{config.CHAIN_STALE_BLOCK_SESSIONS}-session limit are marked "
-            "DATA_BLOCKED and excluded from the shortlist.</div>"
-        )
+        return ('<div class="notice bad"><strong>! STALE BOARD for '
+                f"{joined} — option quotes are {age} trading {sessions} old."
+                f"</strong> Their premium, delta, and moneyness figures are "
+                f"from the {_esc(as_of)} close, not today. Cards past the "
+                f"{config.CHAIN_STALE_BLOCK_SESSIONS}-session limit are marked "
+                "DATA_BLOCKED and excluded from the shortlist.</div>")
     if age >= config.CHAIN_STALE_WARN_SESSIONS:
-        return (
-            '<div class="notice watch">! Option quotes for '
-            f"{joined} are {age} trading {sessions} old (chain close "
-            f"{_esc(as_of)}). Verify against the live broker quote.</div>"
-        )
+        return ('<div class="notice watch">! Option quotes for '
+                f"{joined} are {age} trading {sessions} old (chain close "
+                f"{_esc(as_of)}). Verify against the live broker quote.</div>")
     return ""
 
 
@@ -1303,15 +1246,9 @@ def _valid_iso_date(value: object) -> str | None:
 
 
 def _strict_utc_timestamp(value: object) -> datetime | None:
-    if (
-        not isinstance(value, str)
-        or re.fullmatch(
+    if not isinstance(value, str) or re.fullmatch(
             r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
-            r"\.[0-9]{6}Z",
-            value,
-        )
-        is None
-    ):
+            r"\.[0-9]{6}Z", value) is None:
         return None
     try:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
@@ -1319,7 +1256,8 @@ def _strict_utc_timestamp(value: object) -> datetime | None:
         return None
 
 
-def load_research_views_status(path: str | Path = RESEARCH_VIEWS_STATUS_PATH) -> dict[str, object]:
+def load_research_views_status(
+        path: str | Path = RESEARCH_VIEWS_STATUS_PATH) -> dict[str, object]:
     """Validate one current pointer and its immutable generation, fail closed."""
     from options_researcher.research_views_publication import load_current, load_failure
 
@@ -1333,16 +1271,15 @@ def load_research_views_status(path: str | Path = RESEARCH_VIEWS_STATUS_PATH) ->
         if isinstance(failure_value, Mapping):
             current_time = _strict_utc_timestamp(current.get("published_at"))
             completed = _strict_utc_timestamp(failure_value.get("completed_at"))
-            if current.get("state") != "published" or (
-                current_time is not None and completed is not None and completed > current_time
-            ):
+            if (current.get("state") != "published"
+                    or (current_time is not None and completed is not None
+                        and completed > current_time)):
                 current["active_failure"] = failure_value
     return current
 
 
-def _strict_regime_sidecar(
-    status: Mapping[str, object], evaluation_date: str
-) -> dict[str, object] | None:
+def _strict_regime_sidecar(status: Mapping[str, object],
+                           evaluation_date: str) -> dict[str, object] | None:
     import json
 
     artifacts = status.get("artifacts")
@@ -1354,22 +1291,16 @@ def _strict_regime_sidecar(
     try:
         raw = path_value.read_bytes()
         value = json.loads(raw)
-        canonical = (
-            json.dumps(
-                value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
-            )
-            + "\n"
-        ).encode("utf-8")
+        canonical = (json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError):
         return None
     if raw != canonical or not isinstance(value, dict):
         return None
     if set(value) != {"schema", "as_of_written", "evaluation_date", "symbols"}:
         return None
-    if (
-        value.get("schema") != "regime_report/v1"
-        or _strict_utc_timestamp(value.get("as_of_written")) is None
-    ):
+    if value.get("schema") != "regime_report/v1" or _strict_utc_timestamp(
+            value.get("as_of_written")) is None:
         return None
     sidecar_date = _valid_iso_date(value.get("evaluation_date"))
     board_date = _valid_iso_date(evaluation_date)
@@ -1380,11 +1311,7 @@ def _strict_regime_sidecar(
         return None
     for row in symbols.values():
         if not isinstance(row, dict) or set(row) != {
-            "label",
-            "high_dispersion",
-            "max_asof",
-            "skipped_reason",
-        }:
+                "label", "high_dispersion", "max_asof", "skipped_reason"}:
             return None
         label, dispersion = row.get("label"), row.get("high_dispersion")
         max_asof, reason = row.get("max_asof"), row.get("skipped_reason")
@@ -1392,26 +1319,18 @@ def _strict_regime_sidecar(
             strict_max = _valid_iso_date(max_asof)
             if strict_max is None or strict_max > sidecar_date or strict_max > board_date:
                 return None
-        successful = (
-            isinstance(label, int)
-            and not isinstance(label, bool)
-            and isinstance(dispersion, bool)
-            and reason is None
-            and isinstance(max_asof, str)
-        )
-        skipped = (
-            label is None
-            and dispersion is None
-            and isinstance(reason, str)
-            and bool(reason)
-            and (max_asof is None or isinstance(max_asof, str))
-        )
+        successful = (isinstance(label, int) and not isinstance(label, bool)
+                      and isinstance(dispersion, bool) and reason is None
+                      and isinstance(max_asof, str))
+        skipped = (label is None and dispersion is None and isinstance(reason, str)
+                   and bool(reason) and (max_asof is None or isinstance(max_asof, str)))
         if not successful and not skipped:
             return None
     return value
 
 
-def _regime_strip_html(status: Mapping[str, object] | None, evaluation_date: str) -> str:
+def _regime_strip_html(status: Mapping[str, object] | None,
+                       evaluation_date: str) -> str:
     from options_researcher.regime_constants import DISCLAIMER
     from options_researcher.top3_snapshot import trading_sessions_between
 
@@ -1422,42 +1341,28 @@ def _regime_strip_html(status: Mapping[str, object] | None, evaluation_date: str
     if sidecar is not None:
         symbols = sidecar["symbols"]
         assert isinstance(symbols, dict)
-        max_dates = [
-            row["max_asof"]
-            for row in symbols.values()
-            if isinstance(row, dict) and isinstance(row.get("max_asof"), str)
-        ]
+        max_dates = [row["max_asof"] for row in symbols.values()
+                     if isinstance(row, dict) and isinstance(row.get("max_asof"), str)]
         if not max_dates or trading_sessions_between(max(max_dates), evaluation_date) > 5:
             stale = True
         for symbol in config.REGIME_SYMBOLS:
             row = symbols[symbol]
             if row["skipped_reason"] is None:
-                detail = (
-                    f"label {row['label']} · high dispersion "
-                    f"{'yes' if row['high_dispersion'] else 'no'} · "
-                    f"max as-of {row['max_asof']}"
-                )
+                detail = (f"label {row['label']} · high dispersion "
+                          f"{'yes' if row['high_dispersion'] else 'no'} · "
+                          f"max as-of {row['max_asof']}")
             else:
-                detail = (
-                    f"unavailable · max as-of {row['max_asof'] or 'unavailable'} · "
-                    f"{row['skipped_reason']}"
-                )
+                detail = (f"unavailable · max as-of {row['max_asof'] or 'unavailable'} · "
+                          f"{row['skipped_reason']}")
             rows.append(f"<li><strong>{_esc(symbol)}</strong> · {_esc(detail)}</li>")
     if not rows:
-        rows = [
-            f"<li><strong>{_esc(symbol)}</strong> · unavailable</li>"
-            for symbol in config.REGIME_SYMBOLS
-        ]
-    warning = (
-        '<div class="notice bad">regime view unpublished/stale — see Experiments shelf</div>'
-        if stale
-        else ""
-    )
-    return (
-        '<section class="panel regime-strip"><div class="eyebrow">'
-        f"REGIME (descriptive)</div>{warning}<ul>{''.join(rows)}</ul>"
-        f'<div class="label">{_esc(DISCLAIMER.replace("**", ""))}</div></section>'
-    )
+        rows = [f"<li><strong>{_esc(symbol)}</strong> · unavailable</li>"
+                for symbol in config.REGIME_SYMBOLS]
+    warning = ('<div class="notice bad">regime view unpublished/stale — '
+               'see Experiments shelf</div>' if stale else "")
+    return ('<section class="panel regime-strip"><div class="eyebrow">'
+            f'REGIME (descriptive)</div>{warning}<ul>{"".join(rows)}</ul>'
+            f'<div class="label">{_esc(DISCLAIMER.replace("**", ""))}</div></section>')
 
 
 def _underlying_closes_store_freshness(
@@ -1557,9 +1462,8 @@ def assemble(
             cards = []
             for card in grp["cards"]:
                 if "skipped" in card:
-                    cards.append(
-                        {**card, "scenarios": [], "bbb": [], "headline": "", "countdown": ""}
-                    )
+                    cards.append({**card, "scenarios": [], "bbb": [],
+                                  "headline": "", "countdown": ""})
                     continue
                 # Shallow copy; grades get their own copy because the
                 # lane-specific policy badge is added below.
@@ -1569,11 +1473,10 @@ def assemble(
                     enriched["leaps_cost"] = float(grp["leaps_premium"]) * 100.0
                     if grp.get("preview"):
                         enriched["preview"] = True
-                enriched["risk"] = risk_economics(enriched, kind, close=float(sec["close"]))
+                enriched["risk"] = risk_economics(
+                    enriched, kind, close=float(sec["close"]))
                 snapshot = snapshot_candidate(
-                    sec,
-                    grp,
-                    enriched,
+                    sec, grp, enriched,
                     csp_open_count=sec.get("csp_open_count"),
                     covered_shares=sec.get("covered_shares"),
                     leaps_held=sec.get("leaps_held"),
@@ -1581,65 +1484,47 @@ def assemble(
                 )
                 enriched["top3_snapshot"] = snapshot
                 policy = snapshot.get("policy")
-                raw_policy_status = policy.get("status") if isinstance(policy, Mapping) else None
-                policy_status = (
-                    raw_policy_status if isinstance(raw_policy_status, str) else "DATA_BLOCKED"
-                )
-                policy_grade = {"ELIGIBLE": "GREEN", "WATCH": "AMBER", "PLAN_ONLY": "RED"}.get(
-                    policy_status, "RED"
-                )
-                enriched["grades"] = {**(enriched.get("grades") or {}), "portfolio": policy_grade}
+                raw_policy_status = (policy.get("status")
+                                     if isinstance(policy, Mapping) else None)
+                policy_status = (raw_policy_status
+                                 if isinstance(raw_policy_status, str)
+                                 else "DATA_BLOCKED")
+                policy_grade = {"ELIGIBLE": "GREEN", "WATCH": "AMBER",
+                                "PLAN_ONLY": "RED"}.get(policy_status, "RED")
+                enriched["grades"] = {**(enriched.get("grades") or {}),
+                                      "portfolio": policy_grade}
                 enriched["scenarios"] = scenario_rows(
-                    enriched, kind, close=float(sec["close"]), rv21=rv21
-                )
-                enriched["bbb"] = bbb_rows(enriched, kind, close=float(sec["close"]), rv21=rv21)
+                    enriched, kind, close=float(sec["close"]), rv21=rv21)
+                enriched["bbb"] = bbb_rows(
+                    enriched, kind, close=float(sec["close"]), rv21=rv21)
                 if not enriched["bbb"]:
                     # An absent scenario table states WHY. Silence would read
                     # as "no scenarios worth showing" rather than "the input
                     # this table is built from does not exist".
-                    reasons = [
-                        item.get("reason")
-                        for item in (sec.get("feature_unavailable") or [])
-                        if item.get("field") == "rv21"
-                    ]
+                    reasons = [item.get("reason")
+                               for item in (sec.get("feature_unavailable") or [])
+                               if item.get("field") == "rv21"]
                     enriched["bbb_absent"] = (
                         "bull/base/bear scenarios need realized volatility "
-                        "(rv21): "
-                        + (str(reasons[0]) if reasons else "no finite rv21 for this session")
-                    )
+                        "(rv21): " + (str(reasons[0]) if reasons
+                                      else "no finite rv21 for this session"))
                 enriched["headline"] = _headline(sym, kind, enriched)
-                enriched["countdown"] = (
-                    _countdown(enriched) if kind in ("leaps", "long_call") else ""
-                )
+                enriched["countdown"] = (_countdown(enriched)
+                                         if kind in ("leaps", "long_call")
+                                         else "")
                 cards.append(enriched)
-            out_grp = {
-                "kind": kind,
-                "title": grp["title"],
-                "cards": cards,
-                "empty": grp.get("empty"),
-            }
+            out_grp = {"kind": kind, "title": grp["title"],
+                       "cards": cards, "empty": grp.get("empty")}
             if "preview" in grp:
                 out_grp["preview"] = grp["preview"]
             out_groups.append(out_grp)
-        out_sec = {
-            "symbol": sym,
-            "close": float(sec["close"]),
-            "iv_rank": float(sec["iv_rank"]),
-            "as_of": sec["as_of"],
-            "groups": out_groups,
-        }
-        for passthrough in (
-            "chain_source",
-            "close_as_of",
-            "close_kind",
-            "closes_as_of",
-            "technicals_as_of",
-            "atm_iv",
-            "features_source",
-            "feature_unavailable",
-            "iv_rank_label",
-            "fresh_refusal_reason",
-        ):
+        out_sec = {"symbol": sym, "close": float(sec["close"]),
+                   "iv_rank": float(sec["iv_rank"]),
+                   "as_of": sec["as_of"], "groups": out_groups}
+        for passthrough in ("chain_source", "close_as_of", "close_kind",
+                            "closes_as_of", "technicals_as_of", "atm_iv",
+                            "features_source", "feature_unavailable",
+                            "iv_rank_label", "fresh_refusal_reason"):
             if passthrough in sec:
                 out_sec[passthrough] = sec[passthrough]
         if bool(sec.get("display_only")) or sym in display_only_names:
@@ -1688,7 +1573,9 @@ def assemble(
         summarize_hypothesis_evidence,
     )
 
-    family_evidence = summarize_hypothesis_evidence(hypothesis_evidence_by_symbol or {})
+    family_evidence = summarize_hypothesis_evidence(
+        hypothesis_evidence_by_symbol or {}
+    )
 
     if composite_signals is None and real_assembly:
         from options_researcher.composite_signals import build_board
@@ -1702,10 +1589,13 @@ def assemble(
             config.ATTRACTIVENESS_UNIVERSE
         )
 
-    canonical_symbols = [sec for sec in out_symbols if not sec.get("display_only")]
+    canonical_symbols = [
+        sec for sec in out_symbols if not sec.get("display_only")
+    ]
     page_as_of = _page_data_as_of(canonical_symbols)
     stale_as_of, stale_symbols = _stale_path_as_of(canonical_symbols)
-    fresh_symbols = [str(sec.get("symbol", "?")) for sec in _fresh_sections(canonical_symbols)]
+    fresh_symbols = [str(sec.get("symbol", "?"))
+                     for sec in _fresh_sections(canonical_symbols)]
     out = {
         "symbols": out_symbols,
         "blocked": out_blocked,
@@ -1717,14 +1607,16 @@ def assemble(
         "stale_chain_age_sessions": (
             _page_chain_age_sessions(stale_as_of, today) if stale_as_of else None
         ),
-        "display_data_as_of": _all_display_data_as_of(out_symbols, out_blocked),
+        "display_data_as_of": _all_display_data_as_of(
+            out_symbols, out_blocked
+        ),
         "evaluation_date": today,
         "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
         "family_evidence": family_evidence,
         "underlying_closes_freshness": dict(
-            underlying_closes_freshness or {"state": "unavailable", "detail": "not assembled"}
-        ),
+            underlying_closes_freshness or {
+                "state": "unavailable", "detail": "not assembled"}),
     }
     if schwab_state is not None:
         out["schwab_lane"] = schwab_state
@@ -1771,28 +1663,21 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
         technical_summary_line,
     )
 
-    holdings = (
-        load_holdings()
-        if os.path.exists(HOLDINGS_PATH)
-        else pd.DataFrame(
-            {
-                "symbol": pd.Series(dtype="str"),
-                "shares": pd.Series(dtype="int"),
-                "cost_basis": pd.Series(dtype="float"),
-            }
-        )
-    )
+    holdings = (load_holdings() if os.path.exists(HOLDINGS_PATH)
+                else pd.DataFrame({"symbol": pd.Series(dtype="str"),
+                                   "shares": pd.Series(dtype="int"),
+                                   "cost_basis": pd.Series(dtype="float")}))
     positions = load_positions()
-    csp_open_count = int((positions["structure"] == "csp").sum()) if not positions.empty else 0
+    csp_open_count = (int((positions["structure"] == "csp").sum())
+                      if not positions.empty else 0)
     thesis_used = 0.0
     held_leaps: dict[str, tuple[float, float]] = {}
     if not positions.empty:
         t = positions[positions["bucket"] == "thesis"]
         thesis_used = float((t["entry_price"] * 100 * t["contracts"]).sum())
         for _, lp in positions[positions["structure"] == "leaps_call"].iterrows():
-            held_leaps.setdefault(
-                str(lp["symbol"]), (float(lp["strike"]), float(lp["entry_price"]))
-            )
+            held_leaps.setdefault(str(lp["symbol"]),
+                                  (float(lp["strike"]), float(lp["entry_price"])))
     bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
 
     # One v3 evidence load for the whole page; a broken store degrades every
@@ -1807,16 +1692,11 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
     rv21_by_symbol: dict[str, float] = {}
     blocked: list[dict] = []
 
-    def _block(
-        symbol: str, code: str, detail: str, day: str | None, unexpected: bool = False
-    ) -> None:
-        record = {
-            "symbol": symbol,
-            "reason_code": code,
-            "detail": detail,
-            "last_known_date": day,
-            "unexpected": unexpected,
-        }
+    def _block(symbol: str, code: str, detail: str, day: str | None,
+               unexpected: bool = False) -> None:
+        record = {"symbol": symbol, "reason_code": code,
+                  "detail": detail, "last_known_date": day,
+                  "unexpected": unexpected}
         if symbol in config.ATTRACTIVENESS_EXTRA_NAMES:
             record["display_only"] = True
         blocked.append(record)
@@ -1829,24 +1709,22 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
     }
 
     for symbol in config.ATTRACTIVENESS_UNIVERSE:
-        files = sorted(glob.glob(os.path.join(".cache", "chains", f"{symbol}_*.parquet")))
-        theta_day = (
-            os.path.basename(files[-1]).split("_")[1].replace(".parquet", "") if files else None
-        )
+        files = sorted(glob.glob(os.path.join(".cache", "chains",
+                                              f"{symbol}_*.parquet")))
+        theta_day = (os.path.basename(files[-1]).split("_")[1]
+                     .replace(".parquet", "") if files else None)
         # Newer of (frozen ThetaData EOD cache, newest VERIFIED Schwab
         # pre-close session), decided by the ONE shared rule the CLI board uses
         # too. A fresh chain is only rendered when a same-instant 15:45 spot
         # exists for it -- pairing 15:45 quotes with the closes store (frozen
         # well behind) misprices moneyness by several percent.
         source = schwab_view.select_display_source(
-            symbol, theta_day, have_verified_sessions=bool(schwab_sessions)
-        )
+            symbol, theta_day, have_verified_sessions=bool(schwab_sessions))
         fresh_refusal = source.refusal
         is_fresh = source.kind == schwab_view.CHAIN_SOURCE
         if not is_fresh and theta_day is None:
-            detail = "no chain parquet in .cache/chains" + (
-                f"; {fresh_refusal}" if fresh_refusal else ""
-            )
+            detail = ("no chain parquet in .cache/chains"
+                      + (f"; {fresh_refusal}" if fresh_refusal else ""))
             _block(symbol, "NO_CACHED_CHAINS", detail, None)
             continue
         if is_fresh:
@@ -1860,44 +1738,32 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
             chain_source = schwab_view.THETADATA_CHAIN_SOURCE
         try:
             section, rv21 = _gather_symbol(
-                symbol,
-                chain_path,
-                day,
-                chain_frame=chain_frame,
-                chain_source=chain_source,
+                symbol, chain_path, day,
+                chain_frame=chain_frame, chain_source=chain_source,
                 preclose_spot=preclose_spot,
                 iv_rank_preview=iv_rank_preview,
                 fresh_refusal_reason=fresh_refusal,
-                holdings=holdings,
-                held_leaps=held_leaps,
-                csp_open_count=csp_open_count,
-                bucket_room=bucket_room,
-                v3_assertions=v3_assertions,
-                known_now=known_now,
+                holdings=holdings, held_leaps=held_leaps,
+                csp_open_count=csp_open_count, bucket_room=bucket_room,
+                v3_assertions=v3_assertions, known_now=known_now,
                 load_closes=load_closes,
                 load_closes_adjusted=load_closes_adjusted,
-                load_earnings=load_earnings,
-                load_features=load_features,
-                load_fomc=load_fomc,
-                apply_cycle_badges=apply_cycle_badges,
+                load_earnings=load_earnings, load_features=load_features,
+                load_fomc=load_fomc, apply_cycle_badges=apply_cycle_badges,
                 technical_snapshot=technical_snapshot,
                 technical_summary_line=technical_summary_line,
-                ladder_cards=ladder_cards,
-                put_card_rows=put_card_rows,
-                cc_card_rows=cc_card_rows,
-                pmcc_card_rows=pmcc_card_rows,
+                ladder_cards=ladder_cards, put_card_rows=put_card_rows,
+                cc_card_rows=cc_card_rows, pmcc_card_rows=pmcc_card_rows,
                 leaps_card_rows=leaps_card_rows,
                 long_call_card_rows=long_call_card_rows,
                 attach_oi_change=attach_oi_change,
-                date_cls=date_cls,
-                pd=pd,
-                config=config,
-            )
+                date_cls=date_cls, pd=pd, config=config)
         except FileNotFoundError as exc:
             _block(symbol, "INPUT_MISSING", str(exc), day)
             continue
         except Exception as exc:  # fail-visible, never success-shaped
-            _block(symbol, "UNEXPECTED_ERROR", f"{type(exc).__name__}: {exc}", day, unexpected=True)
+            _block(symbol, "UNEXPECTED_ERROR",
+                   f"{type(exc).__name__}: {exc}", day, unexpected=True)
             continue
         if symbol in config.ATTRACTIVENESS_EXTRA_NAMES:
             section["display_only"] = True
@@ -1906,41 +1772,17 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
     return sections, rv21_by_symbol, blocked, schwab_state
 
 
-def _gather_symbol(
-    symbol,
-    chain_path,
-    day,
-    *,
-    holdings,
-    held_leaps,
-    csp_open_count,
-    bucket_room,
-    v3_assertions,
-    known_now,
-    load_closes,
-    load_closes_adjusted,
-    load_earnings,
-    load_features,
-    load_fomc,
-    apply_cycle_badges,
-    technical_snapshot,
-    technical_summary_line,
-    ladder_cards,
-    put_card_rows,
-    cc_card_rows,
-    pmcc_card_rows,
-    leaps_card_rows,
-    long_call_card_rows,
-    attach_oi_change,
-    date_cls,
-    pd,
-    config,
-    chain_frame=None,
-    chain_source=None,
-    preclose_spot=None,
-    iv_rank_preview=None,
-    fresh_refusal_reason=None,
-) -> tuple[dict, float]:
+def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
+                   csp_open_count, bucket_room, v3_assertions, known_now,
+                   load_closes, load_closes_adjusted, load_earnings,
+                   load_features, load_fomc, apply_cycle_badges,
+                   technical_snapshot, technical_summary_line, ladder_cards,
+                   put_card_rows, cc_card_rows, pmcc_card_rows,
+                   leaps_card_rows, long_call_card_rows, attach_oi_change,
+                   date_cls, pd, config, chain_frame=None,
+                   chain_source=None, preclose_spot=None,
+                   iv_rank_preview=None,
+                   fresh_refusal_reason=None) -> tuple[dict, float]:
     """Build one symbol's section (extracted so _gather_all can isolate
     per-symbol failures). Dependencies are passed in to keep the lazy-import
     pattern of the caller.
@@ -1957,7 +1799,8 @@ def _gather_symbol(
     schwab_sourced = chain_source == schwab_view.CHAIN_SOURCE
     chain = chain_frame if chain_frame is not None else pd.read_parquet(chain_path)
     raw_closes = load_closes(symbol, "2018-01-01", day, allow_oos=True)
-    adjusted_closes = load_closes_adjusted(symbol, "2018-01-01", day, allow_oos=True)
+    adjusted_closes = load_closes_adjusted(
+        symbol, "2018-01-01", day, allow_oos=True)
     closes_as_of = str(raw_closes.index[-1])
     technicals = technical_snapshot(adjusted_closes)
     feature_unavailable: list[dict] = []
@@ -1971,25 +1814,28 @@ def _gather_symbol(
             # Unreachable from _gather_all (it refuses a fresh chain without a
             # verified spot); explicit so a future caller cannot pair a fresh
             # chain with a stale close by omission.
-            raise ValueError(f"{symbol}: a schwab-sourced section requires a verified 15:45 spot")
+            raise ValueError(
+                f"{symbol}: a schwab-sourced section requires a verified "
+                "15:45 spot")
         close = float(preclose_spot)
         close_as_of, close_kind = day, schwab_view.CLOSE_KIND
         features_as_of, features_stale = day, False
         features_source = "schwab_preclose_session"
         rv21 = float("nan")
         iv_minus_rv = float("nan")
-        iv_rank = float(iv_rank_preview) if iv_rank_preview is not None else float("nan")
-        iv_rank_label = (
-            "preview (capture-lane calibration)" if iv_rank_preview is not None else None
-        )
+        iv_rank = (float(iv_rank_preview) if iv_rank_preview is not None
+                   else float("nan"))
+        iv_rank_label = ("preview (capture-lane calibration)"
+                         if iv_rank_preview is not None else None)
         atm_iv = _session_atm_iv(chain, day)
-        gap = f"underlying closes end {closes_as_of}, before this {day} session"
+        gap = (f"underlying closes end {closes_as_of}, before this "
+               f"{day} session")
         feature_unavailable.append({"field": "rv21", "reason": gap})
         feature_unavailable.append({"field": "iv_minus_rv", "reason": gap})
         if iv_rank_preview is None:
-            feature_unavailable.append(
-                {"field": "iv_rank", "reason": "no capture-lane IV-rank preview for this session"}
-            )
+            feature_unavailable.append({
+                "field": "iv_rank",
+                "reason": "no capture-lane IV-rank preview for this session"})
     else:
         # DATE-ALIGNED feature row: the row FOR the chain day when it exists,
         # else the newest row at-or-before it (never a future row -- that
@@ -2014,21 +1860,20 @@ def _gather_symbol(
         # has ever shown") and iv_minus_rv 0.0 clears the VRP GREEN threshold of
         # exactly 0.0. Both read as evidence; neither was a measurement.
         rv21 = float(row["rv21"]) if pd.notna(row["rv21"]) else float("nan")
-        iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else float("nan")
-        iv_minus_rv = float(row["iv_minus_rv"]) if pd.notna(row["iv_minus_rv"]) else float("nan")
-        atm_iv = (
-            float(row["atm_iv"])
-            if "atm_iv" in row.index and pd.notna(row["atm_iv"])
-            else float("nan")
-        )
-        for field, value in (("rv21", rv21), ("iv_rank", iv_rank), ("iv_minus_rv", iv_minus_rv)):
+        iv_rank = (float(row["iv_rank"]) if pd.notna(row["iv_rank"])
+                   else float("nan"))
+        iv_minus_rv = (float(row["iv_minus_rv"])
+                       if pd.notna(row["iv_minus_rv"]) else float("nan"))
+        atm_iv = (float(row["atm_iv"])
+                  if "atm_iv" in row.index and pd.notna(row["atm_iv"])
+                  else float("nan"))
+        for field, value in (("rv21", rv21), ("iv_rank", iv_rank),
+                             ("iv_minus_rv", iv_minus_rv)):
             if value != value:
-                feature_unavailable.append(
-                    {
-                        "field": field,
-                        "reason": f"no finite value in the {features_as_of} feature row",
-                    }
-                )
+                feature_unavailable.append({
+                    "field": field,
+                    "reason": f"no finite value in the {features_as_of} "
+                              "feature row"})
     # Core names keep the curated per-symbol CSV. Watchlist names have
     # none: the ladder is built with an empty date list (every earnings
     # badge UNKNOWN) and re-graded per card from the v3 point-in-time
@@ -2041,210 +1886,132 @@ def _gather_symbol(
         earnings_source = "v3_store"
     fomcs = load_fomc()
 
-    put_cards = ladder_cards(
-        put_card_rows,
-        symbol,
-        chain,
-        day,
-        rank_key="annualized_yield",
-        higher_is_better=True,
-        close=close,
-        rv21=rv21,
-        iv_rank=iv_rank,
-        iv_minus_rv=iv_minus_rv,
-        earnings_dates=earnings,
-        fomc_dates=fomcs,
-    )
+    put_cards = ladder_cards(put_card_rows, symbol, chain, day,
+                             rank_key="annualized_yield",
+                             higher_is_better=True, close=close, rv21=rv21,
+                             iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                             earnings_dates=earnings,
+                             fomc_dates=fomcs)
     # Neutral OI-change context, strictly AFTER ranking (board-invariant).
-    attach_oi_change(put_cards, right="P", chain_day=chain, symbol=symbol, day=day)
+    attach_oi_change(put_cards, right="P", chain_day=chain,
+                     symbol=symbol, day=day)
     groups: list[dict] = [
-        {
-            "kind": "put",
-            "title": "SELL A PUT? (promise to buy lower)",
-            "cards": put_cards,
-            "empty": None if put_cards else "no candidates near the target delta this cycle",
-        }
-    ]
+        {"kind": "put", "title": "SELL A PUT? (promise to buy lower)",
+         "cards": put_cards,
+         "empty": None if put_cards
+         else "no candidates near the target delta this cycle"}]
 
     lot = holdings.loc[holdings["symbol"] == symbol]
     held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
     if held_shares >= 100:
         cc_cards = ladder_cards(
-            cc_card_rows,
-            symbol,
-            chain,
-            day,
+            cc_card_rows, symbol, chain, day,
             rank_key="annualized_yield",
-            higher_is_better=True,
-            close=close,
+            higher_is_better=True, close=close,
             cost_basis=float(lot.iloc[0]["cost_basis"]),
-            iv_rank=iv_rank,
-            iv_minus_rv=iv_minus_rv,
+            iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
             earnings_dates=earnings,
-            fomc_dates=fomcs,
-        )
-        attach_oi_change(cc_cards, right="C", chain_day=chain, symbol=symbol, day=day)
-        groups.append(
-            {
-                "kind": "cc",
-                "title": "SELL A COVERED CALL? (rent out your shares)",
-                "cards": cc_cards,
-                "empty": None,
-            }
-        )
+            fomc_dates=fomcs)
+        attach_oi_change(cc_cards, right="C", chain_day=chain,
+                         symbol=symbol, day=day)
+        groups.append({"kind": "cc",
+                       "title": "SELL A COVERED CALL? (rent out your shares)",
+                       "cards": cc_cards,
+                       "empty": None})
     elif held_shares > 0:
-        groups.append(
-            {
-                "kind": "cc",
-                "title": "SELL A COVERED CALL? (rent out your shares)",
-                "cards": [],
-                "empty": (
-                    f"you hold {held_shares} sh of {symbol} -- a "
-                    "covered call needs 100 per contract. "
-                    "Covered-call rows appear after a declared "
-                    "100-share lot; PMCC rows appear only after "
-                    "a real LEAPS is recorded."
-                ),
-            }
-        )
+        groups.append({"kind": "cc",
+                       "title": "SELL A COVERED CALL? (rent out your shares)",
+                       "cards": [],
+                       "empty": (f"you hold {held_shares} sh of {symbol} -- a "
+                                 "covered call needs 100 per contract. "
+                                 "Covered-call rows appear after a declared "
+                                 "100-share lot; PMCC rows appear only after "
+                                 "a real LEAPS is recorded.")})
     if symbol in held_leaps:
         lk, lp = held_leaps[symbol]
         pmcc_cards = ladder_cards(
-            pmcc_card_rows,
-            symbol,
-            chain,
-            day,
-            rank_key="annualized_yield",
-            higher_is_better=True,
-            leaps_strike=lk,
-            leaps_premium=lp,
-            close=close,
-            iv_rank=iv_rank,
-            iv_minus_rv=iv_minus_rv,
-            earnings_dates=earnings,
-            fomc_dates=fomcs,
-        )
+            pmcc_card_rows, symbol, chain, day,
+            rank_key="annualized_yield", higher_is_better=True,
+            leaps_strike=lk, leaps_premium=lp,
+            close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+            earnings_dates=earnings, fomc_dates=fomcs)
         # Card's own strike/expiry are the SHORT call it displays (pmcc_card_rows).
-        attach_oi_change(pmcc_cards, right="C", chain_day=chain, symbol=symbol, day=day)
-        groups.append(
-            {
-                "kind": "pmcc",
-                "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
-                "leaps_strike": lk,
-                "leaps_premium": lp,
-                "cards": pmcc_cards,
-                "empty": None
-                if pmcc_cards
-                else (
-                    f"no SAFE strike this cycle: the rule needs a call "
-                    f"at ${lk + lp:.2f}+ and none is listed / all too "
-                    "far out to pay -- selling closer would risk locking "
-                    "a loss, so H5 shows nothing."
-                ),
-            }
-        )
+        attach_oi_change(pmcc_cards, right="C", chain_day=chain,
+                         symbol=symbol, day=day)
+        groups.append({"kind": "pmcc",
+                       "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
+                       "leaps_strike": lk, "leaps_premium": lp,
+                       "cards": pmcc_cards,
+                       "empty": None if pmcc_cards else
+                       (f"no SAFE strike this cycle: the rule needs a call "
+                        f"at ${lk + lp:.2f}+ and none is listed / all too "
+                        "far out to pay -- selling closer would risk locking "
+                        "a loss, so H5 shows nothing.")})
     if symbol in config.H4_THESIS_NAMES:
-        leaps_cards = leaps_card_rows(
-            symbol, chain, day, close=close, iv_rank=iv_rank, bucket_room=bucket_room
-        )
-        attach_oi_change(leaps_cards, right="C", chain_day=chain, symbol=symbol, day=day)
-        groups.append(
-            {
-                "kind": "leaps",
-                "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
-                "preview": False,
-                "cards": leaps_cards,
-                "empty": None,
-            }
-        )
+        leaps_cards = leaps_card_rows(symbol, chain, day, close=close,
+                                      iv_rank=iv_rank, bucket_room=bucket_room)
+        attach_oi_change(leaps_cards, right="C", chain_day=chain,
+                         symbol=symbol, day=day)
+        groups.append({"kind": "leaps",
+                       "title": f"BUY A LEAPS? (bucket room ${bucket_room:,.0f})",
+                       "preview": False, "cards": leaps_cards, "empty": None})
         # PMCC PREVIEW: if no LEAPS is actually held, show what selling a
         # safe call against the *previewed* LEAPS would look like.
         if symbol not in held_leaps and leaps_cards:
             lc = leaps_cards[0]
             lk, lp = float(lc["strike"]), float(lc["cost"]) / 100.0
             preview_pmcc = ladder_cards(
-                pmcc_card_rows,
-                symbol,
-                chain,
-                day,
-                rank_key="annualized_yield",
-                higher_is_better=True,
-                leaps_strike=lk,
-                leaps_premium=lp,
-                close=close,
-                iv_rank=iv_rank,
-                iv_minus_rv=iv_minus_rv,
-                earnings_dates=earnings,
-                fomc_dates=fomcs,
-            )
-            attach_oi_change(preview_pmcc, right="C", chain_day=chain, symbol=symbol, day=day)
-            groups.append(
-                {
-                    "kind": "pmcc",
-                    "preview": True,
-                    "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
-                    "leaps_strike": lk,
-                    "leaps_premium": lp,
-                    "cards": preview_pmcc,
-                    "empty": None
-                    if preview_pmcc
-                    else (
-                        f"no SAFE strike this cycle: needs a call at "
-                        f"${lk + lp:.2f}+ that still pays; none listed."
-                    ),
-                }
-            )
+                pmcc_card_rows, symbol, chain, day,
+                rank_key="annualized_yield", higher_is_better=True,
+                leaps_strike=lk, leaps_premium=lp,
+                close=close, iv_rank=iv_rank, iv_minus_rv=iv_minus_rv,
+                earnings_dates=earnings, fomc_dates=fomcs)
+            attach_oi_change(preview_pmcc, right="C", chain_day=chain,
+                             symbol=symbol, day=day)
+            groups.append({
+                "kind": "pmcc", "preview": True,
+                "title": "SELL A CALL AGAINST A LEAPS? (PMCC — PREVIEW)",
+                "leaps_strike": lk, "leaps_premium": lp,
+                "cards": preview_pmcc,
+                "empty": None if preview_pmcc else
+                (f"no SAFE strike this cycle: needs a call at "
+                 f"${lk + lp:.2f}+ that still pays; none listed.")})
 
     # TACTICAL long-call preview (descriptive; not an H5 income lane).
-    long_calls = ladder_cards(
-        long_call_card_rows,
-        symbol,
-        chain,
-        day,
-        rank_key="breakeven_move",
-        higher_is_better=False,
-        close=close,
-        iv_rank=iv_rank,
-    )
-    attach_oi_change(long_calls, right="C", chain_day=chain, symbol=symbol, day=day)
-    groups.append(
-        {
-            "kind": "long_call",
-            "preview": True,
-            "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
-            "cards": long_calls,
-            "empty": None if long_calls else "no call near the tactical delta this cycle",
-        }
-    )
+    long_calls = ladder_cards(long_call_card_rows, symbol, chain, day,
+                              rank_key="breakeven_move",
+                              higher_is_better=False, close=close,
+                              iv_rank=iv_rank)
+    attach_oi_change(long_calls, right="C", chain_day=chain,
+                     symbol=symbol, day=day)
+    groups.append({"kind": "long_call", "preview": True,
+                   "title": "BUY A SHORT-DATED CALL? (TACTICAL — PREVIEW)",
+                   "cards": long_calls,
+                   "empty": None if long_calls
+                   else "no call near the tactical delta this cycle"})
 
     if earnings_source == "v3_store" and v3_assertions is not None:
-        apply_cycle_badges(
-            groups, symbol, date_cls.fromisoformat(day), v3_assertions, known_as_of=known_now
-        )
+        apply_cycle_badges(groups, symbol, date_cls.fromisoformat(day),
+                           v3_assertions, known_as_of=known_now)
 
-    section = {
-        "symbol": symbol,
-        "as_of": day,
-        "close": close,
-        "iv_rank": iv_rank,
-        "groups": groups,
-        "csp_open_count": csp_open_count,
-        "covered_shares": held_shares,
-        "leaps_held": symbol in held_leaps,
-        "features_as_of": features_as_of,
-        "features_stale": features_stale,
-        "features_source": features_source,
-        "feature_unavailable": feature_unavailable,
-        "atm_iv": atm_iv,
-        "chain_source": chain_source or schwab_view.THETADATA_CHAIN_SOURCE,
-        "close_as_of": close_as_of,
-        "close_kind": close_kind,
-        "closes_as_of": closes_as_of,
-        "technicals_as_of": closes_as_of,
-        "earnings_source": earnings_source,
-        "technicals": technicals,
-        "technicals_line": technical_summary_line(technicals),
-    }
+    section = {"symbol": symbol, "as_of": day, "close": close,
+               "iv_rank": iv_rank, "groups": groups,
+               "csp_open_count": csp_open_count,
+               "covered_shares": held_shares,
+               "leaps_held": symbol in held_leaps,
+               "features_as_of": features_as_of,
+               "features_stale": features_stale,
+               "features_source": features_source,
+               "feature_unavailable": feature_unavailable,
+               "atm_iv": atm_iv,
+               "chain_source": chain_source or schwab_view.THETADATA_CHAIN_SOURCE,
+               "close_as_of": close_as_of,
+               "close_kind": close_kind,
+               "closes_as_of": closes_as_of,
+               "technicals_as_of": closes_as_of,
+               "earnings_source": earnings_source,
+               "technicals": technicals,
+               "technicals_line": technical_summary_line(technicals)}
     if iv_rank_label:
         section["iv_rank_label"] = iv_rank_label
     if fresh_refusal_reason:
@@ -2287,9 +2054,9 @@ def sections_json(sections: list[dict] | None = None) -> str:
             sections, _rv21, blocked, _schwab_state = _gather_all()
     _dates = {s["as_of"] for s in sections} if sections else set()
     as_of = next(iter(_dates)) if len(_dates) == 1 else None
-    return json.dumps(
-        {"as_of": as_of, "sections": sections, "blocked": blocked}, indent=2, sort_keys=False
-    )
+    return json.dumps({"as_of": as_of, "sections": sections,
+                       "blocked": blocked},
+                      indent=2, sort_keys=False)
 
 
 _GRADE_CLASSES = {"GREEN": "good", "AMBER": "watch", "RED": "bad", "UNKNOWN": "unknown"}
@@ -2895,17 +2662,14 @@ def _badges(grades: dict) -> str:
         status = str(v).upper()
         cls = _GRADE_CLASSES.get(status, "unknown")
         symbol = _GRADE_SYMBOLS.get(status, "?")
-        pills.append(f'<span class="status-badge {cls}">{symbol} {_esc(k)} · {_esc(status)}</span>')
+        pills.append(f'<span class="status-badge {cls}">'
+                     f'{symbol} {_esc(k)} · {_esc(status)}</span>')
     return f'<div class="party-badges">{"".join(pills)}</div>'
 
 
-def event_chips(
-    card: Mapping[str, object],
-    symbol: str,
-    evaluation_date: str,
-    calendar: object,
-    complex_map: Mapping[str, object],
-) -> list[dict[str, str]]:
+def event_chips(card: Mapping[str, object], symbol: str,
+                evaluation_date: str, calendar: object,
+                complex_map: Mapping[str, object]) -> list[dict[str, str]]:
     """Return non-grading calendar/complex annotations for one card life window.
 
     ``evaluation_date`` is intentionally an explicit board value: never use a
@@ -2932,53 +2696,34 @@ def event_chips(
                 if not isinstance(cluster, Mapping):
                     continue
                 members = {str(value).upper() for value in cluster.get("members", [])}
-                propagators = {
-                    str(value).upper() for value in cluster.get("events_propagate_from", [])
-                }
+                propagators = {str(value).upper() for value in cluster.get("events_propagate_from", [])}
                 if symbol.upper() in members and origin in members and origin in propagators:
                     marker = "complex"
                     break
-        label = (
-            f"{marker.upper()} · {event.kind.replace('_', ' ')} · {event.title} · "
-            f"{event.date.isoformat()} · {event.time_et or 'time TBD'}"
-        )
+        label = (f"{marker.upper()} · {event.kind.replace('_', ' ')} · {event.title} · "
+                 f"{event.date.isoformat()} · {event.time_et or 'time TBD'}")
         for notice in provenance_markers(event, start):
             label += f" · {notice}"
         chips.append({"marker": marker, "text": label})
     return chips
 
 
-def _event_chips_html(
-    card: Mapping[str, object],
-    symbol: str,
-    evaluation_date: str,
-    event_view: Mapping[str, object] | None,
-) -> str:
+def _event_chips_html(card: Mapping[str, object], symbol: str,
+                      evaluation_date: str, event_view: Mapping[str, object] | None) -> str:
     if not event_view:
         return ""
     calendar = event_view.get("calendar", [])
     complex_raw = event_view.get("complex_map", {})
-    chips = event_chips(
-        card,
-        symbol,
-        evaluation_date,
-        calendar if isinstance(calendar, (list, tuple)) else [],
-        complex_raw if isinstance(complex_raw, Mapping) else {},
-    )
-    return (
-        (
-            '<div class="event-chips">'
-            + "".join(
-                f'<span class="event-chip">EVENT · {_esc(chip["text"])}</span>' for chip in chips
-            )
-            + "</div>"
-        )
-        if chips
-        else ""
-    )
+    chips = event_chips(card, symbol, evaluation_date,
+                        calendar if isinstance(calendar, (list, tuple)) else [],
+                        complex_raw if isinstance(complex_raw, Mapping) else {})
+    return ('<div class="event-chips">' + ''.join(
+        f'<span class="event-chip">EVENT · {_esc(chip["text"])}</span>' for chip in chips
+    ) + '</div>') if chips else ""
 
 
-def _elapsed_events_html(evaluation_date: str, event_view: Mapping[str, object] | None) -> str:
+def _elapsed_events_html(evaluation_date: str,
+                         event_view: Mapping[str, object] | None) -> str:
     """Show prior events only in a details block, never as active chips."""
     from options_researcher.event_calendar import Event
 
@@ -2989,19 +2734,14 @@ def _elapsed_events_html(evaluation_date: str, event_view: Mapping[str, object] 
     except ValueError:
         return ""
     calendar = event_view.get("calendar", [])
-    elapsed = [
-        event
-        for event in (calendar if isinstance(calendar, (list, tuple)) else [])
-        if isinstance(event, Event) and event.date < evaluation
-    ]
+    elapsed = [event for event in (calendar if isinstance(calendar, (list, tuple)) else [])
+               if isinstance(event, Event) and event.date < evaluation]
     if not elapsed:
         return ""
-    rows = "".join(
-        f"<li>{_esc(event.date.isoformat())} · {_esc(event.title)}</li>" for event in elapsed
-    )
-    return (
-        f'<details class="event-elapsed"><summary>Elapsed events</summary><ul>{rows}</ul></details>'
-    )
+    rows = ''.join(f'<li>{_esc(event.date.isoformat())} · {_esc(event.title)}</li>'
+                   for event in elapsed)
+    return (f'<details class="event-elapsed"><summary>Elapsed events</summary>'
+            f'<ul>{rows}</ul></details>')
 
 
 def _hero_badges(grades: dict) -> str:
@@ -3011,11 +2751,9 @@ def _hero_badges(grades: dict) -> str:
     key_order = ("liquidity", "earnings", "fomc")
     primary = {key: grades[key] for key in key_order if key in grades}
     visible = _badges(primary)
-    return (
-        f'{visible}<details class="gate-details">'
-        f"<summary>All gate checks ({len(grades)})</summary>"
-        f"{_badges(grades)}</details>"
-    )
+    return (f'{visible}<details class="gate-details">'
+            f'<summary>All gate checks ({len(grades)})</summary>'
+            f'{_badges(grades)}</details>')
 
 
 def _pnl_cell(row: dict) -> str:
@@ -3042,15 +2780,12 @@ def _scenario_table(rows: list[dict]) -> str:
     trs = []
     for r in rows:
         tag = _esc(r["tag"]) if r["tag"] else ""
-        trs.append(
-            f"<tr><td>${r['price']:,.2f}</td>"
-            f'<td class="label">{tag}</td>'
-            f"<td>{_pnl_cell(r)}</td></tr>"
-        )
-    return (
-        "<table><thead><tr><th>Price</th><th></th>"
-        "<th>Your gain or loss</th></tr></thead><tbody>" + "".join(trs) + "</tbody></table>"
-    )
+        trs.append(f"<tr><td>${r['price']:,.2f}</td>"
+                   f'<td class="label">{tag}</td>'
+                   f"<td>{_pnl_cell(r)}</td></tr>")
+    return ("<table><thead><tr><th>Price</th><th></th>"
+            "<th>Your gain or loss</th></tr></thead><tbody>"
+            + "".join(trs) + "</tbody></table>")
 
 
 def _bbb_table(rows: list[dict], *, absent_reason: object = None) -> str:
@@ -3062,23 +2797,18 @@ def _bbb_table(rows: list[dict], *, absent_reason: object = None) -> str:
     """
     if not rows:
         if isinstance(absent_reason, str) and absent_reason:
-            return (
-                '<div class="notice watch">! Scenario table unavailable — '
-                f"{_esc(absent_reason)}.</div>"
-            )
+            return ('<div class="notice watch">! Scenario table unavailable — '
+                    f"{_esc(absent_reason)}.</div>")
         return ""
     trs = []
     for r in rows:
-        trs.append(
-            f"<tr><td>{_esc(r['scenario'])}</td>"
-            f"<td>${r['price']:,.2f}</td>"
-            f"<td>{_pnl_cell(r)}</td></tr>"
-        )
-    return (
-        f'<div class="label">{_esc(_BBB_LABEL)}</div>'
-        "<table><thead><tr><th>Scenario</th><th>Price</th>"
-        "<th>P&amp;L</th></tr></thead><tbody>" + "".join(trs) + "</tbody></table>"
-    )
+        trs.append(f"<tr><td>{_esc(r['scenario'])}</td>"
+                   f"<td>${r['price']:,.2f}</td>"
+                   f"<td>{_pnl_cell(r)}</td></tr>")
+    return (f'<div class="label">{_esc(_BBB_LABEL)}</div>'
+            "<table><thead><tr><th>Scenario</th><th>Price</th>"
+            "<th>P&amp;L</th></tr></thead><tbody>"
+            + "".join(trs) + "</tbody></table>")
 
 
 def _card_tech_line(kind: str, tech: dict | None) -> str:
@@ -3096,11 +2826,9 @@ def _card_tech_line(kind: str, tech: dict | None) -> str:
         if isinstance(mom, float) and mom == mom:
             bits.append(f"{mom:+.1%} 1M")
         return "buy-side context: " + " · ".join(bits) if bits else ""
-    posture = {
-        "above_all": "above all MAs",
-        "below_all": "below all MAs",
-        "mixed": "mixed vs MAs",
-    }.get(tech.get("ma_posture", ""))
+    posture = {"above_all": "above all MAs",
+               "below_all": "below all MAs",
+               "mixed": "mixed vs MAs"}.get(tech.get("ma_posture", ""))
     return f"sell-side context: {posture}" if posture else ""
 
 
@@ -3119,38 +2847,38 @@ def _risk_line(card: dict) -> str:
     bits = [f"worst case -${risk['max_loss']:,.0f} at expiration"]
     cap_req = risk.get("capital_required")
     if isinstance(cap_req, (int, float)) and cap_req > 0:
-        bits.append(
-            f"capital required ${cap_req:,.0f}"
-            + (f" vs ${config.RISK_SLEEVE:,.0f} sleeve" if cap_req > config.RISK_SLEEVE else "")
-        )
+        bits.append(f"capital required ${cap_req:,.0f}"
+                    + (f" vs ${config.RISK_SLEEVE:,.0f} sleeve"
+                       if cap_req > config.RISK_SLEEVE else ""))
     if isinstance(risk.get("max_profit"), (int, float)):
         bits.append(f"max profit ${risk['max_profit']:,.0f}")
     if isinstance(risk.get("breakeven"), (int, float)):
         bits.append(f"breakeven ${risk['breakeven']:,.2f}")
     snapshot = card.get("top3_snapshot")
-    policy_data = snapshot.get("policy") if isinstance(snapshot, dict) else None
+    policy_data = (snapshot.get("policy") if isinstance(snapshot, dict)
+                   else None)
     if isinstance(policy_data, dict):
         status = str(policy_data.get("status", "WATCH"))
         reasons = policy_data.get("reason_codes") or []
         detail = ", ".join(
-            _POLICY_REASON_LABELS.get(str(reason), str(reason)) for reason in reasons
-        )
-        cls = {"ELIGIBLE": "good", "WATCH": "watch", "PLAN_ONLY": "bad", "DATA_BLOCKED": "bad"}.get(
-            status, "unknown"
-        )
-        symbol = {"ELIGIBLE": "✓", "WATCH": "!", "PLAN_ONLY": "×", "DATA_BLOCKED": "×"}.get(
-            status, "?"
-        )
+            _POLICY_REASON_LABELS.get(str(reason), str(reason))
+            for reason in reasons)
+        cls = {"ELIGIBLE": "good", "WATCH": "watch",
+               "PLAN_ONLY": "bad", "DATA_BLOCKED": "bad"}.get(
+                   status, "unknown")
+        symbol = {"ELIGIBLE": "✓", "WATCH": "!",
+                  "PLAN_ONLY": "×", "DATA_BLOCKED": "×"}.get(status, "?")
     else:
-        status, detail, cls, symbol = "UNKNOWN", "policy status unavailable", "unknown", "?"
-    detail_html = f'<span class="policy-detail">{_esc(detail)}</span>' if detail else ""
+        status, detail, cls, symbol = "UNKNOWN", "policy status unavailable", \
+            "unknown", "?"
+    detail_html = (f'<span class="policy-detail">{_esc(detail)}</span>'
+                   if detail else "")
     return (
         '<div class="risk-block">'
         f'<div class="risk-metrics">{_esc(" · ".join(bits))}</div>'
         '<div class="policy-line">'
         f'<span class="policy-status {cls}">{symbol} {_esc(status)}</span>'
-        f"{detail_html}</div></div>"
-    )
+        f'{detail_html}</div></div>')
 
 
 _PREVIEW_WARNING = (
@@ -3176,31 +2904,24 @@ _POLICY_REASON_LABELS = {
 }
 
 
-def _card_html(
-    card: dict,
-    *,
-    tech_note: str = "",
-    symbol: str = "",
-    evaluation_date: str = "",
-    event_view: Mapping[str, object] | None = None,
-) -> str:
+def _card_html(card: dict, *, tech_note: str = "", symbol: str = "",
+               evaluation_date: str = "",
+               event_view: Mapping[str, object] | None = None) -> str:
     if "skipped" in card:
-        return f'<div class="panel"><div class="label">{_esc(card["skipped"])}</div></div>'
+        return (f'<div class="panel"><div class="label">'
+                f'{_esc(card["skipped"])}</div></div>')
     snapshot = card.get("top3_snapshot")
-    candidate_id = snapshot.get("candidate_id") if isinstance(snapshot, Mapping) else None
-    identity_attr = (
-        f' data-candidate-id="{_esc(candidate_id)}"'
-        if isinstance(candidate_id, str) and candidate_id
-        else ""
-    )
-    parts = [
-        f'<div class="panel candidate-card"{identity_attr}>',
-        f'<div class="party-name">{_esc(card["headline"])}</div>',
-        _badges(card.get("grades", {})),
-    ]
+    candidate_id = (snapshot.get("candidate_id")
+                    if isinstance(snapshot, Mapping) else None)
+    identity_attr = (f' data-candidate-id="{_esc(candidate_id)}"'
+                     if isinstance(candidate_id, str) and candidate_id else "")
+    parts = [f'<div class="panel candidate-card"{identity_attr}>',
+             f'<div class="party-name">{_esc(card["headline"])}</div>',
+             _badges(card.get("grades", {}))]
     parts.append(_event_chips_html(card, symbol, evaluation_date, event_view))
     if card.get("preview"):
-        parts.append(f'<div class="notice watch">! {_esc(_PREVIEW_WARNING)}</div>')
+        parts.append(f'<div class="notice watch">! '
+                     f'{_esc(_PREVIEW_WARNING)}</div>')
     parts.append(_risk_line(card))
     if card.get("oi_change_line"):
         # Neutral positioning context (activity fact); reuses the plain label
@@ -3208,37 +2929,31 @@ def _card_html(
         parts.append(f'<div class="label oi-line">{_esc(card["oi_change_line"])}</div>')
     if tech_note:
         parts.append(f'<div class="tech-line">{_esc(tech_note)}</div>')
-    parts.append(_bbb_table(card.get("bbb", []), absent_reason=card.get("bbb_absent")))
+    parts.append(_bbb_table(card.get("bbb", []),
+                            absent_reason=card.get("bbb_absent")))
     parts.append(f'<div class="header-sub">{_esc(card.get("verdict", ""))}</div>')
     if card.get("countdown"):
         parts.append(f'<div class="label">{_esc(card["countdown"])}</div>')
     ladder = _scenario_table(card["scenarios"])
     if ladder:
-        parts.append(f"<details><summary>payoff ladder</summary>{ladder}</details>")
+        parts.append(f"<details><summary>payoff ladder</summary>{ladder}"
+                     "</details>")
     parts.append("</div>")
     return "".join(parts)
 
 
-def _group_html(
-    grp: dict,
-    *,
-    rank: int,
-    tech: dict | None = None,
-    close: float | None = None,
-    protected_indexes: frozenset[int] = frozenset(),
-    collapse_enabled: bool = True,
-    symbol: str = "",
-    evaluation_date: str = "",
-    event_view: Mapping[str, object] | None = None,
-) -> str:
+def _group_html(grp: dict, *, rank: int, tech: dict | None = None,
+                close: float | None = None,
+                protected_indexes: frozenset[int] = frozenset(),
+                collapse_enabled: bool = True, symbol: str = "",
+                evaluation_date: str = "",
+                event_view: Mapping[str, object] | None = None) -> str:
     count = len(grp["cards"])
     count_label = f"{count} contract" + ("" if count == 1 else "s")
-    head = (
-        f'<summary><span class="group-heading">'
-        f'<span class="group-rank" aria-label="Rank {rank}">{rank}</span>'
-        f"<span>{_esc(grp['title'])}</span></span>"
-        f'<span class="group-count">{count_label}</span></summary>'
-    )
+    head = (f'<summary><span class="group-heading">'
+            f'<span class="group-rank" aria-label="Rank {rank}">{rank}</span>'
+            f'<span>{_esc(grp["title"])}</span></span>'
+            f'<span class="group-count">{count_label}</span></summary>')
     if not grp["cards"]:
         empty = grp.get("empty") or "none this cycle"
         body = f'<div class="empty">{_esc(empty)}</div>'
@@ -3246,38 +2961,24 @@ def _group_html(
         note = _card_tech_line(grp["kind"], tech)
         if collapse_enabled and close is not None:
             shown, hidden = dominated_partition(
-                grp["cards"], str(grp["kind"]), close, protected_indexes=protected_indexes
-            )
+                grp["cards"], str(grp["kind"]), close,
+                protected_indexes=protected_indexes)
         else:
             shown, hidden = list(grp["cards"]), []
-        cards = "".join(
-            _card_html(
-                c,
-                tech_note=note,
-                symbol=symbol,
-                evaluation_date=evaluation_date,
-                event_view=event_view,
-            )
-            for c in shown
-        )
+        cards = "".join(_card_html(c, tech_note=note, symbol=symbol,
+                                    evaluation_date=evaluation_date,
+                                    event_view=event_view) for c in shown)
         hidden_html = ""
         if hidden:
-            hidden_cards = "".join(
-                _card_html(
-                    card,
-                    tech_note=note,
-                    symbol=symbol,
-                    evaluation_date=evaluation_date,
-                    event_view=event_view,
-                )
-                for card, _dominator in hidden
-            )
+            hidden_cards = "".join(_card_html(card, tech_note=note, symbol=symbol,
+                                                evaluation_date=evaluation_date,
+                                                event_view=event_view)
+                                    for card, _dominator in hidden)
             hidden_html = (
                 '<details class="dominated-candidates"><summary>'
                 f"{len(hidden)} candidates hidden — each is matched or beaten by a "
                 "shown card on every measure (expand to verify)</summary>"
-                f'<div class="card-grid">{hidden_cards}</div></details>'
-            )
+                f'<div class="card-grid">{hidden_cards}</div></details>')
         body = f'<div class="card-grid">{cards}</div>{hidden_html}'
     return f'<details class="group-section">{head}{body}</details>'
 
@@ -3300,21 +3001,21 @@ def _panel_best_headline(section: Mapping[str, object]) -> str:
                 continue
             headline = card.get("headline")
             if isinstance(headline, str) and headline:
-                choices.append(
-                    (_group_candidate_sort_key(card, kind, tech), group_index, card_index, headline)
-                )
+                choices.append((_group_candidate_sort_key(card, kind, tech),
+                                group_index, card_index, headline))
     return min(choices)[3] if choices else "No current candidate"
 
 
 def _prov_tag(context: dict | None) -> str:
     """Small provenance tag for every context-derived narrative block."""
-    prov = (context or {}).get("provenance") or ("provenance not stated in context file")
+    prov = (context or {}).get("provenance") or (
+        "provenance not stated in context file")
     return f'<span class="prov">{_esc(prov)}</span>'
 
 
 def _research_annotation_result(
-    picks: list[dict], context: dict | None
-) -> tuple[dict[str, Mapping[str, object]], str | None, bool]:
+        picks: list[dict], context: dict | None
+        ) -> tuple[dict[str, Mapping[str, object]], str | None, bool]:
     """Validate advisory annotations against the deterministic hero IDs.
 
     The context JSON may explain a current candidate, but it cannot add one or
@@ -3340,11 +3041,13 @@ def _research_annotation_result(
         return {}, None, True
     if not isinstance(raw, dict):
         return {}, "research annotations are not an object — ignoring them", False
-    keys = [p["card"].get("top3_snapshot", {}).get("candidate_id") for p in picks]
+    keys = [p["card"].get("top3_snapshot", {}).get("candidate_id")
+            for p in picks]
     if any(not isinstance(key, str) for key in keys):
         return {}, "candidate identities are invalid — research annotations ignored", False
     current_keys = frozenset(keys)
-    current_annotations = {key: value for key, value in raw.items() if key in current_keys}
+    current_annotations = {key: value for key, value in raw.items()
+                           if key in current_keys}
     dropped = sorted(str(key) for key in raw if key not in current_keys)
     try:
         normalized = normalize_research_annotations(keys, current_annotations)
@@ -3352,67 +3055,56 @@ def _research_annotation_result(
         return {}, f"research annotations invalid ({error.code}) — ignoring them", False
     notice = None
     if dropped:
-        notice = (
-            f"{len(dropped)} research annotation(s) do not match any "
-            f"card on today's board and were not rendered "
-            f"({', '.join(dropped)}) — the research context is stale "
-            "relative to the current picks, or a key is mistyped"
-        )
+        notice = (f"{len(dropped)} research annotation(s) do not match any "
+                  f"card on today's board and were not rendered "
+                  f"({', '.join(dropped)}) — the research context is stale "
+                  "relative to the current picks, or a key is mistyped")
     return dict(normalized), notice, True
 
 
 def _research_annotation_map(
-    picks: list[dict], context: dict | None
-) -> tuple[dict[str, Mapping[str, object]], str | None]:
+        picks: list[dict], context: dict | None
+        ) -> tuple[dict[str, Mapping[str, object]], str | None]:
     """Compatibility wrapper retaining the existing two-value contract."""
     normalized, warning, _integrity_ok = _research_annotation_result(picks, context)
     return normalized, warning
 
 
-def _research_html(annotation: Mapping[str, object] | None, *, data_as_of: str) -> str:
+def _research_html(annotation: Mapping[str, object] | None, *,
+                   data_as_of: str) -> str:
     """Render source-linked, advisory research for exactly one hero card."""
     if annotation is None:
-        return (
-            '<div class="notice watch">! Research evidence incomplete — '
-            "no source-validated annotation for this candidate.</div>"
-        )
+        return ('<div class="notice watch">! Research evidence incomplete — '
+                "no source-validated annotation for this candidate.</div>")
     market_as_of = annotation.get("market_as_of_date")
     if market_as_of != data_as_of:
-        return (
-            '<div class="notice watch">! Research evidence stale — annotation '
-            f"market date {_esc(market_as_of or 'unknown')} does not "
-            f"match card date {_esc(data_as_of)}.</div>"
-        )
+        return ('<div class="notice watch">! Research evidence stale — annotation '
+                f'market date {_esc(market_as_of or "unknown")} does not '
+                f'match card date {_esc(data_as_of)}.</div>')
     raw_claims = annotation.get("claims")
     claims = raw_claims if isinstance(raw_claims, (list, tuple)) else ()
     if not claims:
-        return (
-            '<div class="notice watch">! Research evidence incomplete — '
-            "the validated annotation has no claims.</div>"
-        )
-    parts = ['<details class="research-details"><summary>✓ Research evidence · complete</summary>']
+        return ('<div class="notice watch">! Research evidence incomplete — '
+                "the validated annotation has no claims.</div>")
+    parts = ['<details class="research-details"><summary>'
+             '✓ Research evidence · complete</summary>']
     for claim in claims:
         if not isinstance(claim, Mapping):
             continue
         source = claim.get("source_url")
-        source_html = (
-            f' <a href="{_esc(source)}">source</a>'
-            if isinstance(source, str) and source
-            else f" · source unknown: {_esc(claim.get('unknown_rationale', ''))}"
-        )
+        source_html = (f' <a href="{_esc(source)}">source</a>'
+                       if isinstance(source, str) and source else
+                       f' · source unknown: {_esc(claim.get("unknown_rationale", ""))}')
         parts.append(
             '<div class="narr"><span class="narr-k">'
-            f"{_esc(claim['classification'])} / "
-            f"{_esc(claim['date_certainty'])} / "
-            f"{_esc(claim['source_tier'])}</span>"
-            f"{_esc(claim['text'])}{source_html}<br>"
+            f'{_esc(claim["classification"])} / '
+            f'{_esc(claim["date_certainty"])} / '
+            f'{_esc(claim["source_tier"])}</span>'
+            f'{_esc(claim["text"])}{source_html}<br>'
             f'<span class="narr-k">counter-case</span>'
-            f"{_esc(claim['countercase'])}</div>"
-        )
-    parts.append(
-        '<div class="label">Advisory context only; it does not '
-        "change membership or rank.</div></details>"
-    )
+            f'{_esc(claim["countercase"])}</div>')
+    parts.append('<div class="label">Advisory context only; it does not '
+                 'change membership or rank.</div></details>')
     return "".join(parts)
 
 
@@ -3437,11 +3129,8 @@ def _freshness_state(as_of: object, evaluation_date: object) -> tuple[str, str]:
 
 
 def _source_freshness_chip(
-    label: str,
-    sections: list[Mapping[str, object]],
-    *,
-    source: str,
-    evaluation_date: object,
+    label: str, sections: list[Mapping[str, object]], *,
+    source: str, evaluation_date: object,
 ) -> str:
     present = [section for section in sections if section.get("chain_source") == source]
     dates = [_valid_iso_date(section.get("as_of")) for section in present]
@@ -3453,9 +3142,12 @@ def _source_freshness_chip(
     available = {str(section.get("symbol")) for section in present}
     board_available = {str(section.get("symbol")) for section in sections}
     unavailable = [
-        symbol for symbol in config.ATTRACTIVENESS_UNIVERSE if symbol not in board_available
+        symbol for symbol in config.ATTRACTIVENESS_UNIVERSE
+        if symbol not in board_available
     ]
-    unavailable_text = f"; unavailable: {', '.join(unavailable)}" if unavailable else ""
+    unavailable_text = (
+        f"; unavailable: {', '.join(unavailable)}" if unavailable else ""
+    )
     return (
         f'<span class="meta-chip freshness-chip {state.lower()}"><strong>{_esc(label)}</strong> '
         f"{_esc(detail)} · {len(available)}/{len(config.ATTRACTIVENESS_UNIVERSE)} names"
@@ -3463,7 +3155,9 @@ def _source_freshness_chip(
     )
 
 
-def _research_freshness_chip(context: Mapping[str, object] | None, evaluation_date: object) -> str:
+def _research_freshness_chip(
+    context: Mapping[str, object] | None, evaluation_date: object
+) -> str:
     if not isinstance(context, Mapping):
         return '<span class="meta-chip freshness-chip blocked"><strong>Research</strong> research: none · BLOCKED</span>'
     as_of = _valid_iso_date(context.get("as_of"))
@@ -3477,13 +3171,9 @@ def _research_freshness_chip(context: Mapping[str, object] | None, evaluation_da
         state = "WARN" if age is not None else "BLOCKED"
         detail = f"stale by {age} sessions" if age is not None else "stale; age unknown"
     return (
-        '<span class="meta-chip freshness-chip '
-        + state.lower()
-        + '"><strong>Research</strong> '
-        + _esc(
-            f"as of {as_of or 'unavailable'}; researched on {researched_on or 'unavailable'}; {detail}; {state}"
-        )
-        + "</span>"
+        '<span class="meta-chip freshness-chip ' + state.lower() + '"><strong>Research</strong> '
+        + _esc(f"as of {as_of or 'unavailable'}; researched on {researched_on or 'unavailable'}; {detail}; {state}")
+        + '</span>'
     )
 
 
@@ -3511,9 +3201,7 @@ def _research_context_evidence_chip(
         or context_as_of > board_as_of
     ):
         state = "INTEGRITY_FAILED"
-        context_as_of = (
-            None if context_as_of is None or context_as_of > (board_as_of or "") else context_as_of
-        )
+        context_as_of = None if context_as_of is None or context_as_of > (board_as_of or "") else context_as_of
     elif context_as_of == board_as_of:
         state = "EXACT"
     else:
@@ -3536,8 +3224,8 @@ def _qm_freshness_chip(qm_context: Mapping[str, object] | None) -> str:
     state = "OK" if study_date and daily_date else "BLOCKED"
     return (
         f'<span class="meta-chip freshness-chip {state.lower()}"><strong>QM</strong> '
-        f"frozen study vintage {_esc(study_date or 'unavailable')}; exact daily computation "
-        f"{_esc(daily_date or 'unavailable')}; {state}</span>"
+        f"frozen study vintage { _esc(study_date or 'unavailable') }; exact daily computation "
+        f"{ _esc(daily_date or 'unavailable') }; {state}</span>"
     )
 
 
@@ -3556,8 +3244,7 @@ def _composite_freshness_chip(cards: object) -> str:
 
 
 def _underlying_closes_freshness_chip(
-    freshness: object,
-    evaluation_date: object,
+    freshness: object, evaluation_date: object,
 ) -> str:
     """Render the assembly-time close-store summary without reopening it."""
     summary = freshness if isinstance(freshness, Mapping) else {}
@@ -3602,8 +3289,7 @@ def _experiments_views_freshness_chip(
 
 
 def _freshness_html(
-    data: Mapping[str, object],
-    context: Mapping[str, object] | None,
+    data: Mapping[str, object], context: Mapping[str, object] | None,
     qm_context: Mapping[str, object] | None,
     research_views_status: Mapping[str, object] | None,
     context_evidence: Mapping[str, object] | None = None,
@@ -3618,39 +3304,25 @@ def _freshness_html(
     sections = [section for section in raw_sections if isinstance(section, Mapping)]
     chips = []
     if any(section.get("chain_source") == THETADATA_CHAIN_SOURCE for section in sections):
-        chips.append(
-            _source_freshness_chip(
-                "Frozen EOD (.cache/chains)",
-                sections,
-                source=THETADATA_CHAIN_SOURCE,
-                evaluation_date=data.get("evaluation_date"),
-            )
-        )
+        chips.append(_source_freshness_chip(
+            "Frozen EOD (.cache/chains)", sections, source=THETADATA_CHAIN_SOURCE,
+            evaluation_date=data.get("evaluation_date"),
+        ))
     if any(section.get("chain_source") == CHAIN_SOURCE for section in sections):
-        chips.append(
-            _source_freshness_chip(
-                "Verified Schwab 15:45 pre-close (.cache/schwab_chains)",
-                sections,
-                source=CHAIN_SOURCE,
-                evaluation_date=data.get("evaluation_date"),
-            )
-        )
-    chips.append(
-        _underlying_closes_freshness_chip(
-            data.get("underlying_closes_freshness"), data.get("evaluation_date")
-        )
-    )
+        chips.append(_source_freshness_chip(
+            "Verified Schwab 15:45 pre-close (.cache/schwab_chains)", sections,
+            source=CHAIN_SOURCE, evaluation_date=data.get("evaluation_date"),
+        ))
+    chips.append(_underlying_closes_freshness_chip(
+        data.get("underlying_closes_freshness"), data.get("evaluation_date")
+    ))
     if context_evidence is None:
         chips.append(_research_freshness_chip(context, data.get("evaluation_date")))
     else:
-        chips.append(
-            _research_context_evidence_chip(
-                data,
-                context,
-                context_evidence,
-                annotation_integrity=annotation_integrity,
-            )
-        )
+        chips.append(_research_context_evidence_chip(
+            data, context, context_evidence,
+            annotation_integrity=annotation_integrity,
+        ))
     chips.append(_qm_freshness_chip(qm_context))
     chips.append(_composite_freshness_chip(data.get("composite_signals")))
     chips.append(_experiments_views_freshness_chip(research_views_status))
@@ -3662,10 +3334,8 @@ def _freshness_html(
 
 
 def _research_desk_html(
-    data: Mapping[str, object],
-    context: Mapping[str, object] | None,
-    context_warning: str | None,
-    annotation_notice: str | None,
+    data: Mapping[str, object], context: Mapping[str, object] | None,
+    context_warning: str | None, annotation_notice: str | None,
 ) -> str:
     """Show research coverage separately from advisory per-symbol accordions."""
     import config
@@ -3683,28 +3353,21 @@ def _research_desk_html(
         age = _page_chain_age_sessions(context_as_of, board_as_of)
         status = f"stale by {age} sessions" if age is not None else "stale; date unavailable"
     rows = "".join(
-        '<div class="research-coverage-row"><strong>'
-        + _esc(symbol)
-        + "</strong> · "
-        + (
-            "covered packet"
-            if isinstance(packets.get(symbol), Mapping)
-            else "no mapping-valued packet"
-        )
-        + "</div>"
+        '<div class="research-coverage-row"><strong>' + _esc(symbol) + '</strong> · '
+        + ("covered packet" if isinstance(packets.get(symbol), Mapping) else "no mapping-valued packet")
+        + '</div>'
         for symbol in config.ATTRACTIVENESS_UNIVERSE
     )
     notices = "".join(
         f'<div class="notice watch">! {_esc(notice)}</div>'
-        for notice in (context_warning, annotation_notice)
-        if notice
+        for notice in (context_warning, annotation_notice) if notice
     )
     return (
         '<section class="panel research-desk"><div class="eyebrow">RESEARCH DESK</div>'
-        "<h2>Research context and coverage</h2>"
+        '<h2>Research context and coverage</h2>'
         '<p class="header-sub">Research supplies context only; it cannot change the fixed shortlist, a grade, or a trade.</p>'
         f'<div class="label">as of {_esc(context_as_of or "unavailable")} · researched on '
-        f"{_esc(str(context.get('researched_on') or 'unavailable'))} · {_esc(status)} · "
+        f'{_esc(str(context.get("researched_on") or "unavailable"))} · {_esc(status)} · '
         f'{_prov_tag(dict(context))}</div>{notices}<div class="research-coverage">{rows}</div></section>'
     )
 
@@ -3725,17 +3388,13 @@ def _experiments_shelf_html(status: Mapping[str, object] | None) -> str:
     active_failure = status_map.get("active_failure")
     failure_channel = status_map.get("failure_channel")
     if isinstance(active_failure, Mapping):
-        failure_html = (
-            '<div class="notice bad">latest research-view refresh FAILED · '
-            f"experiments exit {_esc(active_failure.get('experiments_exit'))} · "
-            f"wasserstein exit {_esc(active_failure.get('wasserstein_exit'))}</div>"
-        )
-    elif (
-        isinstance(failure_channel, Mapping) and failure_channel.get("state") == "integrity_failed"
-    ):
-        failure_html = (
-            '<div class="notice bad">research-view failure channel integrity failed</div>'
-        )
+        failure_html = ('<div class="notice bad">latest research-view refresh FAILED · '
+                        f"experiments exit {_esc(active_failure.get('experiments_exit'))} · "
+                        f"wasserstein exit {_esc(active_failure.get('wasserstein_exit'))}</div>")
+    elif (isinstance(failure_channel, Mapping)
+          and failure_channel.get("state") == "integrity_failed"):
+        failure_html = ('<div class="notice bad">research-view failure channel '
+                        'integrity failed</div>')
     else:
         failure_html = ""
     copy_warning = status_map.get("copy_warning")
@@ -3743,13 +3402,7 @@ def _experiments_shelf_html(status: Mapping[str, object] | None) -> str:
         failure_html += f'<div class="notice bad">{_esc(copy_warning)}</div>'
     cards = "".join(
         f'<div class="market-card"><h3>{_esc(name)}</h3><p>Display-only research view.</p></div>'
-        for name in (
-            "beta-to-QQQ",
-            "tail shape",
-            "spread stability",
-            "T-bill carry",
-            "short-interest context",
-        )
+        for name in ("beta-to-QQQ", "tail shape", "spread stability", "T-bill carry", "short-interest context")
     )
     return (
         '<section class="panel experiments-shelf"><div class="eyebrow">EXPERIMENTS SHELF</div>'
@@ -3941,13 +3594,8 @@ def _top3_gap_reasons(data: dict) -> list[str]:
     outside_put_names: set[str] = set()
     plan_only = 0
     data_blocked = 0
-    lane_names = {
-        "put": "put",
-        "cc": "covered call",
-        "pmcc": "PMCC",
-        "leaps": "LEAPS",
-        "long_call": "call",
-    }
+    lane_names = {"put": "put", "cc": "covered call", "pmcc": "PMCC",
+                  "leaps": "LEAPS", "long_call": "call"}
     for sec in data.get("symbols", []):
         if sec.get("display_only"):
             continue
@@ -3967,11 +3615,11 @@ def _top3_gap_reasons(data: dict) -> list[str]:
                 liquidity = (card.get("grades") or {}).get("liquidity")
                 if status == "ELIGIBLE" and liquidity == "RED":
                     strike = card.get("strike")
-                    strike_text = f"${float(strike):g} " if isinstance(strike, (int, float)) else ""
+                    strike_text = (f"${float(strike):g} "
+                                   if isinstance(strike, (int, float)) else "")
                     liquid_failures.append(
                         f"{symbol} {strike_text}{lane_names.get(lane, lane)} "
-                        "passes portfolio policy but fails liquidity"
-                    )
+                        "passes portfolio policy but fails liquidity")
                 if "CSP_SYMBOL_OUTSIDE_ALLOWED_NAMES" in reasons:
                     outside_put_names.add(symbol)
                 if status == "PLAN_ONLY":
@@ -3984,8 +3632,10 @@ def _top3_gap_reasons(data: dict) -> list[str]:
         out.append(liquid_failures[0] + ".")
     if outside_put_names:
         names = sorted(outside_put_names)
-        joined = names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" and {names[-1]}"
-        out.append(f"{joined} puts are plan-only outside the registered cash-secured-put names.")
+        joined = (names[0] if len(names) == 1 else
+                  ", ".join(names[:-1]) + f" and {names[-1]}")
+        out.append(f"{joined} puts are plan-only outside the registered "
+                   "cash-secured-put names.")
     elif plan_only:
         out.append(f"{plan_only} remaining contract(s) are plan-only.")
     if data_blocked:
@@ -3997,15 +3647,15 @@ def _top3_gap_reasons(data: dict) -> list[str]:
 
 
 def _empty_hero_slot_html(data: dict, slot: int) -> str:
-    reasons = "".join(f"<li>{_esc(reason)}</li>" for reason in _top3_gap_reasons(data))
+    reasons = "".join(f"<li>{_esc(reason)}</li>"
+                      for reason in _top3_gap_reasons(data))
     return (
         '<div class="hero-card unknown empty-slot">'
         f'<div class="slot-label"><span>Pick {slot}</span>'
         '<span class="policy-status unknown">? OPEN</span></div>'
-        "<h3>No qualifying contract</h3>"
+        '<h3>No qualifying contract</h3>'
         '<div class="label">This is an intentional open slot, not missing UI.</div>'
-        f'<ul class="gate-list">{reasons}</ul></div>'
-    )
+        f'<ul class="gate-list">{reasons}</ul></div>')
 
 
 def _blocked_qm_slot_html(
@@ -4026,9 +3676,7 @@ def _blocked_qm_slot_html(
 
 
 def _original_hero_html(
-    data: dict,
-    context: dict | None,
-    qm_context: Mapping[str, object] | None,
+    data: dict, context: dict | None, qm_context: Mapping[str, object] | None,
     event_view: Mapping[str, object] | None = None,
 ) -> str:
     """Render the unchanged mechanical Top-3 plus advisory research.
@@ -4083,10 +3731,10 @@ def _original_hero_html(
         '<section class="panel hero">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">Daily shortlist · TOP 5 PICKS TODAY</div>'
-        "<h2>Rule-based top 5 — best policy-and-liquidity fit today</h2>"
+        '<h2>Rule-based top 5 — best policy-and-liquidity fit today</h2>'
         '<p class="header-sub">Chosen by fixed rules (green-check fraction, one pick per stock). '
-        "This is a fit ranking, not a prediction; whether it predicts anything is exactly what "
-        "the registered RQ2/A2 studies will measure.</p></div>"
+        'This is a fit ranking, not a prediction; whether it predicts anything is exactly what '
+        'the registered RQ2/A2 studies will measure.</p></div>'
         '<div class="hero-stats">'
         f'<div class="hero-stat {qualified_cls}"><strong>{qualified_count}</strong>'
         "<span>Eligible</span></div>"
@@ -4117,19 +3765,16 @@ def _qm_two_date_label_html(
     if not isinstance(qm_as_of, str) or not qm_as_of:
         return ""
     board_text = (
-        f"{CONVENTION_LABEL} {board}"
-        if data.get("as_of_kind") == CHAIN_SOURCE
+        f"{CONVENTION_LABEL} {board}" if data.get("as_of_kind") == CHAIN_SOURCE
         else f"close {board}"
     )
     not_covered = qm_context.get("not_covered")
-    not_covered = (
-        [str(name) for name in not_covered] if isinstance(not_covered, (list, tuple)) else []
-    )
+    not_covered = [str(name) for name in not_covered] if isinstance(
+        not_covered, (list, tuple)) else []
     covered_note = (
         f" Not covered by the frozen study: {', '.join(sorted(not_covered))} "
         "(no QM context exists for these names)."
-        if not_covered
-        else ""
+        if not_covered else ""
     )
     return (
         f'<div class="label">QM daily-bar context as of {_esc(qm_as_of)}; '
@@ -4213,7 +3858,9 @@ def _qm_movement_lane_html(
     raw_movement = qm_context.get("movement_symbols") if isinstance(qm_context, Mapping) else None
     has_movement = isinstance(raw_movement, Mapping)
     movement = raw_movement if isinstance(raw_movement, Mapping) else {}
-    items = [(str(symbol), item) for symbol, item in movement.items() if isinstance(item, Mapping)]
+    items = [
+        (str(symbol), item) for symbol, item in movement.items() if isinstance(item, Mapping)
+    ]
     evaluated = [(symbol, item) for symbol, item in items if item.get("status") == "CURRENT"]
     unavailable = [(symbol, item) for symbol, item in items if item.get("status") != "CURRENT"]
     fires = [
@@ -4232,10 +3879,14 @@ def _qm_movement_lane_html(
         label_context = {**qm_context, "as_of": qm_context["movement_as_of"], "not_covered": []}
     if not has_movement or not evaluated:
         reason = (
-            str(qm_context.get("reason", "")).strip() if isinstance(qm_context, Mapping) else ""
+            str(qm_context.get("reason", "")).strip()
+            if isinstance(qm_context, Mapping)
+            else ""
         )
         reason_html = f'<p class="label">Reason: {_esc(reason)}</p>' if reason else ""
-        body = f'<p class="label">{_esc(_QM_MOVEMENT_BLOCKED)}</p>{reason_html}{unavailable_note}'
+        body = (
+            f'<p class="label">{_esc(_QM_MOVEMENT_BLOCKED)}</p>{reason_html}{unavailable_note}'
+        )
     elif not fires:
         body = f'<p class="label">{_esc(_QM_MOVEMENT_EMPTY)}</p>{unavailable_note}'
     else:
@@ -4258,19 +3909,17 @@ def _qm_movement_lane_html(
         '<section class="panel qm-movement">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div>'
-        "<h2>QM MOVEMENT LANE</h2>"
+        '<h2>QM MOVEMENT LANE</h2>'
         '<p class="header-sub">Current-session mechanical fires from adjusted cached OHLCV, '
-        "shown in watch-universe order. This does not select, order, gate, or validate "
-        "a mechanical pick.</p>"
+        'shown in watch-universe order. This does not select, order, gate, or validate '
+        'a mechanical pick.</p>'
         f'<div class="label">{_esc(_QM_MOVEMENT_BANNER)}</div>'
         f"{_qm_two_date_label_html(data, label_context)}</div></div>{body}</section>"
     )
 
 
 def _hero_html(
-    data: dict,
-    context: dict | None,
-    qm_context: Mapping[str, object] | None = None,
+    data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None,
     event_view: Mapping[str, object] | None = None,
 ) -> str:
     return (
@@ -4289,7 +3938,8 @@ _CONTEXT_LANE_DISCLAIMER = (
 )
 
 
-def _context_lane_html(data: dict, event_view: Mapping[str, object] | None = None) -> str:
+def _context_lane_html(data: dict,
+                       event_view: Mapping[str, object] | None = None) -> str:
     """Render the owner-gated second ranking lane, or nothing while disabled."""
     if not config.CONTEXT_LANE_ENABLED:
         return ""
@@ -4320,9 +3970,9 @@ def _context_lane_html(data: dict, event_view: Mapping[str, object] | None = Non
         card = pick["card"]
         reason = str(row["context_reason"])
         blocked = reason == "BLOCKED"
-        status_class = (
-            "bad" if blocked else "watch" if reason in {"VETOED", "DIRECTION_MISMATCH"} else "good"
-        )
+        status_class = "bad" if blocked else "watch" if reason in {
+            "VETOED", "DIRECTION_MISMATCH"
+        } else "good"
         aligned = row.get("aligned_angles")
         aligned_text = (
             "Aligned angles: " + ", ".join(str(name) for name in aligned)
@@ -4337,20 +3987,20 @@ def _context_lane_html(data: dict, event_view: Mapping[str, object] | None = Non
             f'<div class="party-name">{_esc(str(card.get("headline", candidate_id)))}</div>'
             f"{_event_chips_html(card, str(row['symbol']), str(data.get('evaluation_date') or data.get('data_as_of') or ''), event_view)}"
             f'<div class="label">{_esc(aligned_text)} · context term '
-            f"{_esc(row['context_term'])} · context max as-of "
-            f"{_esc(row.get('context_max_asof') or 'unavailable')} · board as-of "
-            f"{_esc(row['board_as_of'])}</div>"
+            f'{_esc(row["context_term"])} · context max as-of '
+            f'{_esc(row.get("context_max_asof") or "unavailable")} · board as-of '
+            f'{_esc(row["board_as_of"])}</div>'
             f'<details><summary>Context score audit</summary><div class="label">'
-            f"{_esc(candidate_id)} · {_esc(row['score'])}</div></details></div>"
+            f'{_esc(candidate_id)} · {_esc(row["score"])}</div></details></div>'
         )
     for slot in range(len(rows) + 1, config.PICK_TOP_N + 1):
         cards.append(
             '<div class="hero-card unknown empty-slot">'
             f'<div class="slot-label"><span>Context pick {slot}</span>'
             '<span class="policy-status unknown">? OPEN</span></div>'
-            "<h3>No qualifying contract</h3>"
+            '<h3>No qualifying contract</h3>'
             '<div class="label">The full admissible pool did not supply another symbol.</div>'
-            "</div>"
+            '</div>'
         )
 
     diagnostics = []
@@ -4368,7 +4018,7 @@ def _context_lane_html(data: dict, event_view: Mapping[str, object] | None = Non
         '<section class="panel hero context-lane">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
-        "<h2>Context-aware Top 5 — full admitted pool</h2>"
+        '<h2>Context-aware Top 5 — full admitted pool</h2>'
         f'<p class="header-sub">{_esc(_CONTEXT_LANE_DISCLAIMER)}</p></div></div>'
         f'<div class="hero-grid">{"".join(cards)}</div>'
         '<div class="label">Frozen-shortlist comparison diagnostics</div>'
@@ -4412,26 +4062,25 @@ def _market_html(context: dict | None) -> str:
     if not isinstance(market, dict) or not market:
         return ""
     prov = _prov_tag(context)
-    parts = [
-        '<section class="panel market-panel">',
-        '<div class="eyebrow">Backdrop</div>',
-        f"<h2>Market context {prov}</h2>",
-    ]
+    parts = ['<section class="panel market-panel">',
+             '<div class="eyebrow">Backdrop</div>',
+             f"<h2>Market context {prov}</h2>"]
     summary = str(market.get("summary") or "").strip()
     if summary:
         lead, separator, _tail = summary.partition(". ")
         lead = lead + ("." if separator else "")
         parts.append(f'<div class="market-summary">{_esc(lead)}</div>')
     if market.get("regime"):
-        parts.append(f'<div class="regime-label">Regime · {_esc(market["regime"])}</div>')
+        parts.append(f'<div class="regime-label">Regime · '
+                     f'{_esc(market["regime"])}</div>')
     notes = market.get("notes") or []
     if summary or notes:
-        parts.append("<details><summary>Full market narrative &amp; notes</summary>")
+        parts.append('<details><summary>Full market narrative &amp; notes</summary>')
         if summary:
             parts.append(f'<div class="narr">{_esc(summary)}</div>')
         for note in notes:
             parts.append(f'<div class="label">&middot; {_esc(note)}</div>')
-        parts.append("</details>")
+        parts.append('</details>')
     parts.append("</section>")
     return "".join(parts)
 
@@ -4448,10 +4097,8 @@ def _sources_html(sources: list | None) -> str:
             items.append(f"<li>{_esc(u)}</li>")
     if not items:
         return ""
-    return (
-        f"<details><summary>sources ({len(items)})</summary>"
-        f'<ul class="label">{"".join(items)}</ul></details>'
-    )
+    return (f"<details><summary>sources ({len(items)})</summary>"
+            f'<ul class="label">{"".join(items)}</ul></details>')
 
 
 def _symbol_context_html(symbol: str, context: dict | None) -> str:
@@ -4461,25 +4108,20 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
     if not isinstance(sym_ctx, dict):
         return ""
     prov = _prov_tag(context)
-    parts = [
-        '<details class="context-details"><summary>'
-        "Company context, catalysts &amp; sources</summary>"
-    ]
+    parts = ['<details class="context-details"><summary>'
+             'Company context, catalysts &amp; sources</summary>']
     if sym_ctx.get("news_summary"):
-        parts.append(
-            f'<div class="narr"><span class="narr-k">news</span>'
-            f"{_esc(sym_ctx['news_summary'])} {prov}</div>"
-        )
+        parts.append(f'<div class="narr"><span class="narr-k">news</span>'
+                     f'{_esc(sym_ctx["news_summary"])} {prov}</div>')
     for cat in sym_ctx.get("catalysts") or []:
         if isinstance(cat, dict) and cat.get("what"):
             when = cat.get("date") or "date unknown"
-            confirmed = "" if cat.get("confirmed", True) else " [UNCONFIRMED/estimated]"
-            parts.append(
-                f'<div class="label">catalyst {_esc(when)}'
-                f"{_esc(confirmed)}: {_esc(cat['what'])} {prov}</div>"
-            )
+            confirmed = ("" if cat.get("confirmed", True)
+                         else " [UNCONFIRMED/estimated]")
+            parts.append(f'<div class="label">catalyst {_esc(when)}'
+                         f"{_esc(confirmed)}: {_esc(cat['what'])} {prov}</div>")
     parts.append(_sources_html(sym_ctx.get("sources")))
-    parts.append("</details>")
+    parts.append('</details>')
     return "".join(parts)
 
 
@@ -4493,48 +4135,38 @@ def _pinned_html(data: dict, event_view: Mapping[str, object] | None = None) -> 
     for rec in pinned:
         symbol, pick = rec["symbol"], rec["pick"]
         if pick is None:
-            cards += (
-                f'<div class="pinned-card watch"><div class="slot-label">'
-                f"<span>{_esc(symbol)}</span>"
-                '<span class="policy-status watch">GAP</span></div>'
-                '<div class="label">no eligible liquid card this run '
-                "— pinning never fabricates a candidate; see the "
-                "symbol panel below for why each card is out.</div>"
-                "</div>"
-            )
+            cards += (f'<div class="pinned-card watch"><div class="slot-label">'
+                      f'<span>{_esc(symbol)}</span>'
+                      '<span class="policy-status watch">GAP</span></div>'
+                      '<div class="label">no eligible liquid card this run '
+                      '— pinning never fabricates a candidate; see the '
+                      'symbol panel below for why each card is out.</div>'
+                      '</div>')
             continue
         card = pick["card"]
         snapshot = card.get("top3_snapshot")
-        status = (
-            snapshot.get("selection_status") if isinstance(snapshot, Mapping) else None
-        ) or "?"
-        status_cls = {"ELIGIBLE": "good", "WATCH": "watch"}.get(str(status), "watch")
-        cards += (
-            f'<div class="pinned-card {status_cls}">'
-            f'<div class="slot-label"><span>{_esc(symbol)}</span>'
-            f'<span class="policy-status {status_cls}">'
-            f"{_esc(str(status))}</span></div>"
-            f'<div class="party-name">{_esc(card.get("headline", ""))}'
-            "</div>"
-            + _hero_badges(card.get("grades", {}))
-            + _event_chips_html(
-                card,
-                str(symbol),
-                str(data.get("evaluation_date") or data.get("data_as_of") or ""),
-                event_view,
-            )
-            + _risk_line(card)
-            + _bbb_table(card.get("bbb", []))
-            + "</div>"
-        )
-    return (
-        '<section class="panel hero"><div class="section-header"><div>'
-        '<div class="eyebrow">CORE NAMES</div>'
-        f"<h2>{names} — ALWAYS SHOWN</h2>"
-        "<p>owner-pinned visibility — not ranked; these cards do not "
-        "compete with or reorder the Top-5 shortlist.</p></div></div>"
-        f'<div class="hero-grid">{cards}</div></section>'
-    )
+        status = (snapshot.get("selection_status")
+                  if isinstance(snapshot, Mapping) else None) or "?"
+        status_cls = {"ELIGIBLE": "good", "WATCH": "watch"}.get(
+            str(status), "watch")
+        cards += (f'<div class="pinned-card {status_cls}">'
+                  f'<div class="slot-label"><span>{_esc(symbol)}</span>'
+                  f'<span class="policy-status {status_cls}">'
+                  f'{_esc(str(status))}</span></div>'
+                  f'<div class="party-name">{_esc(card.get("headline", ""))}'
+                  '</div>'
+                  + _hero_badges(card.get("grades", {}))
+                  + _event_chips_html(card, str(symbol),
+                                      str(data.get("evaluation_date") or data.get("data_as_of") or ""),
+                                      event_view)
+                  + _risk_line(card)
+                  + _bbb_table(card.get("bbb", [])) + '</div>')
+    return ('<section class="panel hero"><div class="section-header"><div>'
+            '<div class="eyebrow">CORE NAMES</div>'
+            f'<h2>{names} — ALWAYS SHOWN</h2>'
+            '<p>owner-pinned visibility — not ranked; these cards do not '
+            'compete with or reorder the Top-5 shortlist.</p></div></div>'
+            f'<div class="hero-grid">{cards}</div></section>')
 
 
 _COMPOSITE_GRADE_CLASS = {"A": "good", "B": "watch", "C": "unknown"}
@@ -4546,7 +4178,8 @@ _COMPOSITE_INTERNALS_CLASS = {"CONFIRM": "good", "VETO": "bad", "NEUTRAL": "unkn
 
 def _composite_badge(label: str, state: str, cls_map: Mapping[str, str]) -> str:
     cls = cls_map.get(state, "unknown")
-    return f'<span class="status-badge {cls}">{_esc(label)} {_esc(state)}</span>'
+    return (f'<span class="status-badge {cls}">{_esc(label)} '
+            f'{_esc(state)}</span>')
 
 
 def _as_mapping(value: object) -> Mapping[str, object]:
@@ -4562,65 +4195,59 @@ def _composite_card_html(card: Mapping[str, object]) -> str:
     regime = _as_mapping(card.get("regime"))
     internals = _as_mapping(card.get("internals"))
     badges = (
-        _composite_badge("TREND", str(trend.get("state", "DATA_BLOCKED")), _COMPOSITE_TREND_CLASS)
-        + _composite_badge(
-            "VOL", str(vol_premium.get("state", "DATA_BLOCKED")), _COMPOSITE_VOL_CLASS
-        )
-        + _composite_badge(
-            "REGIME", str(regime.get("state", "DATA_BLOCKED")), _COMPOSITE_REGIME_CLASS
-        )
-        + _composite_badge(
-            "INTERNALS", str(internals.get("state", "DATA_BLOCKED")), _COMPOSITE_INTERNALS_CLASS
-        )
+        _composite_badge("TREND", str(trend.get("state", "DATA_BLOCKED")),
+                         _COMPOSITE_TREND_CLASS)
+        + _composite_badge("VOL", str(vol_premium.get("state", "DATA_BLOCKED")),
+                           _COMPOSITE_VOL_CLASS)
+        + _composite_badge("REGIME", str(regime.get("state", "DATA_BLOCKED")),
+                           _COMPOSITE_REGIME_CLASS)
+        + _composite_badge("INTERNALS", str(internals.get("state", "DATA_BLOCKED")),
+                           _COMPOSITE_INTERNALS_CLASS)
     )
     reasons = [
         f"{name}: {angle.get('reason')}"
-        for name, angle in (
-            ("trend", trend),
-            ("vol", vol_premium),
-            ("regime", regime),
-            ("internals", internals),
-        )
+        for name, angle in (("trend", trend), ("vol", vol_premium),
+                            ("regime", regime), ("internals", internals))
         if angle.get("data_blocked") and angle.get("reason")
     ]
-    reason_html = f'<div class="label">{_esc("; ".join(reasons))}</div>' if reasons else ""
+    reason_html = (f'<div class="label">{_esc("; ".join(reasons))}</div>'
+                  if reasons else "")
     as_of = card.get("max_asof") or card.get("asof") or "?"
     return (
         '<div class="panel composite-card">'
-        '<div class="slot-label"><span>'
-        + _esc(str(card.get("symbol", "?")))
+        '<div class="slot-label"><span>' + _esc(str(card.get("symbol", "?")))
         + f'</span><span class="status-badge {_COMPOSITE_GRADE_CLASS.get(grade, "unknown")}">'
-        f"GRADE {_esc(grade)}</span></div>"
+        f'GRADE {_esc(grade)}</span></div>'
         f'<div class="party-badges">{badges}</div>'
-        f"{reason_html}"
+        f'{reason_html}'
         f'<div class="label">as of {_esc(str(as_of))}</div>'
-        "</div>"
+        '</div>'
     )
 
 
 def _composite_html(data: dict) -> str:
     """Composite signal board panel: display-only, non-verdict-bearing
     four-angle confluence cards (options_researcher.composite_signals)."""
-    cards = [card for card in (data.get("composite_signals") or []) if isinstance(card, Mapping)]
+    cards = [card for card in (data.get("composite_signals") or [])
+             if isinstance(card, Mapping)]
     grade_a = [str(card.get("symbol")) for card in cards if card.get("grade") == "A"]
     agreement = (
-        f"Highest agreement today: {', '.join(grade_a)}"
-        if grade_a
+        f"Highest agreement today: {', '.join(grade_a)}" if grade_a
         else "Highest agreement today: none at grade A"
     )
     grid = "".join(_composite_card_html(card) for card in cards)
     if not grid:
         grid = (
             '<div class="empty">No composite cards are available for this board. '
-            "The lane is display-only and no signal or verdict is implied.</div>"
+            'The lane is display-only and no signal or verdict is implied.</div>'
         )
     return (
         '<section class="panel"><div class="section-header"><div>'
         '<div class="eyebrow">COMPOSITE SIGNAL LANE</div>'
-        "<h2>Composite signal board — display-only</h2>"
-        "<p>Four independent angles (trend, vol premium, regime, options-"
-        "market internals) per name. Not verdict-bearing, not FIRE-capable; "
-        "writes nothing to ledger/ or positions.</p>"
+        '<h2>Composite signal board — display-only</h2>'
+        '<p>Four independent angles (trend, vol premium, regime, options-'
+        'market internals) per name. Not verdict-bearing, not FIRE-capable; '
+        'writes nothing to ledger/ or positions.</p>'
         f'<div class="label">{_esc(agreement)}</div></div></div>'
         f'<div class="card-grid">{grid}</div></section>'
     )
@@ -4640,11 +4267,13 @@ def _evidence_row_html(row: object) -> str:
     evaluation_session = _evidence_attr(row, "evaluation_session")
     run_date = _evidence_attr(row, "run_date")
     raw_states = _evidence_attr(row, "symbol_states", ())
-    raw_states = raw_states if isinstance(raw_states, (list, tuple)) else ()
+    raw_states = (
+        raw_states if isinstance(raw_states, (list, tuple)) else ()
+    )
     state_chips = "".join(
         '<span class="evidence-chip">'
-        f"<strong>{_esc(str(_evidence_attr(state, 'label', 'raw')))}</strong> "
-        f"{_esc(str(_evidence_attr(state, 'state', 'UNKNOWN')))}</span>"
+        f'<strong>{_esc(str(_evidence_attr(state, "label", "raw")))}</strong> '
+        f'{_esc(str(_evidence_attr(state, "state", "UNKNOWN")))}</span>'
         for state in raw_states
     )
     dates = []
@@ -4652,23 +4281,35 @@ def _evidence_row_html(row: object) -> str:
         dates.append(f"evaluation {evaluation_session}")
     if run_date:
         dates.append(f"run {run_date}")
-    date_html = f'<div class="evidence-dates">{_esc(" · ".join(dates))}</div>' if dates else ""
+    date_html = (
+        f'<div class="evidence-dates">{_esc(" · ".join(dates))}</div>'
+        if dates
+        else ""
+    )
     sources = _evidence_attr(row, "sources", ())
     sources = sources if isinstance(sources, (list, tuple)) else ()
     source_items = "".join(
         "<li>"
-        f"{_esc(str(_evidence_attr(source, 'kind', 'source')))}: "
-        f"<code>{_esc(str(_evidence_attr(source, 'path', '?')))}</code> "
-        f"({_esc(str(_evidence_attr(source, 'date', '?')))})"
+        f'{_esc(str(_evidence_attr(source, "kind", "source")))}: '
+        f'<code>{_esc(str(_evidence_attr(source, "path", "?")))}</code> '
+        f'({_esc(str(_evidence_attr(source, "date", "?")))})'
         "</li>"
         for source in sources
     )
-    sources_html = f'<ul class="evidence-sources">{source_items}</ul>' if source_items else ""
-    detail_html = f'<div class="evidence-detail">{_esc(detail)}</div>' if detail else ""
+    sources_html = (
+        f'<ul class="evidence-sources">{source_items}</ul>'
+        if source_items
+        else ""
+    )
+    detail_html = (
+        f'<div class="evidence-detail">{_esc(detail)}</div>'
+        if detail
+        else ""
+    )
     return (
         '<div class="evidence-row">'
         '<div class="evidence-row-head">'
-        f"<strong>{_esc(family)}</strong>"
+        f'<strong>{_esc(family)}</strong>'
         f'<span class="status-badge unknown">Ritual '
         f"{_esc(family_state)}</span></div>"
         f'<div class="evidence-membership">{_esc(membership)}</div>'
@@ -4687,7 +4328,7 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
     hypothesis_rows = "".join(_evidence_row_html(row) for row in rows)
     intraday_html = (
         '<div class="intraday-evidence">'
-        "<h4>Intraday context — descriptive only</h4>"
+        '<h4>Intraday context — descriptive only</h4>'
         f"{_evidence_row_html(intraday)}</div>"
         if intraday is not None
         else ""
@@ -4696,7 +4337,7 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
         return ""
     return (
         '<details class="hypothesis-evidence">'
-        "<summary>Hypothesis evidence</summary>"
+        '<summary>Hypothesis evidence</summary>'
         '<div class="evidence-grid">'
         f"{hypothesis_rows}</div>{intraday_html}</details>"
     )
@@ -4705,7 +4346,9 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
 def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
     """Render already-attached family summaries without gathering evidence."""
     raw_summaries = data.get("family_evidence")
-    summaries = raw_summaries if isinstance(raw_summaries, (list, tuple)) else ()
+    summaries = (
+        raw_summaries if isinstance(raw_summaries, (list, tuple)) else ()
+    )
     lines = []
     for summary in summaries:
         family = str(_evidence_attr(summary, "family", "?"))
@@ -4713,24 +4356,21 @@ def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
         ritual_detail = str(_evidence_attr(summary, "ritual_detail", "NO RECEIPT"))
         raw_counts = _evidence_attr(summary, "raw_state_counts", ())
         raw_counts = raw_counts if isinstance(raw_counts, (list, tuple)) else ()
-        raw_html = (
-            "; ".join(
-                '<span class="status-badge'
-                + (
-                    " bad"
-                    if str(_evidence_attr(count, "state", "UNKNOWN"))
-                    in {"UNKNOWN", "MISSING", "REFUSED", "NO RECEIPT", "NOT TRACKED"}
-                    else " unknown"
-                )
-                + '">evidence '
-                + _esc(str(_evidence_attr(count, "state", "UNKNOWN")))
-                + ": "
-                + _esc(str(_evidence_attr(count, "count", 0)))
-                + "</span>"
-                for count in raw_counts
+        raw_html = "; ".join(
+            '<span class="status-badge'
+            + (
+                " bad"
+                if str(_evidence_attr(count, "state", "UNKNOWN"))
+                in {"UNKNOWN", "MISSING", "REFUSED", "NO RECEIPT", "NOT TRACKED"}
+                else " unknown"
             )
-            or '<span class="status-badge bad">evidence UNKNOWN: 0</span>'
-        )
+            + '">evidence '
+            + _esc(str(_evidence_attr(count, "state", "UNKNOWN")))
+            + ": "
+            + _esc(str(_evidence_attr(count, "count", 0)))
+            + "</span>"
+            for count in raw_counts
+        ) or '<span class="status-badge bad">evidence UNKNOWN: 0</span>'
         evaluation = _evidence_attr(summary, "evaluation_session") or "UNKNOWN"
         run_date = _evidence_attr(summary, "run_date") or "UNKNOWN"
         raw_sources = _evidence_attr(summary, "sources", ())
@@ -4740,20 +4380,22 @@ def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
             for source in raw_sources
             if _evidence_attr(source, "path")
         ]
-        sources_text = f"; sources: {', '.join(source_paths)}" if source_paths else ""
+        sources_text = (
+            f"; sources: {', '.join(source_paths)}" if source_paths else ""
+        )
         window_end = _evidence_attr(summary, "registered_window_end")
         window_metadata = _evidence_attr(summary, "registered_window_metadata")
         window_text = (
-            f"; {window_metadata}: ends {window_end}" if window_end and window_metadata else ""
+            f"; {window_metadata}: ends {window_end}"
+            if window_end and window_metadata else ""
         )
         conspicuous = (
-            " bad"
-            if ritual_state in {"MISSING", "REFUSED", "UNKNOWN", "NOT TRACKED"}
+            " bad" if ritual_state in {"MISSING", "REFUSED", "UNKNOWN", "NOT TRACKED"}
             else " unknown"
         )
         lines.append(
             "<li><strong>"
-            f'{_esc(family)}</strong> — ritual <span class="status-badge{conspicuous}">'
+            f"{_esc(family)}</strong> — ritual <span class=\"status-badge{conspicuous}\">"
             f"{_esc(ritual_state)}</span> ({_esc(ritual_detail)}); "
             f"{raw_html}; evaluation {_esc(str(evaluation))}; "
             f"run {_esc(str(run_date))}{_esc(sources_text)}{_esc(window_text)}</li>"
@@ -4765,8 +4407,8 @@ def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
     return (
         '<section class="panel registered-bets-tracker"><div class="section-header"><div>'
         '<div class="eyebrow">REGISTERED-BETS TRACKER</div>'
-        "<h2>Registered-bets tracker</h2>"
-        "<p>This is a read-only receipt summary and cannot activate, rank, or place a trade.</p>"
+        '<h2>Registered-bets tracker</h2>'
+        '<p>This is a read-only receipt summary and cannot activate, rank, or place a trade.</p>'
         f"</div></div><ul>{body}</ul></section>"
     )
 
@@ -4827,7 +4469,8 @@ def _atm_iv_stat_html(sec: Mapping[str, object]) -> str:
     value = sec.get("atm_iv")
     if not isinstance(value, (int, float)) or value != value:
         return ""
-    return f'<div class="symbol-stat"><span>ATM IV</span><strong>{float(value):.1%}</strong></div>'
+    return ('<div class="symbol-stat"><span>ATM IV</span><strong>'
+            f"{float(value):.1%}</strong></div>")
 
 
 def _section_source_html(sec: Mapping[str, object]) -> str:
@@ -4839,12 +4482,11 @@ def _section_source_html(sec: Mapping[str, object]) -> str:
         parts.append(
             '<div class="notice info">Quotes: '
             f"{_esc(CONVENTION_LABEL)} session "
-            f"{_esc(str(sec.get('as_of', '?')))}; price "
+            f'{_esc(str(sec.get("as_of", "?")))}; price '
             f"${_as_float(sec.get('close')):,.2f} is the 15:45 spot mid from "
             "the same capture instant, not a closing price. Moving averages "
-            f"and trend use closes through {_esc(str(sec.get('technicals_as_of', '?')))}."
-            "</div>"
-        )
+            f'and trend use closes through {_esc(str(sec.get("technicals_as_of", "?")))}.'
+            "</div>")
     refusal = sec.get("fresh_refusal_reason")
     if isinstance(refusal, str) and refusal:
         parts.append(f'<div class="notice watch">! {_esc(refusal)}</div>')
@@ -4861,18 +4503,16 @@ def _feature_unavailable_html(sec: Mapping[str, object]) -> str:
     items = sec.get("feature_unavailable")
     items = items if isinstance(items, (list, tuple)) else ()
     rows = [
-        f"{_esc(str(item.get('field', '?')))}: {_esc(str(item.get('reason', '?')))}"
+        f'{_esc(str(item.get("field", "?")))}: {_esc(str(item.get("reason", "?")))}'
         for item in items
         if isinstance(item, Mapping)
     ]
     if not rows:
         return ""
-    return (
-        '<div class="notice watch">! Unavailable for this session — '
-        + "; ".join(rows)
-        + ". The badges these feed show UNKNOWN (never a default value), "
-        "and scenario tables that need them state their absence.</div>"
-    )
+    return ('<div class="notice watch">! Unavailable for this session — '
+            + "; ".join(rows)
+            + ". The badges these feed show UNKNOWN (never a default value), "
+            "and scenario tables that need them state their absence.</div>")
 
 
 def _blocked_html(blocked: list[dict]) -> str:
@@ -4884,28 +4524,31 @@ def _blocked_html(blocked: list[dict]) -> str:
     for rec in blocked:
         last = rec.get("last_known_date") or "never cached"
         display_only = (
-            f' <span class="status-badge unknown">{_esc(DISPLAY_ONLY_LABEL)}</span>'
+            f' <span class="status-badge unknown">'
+            f"{_esc(DISPLAY_ONLY_LABEL)}</span>"
             if rec.get("display_only")
             else ""
         )
-        evidence = _hypothesis_panel_html(rec.get("hypothesis_evidence"))
-        rows += (
-            f"<li><strong>{_esc(str(rec.get('symbol', '?')))}</strong>"
-            f"{display_only} · "
-            f"{_esc(str(rec.get('reason_code', '?')))} · "
-            f"{_esc(str(rec.get('detail', '')))} · "
-            f"last known data: {_esc(str(last))}{evidence}</li>"
+        evidence = _hypothesis_panel_html(
+            rec.get("hypothesis_evidence")
         )
-    return (
-        '<section class="panel"><div class="eyebrow">DATA BLOCKED</div>'
-        '<div class="notice watch">! These symbols are in the display '
-        "universe but could not be analyzed this run — shown so a gap "
-        "is never mistaken for a clean board.</div>"
-        f'<ul class="blocked-list">{rows}</ul></section>'
-    )
+        rows += (
+            f'<li><strong>{_esc(str(rec.get("symbol", "?")))}</strong>'
+            f"{display_only} · "
+            f'{_esc(str(rec.get("reason_code", "?")))} · '
+            f'{_esc(str(rec.get("detail", "")))} · '
+            f'last known data: {_esc(str(last))}{evidence}</li>'
+        )
+    return ('<section class="panel"><div class="eyebrow">DATA BLOCKED</div>'
+            '<div class="notice watch">! These symbols are in the display '
+            'universe but could not be analyzed this run — shown so a gap '
+            'is never mistaken for a clean board.</div>'
+            f'<ul class="blocked-list">{rows}</ul></section>')
 
 
-def _run_exit_code(blocked: list[dict], *, qm_context: Mapping[str, object] | None = None) -> int:
+def _run_exit_code(
+    blocked: list[dict], *, qm_context: Mapping[str, object] | None = None
+) -> int:
     """0 for a clean or data-gapped run; 1 when any symbol failed on an
     UNEXPECTED error (programming failure) so cron/launchd never reports a
     clean rebuild over one."""
@@ -4928,8 +4571,7 @@ def build_event_view(data: Mapping[str, object]) -> dict[str, object]:
             calendar = event_calendar.calendar_with_fomc(calendar, fomc.load_fomc())
         evaluation = date.fromisoformat(str(data.get("evaluation_date") or data.get("data_as_of")))
         complex_map = event_calendar.load_complex_map(
-            events=[event for event in calendar if event.date >= evaluation]
-        )
+            events=[event for event in calendar if event.date >= evaluation])
     except Exception as exc:
         calendar, complex_map = [], {}
         failures["__calendar__"] = exc.__class__.__name__
@@ -4945,22 +4587,17 @@ def build_event_view(data: Mapping[str, object]) -> dict[str, object]:
         try:
             newest = schwab_chain_view.newest_chain(symbol)
             if newest is None or newest[1] != session:
-                moves[symbol] = {
-                    "text": "UNAVAILABLE",
-                    "reason": "matching verified chain unavailable",
-                }
+                moves[symbol] = {"text": "UNAVAILABLE",
+                                 "reason": "matching verified chain unavailable"}
                 continue
             spot_record = schwab_chain_view.load_preclose_spot(symbol, session)
             spot = spot_record[0] if spot_record is not None else None
-            moves[symbol] = event_calendar.implied_move(newest[0], session, spot, "schwab_preclose")
+            moves[symbol] = event_calendar.implied_move(
+                newest[0], session, spot, "schwab_preclose")
         except Exception as exc:
             failures[symbol] = exc.__class__.__name__
-    return {
-        "calendar": calendar,
-        "complex_map": complex_map,
-        "implied_moves": moves,
-        "failures": failures,
-    }
+    return {"calendar": calendar, "complex_map": complex_map,
+            "implied_moves": moves, "failures": failures}
 
 
 def render(
@@ -4986,39 +4623,29 @@ def render(
     _annotations, annotation_notice, annotation_integrity = _research_annotation_result(
         picks_for_research, context
     )
-    protected_card_ids = {
-        id(pick["card"]) for pick in select_top_picks(data, include_csp_watch=True)
-    }
+    protected_card_ids = {id(pick["card"])
+                          for pick in select_top_picks(data, include_csp_watch=True)}
     protected_card_ids.update(
-        id(record["pick"]["card"]) for record in pinned_picks(data) if record.get("pick")
-    )
+        id(record["pick"]["card"]) for record in pinned_picks(data)
+        if record.get("pick"))
     stale_symbols = set(data.get("stale_symbols") or [])
     symbols_html = ""
     for sec in data["symbols"]:
         tech = sec.get("technicals")
         ranked_groups = _rank_groups_for_display(sec["groups"], tech=tech)
-        section_stale = sec.get("features_stale") is True or sec.get("symbol") in stale_symbols
+        section_stale = (sec.get("features_stale") is True
+                         or sec.get("symbol") in stale_symbols)
         rendered_groups = []
         evaluation_date = str(data.get("evaluation_date") or data.get("data_as_of") or "")
         for rank, group in enumerate(ranked_groups, start=1):
             protected_indexes = frozenset(
-                index
-                for index, card in enumerate(group.get("cards", []))
-                if id(card) in protected_card_ids
-            )
-            rendered_groups.append(
-                _group_html(
-                    group,
-                    rank=rank,
-                    tech=tech,
-                    close=float(sec["close"]),
-                    protected_indexes=protected_indexes,
-                    collapse_enabled=not section_stale,
-                    symbol=str(sec.get("symbol", "")),
-                    evaluation_date=evaluation_date,
-                    event_view=event_view,
-                )
-            )
+                index for index, card in enumerate(group.get("cards", []))
+                if id(card) in protected_card_ids)
+            rendered_groups.append(_group_html(
+                group, rank=rank, tech=tech, close=float(sec["close"]),
+                protected_indexes=protected_indexes,
+                collapse_enabled=not section_stale, symbol=str(sec.get("symbol", "")),
+                evaluation_date=evaluation_date, event_view=event_view))
         groups = "".join(rendered_groups)
         rank_note = (
             '<div class="strategy-rank-note">'
@@ -5038,7 +4665,8 @@ def render(
                 "Top-5 shortlist.</div>"
             )
         display_only_html = (
-            f'<div><span class="status-badge unknown">{_esc(DISPLAY_ONLY_LABEL)}</span></div>'
+            f'<div><span class="status-badge unknown">'
+            f"{_esc(DISPLAY_ONLY_LABEL)}</span></div>"
             if sec.get("display_only")
             else ""
         )
@@ -5050,36 +4678,31 @@ def render(
         )
         status_labels, panel_open = _panel_status(sec, stale_symbols)
         status_html = "".join(
-            f'<span class="status-badge unknown">{_esc(label)}</span>' for label in status_labels
-        )
+            f'<span class="status-badge unknown">{_esc(label)}</span>'
+            for label in status_labels)
         open_attr = " open" if panel_open else ""
         event_failure = ""
         if isinstance(event_view, Mapping):
             raw_failures = event_view.get("failures", {})
-            failure_map = (
-                {str(key): str(value) for key, value in raw_failures.items()}
-                if isinstance(raw_failures, Mapping)
-                else {}
-            )
+            failure_map = ({str(key): str(value) for key, value in raw_failures.items()}
+                           if isinstance(raw_failures, Mapping) else {})
             failure = failure_map.get(sec.get("symbol")) or failure_map.get("__calendar__")
             if failure:
-                event_failure = (
-                    f'<div class="notice bad">EVENT LAYER FAILED — {_esc(failure)}</div>'
-                )
+                event_failure = (f'<div class="notice bad">EVENT LAYER FAILED — '
+                                 f'{_esc(failure)}</div>')
         implied = ""
         if isinstance(event_view, Mapping):
             raw_moves = event_view.get("implied_moves", {})
-            moves = (
-                {str(key): value for key, value in raw_moves.items()}
-                if isinstance(raw_moves, Mapping)
-                else {}
-            )
+            moves = ({str(key): value for key, value in raw_moves.items()}
+                     if isinstance(raw_moves, Mapping) else {})
             move = moves.get(str(sec.get("symbol", "")))
             if isinstance(move, Mapping):
                 if move.get("text") == "UNAVAILABLE":
-                    implied = f'<div class="notice watch">implied move UNAVAILABLE — {_esc(move.get("reason", "unknown"))}</div>'
+                    implied = (f'<div class="notice watch">implied move UNAVAILABLE — '
+                               f'{_esc(move.get("reason", "unknown"))}</div>')
                 elif move.get("text"):
-                    implied = f'<div class="label">implied move {_esc(move["text"])} · {_esc(move.get("method", ""))}</div>'
+                    implied = (f'<div class="label">implied move {_esc(move["text"])} · '
+                               f'{_esc(move.get("method", ""))}</div>')
         symbols_html += (
             f'<details class="panel symbol-panel"{open_attr}>'
             '<summary class="symbol-header"><div>'
@@ -5091,11 +4714,12 @@ def render(
             f'<div class="symbol-stat"><span>{_esc(_close_stat_label(sec))}'
             f"</span><strong>${sec['close']:,.2f}</strong></div>"
             f'<div class="symbol-stat"><span>As of</span><strong>'
-            f"{_esc(sec.get('as_of', '?'))}</strong></div>"
+            f'{_esc(sec.get("as_of", "?"))}</strong></div>'
             f'<div class="symbol-stat"><span>IV rank</span><strong>'
             f"{_esc(_iv_rank_text(sec))}</strong></div>"
             f"{_atm_iv_stat_html(sec)}{display_date_stat}</div></summary>"
-            f'<div class="symbol-body">{event_failure}{implied}{_elapsed_events_html(evaluation_date, event_view)}{_section_source_html(sec)}'
+            f'<div class="symbol-body">{event_failure}{implied}'
+            f'{_elapsed_events_html(evaluation_date, event_view)}{_section_source_html(sec)}'
             f"{_feature_unavailable_html(sec)}{stale_html}{tech_html}"
             f"{_symbol_context_html(sec['symbol'], context)}{rank_note}{groups}"
             f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
@@ -5121,9 +4745,8 @@ def render(
     age_html = _chain_age_html(data)
     hero_html = _hero_html(data, context, qm_context, event_view)
     pinned_html = _pinned_html(data, event_view)
-    event_css = (
-        _EVENT_STYLE if 'class="event-chip"' in (symbols_html + hero_html + pinned_html) else ""
-    )
+    event_css = (_EVENT_STYLE if 'class="event-chip"' in
+                 (symbols_html + hero_html + pinned_html) else "")
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -5183,7 +4806,8 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
         context_evidence = load_context_evidence(data.get("data_as_of") or "")
     copy_warning = None
     try:
-        copy_publication(source_root=Path(input_root).resolve(), destination_root=deployment_root)
+        copy_publication(source_root=Path(input_root).resolve(),
+                         destination_root=deployment_root)
     except (OSError, PublicationError) as exc:
         copy_warning = f"research-view copy/integrity failure: {exc}"
     context_evidence = _verify_context_evidence(context_evidence)
