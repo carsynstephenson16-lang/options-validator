@@ -155,3 +155,24 @@ counts.
   in `/tmp/repo-reconcile.err.log`, canonical digest dated today, and
   `git show origin/main:tools/anti-stranding/repo-reconcile | diff - ~/bin/repo-reconcile`
   empty.
+
+## Owner ruling appended 2026-08-26 (in-session): SEC-02 folds into this arc
+
+The 2026-08-25 repository audit's SEC-02 finding (the anti-stranding hooks'
+remote-ownership check is a raw URL-substring match — spoofable; and the
+DEPLOYED copies in `~/.githooks` / `~/bin` currently have NO ownership gate
+and NO gitleaks scan at all, worse than the repo copies) is routed INTO this
+brief's arc by owner ruling 2026-08-26 ("do not open new workstreams",
+"confirm fold into brief 24 sequencing"). Binding sequencing:
+
+1. FIRST land and deploy this brief (redeploying the repo copies is a strict
+   improvement — it restores the ownership gate and the gitleaks gate).
+2. THEN a small follow-on work package inside this arc replaces the
+   substring match with one strict canonical GitHub remote parser/owner
+   verifier shared by all hooks (including effective `pushurl`), with fake
+   remotes covering HTTPS/SSH/pushurl/spoofed-host forms asserting no push.
+   Evidence: audit finding SEC-02,
+   `reports/repository-audits/2026-08-25-options-validator/04-candidate-registry.csv`
+   (lands with PR #82).
+
+No standalone SEC-02 brief exists or should be created.

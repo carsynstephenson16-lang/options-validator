@@ -1,4 +1,4 @@
-# Adversarial review receipt — Codex briefs 25/26/27 (three rounds, 2026-08-25)
+# Adversarial review receipt — Codex briefs 25/26/27 (three adversarial rounds + parameter/Wave 0 addenda, 2026-08-25)
 
 **Date:** 2026-08-25
 **Reviewer:** independent Opus adversarial-review agent (spawned by the
@@ -126,6 +126,50 @@ All amendments applied same-day; owner-typed registration values remain
 owner-typed (the approvals are spoken selections of proposals, not typed
 registrations).
 
+## Wave 0 Brief 26 author repair pass (2026-08-25 — not an independent review)
+
+Codex audited rev 4 after the owner-directed hand-off commit `839ddb3` and
+reset Brief 26 to DRAFT rev 5 pending independent adversarial review. This
+section records author-found specification defects and repairs only; it does
+not issue a review verdict:
+
+- **W0-26-01 — invalid acceptance baseline:** rev 4 measured cards outside
+  closed `<details>`, but `_group_html` already nests every lane's cards under
+  closed group details @720a20e, making the baseline zero. Replaced with an
+  exact initial symbol/group-summary chrome metric plus a checked-in dry-run
+  partition receipt; removed the stale claim-register reference to a 50%
+  floor. The 30% value now applies only as a pre-build STOP gate to the
+  initial-chrome metric.
+- **W0-26-02 — unimplementable protection + nondeterministic fixpoint:** the
+  three-argument partition could not receive Top-5/pinned identities, and
+  "recompute until stable" left iteration discretion. Added an explicit
+  protected-ID union and an all-at-once retained-set fixpoint.
+- **W0-26-03 — overstated hidden-card disclosure:** "every measure" was false
+  because the rule intentionally compares only lane axes and shared badges.
+  The exact summary now names those limits.
+- **W0-26-04 — fail-visible panel contradiction:** Scope forbade collapsing
+  skipped states while WP-C opened only DATA_BLOCKED/stale panels. Skipped
+  panels now open; DATA_BLOCKED/malformed, stale, skipped, liquidity-warning,
+  and current summary labels have deterministic sources and precedence.
+- **W0-26-05 — incomplete sidecar contract:** added an exact CLI/output path,
+  JSON types/nullability/invariants, skipped-row behavior, strict dashboard
+  validation, and explicit loader-to-pure-render injection.
+- **W0-26-06 — impossible two-rename atomicity claim:** two adjacent file
+  renames are not a set-atomic commit. Replaced them with a generation
+  directory and one atomically renamed status pointer; added phase-failure
+  acceptance tests.
+- **W0-26-07 — contradictory non-ops sync gate:** "status absent" could never
+  also take the "local newer" branch. Sync now compares valid published
+  timestamps whenever roots differ, stages the referenced generation, and
+  commits the local status pointer last.
+- **W0-26-08 — stale hand-off/process language:** reset status to DRAFT after
+  material repairs and required human-language Top-3 prose/test names to
+  become Top-5/Top-N while preserving stable `top3_*` identities. Updated the
+  direct Brief-25 interlock to reflect that D-2 (annotate all five derived
+  picks, fail closed on plan-usage shortfall) is RULED, not still open.
+
+Independent reviewer judgment is still required for the rev-4
+liquidity-panel decision and W0-26-01..08 before canonical re-hand-off.
 ## Wave 0 focused independent review — Brief 26 rev 5
 
 **Date:** 2026-08-25
