@@ -481,7 +481,7 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
 
     try:
         schwab_chain_manifest.verify_session(as_of, universe, chain_dir, manifest_path, path)
-    except (schwab_chain_manifest.SchwabChainManifestError, OSError) as exc:
+    except (schwab_chain_manifest.SchwabChainManifestError, OSError, ValueError) as exc:
         return HealthRow(
             "Schwab preclose",
             HealthStatus.FAILED,

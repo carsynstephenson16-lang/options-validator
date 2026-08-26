@@ -277,6 +277,18 @@ class JobHealthDigestTests(unittest.TestCase):
         self.assertEqual(row.status, HealthStatus.FAILED)
         self.assertIn("manifest verification failed", row.reason)
 
+    def test_schwab_nonfinite_manifest_value_is_failed(self):
+        self._install_all_ok()
+        manifest = self.root / f"reports/schwab_chains/{AS_OF}/manifest.json"
+        payload = json.loads(manifest.read_text())
+        payload["invalid_nonfinite"] = float("nan")
+        manifest.write_text(json.dumps(payload))
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertIn("manifest verification failed", row.reason)
+
     def test_schwab_manifest_symlink_cannot_escape_root(self):
         self._install_all_ok()
         external_dir = Path(tempfile.mkdtemp())
