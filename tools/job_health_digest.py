@@ -307,6 +307,13 @@ def _intraday_capture(root: Path, as_of: str, tag: str) -> HealthRow:
             "receipt_kind mismatch: expected intraday_capture/v1",
             relative,
         )
+    if payload.get("force") is not False:
+        return HealthRow(
+            job,
+            HealthStatus.FAILED,
+            "force must be false for a scheduled capture",
+            relative,
+        )
     if payload.get("session_tag") != tag:
         return HealthRow(
             job,

@@ -212,6 +212,7 @@ class JobHealthDigestTests(unittest.TestCase):
         original = json.loads(path.read_text())
         cases = (
             ("receipt_kind", "intraday_capture/v0", "receipt_kind mismatch"),
+            ("force", True, "force must be false"),
             ("session_tag", "preclose", "session_tag mismatch"),
             ("scheduled_et", "15:45", "scheduled_et mismatch"),
             ("captured_at_utc", "2026-08-20T13:35:00+00:00", "session mismatch"),
