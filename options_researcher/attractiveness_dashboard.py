@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import config
+from options_researcher import display_rank
 
 if TYPE_CHECKING:
     from options_researcher.hypothesis_evidence import SymbolEvidence
@@ -214,8 +215,8 @@ def scenario_rows(card: dict, structure: str, *, close: float,
 
 _BBB_LABEL = "scenario framing from realized vol — not a forecast"
 
-_SELL_LANES = ("put", "cc", "pmcc")
-_BUY_LANES = ("leaps", "long_call")
+_SELL_LANES = display_rank.SELL_LANES
+_BUY_LANES = display_rank.BUY_LANES
 
 
 def bbb_rows(card: dict, structure: str, *, close: float,
@@ -612,25 +613,8 @@ def _display_score(card: dict, kind: str, tech: dict | None) -> int:
 
 
 def _display_quality_key(card: dict, kind: str, tech: dict | None) -> tuple:
-    """Lexicographic, lane-size-neutral quality key; better sorts first.
-
-    Levels: GREEN fraction (not the raw count — seller lanes carry 7
-    gradeable badges vs 3 on buyer lanes, so counts are not comparable
-    across lanes), then lane leadership, then technical confluence. No
-    weights: the levels are strictly ordered, never summed.
-    """
-    grades = card.get("grades") or {}
-    greens = sum(1 for value in grades.values() if value == "GREEN")
-    frac = greens / len(grades) if grades else 0.0
-    leader = 1 if card.get("rank_leader") else 0
-    tech_conf = 0
-    if tech:
-        if kind in _BUY_LANES and (tech.get("trend") == "up"
-                                   or tech.get("breakout_20d")):
-            tech_conf = 1
-        elif kind in _SELL_LANES and tech.get("ma_posture") != "below_all":
-            tech_conf = 1
-    return (-frac, -leader, -tech_conf)
+    """Compatibility wrapper around the shared frozen display-quality key."""
+    return display_rank.display_quality_key(card, kind, tech)
 
 
 def _display_policy_tier(card: dict) -> int:
@@ -829,55 +813,126 @@ def _panel_status(section: Mapping[str, object],
     return labels, opened
 
 
-def load_context(as_of: str, base_dir: str = "reports/attractiveness_context"
-                 ) -> tuple[dict | None, str | None]:
-    """Load the research-context JSON for a data as-of date.
-
-    Exact match <base_dir>/<as_of>.json first; else the newest dated file
-    <= as_of with a stale warning; else (None, None). Malformed/unreadable
-    JSON -> (None, warning). Never fabricates content."""
-    import glob
+def load_context_evidence(
+    as_of: str, base_dir: str = "reports/attractiveness_context"
+) -> dict[str, object]:
+    """Read, hash, and parse one research-context byte snapshot."""
+    import hashlib
     import json
-    import re
-    from datetime import date
 
+    unavailable = {
+        "state": "unavailable", "context": None, "warning": None,
+        "source_path": None, "sha256": None,
+    }
+    if _valid_iso_date(as_of) is None:
+        return unavailable
+    root = Path(base_dir)
+    exact = root / f"{as_of}.json"
+    if exact.exists():
+        selected, selected_date = exact, as_of
+    else:
+        candidates = sorted(
+            (path, path.stem)
+            for path in root.glob("*.json")
+            if _valid_iso_date(path.stem) is not None and path.stem <= as_of
+        )
+        if not candidates:
+            return unavailable
+        selected, selected_date = candidates[-1]
+    unresolved = selected
     try:
-        date.fromisoformat(str(as_of))
-    except (TypeError, ValueError):
-        return None, None
+        context_root = root.resolve(strict=True)
+        selected = unresolved.resolve(strict=True)
+        selected.relative_to(context_root)
+    except ValueError:
+        return {
+            "state": "integrity_failed",
+            "context": None,
+            "warning": (
+                f"research context file {unresolved.name} escapes context root "
+                "— ignoring it"
+            ),
+            "source_path": str(unresolved.absolute()),
+            "sha256": None,
+        }
+    except (OSError, RuntimeError) as exc:
+        return {
+            "state": "integrity_failed",
+            "context": None,
+            "warning": (
+                f"research context file {unresolved.name} is unreadable "
+                f"({exc.__class__.__name__}) — ignoring it"
+            ),
+            "source_path": str(unresolved.absolute()),
+            "sha256": None,
+        }
+    try:
+        raw = selected.read_bytes()
+        context = json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return {
+            "state": "integrity_failed", "context": None,
+            "warning": (f"research context file {selected.name} is unreadable "
+                        f"({exc.__class__.__name__}) — ignoring it"),
+            "source_path": str(selected), "sha256": None,
+        }
+    digest = hashlib.sha256(raw).hexdigest()
+    if not isinstance(context, dict):
+        return {
+            "state": "integrity_failed", "context": None,
+            "warning": (f"research context file {selected.name} is not a JSON "
+                        "object — ignoring it"),
+            "source_path": str(selected), "sha256": digest,
+        }
+    warning = None
+    if selected_date != as_of:
+        warning = (
+            f"company-research annotations are from {selected_date} "
+            f"(stale vs data as-of {as_of}; QM status has its own "
+            "exact-date check)"
+        )
+    return {
+        "state": "loaded", "context": context, "warning": warning,
+        "source_path": str(selected), "sha256": digest,
+    }
 
-    def _read(path: str) -> tuple[dict | None, str | None]:
-        try:
-            with open(path) as f:
-                ctx = json.load(f)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
-            return None, (f"research context file {os.path.basename(path)} "
-                          f"is unreadable ({e.__class__.__name__}) — "
-                          "ignoring it")
-        if not isinstance(ctx, dict):
-            return None, (f"research context file {os.path.basename(path)} "
-                          "is not a JSON object — ignoring it")
-        return ctx, None
 
-    exact = os.path.join(base_dir, f"{as_of}.json")
-    if os.path.exists(exact):
-        return _read(exact)
+def _verify_context_evidence(evidence: Mapping[str, object]) -> dict[str, object]:
+    """Reject source drift without reparsing a different context snapshot."""
+    result = dict(evidence)
+    if result.get("state") != "loaded":
+        return result
+    import hashlib
 
-    dated = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
-    stems = sorted(
-        m.group(1)
-        for m in (dated.match(os.path.basename(p))
-                  for p in glob.glob(os.path.join(base_dir, "*.json")))
-        if m and m.group(1) <= as_of)
-    if not stems:
-        return None, None
-    newest = stems[-1]
-    ctx, warn = _read(os.path.join(base_dir, f"{newest}.json"))
-    if ctx is None:
-        return None, warn
-    return ctx, (f"company-research annotations are from {newest} "
-                 f"(stale vs data as-of {as_of}; QM status has its own "
-                 "exact-date check)")
+    source = result.get("source_path")
+    expected = result.get("sha256")
+    try:
+        raw = Path(str(source)).read_bytes()
+    except OSError:
+        raw = None
+    if (
+        raw is None
+        or not isinstance(expected, str)
+        or hashlib.sha256(raw).hexdigest() != expected
+    ):
+        result.update({
+            "state": "integrity_failed", "context": None,
+            "warning": "research context integrity failed (hash drift after load)",
+        })
+    return result
+
+
+def load_context(
+    as_of: str, base_dir: str = "reports/attractiveness_context"
+) -> tuple[dict | None, str | None]:
+    """Compatibility view over the evidence-bearing context loader."""
+    evidence = load_context_evidence(as_of, base_dir)
+    context = evidence.get("context")
+    warning = evidence.get("warning")
+    return (
+        context if isinstance(context, dict) else None,
+        warning if isinstance(warning, str) else None,
+    )
 
 
 def _headline(symbol: str, kind: str, card: dict) -> str:
@@ -2865,9 +2920,9 @@ def _prov_tag(context: dict | None) -> str:
     return f'<span class="prov">{_esc(prov)}</span>'
 
 
-def _research_annotation_map(
+def _research_annotation_result(
         picks: list[dict], context: dict | None
-        ) -> tuple[dict[str, Mapping[str, object]], str | None]:
+        ) -> tuple[dict[str, Mapping[str, object]], str | None, bool]:
     """Validate advisory annotations against the deterministic hero IDs.
 
     The context JSON may explain a current candidate, but it cannot add one or
@@ -2890,13 +2945,13 @@ def _research_annotation_map(
 
     raw = (context or {}).get("annotations")
     if raw is None:
-        return {}, None
+        return {}, None, True
     if not isinstance(raw, dict):
-        return {}, "research annotations are not an object — ignoring them"
+        return {}, "research annotations are not an object — ignoring them", False
     keys = [p["card"].get("top3_snapshot", {}).get("candidate_id")
             for p in picks]
     if any(not isinstance(key, str) for key in keys):
-        return {}, "candidate identities are invalid — research annotations ignored"
+        return {}, "candidate identities are invalid — research annotations ignored", False
     current_keys = frozenset(keys)
     current_annotations = {key: value for key, value in raw.items()
                            if key in current_keys}
@@ -2904,14 +2959,22 @@ def _research_annotation_map(
     try:
         normalized = normalize_research_annotations(keys, current_annotations)
     except AnnotationValidationError as error:
-        return {}, f"research annotations invalid ({error.code}) — ignoring them"
+        return {}, f"research annotations invalid ({error.code}) — ignoring them", False
     notice = None
     if dropped:
         notice = (f"{len(dropped)} research annotation(s) do not match any "
                   f"card on today's board and were not rendered "
                   f"({', '.join(dropped)}) — the research context is stale "
                   "relative to the current picks, or a key is mistyped")
-    return dict(normalized), notice
+    return dict(normalized), notice, True
+
+
+def _research_annotation_map(
+        picks: list[dict], context: dict | None
+        ) -> tuple[dict[str, Mapping[str, object]], str | None]:
+    """Compatibility wrapper retaining the existing two-value contract."""
+    normalized, warning, _integrity_ok = _research_annotation_result(picks, context)
+    return normalized, warning
 
 
 def _research_html(annotation: Mapping[str, object] | None, *,
@@ -3021,6 +3084,44 @@ def _research_freshness_chip(
     )
 
 
+def _research_context_evidence_chip(
+    data: Mapping[str, object],
+    context: Mapping[str, object] | None,
+    evidence: Mapping[str, object],
+    *,
+    annotation_integrity: bool,
+) -> str:
+    """Classify only the research bytes injected into this board build."""
+    board_as_of = _valid_iso_date(data.get("data_as_of"))
+    context_as_of = _valid_iso_date(context.get("as_of")) if context else None
+    evidence_state = evidence.get("state")
+    if evidence_state == "unavailable":
+        state, context_as_of = "UNAVAILABLE", None
+    elif evidence_state != "loaded":
+        state, context_as_of = "INTEGRITY_FAILED", None
+    elif (
+        not isinstance(context, Mapping)
+        or evidence.get("context") != context
+        or not annotation_integrity
+        or board_as_of is None
+        or context_as_of is None
+        or context_as_of > board_as_of
+    ):
+        state = "INTEGRITY_FAILED"
+        context_as_of = None if context_as_of is None or context_as_of > (board_as_of or "") else context_as_of
+    elif context_as_of == board_as_of:
+        state = "EXACT"
+    else:
+        state = "STALE"
+    css = "ok" if state == "EXACT" else "warn" if state == "STALE" else "blocked"
+    return (
+        f'<span class="meta-chip freshness-chip {css}"><strong>Research</strong> '
+        f"Research context {state} — context as of "
+        f"{_esc(context_as_of or 'unavailable')}; board as of "
+        f"{_esc(board_as_of or 'unavailable')}.</span>"
+    )
+
+
 def _qm_freshness_chip(qm_context: Mapping[str, object] | None) -> str:
     context = qm_context if isinstance(qm_context, Mapping) else {}
     study = context.get("study")
@@ -3098,6 +3199,9 @@ def _freshness_html(
     data: Mapping[str, object], context: Mapping[str, object] | None,
     qm_context: Mapping[str, object] | None,
     research_views_status: Mapping[str, object] | None,
+    context_evidence: Mapping[str, object] | None = None,
+    *,
+    annotation_integrity: bool = True,
 ) -> str:
     """One injected-data-only summary strip; no cache scan belongs in render."""
     from options_researcher.schwab_chain_view import CHAIN_SOURCE, THETADATA_CHAIN_SOURCE
@@ -3119,7 +3223,13 @@ def _freshness_html(
     chips.append(_underlying_closes_freshness_chip(
         data.get("underlying_closes_freshness"), data.get("evaluation_date")
     ))
-    chips.append(_research_freshness_chip(context, data.get("evaluation_date")))
+    if context_evidence is None:
+        chips.append(_research_freshness_chip(context, data.get("evaluation_date")))
+    else:
+        chips.append(_research_context_evidence_chip(
+            data, context, context_evidence,
+            annotation_integrity=annotation_integrity,
+        ))
     chips.append(_qm_freshness_chip(qm_context))
     chips.append(_composite_freshness_chip(data.get("composite_signals")))
     chips.append(_experiments_views_freshness_chip(research_views_status))
@@ -3714,8 +3824,103 @@ def _hero_html(
 ) -> str:
     return (
         _original_hero_html(data, context, qm_context)
+        + _context_lane_html(data)
         + _qm_movement_lane_html(data, qm_context)
         + _qm_hero_html(data, context, qm_context)
+    )
+
+
+_CONTEXT_LANE_DISCLAIMER = (
+    "Experimental re-ordering by market context. The rule-based list above is "
+    "the registered baseline. This lane is display-only and carries no verdict "
+    "or trade authority; once the pick tracker is live its picks will be tracked "
+    "descriptively against the baseline."
+)
+
+
+def _context_lane_html(data: dict) -> str:
+    """Render the owner-gated second ranking lane, or nothing while disabled."""
+    if not config.CONTEXT_LANE_ENABLED:
+        return ""
+    from options_researcher.context_lane import rank_context_lane
+
+    try:
+        pool = _admissible_pick_pool(data, include_csp_watch=True)
+        rows = rank_context_lane(
+            pool,
+            data.get("composite_signals"),
+            board_as_of=str(data.get("data_as_of") or "unavailable"),
+            n=config.PICK_TOP_N,
+        )
+    except Exception as exc:  # explicitly fail-visible; never hide scorer failure
+        return (
+            '<section class="panel hero context-lane">'
+            '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
+            f'<div class="notice bad">CONTEXT LANE FAILED — {_esc(exc.__class__.__name__)}</div>'
+            f'<p class="header-sub">{_esc(_CONTEXT_LANE_DISCLAIMER)}</p></section>'
+        )
+
+    cards = []
+    selected_by_id: dict[str, Mapping[str, object]] = {}
+    for slot, row in enumerate(rows, start=1):
+        candidate_id = str(row["candidate_id"])
+        selected_by_id[candidate_id] = row
+        pick = row["pick"]
+        card = pick["card"]
+        reason = str(row["context_reason"])
+        blocked = reason == "BLOCKED"
+        status_class = "bad" if blocked else "watch" if reason in {
+            "VETOED", "DIRECTION_MISMATCH"
+        } else "good"
+        aligned = row.get("aligned_angles")
+        aligned_text = (
+            "Aligned angles: " + ", ".join(str(name) for name in aligned)
+            if isinstance(aligned, (list, tuple)) and aligned
+            else f"Context reason: {reason}"
+        )
+        cards.append(
+            f'<div class="hero-card {status_class}" '
+            f'data-context-symbol="{_esc(str(row["symbol"]))}">'
+            f'<div class="slot-label"><span>Context pick {slot}</span>'
+            f'<span class="policy-status {status_class}">{_esc(reason)}</span></div>'
+            f'<div class="party-name">{_esc(str(card.get("headline", candidate_id)))}</div>'
+            f'<div class="label">{_esc(aligned_text)} · context term '
+            f'{_esc(row["context_term"])} · context max as-of '
+            f'{_esc(row.get("context_max_asof") or "unavailable")} · board as-of '
+            f'{_esc(row["board_as_of"])}</div>'
+            f'<details><summary>Context score audit</summary><div class="label">'
+            f'{_esc(candidate_id)} · {_esc(row["score"])}</div></details></div>'
+        )
+    for slot in range(len(rows) + 1, config.PICK_TOP_N + 1):
+        cards.append(
+            '<div class="hero-card unknown empty-slot">'
+            f'<div class="slot-label"><span>Context pick {slot}</span>'
+            '<span class="policy-status unknown">? OPEN</span></div>'
+            '<h3>No qualifying contract</h3>'
+            '<div class="label">The full admissible pool did not supply another symbol.</div>'
+            '</div>'
+        )
+
+    diagnostics = []
+    for pick in select_top_picks(data, include_csp_watch=True):
+        symbol = str(pick["symbol"])
+        snapshot = pick["card"].get("top3_snapshot")
+        candidate_id = snapshot.get("candidate_id") if isinstance(snapshot, Mapping) else None
+        row = selected_by_id.get(candidate_id) if isinstance(candidate_id, str) else None
+        reason = str(row["context_reason"]) if row is not None else "DISPLACED"
+        diagnostics.append(
+            f'<span class="status-badge unknown" data-diagnostic-symbol="'
+            f'{_esc(symbol)}">{_esc(symbol)} — {_esc(reason)}</span>'
+        )
+    return (
+        '<section class="panel hero context-lane">'
+        '<div class="section-header"><div>'
+        '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
+        '<h2>Context-aware Top 5 — full admitted pool</h2>'
+        f'<p class="header-sub">{_esc(_CONTEXT_LANE_DISCLAIMER)}</p></div></div>'
+        f'<div class="hero-grid">{"".join(cards)}</div>'
+        '<div class="label">Frozen-shortlist comparison diagnostics</div>'
+        f'<div class="party-badges">{"".join(diagnostics)}</div></section>'
     )
 
 
@@ -4251,6 +4456,7 @@ def render(
     *,
     context: dict | None = None,
     context_warning: str | None = None,
+    context_evidence: Mapping[str, object] | None = None,
     qm_context: Mapping[str, object] | None = None,
     research_views_status: Mapping[str, object] | None = None,
 ) -> str:
@@ -4264,7 +4470,7 @@ def render(
     per-symbol panels (card grid)."""
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
     picks_for_research = select_top_picks(data, include_csp_watch=True)
-    _annotations, annotation_notice = _research_annotation_map(
+    _annotations, annotation_notice, annotation_integrity = _research_annotation_result(
         picks_for_research, context
     )
     protected_card_ids = {id(pick["card"])
@@ -4377,7 +4583,7 @@ def render(
         f"</strong> {_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header><main class="page-body">'
-        f"{_freshness_html(data, context, qm_context, research_views_status)}"
+        f"{_freshness_html(data, context, qm_context, research_views_status, context_evidence, annotation_integrity=annotation_integrity)}"
         f"{age_html}"
         f"{warn_html}"
         f"{_blocked_html(data.get('blocked') or [])}"
@@ -4418,13 +4624,18 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     with _input_root_cwd() as input_root:
         data = assemble(**assemble_kwargs)
         qm_context = load_qm_context(data.get("data_as_of") or "")
+        context_evidence = load_context_evidence(data.get("data_as_of") or "")
     copy_warning = None
     try:
         copy_publication(source_root=Path(input_root).resolve(),
                          destination_root=deployment_root)
     except (OSError, PublicationError) as exc:
         copy_warning = f"research-view copy/integrity failure: {exc}"
-    context, warning = load_context(data.get("data_as_of") or "")
+    context_evidence = _verify_context_evidence(context_evidence)
+    context_value = context_evidence.get("context")
+    context = context_value if isinstance(context_value, dict) else None
+    warning_value = context_evidence.get("warning")
+    warning = warning_value if isinstance(warning_value, str) else None
     research_views_status = load_research_views_status()
     if copy_warning:
         research_views_status["copy_warning"] = copy_warning
@@ -4432,6 +4643,7 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
         data,
         context=context,
         context_warning=warning,
+        context_evidence=(context_evidence if config.CONTEXT_LANE_ENABLED else None),
         qm_context=qm_context,
         research_views_status=research_views_status,
     )
