@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import io
 import json
+import os
 import re
 from contextlib import redirect_stdout
 from dataclasses import dataclass
@@ -290,11 +292,34 @@ def _intraday_capture(root: Path, as_of: str, tag: str) -> HealthRow:
     payload, error = _read_object(path)
     if error is not None or payload is None:
         return HealthRow(job, HealthStatus.FAILED, error or "invalid receipt", relative)
-    if _receipt_timestamp(payload) is None:
+    timestamp = _receipt_timestamp(payload)
+    if timestamp is None:
         return HealthRow(
             job,
             HealthStatus.FAILED,
             "invalid captured_at_utc",
+            relative,
+        )
+    if payload.get("session_tag") != tag:
+        return HealthRow(
+            job,
+            HealthStatus.FAILED,
+            f"session_tag mismatch: expected {tag}",
+            relative,
+        )
+    scheduled_et = config.INTRADAY_CAPTURE_TIMES[tag]
+    if payload.get("scheduled_et") != scheduled_et:
+        return HealthRow(
+            job,
+            HealthStatus.FAILED,
+            f"scheduled_et mismatch: expected {scheduled_et}",
+            relative,
+        )
+    if timestamp.astimezone(_NY_TZ).date().isoformat() != as_of:
+        return HealthRow(
+            job,
+            HealthStatus.FAILED,
+            f"session mismatch: expected {as_of}",
             relative,
         )
     universe = payload.get("universe")
@@ -671,6 +696,11 @@ def write_digest(
         ):
             raise ValueError(f"--out-dir resolves inside {label} for a different checkout")
     output = resolved_out_dir / f"digest_{as_of}.md"
+    if output.is_symlink():
+        raise ValueError("digest output path must not be a symlink")
+    resolved_output = output.resolve(strict=False)
+    if resolved_output.parent != resolved_out_dir:
+        raise ValueError("digest output path resolves outside --out-dir")
     digest = render_digest(
         as_of,
         collect_health(
@@ -681,7 +711,15 @@ def write_digest(
         ),
     )
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(digest, encoding="utf-8")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(output, flags, 0o666)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError("digest output path must not be a symlink") from exc
+        raise
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        stream.write(digest)
     print(digest, end="")
     return output
 

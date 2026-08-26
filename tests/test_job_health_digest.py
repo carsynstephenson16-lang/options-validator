@@ -206,6 +206,24 @@ class JobHealthDigestTests(unittest.TestCase):
             ],
         )
 
+    def test_intraday_tag_receipt_identity_must_match_expected_slot(self):
+        self._install_all_ok()
+        path = self.root / f"reports/intraday_capture/{AS_OF}/open.json"
+        original = json.loads(path.read_text())
+        cases = (
+            ("session_tag", "preclose", "session_tag mismatch"),
+            ("scheduled_et", "15:45", "scheduled_et mismatch"),
+            ("captured_at_utc", "2026-08-20T13:35:00+00:00", "session mismatch"),
+        )
+        for field, value, reason in cases:
+            with self.subTest(field=field):
+                path.write_text(json.dumps({**original, field: value}))
+
+                row = self._by_job(collect_health(self.root, AS_OF))["Intraday capture (open)"]
+
+                self.assertEqual(row.status, HealthStatus.FAILED)
+                self.assertIn(reason, row.reason)
+
     def test_schwab_preclose_requires_unforced_launchd_receipt(self):
         self._install_all_ok()
         path = self.root / f"reports/schwab_chains/{AS_OF}/preclose.json"
@@ -776,6 +794,40 @@ class JobHealthDigestTests(unittest.TestCase):
                     completed.stderr,
                 )
                 self.assertFalse((output_dir / f"digest_{AS_OF}.md").exists())
+
+    def test_cli_rejects_symlinked_digest_target_without_following_it(self):
+        self._install_all_ok()
+        output_dir = Path(tempfile.mkdtemp())
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, output_dir, True)
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        external = external_dir / "outside.md"
+        external.write_text("preserve me\n")
+        (output_dir / f"digest_{AS_OF}.md").symlink_to(external)
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tools.job_health_digest",
+                "--root",
+                str(self.root),
+                "--research-root",
+                str(self.root),
+                "--out-dir",
+                str(output_dir),
+                "--as-of",
+                AS_OF,
+            ],
+            cwd=REPO_ROOT,
+            env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("digest output path must not be a symlink", completed.stderr)
+        self.assertEqual(external.read_text(), "preserve me\n")
 
     def test_cli_prints_digest_and_writes_only_under_invoking_cwd(self):
         self._install_all_ok()
