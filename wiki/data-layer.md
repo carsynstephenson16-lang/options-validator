@@ -46,13 +46,25 @@ H7 watchlist — they were chosen already knowing the 2023+ AI boom
 registered since H5 pre-declares its own validation design instead (usually
 a forward paper window — [[hypotheses]]).
 
-## Remote-MDDS keyed adapter path (not a local terminal)
-The live data path, `data/thetadata_adapter.py`, resolves
-`THETADATA_API_KEY` from `.env` and calls ThetaData's remote market-data
-service (MDDS) directly over HTTP — **no local ThetaTerminal process, no
-port**; the `127.0.0.1:25503` entry still in `.env.example` is the legacy
-path, confirmed retired at `tools/daily_ritual.sh:56-61`. Subscription
-confirmed through 2026-11-30 (`THETADATA_RENEWAL_EXECUTED` fact).
+## Provider status (as of 2026-08-26): ThetaData retired, Schwab captures
+ThetaData acquisition is **DISABLED** — the subscription ended ~2026-07-29
+and `data/provider_policy.py` holds a non-overridable refusal; only cached
+reads remain (the parquet cache is the permanent record). The remote-MDDS
+adapter (`data/thetadata_adapter.py`) survives for cached-read compatibility
+only; this page's earlier "subscription confirmed through 2026-11-30" claim
+described the pre-July state and was stale. The current capture path is the
+**Schwab 15:45 ET preclose lane**: exact-session chain packages land in
+`.cache/schwab_chains/` (gitignored, unrepurchasable — currently an
+inventory-guard protection GAP; brief 29 is closing it but is BLOCKED
+pending re-review as of 2026-08-26) with tracked manifests/receipts
+under `reports/schwab_chains/` (capture
+`options_researcher/schwab_chain_capture.py`, verifier
+`tools/schwab_chain_manifest.py`). Operational sharp edge: the Schwab OAuth
+refresh token dies a hard **7 days after creation** (Official-source —
+Schwab developer documentation mirrored in the diagnosis report; separately
+Test-verified by the 2026-08 production expiry observation; refreshing an
+access token does NOT reset the clock) — weekend re-auth procedure in
+`reports/2026-08-12-schwab-auth-diagnosis.md`.
 
 ## Supporting modules
 `data/atomic_io.py` (atomic parquet/JSON writes, tmp file + `os.replace`,

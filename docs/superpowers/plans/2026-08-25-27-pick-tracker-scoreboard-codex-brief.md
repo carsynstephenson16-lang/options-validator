@@ -3,9 +3,9 @@
 **Date:** 2026-08-25 (rev 5, Wave 0 full-PR audit)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 5 — not authorized for hand-off. Round-3 fixes and the parameter amendments are incorporated, but Brief 27 must be rebased/reverified after Briefs 26 and 25 land and then receive its own fresh written independent PASS. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
+**Status:** DRAFT rev 5 — not authorized for hand-off. Round-3 fixes and the parameter amendments are incorporated, but Brief 27 must be rebased/reverified after Briefs 26, 25, and 28 land and then receive its own fresh written independent PASS. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
 **Duration honesty (rev-2 finding N-6):** the owner asked for "two months." Two months is the ENTRY window (proposed 42 sessions, owner-typed at registration). Positions entered late in the window then run out their mark schedules — a LEAPS pick entered on the final day reaches its longest registered mark ~126 sessions (≈6 months) later. The scoreboard reports progressively from week one; the FINAL settled answer for every lane arrives months after the entry window closes. Say this to the owner plainly; do not sell a 6-month tail as a 2-month study.
-**Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. Landing order is binding: **brief 26, then brief 25, then this brief.**
+**Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. Canonical landing order is binding: **brief 26, then brief 25, then brief 28, then this brief, then brief 30.** This ordering-only correction does not waive this brief's required post-Brief-28 rebase/reverification and fresh independent PASS.
 **Owner directive source:** Carsyn in-session 2026-08-25 ("each day the system should thoroughly run through each experiment and different standards and choose the top 5 for the day and track its picks for 2 months to see if it actually has been picking correctly") — spoken, not owner-typed.
 
 ## Why this exists (plain language)
@@ -324,6 +324,19 @@ path is `.tmp`).
 2. Add `reports/pick_tracker` to `DATA_TIER_PATHS`
    (`tools/daily_ritual.sh:535-536`) and to
    `tools/irreplaceable_data_guard.py` namespaces.
+   *(Coordination flag, 2026-08-26 merge resolution — for this brief's
+   mandatory fresh review: the guard-namespace half of this step is
+   DISPUTED. Brief-29 round-1 review findings A1/B5 argue a git-tracked,
+   ritual-grown directory must not carry an inventory floor — the main
+   checkout routinely sits on branches lagging origin/main, a floor recorded
+   from main then false-alarms, and a guard failure halts the daily
+   reconciler for the whole repo. The brief-29 blocking receipt
+   (`reports/2026-08-26-brief-29-independent-review-receipt.md`, findings 4
+   and 6) records the counter-dependency (existing guard tests and
+   `h7_forward_backup` consume `DEFAULT_NAMESPACES`). Resolve this step
+   against brief 29's rev-3 outcome before hand-off; do not implement the
+   guard addition as written without that adjudication. The
+   `DATA_TIER_PATHS` half is undisputed.)*
 3. **Owner-run ops-sync handoff (explicit; worker MUST NOT execute):** the
    implementation draft PR includes a post-merge checklist for the owner or a
    separately authorized operator. Only after owner merge may that operator
