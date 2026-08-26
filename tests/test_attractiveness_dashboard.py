@@ -1513,6 +1513,140 @@ class LoadContextTests(unittest.TestCase):
     def test_non_date_as_of_returns_none_none(self):
         self.assertEqual(ad.load_context("no cached data"), (None, None))
 
+    def test_evidence_loader_hashes_the_same_single_byte_snapshot_it_parses(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        raw = b'{"as_of":"2026-07-15","annotations":{}}\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "2026-07-15.json"
+            path.write_bytes(raw)
+            with mock.patch.object(Path, "read_bytes", return_value=raw) as read:
+                evidence = ad.load_context_evidence("2026-07-15", base_dir=tmp)
+
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(evidence["context"]["as_of"], "2026-07-15")
+        self.assertEqual(evidence["sha256"], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(evidence["source_path"], str(path.resolve()))
+
+    def test_evidence_hash_drift_fails_closed_without_reparsing_new_bytes(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "2026-07-15.json"
+            path.write_text('{"as_of":"2026-07-15","annotations":{}}\n')
+            evidence = ad.load_context_evidence("2026-07-15", base_dir=tmp)
+            path.write_text('{"as_of":"2026-07-14","annotations":{}}\n')
+
+            verified = ad._verify_context_evidence(evidence)
+
+        self.assertEqual(verified["state"], "integrity_failed")
+        self.assertIsNone(verified["context"])
+        self.assertIn("hash drift", verified["warning"])
+
+    def test_evidence_loader_rejects_a_dated_symlink_outside_context_root(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "context"
+            root.mkdir()
+            outside = Path(tmp) / "outside.json"
+            outside.write_text('{"as_of":"2026-07-15","annotations":{}}\n')
+            (root / "2026-07-15.json").symlink_to(outside)
+
+            evidence = ad.load_context_evidence("2026-07-15", base_dir=str(root))
+
+        self.assertEqual(evidence["state"], "integrity_failed")
+        self.assertIsNone(evidence["context"])
+        self.assertIn("escapes context root", evidence["warning"])
+
+    def test_evidence_loader_classifies_a_symlink_loop_as_integrity_failed(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "context"
+            root.mkdir()
+            loop = root / "2026-07-15.json"
+            loop.symlink_to(loop.name)
+
+            evidence = ad.load_context_evidence("2026-07-15", base_dir=str(root))
+
+        self.assertEqual(evidence["state"], "integrity_failed")
+        self.assertIsNone(evidence["context"])
+        self.assertIn("unreadable", evidence["warning"])
+
+    def test_rendered_context_freshness_has_all_evidence_derived_states(self):
+        data = {
+            "symbols": [], "blocked": [], "data_as_of": "2026-07-15",
+            "evaluation_date": "2026-08-26", "composite_signals": [],
+            "family_evidence": [],
+            "underlying_closes_freshness": {
+                "state": "unavailable", "detail": "fixture"},
+        }
+
+        def chip(context, evidence):
+            html = ad.render(data, context=context, context_evidence=evidence)
+            start = html.index("Research context")
+            return html[start:html.index("</span>", start)]
+
+        exact = {"as_of": "2026-07-15", "annotations": {}}
+        stale = {"as_of": "2026-07-14", "annotations": {}}
+        loaded = {"state": "loaded", "source_path": "/fixture/context.json",
+                  "sha256": "a" * 64}
+        self.assertIn(
+            "Research context EXACT — context as of 2026-07-15; board as of 2026-07-15.",
+            chip(exact, {**loaded, "context": exact}),
+        )
+        self.assertIn(
+            "Research context STALE — context as of 2026-07-14; board as of 2026-07-15.",
+            chip(stale, {**loaded, "context": stale}),
+        )
+        self.assertIn(
+            "Research context UNAVAILABLE — context as of unavailable; board as of 2026-07-15.",
+            chip(None, {"state": "unavailable", "context": None}),
+        )
+        self.assertIn(
+            "Research context INTEGRITY_FAILED — context as of unavailable; board as of 2026-07-15.",
+            chip(None, {"state": "integrity_failed", "context": None}),
+        )
+        future = {"as_of": "2026-07-16", "annotations": {}}
+        self.assertIn("Research context INTEGRITY_FAILED", chip(
+            future, {**loaded, "context": future}))
+        invalid_annotations = {"as_of": "2026-07-15", "annotations": []}
+        self.assertIn("Research context INTEGRITY_FAILED", chip(
+            invalid_annotations, {**loaded, "context": invalid_annotations}))
+
+    def test_mutable_refresh_files_cannot_change_injected_context_chip(self):
+        import tempfile
+        from pathlib import Path
+
+        data = {
+            "symbols": [], "blocked": [], "data_as_of": "2026-07-15",
+            "evaluation_date": "2026-08-26", "composite_signals": [],
+            "family_evidence": [],
+            "underlying_closes_freshness": {
+                "state": "unavailable", "detail": "fixture"},
+        }
+        context = {"as_of": "2026-07-15", "annotations": {}}
+        evidence = {"state": "loaded", "context": context,
+                    "source_path": "/fixture/context.json", "sha256": "a" * 64}
+        with tempfile.TemporaryDirectory() as tmp:
+            files = [Path(tmp) / name for name in (
+                "guard.json", "refresh.log", "final-manifest.json")]
+            for path in files:
+                path.write_text("before")
+            before = ad.render(data, context=context, context_evidence=evidence)
+            for path in files:
+                path.write_text("after")
+            after = ad.render(data, context=context, context_evidence=evidence)
+
+        self.assertEqual(before, after)
+
 
 def _v2_section():
     return {
@@ -2020,6 +2154,177 @@ class V2RenderTests(unittest.TestCase):
         )
 
 
+class ContextLaneRenderTests(unittest.TestCase):
+    def _data(self, count=6):
+        sections = []
+        for index in range(count):
+            sections.append({
+                "symbol": f"S{index}",
+                "as_of": "2026-08-25",
+                "close": 100.0,
+                "iv_rank": 0.5,
+                "groups": [{
+                    "kind": "put",
+                    "title": "SELL A PUT?",
+                    "cards": [{
+                        "strike": 95.0,
+                        "expiry": "2026-09-18",
+                        "dte": 24,
+                        "credit": 100.0 + (count - index),
+                        "annualized_yield": 0.30 - index / 100.0,
+                        "cushion": 0.05,
+                        "grades": {"yield": "GREEN", "liquidity": "GREEN"},
+                        "verdict": "display only",
+                    }],
+                    "empty": None,
+                }],
+            })
+        data = ad.assemble(
+            symbol_sections=sections,
+            rv21_by_symbol={},
+            today="2026-08-25",
+            composite_signals=[],
+        )
+        for section in data["symbols"]:
+            snapshot = section["groups"][0]["cards"][0]["top3_snapshot"]
+            snapshot.update({
+                "rank_eligible": True,
+                "selection_status": "ELIGIBLE",
+                "policy": {"status": "ELIGIBLE", "reason_codes": []},
+            })
+        return data
+
+    @staticmethod
+    def _composite(symbol, *, count=3, trend="UP", grade="A"):
+        return {
+            "symbol": symbol,
+            "grade": grade,
+            "aligned_count": count,
+            "max_asof": "2026-08-25",
+            "trend": {"state": trend, "data_blocked": trend == "DATA_BLOCKED"},
+            "vol_premium": {"state": "CHEAP" if count >= 2 else "NEUTRAL",
+                            "data_blocked": False},
+            "regime": {"state": "CALM", "high_dispersion": count < 3,
+                       "data_blocked": False},
+            "internals": {"state": "CONFIRM" if count >= 4 else "NEUTRAL",
+                          "data_blocked": False},
+        }
+
+    def test_flag_off_matches_post_brief26_golden_bytes(self):
+        import hashlib
+        from unittest import mock
+
+        case = LaneBoardPresentationTests()
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", False):
+            html = ad.render(
+                case._data(),
+                context=case._context(),
+                qm_context={"status": "DATA_BLOCKED"},
+                research_views_status={"state": "absent"},
+            )
+
+        self.assertEqual(
+            hashlib.sha256(html.encode()).hexdigest(),
+            "f092f03e0c58a904a7126a03e6107494ee4740695e7c7e717eb965b9570c5af7",
+        )
+        self.assertNotIn("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL", html)
+
+    def test_flag_on_reorders_full_pool_and_diagnoses_displaced_frozen_name(self):
+        from unittest import mock
+
+        data = self._data()
+        data["composite_signals"] = [
+            self._composite(f"S{index}", count=(4 if index == 5 else 3))
+            for index in range(6)
+        ]
+        data["composite_signals"][4] = self._composite(
+            "S4", count=0, trend="MIXED", grade="B"
+        )
+        frozen = [pick["symbol"] for pick in ad.select_top_picks(
+            data, include_csp_watch=True)]
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            html = ad.render(data)
+
+        section_start = html.index("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL")
+        section_end = html.index("QM MOVEMENT LANE")
+        section = html[section_start:section_end]
+        self.assertEqual(frozen, ["S0", "S1", "S2", "S3", "S4"])
+        self.assertIn('data-context-symbol="S5"', section)
+        self.assertNotIn('data-context-symbol="S4"', section)
+        self.assertIn('data-diagnostic-symbol="S4">DISPLACED', section)
+        for symbol in frozen:
+            self.assertIn(f'data-diagnostic-symbol="{symbol}"', section)
+        self.assertLess(html.index("Rule-based top 5"), section_start)
+        self.assertLess(section_start, html.index("QM MOVEMENT LANE"))
+        self.assertIn(
+            "Experimental re-ordering by market context. The rule-based list above is "
+            "the registered baseline. This lane is display-only and carries no verdict "
+            "or trade authority; once the pick tracker is live its picks will be tracked "
+            "descriptively against the baseline.",
+            section,
+        )
+
+    def test_selected_blocked_composite_stays_in_slot_with_reason(self):
+        from unittest import mock
+
+        data = self._data(count=1)
+        data["composite_signals"] = [
+            self._composite("S0", count=0, trend="DATA_BLOCKED", grade="C")
+        ]
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            html = ad.render(data)
+
+        section = html[
+            html.index("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL"):
+            html.index("QM MOVEMENT LANE")
+        ]
+        self.assertIn('data-context-symbol="S0"', section)
+        self.assertIn("BLOCKED", section)
+
+    def test_flag_on_shows_zero_credit_for_vetoed_down_and_mixed_context(self):
+        from unittest import mock
+
+        data = self._data(count=3)
+        data["composite_signals"] = [
+            self._composite("S0", count=3, grade="C"),
+            self._composite("S1", count=3, trend="DOWN"),
+            self._composite("S2", count=0, trend="MIXED"),
+        ]
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            html = ad.render(data)
+
+        section = html[
+            html.index("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL") :
+            html.index("QM MOVEMENT LANE")
+        ]
+        for symbol, reason in (
+            ("S0", "VETOED"),
+            ("S1", "DIRECTION_MISMATCH"),
+            ("S2", "DIRECTION_MISMATCH"),
+        ):
+            start = section.index(f'data-context-symbol="{symbol}"')
+            card = section[start : section.index("</details></div>", start)]
+            self.assertIn(reason, card)
+            self.assertIn("context term 0", card)
+
+    def test_scoring_exception_renders_loud_failure(self):
+        from unittest import mock
+
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch(
+                "options_researcher.context_lane.rank_context_lane",
+                side_effect=RuntimeError("injected"),
+            ),
+        ):
+            html = ad.render(self._data(count=1))
+
+        self.assertIn("CONTEXT LANE FAILED — RuntimeError", html)
+
+
 class InputRootFallbackTests(unittest.TestCase):
     """ATTRACTIVENESS_INPUT_ROOT unset -> default to the ops checkout.
 
@@ -2119,7 +2424,7 @@ class MainTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_main_reads_external_board_and_restores_output_cwd(self):
+    def test_main_loads_board_and_context_from_same_external_root(self):
         import os
         import tempfile
         from pathlib import Path
@@ -2145,9 +2450,10 @@ class MainTests(unittest.TestCase):
             return [section], {"MSFT": 1.1}, [], {
                 "verified_sessions": [], "failures": [], "receipts_found": False}
 
-        def load_context(_as_of):
-            observed["output"] = Path.cwd()
-            return None, None
+        def load_context_evidence(_as_of):
+            observed["context"] = Path.cwd()
+            return {"state": "unavailable", "context": None,
+                    "warning": None, "source_path": None, "sha256": None}
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -2160,7 +2466,9 @@ class MainTests(unittest.TestCase):
                     {"ATTRACTIVENESS_INPUT_ROOT": str(board_root)},
                 ),
                 mock.patch.object(ad, "_gather_all", side_effect=gather),
-                mock.patch.object(ad, "load_context", side_effect=load_context),
+                mock.patch.object(
+                    ad, "load_context_evidence", side_effect=load_context_evidence),
+                mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
                 mock.patch.object(ad, "OUTPUT_PATH", str(output)),
                 mock.patch(
                     "options_researcher.hypothesis_evidence.gather_hypothesis_evidence",
@@ -2174,9 +2482,75 @@ class MainTests(unittest.TestCase):
                 path = ad.main()
 
         self.assertEqual(observed["board"], board_root)
-        self.assertEqual(observed["output"], original_cwd)
+        self.assertEqual(observed["context"], board_root)
         self.assertEqual(Path.cwd(), original_cwd)
         self.assertEqual(Path(path).resolve(), output.resolve())
+
+    def test_flag_off_build_uses_same_root_context_but_keeps_legacy_chip_path(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        section = {
+            "symbol": "MSFT",
+            "as_of": "2026-07-24",
+            "close": 373.02,
+            "iv_rank": 0.88,
+            "groups": [{
+                "kind": "put",
+                "title": "SELL A PUT?",
+                "cards": [],
+                "empty": "none this cycle",
+            }],
+        }
+        context = {"as_of": "2026-07-24", "annotations": {}}
+        with tempfile.TemporaryDirectory() as temp:
+            board_root = (Path(temp) / "input-root").resolve()
+            board_root.mkdir()
+            output = Path(temp) / "deployment" / "attractiveness.html"
+            observed = {}
+
+            def load_evidence(_as_of):
+                observed["context_cwd"] = Path.cwd()
+                return {
+                    "state": "loaded",
+                    "context": context,
+                    "warning": None,
+                    "source_path": str(board_root / "context.json"),
+                    "sha256": "a" * 64,
+                }
+
+            with (
+                mock.patch.object(config, "CONTEXT_LANE_ENABLED", False),
+                mock.patch.dict(
+                    os.environ, {"ATTRACTIVENESS_INPUT_ROOT": str(board_root)}
+                ),
+                mock.patch.object(ad, "load_context") as legacy,
+                mock.patch.object(
+                    ad, "load_context_evidence", side_effect=load_evidence
+                ) as evidence,
+                mock.patch.object(
+                    ad, "_verify_context_evidence", side_effect=lambda value: value
+                ),
+                mock.patch.object(ad, "render", return_value="baseline-bytes") as render,
+                mock.patch.object(ad, "OUTPUT_PATH", str(output)),
+                mock.patch(
+                    "options_researcher.research_views_publication.copy_publication"
+                ),
+                mock.patch(
+                    "options_researcher.qm_dashboard.load_qm_context", return_value={}
+                ),
+            ):
+                ad._build_and_write(
+                    symbol_sections=[section], rv21_by_symbol={"MSFT": 1.1}
+                )
+
+        legacy.assert_not_called()
+        evidence.assert_called_once_with("2026-07-24")
+        self.assertEqual(observed["context_cwd"], board_root)
+        self.assertIsNone(render.call_args.kwargs["context_evidence"])
+        self.assertEqual(render.call_args.kwargs["context"], context)
 
     def test_main_writes_file_and_prints_path(self):
         import io

@@ -864,6 +864,11 @@ CONSISTENCY_UNDERLYING_SMALL_MOVE = 0.01
 CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO = 2.0
 CONSISTENCY_MAX_EXAMPLES = 20
 
+# CONTEXT-AWARE SHORTLIST LANE — display-only second ranking lane.
+# Owner-directed in-session 2026-08-25 (spoken, not owner-typed).
+# Disabled by default; enabling is an owner decision (see brief 25 WP-E.4).
+CONTEXT_LANE_ENABLED: bool = False
+
 # ---------------------------------------------------------------------------
 # ATTRACTIVENESS EXPERIMENT LANES -- display-only, cached-data-only, and
 # disabled by default. LLM-proposed 2026-08-09; standard-from-literature or
