@@ -20,7 +20,8 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from research.hashing import sha256_file
+from options_researcher.h7_scope import watch_universe
+from research.hashing import canonical_json, sha256_file, sha256_hex
 from tools import schwab_chain_manifest
 from tools.job_health_digest import HealthStatus, collect_health, render_digest
 
@@ -28,6 +29,7 @@ AS_OF = "2026-08-21"
 FIXTURES = Path(__file__).parent / "fixtures" / "job_health"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NY_TZ = ZoneInfo("America/New_York")
+WATCH_UNIVERSE = tuple(watch_universe())
 INTRADAY_FIXTURE_FIELDS = {
     "open_auction": ("09:31", "09:31:00", "13:31:00"),
     "open": ("09:35", "09:35:00", "13:35:00"),
@@ -58,6 +60,8 @@ class JobHealthDigestTests(unittest.TestCase):
                 "scheduled_et": scheduled,
                 "captured_at_et": f"{AS_OF}T{captured_et}-04:00",
                 "captured_at_utc": f"{AS_OF}T{captured_utc}+00:00",
+                "universe": list(WATCH_UNIVERSE),
+                "names": {symbol: {"symbol": symbol, "status": "ok"} for symbol in WATCH_UNIVERSE},
             }
         )
         path = self.root / f"reports/intraday_capture/{AS_OF}/{tag}.json"
@@ -65,7 +69,7 @@ class JobHealthDigestTests(unittest.TestCase):
         path.write_text(json.dumps(payload, indent=2) + "\n")
         return path
 
-    def _install_schwab_package(self) -> None:
+    def _install_schwab_package(self, symbols: list[str] | None = None) -> None:
         chain_dir = self.root / ".cache" / "schwab_chains"
         report_dir = self.root / "reports" / "schwab_chains" / AS_OF
         chain_dir.mkdir(parents=True, exist_ok=True)
@@ -76,7 +80,7 @@ class JobHealthDigestTests(unittest.TestCase):
                 {"expiration": "2026-10-16", "strike": 105.0},
             ]
         )
-        symbols = ["CEG", "VST"]
+        symbols = sorted(WATCH_UNIVERSE if symbols is None else symbols)
         names = {}
         for symbol in symbols:
             path = chain_dir / f"{symbol}_{AS_OF}.parquet"
@@ -172,6 +176,22 @@ class JobHealthDigestTests(unittest.TestCase):
                 self.assertEqual(row.status, HealthStatus.FAILED)
                 self.assertIn(reason, row.reason)
 
+    def test_ritual_hypotheses_requires_matching_capture_session(self):
+        self._install_all_ok()
+        capture = self.root / f"reports/ritual/capture_receipt_{AS_OF}.json"
+        payload = json.loads(capture.read_text())
+        payload["as_of"] = "2026-08-20"
+        capture.write_text(json.dumps(payload))
+        status = self.root / f"reports/ritual/run_status_{AS_OF}.json"
+        status_payload = json.loads(status.read_text())
+        status_payload["capture_receipt_sha256"] = sha256_file(capture)
+        status.write_text(json.dumps(status_payload))
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Ritual hypotheses"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertIn("session mismatch", row.reason)
+
     def test_all_five_intraday_tags_are_classified_independently(self):
         self._install_all_ok()
 
@@ -225,6 +245,22 @@ class JobHealthDigestTests(unittest.TestCase):
 
                 self.assertEqual(row.status, HealthStatus.FAILED)
                 self.assertIn(reason, row.reason)
+
+    def test_capture_receipts_require_canonical_watch_universe(self):
+        self._install_intraday_tag("open")
+        intraday_path = self.root / f"reports/intraday_capture/{AS_OF}/open.json"
+        intraday = json.loads(intraday_path.read_text())
+        omitted = intraday["universe"].pop()
+        del intraday["names"][omitted]
+        intraday_path.write_text(json.dumps(intraday))
+        self._install_schwab_package(["CEG", "VST"])
+
+        rows = self._by_job(collect_health(self.root, AS_OF))
+
+        for job in ("Intraday capture (open)", "Schwab preclose"):
+            with self.subTest(job=job):
+                self.assertEqual(rows[job].status, HealthStatus.FAILED)
+                self.assertIn("canonical watch universe", rows[job].reason)
 
     def test_schwab_preclose_requires_unforced_launchd_receipt(self):
         self._install_all_ok()
@@ -283,6 +319,37 @@ class JobHealthDigestTests(unittest.TestCase):
         payload = json.loads(manifest.read_text())
         payload["invalid_nonfinite"] = float("nan")
         manifest.write_text(json.dumps(payload))
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertIn("manifest verification failed", row.reason)
+
+    def test_schwab_malformed_byte_consistent_parquet_is_failed(self):
+        self._install_all_ok()
+        chain = self.root / ".cache" / "schwab_chains" / f"CEG_{AS_OF}.parquet"
+        malformed = pd.DataFrame(
+            [
+                {"expiration": ["2026-09-18"], "strike": 100.0},
+                {"expiration": ["2026-10-16"], "strike": 105.0},
+            ]
+        )
+        malformed.to_parquet(chain)
+        actual_hash = sha256_file(chain)
+        actual_size = chain.stat().st_size
+
+        manifest_path = self.root / f"reports/schwab_chains/{AS_OF}/manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["files"]["CEG"].update({"sha256": actual_hash, "size_bytes": actual_size})
+        manifest_body = {key: value for key, value in manifest.items() if key != "manifest_hash"}
+        manifest["manifest_hash"] = sha256_hex(canonical_json(manifest_body))
+        manifest_path.write_text(json.dumps(manifest))
+
+        receipt_path = self.root / f"reports/schwab_chains/{AS_OF}/preclose.json"
+        receipt = json.loads(receipt_path.read_text())
+        receipt["manifest_hash"] = manifest["manifest_hash"]
+        receipt["names"]["CEG"].update({"sha256": actual_hash, "size_bytes": actual_size})
+        receipt_path.write_text(json.dumps(receipt))
 
         row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
 
@@ -476,7 +543,7 @@ class JobHealthDigestTests(unittest.TestCase):
 
         self.assertEqual(row.status, HealthStatus.DEGRADED)
         self.assertEqual(row.path, f"reports/intraday_capture/{AS_OF}/preclose.json")
-        self.assertIn("1/2", row.reason)
+        self.assertIn(f"{len(WATCH_UNIVERSE) - 1}/{len(WATCH_UNIVERSE)}", row.reason)
         self.assertEqual(rows["Intraday capture (open)"].status, HealthStatus.OK)
 
     def test_zero_intraday_coverage_is_failed(self):
@@ -490,7 +557,7 @@ class JobHealthDigestTests(unittest.TestCase):
         row = self._by_job(collect_health(self.root, AS_OF))["Intraday capture (preclose)"]
 
         self.assertEqual(row.status, HealthStatus.FAILED)
-        self.assertIn("0/2", row.reason)
+        self.assertIn(f"0/{len(WATCH_UNIVERSE)}", row.reason)
 
     def test_intraday_missing_expected_symbol_row_is_failed(self):
         self._install_all_ok()

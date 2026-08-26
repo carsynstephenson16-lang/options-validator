@@ -21,6 +21,9 @@ import pandas_market_calendars as mcal
 
 import config
 
+with redirect_stdout(io.StringIO()):
+    from options_researcher.h7_scope import watch_universe
+
 
 class HealthStatus(StrEnum):
     FAILED = "FAILED"
@@ -54,6 +57,8 @@ _SORT_ORDER = {
 }
 _ALIGNMENT_STATUS = re.compile(r"(?:^|\s)status=([A-Z_]+)(?:\s|$)")
 _EXPECTED_HYPOTHESES = frozenset(("H5", "H6", "H7", "H8", "H10"))
+_EXPECTED_WATCH_UNIVERSE = tuple(watch_universe())
+_EXPECTED_SCHWAB_UNIVERSE = tuple(sorted(_EXPECTED_WATCH_UNIVERSE))
 _NY_TZ = ZoneInfo("America/New_York")
 
 
@@ -205,6 +210,13 @@ def _ritual_hypotheses(root: Path, as_of: str) -> HealthRow:
         return HealthRow(
             "Ritual hypotheses", HealthStatus.FAILED, error or "invalid receipt", relative
         )
+    if payload.get("as_of") != as_of:
+        return HealthRow(
+            "Ritual hypotheses",
+            HealthStatus.FAILED,
+            f"session mismatch: expected {as_of}",
+            relative,
+        )
     hypotheses = payload.get("hypotheses")
     if not isinstance(hypotheses, dict) or not hypotheses:
         return HealthRow(
@@ -344,6 +356,13 @@ def _intraday_capture(root: Path, as_of: str, tag: str) -> HealthRow:
         or len(set(universe)) != len(universe)
     ):
         return HealthRow(job, HealthStatus.FAILED, "invalid symbol universe", relative)
+    if tuple(universe) != _EXPECTED_WATCH_UNIVERSE:
+        return HealthRow(
+            job,
+            HealthStatus.FAILED,
+            "universe mismatch: expected canonical watch universe",
+            relative,
+        )
     names = payload.get("names")
     if not isinstance(names, dict):
         return HealthRow(job, HealthStatus.FAILED, "missing per-symbol statuses", relative)
@@ -445,6 +464,13 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
             "invalid universe for manifest verification",
             relative,
         )
+    if tuple(universe) != _EXPECTED_SCHWAB_UNIVERSE:
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            "universe mismatch: expected canonical watch universe",
+            relative,
+        )
     manifest_relative = f"reports/schwab_chains/{as_of}/manifest.json"
     manifest_path, manifest_error = _contained_path(root, manifest_relative)
     if manifest_error is not None or manifest_path is None:
@@ -481,7 +507,12 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
 
     try:
         schwab_chain_manifest.verify_session(as_of, universe, chain_dir, manifest_path, path)
-    except (schwab_chain_manifest.SchwabChainManifestError, OSError, ValueError) as exc:
+    except (
+        schwab_chain_manifest.SchwabChainManifestError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
         return HealthRow(
             "Schwab preclose",
             HealthStatus.FAILED,
