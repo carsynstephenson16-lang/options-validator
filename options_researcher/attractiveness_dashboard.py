@@ -2642,6 +2642,13 @@ _STYLE = """
   }
 """
 
+_EVENT_STYLE = """
+  /* event-chip-style: neutral, non-grading annotations only */
+  .event-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
+  .event-chip { background: #edf3f6; border: 1px solid #a9bdc8; border-radius: 999px;
+    color: #294b5c; font-size: .67rem; font-weight: 750; padding: 4px 7px; }
+"""
+
 
 def _esc(v) -> str:
     return _html.escape(str(v))
@@ -2658,6 +2665,86 @@ def _badges(grades: dict) -> str:
         pills.append(f'<span class="status-badge {cls}">'
                      f'{symbol} {_esc(k)} · {_esc(status)}</span>')
     return f'<div class="party-badges">{"".join(pills)}</div>'
+
+
+def event_chips(card: Mapping[str, object], symbol: str,
+                evaluation_date: str, calendar: object,
+                complex_map: Mapping[str, object]) -> list[dict[str, str]]:
+    """Return non-grading calendar/complex annotations for one card life window.
+
+    ``evaluation_date`` is intentionally an explicit board value: never use a
+    stale section as-of date to decide which events are alive.
+    """
+    from options_researcher.event_calendar import Event, provenance_markers
+
+    try:
+        start = date.fromisoformat(evaluation_date)
+        expiry = date.fromisoformat(str(card["expiry"]))
+    except (KeyError, TypeError, ValueError):
+        return []
+    if expiry < start:
+        return []
+    chips: list[dict[str, str]] = []
+    clusters = complex_map.get("clusters", {}) if isinstance(complex_map, Mapping) else {}
+    for event in calendar if isinstance(calendar, (list, tuple)) else ():
+        if not isinstance(event, Event) or not start <= event.date <= expiry:
+            continue
+        origin = event.event_id.split("-", 1)[0].upper()
+        marker = "cal"
+        if origin != symbol.upper():
+            for cluster in clusters.values() if isinstance(clusters, Mapping) else ():
+                if not isinstance(cluster, Mapping):
+                    continue
+                members = {str(value).upper() for value in cluster.get("members", [])}
+                propagators = {str(value).upper() for value in cluster.get("events_propagate_from", [])}
+                if symbol.upper() in members and origin in members and origin in propagators:
+                    marker = "complex"
+                    break
+        label = (f"{marker.upper()} · {event.kind.replace('_', ' ')} · {event.title} · "
+                 f"{event.date.isoformat()} · {event.time_et or 'time TBD'}")
+        for notice in provenance_markers(event, start):
+            label += f" · {notice}"
+        chips.append({"marker": marker, "text": label})
+    return chips
+
+
+def _event_chips_html(card: Mapping[str, object], symbol: str,
+                      evaluation_date: str, event_view: Mapping[str, object] | None) -> str:
+    if not event_view:
+        return ""
+    try:
+        calendar = event_view.get("calendar", [])
+        complex_raw = event_view.get("complex_map", {})
+        chips = event_chips(card, symbol, evaluation_date,
+                            calendar if isinstance(calendar, (list, tuple)) else [],
+                            complex_raw if isinstance(complex_raw, Mapping) else {})
+    except Exception as exc:
+        return f'<div class="notice bad">EVENT LAYER FAILED — {_esc(exc.__class__.__name__)}</div>'
+    return ('<div class="event-chips">' + ''.join(
+        f'<span class="event-chip">EVENT · {_esc(chip["text"])}</span>' for chip in chips
+    ) + '</div>') if chips else ""
+
+
+def _elapsed_events_html(evaluation_date: str,
+                         event_view: Mapping[str, object] | None) -> str:
+    """Show prior events only in a details block, never as active chips."""
+    from options_researcher.event_calendar import Event
+
+    if not event_view:
+        return ""
+    try:
+        evaluation = date.fromisoformat(evaluation_date)
+    except ValueError:
+        return ""
+    calendar = event_view.get("calendar", [])
+    elapsed = [event for event in (calendar if isinstance(calendar, (list, tuple)) else [])
+               if isinstance(event, Event) and event.date < evaluation]
+    if not elapsed:
+        return ""
+    rows = ''.join(f'<li>{_esc(event.date.isoformat())} · {_esc(event.title)}</li>'
+                   for event in elapsed)
+    return (f'<details class="event-elapsed"><summary>Elapsed events</summary>'
+            f'<ul>{rows}</ul></details>')
 
 
 def _hero_badges(grades: dict) -> str:
@@ -2820,7 +2907,9 @@ _POLICY_REASON_LABELS = {
 }
 
 
-def _card_html(card: dict, *, tech_note: str = "") -> str:
+def _card_html(card: dict, *, tech_note: str = "", symbol: str = "",
+               evaluation_date: str = "",
+               event_view: Mapping[str, object] | None = None) -> str:
     if "skipped" in card:
         return (f'<div class="panel"><div class="label">'
                 f'{_esc(card["skipped"])}</div></div>')
@@ -2832,6 +2921,7 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
     parts = [f'<div class="panel candidate-card"{identity_attr}>',
              f'<div class="party-name">{_esc(card["headline"])}</div>',
              _badges(card.get("grades", {}))]
+    parts.append(_event_chips_html(card, symbol, evaluation_date, event_view))
     if card.get("preview"):
         parts.append(f'<div class="notice watch">! '
                      f'{_esc(_PREVIEW_WARNING)}</div>')
@@ -2858,7 +2948,9 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
 def _group_html(grp: dict, *, rank: int, tech: dict | None = None,
                 close: float | None = None,
                 protected_indexes: frozenset[int] = frozenset(),
-                collapse_enabled: bool = True) -> str:
+                collapse_enabled: bool = True, symbol: str = "",
+                evaluation_date: str = "",
+                event_view: Mapping[str, object] | None = None) -> str:
     count = len(grp["cards"])
     count_label = f"{count} contract" + ("" if count == 1 else "s")
     head = (f'<summary><span class="group-heading">'
@@ -2876,10 +2968,14 @@ def _group_html(grp: dict, *, rank: int, tech: dict | None = None,
                 protected_indexes=protected_indexes)
         else:
             shown, hidden = list(grp["cards"]), []
-        cards = "".join(_card_html(c, tech_note=note) for c in shown)
+        cards = "".join(_card_html(c, tech_note=note, symbol=symbol,
+                                    evaluation_date=evaluation_date,
+                                    event_view=event_view) for c in shown)
         hidden_html = ""
         if hidden:
-            hidden_cards = "".join(_card_html(card, tech_note=note)
+            hidden_cards = "".join(_card_html(card, tech_note=note, symbol=symbol,
+                                                evaluation_date=evaluation_date,
+                                                event_view=event_view)
                                     for card, _dominator in hidden)
             hidden_html = (
                 '<details class="dominated-candidates"><summary>'
@@ -3439,6 +3535,8 @@ def _hero_pick_html(
     data_as_of: str,
     slot: int,
     symbol_qm_context: Mapping[str, object] | None = None,
+    evaluation_date: str = "",
+    event_view: Mapping[str, object] | None = None,
 ) -> str:
     """Render one deterministic hero pick plus optional lower-panel QM evidence."""
     card = pick["card"]
@@ -3461,6 +3559,7 @@ def _hero_pick_html(
         f"{_esc(status)}</span></div>"
         f'<div class="party-name">{_esc(card["headline"])}</div>'
         + _hero_badges(card.get("grades", {}))
+        + _event_chips_html(card, str(pick.get("symbol", "")), evaluation_date, event_view)
         + preview_warn
         + _risk_line(card)
         + _bbb_table(card.get("bbb", []))
@@ -3580,7 +3679,8 @@ def _blocked_qm_slot_html(
 
 
 def _original_hero_html(
-    data: dict, context: dict | None, qm_context: Mapping[str, object] | None
+    data: dict, context: dict | None, qm_context: Mapping[str, object] | None,
+    event_view: Mapping[str, object] | None = None,
 ) -> str:
     """Render the unchanged mechanical Top-3 plus advisory research.
 
@@ -3619,6 +3719,8 @@ def _original_hero_html(
                 annotation,
                 data_as_of=data_as_of,
                 slot=slot,
+                evaluation_date=str(data.get("evaluation_date") or data_as_of),
+                event_view=event_view,
             )
         )
     for slot in range(len(py_picks) + 1, config.PICK_TOP_N + 1):
@@ -3820,11 +3922,12 @@ def _qm_movement_lane_html(
 
 
 def _hero_html(
-    data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None
+    data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None,
+    event_view: Mapping[str, object] | None = None,
 ) -> str:
     return (
-        _original_hero_html(data, context, qm_context)
-        + _context_lane_html(data)
+        _original_hero_html(data, context, qm_context, event_view)
+        + _context_lane_html(data, event_view)
         + _qm_movement_lane_html(data, qm_context)
         + _qm_hero_html(data, context, qm_context)
     )
@@ -3838,7 +3941,8 @@ _CONTEXT_LANE_DISCLAIMER = (
 )
 
 
-def _context_lane_html(data: dict) -> str:
+def _context_lane_html(data: dict,
+                       event_view: Mapping[str, object] | None = None) -> str:
     """Render the owner-gated second ranking lane, or nothing while disabled."""
     if not config.CONTEXT_LANE_ENABLED:
         return ""
@@ -3884,6 +3988,7 @@ def _context_lane_html(data: dict) -> str:
             f'<div class="slot-label"><span>Context pick {slot}</span>'
             f'<span class="policy-status {status_class}">{_esc(reason)}</span></div>'
             f'<div class="party-name">{_esc(str(card.get("headline", candidate_id)))}</div>'
+            f"{_event_chips_html(card, str(row['symbol']), str(data.get('evaluation_date') or data.get('data_as_of') or ''), event_view)}"
             f'<div class="label">{_esc(aligned_text)} · context term '
             f'{_esc(row["context_term"])} · context max as-of '
             f'{_esc(row.get("context_max_asof") or "unavailable")} · board as-of '
@@ -4023,7 +4128,7 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
     return "".join(parts)
 
 
-def _pinned_html(data: dict) -> str:
+def _pinned_html(data: dict, event_view: Mapping[str, object] | None = None) -> str:
     """Core-names strip: owner-pinned visibility, explicitly not ranked."""
     pinned = pinned_picks(data)
     if not pinned:
@@ -4054,6 +4159,9 @@ def _pinned_html(data: dict) -> str:
                   f'<div class="party-name">{_esc(card.get("headline", ""))}'
                   '</div>'
                   + _hero_badges(card.get("grades", {}))
+                  + _event_chips_html(card, str(symbol),
+                                      str(data.get("evaluation_date") or data.get("data_as_of") or ""),
+                                      event_view)
                   + _risk_line(card)
                   + _bbb_table(card.get("bbb", [])) + '</div>')
     return ('<section class="panel hero"><div class="section-header"><div>'
@@ -4451,6 +4559,53 @@ def _run_exit_code(
     return 1 if any(rec.get("unexpected") for rec in blocked) or qm_unexpected else 0
 
 
+def build_event_view(data: Mapping[str, object], evaluation_date: str) -> Mapping[str, object] | None:
+    """Read immutable cached event inputs before pure ``render`` runs.
+
+    This pre-render boundary is display-only. Promotion requires a separate
+    owner decision, registration, and the 2026-07-24 feasibility gate.
+    """
+    from options_researcher import event_calendar, fomc, schwab_chain_view
+
+    failures: dict[str, str] = {}
+    if not event_calendar.CALENDAR_PATH.exists() and not event_calendar.COMPLEX_MAP_PATH.exists():
+        return None
+    try:
+        calendar = event_calendar.load_calendar()
+        if calendar:
+            calendar = event_calendar.calendar_with_fomc(calendar, fomc.load_fomc())
+        evaluation = date.fromisoformat(evaluation_date)
+        complex_map = event_calendar.load_complex_map(
+            events=[event for event in calendar if event.date >= evaluation])
+    except Exception as exc:
+        calendar, complex_map = [], {}
+        failures["__calendar__"] = exc.__class__.__name__
+    moves: dict[str, dict[str, str]] = {}
+    symbols = data.get("symbols")
+    for sec in symbols if isinstance(symbols, list) else []:
+        if not isinstance(sec, Mapping):
+            continue
+        symbol, session = str(sec.get("symbol", "")), str(sec.get("as_of", ""))
+        if sec.get("chain_source") != schwab_chain_view.CHAIN_SOURCE:
+            moves[symbol] = {"text": "UNAVAILABLE", "reason": "non-Schwab source"}
+            continue
+        try:
+            newest = schwab_chain_view.newest_chain(symbol)
+            if newest is None or newest[1] != session:
+                moves[symbol] = {"text": "UNAVAILABLE",
+                                 "reason": "matching verified chain unavailable"}
+                continue
+            spot_record = schwab_chain_view.load_preclose_spot(symbol, session)
+            spot = spot_record[0] if spot_record is not None else None
+            timestamp = spot_record[1] if spot_record is not None else ""
+            moves[symbol] = event_calendar.implied_move(
+                newest[0], session, spot, "schwab_preclose",
+                spot_timestamp=timestamp, receipt_session=session)
+        except Exception as exc:
+            failures[symbol] = exc.__class__.__name__
+    return event_calendar.EventView.create(calendar, complex_map, moves, failures)
+
+
 def render(
     data: dict,
     *,
@@ -4459,6 +4614,7 @@ def render(
     context_evidence: Mapping[str, object] | None = None,
     qm_context: Mapping[str, object] | None = None,
     research_views_status: Mapping[str, object] | None = None,
+    event_view: Mapping[str, object] | None = None,
 ) -> str:
     """Render the assemble() dict (plus optional research context) into one
     self-contained HTML string. Pure string templating: no file I/O, no
@@ -4486,6 +4642,7 @@ def render(
         section_stale = (sec.get("features_stale") is True
                          or sec.get("symbol") in stale_symbols)
         rendered_groups = []
+        evaluation_date = str(data.get("evaluation_date") or data.get("data_as_of") or "")
         for rank, group in enumerate(ranked_groups, start=1):
             protected_indexes = frozenset(
                 index for index, card in enumerate(group.get("cards", []))
@@ -4493,7 +4650,8 @@ def render(
             rendered_groups.append(_group_html(
                 group, rank=rank, tech=tech, close=float(sec["close"]),
                 protected_indexes=protected_indexes,
-                collapse_enabled=not section_stale))
+                collapse_enabled=not section_stale, symbol=str(sec.get("symbol", "")),
+                evaluation_date=evaluation_date, event_view=event_view))
         groups = "".join(rendered_groups)
         rank_note = (
             '<div class="strategy-rank-note">'
@@ -4529,6 +4687,35 @@ def render(
             f'<span class="status-badge unknown">{_esc(label)}</span>'
             for label in status_labels)
         open_attr = " open" if panel_open else ""
+        event_failure = ""
+        if isinstance(event_view, Mapping):
+            raw_failures = event_view.get("failures", {})
+            failure_map = ({str(key): str(value) for key, value in raw_failures.items()}
+                           if isinstance(raw_failures, Mapping) else {})
+            failure = failure_map.get(sec.get("symbol")) or failure_map.get("__calendar__")
+            if failure:
+                event_failure = (f'<div class="notice bad">EVENT LAYER FAILED — '
+                                 f'{_esc(failure)}</div>')
+        implied = ""
+        if isinstance(event_view, Mapping):
+            raw_moves = event_view.get("implied_moves", {})
+            moves = ({str(key): value for key, value in raw_moves.items()}
+                     if isinstance(raw_moves, Mapping) else {})
+            move = moves.get(str(sec.get("symbol", "")))
+            if isinstance(move, Mapping):
+                if move.get("text") == "UNAVAILABLE":
+                    implied = (f'<div class="notice watch">implied move UNAVAILABLE — '
+                               f'{_esc(move.get("reason", "unknown"))}</div>')
+                elif move.get("text"):
+                    implied = (f'<div class="label">implied move {_esc(move["text"])} · '
+                               f'{_esc(move.get("method", ""))} · chain session '
+                               f'{_esc(move.get("chain_session", ""))} · capture convention '
+                               f'{_esc(move.get("capture_convention", ""))} · expiry '
+                               f'{_esc(move.get("expiry", ""))} · strike '
+                               f'{_esc(move.get("strike", ""))} · spot source '
+                               f'{_esc(move.get("spot_source", ""))} · intraday receipt session '
+                               f'{_esc(move.get("intraday_receipt_session", ""))} · spot timestamp '
+                               f'{_esc(move.get("spot_timestamp", ""))}</div>')
         symbols_html += (
             f'<details class="panel symbol-panel"{open_attr}>'
             '<summary class="symbol-header"><div>'
@@ -4544,7 +4731,8 @@ def render(
             f'<div class="symbol-stat"><span>IV rank</span><strong>'
             f"{_esc(_iv_rank_text(sec))}</strong></div>"
             f"{_atm_iv_stat_html(sec)}{display_date_stat}</div></summary>"
-            f'<div class="symbol-body">{_section_source_html(sec)}'
+            f'<div class="symbol-body">{event_failure}{implied}'
+            f'{_elapsed_events_html(evaluation_date, event_view)}{_section_source_html(sec)}'
             f"{_feature_unavailable_html(sec)}{stale_html}{tech_html}"
             f"{_symbol_context_html(sec['symbol'], context)}{rank_note}{groups}"
             f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
@@ -4568,11 +4756,15 @@ def render(
         f'<div class="notice watch">! {_esc(context_warning)}</div>' if context_warning else ""
     )
     age_html = _chain_age_html(data)
+    hero_html = _hero_html(data, context, qm_context, event_view)
+    pinned_html = _pinned_html(data, event_view)
+    event_css = (_EVENT_STYLE if 'class="event-chip"' in
+                 (symbols_html + hero_html + pinned_html) else "")
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>Options Attractiveness</title>"
-        f"<style>{_STYLE}</style></head><body>"
+        f"<style>{_STYLE}{event_css}</style></head><body>"
         '<header class="app-header"><div class="app-header-inner">'
         '<div><div class="eyebrow">Options research · Attractiveness</div>'
         "<h1>Which options look attractive today?</h1>"
@@ -4587,13 +4779,13 @@ def render(
         f"{age_html}"
         f"{warn_html}"
         f"{_blocked_html(data.get('blocked') or [])}"
-        f"{_hero_html(data, context, qm_context)}"
+        f"{hero_html}"
         f"{_composite_html(data)}"
         f"{_research_desk_html(data, context, context_warning, annotation_notice)}"
         f"{_registered_bets_tracker_html(data)}"
         f"{_regime_strip_html(research_views_status, str(data.get('evaluation_date') or data_as_of))}"
         f"{_experiments_shelf_html(research_views_status)}"
-        f"{_pinned_html(data)}"
+        f"{pinned_html}"
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
         f"{symbols_html}"
@@ -4639,6 +4831,7 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     research_views_status = load_research_views_status()
     if copy_warning:
         research_views_status["copy_warning"] = copy_warning
+    event_view = build_event_view(data, str(data["evaluation_date"]))
     out_html = render(
         data,
         context=context,
@@ -4646,6 +4839,7 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
         context_evidence=(context_evidence if config.CONTEXT_LANE_ENABLED else None),
         qm_context=qm_context,
         research_views_status=research_views_status,
+        event_view=event_view,
     )
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     # tmp + os.replace so a mid-write crash can never leave a truncated page

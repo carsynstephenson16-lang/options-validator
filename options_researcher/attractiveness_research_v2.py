@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from data.atomic_io import atomic_text_write
+from options_researcher.source_policy import BANNED_HOST_FRAGMENTS
 from options_researcher.top3_context import (
     AnnotationValidationError,
     normalize_research_annotations,
@@ -57,18 +58,6 @@ SOURCE_FIELDS: Final = frozenset(
         "capture_sha256",
         "independence_group",
     }
-)
-BANNED_HOST_FRAGMENTS: Final = (
-    "reddit.",
-    "youtube.",
-    "youtu.be",
-    "seekingalpha.",
-    "medium.",
-    "substack.",
-    "wordpress.",
-    "blogspot.",
-    "stocktwits.",
-    "fool.",
 )
 
 
@@ -209,11 +198,7 @@ def validate_capture_sha256(value: object, *, where: str) -> str:
 
 
 def _require_attempt_id(value: object, *, where: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or any(character.isspace() for character in value)
-    ):
+    if not isinstance(value, str) or not value or any(character.isspace() for character in value):
         raise ResearchArtifactError(f"{where}: invalid producer attempt id")
     return value
 
