@@ -258,6 +258,13 @@ class SnapshotAndMembershipTests(unittest.TestCase):
                     registration=fabricated,
                 )
 
+            with self.assertRaisesRegex(tracker.RegistrationRequired, "dryrun"):
+                tracker.append_membership(
+                    snapshot("2026-08-25", []),
+                    journal_path=root / "scored/bypass.jsonl",
+                    verified_sessions=["2026-08-25"],
+                )
+
     def test_disabled_context_arm_is_loud_and_refuses_primary_contrast(self):
         with tempfile.TemporaryDirectory() as tmp:
             payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
@@ -414,6 +421,41 @@ class FillAndPositionTests(unittest.TestCase):
         )
         self.assertEqual(cancelled["status"], "CANCELLED_POSITION_SCHEMA_INVALID")
 
+    def test_position_schema_rejects_identity_side_and_basis_mismatches(self):
+        wrong_symbol = candidate("VST:long_call:one")
+        wrong_symbol["pick_position"]["evaluated_leg"]["symbol"] = "MSFT"
+        with self.assertRaisesRegex(tracker.PositionSchemaError, "symbol"):
+            tracker.validate_position(wrong_symbol)
+
+        wrong_side = candidate(
+            "VST:put:one",
+            lane="put",
+            side="buy",
+            right="P",
+            risk_kind="ASSIGNMENT_CAPITAL",
+            risk_value=10_000.0,
+        )
+        with self.assertRaisesRegex(tracker.PositionSchemaError, "lane/right/side"):
+            tracker.validate_position(wrong_side)
+
+        cc = candidate(
+            "VST:cc:one",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=9_999.0,
+            coverage={
+                "symbol": "VST",
+                "shares": 100,
+                "declared_shares": 100,
+                "cost_basis": 100.0,
+                "acquired": "2025-01-02",
+                "source_row_hash": "a" * 64,
+            },
+        )
+        with self.assertRaisesRegex(tracker.PositionSchemaError, "coverage cost basis"):
+            tracker.validate_position(cc)
+
     def test_coverage_change_cancels_before_chain_lookup(self):
         decision = candidate(
             "VST:cc:one",
@@ -421,7 +463,14 @@ class FillAndPositionTests(unittest.TestCase):
             side="sell",
             risk_kind="FROZEN_100_SHARE_COST_BASIS",
             risk_value=10_000.0,
-            coverage={"shares": 100, "cost_basis": 100.0, "source_row_hash": "a" * 64},
+            coverage={
+                "symbol": "VST",
+                "shares": 100,
+                "declared_shares": 100,
+                "cost_basis": 100.0,
+                "acquired": "2025-01-02",
+                "source_row_hash": "a" * 64,
+            },
         )
         result = tracker.resolve_fill(
             decision,
@@ -432,6 +481,45 @@ class FillAndPositionTests(unittest.TestCase):
             coverage_validator=lambda _position, _session: False,
         )
         self.assertEqual(result["status"], "CANCELLED_COVERAGE_CHANGED")
+
+    def test_current_coverage_identity_accepts_exact_cc_source_row(self):
+        identity = {
+            "symbol": "VST",
+            "shares": 100,
+            "declared_shares": 100,
+            "cost_basis": 100.0,
+            "acquired": "2025-01-02",
+        }
+        identity["source_row_hash"] = tracker._identity_hash(identity)
+        decision = candidate(
+            "VST:cc:one",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage=identity,
+        )
+        position = tracker.validate_position(decision)
+        holdings = pd.DataFrame(
+            [{"symbol": "VST", "shares": 100, "cost_basis": 100.0, "acquired": "2025-01-02"}]
+        )
+        positions = pd.DataFrame(
+            columns=[
+                "id",
+                "structure",
+                "symbol",
+                "right",
+                "strike",
+                "expiration",
+                "contracts",
+                "entry_date",
+                "entry_price",
+                "bucket",
+            ]
+        )
+        self.assertTrue(
+            tracker.coverage_identity_matches(position, holdings=holdings, positions=positions)
+        )
 
     def test_mark_gap_and_coverage_pnl_exclusion(self):
         filled = tracker.resolve_fill(
@@ -524,6 +612,116 @@ class FillAndPositionTests(unittest.TestCase):
         self.assertEqual(first["coverage_context_status"], "NOT_APPLICABLE")
         self.assertIn(first["outcome_word"], {"gained after costs", "lost after costs"})
 
+    def test_expiry_aligned_schedule_has_one_intrinsic_mark(self):
+        opening = candidate("VST:long_call:expiry", expiry="2026-09-02")
+        record = {
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:long_call", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:long_call": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+
+        def calendar(start: str, end: str) -> list[str]:
+            cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+            while cursor <= stop:
+                if cursor.weekday() < 5:
+                    days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            return days
+
+        outcomes = tracker.evaluate_records(
+            [record],
+            as_of="2026-09-03",
+            verified_sessions=calendar("2026-08-25", "2026-09-03"),
+            chain_loader=lambda _symbol, _session: chain(expiry="2026-09-02"),
+            trading_days_fn=calendar,
+            close_loader=lambda _symbol, _session: 103.0,
+        )
+        expiry_marks = [
+            mark for mark in outcomes[0]["marks"] if mark.get("mark_session") == "2026-09-02"
+        ]
+        self.assertEqual(len(expiry_marks), 1)
+        self.assertEqual(expiry_marks[0]["termination"], "expiry_intrinsic")
+
+    def test_coverage_is_revalidated_before_marks(self):
+        opening = candidate(
+            "VST:cc:coverage",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage={
+                "symbol": "VST",
+                "shares": 100,
+                "declared_shares": 100,
+                "cost_basis": 100.0,
+                "acquired": "2025-01-02",
+                "source_row_hash": "a" * 64,
+            },
+        )
+        record = {
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:cc", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:cc": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+        calls = 0
+
+        def coverage(_position, _session):
+            nonlocal calls
+            calls += 1
+            return calls == 1
+
+        outcomes = tracker.evaluate_records(
+            [record],
+            as_of="2026-09-03",
+            verified_sessions=self.sessions("", ""),
+            chain_loader=lambda _symbol, _session: chain(),
+            trading_days_fn=lambda _start, _end: [
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-25",
+            ],
+            close_loader=lambda _symbol, _session: 100.0,
+            coverage_validator=coverage,
+        )
+        self.assertEqual(outcomes[0]["status"], "CANCELLED_COVERAGE_CHANGED")
+        self.assertGreaterEqual(calls, 2)
+
 
 class ScoreboardTests(unittest.TestCase):
     def test_raw_dollars_never_pool_and_contrast_pairs_lanes(self):
@@ -583,6 +781,32 @@ class ScoreboardTests(unittest.TestCase):
         self.assertAlmostEqual(cohorts[0]["contrast"], 0.15)
         self.assertEqual(cohorts[0]["paired_lanes"], ["cc", "long_call"])
         self.assertEqual(cohorts[0]["unmatched_lanes"], ["put"])
+
+    def test_unmatched_lane_occurrences_are_disclosed_per_week(self):
+        outcomes = [
+            {
+                "arm": "frozen_baseline",
+                "lane": "put",
+                "decision_session": "2026-08-03",
+                "return": 0.10,
+            },
+            {
+                "arm": "frozen_baseline",
+                "lane": "put",
+                "decision_session": "2026-08-10",
+                "return": 0.20,
+            },
+            {
+                "arm": "context_lane",
+                "lane": "put",
+                "decision_session": "2026-08-10",
+                "return": 0.25,
+            },
+        ]
+        board = tracker.build_scoreboard(outcomes)
+        self.assertEqual(len(board["weekly_cohorts"]), 2)
+        self.assertIsNone(board["weekly_cohorts"][0]["contrast"])
+        self.assertEqual(board["unmatched_lane_counts"]["frozen_baseline_only"], 1)
 
     def test_header_contains_concentration_and_a2_authority(self):
         board = tracker.build_scoreboard([], weekly_cohorts=[])

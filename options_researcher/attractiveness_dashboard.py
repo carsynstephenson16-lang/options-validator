@@ -5222,12 +5222,34 @@ def _write_dashboard_result(
     receipt_path = input_root / receipt_reference
     try:
         receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
-    except OSError:
-        receipt_sha256 = None
+    except OSError as exc:
+        raise ValueError(
+            f"capture receipt is required for the pick snapshot: {receipt_reference}"
+        ) from exc
+    snapshot_arms = (
+        "frozen_baseline",
+        "frozen_baseline_watch_inclusive",
+        "context_lane",
+    )
+    for arm_name in snapshot_arms:
+        for candidate in _snapshot_candidates(payload.get(arm_name)):
+            quote = candidate.get("raw_quote")
+            source_hash = candidate.get("source_row_hash")
+            if (
+                not isinstance(quote, Mapping)
+                or _finite_number(quote.get("bid")) is None
+                or _finite_number(quote.get("ask")) is None
+                or not isinstance(source_hash, str)
+                or not source_hash
+            ):
+                raise ValueError(
+                    f"raw quote provenance is required for {arm_name} candidate "
+                    f"{candidate.get('candidate_id')!r}"
+                )
     source_hashes = sorted(
         {
             str(candidate.get("source_row_hash"))
-            for arm_name in _SCORED_SNAPSHOT_ARMS
+            for arm_name in snapshot_arms
             for candidate in _snapshot_candidates(payload.get(arm_name))
             if candidate.get("source_row_hash")
         }
@@ -5265,9 +5287,6 @@ def _write_dashboard_result(
         + b"\n",
     )
     return payload
-
-
-_SCORED_SNAPSHOT_ARMS = ("frozen_baseline", "context_lane")
 
 
 def _snapshot_candidates(value: object) -> list[Mapping[str, object]]:

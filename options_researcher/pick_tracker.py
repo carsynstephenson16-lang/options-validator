@@ -116,6 +116,27 @@ def validate_snapshot(
     hashes = payload.get("source_row_hashes")
     if not isinstance(hashes, list) or not all(isinstance(value, str) for value in hashes):
         raise TrackerError("snapshot source_row_hashes are malformed")
+    observed_hashes: set[str] = set()
+    for arm in (*_SCORED_ARMS, "frozen_baseline_watch_inclusive"):
+        arm_value = payload[arm]
+        assert isinstance(arm_value, Mapping)
+        candidates = arm_value["candidates"]
+        assert isinstance(candidates, list)
+        for candidate in candidates:
+            if not isinstance(candidate, Mapping):
+                raise TrackerError(f"snapshot arm {arm} candidate is malformed")
+            raw_quote = candidate.get("raw_quote")
+            source_hash = candidate.get("source_row_hash")
+            if (
+                not isinstance(raw_quote, Mapping)
+                or not quote_valid(raw_quote.get("bid"), raw_quote.get("ask"))
+                or not isinstance(source_hash, str)
+                or not source_hash
+            ):
+                raise TrackerError(f"snapshot arm {arm} raw quote provenance is malformed")
+            observed_hashes.add(source_hash)
+    if observed_hashes != set(hashes):
+        raise TrackerError("snapshot source_row_hashes do not match candidate rows")
     if input_root is not None:
         receipt_path = input_root / str(payload["capture_receipt_path"])
         try:
@@ -155,7 +176,12 @@ def _enforce_write_path(
     registration_validator: Callable[[Mapping[str, object]], bool] | None,
 ) -> None:
     if reports_root is None:
-        return
+        resolved = journal_path.resolve()
+        parts = resolved.parts
+        indexes = [index for index, part in enumerate(parts) if part == "pick_tracker"]
+        if not indexes:
+            return
+        reports_root = Path(*parts[: indexes[-1] + 1])
     dryrun = reports_root / "dryrun"
     if _is_below(journal_path, dryrun):
         return
@@ -351,11 +377,32 @@ def validate_position(candidate: Mapping[str, object]) -> dict[str, object]:
     leg = position.get("evaluated_leg")
     if not isinstance(leg, Mapping):
         raise PositionSchemaError("evaluated leg is required")
+    symbol = candidate.get("symbol")
+    lane = candidate.get("lane")
+    if not isinstance(symbol, str) or not symbol or leg.get("symbol") != symbol:
+        raise PositionSchemaError("evaluated leg symbol must match the candidate")
     strike = _finite_positive(leg.get("strike"), "evaluated strike")
+    candidate_strike = _finite_positive(candidate.get("strike"), "candidate strike")
+    if not math.isclose(strike, candidate_strike):
+        raise PositionSchemaError("evaluated strike must match the candidate")
     if leg.get("contracts") != 1 or leg.get("side") not in {"buy", "sell"}:
         raise PositionSchemaError("evaluated leg must contain one contract and a valid side")
-    if leg.get("right") not in {"C", "P"} or not isinstance(leg.get("expiry"), str):
+    expiry = leg.get("expiry")
+    if not isinstance(expiry, str) or expiry != candidate.get("expiry"):
         raise PositionSchemaError("evaluated leg right/expiry is invalid")
+    try:
+        date.fromisoformat(expiry)
+    except ValueError as exc:
+        raise PositionSchemaError("evaluated leg expiry is not ISO formatted") from exc
+    lane_contract = {
+        "long_call": ("C", "buy"),
+        "leaps": ("C", "buy"),
+        "put": ("P", "sell"),
+        "cc": ("C", "sell"),
+        "pmcc": ("C", "sell"),
+    }
+    if lane not in lane_contract or (leg.get("right"), leg.get("side")) != lane_contract[lane]:
+        raise PositionSchemaError("evaluated leg lane/right/side combination is invalid")
     basis = position.get("risk_basis")
     if not isinstance(basis, Mapping):
         raise PositionSchemaError("risk basis is required")
@@ -366,6 +413,8 @@ def validate_position(candidate: Mapping[str, object]) -> dict[str, object]:
         if basis.get("value") is not None:
             basis_out["value"] = _finite_positive(basis.get("value"), "risk basis")
     elif lane == "put":
+        if basis.get("kind") != "ASSIGNMENT_CAPITAL":
+            raise PositionSchemaError("put risk basis kind is invalid")
         value = _finite_positive(basis.get("value"), "risk basis")
         if basis.get("derivation") != "EVALUATED_STRIKE_X_100" or not math.isclose(
             value, strike * 100.0
@@ -373,14 +422,34 @@ def validate_position(candidate: Mapping[str, object]) -> dict[str, object]:
             raise PositionSchemaError("put assignment capital must equal strike x 100")
         basis_out["value"] = value
     elif lane == "cc":
-        basis_out["value"] = _finite_positive(basis.get("value"), "risk basis")
+        if basis.get("kind") != "FROZEN_100_SHARE_COST_BASIS":
+            raise PositionSchemaError("covered-call risk basis kind is invalid")
+        basis_value = _finite_positive(basis.get("value"), "risk basis")
         coverage = position.get("coverage_context")
         if not isinstance(coverage, Mapping):
             raise PositionSchemaError("covered-call coverage is required")
-        if coverage.get("shares") != 100 or not isinstance(coverage.get("source_row_hash"), str):
+        if (
+            coverage.get("symbol") != symbol
+            or coverage.get("shares") != 100
+            or not isinstance(coverage.get("declared_shares"), int)
+            or int(coverage["declared_shares"]) < 100
+            or not isinstance(coverage.get("source_row_hash"), str)
+            or not coverage.get("source_row_hash")
+            or not isinstance(coverage.get("acquired"), str)
+        ):
             raise PositionSchemaError("covered-call coverage must bind 100 shares and source hash")
+        try:
+            date.fromisoformat(str(coverage["acquired"]))
+        except ValueError as exc:
+            raise PositionSchemaError("covered-call acquired date is invalid") from exc
+        cost_basis = _finite_positive(coverage.get("cost_basis"), "coverage cost basis")
+        if not math.isclose(basis_value, cost_basis * 100.0):
+            raise PositionSchemaError("covered-call basis must equal coverage cost basis x 100")
+        basis_out["value"] = basis_value
     elif lane == "pmcc":
-        basis_out["value"] = _finite_positive(basis.get("value"), "risk basis")
+        if basis.get("kind") != "FROZEN_COVERING_LEAPS_ENTRY_DEBIT":
+            raise PositionSchemaError("PMCC risk basis kind is invalid")
+        basis_value = _finite_positive(basis.get("value"), "risk basis")
         coverage = position.get("coverage_context")
         required = {
             "id",
@@ -392,13 +461,99 @@ def validate_position(candidate: Mapping[str, object]) -> dict[str, object]:
             "entry_price",
             "source_row_hash",
         }
-        if not isinstance(coverage, Mapping) or not required.issubset(coverage):
+        if (
+            not isinstance(coverage, Mapping)
+            or not required.issubset(coverage)
+            or coverage.get("symbol") != symbol
+            or coverage.get("right") != "C"
+            or not isinstance(coverage.get("id"), str)
+            or not coverage.get("id")
+            or not isinstance(coverage.get("source_row_hash"), str)
+            or not coverage.get("source_row_hash")
+            or not isinstance(coverage.get("contracts"), int)
+            or int(coverage["contracts"]) <= 0
+        ):
             raise PositionSchemaError("PMCC coverage must preserve full held-LEAPS identity")
+        _finite_positive(coverage.get("strike"), "PMCC covering strike")
+        entry_price = _finite_positive(coverage.get("entry_price"), "PMCC covering entry price")
+        try:
+            date.fromisoformat(str(coverage["expiration"]))
+        except ValueError as exc:
+            raise PositionSchemaError("PMCC covering expiration is invalid") from exc
+        if not math.isclose(basis_value, entry_price * 100.0):
+            raise PositionSchemaError("PMCC basis must equal covering LEAPS entry debit")
+        basis_out["value"] = basis_value
     else:
         raise PositionSchemaError(f"unsupported lane {lane!r}")
     out = copy.deepcopy(dict(position))
     out["risk_basis"] = basis_out
     return out
+
+
+def _identity_hash(value: Mapping[str, object]) -> str:
+    return _sha256_bytes(_canonical_bytes(value))
+
+
+def coverage_identity_matches(
+    position: Mapping[str, object],
+    *,
+    holdings: pd.DataFrame,
+    positions: pd.DataFrame,
+) -> bool:
+    """Compare frozen coverage to the currently declared source-row identity."""
+    coverage = position.get("coverage_context")
+    leg = position.get("evaluated_leg")
+    if not isinstance(coverage, Mapping) or not isinstance(leg, Mapping):
+        return False
+    symbol = str(leg.get("symbol") or "")
+    kind = position.get("risk_basis")
+    kind = kind.get("kind") if isinstance(kind, Mapping) else None
+    if kind == "FROZEN_100_SHARE_COST_BASIS":
+        rows = holdings.loc[holdings["symbol"].astype(str) == symbol]
+        if len(rows) != 1:
+            return False
+        row = rows.iloc[0]
+        identity = {
+            "symbol": symbol,
+            "shares": 100,
+            "declared_shares": int(row["shares"]),
+            "cost_basis": float(row["cost_basis"]),
+            "acquired": str(row["acquired"]),
+        }
+    elif kind == "FROZEN_COVERING_LEAPS_ENTRY_DEBIT":
+        rows = positions.loc[
+            (positions["id"].astype(str) == str(coverage.get("id")))
+            & (positions["structure"].astype(str) == "leaps_call")
+        ]
+        if len(rows) != 1:
+            return False
+        row = rows.iloc[0]
+        identity = {
+            "id": str(row["id"]),
+            "symbol": str(row["symbol"]),
+            "right": str(row["right"]),
+            "strike": float(row["strike"]),
+            "expiration": str(row["expiration"]),
+            "contracts": int(row["contracts"]),
+            "entry_price": float(row["entry_price"]),
+        }
+    else:
+        return True
+    identity["source_row_hash"] = _identity_hash(identity)
+    return _canonical_bytes(identity) == _canonical_bytes(coverage)
+
+
+def _current_coverage_validator(position: Mapping[str, object], _session: str) -> bool:
+    from options_researcher.portfolio import load_holdings, load_positions
+
+    try:
+        return coverage_identity_matches(
+            position,
+            holdings=load_holdings(),
+            positions=load_positions(),
+        )
+    except (FileNotFoundError, KeyError, OSError, TypeError, ValueError):
+        return False
 
 
 def _candidate_sessions(
@@ -709,17 +864,32 @@ def evaluate_records(
                 )
                 marks: list[dict[str, object]] = []
                 unreachable = 0
+                coverage_changed = False
                 for offset, mark_session in scheduled:
-                    if mark_session > expiry:
-                        marks.append(
-                            {
-                                "status": "MARK_AFTER_EXPIRY",
-                                "elapsed_sessions": offset,
-                                "mark_session": mark_session,
-                            }
-                        )
-                        unreachable += 1
+                    if mark_session >= expiry:
+                        if mark_session > expiry:
+                            marks.append(
+                                {
+                                    "status": "MARK_AFTER_EXPIRY",
+                                    "elapsed_sessions": offset,
+                                    "mark_session": mark_session,
+                                }
+                            )
+                            unreachable += 1
                     elif mark_session <= as_of:
+                        if candidate.get("lane") in {"cc", "pmcc"} and (
+                            coverage_validator is None
+                            or not coverage_validator(position, mark_session)
+                        ):
+                            coverage_changed = True
+                            result["status"] = "CANCELLED_COVERAGE_CHANGED"
+                            marks.append(
+                                {
+                                    "status": "CANCELLED_COVERAGE_CHANGED",
+                                    "mark_session": mark_session,
+                                }
+                            )
+                            break
                         if mark_session not in verified:
                             marks.append(
                                 {
@@ -749,7 +919,21 @@ def evaluate_records(
                                 )
                                 mark["elapsed_sessions"] = offset
                                 marks.append(mark)
-                if expiry <= as_of:
+                if (
+                    not coverage_changed
+                    and expiry <= as_of
+                    and candidate.get("lane") in {"cc", "pmcc"}
+                    and (coverage_validator is None or not coverage_validator(position, expiry))
+                ):
+                    coverage_changed = True
+                    result["status"] = "CANCELLED_COVERAGE_CHANGED"
+                    marks.append(
+                        {
+                            "status": "CANCELLED_COVERAGE_CHANGED",
+                            "mark_session": expiry,
+                        }
+                    )
+                if not coverage_changed and expiry <= as_of:
                     try:
                         underlying_close = close_loader(str(leg["symbol"]), expiry)
                     except (OSError, KeyError, ValueError) as exc:
@@ -770,9 +954,10 @@ def evaluate_records(
                             )
                         )
                     result["status"] = "SETTLED"
-                elif scheduled and scheduled[-1][1] <= as_of:
+                elif not coverage_changed and scheduled and scheduled[-1][1] <= as_of:
                     result["status"] = "SETTLED"
-                    marks[-1]["termination"] = "longest_applicable_mark"
+                    if marks:
+                        marks[-1]["termination"] = "longest_applicable_mark"
                 valid_marks = [
                     mark
                     for mark in marks
@@ -791,7 +976,7 @@ def evaluate_records(
                 result["marks"] = marks
                 result["unreachable_marks"] = unreachable
                 result["coverage_context_status"] = (
-                    "VALIDATED_UNCHANGED"
+                    ("CHANGED" if coverage_changed else "VALIDATED_UNCHANGED")
                     if candidate.get("lane") in {"cc", "pmcc"}
                     else "NOT_APPLICABLE"
                 )
@@ -860,8 +1045,6 @@ def weekly_paired_cohorts(
             lane for (row_week, arm, lane) in grouped if row_week == week and arm == "context_lane"
         }
         paired = sorted(baseline_lanes & context_lanes)
-        if not paired:
-            continue
         lane_contrasts = []
         for lane in paired:
             baseline = grouped[(week, "frozen_baseline", lane)]
@@ -870,9 +1053,11 @@ def weekly_paired_cohorts(
         cohorts.append(
             {
                 "week": week,
-                "contrast": sum(lane_contrasts) / len(lane_contrasts),
+                "contrast": (sum(lane_contrasts) / len(lane_contrasts) if lane_contrasts else None),
                 "paired_lanes": paired,
                 "unmatched_lanes": sorted(baseline_lanes ^ context_lanes),
+                "frozen_baseline_only": sorted(baseline_lanes - context_lanes),
+                "context_lane_only": sorted(context_lanes - baseline_lanes),
             }
         )
     return cohorts
@@ -883,7 +1068,8 @@ def build_scoreboard(
     *,
     weekly_cohorts: Sequence[Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
-    if weekly_cohorts is None:
+    derived_weekly = weekly_cohorts is None
+    if derived_weekly:
         weekly_cohorts = weekly_paired_cohorts(outcomes)
     arm_states = {arm: "READY" for arm in _SCORED_ARMS}
     lanes: dict[str, dict[str, dict[str, object]]] = defaultdict(dict)
@@ -939,8 +1125,14 @@ def build_scoreboard(
                     "unreachable_marks": 0,
                 },
             )
-    baseline_only = represented["frozen_baseline"] - represented["context_lane"]
-    context_only = represented["context_lane"] - represented["frozen_baseline"]
+    if derived_weekly:
+        baseline_only_count = sum(
+            len(row.get("frozen_baseline_only", [])) for row in weekly_cohorts
+        )
+        context_only_count = sum(len(row.get("context_lane_only", [])) for row in weekly_cohorts)
+    else:
+        baseline_only_count = len(represented["frozen_baseline"] - represented["context_lane"])
+        context_only_count = len(represented["context_lane"] - represented["frozen_baseline"])
     contrasts = [
         float(row["contrast"])
         for row in weekly_cohorts
@@ -975,8 +1167,8 @@ def build_scoreboard(
         "arm_states": arm_states,
         "lanes": {arm: dict(sorted(value.items())) for arm, value in lanes.items()},
         "unmatched_lane_counts": {
-            "frozen_baseline_only": len(baseline_only),
-            "context_lane_only": len(context_only),
+            "frozen_baseline_only": baseline_only_count,
+            "context_lane_only": context_only_count,
         },
         "primary_contrast": primary,
         "weekly_cohorts": [copy.deepcopy(dict(row)) for row in weekly_cohorts],
@@ -1098,6 +1290,7 @@ def evaluate_cli(as_of: str) -> None:
         chain_loader=load_chain,
         trading_days_fn=trading_days,
         close_loader=close_loader,
+        coverage_validator=_current_coverage_validator,
     )
     board = build_scoreboard(outcomes)
     board["as_of"] = as_of

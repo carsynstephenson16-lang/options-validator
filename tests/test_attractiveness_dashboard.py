@@ -2383,6 +2383,14 @@ class ContextLaneRenderTests(unittest.TestCase):
         from options_researcher import pick_tracker
 
         data = self._data(count=1)
+        card = data["symbols"][0]["groups"][0]["cards"][0]
+        data["symbols"][0]["groups"][0]["pick_tracker_quotes"] = {
+            f"{card['expiry']}:{float(card['strike']):.2f}": {
+                "bid": 1.0,
+                "ask": 1.2,
+                "source_row_hash": "a" * 64,
+            }
+        }
         with (
             mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
             mock.patch.object(config, "PICK_PINNED_SYMBOLS", []),
@@ -2409,8 +2417,42 @@ class ContextLaneRenderTests(unittest.TestCase):
             self.assertEqual(payload["html_sha256"], hashlib.sha256(html_path.read_bytes()).hexdigest())
             self.assertEqual(payload["capture_receipt_sha256"], hashlib.sha256(receipt.read_bytes()).hexdigest())
             self.assertEqual(payload["config_hash"], "e" * 64)
-            pick_tracker.validate_snapshot(payload, html_path.read_bytes())
+            pick_tracker.validate_snapshot(
+                payload, html_path.read_bytes(), input_root=root
+            )
             self.assertEqual(list(html_path.parent.glob("*.tmp")), [])
+
+    def test_dashboard_refuses_to_persist_snapshot_without_receipt_or_raw_quote(self):
+        from unittest import mock
+
+        data = self._data(count=1)
+        result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with (
+                mock.patch("research.hashing.config_hash", return_value="e" * 64),
+                self.assertRaisesRegex(ValueError, "capture receipt"),
+            ):
+                ad._write_dashboard_result(
+                    result,
+                    html_path=root / "attractiveness.html",
+                    snapshot_path=root / "picks_snapshot.json",
+                    input_root=root,
+                )
+
+            receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
+            with (
+                mock.patch("research.hashing.config_hash", return_value="e" * 64),
+                self.assertRaisesRegex(ValueError, "raw quote"),
+            ):
+                ad._write_dashboard_result(
+                    result,
+                    html_path=root / "attractiveness.html",
+                    snapshot_path=root / "picks_snapshot.json",
+                    input_root=root,
+                )
 
     def test_snapshot_carries_frozen_coverage_basis_without_changing_sections_json(self):
         data = self._data(count=1)
@@ -2676,6 +2718,9 @@ class MainTests(unittest.TestCase):
             root = Path(temp)
             board_root = (root / "ops").resolve()
             board_root.mkdir()
+            receipt = board_root / "reports/schwab_chains/2026-07-24/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
             output = root / "research" / "attractiveness.html"
             with (
                 mock.patch.dict(
@@ -2725,6 +2770,9 @@ class MainTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             board_root = (Path(temp) / "input-root").resolve()
             board_root.mkdir()
+            receipt = board_root / "reports/schwab_chains/2026-07-24/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
             output = Path(temp) / "deployment" / "attractiveness.html"
             observed = {}
 
@@ -2796,8 +2844,17 @@ class MainTests(unittest.TestCase):
                    "groups": [{"kind": "put", "title": "SELL A PUT?",
                                "cards": [], "empty": "none this cycle"}]}
         with tempfile.TemporaryDirectory() as tmp:
+            input_root = Path(tmp) / "input-root"
+            receipt = input_root / "reports/schwab_chains/2026-06-30/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
             out = os.path.join(tmp, "dashboard", "attractiveness.html")
-            with mock.patch.object(ad, "OUTPUT_PATH", out):
+            with (
+                mock.patch.object(ad, "OUTPUT_PATH", out),
+                mock.patch.dict(
+                    os.environ, {"ATTRACTIVENESS_INPUT_ROOT": str(input_root)}
+                ),
+            ):
                 buf = io.StringIO()
                 with redirect_stdout(buf):
                     path = ad.main(symbol_sections=[section],
