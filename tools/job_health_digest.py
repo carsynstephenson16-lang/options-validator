@@ -430,20 +430,6 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
             f"unknown overall_status {value!r}",
             relative,
         )
-    if payload.get("force") is not False:
-        return HealthRow(
-            "Schwab preclose",
-            HealthStatus.DEGRADED,
-            "force must be false; require force=false",
-            relative,
-        )
-    if payload.get("invocation_source") != "launchd":
-        return HealthRow(
-            "Schwab preclose",
-            HealthStatus.DEGRADED,
-            "invocation_source must be launchd",
-            relative,
-        )
     universe = payload.get("universe")
     if not isinstance(universe, list) or not all(isinstance(symbol, str) for symbol in universe):
         return HealthRow(
@@ -493,6 +479,13 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
             "Schwab preclose",
             HealthStatus.FAILED,
             f"manifest verification failed: {exc}",
+            relative,
+        )
+    if payload.get("invocation_source") != "launchd":
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.DEGRADED,
+            "invocation_source must be launchd",
             relative,
         )
     return HealthRow(

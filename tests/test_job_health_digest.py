@@ -229,15 +229,38 @@ class JobHealthDigestTests(unittest.TestCase):
         self._install_all_ok()
         path = self.root / f"reports/schwab_chains/{AS_OF}/preclose.json"
         original = json.loads(path.read_text())
-        cases = (("force", True, "force=false"), ("invocation_source", "manual", "launchd"))
-        for field, value, reason in cases:
+        cases = (
+            ("force", True, HealthStatus.FAILED, "force=false"),
+            ("invocation_source", "manual", HealthStatus.DEGRADED, "launchd"),
+        )
+        for field, value, status, reason in cases:
             with self.subTest(field=field):
                 path.write_text(json.dumps({**original, field: value}))
 
                 row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
 
-                self.assertEqual(row.status, HealthStatus.DEGRADED)
+                self.assertEqual(row.status, status)
                 self.assertIn(reason, row.reason)
+
+    def test_schwab_manifest_failure_overrides_policy_degradation(self):
+        self._install_all_ok()
+        chain = self.root / ".cache" / "schwab_chains" / f"CEG_{AS_OF}.parquet"
+        with chain.open("r+b") as stream:
+            stream.seek(16)
+            original_byte = stream.read(1)
+            stream.seek(16)
+            stream.write(bytes([original_byte[0] ^ 0x01]))
+        receipt = self.root / f"reports/schwab_chains/{AS_OF}/preclose.json"
+        original = json.loads(receipt.read_text())
+        cases = (("force", True), ("invocation_source", "manual"))
+        for field, value in cases:
+            with self.subTest(field=field):
+                receipt.write_text(json.dumps({**original, field: value}))
+
+                row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
+
+                self.assertEqual(row.status, HealthStatus.FAILED)
+                self.assertIn("manifest verification failed", row.reason)
 
     def test_schwab_preclose_runs_offline_manifest_verification(self):
         self._install_all_ok()
