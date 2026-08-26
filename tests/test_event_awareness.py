@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import date
@@ -75,6 +77,12 @@ class EventCalendarTests(unittest.TestCase):
         calendar = event_calendar.calendar_with_fomc([], fomc.load_fomc())
         self.assertEqual([item.date for item in calendar], fomc.load_fomc())
         self.assertEqual(len(calendar), len({item.event_id for item in calendar}))
+        self.assertTrue(
+            all(item.verification == "asserted" and not item.source_quote for item in calendar)
+        )
+        self.assertTrue(
+            all(item.source_url.startswith("https://www.federalreserve.gov/") for item in calendar)
+        )
 
     def test_complex_map_rejects_future_membership(self):
         # Catches hindsight membership applied to an earlier event.
@@ -100,6 +108,66 @@ class EventCalendarTests(unittest.TestCase):
         self.assertEqual(len(calendar), 7)
         self.assertEqual(
             set(complex_map["clusters"]["ai_infra"]["members"]), set(config.ATTRACTIVENESS_UNIVERSE)
+        )
+
+    def test_cli_add_appends_one_valid_row_and_refuses_duplicate(self):
+        # Catches a manual add path bypassing the same schema and duplicate guard.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "calendar.jsonl"
+            args = [
+                sys.executable,
+                "-m",
+                "options_researcher.event_calendar",
+                "add",
+                "--path",
+                str(path),
+                "--event-id",
+                "cli",
+                "--date",
+                "2026-08-27",
+                "--time-et",
+                "UNKNOWN",
+                "--kind",
+                "other",
+                "--title",
+                "CLI event",
+                "--source-url",
+                "https://example.gov/event",
+                "--source-kind",
+                "official_gov",
+                "--verification",
+                "asserted",
+                "--source-quote",
+                "",
+                "--captured-at",
+                "2026-08-26T15:53:26Z",
+                "--added-by",
+                "test",
+            ]
+            self.assertEqual(subprocess.run(args, capture_output=True, text=True).returncode, 0)
+            self.assertEqual(len(path.read_text().splitlines()), 1)
+            self.assertNotEqual(subprocess.run(args, capture_output=True, text=True).returncode, 0)
+
+    def test_seed_evidence_is_pinned_to_reviewed_literals(self):
+        # Catches paraphrased source quotes that cannot be verified in a diff.
+        expected = {
+            "nvda-fy27q2-results-2026-08-26": "This material will be posted to investor.nvidia.com immediately after the company’s results are publicly announced at approximately 1:20 p.m. PT.",
+            "bea-gdp-q2-second-estimate-2026-08-26": "August 26 8:30 AM | GDP (Second Estimate) and Corporate Profits, 2nd Quarter 2026.",
+            "bea-personal-income-outlays-july-2026-08-26": "August 26 8:30 AM | Personal Income and Outlays, July 2026.",
+            "jackson-hole-symposium-2026": "Jackson Hole Economic Policy Symposium, August 27–29, 2026",
+            "warsh-jackson-hole-keynote-2026-08-28": "10:00 a.m. | Speech - Chairman Kevin Warsh | Keynote Remarks",
+            "avgo-fy26q3-results-2026-09-02": "Broadcom Inc. to Announce Third Quarter Fiscal Year 2026 Financial Results on Wednesday, September 2, 2026",
+            "iren-fy26-results-2026-08-27": "IREN to Release FY26 Results on August 27, 2026",
+        }
+        seeded = {item.event_id: item for item in event_calendar.load_calendar()}
+        self.assertEqual({key: item.source_quote for key, item in seeded.items()}, expected)
+        self.assertEqual(
+            seeded["nvda-fy27q2-results-2026-08-26"].source_url,
+            "https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Sets-Conference-Call-for-Second-Quarter-Financial-Results/default.aspx",
+        )
+        self.assertEqual(
+            seeded["warsh-jackson-hole-keynote-2026-08-28"].source_url,
+            "https://www.federalreserve.gov/newsevents/2026-august.htm",
         )
 
 
@@ -221,6 +289,43 @@ class EventChipTests(unittest.TestCase):
         self.assertEqual(ad.render(data), ad.render(data, event_view=None))
         self.assertNotIn("event-chip-style", ad.render(data, event_view=None))
 
+    def test_missing_both_event_files_disables_exactly_to_prebrief_render(self):
+        # Catches rollback leaving FOMC, CSS, notices, or implied annotations behind.
+        data = {
+            "evaluation_date": "2026-08-26",
+            "data_as_of": "2026-08-26",
+            "symbols": [],
+            "blocked": [],
+            "stale_symbols": [],
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(event_calendar, "CALENDAR_PATH", Path(tmp) / "none.jsonl"),
+            mock.patch.object(event_calendar, "COMPLEX_MAP_PATH", Path(tmp) / "none.json"),
+        ):
+            self.assertIsNone(ad.build_event_view(data, "2026-08-26"))
+        self.assertEqual(ad.render(data), ad.render(data, event_view=None))
+
+    def test_chip_exception_is_contained_and_explicit_event_date_is_required(self):
+        # Catches a renderer crash or stale data_as_of fallback in the event boundary.
+        data = {
+            "evaluation_date": "2026-08-26",
+            "data_as_of": "2020-01-01",
+            "symbols": [],
+            "blocked": [],
+            "stale_symbols": [],
+        }
+        with self.assertRaises(TypeError):
+            ad.build_event_view(data)  # type: ignore[call-arg]
+        event = self.calendar[0]
+        view = event_calendar.EventView.create([event], {}, {}, {})
+        with self.assertRaises(TypeError):
+            view.failures["x"] = "y"  # type: ignore[index]
+        card = {"expiry": "2026-08-30"}
+        with mock.patch.object(ad, "event_chips", side_effect=RuntimeError):
+            html = ad._event_chips_html(card, "NVDA", "2026-08-26", view)
+        self.assertIn("EVENT LAYER FAILED — RuntimeError", html)
+
 
 class ImpliedMoveTests(unittest.TestCase):
     def test_exact_atm_straddle_and_loud_unavailable_reasons(self):
@@ -243,6 +348,34 @@ class ImpliedMoveTests(unittest.TestCase):
         ]:
             unavailable = event_calendar.implied_move(chain, "2026-08-26", None, source)
             self.assertIn(reason, unavailable["reason"])
+
+    def test_implied_move_stamps_and_each_unavailable_reason(self):
+        # Catches lossy provenance stamps or a quiet invalid/missing option leg.
+        chain = [
+            {"expiration": "2026-09-05", "strike": 100.0, "right": "C", "bid": 4.0, "ask": 6.0},
+            {"expiration": "2026-09-05", "strike": 100.0, "right": "P", "bid": 2.0, "ask": 4.0},
+        ]
+        good = event_calendar.implied_move(
+            chain,
+            "2026-08-26",
+            100.0,
+            "schwab_preclose",
+            spot_timestamp="15:45:00",
+            receipt_session="2026-08-26",
+        )
+        self.assertEqual(good["method"], "atm_straddle_mid/v1")
+        self.assertEqual(good["capture_convention"], "15:45 ET preclose")
+        self.assertEqual(good["spot_source"], "stock_snapshot")
+        for rows, reason in [
+            (chain[:1], "missing put"),
+            (chain[1:], "missing call"),
+            ([{**chain[0], "bid": float("nan")}], "missing call"),
+            ([{**chain[0], "expiration": "2026-10-30"}], "no expiry"),
+        ]:
+            self.assertIn(
+                reason,
+                event_calendar.implied_move(rows, "2026-08-26", 100.0, "schwab_preclose")["reason"],
+            )
 
 
 if __name__ == "__main__":

@@ -2712,11 +2712,14 @@ def _event_chips_html(card: Mapping[str, object], symbol: str,
                       evaluation_date: str, event_view: Mapping[str, object] | None) -> str:
     if not event_view:
         return ""
-    calendar = event_view.get("calendar", [])
-    complex_raw = event_view.get("complex_map", {})
-    chips = event_chips(card, symbol, evaluation_date,
-                        calendar if isinstance(calendar, (list, tuple)) else [],
-                        complex_raw if isinstance(complex_raw, Mapping) else {})
+    try:
+        calendar = event_view.get("calendar", [])
+        complex_raw = event_view.get("complex_map", {})
+        chips = event_chips(card, symbol, evaluation_date,
+                            calendar if isinstance(calendar, (list, tuple)) else [],
+                            complex_raw if isinstance(complex_raw, Mapping) else {})
+    except Exception as exc:
+        return f'<div class="notice bad">EVENT LAYER FAILED — {_esc(exc.__class__.__name__)}</div>'
     return ('<div class="event-chips">' + ''.join(
         f'<span class="event-chip">EVENT · {_esc(chip["text"])}</span>' for chip in chips
     ) + '</div>') if chips else ""
@@ -4556,7 +4559,7 @@ def _run_exit_code(
     return 1 if any(rec.get("unexpected") for rec in blocked) or qm_unexpected else 0
 
 
-def build_event_view(data: Mapping[str, object]) -> dict[str, object]:
+def build_event_view(data: Mapping[str, object], evaluation_date: str) -> Mapping[str, object] | None:
     """Read immutable cached event inputs before pure ``render`` runs.
 
     This pre-render boundary is display-only. Promotion requires a separate
@@ -4565,11 +4568,13 @@ def build_event_view(data: Mapping[str, object]) -> dict[str, object]:
     from options_researcher import event_calendar, fomc, schwab_chain_view
 
     failures: dict[str, str] = {}
+    if not event_calendar.CALENDAR_PATH.exists() and not event_calendar.COMPLEX_MAP_PATH.exists():
+        return None
     try:
         calendar = event_calendar.load_calendar()
         if calendar:
             calendar = event_calendar.calendar_with_fomc(calendar, fomc.load_fomc())
-        evaluation = date.fromisoformat(str(data.get("evaluation_date") or data.get("data_as_of")))
+        evaluation = date.fromisoformat(evaluation_date)
         complex_map = event_calendar.load_complex_map(
             events=[event for event in calendar if event.date >= evaluation])
     except Exception as exc:
@@ -4592,12 +4597,13 @@ def build_event_view(data: Mapping[str, object]) -> dict[str, object]:
                 continue
             spot_record = schwab_chain_view.load_preclose_spot(symbol, session)
             spot = spot_record[0] if spot_record is not None else None
+            timestamp = spot_record[1] if spot_record is not None else ""
             moves[symbol] = event_calendar.implied_move(
-                newest[0], session, spot, "schwab_preclose")
+                newest[0], session, spot, "schwab_preclose",
+                spot_timestamp=timestamp, receipt_session=session)
         except Exception as exc:
             failures[symbol] = exc.__class__.__name__
-    return {"calendar": calendar, "complex_map": complex_map,
-            "implied_moves": moves, "failures": failures}
+    return event_calendar.EventView.create(calendar, complex_map, moves, failures)
 
 
 def render(
@@ -4702,7 +4708,14 @@ def render(
                                f'{_esc(move.get("reason", "unknown"))}</div>')
                 elif move.get("text"):
                     implied = (f'<div class="label">implied move {_esc(move["text"])} · '
-                               f'{_esc(move.get("method", ""))}</div>')
+                               f'{_esc(move.get("method", ""))} · chain session '
+                               f'{_esc(move.get("chain_session", ""))} · capture convention '
+                               f'{_esc(move.get("capture_convention", ""))} · expiry '
+                               f'{_esc(move.get("expiry", ""))} · strike '
+                               f'{_esc(move.get("strike", ""))} · spot source '
+                               f'{_esc(move.get("spot_source", ""))} · intraday receipt session '
+                               f'{_esc(move.get("intraday_receipt_session", ""))} · spot timestamp '
+                               f'{_esc(move.get("spot_timestamp", ""))}</div>')
         symbols_html += (
             f'<details class="panel symbol-panel"{open_attr}>'
             '<summary class="symbol-header"><div>'
@@ -4818,7 +4831,7 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     research_views_status = load_research_views_status()
     if copy_warning:
         research_views_status["copy_warning"] = copy_warning
-    event_view = build_event_view(data)
+    event_view = build_event_view(data, str(data["evaluation_date"]))
     out_html = render(
         data,
         context=context,

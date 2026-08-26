@@ -6,12 +6,17 @@ a separate owner decision, registration, and the 2026-07-24 gate.
 
 from __future__ import annotations
 
+import argparse
+import csv
+import fcntl
 import json
 import math
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Iterable, Mapping
+from types import MappingProxyType
+from typing import Iterable, Iterator, Mapping
 from urllib.parse import urlparse
 
 from options_researcher.source_policy import BANNED_HOST_FRAGMENTS
@@ -51,6 +56,47 @@ class Event:
     source_quote: str
     captured_at: datetime
     added_by: str
+
+
+@dataclass(frozen=True)
+class EventView(Mapping[str, object]):
+    """Immutable pre-render input; promotion requires owner decision, registration, and gate."""
+
+    calendar: tuple[Event, ...]
+    complex_map: Mapping[str, object]
+    implied_moves: Mapping[str, Mapping[str, str]]
+    failures: Mapping[str, str]
+
+    def __getitem__(self, key: str) -> object:
+        return {
+            "calendar": self.calendar,
+            "complex_map": self.complex_map,
+            "implied_moves": self.implied_moves,
+            "failures": self.failures,
+        }[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(("calendar", "complex_map", "implied_moves", "failures"))
+
+    def __len__(self) -> int:
+        return 4
+
+    @classmethod
+    def create(
+        cls,
+        calendar: Iterable[Event],
+        complex_map: Mapping[str, object],
+        implied_moves: Mapping[str, Mapping[str, str]],
+        failures: Mapping[str, str],
+    ) -> "EventView":
+        return cls(
+            tuple(calendar),
+            MappingProxyType(dict(complex_map)),
+            MappingProxyType(
+                {key: MappingProxyType(dict(value)) for key, value in implied_moves.items()}
+            ),
+            MappingProxyType(dict(failures)),
+        )
 
 
 def _string(row: Mapping[str, object], name: str, *, allow_unknown: bool = False) -> str:
@@ -135,8 +181,14 @@ def load_calendar(path: Path | str = CALENDAR_PATH) -> list[Event]:
 
 def calendar_with_fomc(calendar: Iterable[Event], fomc_dates: Iterable[date]) -> list[Event]:
     """Adapt the existing FOMC source without adding rows to the JSONL file."""
+    from options_researcher.fomc import FOMC_PATH
+
     out = list(calendar)
     ids = {item.event_id for item in out}
+    with open(FOMC_PATH, newline="") as handle:
+        urls = {
+            date.fromisoformat(row["date"]): row["source_url"] for row in csv.DictReader(handle)
+        }
     for decision_date in fomc_dates:
         event_id = f"fomc-{decision_date.isoformat()}"
         if event_id not in ids:
@@ -147,10 +199,10 @@ def calendar_with_fomc(calendar: Iterable[Event], fomc_dates: Iterable[date]) ->
                     None,
                     "fomc_meeting",
                     "FOMC decision",
-                    "data/events/fomc_dates.csv",
+                    urls[decision_date],
                     "official_gov",
-                    "fetched",
-                    "FOMC date from the existing cached Federal Reserve calendar.",
+                    "asserted",
+                    "",
                     datetime(1970, 1, 1, tzinfo=timezone.utc),
                     "existing-fomc-source",
                 )
@@ -193,7 +245,13 @@ def provenance_markers(event: Event, evaluation_date: date) -> tuple[str, ...]:
 
 
 def implied_move(
-    chain: Iterable[Mapping[str, object]], session: str, spot: float | None, source: str | None
+    chain: Iterable[Mapping[str, object]],
+    session: str,
+    spot: float | None,
+    source: str | None,
+    *,
+    spot_timestamp: str = "",
+    receipt_session: str = "",
 ) -> dict[str, str]:
     """Compute nearest 1–21 day ATM call+put mid / verified spot, or explain refusal."""
     if source != "schwab_preclose":
@@ -250,8 +308,10 @@ def implied_move(
             and ask >= bid
         ):
             mids[side] = (float(bid) + float(ask)) / 2
-    if "CALL" not in mids or "PUT" not in mids:
-        return {"text": "UNAVAILABLE", "reason": "missing call or put quote at ATM strike"}
+    if "CALL" not in mids:
+        return {"text": "UNAVAILABLE", "reason": "missing call quote at ATM strike"}
+    if "PUT" not in mids:
+        return {"text": "UNAVAILABLE", "reason": "missing put quote at ATM strike"}
     move = (mids["CALL"] + mids["PUT"]) / float(spot)
     return {
         "text": f"{move:.2%}",
@@ -259,5 +319,45 @@ def implied_move(
         "expiry": expiry.isoformat(),
         "strike": f"{strike:g}",
         "spot_source": "stock_snapshot",
-        "session": session,
+        "chain_session": session,
+        "capture_convention": "15:45 ET preclose",
+        "intraday_receipt_session": receipt_session or session,
+        "spot_timestamp": spot_timestamp or "unavailable",
     }
+
+
+def _add(args: argparse.Namespace) -> int:
+    row = {key: getattr(args, key) for key in _REQUIRED}
+    _parse(row, where="command line")
+    path = Path(args.path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        handle.seek(0)
+        existing = load_calendar(path)
+        if any(item.event_id == args.event_id for item in existing):
+            raise ValueError(f"duplicate event_id {args.event_id}")
+        handle.seek(0, os.SEEK_END)
+        handle.write(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Manage cached display-only event calendar")
+    sub = parser.add_subparsers(dest="command", required=True)
+    add = sub.add_parser("add")
+    add.add_argument("--path", default=str(CALENDAR_PATH))
+    for field in _REQUIRED:
+        add.add_argument("--" + field.replace("_", "-"), dest=field, required=True)
+    args = parser.parse_args(argv)
+    try:
+        return _add(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
