@@ -96,3 +96,30 @@ recurring failure in this work package was "guards specified in prose
 that turn out to compare the wrong pair" — future briefs should state
 guards as concrete comparisons between named, independently-sourced
 values from the first draft.
+
+## 2026-08-26 independent correction review
+
+**Reviewer:** isolated GPT-5.6 high-reasoning reviewer, read-only.
+**Reviewed commit:** `bc760a22d0c01e30e8d526158188158f06a32bc9`.
+**Verified base:** post-Brief-25
+`origin/main@8a6920a2449094f4e5db5ad6ff00741f2d388023`.
+**Verdict:** **PASS**.
+
+The reviewer independently checked all six correction criteria:
+
+1. Active passages use exactly 26 → 25 → 28 → 27 → 30.
+2. Briefs 28/30 are rebased and provenanced to the verified base, and the
+   refreshed line citations support their claims.
+3. Brief 28 explicitly covers landed Brief-25 context cards through each
+   row's underlying `pick["card"]`, render-only and non-grading, with a named
+   acceptance proof.
+4. Brief 30 retains all five keyword-only capture-core parameters, including
+   `receipt_kind` and `convention`, and the midday call supplies its distinct
+   identity values.
+5. Only gitignored `.cache/schwab_chains_midday` enters the irreplaceable-data
+   guard; tracked `reports/schwab_chains_midday` relies on `DATA_TIER_PATHS`
+   plus git/remote and carries no inventory floor.
+6. No stale active passage, hidden authority expansion, or internal contract
+   contradiction was introduced.
+
+No blocking findings were reported.
