@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import unittest
 
-import config
 from options_researcher import context_lane
 
 
@@ -62,9 +61,6 @@ def _composite(
 
 
 class ContextLaneRankingTests(unittest.TestCase):
-    def test_feature_flag_defaults_off(self) -> None:
-        self.assertIs(config.CONTEXT_LANE_ENABLED, False)
-
     def test_green_fraction_lexicographically_dominates_context_term(self) -> None:
         pool = [
             _pool_item("GREEN", green_fraction=1.0),

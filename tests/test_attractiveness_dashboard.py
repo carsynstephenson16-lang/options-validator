@@ -2031,7 +2031,7 @@ class V2RenderTests(unittest.TestCase):
             html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
         )
 
-    def test_configured_slots_render_as_two_lists_and_duplicate_is_allowed(self):
+    def test_configured_slots_render_as_three_lists_and_duplicate_is_allowed(self):
         section = _v2_section()
         section["symbol"] = "AMZN"  # registered CSP name; appears as WATCH
         data = ad.assemble(symbol_sections=[section], rv21_by_symbol={"AMZN": math.sqrt(12) * 0.11})
@@ -2044,8 +2044,8 @@ class V2RenderTests(unittest.TestCase):
         html = ad.render(data, qm_context=qm_context)
         self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", html)
         self.assertIn("Rule-based top 5", html)
-        self.assertEqual(html.count('class="hero-card '), 2 * config.PICK_TOP_N)
-        self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 2)
+        self.assertEqual(html.count('class="hero-card '), 3 * config.PICK_TOP_N)
+        self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 3)
         original_start = html.index("Rule-based top 5")
         qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         self.assertNotIn("Current QM signal", html[original_start:qm_start])
