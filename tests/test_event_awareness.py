@@ -371,29 +371,100 @@ class EventChipTests(unittest.TestCase):
         ]
         picks_before = json.dumps(ad.select_top_picks(data), sort_keys=True, separators=(",", ":"))
         sections_before = ad.sections_json(data["symbols"])
-        view = {"calendar": self.calendar, "complex_map": {}, "implied_moves": {}, "failures": {}}
+        view = {
+            "calendar": self.calendar,
+            "complex_map": {},
+            "implied_moves": {
+                "NVDA": {
+                    "text": "7.92%",
+                    "method": "atm_straddle_mid/v1",
+                    "chain_session": "2026-08-26",
+                    "capture_convention": "15:45 ET preclose",
+                    "expiry": "2026-09-05",
+                    "strike": "100.0",
+                    "spot_source": "stock_snapshot",
+                    "intraday_receipt_session": "2026-08-26",
+                    "spot_timestamp": "2026-08-26T15:45:00-04:00",
+                }
+            },
+            "failures": {},
+        }
+
+        def chips(fragment):
+            return re.findall(r'<span class="event-chip">(.*?)</span>', fragment)
+
+        def card_fragment(page, symbol, surface):
+            marker = {
+                "lane": f'data-candidate-id="{symbol}:long_call:100"',
+                "context": f'data-context-symbol="{symbol}"',
+                "pinned": '<div class="pinned-card good">',
+            }[surface]
+            start = page.index(marker)
+            if surface == "lane":
+                start = page.rfind('<div class="panel candidate-card"', 0, start)
+                end = page.find("</details>", start)
+                return page[start:] if end == -1 else page[start:end]
+            if surface == "context":
+                end_marker = "</details></div>"
+                end = page.index(end_marker, start) + len(end_marker)
+                return page[start:end]
+            if surface == "pinned":
+                end = page.find("</section>", start)
+                return page[start:] if end == -1 else page[start:end]
+
         with (
             mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
             mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"]),
         ):
             html = ad.render(data, event_view=view)
+            self.assertIn("implied move 7.92%", html)
+            prebrief = ad.render(data)
+            with (
+                tempfile.TemporaryDirectory() as tmp,
+                mock.patch.object(event_calendar, "CALENDAR_PATH", Path(tmp) / "none.jsonl"),
+                mock.patch.object(event_calendar, "COMPLEX_MAP_PATH", Path(tmp) / "none.json"),
+            ):
+                disabled = ad.build_event_view(data, "2026-08-26")
+            rollback = ad.render(data, event_view=disabled)
 
-        def chips(fragment):
-            return re.findall(r'<span class="event-chip">(.*?)</span>', fragment)
-
-        lane = html[html.index('data-candidate-id="NVDA:long_call:100"') :]
-        hero = html[html.index('<div class="hero-card good">') :]
-        context = html[html.index('data-context-symbol="NVDA"') :]
-        pinned = html[html.index('<div class="pinned-card good">') :]
-        expected = chips(lane)[:3]
-        self.assertGreaterEqual(len(expected), 3)
-        self.assertEqual(chips(hero)[: len(expected)], expected)
-        self.assertEqual(chips(context)[: len(expected)], expected)
-        self.assertEqual(chips(pinned)[: len(expected)], expected)
-        self.assertGreaterEqual(html.count('<div class="hero-card good">'), 3)
-        self.assertEqual(
-            len(chips(html[html.index("empty-slot") : html.index("empty-slot") + 350])), 0
+        lane = card_fragment(html, "NVDA", "lane")
+        context = card_fragment(html, "NVDA", "context")
+        pinned = card_fragment(html, "NVDA", "pinned")
+        hero_section = html[
+            html.index("Daily shortlist · TOP 5 PICKS TODAY") : html.index("CONTEXT-AWARE")
+        ]
+        hero_cards = re.findall(
+            r'<div class="hero-card good">(.*?)(?=<div class="hero-card good">|</section>)',
+            hero_section,
+            re.S,
         )
+        self.assertEqual(len(hero_cards), 3)
+        nvda_hero = next(card for card in hero_cards if "NVDA call" in card)
+        # Bind the named hero explicitly rather than inferring identity from position.
+        self.assertIn("NVDA:long_call:100", nvda_hero)
+        for hero_card in hero_cards:
+            self.assertGreaterEqual(len(chips(hero_card)), 3)
+        expected = chips(lane)
+        self.assertEqual(chips(nvda_hero), expected)
+        self.assertEqual(chips(context), expected)
+        self.assertEqual(chips(pinned), expected)
+        context_section = html[
+            html.index("CONTEXT-AWARE SHORTLIST") : html.index(
+                "Frozen-shortlist comparison diagnostics"
+            )
+        ]
+        empty_start = context_section.index('class="hero-card unknown empty-slot"')
+        empty_fragment = context_section[
+            empty_start : context_section.index("</div>", empty_start) + 6
+        ]
+        self.assertIn("Context pick", empty_fragment)
+        self.assertEqual(chips(empty_fragment), [])
+        self.assertIsNone(disabled)
+        self.assertEqual(rollback, prebrief)
+        self.assertNotIn("event-chip", rollback)
+        self.assertNotIn("event-chip-style", rollback)
+        self.assertNotIn("implied move", rollback)
+        self.assertNotIn("EVENT LAYER FAILED", rollback)
         self.assertEqual(
             [section["groups"][0]["cards"][0]["grades"] for section in data["symbols"]],
             grades_before,
