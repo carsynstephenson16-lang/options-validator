@@ -1025,6 +1025,73 @@ class JobHealthDigestTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(completed.stdout, output.read_text())
 
+    def test_cli_rejects_outer_root_from_nested_worktree(self):
+        self._install_all_ok()
+        (self.root / ".git").mkdir()
+        nested_worktree = self.root / ".tmp" / "worktrees" / "review"
+        nested_worktree.mkdir(parents=True)
+        (nested_worktree / ".git").write_text("gitdir: ../../../../.git/worktrees/review\n")
+        env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tools.job_health_digest",
+                "--root",
+                str(self.root),
+                "--research-root",
+                str(self.root),
+                "--as-of",
+                AS_OF,
+            ],
+            cwd=nested_worktree,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        output = nested_worktree / ".tmp" / "job_health" / f"digest_{AS_OF}.md"
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn(
+            "--out-dir resolves inside --root for a different checkout",
+            completed.stderr,
+        )
+        self.assertFalse(output.exists())
+
+    def test_cli_rejects_unknown_outer_root_from_known_nested_checkout(self):
+        self._install_all_ok()
+        nested_checkout = self.root / "nested_checkout"
+        nested_checkout.mkdir()
+        (nested_checkout / ".git").write_text("gitdir: ../git-data\n")
+        env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tools.job_health_digest",
+                "--root",
+                str(self.root),
+                "--research-root",
+                str(self.root),
+                "--as-of",
+                AS_OF,
+            ],
+            cwd=nested_checkout,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        output = nested_checkout / ".tmp" / "job_health" / f"digest_{AS_OF}.md"
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn(
+            "--out-dir resolves inside --root for a different checkout",
+            completed.stderr,
+        )
+        self.assertFalse(output.exists())
+
     def test_cli_accepts_explicit_root_equal_to_invoking_cwd(self):
         self._install_all_ok()
         env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}

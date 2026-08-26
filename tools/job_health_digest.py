@@ -712,6 +712,24 @@ def render_digest(as_of: str, rows: list[HealthRow]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _checkout_root(path: Path) -> Path | None:
+    for candidate in (path, *path.parents):
+        git_marker = candidate / ".git"
+        if git_marker.is_dir() or git_marker.is_file():
+            return candidate
+    return None
+
+
+def _same_checkout(cwd: Path, read_root: Path) -> bool:
+    cwd_checkout = _checkout_root(cwd)
+    read_checkout = _checkout_root(read_root)
+    if cwd_checkout is not None and read_checkout is not None:
+        return cwd_checkout == read_checkout
+    if cwd_checkout is None and read_checkout is None:
+        return cwd == read_root or read_root in cwd.parents
+    return False
+
+
 def write_digest(
     *,
     root: Path,
@@ -729,8 +747,7 @@ def write_digest(
         ("--root", resolved_root),
         ("--research-root", resolved_research_root),
     ):
-        cwd_is_in_read_root = resolved_cwd == read_root or read_root in resolved_cwd.parents
-        if not cwd_is_in_read_root and (
+        if not _same_checkout(resolved_cwd, read_root) and (
             resolved_out_dir == read_root or read_root in resolved_out_dir.parents
         ):
             raise ValueError(f"--out-dir resolves inside {label} for a different checkout")
