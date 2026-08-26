@@ -1,7 +1,11 @@
 """tests/test_attractiveness_dashboard.py"""
+import json
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
+import config
 from options_researcher import attractiveness_dashboard as ad
 from options_researcher.hypothesis_evidence import (
     EvidenceRow,
@@ -557,6 +561,23 @@ class SelectTopPicksTests(unittest.TestCase):
                   if p["symbol"] == "BBB" and p["strike"] == 45.0]
         self.assertEqual(vetoed, [])
 
+    def test_default_shortlist_width_is_configured_top_n(self):
+        data = {"symbols": []}
+        for index in range(6):
+            data["symbols"].append({
+                "symbol": f"S{index}", "close": 100.0, "iv_rank": 0.5,
+                "as_of": "2026-07-01", "groups": [{
+                    "kind": "put", "title": "P", "empty": None,
+                    "cards": [_pick_card(
+                        95.0, "2026-08-21", grades={"liquidity": "GREEN"},
+                        lane_fields={"credit": 200.0,
+                                     "annualized_yield": 0.30 - index / 100})],
+                }],
+            })
+        picks = ad.select_top_picks(data)
+        self.assertEqual(len(picks), config.PICK_TOP_N)
+        self.assertEqual(config.PICK_TOP_N, 5)
+
     def test_scoring_greens_leader_and_tech_bonus(self):
         # The legacy display score stays on each pick for the audit line;
         # one-per-symbol means each symbol surfaces only its best card, so
@@ -708,6 +729,200 @@ class SelectTopPicksTests(unittest.TestCase):
         self.assertEqual(actual_picks, expected_picks)
         self.assertEqual(ad._top3_gap_reasons(with_extra), expected_gaps)
         self.assertNotIn("CLSK", {symbol for symbol, _, _ in actual_picks})
+
+
+def _dominance_card(*, annualized_yield=0.20, cushion=0.10, upside=0.10,
+                    cost=500.0, breakeven=105.0, breakeven_move=0.05,
+                    grades=None, **extra):
+    card = {
+        "headline": extra.pop("headline", "candidate"),
+        "annualized_yield": annualized_yield, "cushion": cushion,
+        "upside": upside, "cost": cost, "breakeven": breakeven,
+        "breakeven_move": breakeven_move,
+        "grades": grades or {"liquidity": "GREEN", "portfolio": "GREEN"},
+        "top3_snapshot": {"rank_eligible": True,
+                          "selection_status": "ELIGIBLE",
+                          "policy": {"status": "ELIGIBLE", "reason_codes": []}},
+    }
+    card.update(extra)
+    return card
+
+
+class DominancePartitionTests(unittest.TestCase):
+    def test_put_dominance_hides_only_directly_dominated_card(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        worse = _dominance_card(annualized_yield=0.20, cushion=0.10)
+        tradeoff = _dominance_card(annualized_yield=0.40, cushion=0.05)
+        shown, hidden = ad.dominated_partition([best, worse, tradeoff], "put", 100.0)
+        self.assertEqual(shown, [best, tradeoff])
+        self.assertEqual(hidden, [(worse, best)])
+
+    def test_missing_axis_is_incomparable_and_never_hidden(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        incomparable = _dominance_card(annualized_yield=0.20, cushion=None)
+        third = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        shown, hidden = ad.dominated_partition([best, incomparable, third], "put", 100.0)
+        self.assertIn(incomparable, shown)
+        self.assertNotIn(incomparable, [card for card, _ in hidden])
+
+    def test_liquidity_red_and_blocked_cards_are_never_hidden(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        liquidity_red = _dominance_card(
+            annualized_yield=0.20, cushion=0.10,
+            grades={"liquidity": "RED", "portfolio": "RED"})
+        blocked = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        blocked["top3_snapshot"] = {"selection_status": "DATA_BLOCKED"}
+        shown, hidden = ad.dominated_partition(
+            [best, liquidity_red, blocked], "put", 100.0)
+        self.assertEqual(shown, [best, liquidity_red, blocked])
+        self.assertEqual(hidden, [])
+
+    def test_portfolio_red_only_card_is_hideable(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        worse = _dominance_card(annualized_yield=0.20, cushion=0.10,
+                                grades={"liquidity": "GREEN", "portfolio": "RED"})
+        third = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        _shown, hidden = ad.dominated_partition([best, worse, third], "put", 100.0)
+        self.assertIn(worse, [card for card, _ in hidden])
+
+    def test_two_card_and_pmcc_lanes_are_exempt(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        worse = _dominance_card(annualized_yield=0.20, cushion=0.10)
+        third = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        self.assertEqual(ad.dominated_partition([best, worse], "put", 100.0),
+                         ([best, worse], []))
+        self.assertEqual(ad.dominated_partition([best, worse, third], "pmcc", 100.0),
+                         ([best, worse, third], []))
+
+    def test_hidden_cards_have_a_shown_front_dominator(self):
+        front = _dominance_card(annualized_yield=0.40, cushion=0.20)
+        middle = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        low = _dominance_card(annualized_yield=0.20, cushion=0.10)
+        shown, hidden = ad.dominated_partition([front, middle, low], "put", 100.0)
+        self.assertEqual(shown, [front])
+        self.assertEqual(hidden, [(middle, front), (low, front)])
+
+    def test_group_render_keeps_liquidity_warning_outside_hidden_details(self):
+        def renderable(card, headline):
+            card.update({"headline": headline, "strike": 95.0,
+                         "expiry": "2026-08-21", "dte": 45, "risk": {},
+                         "scenarios": [], "bbb": [], "verdict": "display only"})
+            return card
+        best = renderable(_dominance_card(annualized_yield=0.30, cushion=0.15),
+                          "best shown")
+        warning = renderable(_dominance_card(
+            annualized_yield=0.20, cushion=0.10,
+            grades={"liquidity": "RED", "portfolio": "RED"}),
+            "liquidity warning shown")
+        hideable = renderable(_dominance_card(
+            annualized_yield=0.10, cushion=0.05,
+            grades={"liquidity": "GREEN", "portfolio": "RED"}),
+            "portfolio-only hidden")
+        html = ad._group_html({"kind": "put", "title": "PUT",
+                               "cards": [best, warning, hideable]},
+                              rank=1, close=100.0)
+        hidden_start = html.index('<details class="dominated-candidates">')
+        self.assertLess(html.index("liquidity warning shown"), hidden_start)
+        self.assertGreater(html.index("portfolio-only hidden"), hidden_start)
+
+    def test_group_dom_records_each_candidate_identity_once(self):
+        def renderable(card, ident, headline):
+            card.update({"headline": headline, "strike": 95.0,
+                         "expiry": "2026-08-21", "dte": 45, "risk": {},
+                         "scenarios": [], "bbb": [], "verdict": "display only"})
+            card["top3_snapshot"]["candidate_id"] = ident
+            return card
+
+        best = renderable(
+            _dominance_card(annualized_yield=0.30, cushion=0.15),
+            "AAA:put:best", "best shown")
+        hidden = renderable(
+            _dominance_card(annualized_yield=0.20, cushion=0.10),
+            "AAA:put:hidden", "hidden but retained")
+        tradeoff = renderable(
+            _dominance_card(annualized_yield=0.40, cushion=0.05),
+            "AAA:put:tradeoff", "tradeoff shown")
+
+        html = ad._group_html(
+            {"kind": "put", "title": "PUT", "cards": [best, hidden, tradeoff]},
+            rank=1, close=100.0)
+
+        for ident in ("AAA:put:best", "AAA:put:hidden", "AAA:put:tradeoff"):
+            self.assertEqual(html.count(f'data-candidate-id="{ident}"'), 1)
+
+
+class SymbolPanelStatusTests(unittest.TestCase):
+    def test_fail_visible_labels_open_panel(self):
+        blocked = _dominance_card()
+        blocked["top3_snapshot"] = {"selection_status": "DATA_BLOCKED"}
+        section = {"symbol": "AAA", "features_stale": True,
+                   "groups": [{"cards": [blocked, {"skipped": "no quote"}]}]}
+        self.assertEqual(ad._panel_status(section, {"AAA"}),
+                         (["DATA_BLOCKED", "STALE", "SKIPPED"], True))
+
+    def test_liquidity_warning_only_panel_is_collapsed(self):
+        card = _dominance_card(grades={"liquidity": "RED"})
+        section = {"symbol": "AAA", "groups": [{"cards": [card]}]}
+        self.assertEqual(ad._panel_status(section, set()),
+                         (["LIQUIDITY WARNING"], False))
+
+    def test_clean_panel_is_current_and_collapsed(self):
+        section = {"symbol": "AAA", "groups": [{"cards": [_dominance_card()]}]}
+        self.assertEqual(ad._panel_status(section, set()), (["CURRENT"], False))
+
+    def test_render_uses_details_and_fail_visible_open_attribute(self):
+        section = _v2_section()
+        section["symbol"] = "AMZN"
+        data = ad.assemble(symbol_sections=[section],
+                           rv21_by_symbol={"AMZN": math.sqrt(12) * 0.11})
+        data["stale_symbols"] = []
+        data["symbols"][0]["features_stale"] = False
+        data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"].update(
+            {"rank_eligible": True, "selection_status": "ELIGIBLE"})
+        clean_html = ad.render(data)
+        self.assertIn('<details class="panel symbol-panel">', clean_html)
+        self.assertNotIn('<details class="panel symbol-panel" open>', clean_html)
+        data["symbols"][0]["features_stale"] = True
+        self.assertIn('<details class="panel symbol-panel" open>', ad.render(data))
+
+
+class RegimeStripTests(unittest.TestCase):
+    def _status(self, root: Path, *, evaluation_date="2026-08-26",
+                max_asof="2026-08-25"):
+        sidecar = {
+            "schema": "regime_report/v1",
+            "as_of_written": "2026-08-26T12:00:00.000000Z",
+            "evaluation_date": evaluation_date,
+            "symbols": {symbol: {"label": index,
+                                  "high_dispersion": bool(index % 2),
+                                  "max_asof": max_asof,
+                                  "skipped_reason": None}
+                        for index, symbol in enumerate(config.REGIME_SYMBOLS)},
+        }
+        path = root / "wasserstein-regime.json"
+        path.write_text(json.dumps(sidecar, sort_keys=True,
+                                   separators=(",", ":")) + "\n")
+        return {"state": "published", "generation_id":
+                "20260826T120000000000Z-0123456789abcdef0123456789abcdef",
+                "artifacts": {"wasserstein-regime.json": path}}
+
+    def test_regime_strip_renders_valid_sidecar_and_shared_disclaimer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            html = ad._regime_strip_html(self._status(Path(tmp)), "2026-08-26")
+        self.assertIn("REGIME (descriptive)", html)
+        for symbol in config.REGIME_SYMBOLS:
+            self.assertIn(symbol, html)
+        self.assertIn("not a registered signal", html)
+        self.assertNotIn("regime view unpublished/stale", html)
+
+    def test_absent_or_future_sidecar_is_loud(self):
+        self.assertIn("regime view unpublished/stale — see Experiments shelf",
+                      ad._regime_strip_html({"state": "absent"}, "2026-08-26"))
+        with tempfile.TemporaryDirectory() as tmp:
+            status = self._status(Path(tmp), evaluation_date="2026-08-27",
+                                  max_asof="2026-08-27")
+            html = ad._regime_strip_html(status, "2026-08-26")
+        self.assertIn("regime view unpublished/stale — see Experiments shelf", html)
 
 
 class SelectQmTopPicksTests(unittest.TestCase):
@@ -1367,7 +1582,7 @@ class V2RenderTests(unittest.TestCase):
 
     def test_hero_with_matched_context_pick(self):
         html = ad.render(self._assembled(), context=_v2_context())
-        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertIn("TOP 5 PICKS TODAY", html)
         self.assertIn("Legacy agent-selected top_picks were ignored", html)
         self.assertNotIn("IV elevated vs realized", html)
         self.assertNotIn("cushion exceeds monthly move", html)
@@ -1452,7 +1667,7 @@ class V2RenderTests(unittest.TestCase):
 
     def test_missing_context_renders_honest_quant_shortlist(self):
         html = ad.render(self._assembled())
-        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertIn("TOP 5 PICKS TODAY", html)
         self.assertIn("No qualifying contract", html)
         # honesty: no narrative vocabulary invented
         self.assertNotIn("why now", html)
@@ -1581,7 +1796,7 @@ class V2RenderTests(unittest.TestCase):
         )
 
         movement_start = html.index("QM MOVEMENT LANE")
-        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         lane = html[movement_start:movement_end]
         self.assertIn("SYM0", lane)
         self.assertIn("BREAKOUT + PARABOLIC WARNING", lane)
@@ -1599,7 +1814,7 @@ class V2RenderTests(unittest.TestCase):
         })
         html = ad.render(self._assembled(), qm_context=context)
         movement_start = html.index("QM MOVEMENT LANE")
-        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         lane = html[movement_start:movement_end]
 
         self.assertIn("not covered by the frozen study", lane)
@@ -1614,7 +1829,7 @@ class V2RenderTests(unittest.TestCase):
             qm_context=self._movement_context(statuses=("NO FIRE", "NO FIRE")),
         )
         movement_start = html.index("QM MOVEMENT LANE")
-        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         lane = html[movement_start:movement_end]
 
         self.assertIn(
@@ -1631,7 +1846,7 @@ class V2RenderTests(unittest.TestCase):
         # No movement_symbols key at all — the shape load_qm_context returns when blocked.
         html = ad.render(self._assembled(), qm_context=context)
         movement_start = html.index("QM MOVEMENT LANE")
-        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         lane = html[movement_start:movement_end]
 
         self.assertIn("BLOCKED — movement state is unavailable this session", lane)
@@ -1676,13 +1891,13 @@ class V2RenderTests(unittest.TestCase):
 
     def test_movement_lane_sits_between_mechanical_top_three_and_retained_comparison(self):
         html = ad.render(self._assembled(), qm_context=self._movement_context())
-        self.assertLess(html.index("Rule-based top 3"), html.index("QM MOVEMENT LANE"))
+        self.assertLess(html.index("Rule-based top 5"), html.index("QM MOVEMENT LANE"))
         self.assertLess(
             html.index("QM MOVEMENT LANE"),
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
         )
 
-    def test_six_slots_render_as_two_lists_and_duplicate_is_allowed(self):
+    def test_configured_slots_render_as_two_lists_and_duplicate_is_allowed(self):
         section = _v2_section()
         section["symbol"] = "AMZN"  # registered CSP name; appears as WATCH
         data = ad.assemble(symbol_sections=[section], rv21_by_symbol={"AMZN": math.sqrt(12) * 0.11})
@@ -1693,12 +1908,12 @@ class V2RenderTests(unittest.TestCase):
         qm_context = self._qm_context()
         qm_context["symbols"]["AMZN"] = qm_context["symbols"].pop("MSFT")
         html = ad.render(data, qm_context=qm_context)
-        self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", html)
-        self.assertIn("Rule-based top 3", html)
-        self.assertEqual(html.count('class="hero-card '), 6)
+        self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", html)
+        self.assertIn("Rule-based top 5", html)
+        self.assertEqual(html.count('class="hero-card '), 2 * config.PICK_TOP_N)
         self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 2)
-        original_start = html.index("Rule-based top 3")
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        original_start = html.index("Rule-based top 5")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         self.assertNotIn("Current QM signal", html[original_start:qm_start])
         self.assertIn(
             "QM is descriptive context only; it cannot change this mechanical card's "
@@ -1742,23 +1957,23 @@ class V2RenderTests(unittest.TestCase):
         self.assertIn("frozen study records aggregate excursions, not per-fire moves", html)
         self.assertIn("not recomputed from today&#x27;s cache", html)
 
-    def test_stale_qm_context_renders_three_blocked_slots_but_original_remains(self):
+    def test_stale_qm_context_renders_configured_blocked_slots_but_original_remains(self):
         html = ad.render(
             self._assembled(),
             qm_context=self._qm_context(status="DATA_BLOCKED", as_of="2026-06-29"),
         )
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
-        original_start = html.index("Rule-based top 3")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        original_start = html.index("Rule-based top 5")
         qm_section = html[qm_start:]
-        self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
+        self.assertEqual(qm_section.count("DATA BLOCKED"), config.PICK_TOP_N)
         self.assertIn("Sell the MSFT $350 put", html[original_start:])
 
-    def test_incomplete_current_qm_context_renders_three_blocked_slots(self):
+    def test_incomplete_current_qm_context_renders_configured_blocked_slots(self):
         context = self._qm_context()
         del context["symbols"]["MSFT"]
         html = ad.render(self._assembled(), qm_context=context)
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
-        self.assertEqual(html[qm_start:].count("DATA BLOCKED"), 3)
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        self.assertEqual(html[qm_start:].count("DATA BLOCKED"), config.PICK_TOP_N)
         self.assertIn("QM context missing or stale for: MSFT", html)
 
     def test_qm_section_reports_dropped_research_annotation(self):
@@ -1776,11 +1991,11 @@ class V2RenderTests(unittest.TestCase):
     def test_page_order_puts_mechanical_list_before_descriptive_qm_comparison(self):
         html = ad.render(self._assembled(), context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("Rule-based top 3"),
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("Rule-based top 5"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
         )
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
             html.index("Quant-want background"),
         )
         self.assertLess(html.index("Quant-want background"), html.index("Market context"))
@@ -1797,7 +2012,7 @@ class V2RenderTests(unittest.TestCase):
         data["composite_signals"] = [blocked_card]
         html = ad.render(data, context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
             html.index("Composite signal board"),
         )
         self.assertLess(
@@ -2017,58 +2232,28 @@ class LaneBoardPresentationTests(unittest.TestCase):
             "symbols": {"NVDA": {"news_summary": "covered"}},
         }
 
-    def test_status_reader_accepts_only_atomic_three_line_contract(self):
-        import tempfile
-        from pathlib import Path
+    def test_status_reader_accepts_only_validated_current_generation(self):
+        from options_researcher import research_views_publication as publication
 
+        generation_id = "20260815T113000000000Z-0123456789abcdef0123456789abcdef"
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "research-views-status.txt"
-            path.write_text(
-                "research views refresh: 2026-08-15T07:30:00-0400\n"
-                "experiments: OK exit=0\n"
-                "wasserstein: FAILED exit=2\n"
-            )
-            status = ad.load_research_views_status(path)
+            dashboard = Path(tmp)
+            staging = dashboard / "research-views-generations" / f".staging-{generation_id}"
+            staging.mkdir(parents=True)
+            for name in publication.ARTIFACTS:
+                (staging / name).write_text(f"{name}\n")
+            publication.publish_generation(
+                dashboard_dir=dashboard, staging_dir=staging,
+                generation_id=generation_id,
+                published_at="2026-08-15T11:30:00.000000Z",
+                producer_commit="a" * 40)
+            status = ad.load_research_views_status(dashboard)
             self.assertEqual(status["state"], "published")
-            self.assertEqual(status["timestamp"], "2026-08-15T07:30:00-0400")
-            self.assertEqual(status["experiments"], "OK")
-            self.assertEqual(status["wasserstein"], "FAILED")
-
-            path.write_text("experiments: OK exit=0\n")
-            self.assertEqual(ad.load_research_views_status(path)["state"], "malformed")
-
-            for malformed_timestamp in (
-                "2026-99-99T07:30:00-0400",
-                "2026-08-15T25:30:00-0400",
-                "2026-08-15T07:30:00+2460",
-                "2026-08-15T07:30:00+2359",
-                "2026-08-15T07:30:00-2359",
-                "2026-08-15T07:30:00+1401",
-                "2026-08-15T07:30:00-1401",
-            ):
-                with self.subTest(timestamp=malformed_timestamp):
-                    path.write_text(
-                        f"research views refresh: {malformed_timestamp}\n"
-                        "experiments: OK exit=0\n"
-                        "wasserstein: FAILED exit=2\n"
-                    )
-                    self.assertEqual(
-                        ad.load_research_views_status(path)["state"], "malformed"
-                    )
-
-            for valid_timestamp in (
-                "2026-08-15T07:30:00+1400",
-                "2026-08-15T07:30:00-1400",
-            ):
-                with self.subTest(timestamp=valid_timestamp):
-                    path.write_text(
-                        f"research views refresh: {valid_timestamp}\n"
-                        "experiments: OK exit=0\n"
-                        "wasserstein: FAILED exit=2\n"
-                    )
-                    self.assertEqual(
-                        ad.load_research_views_status(path)["state"], "published"
-                    )
+            self.assertEqual(status["generation_id"], generation_id)
+            status_path = status["artifacts"]["research-views-status.txt"]
+            status_path.write_bytes(status_path.read_bytes() + b"x")
+            self.assertEqual(ad.load_research_views_status(dashboard)["state"],
+                             "integrity_failed")
 
     def test_freshness_research_composite_and_shelf_are_visible_in_board_order(self):
         html = ad.render(
@@ -2077,16 +2262,15 @@ class LaneBoardPresentationTests(unittest.TestCase):
             qm_context={"status": "DATA_BLOCKED"},
             research_views_status={
                 "state": "published",
-                "timestamp": "2026-08-15T07:30:00-0400",
-                "experiments": "OK",
-                "wasserstein": "FAILED",
+                "published_at": "2026-08-15T11:30:00.000000Z",
+                "generation_id": "20260815T113000000000Z-0123456789abcdef0123456789abcdef",
             },
         )
         self.assertIn("DATA FRESHNESS", html)
         self.assertIn("Frozen EOD (.cache/chains)", html)
         self.assertIn("Verified Schwab 15:45 pre-close (.cache/schwab_chains)", html)
         self.assertIn("Underlying closes", html)
-        self.assertIn("Rule-based top 3 — best policy-and-liquidity fit today", html)
+        self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)
         self.assertIn(
             "Chosen by fixed rules (green-check fraction, one pick per stock). This is a fit ranking, not a prediction; whether it predicts anything is exactly what the registered RQ2/A2 studies will measure.",
             html,
@@ -2095,15 +2279,14 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("RESEARCH DESK", html)
         self.assertEqual(html.count('class="research-coverage-row"'), 18)
         self.assertIn("EXPERIMENTS SHELF", html)
-        self.assertIn('href="experiments.html"', html)
-        self.assertIn('href="wasserstein-regime.txt"', html)
+        self.assertIn('href="research-views-generations/', html)
         self.assertIn("experiments: OK", html)
-        self.assertIn("wasserstein: FAILED", html)
+        self.assertIn("wasserstein: OK", html)
         for earlier, later in (
-            ("DATA FRESHNESS", "Rule-based top 3"),
-            ("Rule-based top 3", "QM MOVEMENT LANE"),
-            ("QM MOVEMENT LANE", "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
-            ("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", "Composite signal board"),
+            ("DATA FRESHNESS", "Rule-based top 5"),
+            ("Rule-based top 5", "QM MOVEMENT LANE"),
+            ("QM MOVEMENT LANE", "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
+            ("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", "Composite signal board"),
             ("Composite signal board", "RESEARCH DESK"),
             ("RESEARCH DESK", "EXPERIMENTS SHELF"),
             ("EXPERIMENTS SHELF", "Symbol review"),
@@ -2117,21 +2300,20 @@ class LaneBoardPresentationTests(unittest.TestCase):
             context=self._context(),
             research_views_status={
                 "state": "published",
-                "timestamp": "2026-08-15T07:30:00-0400",
-                "experiments": "OK",
-                "wasserstein": "FAILED",
+                "published_at": "2026-08-15T11:30:00.000000Z",
+                "generation_id": "20260815T113000000000Z-0123456789abcdef0123456789abcdef",
             },
         )
 
-        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("Experiments views</strong>", freshness)
-        self.assertIn("2026-08-15T07:30:00-0400", freshness)
+        self.assertIn("2026-08-15T11:30:00.000000Z", freshness)
         self.assertIn("experiments: OK", freshness)
-        self.assertIn("wasserstein: FAILED", freshness)
+        self.assertIn("wasserstein: OK", freshness)
 
     def test_experiments_views_absent_chip_honestly_says_not_published(self):
         html = ad.render(self._data(), research_views_status={"state": "absent"})
-        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("Experiments views</strong> not published", freshness)
         self.assertIn("BLOCKED", freshness)
 
@@ -2164,7 +2346,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
             )
 
         html = ad.render(data)
-        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("Underlying closes</strong> max session 2026-08-14", strip)
         self.assertNotIn("Underlying closes</strong> as of 2026-08-13", strip)
 
@@ -2196,7 +2378,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
         data = self._data()
         data["underlying_closes_freshness"] = malformed
         html = ad.render(data)
-        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("Underlying closes</strong> unavailable", strip)
         self.assertIn("BLOCKED", strip)
 
@@ -2281,9 +2463,9 @@ class LaneBoardPresentationTests(unittest.TestCase):
         )
         headings = (
             "DATA FRESHNESS",
-            "Rule-based top 3",
+            "Rule-based top 5",
             "QM MOVEMENT LANE",
-            "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3",
+            "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5",
             "Composite signal board",
             "RESEARCH DESK",
             "REGISTERED-BETS TRACKER",
@@ -2301,7 +2483,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
         data["symbols"][0]["closes_as_of"] = "not-a-date"
         data["chain_age_sessions"] = None
         html = ad.render(data, research_views_status={"state": "absent"})
-        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("UNKNOWN", freshness)
         self.assertIn("BLOCKED", freshness)
         self.assertIn("research: none", html)
@@ -2320,7 +2502,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
         data = self._data()
         data["evaluation_date"] = "2026-08-17"
         html = ad.render(data, context=self._context())
-        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("Research</strong> as of 2026-08-14; researched on 2026-08-14; stale by 1 sessions; WARN", freshness)
 
     def test_schwab_freshness_uses_stalest_constituent_date(self):
@@ -2333,7 +2515,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
             today="2026-08-14",
         )
         html = ad.render(data)
-        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 3")]
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         schwab = freshness[freshness.index("Verified Schwab"):freshness.index("Underlying closes")]
         self.assertIn("as of 2026-08-11; 3 sessions old", schwab)
         self.assertIn("BLOCKED", schwab)
@@ -2368,7 +2550,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("Highest agreement today: none at grade A", composite)
         self.assertIn("No composite cards are available for this board.", composite)
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
             html.index("Composite signal board"),
         )
         self.assertLess(html.index("Composite signal board"), html.index("RESEARCH DESK"))

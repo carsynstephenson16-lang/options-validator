@@ -6,6 +6,7 @@ import unittest
 
 import pandas as pd
 
+import config
 import options_researcher.attractiveness_dashboard as ad
 
 
@@ -260,7 +261,7 @@ class RenderHonestyTests(unittest.TestCase):
 
     def test_only_n_fit_note_and_risk_lines(self):
         html = ad.render(self._data_one_fit_one_big())
-        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertIn("TOP 5 PICKS TODAY", html)
         self.assertNotIn("EXCEEDS the $600/trade hard cap", html)
         self.assertIn("worst case -$22,006 at expiration", html)
         self.assertIn("vs $14,000 sleeve", html)
@@ -274,12 +275,12 @@ class RenderHonestyTests(unittest.TestCase):
         self.assertIn("No qualifying contract", html)
         self.assertIn("This is an intentional open slot", html)
 
-    def test_partial_top3_keeps_three_visible_slots_in_each_list(self):
+    def test_partial_shortlist_keeps_configured_visible_slots_in_each_list(self):
         html = ad.render(self._data_one_fit_one_big())
-        self.assertEqual(html.count('<div class="hero-card '), 6)
-        self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", html)
-        self.assertIn("Rule-based top 3 — best policy-and-liquidity fit today", html)
-        self.assertIn("Pick 3", html)
+        self.assertEqual(html.count('<div class="hero-card '), 2 * config.PICK_TOP_N)
+        self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", html)
+        self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)
+        self.assertIn("Pick 5", html)
         self.assertIn("No qualifying contract", html)
         self.assertIn("not missing UI", html)
 
@@ -323,7 +324,7 @@ class RenderHonestyTests(unittest.TestCase):
         data["symbols"][0]["features_as_of"] = "2026-06-30"
         html = ad.render(data)
         self.assertIn("IV features are from 2026-06-30", html)
-        self.assertIn("excluded from the Top-3 shortlist", html)
+        self.assertIn("excluded from the Top-5 shortlist", html)
 
     def test_preview_card_warns_two_leg(self):
         pm = _card(470.0, "2026-09-18",
