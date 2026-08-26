@@ -145,3 +145,22 @@ The reviewer found three blocking documentation defects:
 Revisions 25 rev 5, 28 rev 6, and 30 rev 7 are the correction candidate for
 these findings. A later section must record the immutable correction commit
 and fresh independent verdict before this package may merge.
+
+## 2026-08-26 corrected-pass review
+
+**Reviewer:** isolated GPT-5.6 high-reasoning reviewer, read-only.
+**Reviewed commit:** `572cabce863c8f62db4b084d98590bcb253883b1`.
+**Verified base:** post-Brief-25
+`origin/main@8a6920a2449094f4e5db5ad6ff00741f2d388023`.
+**Verdict:** **PASS**.
+
+The reviewer confirmed that the immutable correction commit closes all three
+prior blockers: every active train passage uses 26 → 25 → 28 → 27 → 30;
+the hashing citations cover both source-path membership and the hash function;
+and Brief 30 fail-closes absent-to-populated cache state and requires a real,
+positive first-population floor before scheduling or cleanup. The reviewer
+also reconfirmed Brief 28's render-only, non-grading context-card chip coverage,
+Brief 30's five keyword-only capture parameters and distinct midday identity,
+and the boundary that only `.cache/schwab_chains_midday` enters the guard while
+tracked `reports/schwab_chains_midday` relies on `DATA_TIER_PATHS` plus
+git/remote. No authority expansion or blocking contradiction was found.

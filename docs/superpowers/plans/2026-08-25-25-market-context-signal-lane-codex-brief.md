@@ -3,7 +3,7 @@
 **Date:** 2026-08-26 (rev 5, train-order correction)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** REVIEW PASS rev 4 for Brief 25's substantive contract; rev 5 changes only the downstream train order and is pending PR #90's final correction review. Binding implementation order is 26 → 25 → 28 → 27 → 30; this status does not authorize merge, flag enablement, or deployment.
+**Status:** REVIEW PASS rev 5 — Brief 25's substantive contract retained its rev-4 PASS, and a fresh independent PR #90 correction review passed the rev-5 downstream train-order amendment on `572cabc`. Binding implementation order is 26 → 25 → 28 → 27 → 30; this status does not authorize implementation, flag enablement, or deployment.
 **Provenance:** Brief 25's substantive contract was repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. The 2026-08-26 order-only addendum is repo-verified against post-Brief-25 `origin/main@8a6920a2449094f4e5db5ad6ff00741f2d388023`. Landing order is binding: **26 → 25 → 28 → 27 → 30** (Brief 28 consumes Brief 25's context-card surface before Brief 27, and Brief 30 remains last).
 **Owner directive source:** Carsyn in-session 2026-08-25 ("market context i want that updated daily and actually contributing to the signals") — spoken, not owner-typed.
 
