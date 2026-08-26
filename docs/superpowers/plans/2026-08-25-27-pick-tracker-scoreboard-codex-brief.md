@@ -1,9 +1,9 @@
-# Codex brief 27 — daily pick recorder + entry-window scoreboard, decision/fill split, registration-gated (rev 4)
+# Codex brief 27 — daily pick recorder + entry-window scoreboard, decision/fill split, registration-gated (rev 5)
 
-**Date:** 2026-08-25 (rev 4, same day)
+**Date:** 2026-08-25 (rev 5, Wave 0 full-PR audit)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 4 — adversarial review round 3 verdict PASS WITH FIXES (NEW-2 sink-key split, NEW-3 stale prose, NEW-4 density/cancellation projection + hard ops precondition — applied in this rev). Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
+**Status:** DRAFT rev 5 — not authorized for hand-off. Round-3 fixes and the parameter amendments are incorporated, but Brief 27 must be rebased/reverified after Briefs 26 and 25 land and then receive its own fresh written independent PASS. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
 **Duration honesty (rev-2 finding N-6):** the owner asked for "two months." Two months is the ENTRY window (proposed 42 sessions, owner-typed at registration). Positions entered late in the window then run out their mark schedules — a LEAPS pick entered on the final day reaches its longest registered mark ~126 sessions (≈6 months) later. The scoreboard reports progressively from week one; the FINAL settled answer for every lane arrives months after the entry window closes. Say this to the owner plainly; do not sell a 6-month tail as a 2-month study.
 **Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. Landing order is binding: **brief 26, then brief 25, then this brief.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("each day the system should thoroughly run through each experiment and different standards and choose the top 5 for the day and track its picks for 2 months to see if it actually has been picking correctly") — spoken, not owner-typed.
@@ -42,8 +42,10 @@ design answers each one head-on:
 3. **Statistics (rev-1 finding 4):** naive daily re-recording counts one
    move many times. Rev 2 records a pick ONCE, at the session it ENTERS a
    lane's top-N (membership-entry event); aggregates use weekly
-   non-overlapping cohorts (A2-v1's own device, ledger seq 19); every
-   summary carries a bootstrap CI; the single primary contrast needs no
+   non-overlapping entry cohorts (A2-v1's own device, ledger seq 19); point
+   summaries always render, while the primary contrast carries an exploratory
+   dependence-aware bootstrap CI only after WP-D's minimum-cohort gate; the
+   single primary contrast needs no
    multiplicity correction, and the mandatory concentration disclosure
    states that picks from an 18-name AI-infrastructure board are correlated
    and the effective sample is far smaller than the row count.
@@ -75,7 +77,7 @@ This tracker IS the paper-trading answer.
   default).
 - WP-C: evaluator (A2-schedule marks, conservative sides, costs).
 - WP-D: scoreboard report + dashboard section.
-- WP-E: ritual hook + ops sync + durability.
+- WP-E: ritual hook + durability + owner-run ops handoff instructions.
 - WP-F: pre-registration packet DRAFT (hard precondition for any scored row).
 
 **OUT (hard stops)**
@@ -89,6 +91,10 @@ This tracker IS the paper-trading answer.
   nominations (descriptive columns only).
 - The tracker has zero authority: descriptive, stamped non-verdict-bearing,
   cannot gate, size, or trigger anything.
+- The worker ends at a green **draft PR**. It may not make the PR ready,
+  merge, deploy, sync `~/options-validator-ops`, modify a ledger, type a
+  registration, enable a flag, or flip authority. WP-E.3 is an owner-run
+  handoff contract, not delegated execution.
 
 ## Design contract
 
@@ -103,15 +109,38 @@ sessions, not paths — rev-1 finding 25).
 
 **Decision/fill split (mirrors registered seq 21).** Decision session D:
 the pick enters a lane's top-N on D's board. Fill session: the NEXT session
-with a verified capture containing the contract. Entry mark = conservative
-executable side at that fill capture (buy at ask / sell at bid) plus
-`SLIPPAGE_HAIRCUT`, plus `COMMISSION_PER_CONTRACT` per leg — all existing
-`config.py` constants, no new numbers. If no verified capture exists within
-2 sessions after D, the record closes as `CANCELLED_NO_FILL_DATA` (never a
-silent fill; 2-session bound is LLM-proposed). If the contract is absent
-from the fill capture, `CANCELLED_CONTRACT_ABSENT`. Both cancellation kinds
-appear in the scoreboard's counts — cancelled picks are themselves a
-finding about the pipeline.
+with a verified capture containing the evaluated option contract. Entry mark
+= conservative executable side at that fill capture (buy at ask / sell at
+bid) plus `SLIPPAGE_HAIRCUT`, plus `COMMISSION_PER_CONTRACT` for the one
+evaluated option leg — all existing `config.py` constants, no new numbers.
+If no verified capture exists within 2 sessions after D, the record closes as
+`CANCELLED_NO_FILL_DATA` (never a silent fill; 2-session bound is
+LLM-proposed). If the contract is absent from the fill capture,
+`CANCELLED_CONTRACT_ABSENT`. Schema/coverage failures use the explicit
+cancellation codes below. Every cancellation kind appears in the scoreboard
+counts — cancelled picks are themselves a finding about the pipeline.
+
+**Evaluated leg and risk basis (Wave 0 full-PR audit):** the study measures the
+incremental option recommendation, not mark-to-market P&L on an owner holding
+that predates the pick. Every pick carries strict schema
+`pick_position/v1` with exactly one evaluated option leg
+`{symbol, right, strike, expiry, side, contracts: 1}`, `pnl_scope` exactly
+`INCREMENTAL_OPTION_LEG_ONLY`, and lane-specific frozen coverage/risk basis:
+
+| Lane | Evaluated leg | Required coverage context | Risk-basis denominator |
+|---|---|---|---|
+| `long_call`, `leaps` | long call | none | conservative entry debit at fill |
+| `put` | short put | assignment-capital value from `top3_snapshot.policy`; `pick_position/v1` adds derivation `EVALUATED_STRIKE_X_100` and validates exact equality | assignment capital |
+| `cc` | short call | 100-share holding identity, cost basis, and source-row hash | frozen 100-share cost basis |
+| `pmcc` | short call | full held-LEAPS identity from `data/positions/positions.csv`: position id, symbol, right, strike, expiration, contracts, entry price, plus source-row hash | frozen LEAPS entry debit for one covering contract |
+
+The coverage leg is validity/provenance and normalization context only: do not
+include its historical P&L in the pick outcome and do not charge a fictitious
+new transaction cost for it. PMCC preview cards remain ineligible. If a lane's
+required identity or finite positive basis is absent, inconsistent, or changes
+before fill, cancel visibly as `CANCELLED_POSITION_SCHEMA_INVALID` or
+`CANCELLED_COVERAGE_CHANGED`; never infer a leg, substitute current spot, or
+emit partial P&L.
 
 **Reuse, don't reimplement (rev-1 finding 3 minimal-fix):**
 `options_researcher/h7_paper_lifecycle.py` already implements
@@ -159,10 +188,14 @@ could silently diverge from the rendered page — the rev-1 defect again
 parameter (a dict it fills with exactly the per-arm pick objects it
 renders); `_build_and_write` passes the sink and persists its contents to
 `.tmp/dashboard/picks_snapshot.json` — schema `picks_snapshot/v1`, per-arm
-ordered candidate lists with `candidate_id`, contract identity (symbol,
-lane kind, strike, expiry, right), quote sides from the board's capture,
-board `data_as_of`, capture receipt path + sha256, and `config_hash`
-surface. Atomic write. Arm-to-call mapping is explicit (round-3 finding
+ordered candidate lists with `candidate_id`, the complete
+`pick_position/v1` evaluated-leg/coverage/risk-basis record above, quote
+sides from the board's capture, board `data_as_of`, capture receipt path +
+sha256, source-row hashes, and `config_hash` surface. Extend the holdings /
+held-LEAPS assembly only enough to preserve the required identities; current
+PMCC enrichment retains only strike and entry cost, which is insufficient
+and must fail closed until full position identity is carried. Atomic write.
+Arm-to-call mapping is explicit (round-3 finding
 NEW-2 — the board makes THREE `select_top_picks` calls that differ):
 - sink key `frozen_baseline` ← the policy-qualified call
   `select_top_picks(data)` at `attractiveness_dashboard.py:3246`;
@@ -182,9 +215,21 @@ path is `.tmp`).
 
 1. Consumes the picks artifact + `verified_sessions()`; refuses to record a
    session absent from the verified list (`SESSION_UNVERIFIED`, fail-closed).
-2. Membership-entry events: a (arm, candidate_id) pair opens ONCE — on the
-   session it first appears in that arm's top-N — and is not re-recorded
-   while continuously present; re-entry after an exit opens a new event.
+2. Membership-entry events are keyed on **(arm, symbol, lane)** — a
+   shortlist SLOT — NOT on `candidate_id` (2026-08-25 parameter audit,
+   measured on the frozen cache 2026-05-01→2026-07-27: the winning
+   expiry+strike changes on ~90% of consecutive session pairs, median
+   candidate_id run length 1 session, ~38 candidate_id-keyed events per
+   symbol-lane per 42 sessions — candidate_id keying would flood the study
+   with re-struck near-duplicates of one economic bet, defeating the
+   rev-2 fix for review finding 4). The slot opens ONCE, on the session
+   its symbol-lane first enters the arm's top-N; the contract recorded is
+   the one displayed on that opening session and it runs its own
+   mark/settlement schedule. While the slot stays continuously in the
+   top-N, a strike/expiry change is recorded as a `RESTRIKE` annotation on
+   the open slot, never a new event. A new event opens only after the
+   symbol-lane exits the top-N and later re-enters. The WP-F.4 projection
+   must quote base rates under THIS keying.
 3. Append-only JSONL under `reports/pick_tracker/dryrun/` (until WP-F's
    registration flips the path), fcntl-locked, idempotent: same
    (session, arm, content-hash) re-append is a no-op; same-session
@@ -198,37 +243,67 @@ path is `.tmp`).
 
 ### WP-C — evaluator
 
-1. Fill resolution per the Design contract's decision/fill split.
-2. Daily marks for open scored picks against the newest verified capture,
-   conservative close-out side (sells marked at ask to buy back, buys at
-   bid). Missing name in a capture → `MARK_GAP` (never a stale carry —
-   `.cursorrules` EOD-gap rule).
-3. Mark/settlement schedule (rev-2 finding N-3 — honesty about what seq 19
-   actually registers): ledger seq 19 registers mark points for exactly TWO
+1. Fill resolution per the Design contract's decision/fill split, including
+   strict `pick_position/v1` and frozen-coverage validation before any P&L.
+2. Daily marks for the single evaluated option leg against the newest verified
+   capture, conservative close-out side (sells marked at ask to buy back, buys
+   at bid). Missing name in a capture → `MARK_GAP` (never a stale carry —
+   `.cursorrules` EOD-gap rule). Coverage context is revalidated for identity
+   but never marked into the incremental pick P&L.
+3. Mark/settlement schedule (rev-2 finding N-3; REVISED by the 2026-08-25
+   parameter audit): ledger seq 19 registers mark points for exactly TWO
    lanes — "LEAPS marks are 21, 63, and 126 sessions; tactical call marks
    are 5, 10, and 20 sessions" (Repo-verified). For CSP it registers exit
    ARMS (strategy rules, no mark schedule); for CC/PMCC it registers
-   accounting decompositions with NO horizons. Therefore: LEAPS and tactical
-   calls use the registered 21/63/126 and 5/10/20 marks; CSP/CC/PMCC mark
-   points are LLM-PROPOSED here (proposal: 5/10/21 sessions, mirroring the
-   tactical grid plus the 21-DTE convention) and are moved into the WP-F
-   packet for the OWNER to type at registration — Codex must not freeze
-   them in `config.py` as registered values. A pick's terminal settlement is
-   the earlier of contract expiry (intrinsic at `data/underlying_closes.py`
-   close) or its lane's longest mark point — no single 42-session close-out
-   across all lanes (rev-1 finding 22). Both legs' costs each way. Data-edge
-   terminations labeled `terminal_conservative_mark` (seq 21 convention).
-4. Outputs per pick: P&L after costs at each mark point, max drawdown while
-   open, and the plain-language outcome word ("gained/lost after costs" —
-   vocabulary discipline; never "worked"/"proven").
+   accounting decompositions with NO horizons. LEAPS and tactical calls use
+   the registered marks. CSP/CC/PMCC use an LLM-PROPOSED,
+   elapsed-SESSION-denominated grid — **5 and 10 sessions, plus 21 sessions
+   applied ONLY to entries whose DTE at fill exceeds 30 calendar days** —
+   owner-typed via the WP-F packet; Codex must not freeze them in
+   `config.py` as registered values. This grid is explicitly NOT seq 19's
+   CSP "close at 21 DTE" exit arm: that is a remaining-tenor rule (like
+   `config.py` H10_DTE_EXIT), not an elapsed clock, and conflating the two
+   is the seq-30 IV-units defect pattern — the audit found the modal board
+   pick (~11 DTE, ladder bucket 1 target 14 DTE / window 10-21 calendar
+   days) can NEVER reach 21 elapsed sessions and is already past 21
+   remaining DTE at entry. Every pick settles at the EARLIER of contract
+   expiry (intrinsic at `data/underlying_closes.py` close) or its lane's
+   longest applicable mark; an interior mark falling after expiry is
+   recorded `MARK_AFTER_EXPIRY` and omitted, never carried — this applies
+   to the registered tactical 10/20 marks too, which an ~11-DTE tactical
+   pick also cannot reach. The scoreboard prints, per lane, the count of
+   entries whose marks were unreachable, and a lane with zero entries over
+   the window reports "no data", never a result — the audit's badge census
+   (sell lanes carry 7 gradeable badges vs 3 on buy lanes; FOMC/VRP/
+   earnings badges currently AMBER/UNKNOWN on most sell cards) means income
+   lanes may rarely enter the shortlist at all. Charge entry and exit costs
+   for the evaluated option leg only. Data-edge terminations labeled
+   `terminal_conservative_mark` (seq 21 convention).
+4. Outputs per pick: evaluated-leg P&L after costs and
+   `return_on_risk_basis = evaluated_leg_pnl / frozen_risk_basis` at each mark
+   point, max drawdown on that same normalized series, coverage-context status,
+   and the plain-language outcome word ("gained/lost after costs" — vocabulary
+   discipline; never "worked"/"proven"). Raw dollars remain available only
+   within lane-level tables and are never pooled across structures.
 
 ### WP-D — scoreboard
 
 1. Dated `reports/pick_tracker/<or dryrun/><date>/scoreboard.{md,json}`:
-   per arm — entries, cancellations by kind, open/settled counts, per-cohort
-   (weekly, non-overlapping) after-cost P&L series with a bootstrap CI, and
-   the ONE primary contrast: context_lane minus frozen_baseline per-cohort
-   mean after-cost P&L, bootstrap CI. Mandatory header block: "DESCRIPTIVE
+   per arm AND lane — entries, cancellations by kind, open/settled counts,
+   raw evaluated-leg dollars, normalized `return_on_risk_basis`, and weekly
+   non-overlapping cohort summaries. Never pool raw dollar P&L across lanes.
+   The ONE primary contrast is context_lane minus frozen_baseline on normalized
+   returns: within each weekly cohort compute each arm's mean separately by
+   lane, compare only lanes represented in BOTH arms, then equal-weight those
+   paired lane contrasts. Report unmatched-lane counts explicitly; do not
+   impute them. Weekly entry cohorts do not make outcomes independent: mark
+   windows overlap and symbols are correlated. Emit an explicitly
+   **exploratory** moving-block bootstrap CI only with at least **8**
+   chronological weekly paired-lane cohort contrasts, resampling consecutive
+   two-week blocks to preserve short-range overlap dependence (threshold and
+   block length LLM-proposed 2026-08-25). Before that, show point summaries
+   plus `INSUFFICIENT_COHORTS`, never a CI or directional conclusion. Never
+   call the cohorts or CI independent. Mandatory header block: "DESCRIPTIVE
    ONLY — NOT A TRADE RANKING; no verdict authority; dry-run rows are
    permanently excluded from any registered window; A2-v1 (ledger seq
    19/27) retains interpretive authority for board-level outcome questions;
@@ -239,7 +314,7 @@ path is `.tmp`).
    read of the latest scoreboard JSON (experiments-shelf doctrine — no
    builder import). Absent scoreboard renders loudly as unbuilt.
 
-### WP-E — ritual hook, ops sync, durability (rev-1 finding 24)
+### WP-E — ritual hook, durability, owner-run ops handoff (rev-1 finding 24)
 
 1. Insert recorder+evaluator after the dashboard build
    (`tools/daily_ritual.sh:472`) and before the capture receipt (`:477`),
@@ -249,20 +324,24 @@ path is `.tmp`).
 2. Add `reports/pick_tracker` to `DATA_TIER_PATHS`
    (`tools/daily_ritual.sh:535-536`) and to
    `tools/irreplaceable_data_guard.py` namespaces.
-3. **Ops-sync work package (explicit):** after merge to origin/main, fast-
-   forward `~/options-validator-ops` in the sanctioned window (after the
-   15:50 capture completes, before the next 07:10 ritual — the capture
-   wrapper refuses on HEAD-vs-origin/main drift, the cause of the permanent
-   2026-08-15→08-18 hole). Steps: record
-   `git -C ~/options-validator-ops rev-parse HEAD` before, `merge --ff-only`
-   per runbook
+3. **Owner-run ops-sync handoff (explicit; worker MUST NOT execute):** the
+   implementation draft PR includes a post-merge checklist for the owner or a
+   separately authorized operator. Only after owner merge may that operator
+   fast-forward `~/options-validator-ops` in the sanctioned window (after the
+   15:50 capture completes, before the next 07:10 ritual — the capture wrapper
+   refuses on HEAD-vs-origin/main drift, the cause of the permanent
+   2026-08-15→08-18 hole). The checklist records
+   `git -C ~/options-validator-ops rev-parse HEAD` before, requires an
+   owner-run `merge --ff-only` per runbook
    `docs/superpowers/plans/2026-08-13-08-fork-healing-ops-sync-canary-runbook.md`,
-   record HEAD after, and verify next ritual's log shows the tracker step.
+   records HEAD after, and verifies the next ritual's log shows the tracker
+   step.
    NOTE (Repo-verified 2026-08-25): the ops ritual is currently unhealthy
    (receipts uncommitted since 08-20; run-status stale/RUNNING at
    07:40-08:10). The separate ops-health investigation (task chip
    2026-08-25) is a HARD PRECONDITION of this brief's deploy step (round-3
-   finding NEW-4 upgraded it from "should"): do not deploy the ritual hook
+   finding NEW-4 upgraded it from "should"): the owner/operator must not
+   deploy the ritual hook
    until the repair has landed and ≥5 consecutive daily receipts have
    committed cleanly (WP-F.4 binds the registration to the same evidence).
    The recorder itself degrades cleanly (SESSION_UNVERIFIED) if captures
@@ -281,6 +360,16 @@ path is `.tmp`).
    calendar months of ENTRIES, positions then run out their mark schedule;
    LLM-proposed, provenance table); dry-run exclusion; no-extension clause;
    owner-typed wording block with blanks.
+   OWNER SELECTION 2026-08-25 (spoken in-session, then audited at the
+   owner's direction "audit your proposals then go with what's best"): the
+   owner approved the 42-session window, the income-lane mark proposal, and
+   the pre-accept route, and delegated adoption of the audit's amendments.
+   The audited final proposals are: window 42 sessions (unchanged; audit
+   verdict — length was fine, the entry KEYING was the defect, fixed in
+   WP-B.2); income-lane marks 5/10 sessions + conditional 21 (WP-C.3, the
+   audited replacement for the defective flat 21); pre-accept per WP-F.4's
+   audited clause below. These remain proposals until the owner TYPES them
+   in the registration.
 2. The packet quotes the feasibility gate's ban verbatim
    (`2026-07-24-registration-feasibility-gate.md:71-73`) and states the
    design's answer: two arms fixed in advance, one pre-registered contrast,
@@ -293,11 +382,13 @@ path is `.tmp`).
    `CONTEXT_LANE_ENABLED = True` (brief 25 owner decision D-1) is a HARD
    precondition of the registration — the packet's wording block states
    that the entry window's first admissible session is the LATER of the
-   registration append and the flip (the seq-26 clause-2 construction), so
+   registration append and the owner-controlled flip present on `origin/main`
+   (the seq-26 clause-2 construction), so
    the contrast can neither open with a permanently empty arm nor cover a
    self-selected sub-window. STATUS: D-1 was RULED 2026-08-25 (owner
-   in-session: enable at landing — see brief 25 WP-E.5), so this
-   precondition is satisfied the day brief 25 merges.
+   in-session; see brief 25 WP-E.5), but the implementation worker may not
+   perform the flip. This precondition remains unsatisfied until a separate
+   owner-controlled follow-up lands and `origin/main` verifies the flag true.
 4. **Entry-count AND cancellation-rate projection (rev-2 N-6; round-3
    NEW-4):** before the packet is presented for owner typing, compute:
    (a) a base-rate estimate of membership-entry events per arm per week —
@@ -314,12 +405,19 @@ path is `.tmp`).
    cancellations the study's dominant output;
    (c) the minimum capture density the design needs (state it as
    sessions-with-verified-capture per week).
-   The packet must either state minimums the owner accepts or carry an
-   explicit sparsity pre-acceptance clause quoting the computed numbers
-   (H10 precedent) — silence is not an option. The gate's stated failure
-   mode — "a window that costs months and answers nothing" — is this
-   design's risk, and the packet must face it with the numbers, not the
-   not-loss-gated escape. **Hard precondition (upgraded from "should",
+   The owner ruled the PRE-ACCEPT route 2026-08-25 — but ruled it EX ANTE,
+   before (a)/(b)/(c) exist. Per the parameter audit, the packet's
+   pre-acceptance clause is therefore incomplete until ALL THREE numbers —
+   (a), (b), AND (c), not just "the computed numbers" loosely — are
+   inserted and quoted verbatim (H10 precedent is pre-accept QUOTING the
+   number). Guard against pre-accepting blind: if computed (b) exceeds 50%
+   or (a) falls below one event per arm per week (slot keying, WP-B.2),
+   the packet RETURNS to the owner for re-confirmation before typing —
+   an advance pre-acceptance does not extend to numbers materially worse
+   than the design assumed. The gate's stated failure mode — "a window
+   that costs months and answers nothing" — is this design's risk, and
+   the packet must face it with the numbers, not the not-loss-gated
+   escape. **Hard precondition (upgraded from "should",
    round-3 NEW-4): the ops-health repair (task chip 2026-08-25 — receipts
    uncommitted, ritual status stale/RUNNING) must land and show ≥5
    consecutive committed daily receipts before the registration is
@@ -331,19 +429,32 @@ path is `.tmp`).
 
 ```bash
 uv run python -m unittest discover -s tests    # exit 0, offline
-uv run ruff check . && uv run pyright          # exit 0
+uv run ruff check .                            # exit 0
+uv run ruff format --check options_researcher/pick_tracker.py
+uv run pyright                                 # exit 0
 ```
-Named tests: unverified-session refusal; membership-entry once-only (a pick
-present 10 straight sessions yields ONE open event); idempotent re-append;
+Named tests: unverified-session refusal; slot membership-entry once-only (one
+symbol-lane present 10 straight sessions while candidate ids re-strike yields
+ONE open event plus `RESTRIKE` annotations); slot exit then re-entry yields a
+second event; idempotent re-append;
 same-session different-hash fail-closed; decision/fill split (fixture where
 D and D+1 quotes differ — the recorded fill uses D+1's WORSE side; the
 drifted-quote rule of `.claude/rules/backtest-engine.md`);
 `CANCELLED_NO_FILL_DATA` on missing next capture; MARK_GAP on missing name;
-per-lane A2 mark schedule applied; dry-run path enforcement (writing a
+per-lane `pick_position/v1` schema and risk-basis construction; put assignment
+capital must equal evaluated strike × 100 with derivation stamped; missing PMCC
+long-leg expiry/right/position identity and missing CC basis each cancel
+fail-closed; coverage P&L is excluded; raw dollars never pool across lanes;
+paired-lane normalization; 7 weekly cohorts render `INSUFFICIENT_COHORTS`
+while 8 enable the exploratory two-week moving-block bootstrap CI, whose test
+proves resampled blocks retain adjacent cohort pairs; per-lane A2 mark schedule
+applied; dry-run path enforcement (writing a
 scored row without a registration receipt raises); ritual isolation
 (recorder raising cannot change wrapper exit — shell-level pattern in
 `tests/test_daily_ritual_provenance.py`); dashboard section absent-is-loud;
 scoreboard header contains the concentration + A2-authority sentences.
+The implementation ends at a green GitHub draft PR with `isDraft=true`; the
+worker does not execute WP-E.3, type WP-F, make ready, merge, or deploy.
 
 ## Claim-discipline register
 
@@ -360,10 +471,28 @@ scoreboard header contains the concentration + A2-authority sentences.
   machinery: Repo-verified modules.
 - Conservative-fill + cost standard: Repo-verified `.cursorrules`;
   `COMMISSION_PER_CONTRACT`, `SLIPPAGE_HAIRCUT` exist in `config.py`.
+- Current PMCC card enrichment retains only the held LEAPS strike and entry
+  cost, while `data/positions/positions.csv` carries the full right/expiration/
+  position identity: Repo-verified
+  `attractiveness_dashboard.py:1231-1234,1434-1440`; the Wave 0 reviewer
+  correctly found the prior multi-leg P&L contract under-specified.
 - Ops ritual currently unhealthy: Repo-verified 2026-08-25 (untracked
   receipts 08-20/08-24 in ops; producer logs showing stale/RUNNING status).
-- 42-session entry window, 2-session fill bound: LLM-proposed 2026-08-25;
-  the owner types the registered numbers.
+- 42-session entry window, 2-session fill bound, 5/10/+conditional-21
+  income-lane marks, slot keying: LLM-proposed 2026-08-25, owner-approved
+  in-session (spoken) with audit amendments owner-delegated ("go with
+  what's best"); the owner types the registered numbers.
+- Candidate churn measurement (winning expiry+strike changes ~90% of
+  consecutive session pairs; median candidate_id run 1 session; ~38
+  candidate_id events per symbol-lane per 42 sessions): Test-verified
+  2026-08-25 on the frozen cache 2026-05-01→2026-07-27 (7 dense symbols;
+  single-regime proxy caveat; parameter-audit receipt in the review
+  receipt file).
+- Incremental-option-leg P&L scope, lane-specific frozen risk bases,
+  paired-lane equal weighting, the 8-cohort CI minimum, and two-week
+  moving-block resampling: LLM-proposed 2026-08-25, descriptive-only, and
+  required to reduce structure-size/lane-mix distortion while acknowledging
+  overlapping outcomes and correlated names.
 - Broker paper fills optimistic vs this repo's standard: Inference (no
   official source consulted); the against-Robinhood recommendation rests
   primarily on the Repo-verified validator-only guardrail.

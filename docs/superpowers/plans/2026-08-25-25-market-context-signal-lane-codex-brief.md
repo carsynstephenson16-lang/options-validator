@@ -1,9 +1,9 @@
-# Codex brief 25 — daily market context that visibly contributes to a labeled second ranking lane (rev 3)
+# Codex brief 25 — daily market context that visibly contributes to a labeled second ranking lane (rev 4)
 
-**Date:** 2026-08-25 (rev 3, same day)
+**Date:** 2026-08-25 (rev 4, Wave 0 authority audit)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** READY FOR HAND-OFF — adversarial review round 3 verdict **PASS** (rounds 1-3 recorded in `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`). Hand-off still waits on brief 26 landing first (binding order 26 → 25 → 27).
+**Status:** REVIEW PASS rev 4 — hand-off remains blocked until Brief 26 implementation lands. A fresh Wave 0 full-PR reviewer issued written PASS after rev 4 closed the later authority, pool, trend-state, and freshness-contract findings. Binding implementation order remains 26 → 25 → 27; this status does not authorize merge, flag enablement, or deployment.
 **Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. Landing order is binding: **brief 26 lands first, then this brief, then brief 27** (shared constants and heading strings flow 26 → 25 → 27).
 **Owner directive source:** Carsyn in-session 2026-08-25 ("market context i want that updated daily and actually contributing to the signals") — spoken, not owner-typed.
 
@@ -65,6 +65,10 @@ registration.
   (AST boundary test `tests/test_experiments_baseline.py:92`).
 - The ritual-health repair (why run-status is RUNNING/stale at 07:40) is a
   separate investigation — do not touch `tools/daily_ritual.sh`.
+- The worker ends at a green **draft PR**. It may not make the PR ready,
+  merge, deploy, sync an operational checkout, enable the context flag,
+  modify a ledger, or flip authority. Owner instructions below describe
+  owner-controlled follow-up state; they do not delegate those actions.
 
 ## Work packages
 
@@ -87,10 +91,14 @@ registration.
 
 ### WP-B — context-aware scorer (`options_researcher/context_lane.py`, flag OFF)
 
-1. Inputs: the assembled board sections AND the composite board object built
-   during real assembly (`attractiveness_dashboard.py:1340` @720a20e:
+1. Inputs: the FULL `_admissible_pick_pool` from the assembled board sections
+   AND the composite board object built during real assembly
+   (`attractiveness_dashboard.py:1340` @720a20e:
    `if composite_signals is None and real_assembly:` — pass the built board
-   in; never rebuild it per page).
+   in; never rebuild it per page). Score the full admissible pool, then take
+   `PICK_TOP_N`; do not restrict scoring to the frozen shortlist. A context
+   pick may therefore displace a frozen boundary pick, which is required for
+   Brief 27's arm comparison to be non-vacuous.
 2. Score tuple (lexicographic, never summed — composite-lane doctrine,
    `composite_signals.py:32,76,520` "never a weighted average"):
    `(-green_fraction, -context_term, -rank_leader, -tech_conf, tie, symbol, lane, strike)`
@@ -104,13 +112,13 @@ registration.
      Repo-verified `composite_signals.py:557-558`; a vetoed name must never
      gain rank from context);
    - else `aligned_count`, but ONLY when the trend angle's state is `UP`.
-     Stated plainly: the composite trend angle emits ONLY `UP`, `DOWN`, or
-     DATA_BLOCKED (Repo-verified `composite_signals.py:164,166,89`; there is
-     no neutral state, and `aligned_count` already zeroes non-UP/DOWN states
-     at `:540`), so for EVERY lane the context term is nonzero only on `UP` —
+     The composite trend angle emits `UP`, `DOWN`, `MIXED`, or DATA_BLOCKED
+     (Repo-verified `composite_signals.py:128-168`). For EVERY lane the
+     context term is nonzero only on `UP` —
      buy lanes because direction agrees, sell lanes because premium selling
-     against a confirmed DOWN trend must not be promoted by "alignment". Do
-     not write a branch for any other trend state; it would be dead code.
+     against a confirmed DOWN trend must not be promoted by "alignment".
+     `DOWN` and `MIXED` both produce 0 with reason `DIRECTION_MISMATCH`;
+     DATA_BLOCKED produces 0 with reason `BLOCKED`.
    - The lane-direction sets `_BUY_LANES`/`_SELL_LANES` (defined at
      `attractiveness_dashboard.py:215-216`; used by the quality key at
      `:624-628`) move to `display_rank` in WP-A — import them from there.
@@ -149,9 +157,14 @@ registration.
    the registered baseline. This lane is display-only and carries no verdict
    or trade authority; once the pick tracker is live its picks will be
    tracked descriptively against the baseline."
-3. Fail-visible: a symbol whose composite card is DATA_BLOCKED renders in the
-   lane with its blocked state and context_term reason; the lane never drops
-   a name the frozen shortlist shows (`_blocked_html` ethos,
+3. Fail-visible without falsifying membership: any selected context-lane name
+   whose composite card is DATA_BLOCKED renders in its slot with blocked state
+   and reason. Separately, a compact comparison-diagnostics row covers every
+   frozen-shortlist name and shows its context reason, including
+   `BLOCKED`, `VETOED`, `DIRECTION_MISMATCH`, or `DISPLACED`. Diagnostics do
+   not consume the `PICK_TOP_N` context slots. The context shortlist may omit
+   a frozen name only through the explicit full-pool ranking; no name or
+   failure state silently disappears (`_blocked_html` ethos,
    `attractiveness_dashboard.py:3971` docstring @720a20e).
 4. Test updates for flag-ON ordering are additive-only: new flag-ON test
    asserts the insertion point; the flag-OFF path leaves EVERY existing
@@ -161,17 +174,33 @@ registration.
 
 ### WP-D — honest research staleness note (rev-1 findings 1, 11, 29)
 
-1. Freshness-strip research chip: add the causal sentence to its
-   notice/tooltip: "Research refresh is currently blocked upstream: the
-   morning data ritual has not been finishing cleanly, so the researcher
-   refuses to run (fail-closed). See the ops ritual-health investigation."
-   Plain English, no launchctl instructions, no dollar figures, no claim
-   about the LaunchAgent being disabled.
-2. Do NOT render budget numbers. (Rev-1 WP-C.2 hardcoded $8/$200 with a wrong
+1. Freshness-strip research chip uses only the context bytes the board actually
+   loaded; it does not inspect the producer's success-only slot receipt,
+   mutable guard state, logs, or FINAL manifest. Brief 26's `_build_and_write`
+   already captures `deployment_root` and the yielded `input_root`. While still
+   inside `_input_root_cwd()`, load both the board and research context from
+   that SAME resolved `input_root`; do not call `load_context()` later from the
+   deployment root. Carry the parsed context, its warning, source path, and
+   SHA-256 into `render()` as injected data.
+2. Derive only these states: context is a mapping, annotation normalization
+   succeeds, and context `as_of == board.data_as_of` → `EXACT`; valid context
+   `as_of < board.data_as_of` → `STALE`; no context → `UNAVAILABLE`; unreadable,
+   non-object, invalid/future as-of, hash drift after load, or failed annotation
+   normalization → `INTEGRITY_FAILED`. Render date-neutral text, "Research
+   context <status> — context as of <as-of or unavailable>; board as of
+   <data_as_of>." These states describe loaded evidence only and never claim
+   why a refresh did or did not run.
+3. Named tests prove exact/stale/unavailable/integrity-failed states; context
+   and board are loaded from the same injected input root even when deployment
+   cwd differs; parsing and hashing use one byte snapshot, so a later file
+   mutation cannot split the current build; mutable guard/log/final-manifest
+   content cannot change the chip. This avoids the producer's PENDING →
+   dashboard → FINAL cycle entirely.
+4. Do NOT render budget numbers. (Rev-1 WP-C.2 hardcoded $8/$200 with a wrong
    citation and a false offline-impossibility claim — deleted. If the owner
    later wants spend surfaced, that is an owner decision with owner-typed
    figures.)
-3. Research-bundle candidate-count cost note (rev-1 finding 29): moved OUT of
+5. Research-bundle candidate-count cost note (rev-1 finding 29): moved OUT of
    a PR description into this brief as an explicit owner decision — see
    WP-E.4 D-2.
 
@@ -180,9 +209,12 @@ registration.
 1. Flag-OFF byte-identity golden test (WP-C.1).
 2. Flag-ON tests MUST inject a synthetic composite board with mixed
    `aligned_count`/grade/trend values and assert an ACTUAL order change vs
-   the frozen lane, plus: vetoed (grade C) name never outranks its frozen
-   position via context; DOWN-trend name gains 0 on a buy lane; blocked
-   composite renders blocked. (Fixture builds never construct a real
+   the frozen lane from the full admissible pool, including displacement of a
+   frozen boundary pick, plus: vetoed (grade C) name never gains rank from
+   context; DOWN and MIXED trends each gain 0 with `DIRECTION_MISMATCH`; a
+   selected blocked composite renders blocked; and every frozen name appears
+   in comparison diagnostics even when displaced. (Fixture builds never
+   construct a real
    composite board — `real_assembly` gating at `:1340` — so injection is the
    only non-vacuous path.)
 3. Scorer unit tests: lexicographic dominance of green_fraction over
@@ -199,27 +231,40 @@ registration.
    block — no other surface touches them.
 5. Owner decisions this brief surfaces (Codex does NOT act on these):
    - **D-1 — RULED (owner-directed in-session 2026-08-25, spoken: "switch
-     context lane"):** the lane is to be ENABLED as soon as it lands. Ship
-     mechanics unchanged for integrity: the constant still defaults `False`
-     in the feature commit (preserving the flag-OFF golden byte-identity
-     test and the rollback path), then a separate follow-up commit in the
-     same PR sets `CONTEXT_LANE_ENABLED = True` with the comment
-     "owner-directed in-session 2026-08-25 (spoken, not owner-typed)". This
-     also satisfies brief 27 WP-F.3's flip-before-registration precondition
-     from day one. The owner retains veto by flipping it back.
-   - **D-2:** whether research bundles should annotate `PICK_TOP_N`+pinned
-     candidates (≈66% more packets per run against the plist's
-     $8.00/attempt, $200.00/month budgets —
-     `tools/launchd/com.carsyn.options-validator.research-refresh.plist:24-27`,
-     Repo-verified) or stay at 3+pinned.
+     context lane"):** the owner intends the lane to be enabled after the
+     feature lands. The implementation worker nevertheless keeps
+     `CONTEXT_LANE_ENABLED = False` throughout its draft PR, preserving the
+     flag-OFF golden and rollback path, and stops. A separate owner-controlled
+     follow-up, after merge and with explicit landing authority, may set it to
+     `True` with the comment "owner-directed in-session 2026-08-25 (spoken,
+     not owner-typed)". Brief 27 WP-F.3 is NOT satisfied until that owner
+     action is present on `origin/main`; an intention to flip is not a flip.
+   - **D-2 — RULED (owner-directed in-session 2026-08-25, spoken:
+     "annotate all 5 picks"):** research bundles annotate
+     `PICK_TOP_N`+pinned. The 2026-08-25 parameter audit confirmed this is
+     the no-edit path — the research tool inherits the selector default and
+     no verifier pins a count (`tools/research_context_assemble.py:66,68`;
+     `attractiveness_research_v2.required_symbols` derives the set). One
+     audited line for the runbook/packet: the annotated-candidate count is
+     DERIVED from the live board, never pinned in the research path; if the
+     derived required-symbol set cannot be covered within the per-attempt
+     budget
+     (`tools/launchd/com.carsyn.options-validator.research-refresh.plist:24-27`;
+     the job runs on the owner's Claude Max login, so the practical constraint
+     is plan usage, not dollars), the run fails closed and reports the
+     shortfall — it never annotates a subset silently.
 
 ## Acceptance / verification
 
 ```bash
 uv run python -m unittest discover -s tests    # exit 0, offline
-uv run ruff check . && uv run pyright          # exit 0
+uv run ruff check .                            # exit 0
+uv run ruff format --check options_researcher/display_rank.py options_researcher/context_lane.py
+uv run pyright                                 # exit 0
 ```
 Plus WP-E.4's named metrics and the unmodified AST boundary test.
+The hand-off artifact is a GitHub draft PR with `isDraft=true`; green checks
+do not authorize readiness, merge, enablement, or deployment.
 
 ## Claim-discipline register
 
@@ -235,8 +280,9 @@ Plus WP-E.4's named metrics and the unmodified AST boundary test.
 - Direction mapping reuse: Repo-verified — `_BUY_LANES`/`_SELL_LANES`
   defined at `attractiveness_dashboard.py:215-216`, used by the quality key
   at `:624-628` @720a20e.
-- Trend angle emits only UP/DOWN/DATA_BLOCKED: Repo-verified
-  `composite_signals.py:164,166,89,540`.
+- Trend angle emits UP/DOWN/MIXED/DATA_BLOCKED: Repo-verified
+  `composite_signals.py:128-168`; DOWN/MIXED receive zero context credit by
+  this brief's LLM-proposed rule.
 - Lexicographic-over-weighted: Inference from composite-lane doctrine
   (`composite_signals.py:32,76,520`).
 - context_term position, UP-only-for-all-lanes rule: LLM-proposed 2026-08-25,
