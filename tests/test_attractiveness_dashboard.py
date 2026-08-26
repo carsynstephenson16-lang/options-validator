@@ -2212,6 +2212,7 @@ class ContextLaneRenderTests(unittest.TestCase):
 
     def test_flag_off_matches_post_brief26_golden_bytes(self):
         import hashlib
+        import re
         from unittest import mock
 
         case = LaneBoardPresentationTests()
@@ -2223,8 +2224,14 @@ class ContextLaneRenderTests(unittest.TestCase):
                 research_views_status={"state": "absent"},
             )
 
+        pre_tracker_bytes = re.sub(
+            r'<section class="panel pick-tracker">.*?</section>',
+            "",
+            html,
+            flags=re.S,
+        )
         self.assertEqual(
-            hashlib.sha256(html.encode()).hexdigest(),
+            hashlib.sha256(pre_tracker_bytes.encode()).hexdigest(),
             "f092f03e0c58a904a7126a03e6107494ee4740695e7c7e717eb965b9570c5af7",
         )
         self.assertNotIn("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL", html)
@@ -2317,6 +2324,120 @@ class ContextLaneRenderTests(unittest.TestCase):
         pattern = r'data-context-symbol="([^"]+)"'
         self.assertEqual(re.findall(pattern, noisy), re.findall(pattern, plain))
         self.assertEqual(re.findall(pattern, plain), ["S5", "S0", "S1", "S2", "S3"])
+
+    def test_render_result_selects_tracker_arms_once_and_returns_rendered_membership(self):
+        """Catches rerunning a tracker selector after rendering its cards."""
+        from unittest import mock
+
+        from options_researcher import context_lane
+
+        data = self._data(count=6)
+        data["composite_signals"] = [
+            self._composite(f"S{index}", count=(4 if index == 5 else 3))
+            for index in range(6)
+        ]
+        sections_before = ad.sections_json(data["symbols"])
+        real_select = ad.select_top_picks
+        real_rank = context_lane.rank_context_lane
+
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", []),
+            mock.patch.object(ad, "select_top_picks", wraps=real_select) as select,
+            mock.patch.object(context_lane, "rank_context_lane", wraps=real_rank) as rank,
+        ):
+            result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+
+        self.assertEqual(select.call_count, 2)
+        self.assertEqual(rank.call_count, 1)
+        self.assertIsInstance(result.html, str)
+        self.assertEqual(result.selection_snapshot["schema"], "picks_snapshot/v1")
+        self.assertEqual(
+            [item["candidate_id"] for item in result.selection_snapshot["context_lane"]["candidates"]],
+            [
+                "S5:put:2026-09-18:95.00",
+                "S0:put:2026-09-18:95.00",
+                "S1:put:2026-09-18:95.00",
+                "S2:put:2026-09-18:95.00",
+                "S3:put:2026-09-18:95.00",
+            ],
+        )
+        context_section = result.html[
+            result.html.index("CONTEXT-AWARE SHORTLIST") : result.html.index("QM MOVEMENT LANE")
+        ]
+        for item in result.selection_snapshot["context_lane"]["candidates"]:
+            self.assertIn(f'data-context-symbol="{item["symbol"]}"', context_section)
+        self.assertEqual(ad.sections_json(data["symbols"]), sections_before)
+
+    def test_pick_tracker_section_is_loud_when_scoreboard_is_unbuilt(self):
+        """Catches a missing scoreboard being rendered as an empty success."""
+        html = ad.render(self._data(count=1), research_views_status={"state": "absent"})
+        self.assertIn("PICK TRACKER (descriptive)", html)
+        self.assertIn("UNBUILT", html)
+
+    def test_dashboard_artifacts_bind_exact_html_and_capture_receipt(self):
+        """Catches a snapshot paired with stale HTML or unbound source evidence."""
+        import hashlib
+        from unittest import mock
+
+        from options_researcher import pick_tracker
+
+        data = self._data(count=1)
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", []),
+        ):
+            result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
+            html_path = root / ".tmp/dashboard/attractiveness.html"
+            snapshot_path = root / ".tmp/dashboard/picks_snapshot.json"
+            with mock.patch(
+                "research.hashing.config_hash", return_value="e" * 64
+            ):
+                ad._write_dashboard_result(
+                    result,
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
+                    input_root=root,
+                )
+
+            payload = json.loads(snapshot_path.read_text())
+            self.assertEqual(payload["html_sha256"], hashlib.sha256(html_path.read_bytes()).hexdigest())
+            self.assertEqual(payload["capture_receipt_sha256"], hashlib.sha256(receipt.read_bytes()).hexdigest())
+            self.assertEqual(payload["config_hash"], "e" * 64)
+            pick_tracker.validate_snapshot(payload, html_path.read_bytes())
+            self.assertEqual(list(html_path.parent.glob("*.tmp")), [])
+
+    def test_snapshot_carries_frozen_coverage_basis_without_changing_sections_json(self):
+        data = self._data(count=1)
+        group = data["symbols"][0]["groups"][0]
+        group["kind"] = "cc"
+        group["pick_tracker_coverage"] = {
+            "symbol": "S0",
+            "shares": 100,
+            "declared_shares": 100,
+            "cost_basis": 72.5,
+            "acquired": "2025-01-02",
+            "source_row_hash": "a" * 64,
+        }
+        card = group["cards"][0]
+        card["top3_snapshot"].update(
+            {"candidate_id": "S0:cc:2026-09-18:95.00", "lane": "cc"}
+        )
+        before = ad.sections_json(data["symbols"])
+
+        result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+
+        position = result.selection_snapshot["frozen_baseline"]["candidates"][0][
+            "pick_position"
+        ]
+        self.assertEqual(position["risk_basis"]["value"], 7_250.0)
+        self.assertEqual(position["coverage_context"]["source_row_hash"], "a" * 64)
+        self.assertEqual(ad.sections_json(data["symbols"]), before)
 
     def test_flag_on_reorders_full_pool_and_diagnoses_displaced_frozen_name(self):
         from unittest import mock
@@ -2629,8 +2750,23 @@ class MainTests(unittest.TestCase):
                 mock.patch.object(
                     ad, "_verify_context_evidence", side_effect=lambda value: value
                 ),
-                mock.patch.object(ad, "render", return_value="baseline-bytes") as render,
+                mock.patch.object(
+                    ad,
+                    "_render_result",
+                    return_value=ad.DashboardRenderResult(
+                        html="baseline-bytes",
+                        selection_snapshot={
+                            "schema": "picks_snapshot/v1",
+                            "data_as_of": "2026-07-24",
+                            "frozen_baseline": {"candidates": []},
+                            "context_lane": {"candidates": []},
+                        },
+                    ),
+                ) as render,
                 mock.patch.object(ad, "OUTPUT_PATH", str(output)),
+                mock.patch.object(
+                    ad, "PICKS_SNAPSHOT_PATH", Path(temp) / "deployment/picks_snapshot.json"
+                ),
                 mock.patch(
                     "options_researcher.research_views_publication.copy_publication"
                 ),

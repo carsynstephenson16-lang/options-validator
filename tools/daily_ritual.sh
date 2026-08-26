@@ -470,6 +470,12 @@ fi
 # and carry their own honest data-as-of banner.
 "$UV" run python -m options_researcher.dashboard && note "dashboard: rebuilt" || note "dashboard: FAILED"
 "$UV" run python -m options_researcher.attractiveness_dashboard && note "attractiveness dashboard: rebuilt" || note "attractiveness dashboard: FAILED"
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -m options_researcher.pick_tracker record --as-of "$AS_OF" && note "pick tracker recorder: appended" || note "pick tracker recorder: FAILED (isolated)"
+  "$UV" run python -m options_researcher.pick_tracker evaluate --as-of "$AS_OF" && note "pick tracker evaluator: rebuilt" || note "pick tracker evaluator: FAILED (isolated)"
+else
+  note "pick tracker: SKIPPED — evaluation session unavailable"
+fi
 
 # Per-hypothesis capture receipt. A missing/refused leg is CRITICAL, but this
 # runs fail-soft so Step 8 can still preserve every artifact that did exist.
@@ -541,7 +547,7 @@ fi
 # rescue commits c9e74cc / 378230f / 13d48a9).
 # ---------------------------------------------------------------------------
 DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs
-                 reports/h5 reports/h10 reports/schwab_chains ledger/facts.log)
+                 reports/h5 reports/h10 reports/schwab_chains reports/pick_tracker ledger/facts.log)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
 EVIDENCE_COMMIT_MSG="data(ritual): daily ritual data-phase artifacts ${RUN_DATE}
 

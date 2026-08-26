@@ -50,6 +50,7 @@ DATA_TIER_MODULES = (
     "options_researcher.qm_dashboard",  # OHLCV refresh (data-tier island)
     "options_researcher.dashboard",
     "options_researcher.attractiveness_dashboard",
+    "options_researcher.pick_tracker",
     "options_researcher.ritual_receipt",
 )
 H7_TIER_SURFACES = (
@@ -123,12 +124,12 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
     "mkdir -p reports/h5": (416,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (564,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (567,),  # data tier
-    "git fetch": (577,),  # data tier
-    "git merge": (578,),  # data tier — mutates the working tree unattended
-    "git push": (579,),  # data tier
-    "restic backup": (596,),  # data tier
+    "git add": (570,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (573,),  # data tier
+    "git fetch": (583,),  # data tier
+    "git merge": (584,),  # data tier — mutates the working tree unattended
+    "git push": (585,),  # data tier
+    "restic backup": (602,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -219,6 +220,30 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                 match = re.search(pattern, source)
                 self.assertIsNotNone(match, verb)
                 self.assertLess(gate, match.start())
+
+    def test_pick_tracker_is_fail_soft_between_board_and_capture_receipt(self):
+        source = _source()
+        dashboard = source.index(
+            'python -m options_researcher.attractiveness_dashboard'
+        )
+        record = source.index('python -m options_researcher.pick_tracker record')
+        evaluate = source.index('python -m options_researcher.pick_tracker evaluate')
+        receipt = source.index('python -m options_researcher.ritual_receipt')
+        self.assertLess(dashboard, record)
+        self.assertLess(record, evaluate)
+        self.assertLess(evaluate, receipt)
+        record_line = next(
+            line
+            for line in source.splitlines()
+            if 'python -m options_researcher.pick_tracker record' in line
+        )
+        evaluate_line = next(
+            line
+            for line in source.splitlines()
+            if 'python -m options_researcher.pick_tracker evaluate' in line
+        )
+        self.assertIn('|| note "pick tracker recorder: FAILED (isolated)"', record_line)
+        self.assertIn('|| note "pick tracker evaluator: FAILED (isolated)"', evaluate_line)
 
     # ---- P2 -----------------------------------------------------------------
     def test_require_full_precedes_every_h7_surface(self):
