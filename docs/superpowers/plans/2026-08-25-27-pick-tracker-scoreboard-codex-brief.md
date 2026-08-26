@@ -25,8 +25,9 @@ design answers each one head-on:
    exact defect `.claude/rules/backtest-engine.md` warns about, and an
    inversion of registered seq 21 (`D_PLUS_1_CLOSE`; entry_date = fill
    session, decision date kept separately). Rev 2 uses a **decision/fill
-   split**: decision on session D's verified board; fill at session D+1's
-   verified 15:45 capture, conservative side.
+   split**: decision on session D's verified board; fill at the conservative
+   side of the first verified candidate capture among the next two XNYS
+   sessions, with the explicit cancellation behavior in the Design contract.
 2. **The multi-arm ban (rev-1 finding 5):** the feasibility-gate doc this
    brief cites also says, verbatim: "Not a data-mining license … Running the
    check on many candidate designs and picking the best is exactly the

@@ -84,3 +84,20 @@ selection rerun; preserves pure rendering, grades, ranking, shortlist
 membership, and `sections_json()`; and retains the specified decision/fill,
 normalization, authority, duration-honesty, documentation-only, display-only,
 and no-broker/no-live-order boundaries.
+
+## Post-PASS PR audit
+
+The primary controller re-audited the complete committed diff, every direct
+current-main source citation, GitHub review state, and the requirements matrix.
+It found one Important internal inconsistency: the introductory causality
+summary still described a D+1-only fill even though the binding Design contract
+correctly specifies the first verified candidate among D+1/D+2 with explicit
+cancellation paths. The summary was corrected to match the binding contract;
+no fill behavior, proposed value, authority boundary, source interface, or
+implementation surface changed.
+
+**Bounded correction review:** PASS — the same independent Terra reviewer
+confirmed that the corrected causality summary now matches the binding first-
+verified-candidate D+1/D+2 contract, with no new change to behavior, authority,
+scope, or requirements and no open Critical, Important, or Minor findings.
+This was correction round 1 of the permitted maximum of two.
