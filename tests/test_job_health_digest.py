@@ -930,7 +930,7 @@ class JobHealthDigestTests(unittest.TestCase):
         output = self.root / ".tmp" / "job_health" / f"digest_{AS_OF}.md"
         self.assertEqual(completed.stdout, output.read_text())
 
-    def test_cli_rejects_explicit_root_that_contains_output_path(self):
+    def test_cli_accepts_explicit_root_from_invoking_subdirectory(self):
         self._install_all_ok()
         output_dir = self.root / "nested_invocation"
         output_dir.mkdir()
@@ -954,12 +954,9 @@ class JobHealthDigestTests(unittest.TestCase):
             text=True,
         )
 
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn(
-            "--out-dir resolves inside --root for a different checkout",
-            completed.stderr,
-        )
-        self.assertFalse((output_dir / ".tmp" / "job_health").exists())
+        output = output_dir / ".tmp" / "job_health" / f"digest_{AS_OF}.md"
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, output.read_text())
 
     def test_cli_accepts_explicit_root_equal_to_invoking_cwd(self):
         self._install_all_ok()

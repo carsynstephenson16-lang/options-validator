@@ -698,7 +698,8 @@ def write_digest(
         ("--root", resolved_root),
         ("--research-root", resolved_research_root),
     ):
-        if read_root != resolved_cwd and (
+        cwd_is_in_read_root = resolved_cwd == read_root or read_root in resolved_cwd.parents
+        if not cwd_is_in_read_root and (
             resolved_out_dir == read_root or read_root in resolved_out_dir.parents
         ):
             raise ValueError(f"--out-dir resolves inside {label} for a different checkout")
