@@ -632,8 +632,9 @@ TECH_52W_LOOKBACK = 252            # ~52 weeks of sessions for high_52w
 
 # LLM-asserted presentation-layer ordering weights — dashboard display only,
 # NOT strategy gates; frozen H5/H6/H7 numbers untouched. They order the
-# dashboard's Top-3 shortlist (select_top_picks) and nothing else: they gate
+# dashboard's display shortlist (select_top_picks) and nothing else: they gate
 # nothing, size nothing, and never touch entry/exit logic.
+PICK_TOP_N: int = 5  # display-layer shortlist width; owner-directed in-session 2026-08-25 (spoken, not owner-typed); presentation only, never a strategy gate.
 PICK_GREEN_POINT = 1        # points per GREEN badge on a card
 PICK_RANK_LEADER_BONUS = 2  # bonus when the card is its lane's rank leader
 PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's direction
@@ -642,7 +643,7 @@ PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's dir
 # and AMZN I always want to see their picks"). Display only: each pinned
 # symbol's best ADMISSIBLE card renders in its own strip, labeled
 # "owner-pinned visibility — not ranked". Pinning never fabricates a card
-# (an inadmissible symbol shows an honest gap) and never touches the Top-3.
+# (an inadmissible symbol shows an honest gap) and never touches the shortlist.
 PICK_PINNED_SYMBOLS = ["VST", "AMZN"]
 
 # Earnings-calendar coverage horizon: a curated calendar whose last entry is
@@ -668,7 +669,7 @@ ATTRACTIVENESS_UNIVERSE = [
 # sessions (weekday count -- market holidays are counted as sessions, which
 # over-states age and therefore fails safe).
 #   WARN  -- render the age as a visible warning; still rankable.
-#   BLOCK -- DATA_BLOCKED, drops out of the Top-3 admissible pool.
+#   BLOCK -- DATA_BLOCKED, drops out of the display-shortlist admissible pool.
 # PROVENANCE: LLM-asserted 2026-08-04, pending owner confirmation. These are
 # display gates only: they bind no hypothesis, verdict, or registered trigger.
 # Evidence: reports/provider-transition/2026-08-04-scanner-staleness-diagnosis.md
@@ -866,7 +867,7 @@ CONSISTENCY_MAX_EXAMPLES = 20
 # ---------------------------------------------------------------------------
 # ATTRACTIVENESS EXPERIMENT LANES -- display-only, cached-data-only, and
 # disabled by default. LLM-proposed 2026-08-09; standard-from-literature or
-# repo conventions; not owner-ratified. Nothing here changes Top-3 ranking,
+# repo conventions; not owner-ratified. Nothing here changes shortlist ranking,
 # registered hypotheses, verdicts, FIRE authority, or paper-book state.
 # ---------------------------------------------------------------------------
 

@@ -273,7 +273,7 @@ launchctl enable gui/$UID/com.carsyn.options-validator.research-views
 
 Print both managed jobs, prove the LaunchAgent server owns the localhost
 listener and its configured document root, then kick the refresh and require a
-fresh status file before checking all four served artifacts:
+fresh immutable-generation pointer before checking that exact generation:
 
 ```bash
 launchctl print gui/$UID/com.carsyn.options-validator.research-display-refresh
@@ -305,24 +305,28 @@ if [[ "$SERVER_COMMAND" != "$EXPECTED_SERVER_COMMAND" ]]; then
   echo "stop: managed server document root differs: $SERVER_COMMAND" >&2
   exit 1
 fi
-STATUS_PATH='/Users/carsynstephenson/options-validator-ops/.tmp/dashboard/research-views-status.txt'
+CURRENT_PATH='/Users/carsynstephenson/options-validator-ops/.tmp/dashboard/research-views-current.json'
 STATUS_STARTED_AT="$(date +%s)"
 launchctl kickstart -k gui/$UID/com.carsyn.options-validator.research-display-refresh
 for _ in {1..20}; do
-  if [[ -f "$STATUS_PATH" ]] && [[ "$(stat -f %m "$STATUS_PATH")" -ge "$STATUS_STARTED_AT" ]]; then
+  if [[ -f "$CURRENT_PATH" ]] && [[ "$(stat -f %m "$CURRENT_PATH")" -ge "$STATUS_STARTED_AT" ]]; then
     break
   fi
   sleep 1
 done
-if [[ ! -f "$STATUS_PATH" ]] || [[ "$(stat -f %m "$STATUS_PATH")" -lt "$STATUS_STARTED_AT" ]]; then
-  echo "stop: refresh did not publish a fresh status file" >&2
+if [[ ! -f "$CURRENT_PATH" ]] || [[ "$(stat -f %m "$CURRENT_PATH")" -lt "$STATUS_STARTED_AT" ]]; then
+  echo "stop: refresh did not publish a fresh current pointer" >&2
   exit 1
 fi
-sed -n '1,3p' "$STATUS_PATH"
+curl -fsS http://127.0.0.1:8766/research-views-current.json > /tmp/research-views-current.json
+GENERATION_ID="$(/Users/carsynstephenson/options-validator-ops/.venv/bin/python -c 'import json; print(json.load(open("/tmp/research-views-current.json"))["generation_id"])')"
+MANIFEST_PATH="research-views-generations/$GENERATION_ID/research-views-manifest.json"
+curl -fsS "http://127.0.0.1:8766/$MANIFEST_PATH"
 curl -fsS http://127.0.0.1:8766/attractiveness.html
-curl -fsS http://127.0.0.1:8766/experiments.html
-curl -fsS http://127.0.0.1:8766/wasserstein-regime.txt
-curl -fsS http://127.0.0.1:8766/research-views-status.txt
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/experiments.html"
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/wasserstein-regime.txt"
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/wasserstein-regime.json"
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/research-views-status.txt"
 ```
 
 ### Rollback

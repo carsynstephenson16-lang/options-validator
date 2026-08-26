@@ -11,6 +11,7 @@ from unittest import mock
 
 import pandas as pd
 
+import config
 from options_researcher import attractiveness_dashboard as ad
 from options_researcher import qm_dashboard
 
@@ -106,9 +107,9 @@ class StudySidecarTests(unittest.TestCase):
             self.assertIn("source hash mismatch", visible["reason"])
             html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=visible)
             qm_section = html[
-                html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3") :
+                html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5") :
             ]
-            self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
+            self.assertEqual(qm_section.count("DATA BLOCKED"), config.PICK_TOP_N)
 
     def test_load_rejects_ledger_fact_hash_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -305,9 +306,11 @@ class ContextBuildTests(unittest.TestCase):
         )
 
         html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=context)
-        start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         self.assertEqual(context["status"], "DATA_BLOCKED")
-        self.assertEqual(html[start:].count("QM context withheld"), 3)
+        self.assertEqual(
+            html[start:].count("QM context withheld"), config.PICK_TOP_N
+        )
 
     def test_symbol_missing_from_frozen_sidecar_is_per_name_not_a_board_blocker(self):
         # REWRITTEN for brief 12 D5 (was: ..._blocks_qm_without_touching_its_cache).
@@ -379,7 +382,7 @@ class ContextBuildTests(unittest.TestCase):
             )
         html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=context)
         qm_section = html[
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3") :
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5") :
         ]
 
         self.assertEqual(context["status"], "CURRENT")

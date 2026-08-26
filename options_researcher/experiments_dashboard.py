@@ -7,10 +7,11 @@ failures into visible ERROR cards, and writes no state other than its HTML.
 
 from __future__ import annotations
 
+import argparse
 import html
 import os
-from collections.abc import Callable, Mapping
-from datetime import datetime
+from collections.abc import Callable, Mapping, Sequence
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -40,6 +41,16 @@ _LANES = (
     ),
     ("exp_tbill", "EXP-TBILL", "cached option chains + Treasury curve", "build_exp_tbill_board"),
 )
+
+
+def _strict_date_arg(value: str) -> str:
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected strict YYYY-MM-DD") from exc
+    if parsed.isoformat() != value:
+        raise argparse.ArgumentTypeError("expected strict YYYY-MM-DD")
+    return value
 
 
 def _esc(value: object) -> str:
@@ -221,8 +232,8 @@ def _experiments_html(data: Mapping[str, object], *, build_asof: str) -> str:
     return (
         '<section class="panel"><div class="section-header"><div>'
         '<div class="eyebrow">EXPERIMENT HEALTH + COMPARISON</div>'
-        "<h2>Experiments — display-only (not part of Top-3 ranking)</h2>"
-        "<p>display-only research experiments — not part of Top-3 ranking, "
+        "<h2>Experiments — display-only (not part of Top-5 ranking)</h2>"
+        "<p>display-only research experiments — not part of Top-5 ranking, "
         "no verdict authority.</p>"
         f'<div class="label">Build max as-of {_esc(build_asof)}</div>'
         "<p>Isolated descriptive views. Missing data stays visibly blocked; "
@@ -281,7 +292,7 @@ def render(data: Mapping[str, object], *, build_asof: str) -> str:
         '<header class="app-header"><div class="app-header-inner">'
         '<div><div class="eyebrow">Options research · experiments</div>'
         "<h1>Display-only research experiments</h1>"
-        '<p class="header-sub">Not part of Top-3 ranking; no verdict authority.</p>'
+        '<p class="header-sub">Not part of Top-5 ranking; no verdict authority.</p>'
         f'<div class="label">Build max as-of {_esc(build_asof)}</div></div>'
         '<div class="meta-row"><span class="meta-chip">Paper research</span></div>'
         '</div></header><main class="page-body">'
@@ -338,10 +349,14 @@ _SHORT_STYLE = """
 """
 
 
-def main() -> int:
-    asof = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Build the offline experiments dashboard")
+    parser.add_argument("--out", default=str(EXPERIMENTS_OUTPUT_PATH))
+    parser.add_argument("--evaluation-date", type=_strict_date_arg)
+    args = parser.parse_args(argv)
+    asof = args.evaluation_date or datetime.now(ZoneInfo("America/New_York")).date().isoformat()
     data = build_experiment_lanes(list(config.ATTRACTIVENESS_UNIVERSE), asof=asof)
-    output_path = Path(EXPERIMENTS_OUTPUT_PATH)
+    output_path = Path(args.out)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_name(f"{output_path.name}.{os.getpid()}.tmp")
     tmp_path.write_text(render(data, build_asof=asof))
