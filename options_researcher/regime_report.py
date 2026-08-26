@@ -12,10 +12,13 @@ Regime labels are unsupervised historical descriptions with no predictive
 test behind them; transition frequencies are historical frequencies, not
 forecasts; nothing here gates, sizes, or triggers a trade.
 """
+
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Callable, Sequence
+from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -27,22 +30,26 @@ from options_researcher.regime import (
     transition_frequencies,
     walk_forward_labels,
 )
+from options_researcher.regime_constants import DISCLAIMER
 
 DEFAULT_OUT = Path(".tmp/regime/regime_report.md")
 CLOSE_HISTORY_START = "2018-01-01"
-
-DISCLAIMER = (
-    "**Display-only, non-verdict-bearing.** This is not a registered signal. "
-    "Regime labels are unsupervised historical descriptions that have "
-    "survived no predictive test. Transition frequencies are historical "
-    "frequencies, not forecasts."
-)
 
 
 def _today_ny_iso() -> str:
     from datetime import datetime
 
     return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+
+def _strict_date_arg(value: str) -> str:
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected strict YYYY-MM-DD") from exc
+    if parsed.isoformat() != value:
+        raise argparse.ArgumentTypeError("expected strict YYYY-MM-DD")
+    return value
 
 
 def _default_loader(symbol: str, start_iso: str, end_iso: str) -> pd.Series:
@@ -55,8 +62,29 @@ def _min_rows_required() -> int:
     return config.REGIME_WINDOW_DAYS + config.REGIME_MIN_FIT_WINDOWS * config.REGIME_STEP_DAYS
 
 
-def _skip_section(symbol: str, reason: str) -> str:
-    return f"## {symbol} -- SKIPPED\n\nReason: {reason}\n"
+def _canonical_json_bytes(value: object) -> bytes:
+    return (
+        json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _skip_section(symbol: str, reason: str, *, max_asof: str | None = None) -> tuple[str, dict]:
+    return (
+        f"## {symbol} -- SKIPPED\n\nReason: {reason}\n",
+        {
+            "label": None,
+            "high_dispersion": None,
+            "max_asof": max_asof,
+            "skipped_reason": reason,
+        },
+    )
 
 
 def _symbol_section(
@@ -64,22 +92,24 @@ def _symbol_section(
     *,
     end_iso: str,
     loader: Callable[[str, str, str], pd.Series],
-) -> str:
+) -> tuple[str, dict]:
     try:
         closes = loader(symbol, CLOSE_HISTORY_START, end_iso)
     except FileNotFoundError as exc:
-        return _skip_section(
-            symbol, f"no cached close series ({exc.__class__.__name__}: {exc})"
-        )
+        return _skip_section(symbol, f"no cached close series ({exc.__class__.__name__}: {exc})")
+    if closes is not None:
+        closes = closes[[str(index)[:10] <= end_iso for index in closes.index]]
 
     min_rows = _min_rows_required()
     if closes is None or len(closes) < min_rows:
         got = 0 if closes is None else len(closes)
+        max_asof = str(closes.index[-1])[:10] if closes is not None and len(closes) else None
         return _skip_section(
             symbol,
             f"only {got} cached close rows through {end_iso}; need at least "
             f"{min_rows} (REGIME_WINDOW_DAYS + REGIME_MIN_FIT_WINDOWS * "
             "REGIME_STEP_DAYS)",
+            max_asof=max_asof,
         )
 
     as_of = str(closes.index[-1])[:10]
@@ -101,6 +131,7 @@ def _symbol_section(
             symbol,
             f"cached history through {as_of} produced no walk-forward label "
             "yet (fewer than REGIME_MIN_FIT_WINDOWS training windows)",
+            max_asof=as_of,
         )
 
     latest = labeled_rows.iloc[-1]
@@ -122,6 +153,8 @@ def _symbol_section(
         "- High-dispersion regime at latest label: "
         f"**{'yes' if bool(latest['high_dispersion']) else 'no'}**"
     )
+    lines.append("")
+    lines.append("— details —")
     lines.append("")
     lines.append("Windows per label (walk-forward, all labeled steps to date):")
     lines.append("")
@@ -147,13 +180,22 @@ def _symbol_section(
             "exists so far (at least 2 are needed)."
         )
     lines.append("")
-    return "\n".join(lines)
+    return (
+        "\n".join(lines),
+        {
+            "label": int(latest["label"]),
+            "high_dispersion": bool(latest["high_dispersion"]),
+            "max_asof": as_of,
+            "skipped_reason": None,
+        },
+    )
 
 
 def build_report(
     symbols: Sequence[str] = tuple(config.REGIME_SYMBOLS),
     *,
     out_path: Path | str = DEFAULT_OUT,
+    json_out_path: Path | str | None = None,
     loader: Callable[[str, str, str], pd.Series] = _default_loader,
     end_iso: str | None = None,
 ) -> tuple[str, int]:
@@ -165,9 +207,8 @@ def build_report(
     with the reason stated, not silently dropped.
     """
     resolved_end = end_iso or _today_ny_iso()
-    sections = [
-        _symbol_section(symbol, end_iso=resolved_end, loader=loader) for symbol in symbols
-    ]
+    results = [_symbol_section(symbol, end_iso=resolved_end, loader=loader) for symbol in symbols]
+    sections = [result[0] for result in results]
     all_skipped = bool(sections) and all(
         section.splitlines()[0].endswith("SKIPPED") for section in sections
     )
@@ -188,21 +229,38 @@ def build_report(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
 
+    if json_out_path is not None:
+        sidecar = {
+            "schema": "regime_report/v1",
+            "as_of_written": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "evaluation_date": resolved_end,
+            "symbols": {symbol: result[1] for symbol, result in zip(symbols, results, strict=True)},
+        }
+        sidecar_path = Path(json_out_path)
+        sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+        sidecar_path.write_bytes(_canonical_json_bytes(sidecar))
+
     return text, (1 if all_skipped else 0)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Offline Wasserstein regime-clustering report "
-            "(display-only, non-verdict-bearing)"
+            "Offline Wasserstein regime-clustering report (display-only, non-verdict-bearing)"
         )
     )
     parser.add_argument("--symbols", nargs="+", default=list(config.REGIME_SYMBOLS))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
+    parser.add_argument("--json-out")
+    parser.add_argument("--evaluation-date", type=_strict_date_arg, default=_today_ny_iso())
     args = parser.parse_args(argv)
 
-    _, exit_code = build_report(args.symbols, out_path=args.out)
+    _, exit_code = build_report(
+        args.symbols,
+        out_path=args.out,
+        json_out_path=args.json_out,
+        end_iso=args.evaluation_date,
+    )
     print(f"Wasserstein regime report written to {args.out}")
     return exit_code
 
