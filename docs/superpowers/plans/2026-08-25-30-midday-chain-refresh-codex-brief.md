@@ -2,11 +2,11 @@
 
 *(Renumbered from 29 — that slot was taken same-day by another session's Schwab-inventory-binding brief.)*
 
-**Date:** 2026-08-26 (rev 6, post-Brief-25 correction)
+**Date:** 2026-08-26 (rev 7, final-review correction)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** READY FOR HAND-OFF — fresh independent correction review **PASS** on `bc760a2` against post-Brief-25 base `8a6920a`; all six correction criteria passed with no blocking contradiction, stale active passage, or authority expansion. The prior adversarial review round 4 verdict was **PASS WITH FIXES**, with all six round-4 minors applied (A-empty branch, atomic HTML writes, janitor gating + test-baseline interaction, failed-build-morning disclosure, comparand-B rationale). Review history: rounds 1/2/3 each FAILED on WP-C.3's delivery mechanism (route delegated → client-side fetch with silent file:// death → same-writer tautology guard); round 4 confirmed the view-time two-comparand guard sound with a formal ordering argument (board ≤ B < A whenever quote lines render). Everything outside WP-C.3 was signed off in round 3. Rev 6 changes only train order/provenance/citations and makes the already-amended five-parameter capture signature proof explicit. WP-A remains staged (WP-A alone → one green 15:45 ops cycle → remainder). Receipt: `reports/2026-08-25-briefs-28-30-adversarial-review-receipt.md`.
-**Landing order (binding):** 26 → 25 → 28 → 27 → 30 (this brief remains last: its overlay golden is captured against the post-28/post-27 board, and its coordination notes assume Brief 27's picks artifact exists). NOTE: adds modules under `options_researcher/` and `tools/` → shifts `diagnostic_source_hash` (`research/hashing.py:137-154`); batch with this train. No new `config.py` constant → `config_hash` untouched.
+**Status:** CORRECTION CANDIDATE — final-head independent review pending. The prior correction review passed `bc760a2`, but the subsequent final-head review found a stale train-order passage, an incomplete hashing citation, and an absent-cache bootstrap gap in WP-D.3. Rev 7 repairs those findings while preserving the revised five-parameter capture-core contract and the tracked-receipt durability ruling. The prior adversarial review round 4 verdict was **PASS WITH FIXES**, with all six round-4 minors applied. WP-A remains staged (WP-A alone → one green 15:45 ops cycle → remainder). Receipt: `reports/2026-08-25-briefs-28-30-adversarial-review-receipt.md`.
+**Landing order (binding):** 26 → 25 → 28 → 27 → 30 (this brief remains last: its overlay golden is captured against the post-28/post-27 board, and its coordination notes assume Brief 27's picks artifact exists). NOTE: adds modules under `options_researcher/` and `tools/`, both included in and therefore shifting `diagnostic_source_hash` (`research/hashing.py:132-154`); batch with this train. No new `config.py` constant → `config_hash` untouched.
 **Provenance:** Repo-verified against post-Brief-25 `origin/main@8a6920a2449094f4e5db5ad6ff00741f2d388023` unless labeled otherwise (capture-lane mechanics mapped by a dedicated scout pass 2026-08-25; ordering, current line references, and the landed Brief-25 dashboard surface re-verified 2026-08-26 against that base).
 **Owner authorization (provider calls):** owner-directed in-session 2026-08-25, spoken: "we should pull schwab options data mid day as well to update it for more accuracy in these picks." Written call-count estimate per `.claude/rules/data-and-providers.md`: +15 Schwab `get_option_chain` calls per trading day (15-name universe × 1 full-chain call), additive to the existing 15/day pre-close capture and the 5×/day spot snapshots. $0 marginal cost; no new entitlement.
 
@@ -279,8 +279,26 @@ selection.
    session's task chip diagnosed — so verify the allowlist edit against
    the POST-#76 `daily_ritual.sh` on main, not this branch's copy. Also
    add ONLY `.cache/schwab_chains_midday` (gitignored, unrepurchasable) to
-   `tools/irreplaceable_data_guard.py` namespaces, and regenerate
-   `data/irreplaceable_data_inventory.json` IN THE SAME COMMIT.
+   `tools/irreplaceable_data_guard.py` namespaces. The implementation is
+   BLOCKED until brief 29's guard-semantic repair, or an equivalent narrow
+   prerequisite, has landed: when an inventory entry records `present: false`
+   and that namespace later contains bytes, `verify` must fail as
+   newly populated but unbaselined instead of skipping it. Pin that behavior,
+   the still-absent healthy case, and unchanged enforcement of existing
+   present floors in tests. In the cache-namespace code commit, regenerate
+   `data/irreplaceable_data_inventory.json` so the new cache key is recorded
+   even while absent; do not invent a nonzero floor.
+
+   Schedule installation and unattended midday capture remain BLOCKED while
+   that cache entry has no committed positive floor. Bootstrap it with one
+   supervised, owner-operated midday capture after merge. Immediately run
+   guard verification (which must fail specifically as newly populated but
+   unbaselined), regenerate the inventory from those real bytes under the
+   repository's owner-controlled inventory procedure, review the exact
+   additive cache delta, and commit the positive floor before enabling the
+   plist or permitting cleanup/reconciliation. This makes the first
+   population fail closed and every later loss/shrink enforceable.
+
    *(Amended 2026-08-26 per PR #90 Codex review P1: the tracked,
    ritual-grown `reports/schwab_chains_midday` must NOT carry an inventory
    floor — the main checkout routinely sits on branches lagging
@@ -291,10 +309,9 @@ selection.
    tracked receipts' durability comes from `DATA_TIER_PATHS` plus
    git/remote. The backup allowlist derives from guard namespaces
    (PR #66), so the cache namespace gains backup coverage automatically
-   while the tracked receipts rely on git — say so in the runbook. If
-   brief 29's rev-3 not-in-inventory check has landed by implementation
-   time, the same-commit regeneration is what keeps the next reconcile
-   green; verify against the then-current guard.)*
+   while the tracked receipts rely on git — say so in the runbook. The
+   inventory regeneration steps above apply only to the gitignored cache;
+   `reports/schwab_chains_midday` must be asserted absent from the inventory.)*
 4. Deploy preconditions: (a) the ops-health repair (task chip 2026-08-25;
    root cause fixed by PR #76) verified by ≥1 clean auto-committed
    pre-close receipt; (b) rev-1 finding 16 — the Schwab refresh token

@@ -123,3 +123,25 @@ The reviewer independently checked all six correction criteria:
    contradiction was introduced.
 
 No blocking findings were reported.
+
+## 2026-08-26 final-head correction review — superseding FAIL
+
+**Reviewer:** isolated GPT-5.6 high-reasoning reviewer, read-only.
+**Reviewed commit:** `1d09e8ae81b1ff371ebc9111f4d65ee3d6f43ac9`.
+**Verified base:** post-Brief-25
+`origin/main@8a6920a2449094f4e5db5ad6ff00741f2d388023`.
+**Verdict:** **FAIL**. This verdict supersedes the PASS above for merge
+eligibility until a later immutable commit receives a fresh independent PASS.
+
+The reviewer found three blocking documentation defects:
+
+1. Brief 25 still stated the obsolete active order 26 → 25 → 27.
+2. Brief 30's durability language recorded an absent cache namespace but did
+   not require guard semantics or a first-population floor, while the current
+   guard skips recorded-absent entries.
+3. Briefs 28/30 cited only the hashing function body and omitted the lines
+   that include `options_researcher/` and `tools/` in its source paths.
+
+Revisions 25 rev 5, 28 rev 6, and 30 rev 7 are the correction candidate for
+these findings. A later section must record the immutable correction commit
+and fresh independent verdict before this package may merge.

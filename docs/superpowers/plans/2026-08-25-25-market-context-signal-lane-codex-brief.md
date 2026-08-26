@@ -1,10 +1,10 @@
-# Codex brief 25 — daily market context that visibly contributes to a labeled second ranking lane (rev 4)
+# Codex brief 25 — daily market context that visibly contributes to a labeled second ranking lane (rev 5)
 
-**Date:** 2026-08-25 (rev 4, Wave 0 authority audit)
+**Date:** 2026-08-26 (rev 5, train-order correction)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** REVIEW PASS rev 4 — hand-off remains blocked until Brief 26 implementation lands. A fresh Wave 0 full-PR reviewer issued written PASS after rev 4 closed the later authority, pool, trend-state, and freshness-contract findings. Binding implementation order remains 26 → 25 → 27; this status does not authorize merge, flag enablement, or deployment.
-**Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. Landing order is binding: **brief 26 lands first, then this brief, then brief 27** (shared constants and heading strings flow 26 → 25 → 27).
+**Status:** REVIEW PASS rev 4 for Brief 25's substantive contract; rev 5 changes only the downstream train order and is pending PR #90's final correction review. Binding implementation order is 26 → 25 → 28 → 27 → 30; this status does not authorize merge, flag enablement, or deployment.
+**Provenance:** Brief 25's substantive contract was repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise. The 2026-08-26 order-only addendum is repo-verified against post-Brief-25 `origin/main@8a6920a2449094f4e5db5ad6ff00741f2d388023`. Landing order is binding: **26 → 25 → 28 → 27 → 30** (Brief 28 consumes Brief 25's context-card surface before Brief 27, and Brief 30 remains last).
 **Owner directive source:** Carsyn in-session 2026-08-25 ("market context i want that updated daily and actually contributing to the signals") — spoken, not owner-typed.
 
 ## Why this exists (plain language)
