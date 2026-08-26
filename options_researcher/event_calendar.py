@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from types import MappingProxyType
-from typing import Iterable, Iterator, Mapping
+from typing import Iterable, Iterator, Mapping, cast
 from urllib.parse import urlparse
 
 from options_researcher.source_policy import BANNED_HOST_FRAGMENTS
@@ -41,6 +41,15 @@ _REQUIRED = frozenset(
         "added_by",
     }
 )
+
+
+def _freeze(value: object) -> object:
+    """Recursively freeze render context payloads before handing them to render."""
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
 
 
 @dataclass(frozen=True)
@@ -91,9 +100,12 @@ class EventView(Mapping[str, object]):
     ) -> "EventView":
         return cls(
             tuple(calendar),
-            MappingProxyType(dict(complex_map)),
+            cast(Mapping[str, object], _freeze(complex_map)),
             MappingProxyType(
-                {key: MappingProxyType(dict(value)) for key, value in implied_moves.items()}
+                {
+                    key: cast(Mapping[str, str], _freeze(value))
+                    for key, value in implied_moves.items()
+                }
             ),
             MappingProxyType(dict(failures)),
         )
