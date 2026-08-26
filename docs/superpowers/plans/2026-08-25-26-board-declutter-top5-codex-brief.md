@@ -1,10 +1,10 @@
-# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 4)
+# Codex brief 26 — board declutter: Top-5 shortlist, dominated-card collapse, compact regime view (rev 6)
 
-**Date:** 2026-08-25 (rev 4, same day)
+**Date:** 2026-08-25 (rev 6, post-submission command audit)
 **Author:** Claude orchestrating session (Fable), 2026-08-25
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 4 — adversarial review round 3 verdict PASS WITH FIXES (NEW-1 measured acceptance, NEW-5 test names, NEW-6 staleness reference — applied in this rev, plus the rev-4 liquidity-panel design decision in WP-C.1 responding to NEW-1's measurement, which has NOT itself been re-reviewed). Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`.
-**Provenance:** Repo-verified against commit `720a20e` on branch `claude/codex-handoff-plan-2026-08-22` unless labeled otherwise (line numbers re-verified at this SHA; the 2026-08-25 input-root-default fix `OPS_CHECKOUT_FALLBACK` is COMMITTED at `attractiveness_dashboard.py:57` — WP-D.3 depends on it and on nothing uncommitted). Landing order is binding: **this brief lands first, then brief 25, then brief 27.**
+**Status:** REVIEW PASS rev 6 — HAND-OFF AUTHORIZED ON OWNER LANDING, not before. The focused rev-5 reviewer PASS at `99b7bba` remains valid for the unchanged atomic protocol, and the fresh Wave 0 full-PR re-review issued written PASS after rev 6 corrected the acceptance commands. The owner-directed hand-off recorded by source commit `839ddb3` becomes effective only if the owner lands this draft documentation PR. Until then canonical `main` remains DRAFT. Receipt: `reports/2026-08-25-briefs-25-27-adversarial-review-receipt.md`. Landing order still binds: this brief lands FIRST (26 → 25 → 27).
+**Provenance:** Repo-verified against current reconciliation base `origin/main@77b1a46` unless labeled otherwise. Round-4 parameter decisions are transplanted from `7908919`; the owner-directed hand-off is transplanted from `839ddb3`. The relevant Brief 26 implementation surfaces are unchanged from its prior `720a20e` anchor except for unrelated later `config.py` additions; all cited symbols and six slot literals were re-verified on `77b1a46`. The committed ops-input fallback remains `options_researcher/attractiveness_dashboard.py:57`. Landing order is binding: **this brief lands first, then brief 25, then brief 27.**
 **Owner directive source:** Carsyn in-session 2026-08-25 ("pull up to top 5 picks each day", "wasserstein regime view needs to be fixed, there's too much information", "if the option isn't as good as another one I don't think it should be shown") — spoken, not owner-typed.
 
 ## Why this exists (plain language)
@@ -38,6 +38,11 @@ report demoted to a link.
   DISPLAY, not how candidates are ordered or admitted.
 - No ledger writes, no registration/amendment, no authority flips, no
   live-order paths, no network providers.
+- The worker may create only a **draft PR**. It may not merge, deploy, sync an
+  ops/research checkout, enable a flag or LaunchAgent, modify a ledger, make a
+  PR ready for review, or otherwise exercise owner authority. A green draft
+  remains owner-held work; it is not permission for the repository reconciler
+  or any worker to land it.
 - No deletion of any card from the assembled payload — pruning is
   presentation-layer collapse; `sections_json()` stays complete.
 - No `options_researcher.exp_*` import into `attractiveness_dashboard.py`
@@ -76,8 +81,10 @@ report demoted to a link.
    - `:3350` `selected_count, open_count = 0, 3`
    - `:3371` `for slot in range(len(cards) + 1, 4):`
    - `:3373` `selected_count, open_count = len(picks), max(0, 3 - len(picks))`
-   After editing, grep `range(1, 4)|range(len(|, 4)|0, 3` in the module to
-   confirm no seventh site exists at the final SHA.
+   After editing, run
+   `rg -n 'range\(1, 4\)|range\(len\([^)]*\) \+ 1, 4\)|max\(0, 3 -|open_count = 0, 3' options_researcher/attractiveness_dashboard.py`
+   and classify every remaining match; no shortlist/QM slot literal may be
+   left at 3 at the final SHA.
 3. Copy updates (this brief owns them): "TOP 3 PICKS TODAY" → "TOP 5 PICKS
    TODAY"; "Rule-based top 3" → "Rule-based top 5"; "…FOR MECHANICAL TOP 3"
    → "…FOR MECHANICAL TOP 5". Then grep user-visible "top 3"/"Top-3"/"Pick 3"
@@ -153,21 +160,24 @@ report demoted to a link.
    Fail-visible law stays absolute for DATA_BLOCKED/stale.
 2. No content change inside panels beyond WP-B.
 
-### WP-D — regime view (rev-1 findings 19, 20 applied)
+### WP-D — regime view and generation publication (rev-1 findings 19, 20;
+Wave 0 atomicity repair)
 
 1. **Machine-readable sidecar, not text parsing:** `regime_report.py` gains a
    JSON sidecar named **`wasserstein-regime.json`** (rev-2 finding N-7):
    `{"schema": "regime_report/v1", "as_of_written": <ISO ts>, "symbols":
    {SYM: {"label", "high_dispersion", "max_asof", "skipped_reason"}}}`.
-   `tools/research_display_refresh.sh` must publish `{wasserstein-regime.txt,
-   wasserstein-regime.json}` as ONE atomic set (both to temp names, then two
-   renames back-to-back after both writes succeed; on any failure neither is
-   renamed) — its current pattern renames the `.txt` alone
-   (`research_display_refresh.sh:13-14,25-37`), which would let a reader see
-   a sidecar disagreeing with the linked report. The report's markdown
-   layout ALSO moves tables below a per-symbol "— details —" separator
-   (latest label + dispersion + as-of stay on top). Sidecar first, then
-   layout — the dashboard never parses markdown.
+   Add `regime_report --json-out <path>` alongside its existing `--out`; the
+   wrapper passes both paths inside one caller-supplied staging generation.
+   Add `experiments_dashboard --out <path>` with
+   `config.EXPERIMENTS_OUTPUT_PATH` preserved as its default, and have the
+   wrapper pass the staging `experiments.html` path. Both CLIs use
+   `main(argv: Sequence[str] | None = None)` so argument parsing is unit
+   testable. A builder may leave a partial file only inside unpublished
+   staging; any nonzero builder exit aborts the generation in WP-D.4. The
+   report's markdown layout ALSO moves tables below a per-symbol "— details —"
+   separator (latest label + dispersion + as-of stay on top). The dashboard
+   never parses markdown.
 2. Shared disclaimer constant: move the DISCLAIMER string to
    `options_researcher/regime_constants.py` (no heavy imports); both
    `regime_report.py` and the dashboard import it — no duplicated drifting
@@ -183,18 +193,107 @@ report demoted to a link.
    rendering loudly: "regime view unpublished/stale — see Experiments
    shelf". Per-symbol lines always show their own `max_asof`.
    Strip always carries the shared DISCLAIMER sentence.
-4. Publication for non-ops builds: when the deployment checkout's
-   `.tmp/dashboard/research-views-status.txt` is absent AND board inputs were
-   read from a different root (`_input_root_cwd` window; the ops default
-   fallback is committed at `attractiveness_dashboard.py:57,61-90` @720a20e),
-   copy the SET {status file, `experiments.html`, `wasserstein-regime.txt`,
-   regime sidecar} from `<input_root>/.tmp/dashboard/` into the deployment
-   `.tmp/dashboard/` **atomically as a set** (temp dir + rename), deciding
-   freshness by the PUBLISHED STATUS FILE's timestamp line — never by file
-   mtimes (rev-1 finding 20: mtimes are reset by git/restic and are not this
-   repo's freshness discipline). If the local status timestamp is newer,
-   skip and note. Stamp the copied-from root visibly on the Experiments
-   shelf ("views copied from ops checkout, published <ts>").
+4. **Single-commit publication protocol (replaces the impossible two-rename
+   design):** add a stdlib-only
+   `options_researcher/research_views_publication.py` helper for canonical JSON,
+   validation, hashing, fsync, locking, publication, and copy. The shell
+   wrapper orchestrates builders but delegates filesystem commit semantics to
+   this helper. A `generation_id` is exactly UTC basic time plus UUID hex,
+   regex `^[0-9]{8}T[0-9]{12}Z-[0-9a-f]{32}$`; `published_at` is canonical UTC
+   RFC 3339 with six fractional digits and `Z`. Parse it as timezone-aware
+   UTC, never order timestamp strings or accept offsets. The helper rejects an
+   ID that fails the regex, disagrees across pointer/manifest/status/directory,
+   resolves outside the generations root, or collides with an existing final
+   directory (collision is a hard error, never overwrite).
+
+   Build inside same-filesystem
+   `.tmp/dashboard/research-views-generations/.staging-<generation_id>/`.
+   Run BOTH builders to collect both exits. If either is nonzero, acquire the
+   same publication lock and atomically write+fsync
+   `.tmp/dashboard/research-views-last-failure.json` with strict schema
+   `research_views_failure/v1`, attempt id, UTC attempted/completed timestamps,
+   producer commit/root, both exits, and `outcome: FAILED`; include no hashes
+   from partial outputs. Mint `completed_at` while holding the lock. Re-read
+   any existing failure under the lock and replace it only when the new parsed
+   completion is later; identical attempt id is an idempotent no-op and equal
+   completion with a different id is `ATTEMPT_CONFLICT`. Remove only that
+   attempt's staging directory; leave current pointer and immutable generations
+   unchanged; exit nonzero. On success,
+   create four logical artifacts — `experiments.html`,
+   `wasserstein-regime.txt`, `wasserstein-regime.json`, and
+   `research-views-status.txt`. Status records the id, timestamp, both zero
+   exits, and SHA-256/byte size for the first three.
+
+   Canonical `research-views-manifest.json` has schema
+   `research_views_manifest/v1`, generation id, parsed publication time,
+   producer commit, and an EXACT four-entry allow-listed file map with
+   SHA-256/byte size for all four logical artifacts, including status. Verify
+   that status identity/outcomes and its three file hashes/sizes equal the
+   manifest entries. Canonical `research-views-current.json` has schema
+   `research_views_current/v1`, generation id, publication time, and the
+   manifest's SHA-256/byte size; for a copied generation it may additionally
+   carry `copied_from_root`, but the immutable source manifest and generation
+   bytes remain byte-identical.
+
+   Flush and fsync every artifact plus manifest and the staging directory;
+   under an exclusive `fcntl` lock at
+   `.tmp/dashboard/.research-views.lock`, rename staging once to the final
+   immutable generation, fsync the generations parent, write+fsync a temporary
+   current pointer, rename that ONE pointer over the old pointer, then fsync
+   the dashboard parent. The durable current pointer IS the success receipt;
+   do not write a second PUBLISHED-attempt file. A failure before pointer rename
+   leaves the prior complete generation current; a crash after pointer
+   durability cannot make an older failure look current because readers apply
+   WP-D.5's timestamp rule. Never rollback by a second rename, and never edit
+   or delete a published generation in this brief.
+5. **Reader and ops-copy hash/locking protocol:** a reader snapshots and parses
+   the current pointer once, verifies the pointer's manifest hash/size, then
+   resolves that exact immutable generation (never re-reads the pointer
+   mid-operation). Validate strict schemas, UTC timestamp, id equality and
+   containment, exact relative-file allow-list, sizes, hashes, and
+   status/manifest agreement before using the sidecar or emitting links to
+   `research-views-generations/<validated_id>/...`. Missing, malformed,
+   path-escaping, hash-mismatched, or split generations render visibly as
+   `unpublished/integrity failed`; no loose-root-file or previous-generation
+   fallback is allowed after the pointer has been read.
+
+   In `_build_and_write`, capture `deployment_root = Path.cwd().resolve()`
+   before entering `_input_root_cwd()`, bind its yielded value as
+   `input_root`, and after exiting call the helper explicitly with
+   `source_root=input_root` and `destination_root=deployment_root` BEFORE
+   loading local research-view status. If the roots resolve equal, perform no
+   copy and load locally. Otherwise snapshot/validate the source pointer and
+   immutable generation, copy its bytes into destination staging, validate
+   again, and commit under the destination's SAME lock/protocol. Under that
+   lock, re-read the destination pointer immediately before commit: source
+   time newer means install; destination newer means skip; identical id means
+   idempotent no-op; equal parsed timestamps with different ids means
+   `GENERATION_CONFLICT` and no pointer change. Snapshot and strictly validate
+   the source `research-views-last-failure.json` independently of the current
+   generation. Under the destination lock, reconcile it by parsed
+   `completed_at` using the same newer/idempotent/equal-time-conflict rules as
+   the producer, even when source and destination generation ids are identical.
+   Copy the byte-identical source failure BEFORE any destination pointer update;
+   a crash after pointer durability therefore cannot omit a source failure that
+   was newer than that source publication. This locked recheck is the
+   compare-and-swap that prevents a stale copy from clobbering a concurrent
+   local publish. The local pointer records `copied_from_root`; source manifest
+   and generation stay byte-identical. Copy/integrity failure is visible but
+   nonfatal to the independent board build. The implementation worker may not
+   run an ops deployment or mutate the ops checkout.
+6. **Consumer migration (no hidden compatibility gap):** change
+   `load_research_views_status` and the regime-sidecar loader to the validated
+   pointer/manifest helper; have `_experiments_shelf_html` link to exact
+   generation paths. Parse the local last-failure record strictly and show it
+   separately only when `failure.completed_at` is later than the validated
+   current pointer's `published_at` (or when no valid current publication
+   exists); suppress an older failure as stale history. A malformed failure
+   channel renders its own integrity warning but cannot invalidate a valid
+   current generation. Update
+   `tools/launchagents/README.md` operator curl examples to fetch the pointer,
+   then its exact manifest/generation paths. Do not keep individual loose-file
+   aliases: they cannot provide set atomicity and must not be treated as a
+   compatibility surface.
 
 ### WP-E — coordinated test updates (rev-1 findings 15, 36 applied)
 
@@ -223,6 +322,18 @@ Intentional updates (same commit as the feature that breaks them):
   expected to pass unmodified; verify rather than edit).
 - `tests/test_research_context_assemble.py` mocks that patch
   `select_top_picks` (locate by grep) — confirm they are n-agnostic.
+- `tests/test_experiments_dashboard.py`: preserve the default output-path test
+  and add the explicit `--out` staging-path contract.
+- `tests/test_regime.py` (the existing regime + report suite): add paired
+  `--out` / `--json-out` schema and partial-staging failure coverage.
+- `tests/test_research_display_refresh.py`: replace loose-file and partial
+  success expectations. On either builder failure, both builders still run,
+  the prior current pointer/generation remain byte-identical, the staging
+  directory is removed, `last-failure` records both exits and FAILED, and the
+  wrapper exits nonzero. On success, assert exact generation files, manifest
+  chain, pointer swap, no second success receipt, and no loose aliases. Replace
+  the old status-rename failure case with pointer-rename/fsync failure cases
+  that preserve the old current generation.
 - NEW tests (names track the rev-3/rev-4 rules — round-3 finding NEW-5):
   dominance partition units (incomparable-never-dominated,
   **liquidity-RED-never-hidden**, blocked-never-hidden,
@@ -231,8 +342,19 @@ Intentional updates (same commit as the feature that breaks them):
   collapsed-panel default states (**DATA_BLOCKED/stale panel open**,
   liquidity-RED-only panel COLLAPSED with its card outside the dominated
   block, clean panel collapsed); regime strip present/absent-is-loud;
-  sidecar schema round-trip; atomic set-copy (fresher-local never
-  clobbered; status and artifacts never split).
+  sidecar schema round-trip; generation publish/copy (failure before pointer
+  swap preserves the prior generation; pointer temp and both parent-directory
+  fsyncs are exercised through injected failures; a reader pinned to one
+  generation cannot observe a split pair; invalid id, directory escape,
+  manifest mutation, status/manifest disagreement, size mismatch, and one-byte
+  artifact mutation all fail closed; same-id is idempotent, newer-local wins,
+  equal-time/different-id conflicts, a lock-delayed stale copier cannot clobber
+  a concurrent publish, same-root skips copy, and no loose-file fallback).
+  Failure-channel tests: a crash after durable pointer commit needs no second
+  success receipt; a failure older than current publication is suppressed; a
+  newer failure with an unchanged source generation is copied and rendered;
+  concurrent failure writers cannot regress `completed_at`; equal completion
+  with different attempt ids fails closed.
 - MUST NOT change: `SelectTopPicksTests` recipe tests except the n default;
   fail-visible pins `:1116`, `:1126`, `:1137` (the exact
   `DISPLAY_ONLY_LABEL` count of 2 must survive WP-B/WP-C); AST boundary
@@ -242,23 +364,35 @@ Intentional updates (same commit as the feature that breaks them):
 
 ```bash
 uv run python -m unittest discover -s tests    # exit 0, offline
-uv run ruff check . && uv run pyright          # exit 0
+uv run ruff check .                            # exit 0
+uv run ruff format --check options_researcher/research_views_publication.py options_researcher/regime_constants.py
+uv run pyright                                 # exit 0
 ```
-Plus, on the REAL board (rev-1 finding 15; rev-2 N-4; round-3 NEW-1 — no
-speculative percentage): the display metric is "candidate cards visible
-without user interaction" (i.e., not inside any CLOSED `<details>`).
-(a) BEFORE implementation, run a dry rule-application over the current live
-board (round-3 measured basis: 18 panels, 14 with a liquidity-RED card, 222
-badge blocks, 82 liquidity-RED) computing exactly which cards the WP-B/WP-C
-rules hide/collapse; record the predicted before/after counts in the PR.
-(b) Acceptance = the implementation reproduces the dry run's predicted set
-EXACTLY (rule-faithfulness, not a percentage); if the predicted reduction
-is below 30%, STOP and report the measured ceiling to the owner before
-building — never loosen an exclusion to manufacture a number.
-(c) Every `candidate_id` present in the payload before the change is still
-present after. (d) Top-5 membership equals the first 5 of the unchanged
-admission+order pipeline. (e) The hidden-card shown-dominator property test
-from WP-E passes.
+Plus, on one frozen copy of the REAL board input (rev-1 finding 15; rev-2 N-4;
+round-3 NEW-1), record the input root, source artifact SHA-256, data/evaluation
+dates, base commit, and the metric definition: "candidate cards visible
+without user interaction" means cards not inside any closed `<details>`.
+
+**Pre-implementation stop gate:** run the WP-B/WP-C rules as a dry projection
+against that frozen input and write the predicted visible-card identity set and
+before/after counts to the draft PR. The prior 18-panel / 14-liquidity-RED-panel
+measurement is context, not an acceptance fixture. If the newly predicted
+reduction is below **30%**, stop before implementation and report the measured
+ceiling to the owner; do not weaken an exclusion or reinterpret the metric.
+
+**Acceptance after the stop gate clears:** build against the SAME frozen input.
+The rendered visible-card identity set must equal the dry projection exactly;
+every pre-change `candidate_id` and multiplicity must remain in the assembled
+payload and DOM; Top-5 membership must equal the first five items from the
+byte-unchanged admission/order pipeline; every hidden card's recorded
+dominator must be in the shown set; and the generation/hash failure tests in
+WP-E must pass. The 30% figure is only the pre-implementation stop gate — it is
+not a target that can substitute for exact rule-faithfulness.
+
+The implementation ends at a green **draft PR** with the frozen-input receipt,
+predicted and actual identity sets, manifest/hash test evidence, and command
+exit codes. The worker must not make it ready, merge it, deploy it, update ops,
+change any ledger, or flip any authority.
 
 ## Claim-discipline register
 
@@ -278,5 +412,10 @@ from WP-E passes.
 - `cc` carries `upside`; `pmcc` carries neither `cushion` nor `upside`:
   Repo-verified `attractiveness.py:280-284,339-343`.
 - Dominance axis sets, ≤2-card exemption, pmcc exemption, 5-session sidecar
-  staleness threshold, 50% acceptance floor: LLM-proposed 2026-08-25
-  (display-only), labeled in code; Assumption until re-review passes them.
+  staleness threshold, and the 30% pre-implementation stop gate:
+  LLM-proposed 2026-08-25 (display-only), labeled in code; Assumptions. The
+  stop gate is not an acceptance floor.
+- Immutable-generation publication, one-pointer commit, allow-listed relative
+  paths, and SHA-256/size verification: Inference from filesystem atomicity and
+  fail-closed repository policy; the focused Wave 0 review explicitly PASSED
+  this protocol at `99b7bba` before hand-off authorization.
