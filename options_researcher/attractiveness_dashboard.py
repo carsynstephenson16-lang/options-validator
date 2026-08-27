@@ -29,13 +29,17 @@ and position state unchanged.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import html as _html
+import json
 import math
 import os
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -48,9 +52,19 @@ if TYPE_CHECKING:
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
 RESEARCH_VIEWS_STATUS_PATH = Path(".tmp/dashboard/research-views-current.json")
+PICKS_SNAPSHOT_PATH = Path(".tmp/dashboard/picks_snapshot.json")
 
 _PMCC_NOTE = "just the premium; LEAPS value not counted"
 DISPLAY_ONLY_LABEL = "DISPLAY-ONLY — not in any registered hypothesis"
+
+
+@dataclass(frozen=True)
+class DashboardRenderResult:
+    """Pure render output plus the exact tracker membership used by the page."""
+
+    html: str
+    selection_snapshot: dict[str, object]
+    render_source_row_hashes: tuple[str, ...] = ()
 
 
 # Capture receipts are written only by the ops execution checkout (its
@@ -1517,6 +1531,14 @@ def assemble(
                        "cards": cards, "empty": grp.get("empty")}
             if "preview" in grp:
                 out_grp["preview"] = grp["preview"]
+            if "pick_tracker_coverage" in grp:
+                out_grp["pick_tracker_coverage"] = copy.deepcopy(
+                    grp["pick_tracker_coverage"]
+                )
+            if "pick_tracker_quotes" in grp:
+                out_grp["pick_tracker_quotes"] = copy.deepcopy(
+                    grp["pick_tracker_quotes"]
+                )
             out_groups.append(out_grp)
         out_sec = {"symbol": sym, "close": float(sec["close"]),
                    "iv_rank": float(sec["iv_rank"]),
@@ -1671,13 +1693,26 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
     csp_open_count = (int((positions["structure"] == "csp").sum())
                       if not positions.empty else 0)
     thesis_used = 0.0
-    held_leaps: dict[str, tuple[float, float]] = {}
+    held_leaps: dict[str, dict[str, object]] = {}
     if not positions.empty:
         t = positions[positions["bucket"] == "thesis"]
         thesis_used = float((t["entry_price"] * 100 * t["contracts"]).sum())
         for _, lp in positions[positions["structure"] == "leaps_call"].iterrows():
-            held_leaps.setdefault(str(lp["symbol"]),
-                                  (float(lp["strike"]), float(lp["entry_price"])))
+            identity = {
+                "id": str(lp["id"]),
+                "symbol": str(lp["symbol"]),
+                "right": str(lp["right"]),
+                "strike": float(lp["strike"]),
+                "expiration": str(lp["expiration"]),
+                "contracts": int(lp["contracts"]),
+                "entry_price": float(lp["entry_price"]),
+            }
+            identity["source_row_hash"] = hashlib.sha256(
+                json.dumps(
+                    identity, sort_keys=True, separators=(",", ":")
+                ).encode()
+            ).hexdigest()
+            held_leaps.setdefault(str(lp["symbol"]), identity)
     bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
 
     # One v3 evidence load for the whole page; a broken store degrades every
@@ -1904,6 +1939,18 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
     lot = holdings.loc[holdings["symbol"] == symbol]
     held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
     if held_shares >= 100:
+        holding_identity = {
+            "symbol": symbol,
+            "shares": 100,
+            "declared_shares": held_shares,
+            "cost_basis": float(lot.iloc[0]["cost_basis"]),
+            "acquired": str(lot.iloc[0]["acquired"]),
+        }
+        holding_identity["source_row_hash"] = hashlib.sha256(
+            json.dumps(
+                holding_identity, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
         cc_cards = ladder_cards(
             cc_card_rows, symbol, chain, day,
             rank_key="annualized_yield",
@@ -1916,6 +1963,7 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                          symbol=symbol, day=day)
         groups.append({"kind": "cc",
                        "title": "SELL A COVERED CALL? (rent out your shares)",
+                       "pick_tracker_coverage": holding_identity,
                        "cards": cc_cards,
                        "empty": None})
     elif held_shares > 0:
@@ -1928,7 +1976,9 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                                  "100-share lot; PMCC rows appear only after "
                                  "a real LEAPS is recorded.")})
     if symbol in held_leaps:
-        lk, lp = held_leaps[symbol]
+        leaps_identity = held_leaps[symbol]
+        lk = float(leaps_identity["strike"])
+        lp = float(leaps_identity["entry_price"])
         pmcc_cards = ladder_cards(
             pmcc_card_rows, symbol, chain, day,
             rank_key="annualized_yield", higher_is_better=True,
@@ -1941,6 +1991,7 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
         groups.append({"kind": "pmcc",
                        "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
                        "leaps_strike": lk, "leaps_premium": lp,
+                       "pick_tracker_coverage": copy.deepcopy(leaps_identity),
                        "cards": pmcc_cards,
                        "empty": None if pmcc_cards else
                        (f"no SAFE strike this cycle: the rule needs a call "
@@ -1993,6 +2044,43 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
     if earnings_source == "v3_store" and v3_assertions is not None:
         apply_cycle_badges(groups, symbol, date_cls.fromisoformat(day),
                            v3_assertions, known_as_of=known_now)
+
+    expiration_column = (
+        "expiration" if "expiration" in chain.columns else "exp_date"
+    )
+    for group in groups:
+        lane = str(group.get("kind") or "")
+        right = "P" if lane == "put" else "C"
+        quotes: dict[str, dict[str, object]] = {}
+        for card in group.get("cards", []):
+            if "strike" not in card or "expiry" not in card:
+                continue
+            try:
+                selected = chain.loc[
+                    (chain[expiration_column].astype(str) == str(card["expiry"]))
+                    & (chain["strike"].astype(float) == float(card["strike"]))
+                    & (chain["right"].astype(str).str.upper().str[0] == right)
+                ]
+            except (KeyError, TypeError, ValueError):
+                selected = chain.iloc[0:0]
+            if len(selected) != 1:
+                continue
+            row = selected.iloc[0]
+            raw = {
+                "symbol": symbol,
+                "right": right,
+                "strike": float(card["strike"]),
+                "expiry": str(card["expiry"]),
+                "bid": float(row["bid"]),
+                "ask": float(row["ask"]),
+                "open_interest": int(row.get("open_interest", 0)),
+            }
+            raw["source_row_hash"] = hashlib.sha256(
+                json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            quotes[f"{card['expiry']}:{float(card['strike']):.2f}"] = raw
+        if quotes:
+            group["pick_tracker_quotes"] = quotes
 
     section = {"symbol": symbol, "as_of": day, "close": close,
                "iv_rank": iv_rank, "groups": groups,
@@ -2054,7 +2142,12 @@ def sections_json(sections: list[dict] | None = None) -> str:
             sections, _rv21, blocked, _schwab_state = _gather_all()
     _dates = {s["as_of"] for s in sections} if sections else set()
     as_of = next(iter(_dates)) if len(_dates) == 1 else None
-    return json.dumps({"as_of": as_of, "sections": sections,
+    public_sections = copy.deepcopy(sections)
+    for section in public_sections or []:
+        for group in section.get("groups", []):
+            group.pop("pick_tracker_coverage", None)
+            group.pop("pick_tracker_quotes", None)
+    return json.dumps({"as_of": as_of, "sections": public_sections,
                        "blocked": blocked},
                       indent=2, sort_keys=False)
 
@@ -3681,6 +3774,9 @@ def _blocked_qm_slot_html(
 def _original_hero_html(
     data: dict, context: dict | None, qm_context: Mapping[str, object] | None,
     event_view: Mapping[str, object] | None = None,
+    *,
+    py_picks: list[dict] | None = None,
+    qualified_picks: list[dict] | None = None,
 ) -> str:
     """Render the unchanged mechanical Top-3 plus advisory research.
 
@@ -3688,8 +3784,10 @@ def _original_hero_html(
     source.  The only hero candidates come from ``select_top_picks`` over the
     assembled, point-in-time policy snapshots.
     """
-    py_picks = select_top_picks(data, include_csp_watch=True)
-    qualified_picks = select_top_picks(data)
+    if py_picks is None:
+        py_picks = select_top_picks(data, include_csp_watch=True)
+    if qualified_picks is None:
+        qualified_picks = select_top_picks(data)
     data_as_of = str(data.get("data_as_of") or "?")
     annotations, _annotation_warning = _research_annotation_map(py_picks, context)
     notes = []
@@ -3786,7 +3884,11 @@ def _qm_two_date_label_html(
     )
 
 
-def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, object] | None) -> str:
+def _qm_hero_html(
+    data: dict,
+    context: dict | None,
+    qm_context: Mapping[str, object] | None,
+) -> str:
     """Render lower QM context on mechanical slots, or three fail-closed slots."""
     data_as_of = str(data.get("data_as_of") or "?")
     block_reason = _qm_context_block_reason(data, qm_context)
@@ -3924,10 +4026,26 @@ def _qm_movement_lane_html(
 def _hero_html(
     data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None,
     event_view: Mapping[str, object] | None = None,
+    *,
+    qualified_picks: list[dict] | None = None,
+    watch_picks: list[dict] | None = None,
+    context_selection: Mapping[str, object] | None = None,
 ) -> str:
     return (
-        _original_hero_html(data, context, qm_context, event_view)
-        + _context_lane_html(data, event_view)
+        _original_hero_html(
+            data,
+            context,
+            qm_context,
+            event_view,
+            py_picks=watch_picks,
+            qualified_picks=qualified_picks,
+        )
+        + _context_lane_html(
+            data,
+            event_view,
+            selection=context_selection,
+            frozen_picks=watch_picks,
+        )
         + _qm_movement_lane_html(data, qm_context)
         + _qm_hero_html(data, context, qm_context)
     )
@@ -3941,28 +4059,45 @@ _CONTEXT_LANE_DISCLAIMER = (
 )
 
 
-def _context_lane_html(data: dict,
-                       event_view: Mapping[str, object] | None = None) -> str:
-    """Render the owner-gated second ranking lane, or nothing while disabled."""
+def _context_lane_selection(data: dict) -> dict[str, object]:
+    """Compute the context tracker arm once and retain a loud state."""
     if not config.CONTEXT_LANE_ENABLED:
-        return ""
+        return {"state": "DISABLED", "rows": [], "error": None}
     from options_researcher.context_lane import rank_context_lane
 
     try:
-        pool = _admissible_pick_pool(data, include_csp_watch=True)
         rows = rank_context_lane(
-            pool,
+            _admissible_pick_pool(data, include_csp_watch=True),
             data.get("composite_signals"),
             board_as_of=str(data.get("data_as_of") or "unavailable"),
             n=config.PICK_TOP_N,
         )
     except Exception as exc:  # explicitly fail-visible; never hide scorer failure
+        return {"state": "FAILED", "rows": [], "error": exc.__class__.__name__}
+    return {"state": "READY", "rows": rows, "error": None}
+
+
+def _context_lane_html(
+    data: dict,
+    event_view: Mapping[str, object] | None = None,
+    *,
+    selection: Mapping[str, object] | None = None,
+    frozen_picks: list[dict] | None = None,
+) -> str:
+    """Render the owner-gated second ranking lane, or nothing while disabled."""
+    selection = selection or _context_lane_selection(data)
+    state = selection.get("state")
+    if state == "DISABLED":
+        return ""
+    if state == "FAILED":
         return (
             '<section class="panel hero context-lane">'
             '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
-            f'<div class="notice bad">CONTEXT LANE FAILED — {_esc(exc.__class__.__name__)}</div>'
+            f'<div class="notice bad">CONTEXT LANE FAILED — {_esc(selection.get("error") or "UnknownError")}</div>'
             f'<p class="header-sub">{_esc(_CONTEXT_LANE_DISCLAIMER)}</p></section>'
         )
+    raw_rows = selection.get("rows")
+    rows = list(raw_rows) if isinstance(raw_rows, (list, tuple)) else []
 
     cards = []
     selected_by_id: dict[str, Mapping[str, object]] = {}
@@ -4007,7 +4142,11 @@ def _context_lane_html(data: dict,
         )
 
     diagnostics = []
-    for pick in select_top_picks(data, include_csp_watch=True):
+    for pick in (
+        frozen_picks
+        if frozen_picks is not None
+        else select_top_picks(data, include_csp_watch=True)
+    ):
         symbol = str(pick["symbol"])
         snapshot = pick["card"].get("top3_snapshot")
         candidate_id = snapshot.get("candidate_id") if isinstance(snapshot, Mapping) else None
@@ -4128,9 +4267,14 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
     return "".join(parts)
 
 
-def _pinned_html(data: dict, event_view: Mapping[str, object] | None = None) -> str:
+def _pinned_html(
+    data: dict,
+    event_view: Mapping[str, object] | None = None,
+    *,
+    records: list[dict] | None = None,
+) -> str:
     """Core-names strip: owner-pinned visibility, explicitly not ranked."""
-    pinned = pinned_picks(data)
+    pinned = records if records is not None else pinned_picks(data)
     if not pinned:
         return ""
     names = " / ".join(_esc(rec["symbol"]) for rec in pinned)
@@ -4606,7 +4750,233 @@ def build_event_view(data: Mapping[str, object], evaluation_date: str) -> Mappin
     return event_calendar.EventView.create(calendar, complex_map, moves, failures)
 
 
-def render(
+def _finite_number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _pick_position(
+    pick: Mapping[str, object],
+    coverage_context: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Detach the evaluated option leg and its fail-closed risk basis."""
+    lane = str(pick.get("lane") or "")
+    card = pick.get("card")
+    card = card if isinstance(card, Mapping) else {}
+    top3 = card.get("top3_snapshot")
+    top3 = top3 if isinstance(top3, Mapping) else {}
+    policy = top3.get("policy")
+    policy = policy if isinstance(policy, Mapping) else {}
+    coverage = copy.deepcopy(coverage_context) if coverage_context is not None else None
+    side = "sell" if lane in {"put", "cc", "pmcc"} else "buy"
+    right = "P" if lane == "put" else "C"
+    basis: dict[str, object]
+    if lane in {"long_call", "leaps"}:
+        basis = {"kind": "ENTRY_DEBIT_AT_FILL", "value": None}
+    elif lane == "put":
+        basis = {
+            "kind": "ASSIGNMENT_CAPITAL",
+            "derivation": "EVALUATED_STRIKE_X_100",
+            "value": _finite_number(policy.get("assignment_capital")),
+        }
+    elif lane == "cc":
+        per_share = (
+            _finite_number(coverage.get("cost_basis"))
+            if isinstance(coverage, Mapping)
+            else None
+        )
+        basis = {
+            "kind": "FROZEN_100_SHARE_COST_BASIS",
+            "value": per_share * 100.0 if per_share is not None else None,
+        }
+    elif lane == "pmcc":
+        entry_price = (
+            _finite_number(coverage.get("entry_price"))
+            if isinstance(coverage, Mapping)
+            else None
+        )
+        basis = {
+            "kind": "FROZEN_COVERING_LEAPS_ENTRY_DEBIT",
+            "value": entry_price * 100.0 if entry_price is not None else None,
+        }
+    else:
+        basis = {"kind": "UNSUPPORTED_LANE", "value": None}
+    return {
+        "schema": "pick_position/v1",
+        "evaluated_leg": {
+            "symbol": str(pick.get("symbol") or ""),
+            "right": right,
+            "strike": _finite_number(pick.get("strike")),
+            "expiry": str(pick.get("expiry") or ""),
+            "side": side,
+            "contracts": 1,
+        },
+        "coverage_context": coverage,
+        "risk_basis": basis,
+        "pnl_scope": "INCREMENTAL_OPTION_LEG_ONLY",
+    }
+
+
+def _snapshot_pick(
+    pick_or_row: Mapping[str, object],
+    coverage_context: Mapping[str, object] | None = None,
+    quote_context: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    pick_value = pick_or_row.get("pick")
+    pick = pick_value if isinstance(pick_value, Mapping) else pick_or_row
+    card = pick.get("card")
+    card = card if isinstance(card, Mapping) else {}
+    top3 = card.get("top3_snapshot")
+    top3 = top3 if isinstance(top3, Mapping) else {}
+    candidate_id = top3.get("candidate_id") or pick_or_row.get("candidate_id")
+    out: dict[str, object] = {
+        "candidate_id": str(candidate_id or ""),
+        "symbol": str(pick.get("symbol") or ""),
+        "lane": str(pick.get("lane") or ""),
+        "strike": _finite_number(pick.get("strike")),
+        "expiry": str(pick.get("expiry") or ""),
+        "dte": pick.get("dte"),
+        "raw_quote": {
+            key: copy.deepcopy(quote_context.get(key) if quote_context is not None else None)
+            for key in ("symbol", "right", "strike", "expiry", "bid", "ask", "open_interest")
+        },
+        "source_row_hash": (
+            quote_context.get("source_row_hash")
+            if quote_context is not None
+            else None
+        ),
+        "pick_position": _pick_position(pick, coverage_context),
+    }
+    if pick_value is not None:
+        out["context"] = {
+            key: copy.deepcopy(pick_or_row.get(key))
+            for key in (
+                "score",
+                "context_max_asof",
+                "board_as_of",
+                "context_term",
+                "context_reason",
+                "aligned_angles",
+            )
+        }
+    return json.loads(json.dumps(out, sort_keys=True, separators=(",", ":")))
+
+
+def _tracker_source_contexts(
+    data: Mapping[str, object],
+) -> tuple[dict[int, Mapping[str, object]], dict[int, Mapping[str, object]]]:
+    coverage_by_card: dict[int, Mapping[str, object]] = {}
+    quote_by_card: dict[int, Mapping[str, object]] = {}
+    raw_sections = data.get("symbols")
+    for section in raw_sections if isinstance(raw_sections, list) else []:
+        if not isinstance(section, Mapping):
+            continue
+        groups = section.get("groups")
+        for group in groups if isinstance(groups, list) else []:
+            if not isinstance(group, Mapping):
+                continue
+            coverage = group.get("pick_tracker_coverage")
+            cards = group.get("cards")
+            for card in cards if isinstance(cards, list) else []:
+                if isinstance(card, Mapping):
+                    if isinstance(coverage, Mapping):
+                        coverage_by_card[id(card)] = coverage
+                    quotes = group.get("pick_tracker_quotes")
+                    key = None
+                    if "expiry" in card and "strike" in card:
+                        try:
+                            key = f"{card['expiry']}:{float(card['strike']):.2f}"
+                        except (TypeError, ValueError):
+                            key = None
+                    if isinstance(quotes, Mapping) and key is not None:
+                        quote = quotes.get(key)
+                        if isinstance(quote, Mapping):
+                            quote_by_card[id(card)] = quote
+    return coverage_by_card, quote_by_card
+
+
+def _render_source_row_hashes(
+    qualified_picks: Sequence[Mapping[str, object]],
+    watch_picks: Sequence[Mapping[str, object]],
+    context_selection: Mapping[str, object],
+    quote_by_card: Mapping[int, Mapping[str, object]],
+) -> tuple[str, ...]:
+    context_rows = context_selection.get("rows")
+    context_rows = list(context_rows) if isinstance(context_rows, (list, tuple)) else []
+    hashes: set[str] = set()
+    for value in (*qualified_picks, *watch_picks, *context_rows):
+        pick_value = value.get("pick")
+        pick = pick_value if isinstance(pick_value, Mapping) else value
+        card = pick.get("card")
+        quote = quote_by_card.get(id(card))
+        source_hash = quote.get("source_row_hash") if isinstance(quote, Mapping) else None
+        if isinstance(source_hash, str) and source_hash:
+            hashes.add(source_hash)
+    return tuple(sorted(hashes))
+
+
+def _selection_snapshot(
+    data: Mapping[str, object],
+    qualified_picks: list[dict],
+    watch_picks: list[dict],
+    context_selection: Mapping[str, object],
+    *,
+    coverage_by_card: Mapping[int, Mapping[str, object]],
+    quote_by_card: Mapping[int, Mapping[str, object]],
+) -> dict[str, object]:
+
+    def snap(value: Mapping[str, object]) -> dict[str, object]:
+        pick_value = value.get("pick")
+        pick = pick_value if isinstance(pick_value, Mapping) else value
+        card = pick.get("card")
+        coverage = coverage_by_card.get(id(card))
+        quote = quote_by_card.get(id(card))
+        return _snapshot_pick(value, coverage, quote)
+
+    context_rows = context_selection.get("rows")
+    context_rows = list(context_rows) if isinstance(context_rows, (list, tuple)) else []
+    return {
+        "schema": "picks_snapshot/v1",
+        "evaluation_date": str(data.get("evaluation_date") or ""),
+        "data_as_of": str(data.get("data_as_of") or ""),
+        "frozen_baseline": {
+            "state": "READY",
+            "watch_included": False,
+            "candidates": [snap(pick) for pick in qualified_picks],
+        },
+        "frozen_baseline_watch_inclusive": {
+            "state": "READY",
+            "watch_included": True,
+            "candidates": [snap(pick) for pick in watch_picks],
+        },
+        "context_lane": {
+            "state": str(context_selection.get("state") or "FAILED"),
+            "error": context_selection.get("error"),
+            "candidates": [snap(row) for row in context_rows],
+        },
+    }
+
+
+def _pick_tracker_html(status: Mapping[str, object] | None) -> str:
+    status_map = status if isinstance(status, Mapping) else {}
+    tracker = status_map.get("pick_tracker")
+    if not isinstance(tracker, Mapping):
+        body = '<div class="notice watch">PICK TRACKER UNBUILT — no scoreboard JSON published.</div>'
+    else:
+        state = str(tracker.get("state") or "UNAVAILABLE")
+        as_of = str(tracker.get("as_of") or "unavailable")
+        body = f'<div class="label">{_esc(state)} · as of {_esc(as_of)}</div>'
+    return (
+        '<section class="panel pick-tracker"><div class="eyebrow">'
+        'PICK TRACKER (descriptive)</div><h2>Shortlist outcome scoreboard</h2>'
+        '<p class="header-sub">Descriptive only; no verdict, ranking, sizing, '
+        f'or trade authority.</p>{body}</section>'
+    )
+
+
+def _render_result(
     data: dict,
     *,
     context: dict | None = None,
@@ -4615,7 +4985,7 @@ def render(
     qm_context: Mapping[str, object] | None = None,
     research_views_status: Mapping[str, object] | None = None,
     event_view: Mapping[str, object] | None = None,
-) -> str:
+) -> DashboardRenderResult:
     """Render the assemble() dict (plus optional research context) into one
     self-contained HTML string. Pure string templating: no file I/O, no
     network, no external assets. Every value from `data` / `context` is
@@ -4624,15 +4994,25 @@ def render(
     -> composite -> research desk -> registered-bets tracker -> passive experiments
     -> pinned -> quant/market ->
     per-symbol panels (card grid)."""
+    qualified_picks = select_top_picks(data)
+    watch_picks = select_top_picks(data, include_csp_watch=True)
+    context_selection = _context_lane_selection(data)
+    coverage_by_card, quote_by_card = _tracker_source_contexts(data)
+    render_source_row_hashes = _render_source_row_hashes(
+        qualified_picks,
+        watch_picks,
+        context_selection,
+        quote_by_card,
+    )
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
-    picks_for_research = select_top_picks(data, include_csp_watch=True)
+    picks_for_research = watch_picks
     _annotations, annotation_notice, annotation_integrity = _research_annotation_result(
         picks_for_research, context
     )
-    protected_card_ids = {id(pick["card"])
-                          for pick in select_top_picks(data, include_csp_watch=True)}
+    protected_card_ids = {id(pick["card"]) for pick in watch_picks}
+    pinned_records = pinned_picks(data)
     protected_card_ids.update(
-        id(record["pick"]["card"]) for record in pinned_picks(data)
+        id(record["pick"]["card"]) for record in pinned_records
         if record.get("pick"))
     stale_symbols = set(data.get("stale_symbols") or [])
     symbols_html = ""
@@ -4756,11 +5136,19 @@ def render(
         f'<div class="notice watch">! {_esc(context_warning)}</div>' if context_warning else ""
     )
     age_html = _chain_age_html(data)
-    hero_html = _hero_html(data, context, qm_context, event_view)
-    pinned_html = _pinned_html(data, event_view)
+    hero_html = _hero_html(
+        data,
+        context,
+        qm_context,
+        event_view,
+        qualified_picks=qualified_picks,
+        watch_picks=watch_picks,
+        context_selection=context_selection,
+    )
+    pinned_html = _pinned_html(data, event_view, records=pinned_records)
     event_css = (_EVENT_STYLE if 'class="event-chip"' in
                  (symbols_html + hero_html + pinned_html) else "")
-    return (
+    out_html = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>Options Attractiveness</title>"
@@ -4785,6 +5173,7 @@ def render(
         f"{_registered_bets_tracker_html(data)}"
         f"{_regime_strip_html(research_views_status, str(data.get('evaluation_date') or data_as_of))}"
         f"{_experiments_shelf_html(research_views_status)}"
+        f"{_pick_tracker_html(research_views_status)}"
         f"{pinned_html}"
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
@@ -4800,6 +5189,197 @@ def render(
         "not an error.</footer>"
         "</main></body></html>"
     )
+    return DashboardRenderResult(
+        html=out_html,
+        selection_snapshot=_selection_snapshot(
+            data,
+            qualified_picks,
+            watch_picks,
+            context_selection,
+            coverage_by_card=coverage_by_card,
+            quote_by_card=quote_by_card,
+        ),
+        render_source_row_hashes=render_source_row_hashes,
+    )
+
+
+def render(
+    data: dict,
+    *,
+    context: dict | None = None,
+    context_warning: str | None = None,
+    context_evidence: Mapping[str, object] | None = None,
+    qm_context: Mapping[str, object] | None = None,
+    research_views_status: Mapping[str, object] | None = None,
+    event_view: Mapping[str, object] | None = None,
+) -> str:
+    """Preserve the public pure-string render interface."""
+    return _render_result(
+        data,
+        context=context,
+        context_warning=context_warning,
+        context_evidence=context_evidence,
+        qm_context=qm_context,
+        research_views_status=research_views_status,
+        event_view=event_view,
+    ).html
+
+
+def _atomic_replace_bytes(path: Path, raw: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with tmp.open("wb") as handle:
+        handle.write(raw)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+    directory_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _write_dashboard_result(
+    result: DashboardRenderResult,
+    *,
+    html_path: Path = Path(OUTPUT_PATH),
+    snapshot_path: Path = PICKS_SNAPSHOT_PATH,
+    input_root: Path = Path("."),
+) -> dict[str, object]:
+    """Atomically publish HTML and its hash-bound, detached pick snapshot."""
+    from options_researcher.pick_tracker import _bind_source_rows_html, _source_rows_digest
+    from research.hashing import config_hash
+
+    html_bytes = result.html.encode()
+    html_sha256 = hashlib.sha256(html_bytes).hexdigest()
+    payload = copy.deepcopy(result.selection_snapshot)
+    data_as_of = str(payload.get("data_as_of") or "")
+    receipt_reference = Path("reports/schwab_chains") / data_as_of / "preclose.json"
+    receipt_path = input_root / receipt_reference
+    unavailable_reason = None
+    try:
+        receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+    except OSError:
+        receipt_sha256 = None
+        unavailable_reason = "CAPTURE_RECEIPT_UNAVAILABLE"
+    snapshot_arms = (
+        "frozen_baseline",
+        "frozen_baseline_watch_inclusive",
+        "context_lane",
+    )
+    if unavailable_reason is None:
+        for arm_name in snapshot_arms:
+            for candidate in _snapshot_candidates(payload.get(arm_name)):
+                quote = candidate.get("raw_quote")
+                source_hash = candidate.get("source_row_hash")
+                if (
+                    not isinstance(quote, Mapping)
+                    or _finite_number(quote.get("bid")) is None
+                    or _finite_number(quote.get("ask")) is None
+                    or not isinstance(source_hash, str)
+                    or not source_hash
+                ):
+                    unavailable_reason = "RAW_QUOTE_PROVENANCE_UNAVAILABLE"
+                    break
+            if unavailable_reason is not None:
+                break
+    if unavailable_reason is not None:
+        unavailable = {
+            "schema": "picks_snapshot/unavailable",
+            "state": "UNAVAILABLE",
+            "reason_code": unavailable_reason,
+            "evaluation_date": payload.get("evaluation_date"),
+            "data_as_of": data_as_of,
+            "html_sha256": html_sha256,
+        }
+        _atomic_replace_bytes(html_path, html_bytes)
+        _atomic_replace_bytes(
+            snapshot_path,
+            json.dumps(
+                unavailable,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode()
+            + b"\n",
+        )
+        return unavailable
+    source_hashes = sorted(
+        {
+            str(candidate.get("source_row_hash"))
+            for arm_name in snapshot_arms
+            for candidate in _snapshot_candidates(payload.get(arm_name))
+            if candidate.get("source_row_hash")
+        }
+    )
+    source_rows_sha256 = _source_rows_digest(source_hashes)
+    render_source_rows_sha256 = _source_rows_digest(result.render_source_row_hashes)
+    html_bytes = _bind_source_rows_html(html_bytes, render_source_rows_sha256)
+    html_sha256 = hashlib.sha256(html_bytes).hexdigest()
+    payload.update(
+        {
+            "html_sha256": html_sha256,
+            "capture_receipt_path": receipt_reference.as_posix(),
+            "capture_receipt_sha256": receipt_sha256,
+            "config_hash": config_hash(),
+            "source_row_hashes": source_hashes,
+            "source_rows_sha256": source_rows_sha256,
+        }
+    )
+    render_identity = {
+        "html_sha256": html_sha256,
+        "snapshot": payload,
+    }
+    payload["render_id"] = hashlib.sha256(
+        json.dumps(
+            render_identity,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+    ).hexdigest()
+    _atomic_replace_bytes(html_path, html_bytes)
+    _atomic_replace_bytes(
+        snapshot_path,
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+        + b"\n",
+    )
+    return payload
+
+
+def _snapshot_candidates(value: object) -> list[Mapping[str, object]]:
+    if not isinstance(value, Mapping):
+        return []
+    candidates = value.get("candidates")
+    if not isinstance(candidates, list):
+        return []
+    return [item for item in candidates if isinstance(item, Mapping)]
+
+
+def _load_pick_tracker_status(
+    root: Path = Path("reports/pick_tracker"),
+) -> dict[str, object] | None:
+    candidates = sorted(root.glob("*/scoreboard.json"))
+    candidates.extend(sorted((root / "dryrun").glob("*/scoreboard.json")))
+    if not candidates:
+        return None
+    path = max(candidates, key=lambda item: item.parent.name)
+    try:
+        from options_researcher.pick_tracker import TrackerError, _active_evaluation_artifact
+
+        path = _active_evaluation_artifact(path.parent, "scoreboard.json")
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError, TrackerError):
+        return {"state": "FAILED", "as_of": path.parent.name}
+    if not isinstance(payload, Mapping) or payload.get("schema") != "pick_tracker_scoreboard/v1":
+        return {"state": "FAILED", "as_of": path.parent.name}
+    return {"state": "PUBLISHED", "as_of": path.parent.name, "scoreboard": payload}
 
 
 def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
@@ -4831,8 +5411,11 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     research_views_status = load_research_views_status()
     if copy_warning:
         research_views_status["copy_warning"] = copy_warning
+    pick_tracker_status = _load_pick_tracker_status()
+    if pick_tracker_status is not None:
+        research_views_status["pick_tracker"] = pick_tracker_status
     event_view = build_event_view(data, str(data["evaluation_date"]))
-    out_html = render(
+    result = _render_result(
         data,
         context=context,
         context_warning=warning,
@@ -4841,13 +5424,12 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
         research_views_status=research_views_status,
         event_view=event_view,
     )
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    # tmp + os.replace so a mid-write crash can never leave a truncated page
-    # over the last good one (same convention as h7_data_gate receipts).
-    tmp_path = f"{OUTPUT_PATH}.{os.getpid()}.tmp"
-    with open(tmp_path, "w") as f:
-        f.write(out_html)
-    os.replace(tmp_path, OUTPUT_PATH)
+    _write_dashboard_result(
+        result,
+        html_path=Path(OUTPUT_PATH),
+        snapshot_path=PICKS_SNAPSHOT_PATH,
+        input_root=Path(input_root).resolve(),
+    )
     abs_path = os.path.abspath(OUTPUT_PATH)
     print(f"wrote {abs_path}")
     blocked = data.get("blocked") or []

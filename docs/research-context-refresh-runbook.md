@@ -30,19 +30,20 @@ The checked-in template is
 `tools/launchd/com.carsyn.options-validator.research-refresh.plist`.
 It has exactly two triggers on weekdays:
 
-- 07:40 ET: normal producer attempt
-- 08:10 ET: idempotent retry
+- 10:00 ET: normal producer attempt
+- 10:30 ET: idempotent retry
 
-There is no 16:45 run and no Saturday run. A successful 07:40 receipt with the
-same ritual-status SHA makes the 08:10 trigger exit without an LLM call.
+(Owner-directed lid-window retime, 2026-08-27; previously 07:40/08:10.)
+There is no 16:45 run and no Saturday run. A successful 10:00 receipt with the
+same ritual-status SHA makes the 10:30 trigger exit without an LLM call.
 `launchd` does not start a second instance of the same job while the first is
 still running.
 
 `StartCalendarInterval` follows the Mac's system timezone; the plist's `TZ`
 environment variable affects the script but does not reinterpret launchd's
 calendar. The host timezone must therefore remain `America/New_York`. If it
-does not, the script's independent weekday 07:30-08:30 ET guard fails closed
-rather than treating a wrong local trigger as premarket.
+does not, the script's independent weekday 09:50-10:50 ET guard fails closed
+rather than treating a wrong local trigger as in-window.
 
 The template points to the deployment checkout, never a temporary worktree,
 and sets:
@@ -54,16 +55,21 @@ worktree reads exact-session cache, feature, QM, and hypothesis evidence there,
 while all generated research manifests, reports, logs, and dashboard output
 remain in `/Users/carsynstephenson/options-validator-research`.
 
-The producer LaunchAgent is intentionally left disabled and unloaded. Safe
-template validation does not enable it:
+The producer LaunchAgent is DEPLOYED AND ACTIVE: the reviewed template is
+installed at `~/Library/LaunchAgents/com.carsyn.options-validator.research-refresh.plist`
+and was bootout/bootstrap-reloaded in the owner-directed 2026-08-27 lid-window
+retime (deployment recorded in
+`reports/2026-08-26-audit-closeout-handoff-package.md`). Template changes are
+validated with:
 
 ```bash
 plutil -lint tools/launchd/com.carsyn.options-validator.research-refresh.plist
 ```
 
-After owner approval, copy the reviewed template to
-`~/Library/LaunchAgents/`. Enabling/loading it is a separate owner-authorized
-operation and is intentionally not part of this runbook.
+and reach the live schedule only through an owner-authorized reinstall
+(bootout/bootstrap) — editing the checked-in template alone changes nothing.
+*(Amended 2026-08-27: this section previously described the producer as
+intentionally disabled and unloaded, which predated the retime deployment.)*
 
 Kill switch:
 
@@ -76,7 +82,7 @@ Remove that file only when the producer is deliberately allowed to run.
 ## Schedule and spend guards
 
 `tools/research_refresh.sh` refuses weekends and times outside weekday
-07:30-08:30 ET before ritual checks or LLM invocation. For a deliberate manual
+09:50-10:50 ET before ritual checks or LLM invocation. For a deliberate manual
 run outside that window:
 
 ```bash
@@ -195,8 +201,9 @@ Generated research remains uncommitted for human review.
 
 ## Independent critic cadence
 
-The desired critic cadence is 08:45 ET on weekdays, after the 08:10 producer
-retry. The critic must read only a validated `FINAL` manifest and preserve the
+The desired critic cadence is 11:05 ET on weekdays, after the 10:30 producer
+retry (same 35-minute follow margin the retired 08:45-after-08:10 cadence
+used). The critic must read only a validated `FINAL` manifest and preserve the
 five finding classifications:
 
 `HARD_CONTRADICTION`, `UNSUPPORTED`, `WEAK_INFERENCE`, `UNRESOLVED`,
@@ -212,12 +219,12 @@ documented callable task API. The installed Antigravity app exposes scheduling
 only through its internal GUI-agent `schedule` and `manage_task` tools, which
 are not executable from this repository or launchd. The existing Antigravity
 task remains unchanged; no guessed command or non-executable schedule template
-is checked in. Change it to weekday 08:45 only through a verified Antigravity
+is checked in. Change it to weekday 11:05 only through a verified Antigravity
 task interface after owner approval.
 
 ## Failure interpretation
 
-- `SCHEDULE_BLOCKED`: outside approved weekday premarket window.
+- `SCHEDULE_BLOCKED`: outside the approved weekday 09:50-10:50 ET window.
 - `UPSTREAM_BLOCKED`: exact-session ritual lineage is absent, mismatched, or
   globally broken.
 - `FAILURE_CIRCUIT_OPEN`: two consecutive paid attempts failed; investigate,
