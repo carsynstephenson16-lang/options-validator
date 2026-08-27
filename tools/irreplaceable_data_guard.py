@@ -39,6 +39,7 @@ directory manufactured a total-loss report from every worktree (false alarm,
 When the main checkout cannot be located at all, the tool exits 2 with a
 LOCATION error, which is never a data-loss finding.
 """
+
 import argparse
 import hashlib
 import json
@@ -61,6 +62,14 @@ DEFAULT_NAMESPACES = [
     ".cache/underlying_ohlcv",
     "reports/schwab_chains",
 ]
+
+# Git-tracked ritual-grown namespaces: the backup allow-list derives from
+# DEFAULT_NAMESPACES so these stay listed, but the guard must never bind
+# them -- verify() skips them entirely and generate records them absent.
+# A branch-lagged checkout drops tracked files and would false-alarm,
+# halting the daily anti-stranding run (2026-08-25/26 review arc). Valid
+# only while the directory is 100% git-tracked.
+TRACKED_NAMESPACES = frozenset({"reports/schwab_chains"})
 
 
 def resolve_repo_root() -> str:
@@ -125,18 +134,28 @@ def scan(root: str, deep: bool = False) -> dict:
 
 
 def build_inventory(namespaces: list[str], deep: bool = False, root: str = ".") -> dict:
+    def inventory_entry(namespace: str) -> dict:
+        if namespace in TRACKED_NAMESPACES:
+            return {"present": False, "file_count": 0, "total_bytes": 0}
+        return scan(os.path.join(root, namespace), deep=deep)
+
     return {
         "note": (
             "Gitignored, unreplaceable data. Provider acquisition is disabled; "
             "these bytes cannot be re-fetched. Verify before any worktree "
             "removal or cleanup sweep."
         ),
-        "namespaces": {ns: scan(os.path.join(root, ns), deep=deep) for ns in namespaces},
+        "namespaces": {ns: inventory_entry(ns) for ns in namespaces},
     }
 
 
 def verify(
-    inventory: dict, deep: bool = False, allow_absent: bool = False, root: str = "."
+    inventory: dict,
+    deep: bool = False,
+    allow_absent: bool = False,
+    root: str = ".",
+    *,
+    required_namespaces=None,
 ) -> list[str]:
     """Return a list of human-readable problems; empty means healthy.
 
@@ -144,9 +163,26 @@ def verify(
     absolute ones -- as the unit-test fixtures use -- are taken as-is.
     """
     problems = []
-    for ns, recorded in sorted(inventory.get("namespaces", {}).items()):
+    recorded_namespaces = inventory.get("namespaces", {})
+    if required_namespaces is not None:
+        for ns in sorted(set(required_namespaces) - set(recorded_namespaces)):
+            problems.append(f"{ns}: NO INVENTORY KEY -- required namespace is not recorded at all.")
+
+    for ns, recorded in sorted(recorded_namespaces.items()):
+        if ns in TRACKED_NAMESPACES:
+            continue
+
         if not recorded.get("present"):
-            continue  # never recorded as present; nothing to protect yet
+            current = scan(os.path.join(root, ns), deep=False)
+            if current["present"] and current["file_count"] > 0:
+                problems.append(
+                    f"{ns}: RECORDED ABSENT BUT POPULATED -- "
+                    f"{current['file_count']} files, {current['total_bytes']} bytes on disk "
+                    "with no inventory floor. Regeneration must follow the reviewed "
+                    "additive procedure (generate --only, isolated worktree); do not run "
+                    "bare generate against the production inventory."
+                )
+            continue
 
         current = scan(os.path.join(root, ns), deep=deep and "content_digest" in recorded)
 
@@ -210,6 +246,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="treat a wholly-absent namespace as a skip (fresh clone / CI)",
     )
+    parser.add_argument(
+        "--only",
+        action="append",
+        metavar="NAMESPACE",
+        help="with generate, rescan only this namespace (repeatable; additive-only)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -225,8 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if os.path.realpath(os.getcwd()) != os.path.realpath(root):
         print(
-            f"note: invoked from {os.getcwd()}\n"
-            f"      verifying the main checkout at {root}",
+            f"note: invoked from {os.getcwd()}\n      verifying the main checkout at {root}",
             file=sys.stderr,
         )
 
@@ -235,11 +276,59 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.command == "generate":
-        inventory = build_inventory(DEFAULT_NAMESPACES, deep=args.deep, root=root)
+        if args.only:
+            if not os.path.exists(inventory_path):
+                print(f"inventory not found: {inventory_path}", file=sys.stderr)
+                return 2
+
+            unknown = sorted(set(args.only) - set(DEFAULT_NAMESPACES))
+            if unknown:
+                print(
+                    "refusing generate --only: not in DEFAULT_NAMESPACES: " + ", ".join(unknown),
+                    file=sys.stderr,
+                )
+                return 2
+
+            try:
+                with open(inventory_path) as fh:
+                    inventory = json.load(fh)
+            except (OSError, json.JSONDecodeError) as exc:
+                print(f"inventory error: {inventory_path}: {exc}", file=sys.stderr)
+                return 2
+
+            recorded_namespaces = inventory.setdefault("namespaces", {})
+            rescanned = {}
+            for ns in dict.fromkeys(args.only):
+                current = (
+                    {"present": False, "file_count": 0, "total_bytes": 0}
+                    if ns in TRACKED_NAMESPACES
+                    else scan(os.path.join(root, ns), deep=args.deep)
+                )
+                recorded = recorded_namespaces.get(ns)
+                if recorded is not None and (
+                    current["file_count"] < recorded.get("file_count", 0)
+                    or current["total_bytes"] < recorded.get("total_bytes", 0)
+                ):
+                    print(
+                        f"refusing generate --only for {ns}: rescan would LOWER "
+                        f"recorded floor ({recorded.get('file_count', 0)} files, "
+                        f"{recorded.get('total_bytes', 0)} bytes) to "
+                        f"({current['file_count']} files, {current['total_bytes']} bytes)",
+                        file=sys.stderr,
+                    )
+                    return 2
+                rescanned[ns] = current
+
+            recorded_namespaces.update(rescanned)
+            displayed_namespaces = rescanned
+        else:
+            inventory = build_inventory(DEFAULT_NAMESPACES, deep=args.deep, root=root)
+            displayed_namespaces = inventory["namespaces"]
+
         with open(inventory_path, "w") as fh:
             json.dump(inventory, fh, indent=2, sort_keys=True)
             fh.write("\n")
-        for ns, info in sorted(inventory["namespaces"].items()):
+        for ns, info in sorted(displayed_namespaces.items()):
             state = (
                 f"{info['file_count']} files, {info['total_bytes']} bytes"
                 if info["present"]
@@ -249,13 +338,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {inventory_path}")
         return 0
 
+    if args.only:
+        print("--only is valid only with generate", file=sys.stderr)
+        return 2
+
     if not os.path.exists(inventory_path):
         print(f"inventory not found: {inventory_path}", file=sys.stderr)
         return 2
     with open(inventory_path) as fh:
         inventory = json.load(fh)
 
-    problems = verify(inventory, deep=args.deep, allow_absent=args.allow_absent, root=root)
+    problems = verify(
+        inventory,
+        deep=args.deep,
+        allow_absent=args.allow_absent,
+        root=root,
+        required_namespaces=(DEFAULT_NAMESPACES if args.inventory == DEFAULT_INVENTORY else None),
+    )
     if problems:
         print("IRREPLACEABLE DATA CHECK FAILED", file=sys.stderr)
         for problem in problems:

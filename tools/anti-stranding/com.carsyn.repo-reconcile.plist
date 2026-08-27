@@ -2,17 +2,26 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.carsyn.repo-reconcile</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/zsh</string>
-    <string>-lc</string>
-    <string>"$HOME/bin/repo-reconcile"</string>
-  </array>
-  <key>StartCalendarInterval</key>
-  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>15</integer></dict>
-  <key>RunAtLoad</key><false/>
-  <key>StandardOutPath</key><string>/tmp/repo-reconcile.out.log</string>
-  <key>StandardErrorPath</key><string>/tmp/repo-reconcile.err.log</string>
+	<key>Label</key>
+	<string>com.carsyn.repo-reconcile</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/zsh</string>
+		<string>-lc</string>
+		<string>"$HOME/bin/repo-reconcile"</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/tmp/repo-reconcile.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/repo-reconcile.out.log</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>9</integer>
+		<key>Minute</key>
+		<integer>20</integer>
+	</dict>
 </dict>
 </plist>
