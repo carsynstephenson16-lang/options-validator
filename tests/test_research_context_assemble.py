@@ -897,7 +897,7 @@ class ShellPreflightTest(unittest.TestCase):
             )
             log_dir = temp / "logs"
             log_dir.mkdir()
-            receipt = log_dir / f"receipt_v2_{AS_OF}_premarket.json"
+            receipt = log_dir / f"receipt_v2_{AS_OF}_midmorning.json"
             receipt.write_text('{"status":"ok","corrupted":true}\n', encoding="utf-8")
 
             fake_uv = temp / "fake-uv"

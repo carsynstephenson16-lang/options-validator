@@ -573,35 +573,35 @@ def _alignment_check(root: Path, as_of: str) -> HealthRow:
 
 
 def _research_refresh(root: Path, as_of: str, invocation_date: date) -> HealthRow:
-    relative = f".tmp/research_refresh/receipt_v2_{as_of}_premarket.json"
+    relative = f".tmp/research_refresh/receipt_v2_{as_of}_midmorning.json"
     path, path_error = _contained_path(root, relative)
     if path_error is not None or path is None:
         return HealthRow(
-            "Research refresh (premarket)",
+            "Research refresh (midmorning)",
             HealthStatus.FAILED,
             path_error or "unsafe receipt path",
             relative,
         )
     if not path.is_file():
-        return _missing("Research refresh (premarket)", relative)
+        return _missing("Research refresh (midmorning)", relative)
     try:
         receipt_date = datetime.fromtimestamp(path.stat().st_mtime, _NY_TZ).date()
     except OSError as exc:
         return HealthRow(
-            "Research refresh (premarket)",
+            "Research refresh (midmorning)",
             HealthStatus.FAILED,
             f"unreadable receipt mtime: {type(exc).__name__}",
             relative,
         )
     if receipt_date != invocation_date:
         return HealthRow(
-            "Research refresh (premarket)",
+            "Research refresh (midmorning)",
             HealthStatus.MISSING,
             f"receipt mtime {receipt_date} not fresh for invocation date {invocation_date}",
             relative,
         )
     return HealthRow(
-        "Research refresh (premarket)",
+        "Research refresh (midmorning)",
         HealthStatus.OK,
         f"expected slot receipt is fresh for invocation date {invocation_date}",
         relative,
@@ -643,10 +643,10 @@ def _session_rows(status: HealthStatus, reason: str, as_of: str) -> list[HealthR
         ),
         HealthRow("Alignment check", status, reason, f".tmp/alignment_check/{as_of}.log"),
         HealthRow(
-            "Research refresh (premarket)",
+            "Research refresh (midmorning)",
             status,
             reason,
-            f".tmp/research_refresh/receipt_v2_{as_of}_premarket.json",
+            f".tmp/research_refresh/receipt_v2_{as_of}_midmorning.json",
         ),
     ]
 

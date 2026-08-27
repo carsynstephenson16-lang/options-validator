@@ -59,7 +59,7 @@ fi
 export RESEARCH_BOARD_ROOT="$BOARD_ROOT"
 export ATTRACTIVENESS_INPUT_ROOT="$BOARD_ROOT"
 
-SLOT="premarket"
+SLOT="midmorning"
 
 # The board is read-only here. A test-only override avoids touching live board
 # data while exercising the fail-closed shell path.
