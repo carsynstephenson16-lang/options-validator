@@ -138,3 +138,94 @@ redirect `DIGEST_DESKTOP` to a non-TCC path via the plist (a small spec'd
 change if chosen). The full installer (post-commit hook with the ownership
 gate + nohup fix, session-rescue, worktree-guard) remains the owner-run
 WP-B step — Codex correctly refused to run it.
+
+## Update 2026-08-27 midday — #93 review resolved; Codex round-3 queue
+
+**PR #93 (pick tracker) is NOT READY — artifact-backed.** The
+audit-closeout session's independent bounded review (recorded in
+`.superpowers/sdd/2026-08-26-audit-closeout-handoff-package/progress.md`
+and `closeout-execution-report.md`, 2026-08-26 23:32 → 02:05 EDT) reviewed
+#93's exact, still-current head `5877939` and returned **FAIL / NOT
+READY**. P1: snapshot validation accepts source-row/render divergence; the
+mutable current portfolio can retroactively rewrite historical CC/PMCC
+outcomes; daily marking is absent and drawdown ignores the zero-return
+entry point. P2: FAILED/DISABLED arms synthesize exits/re-entries; WP-D
+reports omit required cohort/cancellation/scoreboard content. By contrast,
+#93's own body line "independent read-only full-diff review after bounded
+corrections: PASS" has NO corroborating artifact anywhere (no receipt file,
+no GitHub review, no worktree record) — an uncorroborated self-report. The
+only Brief-27 PASS receipt in `reports/` reviewed the SPEC rebase (PR #92),
+not the implementation. Owner A6 answer: hold readiness until the fix round
+below completes.
+
+**State at this update:** #96/#97/#98/#99 are READY with all checks green
+(review-check "failures" were concurrency-cancelled runs, re-run to pass);
+they land at the next 08:15 automerge. A1 fully closed (FDA granted and
+live-verified; Desktop digest delivery restored; redirect reverted).
+Every other open PR is a draft, including the day's reconciler re-PRs of
+squash-merged branches (#104–#110 — see churn note below).
+
+### Codex round-3 dispatch (paste-ready)
+
+> 1. **#93 fix round (Brief 27 implementation).** The governing findings
+> are the audit-closeout controller review at
+> `.superpowers/sdd/2026-08-26-audit-closeout-handoff-package/progress.md`
+> ("A6 independent bounded review: FAIL / NOT READY at head 5877939") —
+> close those exact P1/P2 findings, TDD (RED first per finding where
+> testable): (P1) snapshot validation must fail closed on any
+> source-row/render divergence; historical CC/PMCC outcomes must be
+> immutable once recorded (no retroactive rewrite path from the mutable
+> portfolio — prove with a test that mutates the portfolio and asserts
+> recorded history is byte-stable); implement daily marking and make
+> drawdown include the zero-return entry point; (P2) FAILED/DISABLED arms
+> must never synthesize exits/re-entries; WP-D reports must carry the
+> cohort/cancellation/scoreboard content the spec requires. Then obtain a
+> FRESH independent review of the full diff and COMMIT its receipt under
+> `reports/` — a PASS claim without a committed receipt artifact is void
+> (that is exactly what round 2 caught). Correct #93's PR body: replace
+> the uncorroborated PASS line with the receipt reference. Keep draft;
+> readiness is the owner's A6 decision.
+> 2. **After the 08:15 automerge:** verify #96/#97/#98/#99 all merged;
+> report each merge SHA. If any failed to merge, report why and stop —
+> do not retry merges yourself.
+> 3. **#100 (Brief 30 WP-A) hold update:** its dependency is now "#93 fix
+> round passes independent review + owner A6 + WP-A lands + one green
+> 15:45 ops cycle with committed receipt". Update #100's body to that
+> current chain. No other action.
+> 4. Report back: fix-round evidence (RED logs, suite exit codes), the
+> committed receipt path, the #93 body diff, merge confirmations, and
+> isDraft states for everything you touched.
+
+### Owner/orchestrator notes for next session
+
+- After #97 merges: run the SECOND redeploy (installer + kickstart) so the
+  strict owner-verifier and default-draft reconciler go live; verify
+  `diff` equality per the brief.
+- Reconciler churn: it re-PRs SQUASH-merged branches daily (ancestry check
+  cannot see squashed content; #104–#110 today). WP-D landing makes future
+  ones drafts (harmless). Durable fix options for the owner: delete merged
+  branches (guard-verified list on request) or commission a small brief-24
+  -arc follow-up (skip branches whose PR history shows a MERGED PR).
+- Schwab token re-auth due ~2026-08-30 (weekend).
+
+## Update 2026-08-27 late morning — lid-aware schedule retime (owner-directed)
+
+The owner's laptop lid is shut 07:10–09:00 every morning; all scheduled jobs
+were moved out of the 06:55–09:05 window (owner-directed 2026-08-27; note
+launchd replays missed calendar jobs on wake, so nothing was ever lost —
+this makes timing deterministic instead of a lid-open pile-up). New times:
+repo-reconcile 08:15→**09:20**; research-display-refresh 07:30→**09:50**;
+research-refresh 07:40/08:10→**10:00/10:30** (this also FIXES the standing
+UPSTREAM_BLOCKED failure — the producer was still keyed to the retired
+07:10 ritual and now runs after the 09:09 ritual completes); OV
+repo-rag-health Sun/Wed 07:00→**09:40**; pick-dashboard Mon 08:07→**09:25**;
+kalshi alerts dropped its 09:00 slot (first now 09:15); kalshi
+weekly-calibration Sun 08:00→**09:40**; equity-research repo-rag-agent
+Mon/Thu and repo-rag-health Sun/Wed 07:00→**09:40/09:45**. Daily ritual
+stays 09:09 (already owner-retimed for the same reason). All nine agents
+bootout/bootstrap-reloaded and verified. OV tracked plists updated in the
+same commit as this note; **follow-up for the kalshi and equity-research
+repos:** their tracked plist sources still show the old times (installed
+copies changed only — editing those checkouts would have dirtied branches
+that other automation auto-commits); sync them in each repo's next session.
+Downstream doc note: every "~08:15 reconcile" reference now means 09:20.
