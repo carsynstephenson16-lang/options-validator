@@ -17,12 +17,16 @@ POST_COMMIT = TOOLS / "post-commit"
 WORKTREE_GUARD = TOOLS / "worktree-remove-guard.sh"
 RECONCILER = TOOLS / "repo-reconcile"
 REAL_GIT = shutil.which("git")
+ZSH = shutil.which("zsh")
 
 
+@unittest.skipUnless(ZSH is not None, "requires zsh; anti-stranding scripts are macOS/zsh-only")
 class AntiStrandingRemoteOwnerTests(unittest.TestCase):
     def setUp(self) -> None:
         if REAL_GIT is None:
             self.fail("git is required for anti-stranding integration tests")
+        assert ZSH is not None
+        self.zsh = ZSH
         self._temp = tempfile.TemporaryDirectory()
         self.root = Path(self._temp.name)
         self.home = self.root / "home"
@@ -43,7 +47,8 @@ class AntiStrandingRemoteOwnerTests(unittest.TestCase):
     def _write_stubs(self) -> None:
         self._write_executable(
             self.bin / "git",
-            """#!/bin/zsh
+            f"#!{self.zsh}\n"
+            + """\
 print -r -- "git $*" >> "$CALLS"
 typeset -a original
 original=("$@")
@@ -64,7 +69,8 @@ exec "$REAL_GIT" "${original[@]}"
         )
         self._write_executable(
             self.bin / "gh",
-            """#!/bin/zsh
+            f"#!{self.zsh}\n"
+            + """\
 print -r -- "gh $*" >> "$CALLS"
 if [ "$1" = "api" ] && [ "$2" = "user" ]; then
   [ -n "${GH_API_LOGIN:-}" ] || exit 1
@@ -86,7 +92,7 @@ fi
 exit 97
 """,
         )
-        self._write_executable(self.bin / "osascript", "#!/bin/zsh\nexit 0\n")
+        self._write_executable(self.bin / "osascript", f"#!{self.zsh}\nexit 0\n")
 
     def _env(self, *, gh_api_login: str = "") -> dict[str, str]:
         return {
@@ -131,7 +137,7 @@ exit 97
             f"source {shlex.quote(str(LIBRARY))}; anti_stranding_github_owner {shlex.quote(remote)}"
         )
         return subprocess.run(
-            ["/bin/zsh", "-c", command],
+            [self.zsh, "-c", command],
             capture_output=True,
             text=True,
         )
@@ -142,7 +148,7 @@ exit 97
             f"anti_stranding_remote_owner_ok {shlex.quote(str(repo))} {shlex.quote(login)}"
         )
         return subprocess.run(
-            ["/bin/zsh", "-c", command],
+            [self.zsh, "-c", command],
             env=self._env(),
             capture_output=True,
             text=True,
@@ -226,7 +232,11 @@ exit 97
         cache.write_text("Owner\n", encoding="utf-8")
 
         result = subprocess.run(
-            [str(POST_COMMIT)], cwd=repo, env=self._env(), capture_output=True, text=True
+            [self.zsh, str(POST_COMMIT)],
+            cwd=repo,
+            env=self._env(),
+            capture_output=True,
+            text=True,
         )
         self.assertEqual(result.returncode, 0)
         self._wait_for_background_commands()
@@ -239,7 +249,11 @@ exit 97
         cache.write_text("Owner\n", encoding="utf-8")
 
         result = subprocess.run(
-            [str(POST_COMMIT)], cwd=repo, env=self._env(), capture_output=True, text=True
+            [self.zsh, str(POST_COMMIT)],
+            cwd=repo,
+            env=self._env(),
+            capture_output=True,
+            text=True,
         )
         self.assertEqual(result.returncode, 0)
         self._wait_for_background_commands()
@@ -254,7 +268,7 @@ exit 97
         payload = json.dumps({"worktree_path": str(repo)})
 
         result = subprocess.run(
-            [str(WORKTREE_GUARD)],
+            [self.zsh, str(WORKTREE_GUARD)],
             input=payload,
             env=self._env(),
             capture_output=True,
@@ -285,7 +299,7 @@ exit 97
     ) -> subprocess.CompletedProcess[str]:
         harness = self.root / "reconciler-harness.zsh"
         harness.write_text(
-            f"""#!/bin/zsh
+            f"""#!{self.zsh}
 git() {{ {shlex.quote(str(self.bin / "git"))} "$@"; }}
 gh() {{ {shlex.quote(str(self.bin / "gh"))} "$@"; }}
 osascript() {{ {shlex.quote(str(self.bin / "osascript"))} "$@"; }}
@@ -295,7 +309,7 @@ source {shlex.quote(str(RECONCILER))}
         )
         env = self._env(gh_api_login=gh_api_login)
         env["DRY_RUN"] = "1" if dry_run else "0"
-        return subprocess.run(["/bin/zsh", str(harness)], env=env, capture_output=True, text=True)
+        return subprocess.run([self.zsh, str(harness)], env=env, capture_output=True, text=True)
 
     def test_reconciler_dry_run_is_inert_and_created_pr_is_always_draft(self) -> None:
         self._reconciler_fixture()
