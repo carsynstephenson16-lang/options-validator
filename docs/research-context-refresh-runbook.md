@@ -41,8 +41,8 @@ still running.
 `StartCalendarInterval` follows the Mac's system timezone; the plist's `TZ`
 environment variable affects the script but does not reinterpret launchd's
 calendar. The host timezone must therefore remain `America/New_York`. If it
-does not, the script's independent weekday 07:30-08:30 ET guard fails closed
-rather than treating a wrong local trigger as premarket.
+does not, the script's independent weekday 09:50-10:50 ET guard fails closed
+rather than treating a wrong local trigger as in-window.
 
 The template points to the deployment checkout, never a temporary worktree,
 and sets:
@@ -76,7 +76,7 @@ Remove that file only when the producer is deliberately allowed to run.
 ## Schedule and spend guards
 
 `tools/research_refresh.sh` refuses weekends and times outside weekday
-07:30-08:30 ET before ritual checks or LLM invocation. For a deliberate manual
+09:50-10:50 ET before ritual checks or LLM invocation. For a deliberate manual
 run outside that window:
 
 ```bash
@@ -217,7 +217,7 @@ task interface after owner approval.
 
 ## Failure interpretation
 
-- `SCHEDULE_BLOCKED`: outside approved weekday premarket window.
+- `SCHEDULE_BLOCKED`: outside the approved weekday 09:50-10:50 ET window.
 - `UPSTREAM_BLOCKED`: exact-session ritual lineage is absent, mismatched, or
   globally broken.
 - `FAILURE_CIRCUIT_OPEN`: two consecutive paid attempts failed; investigate,

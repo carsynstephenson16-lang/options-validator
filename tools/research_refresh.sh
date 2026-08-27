@@ -44,7 +44,7 @@ WINDOW_ARGS=()
   "${NOW_ARGS[@]}" "${WINDOW_ARGS[@]}"
 WINDOW_RC=$?
 if [ "$WINDOW_RC" -ne 0 ]; then
-  echo "SCHEDULE_BLOCKED: research refresh is weekday premarket only"
+  echo "SCHEDULE_BLOCKED: research refresh runs weekdays 09:50-10:50 ET only"
   exit "$WINDOW_RC"
 fi
 

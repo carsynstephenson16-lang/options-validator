@@ -808,7 +808,7 @@ class ShellPreflightTest(unittest.TestCase):
             result, invoked, log_dir = self.run_script(
                 Path(directory),
                 ritual_status="BROKEN",
-                now_et="2026-07-27T07:40:00-04:00",
+                now_et="2026-07-27T10:00:00-04:00",
             )
             self.assertEqual(result.returncode, 3)
             self.assertFalse(invoked.exists())
@@ -821,7 +821,7 @@ class ShellPreflightTest(unittest.TestCase):
             result, invoked, log_dir = self.run_script(
                 Path(directory),
                 ritual_status="OK",
-                now_et="2026-07-25T07:40:00-04:00",
+                now_et="2026-07-25T10:00:00-04:00",
             )
             self.assertEqual(result.returncode, 4)
             self.assertFalse(invoked.exists())
@@ -839,15 +839,15 @@ class ShellPreflightTest(unittest.TestCase):
                     2026,
                     7,
                     27,
-                    7,
-                    39,
+                    9,
+                    59,
                     tzinfo=ZoneInfo("America/New_York"),
                 ),
             )
             result, invoked, log_dir = self.run_script(
                 temp,
                 ritual_status="OK",
-                now_et="2026-07-27T07:40:00-04:00",
+                now_et="2026-07-27T10:00:00-04:00",
             )
             self.assertEqual(result.returncode, 8)
             self.assertFalse(invoked.exists())
@@ -876,8 +876,8 @@ class ShellPreflightTest(unittest.TestCase):
                     2026,
                     7,
                     27,
-                    7,
-                    39,
+                    9,
+                    59,
                     tzinfo=ZoneInfo("America/New_York"),
                 ),
             )
@@ -955,7 +955,7 @@ if "--reconcile-published-attempt" in module_args:
         attempt_id=attempt_id,
         succeeded=True,
         published_success=True,
-        now_et=datetime.fromisoformat("2026-07-27T07:40:00-04:00"),
+        now_et=datetime.fromisoformat("2026-07-27T10:00:00-04:00"),
     )
     receipt_out = Path(module_args[module_args.index("--receipt-out") + 1])
     receipt_out.write_text(
@@ -983,7 +983,7 @@ raise SystemExit(0)
             result, invoked, _returned_log_dir = self.run_script(
                 temp,
                 ritual_status="OK",
-                now_et="2026-07-27T07:40:00-04:00",
+                now_et="2026-07-27T10:00:00-04:00",
                 uv_override=str(fake_uv),
                 extra_env={
                     "FAKE_SOURCE_ROOT": str(Path(__file__).resolve().parents[1]),
