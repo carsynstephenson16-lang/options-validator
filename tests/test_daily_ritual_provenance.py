@@ -261,6 +261,9 @@ class DailyRitualProvenanceTests(unittest.TestCase):
 
     def test_pick_tracker_immutability_conflict_is_named_in_ritual_output(self):
         """Execute the real evaluator line; generic isolation must not hide conflicts."""
+        zsh = shutil.which("zsh")
+        if not zsh:
+            self.skipTest("zsh is required")
         source = _source()
         evaluate_line = next(
             line
@@ -277,7 +280,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             stub.chmod(0o755)
             completed = subprocess.run(
                 [
-                    shutil.which("zsh") or "zsh",
+                    zsh,
                     "-c",
                     "\n".join(
                         (
