@@ -55,16 +55,21 @@ worktree reads exact-session cache, feature, QM, and hypothesis evidence there,
 while all generated research manifests, reports, logs, and dashboard output
 remain in `/Users/carsynstephenson/options-validator-research`.
 
-The producer LaunchAgent is intentionally left disabled and unloaded. Safe
-template validation does not enable it:
+The producer LaunchAgent is DEPLOYED AND ACTIVE: the reviewed template is
+installed at `~/Library/LaunchAgents/com.carsyn.options-validator.research-refresh.plist`
+and was bootout/bootstrap-reloaded in the owner-directed 2026-08-27 lid-window
+retime (deployment recorded in
+`reports/2026-08-26-audit-closeout-handoff-package.md`). Template changes are
+validated with:
 
 ```bash
 plutil -lint tools/launchd/com.carsyn.options-validator.research-refresh.plist
 ```
 
-After owner approval, copy the reviewed template to
-`~/Library/LaunchAgents/`. Enabling/loading it is a separate owner-authorized
-operation and is intentionally not part of this runbook.
+and reach the live schedule only through an owner-authorized reinstall
+(bootout/bootstrap) — editing the checked-in template alone changes nothing.
+*(Amended 2026-08-27: this section previously described the producer as
+intentionally disabled and unloaded, which predated the retime deployment.)*
 
 Kill switch:
 

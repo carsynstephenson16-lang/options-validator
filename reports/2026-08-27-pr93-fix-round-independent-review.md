@@ -8,7 +8,7 @@
 
 ## OVERALL: FAIL for head `36a167e`
 
-Three of five findings survive scrutiny (P1-c, P2-a, P2-b). **P1-b is not closed** — the named mechanism is intact and was reproduced. **P1-a is partial** — the larger half of the change is exercised by no test, and the divergence class it names is still accepted. Two Important new defects were introduced by the P1-c fix. The receipt is substantially honest on counts and lint/type gates but overclaims RED-first evidence for P1-a and has imprecise line cites.
+Three of five findings survive scrutiny (P1-c, P2-a, P2-b). **P1-b is not closed** — the named mechanism is intact and was reproduced. **P1-a is partial** — the final source-row hash comparison is not load-bearing in any test (the earlier field-set/identity guards were not separately probed and may have incidental coverage), and the divergence class it names is still accepted. Two Important new defects were introduced by the P1-c fix. The receipt is substantially honest on counts and lint/type gates but overclaims RED-first evidence for P1-a and has imprecise line cites.
 
 ## Scope audit — clean
 
