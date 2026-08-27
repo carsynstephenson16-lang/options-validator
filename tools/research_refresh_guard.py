@@ -39,7 +39,7 @@ class GuardError(ValueError):
 
 
 class ScheduleBlocked(GuardError):
-    """The invocation is outside the weekday premarket window."""
+    """The invocation is outside the weekday scheduled window."""
 
 
 class CircuitOpen(GuardError):
@@ -78,12 +78,17 @@ def _decimal(value: str, *, where: str, allow_zero: bool = False) -> Decimal:
 
 
 def schedule_window_open(now_et: datetime, *, manual_override: bool = False) -> bool:
-    """Allow only weekdays from 07:30 through 08:30 ET unless explicitly overridden."""
+    """Allow only weekdays from 09:50 through 10:50 ET unless explicitly overridden.
+
+    Brackets the retimed 10:00/10:30 ET LaunchAgent triggers (owner-directed
+    lid-window retime, 2026-08-27) with the same margins the original
+    07:30-08:30 window gave its 07:40/08:10 triggers.
+    """
     if manual_override:
         return True
     localized = now_et.astimezone(NEW_YORK)
     minute = localized.hour * 60 + localized.minute
-    return localized.isoweekday() <= 5 and 7 * 60 + 30 <= minute <= 8 * 60 + 30
+    return localized.isoweekday() <= 5 and 9 * 60 + 50 <= minute <= 10 * 60 + 50
 
 
 def _empty_state() -> dict[str, object]:
@@ -412,7 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         now_et = _parse_now(args.now)
         if args.command == "window":
             if not schedule_window_open(now_et, manual_override=args.manual_override):
-                raise ScheduleBlocked("outside weekday 07:30-08:30 America/New_York window")
+                raise ScheduleBlocked("outside weekday 09:50-10:50 America/New_York window")
             print("SCHEDULE_WINDOW_OK")
         elif args.command == "reserve":
             status = reserve_attempt(

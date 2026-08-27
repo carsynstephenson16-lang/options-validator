@@ -124,7 +124,7 @@ class JobHealthDigestTests(unittest.TestCase):
         self._copy("alignment.log", f".tmp/alignment_check/{AS_OF}.log")
         self._copy(
             "research_refresh.json",
-            f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json",
+            f".tmp/research_refresh/receipt_v2_{AS_OF}_midmorning.json",
         )
 
     @staticmethod
@@ -146,7 +146,7 @@ class JobHealthDigestTests(unittest.TestCase):
             "Intraday capture (preclose)",
             "Schwab preclose",
             "Alignment check",
-            "Research refresh (premarket)",
+            "Research refresh (midmorning)",
         ):
             self.assertEqual(rows[job].status, HealthStatus.OK, job)
         self.assertEqual(
@@ -496,9 +496,9 @@ class JobHealthDigestTests(unittest.TestCase):
                 f".tmp/alignment_check/{AS_OF}.log",
             ),
             (
-                "Research refresh (premarket)",
+                "Research refresh (midmorning)",
                 "research_refresh.json",
-                f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json",
+                f".tmp/research_refresh/receipt_v2_{AS_OF}_midmorning.json",
             ),
         )
         for _job, fixture, relative in cases:
@@ -618,10 +618,10 @@ class JobHealthDigestTests(unittest.TestCase):
 
     def test_research_refresh_ignores_payload_after_freshness_check(self):
         self._install_all_ok()
-        path = self.root / f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json"
+        path = self.root / f".tmp/research_refresh/receipt_v2_{AS_OF}_midmorning.json"
         path.write_text("this is deliberately not JSON\n")
 
-        row = self._by_job(collect_health(self.root, AS_OF))["Research refresh (premarket)"]
+        row = self._by_job(collect_health(self.root, AS_OF))["Research refresh (midmorning)"]
 
         self.assertEqual(row.status, HealthStatus.OK)
         self.assertIn("fresh", row.reason)
@@ -642,7 +642,7 @@ class JobHealthDigestTests(unittest.TestCase):
             "Intraday capture (midday)",
             "Intraday capture (preclose)",
             "Schwab preclose",
-            "Research refresh (premarket)",
+            "Research refresh (midmorning)",
         ):
             self.assertEqual(by_job[job].status, HealthStatus.MISSING, job)
         self.assertEqual(by_job["Alignment check"].status, HealthStatus.OK)
@@ -690,12 +690,12 @@ class JobHealthDigestTests(unittest.TestCase):
 
     def test_cli_reads_research_receipt_from_separate_root(self):
         self._install_all_ok()
-        (self.root / f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json").unlink()
+        (self.root / f".tmp/research_refresh/receipt_v2_{AS_OF}_midmorning.json").unlink()
         research_dir = Path(tempfile.mkdtemp())
         output_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, research_dir, True)
         self.addCleanup(shutil.rmtree, output_dir, True)
-        receipt = research_dir / f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json"
+        receipt = research_dir / f".tmp/research_refresh/receipt_v2_{AS_OF}_midmorning.json"
         receipt.parent.mkdir(parents=True)
         shutil.copyfile(FIXTURES / "research_refresh.json", receipt)
         self._set_mtime_for_invocation_date(receipt, datetime.now(NY_TZ).date())
@@ -721,11 +721,11 @@ class JobHealthDigestTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("| Research refresh (premarket) | OK |", completed.stdout)
+        self.assertIn("| Research refresh (midmorning) | OK |", completed.stdout)
 
     def test_cli_default_research_root_is_under_home(self):
         self._install_all_ok()
-        (self.root / f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json").unlink()
+        (self.root / f".tmp/research_refresh/receipt_v2_{AS_OF}_midmorning.json").unlink()
         home = Path(tempfile.mkdtemp())
         output_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home, True)
@@ -735,7 +735,7 @@ class JobHealthDigestTests(unittest.TestCase):
             / "options-validator-research"
             / ".tmp"
             / "research_refresh"
-            / f"receipt_v2_{AS_OF}_premarket.json"
+            / f"receipt_v2_{AS_OF}_midmorning.json"
         )
         receipt.parent.mkdir(parents=True)
         shutil.copyfile(FIXTURES / "research_refresh.json", receipt)
@@ -760,7 +760,7 @@ class JobHealthDigestTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("| Research refresh (premarket) | OK |", completed.stdout)
+        self.assertIn("| Research refresh (midmorning) | OK |", completed.stdout)
 
     def test_research_refresh_requires_invocation_date_freshness(self):
         self._install_all_ok()
@@ -768,7 +768,7 @@ class JobHealthDigestTests(unittest.TestCase):
         output_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, research_dir, True)
         self.addCleanup(shutil.rmtree, output_dir, True)
-        receipt = research_dir / f".tmp/research_refresh/receipt_v2_{AS_OF}_premarket.json"
+        receipt = research_dir / f".tmp/research_refresh/receipt_v2_{AS_OF}_midmorning.json"
         receipt.parent.mkdir(parents=True)
         shutil.copyfile(FIXTURES / "research_refresh.json", receipt)
         invocation_date = datetime.now(NY_TZ).date()
@@ -795,7 +795,7 @@ class JobHealthDigestTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("| Research refresh (premarket) | MISSING |", completed.stdout)
+        self.assertIn("| Research refresh (midmorning) | MISSING |", completed.stdout)
         self.assertIn(f"not fresh for invocation date {invocation_date}", completed.stdout)
 
     def test_cli_out_dir_is_the_exact_digest_directory(self):
