@@ -33,11 +33,13 @@ if [ "${unpushed:-0}" != "0" ] || [ "${untracked:-0}" != "0" ]; then
   push_ok=1
   gh_login=$(cat "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null)
   [ -n "$gh_login" ] || push_ok=0
-  origin_url=$(git -C "$wt" remote get-url origin 2>/dev/null)
-  case "$origin_url" in
-    *"/$gh_login/"*|*":$gh_login/"*) ;;
-    *) push_ok=0;;
-  esac
+  [ -r "$HOME/bin/anti-stranding-lib.sh" ] || push_ok=0
+  if [ "$push_ok" = "1" ]; then
+    source "$HOME/bin/anti-stranding-lib.sh" || push_ok=0
+  fi
+  if [ "$push_ok" = "1" ]; then
+    anti_stranding_remote_owner_ok "$wt" "$gh_login" || push_ok=0
+  fi
   if [ "$push_ok" = "1" ] && [ -n "$br" ] && command -v gitleaks >/dev/null 2>&1; then
     if git -C "$wt" rev-parse --verify -q "origin/$br" >/dev/null; then range="origin/$br..$br"
     else range="$br --not --remotes=origin"; fi

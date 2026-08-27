@@ -31,11 +31,9 @@ fi
 # cached login), and never publish a commit gitleaks would have blocked.
 gh_login=$(cat "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null)
 [ -n "$gh_login" ] || exit 0
-origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null)
-case "$origin_url" in
-  *"/$gh_login/"*|*":$gh_login/"*) ;;
-  *) exit 0;;
-esac
+[ -r "$HOME/bin/anti-stranding-lib.sh" ] || exit 0
+source "$HOME/bin/anti-stranding-lib.sh" || exit 0
+anti_stranding_remote_owner_ok "$repo" "$gh_login" || exit 0
 if command -v gitleaks >/dev/null 2>&1; then
   if git -C "$repo" rev-parse --verify -q "origin/$br" >/dev/null; then range="origin/$br..$br"
   else range="$br --not --remotes=origin"; fi
