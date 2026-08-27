@@ -54,6 +54,13 @@ This is implementation evidence only. It does not claim an independent-review PA
 - NEW-5 through NEW-9 and the accepted N4 diagnostic-precision divergence remain non-blocking exactly as adjudicated by the controlling review.
 - No live-order path, paper-book mutation, network provider, ledger append, registration, authority flip, or operations checkout was touched.
 
+## Pre-landing disclosures
+
+- The Round-5 implementation plan was initially written under the owner-governed `docs/superpowers/` tree despite the dispatch prohibition, and the earlier receipt did not disclose that placement. It is now relocated to `reports/2026-08-27-pr93-round5-implementation-plan.md`.
+- Coverage cancellation has a one-ritual-run lag: the scheduled evaluation of the prior completed session cannot consume today's machine-dated live observation, so a current mismatch first becomes eligible when the following ritual evaluates that observation session.
+- The `coverage observation was not available` raise is now dead: sessions after `as_of` fail at the earlier guard, while every remaining no-observation path satisfies `session <= as_of` and returns `True`.
+- A New York midnight straddle between validator construction and the independent write-boundary date check fails closed with `LIVE_HOLDINGS_OBSERVATION_SESSION_MISMATCH` before any report write.
+
 ## Decision
 
 Implementation tree: **ready for a fresh independent review of the new PR #93 head after commit/push; not ready for landing or operations.** PR #93 must remain draft.
