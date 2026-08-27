@@ -46,6 +46,135 @@ launchctl bootout gui/$UID/com.carsyn.options-validator.alignment-check
 A nonzero exit is the job doing its work, not a bug: it means the ops checkout
 needs the printed command before 15:45.
 
+## Job-health digest (16:30 ET, weekdays)
+
+`com.carsyn.options-validator.job-health-digest.plist` runs
+`tools/job_health_digest.sh` from the ops checkout at 16:30 ET on weekdays.
+The 16:30 time is an LLM-proposed operational constant; the owner may change
+it at install time, provided the job still runs on the same New York calendar
+date passed to `--as-of`.
+
+The Mac system timezone must remain `America/New_York` for 16:30 ET scheduling.
+The plist's `TZ` value controls the child process, not launchd's evaluation of
+`StartCalendarInterval`.
+
+The digest and wrapper log stay under the ops checkout's untracked `.tmp/`
+tree. A successful `ALL OK` run logs one ordinary status line. A successful
+digest whose headline reports problems, or a nonzero tool exit, logs a
+`CRITICAL:` line and attempts a guarded macOS notification. Installing this
+additional scheduled job is an **owner action**; agents build and test only.
+
+### Install
+
+Installation is an owner action only, after the PR is reviewed and landed.
+Before copying or loading the plist, the owner runs this preflight. **STOP on
+any mismatch**; do not install from a feature branch, a dirty tracked tree, a
+stale `main`, another checkout, or a checkout without the executable wrapper.
+Untracked `.tmp/` output is deliberately ignored by the cleanliness check.
+
+```bash
+OPS_ROOT=/Users/carsynstephenson/options-validator-ops
+ACTUAL_ROOT="$(git -C "$OPS_ROOT" rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "STOP: ops checkout is not a Git worktree" >&2; exit 1
+}
+[[ "$ACTUAL_ROOT" == "$OPS_ROOT" ]] || {
+  echo "STOP: unexpected ops checkout root: $ACTUAL_ROOT" >&2; exit 1
+}
+[[ "$(git -C "$OPS_ROOT" branch --show-current)" == "main" ]] || {
+  echo "STOP: ops checkout is not on main" >&2; exit 1
+}
+CHECKOUT_STATUS="$(
+  git -C "$OPS_ROOT" status --porcelain --untracked-files=all -- \
+    . ':(exclude).tmp'
+)" || {
+  echo "STOP: could not inspect ops checkout status" >&2; exit 1
+}
+[[ -z "$CHECKOUT_STATUS" ]] || {
+  printf 'STOP: ops checkout has changes outside .tmp:\n%s\n' \
+    "$CHECKOUT_STATUS" >&2
+  exit 1
+}
+GIT_TERMINAL_PROMPT=0 git -C "$OPS_ROOT" fetch -q origin main || {
+  echo "STOP: could not refresh origin/main" >&2; exit 1
+}
+LOCAL_HEAD="$(git -C "$OPS_ROOT" rev-parse HEAD)" || exit 1
+LANDED_HEAD="$(git -C "$OPS_ROOT" rev-parse origin/main)" || exit 1
+[[ "$LOCAL_HEAD" == "$LANDED_HEAD" ]] || {
+  echo "STOP: ops HEAD is not the current landed origin/main" >&2; exit 1
+}
+[[ -x "$OPS_ROOT/tools/job_health_digest.sh" ]] || {
+  echo "STOP: landed job-health wrapper is absent or not executable" >&2; exit 1
+}
+printf 'verified ops main: %s\n' "$LOCAL_HEAD"
+```
+
+Only after that block succeeds, the owner installs the landed template:
+
+```bash
+OPS_ROOT=/Users/carsynstephenson/options-validator-ops
+mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/job_health \
+  /Users/carsynstephenson/options-validator-ops/.tmp/job_health_digest
+cp "$OPS_ROOT/tools/launchagents/com.carsyn.options-validator.job-health-digest.plist" \
+  ~/Library/LaunchAgents/
+launchctl bootstrap gui/$UID \
+  ~/Library/LaunchAgents/com.carsyn.options-validator.job-health-digest.plist
+launchctl enable gui/$UID/com.carsyn.options-validator.job-health-digest
+```
+
+### Verify
+
+After landing and installation, the owner verifies the loaded job, then runs
+the wrapper explicitly once and inspects the exact newly written digest and
+log. **STOP** if the wrapper is nonzero, the report is absent/symlinked, its
+session differs from the current New York date, its headline is unrecognized,
+or no run log is found. `N PROBLEMS` confirms the plumbing ran but still
+requires the owner to investigate the reported job-health problems.
+
+```bash
+OPS_ROOT=/Users/carsynstephenson/options-validator-ops
+launchctl print gui/$UID/com.carsyn.options-validator.job-health-digest
+"$OPS_ROOT/tools/job_health_digest.sh"
+WRAPPER_RC=$?
+[[ "$WRAPPER_RC" -eq 0 ]] || {
+  echo "STOP: manual job-health wrapper run exited $WRAPPER_RC" >&2; exit 1
+}
+AS_OF="$(TZ=America/New_York date +%Y-%m-%d)"
+DIGEST="$OPS_ROOT/.tmp/job_health/digest_${AS_OF}.md"
+[[ -f "$DIGEST" && ! -L "$DIGEST" ]] || {
+  echo "STOP: expected current digest is absent or symlinked: $DIGEST" >&2; exit 1
+}
+[[ "$(sed -n '3p' "$DIGEST")" == "Session: ${AS_OF}" ]] || {
+  echo "STOP: digest session does not match $AS_OF" >&2; exit 1
+}
+HEADLINE="$(sed -n '1p' "$DIGEST")"
+if [[ "$HEADLINE" != "ALL OK" && ! "$HEADLINE" =~ '^[0-9]+ PROBLEMS$' ]]; then
+  echo "STOP: unrecognized digest headline: $HEADLINE" >&2
+  exit 1
+fi
+LATEST_LOG="$(
+  find "$OPS_ROOT/.tmp/job_health_digest" -maxdepth 1 -type f -name '*.log' \
+    -exec stat -f '%m %N' {} \; | sort -nr | sed -n '1s/^[0-9][0-9]* //p'
+)"
+[[ -n "$LATEST_LOG" && -f "$LATEST_LOG" ]] || {
+  echo "STOP: no job-health wrapper run log found" >&2; exit 1
+}
+printf 'digest headline: %s\nlog: %s\n' "$HEADLINE" "$LATEST_LOG"
+sed -n '1,160p' "$LATEST_LOG"
+```
+
+The wrapper uses an atomic `run.lock` directory to refuse overlap and removes
+it on normal exit and handled HUP/INT/TERM signals. Exit 75 means another run
+holds the lock. A SIGKILL or power loss can leave a stale lock; in that case,
+**STOP and verify no wrapper or digest process is still running before any
+owner-directed recovery. Never delete the lock merely to bypass a refusal.**
+
+### Uninstall
+
+```bash
+launchctl bootout gui/$UID/com.carsyn.options-validator.job-health-digest
+rm ~/Library/LaunchAgents/com.carsyn.options-validator.job-health-digest.plist
+```
+
 ## Live dashboard
 
 `com.carsyn.options-validator.live-dashboard.plist` keeps the read-only
