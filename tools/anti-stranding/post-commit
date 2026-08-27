@@ -31,11 +31,9 @@ git remote get-url origin >/dev/null 2>&1 || exit 0
 # login; no cached login => no auto-push (fail closed, reconciler reports).
 gh_login=$(cat "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null)
 [ -n "$gh_login" ] || exit 0
-origin_url=$(git remote get-url origin 2>/dev/null)
-case "$origin_url" in
-  *"/$gh_login/"*|*":$gh_login/"*) ;;
-  *) exit 0;;
-esac
+[ -r "$HOME/bin/anti-stranding-lib.sh" ] || exit 0
+source "$HOME/bin/anti-stranding-lib.sh" || exit 0
+anti_stranding_remote_owner_ok "$repo" "$gh_login" || exit 0
 
 # Secret scan of the new commit before anything leaves the machine (public repos).
 if command -v gitleaks >/dev/null 2>&1; then
