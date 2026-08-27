@@ -327,6 +327,20 @@ printf '%s\n' "$@" >> "$FAKE_NOTIFICATION_LOG"
         self.assertIn("CRITICAL: job-health digest reported 2 PROBLEMS", run_log)
         self.assertNotIn("unrecognized headline", run_log)
 
+    def test_unrecognized_headline_fails_loud(self) -> None:
+        result = self._run_wrapper(headline="Traceback (most recent call last):")
+
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        run_log = self._run_log()
+        self.assertIn(
+            "CRITICAL: job-health digest returned an unrecognized headline",
+            run_log,
+        )
+        self.assertNotIn("job-health digest: ALL OK", run_log)
+        self.assertIn("display notification", self.notification_log.read_text(encoding="utf-8"))
+        self.assertFalse((self.checkout / ".tmp" / "job_health_digest" / "run.lock").exists())
+
     def test_all_ok_headline_is_quiet(self) -> None:
         result = self._run_wrapper()
 

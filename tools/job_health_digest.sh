@@ -105,7 +105,12 @@ if [[ "$HEADLINE" == "ALL OK" ]]; then
 elif [[ "$HEADLINE" =~ '^[0-9]+ PROBLEMS$' ]]; then
   critical_notify "job-health digest reported ${HEADLINE}"
 else
+  # Fail loud: an unparseable headline means the report could not be verified at
+  # all, the same malformed-report class as a missing report or a mismatched
+  # session above. Exiting 0 here would let launchd record a malformed run as a
+  # success.
   critical_notify "job-health digest returned an unrecognized headline"
+  exit 1
 fi
 
 exit "$RC"
