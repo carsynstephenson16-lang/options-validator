@@ -4,16 +4,16 @@
 
 **Goal:** Close every blocking Round-5 finding while preserving the tracker’s causal, append-only, fail-soft, and no-authority contracts.
 
-**Architecture:** Keep the evaluator’s live portfolio boundary explicit: coverage validation runs only for covered lanes, and any path that reads current holdings requires the requested `as_of` to equal the current New York date. Carry source-row identity alongside the pure render result so the published HTML marker comes from the exact render-side selection, while snapshot validation continues to recompute snapshot rows, the HTML digest, the HTML hash, and `render_id` independently.
+**Architecture:** Keep the evaluator’s two time boundaries explicit: coverage validation runs only for covered lanes, current holdings observations are stamped from the machine-derived New York date, and evaluation session S consumes only observations dated on or before S. Carry source-row identity alongside the pure render result so the published HTML marker comes from the exact render-side selection, while snapshot validation continues to recompute snapshot rows, the HTML digest, the HTML hash, and `render_id` independently.
 
 **Tech Stack:** Python 3.12, pandas, `unittest`, zsh ritual wrapper, ruff, pyright.
 
-**Spec:** `reports/2026-08-27-pr93-round4-independent-review.md` at review commit `cf1c72740b499084c5d630e951977637637c41bd`
+**Spec:** `reports/2026-08-27-pr93-round4-independent-review.md` at review commit `77ff464`
 
 ## Global Constraints
 
 - PR #93 remains draft; no readiness, merge-to-main, deployment, ops sync, registration, ledger write, or scored-write authority.
-- NEW-4 is replaced: live holdings may be observed only when `as_of` equals the current New York date; no override flag.
+- NEW-4 final form: live holdings observations use only the machine-derived current New York date, never `as_of` or caller input; evaluation session S consumes only observations dated `<= S`.
 - The HTML source-row digest must originate from the render-side candidates, not from the snapshot payload.
 - Probe A, R1, P1-b, N2, N3, N5, N6, N7, and the accepted N4 behavior must not regress.
 - Final full-suite acceptance requires exit 0.
@@ -28,19 +28,19 @@
 
 **Interfaces:**
 - Consumes: `evaluate_cli(as_of)`, `_CausalCoverageValidator`, `evaluate_records(...)`.
-- Produces: covered-lane-only validator calls and `LIVE_HOLDINGS_SESSION_MISMATCH` before any backdated live portfolio read.
+- Produces: covered-lane-only validator calls, machine-dated live observations, causal consumption by evaluation date, and `LIVE_HOLDINGS_OBSERVATION_SESSION_MISMATCH` at the write boundary.
 
 - [x] **Step 1: Write failing evaluator regressions**
 
-Add real-CLI tests for a `long_call` record using `_CausalCoverageValidator`, a fresh covered tracker backdated by one session, a tracker whose newest artifact leaves a one-day gap, and the current-date scheduled path.
+Add real-CLI tests for a `long_call` record using `_CausalCoverageValidator`, the scheduled prior-completed-session shape, a fresh backdated tracker, a tracker whose newest artifact leaves a date gap, and a forged non-machine observation date.
 
 - [x] **Step 2: Verify RED**
 
-Run the named tests with `uv run python -m unittest`; expect the non-covered lane to raise `PositionSchemaError` and both backdated covered shapes to avoid the required distinct refusal.
+Run the tracker suite with `uv run python -m unittest discover`; expect the non-covered lane to raise `PositionSchemaError`, the obsolete equality guard to reject all three prior-session shapes, and the writer to accept the forged observation date.
 
 - [x] **Step 3: Implement the minimal evaluator changes**
 
-Call `coverage_validator` in `resolve_fill` only when `lane in {"cc", "pmcc"}`. Before `load_holdings()` or `load_positions()`, compare `as_of` to a New-York-date helper and raise `TrackerError("LIVE_HOLDINGS_SESSION_MISMATCH: ...")` on mismatch.
+Call `coverage_validator` in `resolve_fill` only when `lane in {"cc", "pmcc"}`. Derive the live observation date inside `_CausalCoverageValidator`, filter observations by `observed_session <= evaluated session`, and independently require the machine date at `_write_evaluation_reports` with `LIVE_HOLDINGS_OBSERVATION_SESSION_MISMATCH` on mismatch.
 
 - [x] **Step 4: Verify GREEN**
 

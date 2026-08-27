@@ -700,6 +700,7 @@ class _CausalCoverageValidator:
         positions: pd.DataFrame,
     ) -> None:
         self.as_of = as_of
+        self._observation_session = _current_new_york_session()
         self._holdings = holdings
         self._positions = positions
         self._history = [copy.deepcopy(dict(row)) for row in prior_observations]
@@ -711,7 +712,7 @@ class _CausalCoverageValidator:
                 f"coverage session {session} is after evaluation session {self.as_of}"
             )
         key = _coverage_key(position)
-        if session == self.as_of and key not in self._current:
+        if key not in self._current:
             try:
                 matches = coverage_identity_matches(
                     position,
@@ -722,7 +723,7 @@ class _CausalCoverageValidator:
                 matches = False
             self._current[key] = {
                 "coverage_key": key,
-                "observed_session": self.as_of,
+                "observed_session": self._observation_session,
                 "matches": matches,
             }
         available = [
@@ -735,7 +736,7 @@ class _CausalCoverageValidator:
         if available:
             latest = max(available, key=lambda row: str(row["observed_session"]))
             return bool(latest["matches"])
-        if session < self.as_of:
+        if session <= self.as_of:
             return True
         raise TrackerError(f"coverage observation was not available for {session}")
 
@@ -750,12 +751,6 @@ def _coverage_validator_for_as_of(
 ) -> _CausalCoverageValidator:
     from options_researcher.portfolio import load_holdings, load_positions
 
-    current_session = _current_new_york_session()
-    if as_of != current_session:
-        raise TrackerError(
-            "LIVE_HOLDINGS_SESSION_MISMATCH: "
-            f"as_of={as_of!r} current_new_york_session={current_session!r}"
-        )
     prior = _load_coverage_observations(root, before=as_of)
     try:
         holdings = load_holdings()
@@ -1615,6 +1610,15 @@ def _write_evaluation_reports(
     reports_root: Path | None = REPORTS_ROOT,
     supersede_reason: str | None = None,
 ) -> Path | None:
+    if coverage_observations:
+        machine_session = _current_new_york_session()
+        for row in coverage_observations:
+            if row.get("observed_session") != machine_session:
+                raise TrackerError(
+                    "LIVE_HOLDINGS_OBSERVATION_SESSION_MISMATCH: "
+                    f"observed={row.get('observed_session')!r} "
+                    f"machine={machine_session!r}"
+                )
     _enforce_write_path(
         Path(destination) / "outcomes.json",
         reports_root=reports_root,

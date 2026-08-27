@@ -634,7 +634,7 @@ class FillAndPositionTests(unittest.TestCase):
             )["outcomes"]
             self.assertEqual({row["status"] for row in outcomes}, {"OPEN"})
 
-    def test_backdated_live_holdings_refused_with_fresh_tracker(self):
+    def test_backdated_fresh_tracker_observation_uses_machine_session(self):
         identity, holdings, positions = self._coverage_inputs()
         opening = candidate(
             "VST:cc:fresh",
@@ -646,20 +646,23 @@ class FillAndPositionTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            with self.assertRaisesRegex(
-                tracker.TrackerError, "LIVE_HOLDINGS_SESSION_MISMATCH"
-            ):
-                self._run_evaluate_cli(
-                    root=root,
-                    as_of="2026-08-26",
-                    record=self._record(opening, slot="VST:cc"),
-                    holdings=holdings,
-                    positions=positions,
-                    current_new_york_session="2026-08-27",
-                )
-            self.assertFalse((root / "reports/pick_tracker/dryrun/2026-08-26").exists())
+            self._run_evaluate_cli(
+                root=root,
+                as_of="2026-08-26",
+                record=self._record(opening, slot="VST:cc"),
+                holdings=holdings,
+                positions=positions,
+                current_new_york_session="2026-08-28",
+            )
+            observations = json.loads(
+                (
+                    root / "reports/pick_tracker/dryrun/2026-08-26/coverage_observations.json"
+                ).read_text()
+            )["observations"]
+            self.assertEqual({row["observed_session"] for row in observations}, {"2026-08-28"})
+            self.assertNotIn("2026-08-26", {row["observed_session"] for row in observations})
 
-    def test_backdated_live_holdings_refused_across_newest_artifact_gap(self):
+    def test_backdated_gap_observation_uses_machine_session(self):
         identity, holdings, positions = self._coverage_inputs()
         opening = candidate(
             "VST:cc:gap",
@@ -674,20 +677,23 @@ class FillAndPositionTests(unittest.TestCase):
             newest = root / "reports/pick_tracker/dryrun/2026-08-25/scoreboard.json"
             newest.parent.mkdir(parents=True)
             newest.write_text('{"schema":"pick_tracker_scoreboard/v1"}\n')
-            with self.assertRaisesRegex(
-                tracker.TrackerError, "LIVE_HOLDINGS_SESSION_MISMATCH"
-            ):
-                self._run_evaluate_cli(
-                    root=root,
-                    as_of="2026-08-26",
-                    record=self._record(opening, slot="VST:cc"),
-                    holdings=holdings,
-                    positions=positions,
-                    current_new_york_session="2026-08-27",
-                )
+            self._run_evaluate_cli(
+                root=root,
+                as_of="2026-08-26",
+                record=self._record(opening, slot="VST:cc"),
+                holdings=holdings,
+                positions=positions,
+                current_new_york_session="2026-08-28",
+            )
             self.assertEqual(newest.read_text(), '{"schema":"pick_tracker_scoreboard/v1"}\n')
+            observations = json.loads(
+                (
+                    root / "reports/pick_tracker/dryrun/2026-08-26/coverage_observations.json"
+                ).read_text()
+            )["observations"]
+            self.assertEqual({row["observed_session"] for row in observations}, {"2026-08-28"})
 
-    def test_current_new_york_session_live_holdings_path_is_unaffected(self):
+    def test_scheduled_prior_completed_session_publishes_machine_dated_observation(self):
         identity, holdings, positions = self._coverage_inputs()
         opening = candidate(
             "VST:cc:today",
@@ -701,20 +707,52 @@ class FillAndPositionTests(unittest.TestCase):
             root = Path(tmp)
             self._run_evaluate_cli(
                 root=root,
-                as_of="2026-08-27",
+                as_of="2026-08-26",
                 record=self._record(opening, slot="VST:cc"),
                 holdings=holdings,
                 positions=positions,
                 current_new_york_session="2026-08-27",
             )
+            outcomes = json.loads(
+                (root / "reports/pick_tracker/dryrun/2026-08-26/outcomes.json").read_text()
+            )["outcomes"]
+            self.assertEqual({row["status"] for row in outcomes}, {"OPEN"})
             observations = json.loads(
                 (
-                    root
-                    / "reports/pick_tracker/dryrun/2026-08-27/coverage_observations.json"
+                    root / "reports/pick_tracker/dryrun/2026-08-26/coverage_observations.json"
                 ).read_text()
             )["observations"]
             self.assertEqual(len(observations), 1)
+            self.assertEqual(observations[0]["observed_session"], "2026-08-27")
             self.assertTrue(observations[0]["matches"])
+
+    def test_writer_refuses_non_machine_coverage_observation_date(self):
+        from unittest import mock
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(tracker, "_current_new_york_session", return_value="2026-08-27"),
+        ):
+            destination = Path(tmp) / "reports/pick_tracker/dryrun/2026-08-26"
+            with self.assertRaisesRegex(
+                tracker.TrackerError,
+                "LIVE_HOLDINGS_OBSERVATION_SESSION_MISMATCH",
+            ):
+                tracker._write_evaluation_reports(
+                    destination,
+                    as_of="2026-08-26",
+                    outcomes=[],
+                    board=tracker.build_scoreboard([]),
+                    coverage_observations=[
+                        {
+                            "coverage_key": "a" * 64,
+                            "observed_session": "2026-08-26",
+                            "matches": True,
+                        }
+                    ],
+                    reports_root=Path(tmp) / "reports/pick_tracker",
+                )
+            self.assertFalse(destination.exists())
 
     def test_decision_quote_is_never_used_and_d_plus_one_worse_side_fills(self):
         decision = candidate("VST:long_call:one")
@@ -1215,7 +1253,12 @@ class FillAndPositionTests(unittest.TestCase):
                 mock.patch.object(
                     tracker,
                     "_current_new_york_session",
-                    side_effect=("2026-08-26", "2026-08-27"),
+                    side_effect=(
+                        "2026-08-26",
+                        "2026-08-26",
+                        "2026-08-27",
+                        "2026-08-27",
+                    ),
                 ),
             ):
                 tracker.evaluate_cli("2026-08-26")
