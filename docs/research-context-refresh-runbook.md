@@ -30,11 +30,12 @@ The checked-in template is
 `tools/launchd/com.carsyn.options-validator.research-refresh.plist`.
 It has exactly two triggers on weekdays:
 
-- 07:40 ET: normal producer attempt
-- 08:10 ET: idempotent retry
+- 10:00 ET: normal producer attempt
+- 10:30 ET: idempotent retry
 
-There is no 16:45 run and no Saturday run. A successful 07:40 receipt with the
-same ritual-status SHA makes the 08:10 trigger exit without an LLM call.
+(Owner-directed lid-window retime, 2026-08-27; previously 07:40/08:10.)
+There is no 16:45 run and no Saturday run. A successful 10:00 receipt with the
+same ritual-status SHA makes the 10:30 trigger exit without an LLM call.
 `launchd` does not start a second instance of the same job while the first is
 still running.
 
@@ -195,8 +196,9 @@ Generated research remains uncommitted for human review.
 
 ## Independent critic cadence
 
-The desired critic cadence is 08:45 ET on weekdays, after the 08:10 producer
-retry. The critic must read only a validated `FINAL` manifest and preserve the
+The desired critic cadence is 11:05 ET on weekdays, after the 10:30 producer
+retry (same 35-minute follow margin the retired 08:45-after-08:10 cadence
+used). The critic must read only a validated `FINAL` manifest and preserve the
 five finding classifications:
 
 `HARD_CONTRADICTION`, `UNSUPPORTED`, `WEAK_INFERENCE`, `UNRESOLVED`,
@@ -212,7 +214,7 @@ documented callable task API. The installed Antigravity app exposes scheduling
 only through its internal GUI-agent `schedule` and `manage_task` tools, which
 are not executable from this repository or launchd. The existing Antigravity
 task remains unchanged; no guessed command or non-executable schedule template
-is checked in. Change it to weekday 08:45 only through a verified Antigravity
+is checked in. Change it to weekday 11:05 only through a verified Antigravity
 task interface after owner approval.
 
 ## Failure interpretation
