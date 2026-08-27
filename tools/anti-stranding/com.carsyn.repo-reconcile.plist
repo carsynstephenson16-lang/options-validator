@@ -3,14 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.carsyn.repo-reconcile</string>
-  <!-- Desktop is TCC-protected and launchd's zsh has no Full Disk Access
-       grant; the digest's second copy goes to the home root instead
-       (owner-directed redirect, 2026-08-27). Canonical copy is unchanged. -->
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>DIGEST_DESKTOP</key>
-    <string>/Users/carsynstephenson/repo-digest.md</string>
-  </dict>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
