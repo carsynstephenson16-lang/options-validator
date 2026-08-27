@@ -40,3 +40,26 @@ uv run python -m unittest discover -s tests
 uv run ruff check . && uv run pyright
 ```
 Exit codes define done. Plus: the WP-B test demonstrably fails on the pre-change tree (both directions proven). No network, no restic invocation in the suite.
+
+## Status addendum 2026-08-26 (orchestrating session; record correction)
+
+**IMPLEMENTED AND MERGED.** WP-A/B/C landed via PR #66 (merge `79c6eea`,
+2026-08-23); the WP-C preflight test's macOS `/private/var` path bug was
+repaired by PR #78; PR #76 separately moved `reports/schwab_chains` to the
+ritual's data-tier durability allow-list. Repo-verified @4ab1a38:
+`tools/h7_forward_backup.py:55,61` derives `BACKUP_PATHS` from
+`DEFAULT_NAMESPACES`; `tests/test_h7_backup.py:30-33` asserts full coverage.
+
+**Correction of record:** PR #66's body claims "the existing
+`record-invalidation` subcommand covers this path." That claim was written
+against rev 1 of this brief and is WRONG per the code-verified gap above
+(directory inventory entries are silently skipped by
+`build_invalidation_fact()`); the correction (`7abbd73`) landed the same day
+AFTER the PR merged, so the PR body was never fixed. This addendum is the
+durable restatement the corrected brief required. The named follow-up
+(tested backup-inventory invalidation semantics) remains un-briefed — an
+open owner decision, not silently dropped.
+
+**Still open from lean-ops routing row #2:** no backup or restore-check has
+run against the widened payload (newest receipts predate the 08-23 merge) —
+the drill is an owner/ops action.
