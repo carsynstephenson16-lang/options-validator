@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from contextlib import chdir
@@ -107,8 +108,28 @@ def snapshot(as_of: str, items: list[dict], *, context_items: list[dict] | None 
             )
         },
     }
+    payload["source_rows_sha256"] = source_rows_digest(payload)
     bind_render_id(payload)
     return payload
+
+
+def source_rows_digest(payload: dict) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            sorted(payload["source_row_hashes"]),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+
+def bind_html(payload: dict, body: bytes = b"bound html") -> bytes:
+    digest = source_rows_digest(payload)
+    payload["source_rows_sha256"] = digest
+    html = body + f"\n<!-- pick-tracker-source-rows-sha256:{digest} -->\n".encode()
+    payload["html_sha256"] = hashlib.sha256(html).hexdigest()
+    bind_render_id(payload)
+    return html
 
 
 def bind_render_id(payload: dict) -> None:
@@ -155,10 +176,8 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             tracker.validate_snapshot(payload, b"different html")
 
     def test_snapshot_source_row_mutation_fails_closed(self):
-        html = b"bound html"
         payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
-        payload["html_sha256"] = hashlib.sha256(html).hexdigest()
-        bind_render_id(payload)
+        html = bind_html(payload)
         payload["frozen_baseline"]["candidates"][0]["raw_quote"]["bid"] = 1.1
         changed_quote = payload["frozen_baseline"]["candidates"][0]["raw_quote"]
         changed_hash = hashlib.sha256(
@@ -167,7 +186,34 @@ class SnapshotAndMembershipTests(unittest.TestCase):
         payload["frozen_baseline"]["candidates"][0]["source_row_hash"] = changed_hash
         payload["source_row_hashes"] = [changed_hash]
 
-        with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_RENDER_ID_MISMATCH"):
+        with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_HTML_SOURCE_MISMATCH"):
+            tracker.validate_snapshot(payload, html)
+
+    def test_snapshot_rejects_self_consistent_rows_that_diverge_from_html(self):
+        """Probe A: all snapshot hashes are rebuilt but rendered values stay stale."""
+        payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
+        html = bind_html(payload)
+        payload["frozen_baseline"]["candidates"][0]["raw_quote"]["bid"] = 1.1
+        changed_quote = payload["frozen_baseline"]["candidates"][0]["raw_quote"]
+        changed_hash = hashlib.sha256(
+            json.dumps(changed_quote, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        payload["frozen_baseline"]["candidates"][0]["source_row_hash"] = changed_hash
+        payload["source_row_hashes"] = [changed_hash]
+        payload["source_rows_sha256"] = source_rows_digest(payload)
+        bind_render_id(payload)
+
+        with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_HTML_SOURCE_MISMATCH"):
+            tracker.validate_snapshot(payload, html)
+
+    def test_snapshot_rejects_raw_row_that_does_not_match_its_recorded_hash(self):
+        """R1: deleting the per-row hash guard must make this test fail."""
+        payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
+        html = bind_html(payload)
+        payload["frozen_baseline"]["candidates"][0]["raw_quote"]["bid"] = 1.1
+        bind_render_id(payload)
+
+        with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_SOURCE_ROW_MISMATCH"):
             tracker.validate_snapshot(payload, html)
 
     def test_snapshot_capture_receipt_hash_mismatch_fails_closed(self):
@@ -176,9 +222,8 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
             receipt.parent.mkdir(parents=True)
             receipt.write_bytes(b"verified receipt")
-            html = b"bound html"
             payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
-            payload["html_sha256"] = hashlib.sha256(html).hexdigest()
+            html = bind_html(payload)
             payload["capture_receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
             bind_render_id(payload)
             tracker.validate_snapshot(payload, html, input_root=root)
@@ -349,13 +394,12 @@ class SnapshotAndMembershipTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            html = b"bound html"
             receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
             receipt.parent.mkdir(parents=True)
             receipt.write_bytes(b"verified receipt")
             payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
             payload["evaluation_date"] = "2026-08-26"
-            payload["html_sha256"] = hashlib.sha256(html).hexdigest()
+            html = bind_html(payload)
             payload["capture_receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
             bind_render_id(payload)
             snapshot_path = root / tracker.SNAPSHOT_PATH
@@ -408,6 +452,34 @@ class SnapshotAndMembershipTests(unittest.TestCase):
                 self.assertEqual(middle["arms"]["context_lane"]["current_slots"], prior_slots)
                 self.assertEqual(middle["arms"]["context_lane"]["exits"], [])
                 self.assertEqual(resumed["arms"]["context_lane"]["entries"], [])
+
+    def test_any_non_ready_arm_state_preserves_slots_without_transitions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "reports/pick_tracker/dryrun/events.jsonl"
+            reports_root = journal.parent.parent
+            opening = candidate("VST:long_call:one")
+            first = tracker.append_membership(
+                snapshot("2026-08-25", [opening]),
+                journal_path=journal,
+                reports_root=reports_root,
+                verified_sessions=["2026-08-25"],
+            )
+            paused = snapshot("2026-08-26", [], context_items=[])
+            paused["context_lane"]["state"] = "PAUSED"
+            middle = tracker.append_membership(
+                paused,
+                journal_path=journal,
+                reports_root=reports_root,
+                verified_sessions=["2026-08-26"],
+            )
+
+            self.assertEqual(
+                middle["arms"]["context_lane"]["current_slots"],
+                first["arms"]["context_lane"]["current_slots"],
+            )
+            self.assertEqual(middle["arms"]["context_lane"]["entries"], [])
+            self.assertEqual(middle["arms"]["context_lane"]["restrikes"], [])
+            self.assertEqual(middle["arms"]["context_lane"]["exits"], [])
 
     def test_disabled_context_arm_is_loud_and_refuses_primary_contrast(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -753,13 +825,15 @@ class FillAndPositionTests(unittest.TestCase):
             )
 
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp) / "2026-08-27"
+            reports_root = Path(tmp) / "reports/pick_tracker"
+            destination = reports_root / "dryrun/2026-08-27"
             first_outcomes = evaluate()
             tracker._write_evaluation_reports(
                 destination,
                 as_of="2026-08-27",
                 outcomes=first_outcomes,
                 board=tracker.build_scoreboard(first_outcomes),
+                reports_root=reports_root,
             )
             before = {path.name: path.read_bytes() for path in destination.iterdir()}
 
@@ -771,10 +845,199 @@ class FillAndPositionTests(unittest.TestCase):
                     as_of="2026-08-27",
                     outcomes=changed_outcomes,
                     board=tracker.build_scoreboard(changed_outcomes),
+                    reports_root=reports_root,
                 )
 
             after = {path.name: path.read_bytes() for path in destination.iterdir()}
             self.assertEqual(after, before)
+
+    def test_explicit_supersede_preserves_canonical_artifacts_and_records_reason(self):
+        first_outcomes = [
+            {
+                "arm": "frozen_baseline",
+                "lane": "cc",
+                "decision_session": "2026-08-25",
+                "status": "OPEN",
+            }
+        ]
+        replacement_outcomes = [
+            {
+                "arm": "frozen_baseline",
+                "lane": "cc",
+                "decision_session": "2026-08-25",
+                "status": "SETTLED",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "reports/pick_tracker"
+            destination = root / "dryrun/2026-08-27"
+            tracker._write_evaluation_reports(
+                destination,
+                as_of="2026-08-27",
+                outcomes=first_outcomes,
+                board=tracker.build_scoreboard(first_outcomes),
+                reports_root=root,
+            )
+            canonical_before = {
+                path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()
+            }
+            with self.assertRaisesRegex(tracker.TrackerConflict, "IMMUTABLE_HISTORY_CONFLICT"):
+                tracker._write_evaluation_reports(
+                    destination,
+                    as_of="2026-08-27",
+                    outcomes=replacement_outcomes,
+                    board=tracker.build_scoreboard(replacement_outcomes),
+                    reports_root=root,
+                )
+
+            receipt_path = tracker._write_evaluation_reports(
+                destination,
+                as_of="2026-08-27",
+                outcomes=replacement_outcomes,
+                board=tracker.build_scoreboard(replacement_outcomes),
+                reports_root=root,
+                supersede_reason="late verified close became available",
+            )
+
+            canonical_after = {
+                path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()
+            }
+            self.assertEqual(canonical_after, canonical_before)
+            self.assertIsInstance(receipt_path, Path)
+            receipt = json.loads(receipt_path.read_text())
+            self.assertEqual(receipt["schema"], "pick_tracker_supersede/v1")
+            self.assertEqual(receipt["as_of"], "2026-08-27")
+            self.assertEqual(receipt["reason"], "late verified close became available")
+            replacement = destination / receipt["replacement_path"] / "outcomes.json"
+            self.assertEqual(
+                tracker._active_evaluation_artifact(destination, "outcomes.json"),
+                replacement,
+            )
+            self.assertEqual(json.loads(replacement.read_text())["outcomes"], replacement_outcomes)
+            self.assertEqual(
+                receipt["superseded_sha256"]["outcomes.json"],
+                hashlib.sha256(canonical_before["outcomes.json"]).hexdigest(),
+            )
+
+    def test_immutable_write_wraps_stale_temp_file_as_tracker_conflict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "artifact.json"
+            stale = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+            stale.write_bytes(b"stale")
+            with self.assertRaisesRegex(tracker.TrackerConflict, "TRACKER_TEMP_CONFLICT"):
+                tracker._immutable_write(path, b"new")
+
+    def test_evaluation_reports_enforce_dryrun_write_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "reports/pick_tracker"
+            with self.assertRaisesRegex(tracker.RegistrationRequired, "dryrun"):
+                tracker._write_evaluation_reports(
+                    root / "outside/2026-08-27",
+                    as_of="2026-08-27",
+                    outcomes=[],
+                    board=tracker.build_scoreboard([]),
+                    reports_root=root,
+                )
+
+    def test_later_coverage_change_is_observed_prospectively_without_rewriting_history(self):
+        """Probe B: current holdings must not be back-applied to prior sessions."""
+        from unittest import mock
+
+        identity = {
+            "symbol": "VST",
+            "shares": 100,
+            "declared_shares": 100,
+            "cost_basis": 100.0,
+            "acquired": "2025-01-02",
+        }
+        identity["source_row_hash"] = tracker._identity_hash(identity)
+        opening = candidate(
+            "VST:cc:causal",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage=identity,
+        )
+        record = {
+            "schema": "pick_tracker_session/v1",
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:cc", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:cc": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+        holdings = pd.DataFrame(
+            [{"symbol": "VST", "shares": 100, "cost_basis": 100.0, "acquired": "2025-01-02"}]
+        )
+        positions = pd.DataFrame(
+            columns=(
+                "id",
+                "structure",
+                "symbol",
+                "right",
+                "strike",
+                "expiration",
+                "contracts",
+                "entry_price",
+            )
+        )
+
+        def calendar(start: str, end: str) -> list[str]:
+            cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+            while cursor <= stop:
+                if cursor.weekday() < 5:
+                    days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            return days
+
+        with tempfile.TemporaryDirectory() as tmp, chdir(tmp):
+            journal = Path("reports/pick_tracker/dryrun/events.jsonl")
+            journal.parent.mkdir(parents=True)
+            journal.write_bytes(tracker._canonical_bytes(record) + b"\n")
+            sessions = calendar("2026-08-25", "2026-08-27")
+            with (
+                mock.patch(
+                    "options_researcher.schwab_chain_view.verified_sessions",
+                    return_value=(sessions, []),
+                ),
+                mock.patch("options_researcher.schwab_chain_view.load_chain", return_value=chain()),
+                mock.patch("data.cache_runner.trading_days", side_effect=calendar),
+                mock.patch(
+                    "options_researcher.portfolio.load_holdings",
+                    side_effect=lambda: holdings.copy(),
+                ),
+                mock.patch("options_researcher.portfolio.load_positions", return_value=positions),
+            ):
+                tracker.evaluate_cli("2026-08-26")
+                day1_path = Path("reports/pick_tracker/dryrun/2026-08-26/outcomes.json")
+                day1_bytes = day1_path.read_bytes()
+                day1 = json.loads(day1_bytes)["outcomes"][0]
+                self.assertEqual(day1["status"], "OPEN")
+
+                holdings.loc[0, "shares"] = 0
+                tracker.evaluate_cli("2026-08-27")
+
+            day2 = json.loads(
+                Path("reports/pick_tracker/dryrun/2026-08-27/outcomes.json").read_text()
+            )["outcomes"][0]
+            self.assertEqual(day1_path.read_bytes(), day1_bytes)
+            self.assertEqual(day2["status"], "CANCELLED_COVERAGE_CHANGED")
+            self.assertIn("daily_marks", day2)
+            self.assertEqual(day2["daily_marks"][0], day1["daily_marks"][0])
+            self.assertEqual(
+                day2["status_events"],
+                [
+                    {"session": "2026-08-26", "status": "OPEN"},
+                    {"session": "2026-08-27", "status": "CANCELLED_COVERAGE_CHANGED"},
+                ],
+            )
 
     def test_mark_gap_and_coverage_pnl_exclusion(self):
         filled = tracker.resolve_fill(
@@ -904,6 +1167,53 @@ class FillAndPositionTests(unittest.TestCase):
             first["daily_marks"][-1]["mark_session"],
             first["marks"][-1]["mark_session"],
         )
+
+    def test_evaluator_loads_each_symbol_session_chain_at_most_once(self):
+        """N2 scale probe: duplicate arms must share the per-run chain cache."""
+        opening = candidate(
+            "VST:leaps:scale",
+            lane="leaps",
+            expiry="2027-12-17",
+        )
+        record = {
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:leaps", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:leaps": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+
+        def calendar(start: str, end: str) -> list[str]:
+            cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+            while cursor <= stop:
+                if cursor.weekday() < 5:
+                    days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            return days
+
+        calls: list[tuple[str, str]] = []
+
+        def load(symbol: str, session: str) -> pd.DataFrame:
+            calls.append((symbol, session))
+            return chain(expiry="2027-12-17")
+
+        sessions = calendar("2026-08-25", "2027-03-31")
+        tracker.evaluate_records(
+            [record],
+            as_of="2027-03-31",
+            verified_sessions=sessions,
+            chain_loader=load,
+            trading_days_fn=calendar,
+            close_loader=lambda _symbol, _session: 100.0,
+        )
+
+        self.assertEqual(len(calls), len(set(calls)), calls[:3])
 
     def test_evaluator_applies_marks_then_expiry_and_omits_post_expiry_marks(self):
         opening = candidate(
@@ -1061,6 +1371,7 @@ class FillAndPositionTests(unittest.TestCase):
         )
         self.assertEqual(outcomes[0]["status"], "CANCELLED_COVERAGE_CHANGED")
         self.assertGreaterEqual(calls, 2)
+        self.assertEqual(outcomes[0]["unreachable_marks"], 1)
 
 
 class ScoreboardTests(unittest.TestCase):

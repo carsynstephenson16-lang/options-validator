@@ -4,6 +4,13 @@ This module has no trade, verdict, registration, or ledger authority.  Its
 default CLI writes only below ``reports/pick_tracker/dryrun``; scored output
 requires a separately validated owner-typed registration supplied by a future
 authorized integration.
+
+Operator recovery is explicit and append-only.  If ``evaluate`` reports
+``IMMUTABLE_HISTORY_CONFLICT``, inspect the existing dated artifacts first.
+Only a deliberate manual rerun may pass ``--supersede-reason TEXT``.  That
+keeps the canonical artifacts byte-for-byte unchanged and writes the better
+rerun under ``supersedes/`` beside a reason-bearing supersede receipt.  The
+daily ritual never supplies this flag.
 """
 
 from __future__ import annotations
@@ -41,6 +48,8 @@ HTML_PATH = Path(".tmp/dashboard/attractiveness.html")
 _SCORED_ARMS = ("frozen_baseline", "context_lane")
 _LANES = ("put", "cc", "pmcc", "leaps", "long_call")
 _RECORDER_VERSION = "pick_tracker/v1"
+_HTML_SOURCE_DIGEST_PREFIX = b"<!-- pick-tracker-source-rows-sha256:"
+_HTML_SOURCE_DIGEST_SUFFIX = b" -->"
 _EXPERIMENT_MODULES = {
     "exp_beta_qqq": exp_beta_qqq,
     "exp_tail_shape": exp_tail_shape,
@@ -87,6 +96,35 @@ def _sha256_bytes(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _source_rows_digest(hashes: Iterable[str]) -> str:
+    return _sha256_bytes(_canonical_bytes(sorted(hashes)))
+
+
+def _bind_source_rows_html(html_bytes: bytes, digest: str) -> bytes:
+    return (
+        html_bytes
+        + b"\n"
+        + _HTML_SOURCE_DIGEST_PREFIX
+        + digest.encode("ascii")
+        + _HTML_SOURCE_DIGEST_SUFFIX
+        + b"\n"
+    )
+
+
+def _html_source_rows_digest(html_bytes: bytes) -> str | None:
+    if html_bytes.count(_HTML_SOURCE_DIGEST_PREFIX) != 1:
+        return None
+    tail = html_bytes.split(_HTML_SOURCE_DIGEST_PREFIX, 1)[1]
+    value, separator, _remainder = tail.partition(_HTML_SOURCE_DIGEST_SUFFIX)
+    if not separator or len(value) != 64:
+        return None
+    try:
+        digest = value.decode("ascii")
+    except UnicodeDecodeError:
+        return None
+    return digest if all(character in "0123456789abcdef" for character in digest) else None
+
+
 def validate_snapshot(
     payload: Mapping[str, object],
     html_bytes: bytes,
@@ -110,6 +148,7 @@ def validate_snapshot(
         "capture_receipt_sha256",
         "config_hash",
         "render_id",
+        "source_rows_sha256",
     ):
         if not isinstance(payload.get(field), str) or not payload.get(field):
             raise TrackerError(f"snapshot provenance field {field} is absent")
@@ -170,6 +209,14 @@ def validate_snapshot(
             observed_hashes.add(source_hash)
     if observed_hashes != set(hashes):
         raise TrackerError("snapshot source_row_hashes do not match candidate rows")
+    observed_digest = _source_rows_digest(observed_hashes)
+    html_digest = _html_source_rows_digest(html_bytes)
+    if payload.get("source_rows_sha256") != observed_digest or html_digest != observed_digest:
+        raise TrackerError(
+            "SNAPSHOT_HTML_SOURCE_MISMATCH: "
+            f"snapshot={payload.get('source_rows_sha256')!r} html={html_digest!r} "
+            f"observed={observed_digest}"
+        )
     render_snapshot = copy.deepcopy(dict(payload))
     expected_render_id = render_snapshot.pop("render_id")
     actual_render_id = _sha256_bytes(
@@ -374,7 +421,7 @@ def append_membership(
             previous_slots = prior_arm.get("current_slots")
             previous_slots = previous_slots if isinstance(previous_slots, Mapping) else {}
             arm_state = str(arm_value.get("state") or "FAILED")
-            if arm_state in {"FAILED", "DISABLED"}:
+            if arm_state != "READY":
                 arm_record = {
                     "entries": [],
                     "restrikes": [],
@@ -596,17 +643,125 @@ def coverage_identity_matches(
     return _canonical_bytes(identity) == _canonical_bytes(coverage)
 
 
-def _current_coverage_validator(position: Mapping[str, object], _session: str) -> bool:
+def _coverage_key(position: Mapping[str, object]) -> str:
+    coverage = position.get("coverage_context")
+    leg = position.get("evaluated_leg")
+    if not isinstance(coverage, Mapping) or not isinstance(leg, Mapping):
+        raise PositionSchemaError("coverage observation identity is incomplete")
+    return _sha256_bytes(
+        _canonical_bytes(
+            {
+                "coverage_context": coverage,
+                "symbol": leg.get("symbol"),
+                "risk_basis": position.get("risk_basis"),
+            }
+        )
+    )
+
+
+def _load_coverage_observations(root: Path, *, before: str) -> list[dict[str, object]]:
+    observations: list[dict[str, object]] = []
+    if not root.exists():
+        return observations
+    for destination in sorted(path for path in root.iterdir() if path.is_dir()):
+        if destination.name >= before:
+            continue
+        path = _active_evaluation_artifact(destination, "coverage_observations.json")
+        if not path.exists():
+            continue
+        payload = _load_json(path)
+        rows = payload.get("observations")
+        if payload.get("schema") != "pick_tracker_coverage_observations/v1" or not isinstance(
+            rows, list
+        ):
+            raise TrackerError(f"coverage observation artifact is malformed: {path}")
+        for row in rows:
+            if (
+                not isinstance(row, Mapping)
+                or not isinstance(row.get("coverage_key"), str)
+                or not isinstance(row.get("observed_session"), str)
+                or not isinstance(row.get("matches"), bool)
+            ):
+                raise TrackerError(f"coverage observation row is malformed: {path}")
+            observations.append(copy.deepcopy(dict(row)))
+    return observations
+
+
+class _CausalCoverageValidator:
+    """Apply portfolio observations no earlier than their observed session."""
+
+    def __init__(
+        self,
+        *,
+        as_of: str,
+        prior_observations: Sequence[Mapping[str, object]],
+        holdings: pd.DataFrame,
+        positions: pd.DataFrame,
+    ) -> None:
+        self.as_of = as_of
+        self._holdings = holdings
+        self._positions = positions
+        self._history = [copy.deepcopy(dict(row)) for row in prior_observations]
+        self._current: dict[str, dict[str, object]] = {}
+
+    def __call__(self, position: Mapping[str, object], session: str) -> bool:
+        if session > self.as_of:
+            raise TrackerError(
+                f"coverage session {session} is after evaluation session {self.as_of}"
+            )
+        key = _coverage_key(position)
+        if session == self.as_of and key not in self._current:
+            try:
+                matches = coverage_identity_matches(
+                    position,
+                    holdings=self._holdings,
+                    positions=self._positions,
+                )
+            except (KeyError, TypeError, ValueError):
+                matches = False
+            self._current[key] = {
+                "coverage_key": key,
+                "observed_session": self.as_of,
+                "matches": matches,
+            }
+        available = [
+            row
+            for row in (*self._history, *self._current.values())
+            if row.get("coverage_key") == key
+            and isinstance(row.get("observed_session"), str)
+            and str(row["observed_session"]) <= session
+        ]
+        if available:
+            latest = max(available, key=lambda row: str(row["observed_session"]))
+            return bool(latest["matches"])
+        if session < self.as_of:
+            return True
+        raise TrackerError(f"coverage observation was not available for {session}")
+
+    def observations(self) -> list[dict[str, object]]:
+        return [copy.deepcopy(self._current[key]) for key in sorted(self._current)]
+
+
+def _coverage_validator_for_as_of(
+    as_of: str,
+    *,
+    root: Path,
+) -> _CausalCoverageValidator:
     from options_researcher.portfolio import load_holdings, load_positions
 
+    prior = _load_coverage_observations(root, before=as_of)
     try:
-        return coverage_identity_matches(
-            position,
-            holdings=load_holdings(),
-            positions=load_positions(),
-        )
+        holdings = load_holdings()
+        positions = load_positions()
     except (FileNotFoundError, KeyError, OSError, TypeError, ValueError):
-        return False
+        holdings = pd.DataFrame()
+        positions = pd.DataFrame()
+    return _CausalCoverageValidator(
+        as_of=as_of,
+        prior_observations=prior,
+        holdings=holdings,
+        positions=positions,
+    )
 
 
 def _candidate_sessions(
@@ -861,6 +1016,20 @@ def evaluate_records(
 ) -> list[dict[str, object]]:
     """Rebuild the dry-run outcome book deterministically from opening events."""
     verified = set(verified_sessions)
+    chain_cache: dict[tuple[str, str], pd.DataFrame | OSError | ValueError] = {}
+
+    def cached_chain_loader(symbol: str, session: str) -> pd.DataFrame:
+        key = (symbol, session)
+        if key not in chain_cache:
+            try:
+                chain_cache[key] = chain_loader(symbol, session)
+            except (OSError, ValueError) as exc:
+                chain_cache[key] = exc
+        cached = chain_cache[key]
+        if isinstance(cached, (OSError, ValueError)):
+            raise cached
+        return cached
+
     outcomes: list[dict[str, object]] = []
     for record in records:
         decision_session = record.get("as_of")
@@ -895,7 +1064,7 @@ def evaluate_records(
                     candidate,
                     decision_session=decision_session,
                     verified_sessions=verified,
-                    chain_loader=chain_loader,
+                    chain_loader=cached_chain_loader,
                     trading_days_fn=trading_days_fn,
                     coverage_validator=coverage_validator,
                     current_session=as_of,
@@ -915,6 +1084,7 @@ def evaluate_records(
                 leg = position.get("evaluated_leg")
                 assert isinstance(leg, Mapping)
                 fill_session = str(result["fill_session"])
+                result["status_events"] = [{"session": fill_session, "status": "OPEN"}]
                 expiry = str(leg["expiry"])
                 dte_at_fill = (date.fromisoformat(expiry) - date.fromisoformat(fill_session)).days
                 offsets = mark_schedule(str(candidate["lane"]), dte_at_fill=dte_at_fill)
@@ -955,6 +1125,12 @@ def evaluate_records(
                         }
                         daily_marks.append(daily_mark)
                         daily_by_session[mark_session] = daily_mark
+                        result["status_events"].append(
+                            {
+                                "session": mark_session,
+                                "status": "CANCELLED_COVERAGE_CHANGED",
+                            }
+                        )
                         break
                     if mark_session not in verified:
                         daily_mark = {
@@ -965,7 +1141,7 @@ def evaluate_records(
                         }
                     else:
                         try:
-                            frame = chain_loader(str(leg["symbol"]), mark_session)
+                            frame = cached_chain_loader(str(leg["symbol"]), mark_session)
                         except (OSError, ValueError) as exc:
                             daily_mark = {
                                 "status": "MARK_GAP",
@@ -1001,6 +1177,16 @@ def evaluate_records(
                             checkpoint = copy.deepcopy(daily_mark)
                             checkpoint["elapsed_sessions"] = offset
                             marks.append(checkpoint)
+                        else:
+                            marks.append(
+                                {
+                                    "status": "MARK_UNREACHABLE",
+                                    "elapsed_sessions": offset,
+                                    "mark_session": mark_session,
+                                    "reason": "DAILY_MARK_ABSENT",
+                                }
+                            )
+                            unreachable += 1
                 if (
                     not coverage_changed
                     and expiry <= as_of
@@ -1014,6 +1200,9 @@ def evaluate_records(
                             "status": "CANCELLED_COVERAGE_CHANGED",
                             "mark_session": expiry,
                         }
+                    )
+                    result["status_events"].append(
+                        {"session": expiry, "status": "CANCELLED_COVERAGE_CHANGED"}
                     )
                 if not coverage_changed and expiry <= as_of:
                     try:
@@ -1036,8 +1225,12 @@ def evaluate_records(
                         marks.append(terminal_mark)
                         daily_marks.append(copy.deepcopy(terminal_mark))
                     result["status"] = "SETTLED"
+                    result["status_events"].append({"session": expiry, "status": "SETTLED"})
                 elif not coverage_changed and scheduled and scheduled[-1][1] <= as_of:
                     result["status"] = "SETTLED"
+                    result["status_events"].append(
+                        {"session": scheduled[-1][1], "status": "SETTLED"}
+                    )
                     if marks:
                         marks[-1]["termination"] = "longest_applicable_mark"
                 valid_marks = [
@@ -1269,21 +1462,27 @@ def _immutable_write(path: Path, raw: bytes) -> None:
             return
         raise TrackerConflict(f"IMMUTABLE_HISTORY_CONFLICT: {path}")
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp_created = False
     try:
-        with tmp.open("xb") as handle:
-            handle.write(raw)
-            handle.flush()
-            os.fsync(handle.fileno())
+        try:
+            with tmp.open("xb") as handle:
+                tmp_created = True
+                handle.write(raw)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except FileExistsError as exc:
+            raise TrackerConflict(f"TRACKER_TEMP_CONFLICT: {tmp}") from exc
         try:
             os.link(tmp, path)
         except FileExistsError:
             if path.read_bytes() != raw:
                 raise TrackerConflict(f"IMMUTABLE_HISTORY_CONFLICT: {path}") from None
     finally:
-        try:
-            tmp.unlink()
-        except FileNotFoundError:
-            pass
+        if tmp_created:
+            try:
+                tmp.unlink()
+            except FileNotFoundError:
+                pass
     directory_fd = os.open(path.parent, os.O_RDONLY)
     try:
         os.fsync(directory_fd)
@@ -1399,7 +1598,16 @@ def _write_evaluation_reports(
     as_of: str,
     outcomes: Sequence[Mapping[str, object]],
     board: Mapping[str, object],
-) -> None:
+    coverage_observations: Sequence[Mapping[str, object]] = (),
+    reports_root: Path | None = REPORTS_ROOT,
+    supersede_reason: str | None = None,
+) -> Path | None:
+    _enforce_write_path(
+        Path(destination) / "outcomes.json",
+        reports_root=reports_root,
+        registration=None,
+        registration_validator=None,
+    )
     board_payload = copy.deepcopy(dict(board))
     board_payload["as_of"] = as_of
     board_payload["authority"] = "NONE — descriptive tracking, dry-run"
@@ -1413,12 +1621,81 @@ def _write_evaluation_reports(
         destination / "outcomes.json": _canonical_bytes(outcome_payload) + b"\n",
         destination / "scoreboard.json": _canonical_bytes(board_payload) + b"\n",
         destination / "scoreboard.md": _scoreboard_markdown(board_payload).encode(),
+        destination / "coverage_observations.json": _canonical_bytes(
+            {
+                "schema": "pick_tracker_coverage_observations/v1",
+                "as_of": as_of,
+                "observations": [copy.deepcopy(dict(row)) for row in coverage_observations],
+            }
+        )
+        + b"\n",
     }
-    for path, raw in artifacts.items():
-        if path.exists() and path.read_bytes() != raw:
-            raise TrackerConflict(f"IMMUTABLE_HISTORY_CONFLICT: {path}")
-    for path, raw in artifacts.items():
+    conflicts = [
+        path for path, raw in artifacts.items() if path.exists() and path.read_bytes() != raw
+    ]
+    if not conflicts:
+        if supersede_reason is not None:
+            raise TrackerError("SUPERSEDE_NOT_REQUIRED: canonical artifacts do not conflict")
+        for path, raw in artifacts.items():
+            _immutable_write(path, raw)
+        return None
+    if supersede_reason is None:
+        raise TrackerConflict(f"IMMUTABLE_HISTORY_CONFLICT: {conflicts[0]}")
+    reason = supersede_reason.strip()
+    if not reason:
+        raise TrackerError("SUPERSEDE_REASON_REQUIRED")
+
+    superseded_hashes = {
+        path.name: _sha256_bytes(path.read_bytes())
+        for path in artifacts
+        if path.exists() and path.is_file()
+    }
+    replacement_hashes = {path.name: _sha256_bytes(raw) for path, raw in artifacts.items()}
+    supersede_id = _sha256_bytes(
+        _canonical_bytes(
+            {
+                "as_of": as_of,
+                "reason": reason,
+                "superseded_sha256": superseded_hashes,
+                "replacement_sha256": replacement_hashes,
+            }
+        )
+    )[:16]
+    replacement_relative = Path("supersedes") / f"{as_of}-{supersede_id}"
+    replacement_root = destination / replacement_relative
+    replacement_artifacts = {replacement_root / path.name: raw for path, raw in artifacts.items()}
+    for path in replacement_artifacts:
+        _enforce_write_path(
+            path,
+            reports_root=reports_root,
+            registration=None,
+            registration_validator=None,
+        )
+    for path, raw in replacement_artifacts.items():
         _immutable_write(path, raw)
+
+    receipt_payload = {
+        "schema": "pick_tracker_supersede/v1",
+        "as_of": as_of,
+        "reason": reason,
+        "authority": "NONE — descriptive tracking, dry-run",
+        "canonical_path": ".",
+        "replacement_path": replacement_relative.as_posix(),
+        "superseded_sha256": superseded_hashes,
+        "replacement_sha256": replacement_hashes,
+    }
+    receipt_path = destination / "supersede-receipts" / f"{as_of}-{supersede_id}.json"
+    existing_receipts = sorted((destination / "supersede-receipts").glob("*.json"))
+    if existing_receipts and receipt_path not in existing_receipts:
+        raise TrackerConflict(f"SUPERSEDE_ALREADY_RECORDED: {existing_receipts[0]}")
+    _enforce_write_path(
+        receipt_path,
+        reports_root=reports_root,
+        registration=None,
+        registration_validator=None,
+    )
+    _immutable_write(receipt_path, _canonical_bytes(receipt_payload) + b"\n")
+    return receipt_path
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -1429,6 +1706,35 @@ def _load_json(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         raise TrackerError(f"{path} must contain a JSON object")
     return value
+
+
+def _active_evaluation_artifact(destination: Path, filename: str) -> Path:
+    """Resolve the one explicit supersede, or the immutable canonical artifact."""
+    receipts = sorted((destination / "supersede-receipts").glob("*.json"))
+    if not receipts:
+        return destination / filename
+    if len(receipts) != 1:
+        raise TrackerConflict(f"AMBIGUOUS_SUPERSEDE_RECEIPTS: {destination}")
+    receipt = _load_json(receipts[0])
+    replacement_path = receipt.get("replacement_path")
+    hashes = receipt.get("replacement_sha256")
+    if (
+        receipt.get("schema") != "pick_tracker_supersede/v1"
+        or not isinstance(replacement_path, str)
+        or not isinstance(hashes, Mapping)
+        or not isinstance(hashes.get(filename), str)
+    ):
+        raise TrackerError(f"supersede receipt is malformed: {receipts[0]}")
+    candidate = destination / replacement_path / filename
+    if not _is_below(candidate, destination):
+        raise TrackerError(f"supersede replacement escapes dated directory: {candidate}")
+    try:
+        actual = _sha256_bytes(candidate.read_bytes())
+    except OSError as exc:
+        raise TrackerError(f"supersede replacement is unreadable: {candidate}") from exc
+    if actual != hashes[filename]:
+        raise TrackerError(f"supersede replacement hash mismatch: {candidate}")
+    return candidate
 
 
 def record_cli(as_of: str) -> None:
@@ -1458,7 +1764,7 @@ def _load_journal_path(path: Path) -> list[dict[str, object]]:
         return _read_journal(handle)
 
 
-def evaluate_cli(as_of: str) -> None:
+def evaluate_cli(as_of: str, *, supersede_reason: str | None = None) -> None:
     from data.cache_runner import trading_days
     from data.underlying_closes import load_closes
     from options_researcher.schwab_chain_view import load_chain, verified_sessions
@@ -1472,6 +1778,7 @@ def evaluate_cli(as_of: str) -> None:
         return float(closes.iloc[-1])
 
     records = _load_journal_path(DRYRUN_ROOT / "events.jsonl")
+    coverage_validator = _coverage_validator_for_as_of(as_of, root=DRYRUN_ROOT)
     outcomes = evaluate_records(
         records,
         as_of=as_of,
@@ -1479,7 +1786,7 @@ def evaluate_cli(as_of: str) -> None:
         chain_loader=load_chain,
         trading_days_fn=trading_days,
         close_loader=close_loader,
-        coverage_validator=_current_coverage_validator,
+        coverage_validator=coverage_validator,
     )
     board = build_scoreboard(outcomes)
     destination = DRYRUN_ROOT / as_of
@@ -1488,20 +1795,25 @@ def evaluate_cli(as_of: str) -> None:
         as_of=as_of,
         outcomes=outcomes,
         board=board,
+        coverage_observations=coverage_validator.observations(),
+        reports_root=REPORTS_ROOT,
+        supersede_reason=supersede_reason,
     )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("record", "evaluate"):
-        child = subparsers.add_parser(command)
-        child.add_argument("--as-of", required=True)
+    record_parser = subparsers.add_parser("record")
+    record_parser.add_argument("--as-of", required=True)
+    evaluate_parser = subparsers.add_parser("evaluate")
+    evaluate_parser.add_argument("--as-of", required=True)
+    evaluate_parser.add_argument("--supersede-reason")
     args = parser.parse_args(argv)
     if args.command == "record":
         record_cli(args.as_of)
     else:
-        evaluate_cli(args.as_of)
+        evaluate_cli(args.as_of, supersede_reason=args.supersede_reason)
     return 0
 
 

@@ -472,7 +472,7 @@ fi
 "$UV" run python -m options_researcher.attractiveness_dashboard && note "attractiveness dashboard: rebuilt" || note "attractiveness dashboard: FAILED"
 if [ -n "$AS_OF" ]; then
   "$UV" run python -m options_researcher.pick_tracker record --as-of "$AS_OF" && note "pick tracker recorder: appended" || note "pick tracker recorder: FAILED (isolated)"
-  "$UV" run python -m options_researcher.pick_tracker evaluate --as-of "$AS_OF" && note "pick tracker evaluator: rebuilt" || note "pick tracker evaluator: FAILED (isolated)"
+  PICK_TRACKER_EVAL_OUTPUT="$("$UV" run python -m options_researcher.pick_tracker evaluate --as-of "$AS_OF" 2>&1)" && note "pick tracker evaluator: rebuilt" || { case "$PICK_TRACKER_EVAL_OUTPUT" in *IMMUTABLE_HISTORY_CONFLICT*) note "pick tracker evaluator: IMMUTABLE_HISTORY_CONFLICT — manual --supersede-reason required" ;; *) note "pick tracker evaluator: FAILED (isolated)" ;; esac; print -u2 -- "$PICK_TRACKER_EVAL_OUTPUT"; }
 else
   note "pick tracker: SKIPPED — evaluation session unavailable"
 fi

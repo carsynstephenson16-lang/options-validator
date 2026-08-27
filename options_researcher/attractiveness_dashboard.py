@@ -5208,6 +5208,7 @@ def _write_dashboard_result(
     input_root: Path = Path("."),
 ) -> dict[str, object]:
     """Atomically publish HTML and its hash-bound, detached pick snapshot."""
+    from options_researcher.pick_tracker import _bind_source_rows_html, _source_rows_digest
     from research.hashing import config_hash
 
     html_bytes = result.html.encode()
@@ -5272,6 +5273,9 @@ def _write_dashboard_result(
             if candidate.get("source_row_hash")
         }
     )
+    source_rows_sha256 = _source_rows_digest(source_hashes)
+    html_bytes = _bind_source_rows_html(html_bytes, source_rows_sha256)
+    html_sha256 = hashlib.sha256(html_bytes).hexdigest()
     payload.update(
         {
             "html_sha256": html_sha256,
@@ -5279,6 +5283,7 @@ def _write_dashboard_result(
             "capture_receipt_sha256": receipt_sha256,
             "config_hash": config_hash(),
             "source_row_hashes": source_hashes,
+            "source_rows_sha256": source_rows_sha256,
         }
     )
     render_identity = {
@@ -5325,8 +5330,11 @@ def _load_pick_tracker_status(
         return None
     path = max(candidates, key=lambda item: item.parent.name)
     try:
+        from options_researcher.pick_tracker import TrackerError, _active_evaluation_artifact
+
+        path = _active_evaluation_artifact(path.parent, "scoreboard.json")
         payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, TrackerError):
         return {"state": "FAILED", "as_of": path.parent.name}
     if not isinstance(payload, Mapping) or payload.get("schema") != "pick_tracker_scoreboard/v1":
         return {"state": "FAILED", "as_of": path.parent.name}
