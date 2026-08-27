@@ -53,12 +53,12 @@ def _normalize_yaml_block(block: str) -> str:
 
 
 def _extract_anchored_block(workflow: str, start: str, end: str) -> str:
-    start_anchors = re.findall(rf"^{re.escape(start)}:", workflow, re.MULTILINE)
-    end_anchors = re.findall(rf"^{re.escape(end)}:", workflow, re.MULTILINE)
+    start_anchors = re.findall(rf"^{re.escape(start)}[ \t]*:", workflow, re.MULTILINE)
+    end_anchors = re.findall(rf"^{re.escape(end)}[ \t]*:", workflow, re.MULTILINE)
     if len(start_anchors) != 1 or len(end_anchors) != 1:
         raise AssertionError(f"{start} contract anchors must appear exactly once")
     match = re.search(
-        rf"^{re.escape(start)}:\n(?P<block>.*?)^{re.escape(end)}:",
+        rf"^{re.escape(start)}[ \t]*:\n(?P<block>.*?)^{re.escape(end)}[ \t]*:",
         workflow,
         re.MULTILINE | re.DOTALL,
     )
@@ -101,9 +101,11 @@ def _assert_auth_gate_wiring(workflow: str) -> None:
     action_steps = [
         (header, body)
         for header, body in steps
-        if re.search(
-            r"(?:^|\n)        uses: anthropics/claude-code-action@",
-            f"{header}\n{body}",
+        if re.search(r"^ uses:[ \t]*anthropics/claude-code-action@", header)
+        or re.search(
+            r"^[ \t]+uses:[ \t]*anthropics/claude-code-action@",
+            body,
+            re.MULTILINE,
         )
     ]
     guarded_steps = [*charter_steps, *(body for _, body in action_steps)]
@@ -144,6 +146,14 @@ class ClaudeReviewWorkflowTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AssertionError, "contract anchors"):
             _assert_exact_trigger_contract(mutated)
+
+    def test_permissions_contract_rejects_a_whitespace_variant_duplicate_anchor(self):
+        """A duplicate top-level permission key cannot hide before its colon."""
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        mutated = workflow + "\npermissions :\n  contents: write\n"
+
+        with self.assertRaisesRegex(AssertionError, "contract anchors"):
+            _assert_exact_permissions_contract(mutated)
 
     def test_trigger_contract_rejects_an_added_pull_request_target_trigger(self):
         """Adding a privileged PR trigger changes the workflow contract."""
@@ -191,6 +201,14 @@ class ClaudeReviewWorkflowTests(unittest.TestCase):
             "      -\n        uses: anthropics/claude-code-action@",
             1,
         )
+
+        with self.assertRaisesRegex(AssertionError, "auth-gate wiring"):
+            _assert_auth_gate_wiring(mutated)
+
+    def test_auth_gate_wiring_rejects_an_inline_unguarded_claude_action_step(self):
+        """An inline action mapping cannot evade the Claude-action count."""
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        mutated = workflow + "\n      - uses: anthropics/claude-code-action@deadbeef\n"
 
         with self.assertRaisesRegex(AssertionError, "auth-gate wiring"):
             _assert_auth_gate_wiring(mutated)
