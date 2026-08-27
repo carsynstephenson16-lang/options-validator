@@ -207,3 +207,25 @@ squash-merged branches (#104–#110 — see churn note below).
   branches (guard-verified list on request) or commission a small brief-24
   -arc follow-up (skip branches whose PR history shows a MERGED PR).
 - Schwab token re-auth due ~2026-08-30 (weekend).
+
+## Update 2026-08-27 late morning — lid-aware schedule retime (owner-directed)
+
+The owner's laptop lid is shut 07:10–09:00 every morning; all scheduled jobs
+were moved out of the 06:55–09:05 window (owner-directed 2026-08-27; note
+launchd replays missed calendar jobs on wake, so nothing was ever lost —
+this makes timing deterministic instead of a lid-open pile-up). New times:
+repo-reconcile 08:15→**09:20**; research-display-refresh 07:30→**09:50**;
+research-refresh 07:40/08:10→**10:00/10:30** (this also FIXES the standing
+UPSTREAM_BLOCKED failure — the producer was still keyed to the retired
+07:10 ritual and now runs after the 09:09 ritual completes); OV
+repo-rag-health Sun/Wed 07:00→**09:40**; pick-dashboard Mon 08:07→**09:25**;
+kalshi alerts dropped its 09:00 slot (first now 09:15); kalshi
+weekly-calibration Sun 08:00→**09:40**; equity-research repo-rag-agent
+Mon/Thu and repo-rag-health Sun/Wed 07:00→**09:40/09:45**. Daily ritual
+stays 09:09 (already owner-retimed for the same reason). All nine agents
+bootout/bootstrap-reloaded and verified. OV tracked plists updated in the
+same commit as this note; **follow-up for the kalshi and equity-research
+repos:** their tracked plist sources still show the old times (installed
+copies changed only — editing those checkouts would have dirtied branches
+that other automation auto-commits); sync them in each repo's next session.
+Downstream doc note: every "~08:15 reconcile" reference now means 09:20.
