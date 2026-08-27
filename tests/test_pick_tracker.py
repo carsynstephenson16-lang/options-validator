@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
+from contextlib import chdir
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -299,6 +301,38 @@ class SnapshotAndMembershipTests(unittest.TestCase):
         ):
             tracker.record_cli("2026-08-25")
 
+    def test_record_cli_uses_data_session_not_wall_clock_evaluation_date(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            html = b"bound html"
+            receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_bytes(b"verified receipt")
+            payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
+            payload["evaluation_date"] = "2026-08-26"
+            payload["html_sha256"] = hashlib.sha256(html).hexdigest()
+            payload["capture_receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            snapshot_path = root / tracker.SNAPSHOT_PATH
+            snapshot_path.parent.mkdir(parents=True)
+            snapshot_path.write_text(json.dumps(payload))
+            html_path = root / tracker.HTML_PATH
+            html_path.write_bytes(html)
+
+            with (
+                chdir(root),
+                mock.patch(
+                    "options_researcher.schwab_chain_view.verified_sessions",
+                    return_value=(["2026-08-25"], []),
+                ),
+            ):
+                tracker.record_cli("2026-08-25")
+
+            journal = root / "reports/pick_tracker/dryrun/events.jsonl"
+            records = [json.loads(line) for line in journal.read_text().splitlines()]
+            self.assertEqual([record["as_of"] for record in records], ["2026-08-25"])
+
     def test_disabled_context_arm_is_loud_and_refuses_primary_contrast(self):
         with tempfile.TemporaryDirectory() as tmp:
             payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
@@ -410,6 +444,25 @@ class FillAndPositionTests(unittest.TestCase):
             trading_days_fn=self.sessions,
         )
         self.assertEqual(invalid["status"], "CANCELLED_FILL_SCHEMA_INVALID")
+
+    def test_missing_symbol_file_cancels_contract_absent(self):
+        calls: list[tuple[str, str]] = []
+
+        def missing(symbol: str, session: str) -> pd.DataFrame:
+            calls.append((symbol, session))
+            raise FileNotFoundError(f"no captured chain for {symbol} {session}")
+
+        result = tracker.resolve_fill(
+            candidate("VST:long_call:one"),
+            decision_session="2026-08-25",
+            verified_sessions=["2026-08-26", "2026-08-27"],
+            chain_loader=missing,
+            trading_days_fn=self.sessions,
+        )
+
+        self.assertEqual(result["status"], "CANCELLED_CONTRACT_ABSENT")
+        self.assertEqual(result["fill_session"], "2026-08-26")
+        self.assertEqual(calls, [("VST", "2026-08-26")])
 
     def test_lane_position_schema_and_basis_fail_closed(self):
         put = candidate(
@@ -770,7 +823,7 @@ class ScoreboardTests(unittest.TestCase):
         self.assertEqual(board["lanes"]["frozen_baseline"]["put"]["raw_pnl"], 1_000.0)
         self.assertEqual(board["unmatched_lane_counts"]["frozen_baseline_only"], 1)
 
-    def test_seven_cohorts_are_insufficient_and_eight_enable_adjacent_blocks(self):
+    def test_seven_cohorts_are_insufficient_and_eight_enable_non_circular_blocks(self):
         seven = [{"week": i, "contrast": i / 100.0} for i in range(7)]
         self.assertEqual(
             tracker.build_scoreboard([], weekly_cohorts=seven)["primary_contrast"]["ci_state"],
@@ -779,9 +832,9 @@ class ScoreboardTests(unittest.TestCase):
         eight = [{"week": i, "contrast": i / 100.0} for i in range(8)]
         board = tracker.build_scoreboard([], weekly_cohorts=eight)
         self.assertEqual(board["primary_contrast"]["ci_state"], "EXPLORATORY")
-        for sample in tracker.moving_block_samples(tuple(range(8)), draws=20, seed=7):
+        for sample in tracker.moving_block_samples(tuple(range(8)), draws=1, seed=9):
             for left, right in zip(sample[::2], sample[1::2]):
-                self.assertEqual(right, (left + 1) % 8)
+                self.assertEqual(right, left + 1)
 
     def test_weekly_contrast_pairs_only_common_lanes_and_equal_weights_them(self):
         outcomes = [

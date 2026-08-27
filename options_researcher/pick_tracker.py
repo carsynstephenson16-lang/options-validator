@@ -280,7 +280,7 @@ def append_membership(
     registration_validator: Callable[[Mapping[str, object]], bool] | None = None,
 ) -> dict[str, object]:
     """Append one verified session, keyed by arm/symbol/lane shortlist slots."""
-    as_of = snapshot.get("evaluation_date")
+    as_of = snapshot.get("data_as_of")
     if not isinstance(as_of, str) or as_of not in set(verified_sessions):
         raise TrackerError(f"SESSION_UNVERIFIED: {as_of!r}")
     nominations = snapshot.get("experiment_nominations")
@@ -633,7 +633,15 @@ def resolve_fill(
         }
     leg = position["evaluated_leg"]
     assert isinstance(leg, Mapping)
-    frame = chain_loader(str(leg["symbol"]), fill_session)
+    try:
+        frame = chain_loader(str(leg["symbol"]), fill_session)
+    except FileNotFoundError:
+        return {
+            "status": "CANCELLED_CONTRACT_ABSENT",
+            "decision_session": decision_session,
+            "fill_session": fill_session,
+            "candidate_id": decision.get("candidate_id"),
+        }
     row, cancellation = _exact_row(frame, leg)
     if cancellation is not None:
         return {
@@ -994,8 +1002,8 @@ def moving_block_samples(
     for _ in range(draws):
         sample: list[Any] = []
         for _pair in range(pairs):
-            start = rng.randrange(len(values))
-            sample.extend((values[start], values[(start + 1) % len(values)]))
+            start = rng.randrange(len(values) - 1)
+            sample.extend((values[start], values[start + 1]))
         samples.append(tuple(sample[: len(values)]))
     return samples
 
@@ -1249,8 +1257,8 @@ def record_cli(as_of: str) -> None:
     payload = validate_snapshot(
         _load_json(SNAPSHOT_PATH), HTML_PATH.read_bytes(), input_root=Path(".")
     )
-    if payload.get("evaluation_date") != as_of:
-        raise TrackerError("snapshot evaluation_date does not match --as-of")
+    if payload.get("data_as_of") != as_of:
+        raise TrackerError("snapshot data_as_of does not match --as-of")
     append_membership(
         payload,
         journal_path=DRYRUN_ROOT / "events.jsonl",
