@@ -2432,6 +2432,78 @@ class ContextLaneRenderTests(unittest.TestCase):
             )
             self.assertEqual(list(html_path.parent.glob("*.tmp")), [])
 
+    def test_rendered_dataset_x_rejects_self_consistent_snapshot_dataset_y(self):
+        """A3: the HTML marker must originate from the render-side rows."""
+        import copy
+        import hashlib
+        from dataclasses import replace
+        from unittest import mock
+
+        from options_researcher import pick_tracker
+
+        data = self._data(count=1)
+        card = data["symbols"][0]["groups"][0]["cards"][0]
+        raw_quote = {
+            "symbol": "S0",
+            "right": "P",
+            "strike": float(card["strike"]),
+            "expiry": str(card["expiry"]),
+            "bid": 1.0,
+            "ask": 1.2,
+            "open_interest": 500,
+        }
+        data["symbols"][0]["groups"][0]["pick_tracker_quotes"] = {
+            f"{card['expiry']}:{float(card['strike']):.2f}": {
+                **raw_quote,
+                "source_row_hash": hashlib.sha256(
+                    json.dumps(raw_quote, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest(),
+            }
+        }
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", []),
+        ):
+            rendered_x = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+
+        snapshot_y = copy.deepcopy(rendered_x.selection_snapshot)
+        for arm_name in (
+            "frozen_baseline",
+            "frozen_baseline_watch_inclusive",
+            "context_lane",
+        ):
+            for item in snapshot_y[arm_name]["candidates"]:
+                item["raw_quote"]["bid"] = 1.1
+                item["source_row_hash"] = hashlib.sha256(
+                    json.dumps(
+                        item["raw_quote"], sort_keys=True, separators=(",", ":")
+                    ).encode()
+                ).hexdigest()
+        divergent = replace(rendered_x, selection_snapshot=snapshot_y)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
+            html_path = root / "attractiveness.html"
+            snapshot_path = root / "picks_snapshot.json"
+            with mock.patch("research.hashing.config_hash", return_value="e" * 64):
+                ad._write_dashboard_result(
+                    divergent,
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
+                    input_root=root,
+                )
+
+            published_y = json.loads(snapshot_path.read_text())
+            with self.assertRaisesRegex(
+                pick_tracker.TrackerError, "SNAPSHOT_HTML_SOURCE_MISMATCH"
+            ):
+                pick_tracker.validate_snapshot(
+                    published_y, html_path.read_bytes(), input_root=root
+                )
+
     def test_dashboard_publishes_html_but_marks_snapshot_unavailable_without_provenance(self):
         from unittest import mock
 

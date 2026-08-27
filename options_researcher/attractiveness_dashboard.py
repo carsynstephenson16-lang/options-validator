@@ -37,7 +37,7 @@ import math
 import os
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -64,6 +64,7 @@ class DashboardRenderResult:
 
     html: str
     selection_snapshot: dict[str, object]
+    render_source_row_hashes: tuple[str, ...] = ()
 
 
 # Capture receipts are written only by the ops execution checkout (its
@@ -4863,12 +4864,9 @@ def _snapshot_pick(
     return json.loads(json.dumps(out, sort_keys=True, separators=(",", ":")))
 
 
-def _selection_snapshot(
+def _tracker_source_contexts(
     data: Mapping[str, object],
-    qualified_picks: list[dict],
-    watch_picks: list[dict],
-    context_selection: Mapping[str, object],
-) -> dict[str, object]:
+) -> tuple[dict[int, Mapping[str, object]], dict[int, Mapping[str, object]]]:
     coverage_by_card: dict[int, Mapping[str, object]] = {}
     quote_by_card: dict[int, Mapping[str, object]] = {}
     raw_sections = data.get("symbols")
@@ -4896,6 +4894,38 @@ def _selection_snapshot(
                         quote = quotes.get(key)
                         if isinstance(quote, Mapping):
                             quote_by_card[id(card)] = quote
+    return coverage_by_card, quote_by_card
+
+
+def _render_source_row_hashes(
+    qualified_picks: Sequence[Mapping[str, object]],
+    watch_picks: Sequence[Mapping[str, object]],
+    context_selection: Mapping[str, object],
+    quote_by_card: Mapping[int, Mapping[str, object]],
+) -> tuple[str, ...]:
+    context_rows = context_selection.get("rows")
+    context_rows = list(context_rows) if isinstance(context_rows, (list, tuple)) else []
+    hashes: set[str] = set()
+    for value in (*qualified_picks, *watch_picks, *context_rows):
+        pick_value = value.get("pick")
+        pick = pick_value if isinstance(pick_value, Mapping) else value
+        card = pick.get("card")
+        quote = quote_by_card.get(id(card))
+        source_hash = quote.get("source_row_hash") if isinstance(quote, Mapping) else None
+        if isinstance(source_hash, str) and source_hash:
+            hashes.add(source_hash)
+    return tuple(sorted(hashes))
+
+
+def _selection_snapshot(
+    data: Mapping[str, object],
+    qualified_picks: list[dict],
+    watch_picks: list[dict],
+    context_selection: Mapping[str, object],
+    *,
+    coverage_by_card: Mapping[int, Mapping[str, object]],
+    quote_by_card: Mapping[int, Mapping[str, object]],
+) -> dict[str, object]:
 
     def snap(value: Mapping[str, object]) -> dict[str, object]:
         pick_value = value.get("pick")
@@ -4967,6 +4997,13 @@ def _render_result(
     qualified_picks = select_top_picks(data)
     watch_picks = select_top_picks(data, include_csp_watch=True)
     context_selection = _context_lane_selection(data)
+    coverage_by_card, quote_by_card = _tracker_source_contexts(data)
+    render_source_row_hashes = _render_source_row_hashes(
+        qualified_picks,
+        watch_picks,
+        context_selection,
+        quote_by_card,
+    )
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
     picks_for_research = watch_picks
     _annotations, annotation_notice, annotation_integrity = _research_annotation_result(
@@ -5159,7 +5196,10 @@ def _render_result(
             qualified_picks,
             watch_picks,
             context_selection,
+            coverage_by_card=coverage_by_card,
+            quote_by_card=quote_by_card,
         ),
+        render_source_row_hashes=render_source_row_hashes,
     )
 
 
@@ -5274,7 +5314,8 @@ def _write_dashboard_result(
         }
     )
     source_rows_sha256 = _source_rows_digest(source_hashes)
-    html_bytes = _bind_source_rows_html(html_bytes, source_rows_sha256)
+    render_source_rows_sha256 = _source_rows_digest(result.render_source_row_hashes)
+    html_bytes = _bind_source_rows_html(html_bytes, render_source_rows_sha256)
     html_sha256 = hashlib.sha256(html_bytes).hexdigest()
     payload.update(
         {

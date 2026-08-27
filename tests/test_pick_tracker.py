@@ -216,6 +216,15 @@ class SnapshotAndMembershipTests(unittest.TestCase):
         with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_SOURCE_ROW_MISMATCH"):
             tracker.validate_snapshot(payload, html)
 
+    def test_snapshot_render_id_mismatch_fails_closed_independently(self):
+        """R2: source rows and HTML remain valid while only render_id drifts."""
+        payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
+        html = bind_html(payload)
+        payload["render_id"] = "f" * 64
+
+        with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_RENDER_ID_MISMATCH"):
+            tracker.validate_snapshot(payload, html)
+
     def test_snapshot_capture_receipt_hash_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -517,6 +526,195 @@ class FillAndPositionTests(unittest.TestCase):
     @staticmethod
     def sessions(_start: str, _end: str) -> list[str]:
         return ["2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28"]
+
+    @staticmethod
+    def _calendar(start: str, end: str) -> list[str]:
+        cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+        while cursor <= stop:
+            if cursor.weekday() < 5:
+                days.append(cursor.isoformat())
+            cursor += timedelta(days=1)
+        return days
+
+    @staticmethod
+    def _record(opening: dict, *, slot: str) -> dict:
+        return {
+            "schema": "pick_tracker_session/v1",
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": slot, "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {slot: opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+
+    @staticmethod
+    def _coverage_inputs() -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+        identity = {
+            "symbol": "VST",
+            "shares": 100,
+            "declared_shares": 100,
+            "cost_basis": 100.0,
+            "acquired": "2025-01-02",
+        }
+        identity["source_row_hash"] = tracker._identity_hash(identity)
+        holdings = pd.DataFrame(
+            [{"symbol": "VST", "shares": 100, "cost_basis": 100.0, "acquired": "2025-01-02"}]
+        )
+        positions = pd.DataFrame(
+            columns=(
+                "id",
+                "structure",
+                "symbol",
+                "right",
+                "strike",
+                "expiration",
+                "contracts",
+                "entry_price",
+            )
+        )
+        return identity, holdings, positions
+
+    def _run_evaluate_cli(
+        self,
+        *,
+        root: Path,
+        as_of: str,
+        record: dict,
+        holdings: pd.DataFrame,
+        positions: pd.DataFrame,
+        current_new_york_session: str,
+    ) -> None:
+        from unittest import mock
+
+        journal = root / "reports/pick_tracker/dryrun/events.jsonl"
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        journal.write_bytes(tracker._canonical_bytes(record) + b"\n")
+        sessions = self._calendar("2026-08-25", "2026-08-27")
+        with (
+            chdir(root),
+            mock.patch(
+                "options_researcher.schwab_chain_view.verified_sessions",
+                return_value=(sessions, []),
+            ),
+            mock.patch("options_researcher.schwab_chain_view.load_chain", return_value=chain()),
+            mock.patch("data.cache_runner.trading_days", side_effect=self._calendar),
+            mock.patch("options_researcher.portfolio.load_holdings", return_value=holdings),
+            mock.patch("options_researcher.portfolio.load_positions", return_value=positions),
+            mock.patch.object(
+                tracker,
+                "_current_new_york_session",
+                return_value=current_new_york_session,
+                create=True,
+            ),
+        ):
+            tracker.evaluate_cli(as_of)
+
+    def test_evaluate_cli_noncovered_lane_does_not_invoke_real_coverage_validator(self):
+        opening = candidate("VST:long_call:cli")
+        record = self._record(opening, slot="VST:long_call")
+        _identity, holdings, positions = self._coverage_inputs()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._run_evaluate_cli(
+                root=root,
+                as_of="2026-08-27",
+                record=record,
+                holdings=holdings,
+                positions=positions,
+                current_new_york_session="2026-08-27",
+            )
+            outcomes = json.loads(
+                (root / "reports/pick_tracker/dryrun/2026-08-27/outcomes.json").read_text()
+            )["outcomes"]
+            self.assertEqual({row["status"] for row in outcomes}, {"OPEN"})
+
+    def test_backdated_live_holdings_refused_with_fresh_tracker(self):
+        identity, holdings, positions = self._coverage_inputs()
+        opening = candidate(
+            "VST:cc:fresh",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage=identity,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(
+                tracker.TrackerError, "LIVE_HOLDINGS_SESSION_MISMATCH"
+            ):
+                self._run_evaluate_cli(
+                    root=root,
+                    as_of="2026-08-26",
+                    record=self._record(opening, slot="VST:cc"),
+                    holdings=holdings,
+                    positions=positions,
+                    current_new_york_session="2026-08-27",
+                )
+            self.assertFalse((root / "reports/pick_tracker/dryrun/2026-08-26").exists())
+
+    def test_backdated_live_holdings_refused_across_newest_artifact_gap(self):
+        identity, holdings, positions = self._coverage_inputs()
+        opening = candidate(
+            "VST:cc:gap",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage=identity,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            newest = root / "reports/pick_tracker/dryrun/2026-08-25/scoreboard.json"
+            newest.parent.mkdir(parents=True)
+            newest.write_text('{"schema":"pick_tracker_scoreboard/v1"}\n')
+            with self.assertRaisesRegex(
+                tracker.TrackerError, "LIVE_HOLDINGS_SESSION_MISMATCH"
+            ):
+                self._run_evaluate_cli(
+                    root=root,
+                    as_of="2026-08-26",
+                    record=self._record(opening, slot="VST:cc"),
+                    holdings=holdings,
+                    positions=positions,
+                    current_new_york_session="2026-08-27",
+                )
+            self.assertEqual(newest.read_text(), '{"schema":"pick_tracker_scoreboard/v1"}\n')
+
+    def test_current_new_york_session_live_holdings_path_is_unaffected(self):
+        identity, holdings, positions = self._coverage_inputs()
+        opening = candidate(
+            "VST:cc:today",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage=identity,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._run_evaluate_cli(
+                root=root,
+                as_of="2026-08-27",
+                record=self._record(opening, slot="VST:cc"),
+                holdings=holdings,
+                positions=positions,
+                current_new_york_session="2026-08-27",
+            )
+            observations = json.loads(
+                (
+                    root
+                    / "reports/pick_tracker/dryrun/2026-08-27/coverage_observations.json"
+                ).read_text()
+            )["observations"]
+            self.assertEqual(len(observations), 1)
+            self.assertTrue(observations[0]["matches"])
 
     def test_decision_quote_is_never_used_and_d_plus_one_worse_side_fills(self):
         decision = candidate("VST:long_call:one")
@@ -1014,6 +1212,11 @@ class FillAndPositionTests(unittest.TestCase):
                     side_effect=lambda: holdings.copy(),
                 ),
                 mock.patch("options_researcher.portfolio.load_positions", return_value=positions),
+                mock.patch.object(
+                    tracker,
+                    "_current_new_york_session",
+                    side_effect=("2026-08-26", "2026-08-27"),
+                ),
             ):
                 tracker.evaluate_cli("2026-08-26")
                 day1_path = Path("reports/pick_tracker/dryrun/2026-08-26/outcomes.json")

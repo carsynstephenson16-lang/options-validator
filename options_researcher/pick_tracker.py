@@ -25,9 +25,10 @@ import os
 import random
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -749,6 +750,12 @@ def _coverage_validator_for_as_of(
 ) -> _CausalCoverageValidator:
     from options_researcher.portfolio import load_holdings, load_positions
 
+    current_session = _current_new_york_session()
+    if as_of != current_session:
+        raise TrackerError(
+            "LIVE_HOLDINGS_SESSION_MISMATCH: "
+            f"as_of={as_of!r} current_new_york_session={current_session!r}"
+        )
     prior = _load_coverage_observations(root, before=as_of)
     try:
         holdings = load_holdings()
@@ -762,6 +769,10 @@ def _coverage_validator_for_as_of(
         holdings=holdings,
         positions=positions,
     )
+
+
+def _current_new_york_session() -> str:
+    return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
 
 
 def _candidate_sessions(
@@ -833,8 +844,10 @@ def resolve_fill(
             "candidate_id": decision.get("candidate_id"),
         }
     needs_coverage_check = decision.get("lane") in {"cc", "pmcc"}
-    coverage_changed = coverage_validator is not None and not coverage_validator(
-        position, fill_session
+    coverage_changed = (
+        needs_coverage_check
+        and coverage_validator is not None
+        and not coverage_validator(position, fill_session)
     )
     if needs_coverage_check and (coverage_validator is None or coverage_changed):
         return {

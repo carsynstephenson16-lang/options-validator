@@ -244,6 +244,18 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertIn('|| note "pick tracker recorder: FAILED (isolated)"', record_line)
         self.assertIn("IMMUTABLE_HISTORY_CONFLICT", evaluate_line)
         self.assertIn('note "pick tracker evaluator: FAILED (isolated)"', evaluate_line)
+        branch_start = evaluate_line.index("; if ")
+        conflict_branch = evaluate_line.index("; elif ", branch_start)
+        generic_branch = evaluate_line.index("; else ", conflict_branch)
+        generic_note = evaluate_line.index(
+            'note "pick tracker evaluator: FAILED (isolated)"', generic_branch
+        )
+        branch_end = evaluate_line.rindex("; fi")
+        self.assertLess(branch_start, conflict_branch)
+        self.assertLess(conflict_branch, generic_branch)
+        self.assertLess(generic_branch, generic_note)
+        self.assertLess(generic_note, branch_end)
+        self.assertNotIn("exit ", evaluate_line[branch_start:branch_end])
         invocation = evaluate_line.split("2>&1", 1)[0]
         self.assertNotIn("--supersede-reason", invocation)
 
@@ -282,6 +294,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                 check=False,
             )
         output = completed.stdout + completed.stderr
+        self.assertEqual(completed.returncode, 0, output)
         self.assertIn("pick tracker evaluator: IMMUTABLE_HISTORY_CONFLICT", output)
         self.assertNotIn("pick tracker evaluator: FAILED (isolated)", output)
 
