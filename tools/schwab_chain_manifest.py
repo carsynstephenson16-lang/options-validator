@@ -57,7 +57,7 @@ def _load_object(path: Path, label: str) -> dict:
     return value
 
 
-def _captured_at_preclose(value: object, session: str) -> datetime:
+def _captured_at_session(value: object, session: str, session_tag: str) -> datetime:
     try:
         captured_at = datetime.fromisoformat(str(value))
     except (TypeError, ValueError) as exc:
@@ -69,10 +69,10 @@ def _captured_at_preclose(value: object, session: str) -> datetime:
     captured_at_ny = captured_at.astimezone(NY_TZ)
     if captured_at_ny.date().isoformat() != session:
         raise SchwabChainManifestError("receipt captured_at_et session does not match")
-    timing_ok, timing_reason = validate_session_tag("preclose", captured_at_ny)
+    timing_ok, timing_reason = validate_session_tag(session_tag, captured_at_ny)
     if not timing_ok:
         raise SchwabChainManifestError(
-            f"receipt captured_at_et is outside preclose tolerance: {timing_reason}"
+            f"receipt captured_at_et is outside {session_tag} tolerance: {timing_reason}"
         )
     return captured_at_ny
 
@@ -82,8 +82,20 @@ def _manifest_hash(value: dict) -> str:
     return sha256_hex(canonical_json(body))
 
 
-def build_manifest(session: str, symbols, chain_dir: Path) -> dict:
+def build_manifest(
+    session: str,
+    symbols,
+    chain_dir: Path,
+    *,
+    convention: str = SESSION_CHAIN_CONVENTION,
+    receipt_filename: str = "preclose.json",
+    session_tag: str = "preclose",
+) -> dict:
     """Build a deterministic manifest for the exact requested file set."""
+    # These two identity values are consumed by verify_session; accepting them
+    # here keeps the shared build/verify API aligned without changing manifest
+    # bytes under the default pre-close identity.
+    _ = receipt_filename, session_tag
     session = _session(session)
     symbols = _symbols(symbols)
     chain_dir = Path(chain_dir)
@@ -117,7 +129,7 @@ def build_manifest(session: str, symbols, chain_dir: Path) -> dict:
         "schema_version": SCHEMA_VERSION,
         "provider": PROVIDER,
         "session": session,
-        "session_chain_convention": SESSION_CHAIN_CONVENTION,
+        "session_chain_convention": convention,
         "symbols": symbols,
         "files": files,
     }
@@ -142,6 +154,11 @@ def verify_session(
     chain_dir: Path,
     manifest_path: Path,
     receipt_path: Path,
+    *,
+    convention: str = SESSION_CHAIN_CONVENTION,
+    receipt_filename: str = "preclose.json",
+    session_tag: str = "preclose",
+    receipt_kind: str = "schwab_chain_capture/v1",
 ) -> dict:
     """Verify exact session, universe, bytes, expirations, and receipt binding."""
     session = _session(session)
@@ -154,7 +171,7 @@ def verify_session(
         raise SchwabChainManifestError("manifest provider is not schwab")
     if stored.get("session") != session:
         raise SchwabChainManifestError("manifest session does not match request")
-    if stored.get("session_chain_convention") != SESSION_CHAIN_CONVENTION:
+    if stored.get("session_chain_convention") != convention:
         raise SchwabChainManifestError("manifest convention does not match")
     if stored.get("symbols") != symbols:
         raise SchwabChainManifestError("manifest universe does not match request")
@@ -170,15 +187,18 @@ def verify_session(
             f"extra={sorted(actual_names - expected_names)}"
         )
 
-    receipt = _load_object(Path(receipt_path), "receipt")
-    if receipt.get("receipt_kind") != "schwab_chain_capture/v1":
+    receipt_path = Path(receipt_path)
+    if receipt_path.name != receipt_filename:
+        raise SchwabChainManifestError("receipt filename does not match")
+    receipt = _load_object(receipt_path, "receipt")
+    if receipt.get("receipt_kind") != receipt_kind:
         raise SchwabChainManifestError("receipt kind does not match")
     if receipt.get("session") != session:
         raise SchwabChainManifestError("receipt session does not match request")
-    _captured_at_preclose(receipt.get("captured_at_et"), session)
+    _captured_at_session(receipt.get("captured_at_et"), session, session_tag)
     if receipt.get("force") is not False:
         raise SchwabChainManifestError("receipt force must be false; require force=false")
-    if receipt.get("session_chain_convention") != SESSION_CHAIN_CONVENTION:
+    if receipt.get("session_chain_convention") != convention:
         raise SchwabChainManifestError("receipt convention does not match")
     if receipt.get("universe") != symbols:
         raise SchwabChainManifestError("receipt universe does not match request")
@@ -234,13 +254,11 @@ def verify_session(
             ("expiration_count", expiration_count),
         ):
             if receipt_record.get(field) != actual:
-                raise SchwabChainManifestError(
-                    f"receipt {field} mismatch for {symbol}"
-                )
+                raise SchwabChainManifestError(f"receipt {field} mismatch for {symbol}")
     return {
         "provider": PROVIDER,
         "session": session,
-        "session_chain_convention": SESSION_CHAIN_CONVENTION,
+        "session_chain_convention": convention,
         "manifest_hash": stored["manifest_hash"],
         "manifest_path": str(manifest_path),
         "receipt_path": str(receipt_path),
