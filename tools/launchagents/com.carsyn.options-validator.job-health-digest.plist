@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Runs the read-only job-health digest from the ops checkout at 16:30 ET on
+  weekdays. The time is an LLM-proposed operational constant; the owner may
+  change it during installation, but the run must remain on the same New York
+  calendar date used as the digest invocation date. This is a template only
+  until the owner installs it using tools/launchagents/README.md.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.carsyn.options-validator.job-health-digest</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/carsynstephenson/options-validator-ops/tools/job_health_digest.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/carsynstephenson/options-validator-ops</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TZ</key>
+    <string>America/New_York</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/job_health_digest/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/job_health_digest/launchd.err.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

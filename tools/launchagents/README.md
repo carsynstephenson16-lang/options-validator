@@ -46,6 +46,54 @@ launchctl bootout gui/$UID/com.carsyn.options-validator.alignment-check
 A nonzero exit is the job doing its work, not a bug: it means the ops checkout
 needs the printed command before 15:45.
 
+## Job-health digest (16:30 ET, weekdays)
+
+`com.carsyn.options-validator.job-health-digest.plist` runs
+`tools/job_health_digest.sh` from the ops checkout at 16:30 ET on weekdays.
+The 16:30 time is an LLM-proposed operational constant; the owner may change
+it at install time, provided the job still runs on the same New York calendar
+date passed to `--as-of`.
+
+The Mac system timezone must remain `America/New_York` for 16:30 ET scheduling.
+The plist's `TZ` value controls the child process, not launchd's evaluation of
+`StartCalendarInterval`.
+
+The digest and wrapper log stay under the ops checkout's untracked `.tmp/`
+tree. A successful `ALL OK` run logs one ordinary status line. A successful
+digest whose headline reports problems, or a nonzero tool exit, logs a
+`CRITICAL:` line and attempts a guarded macOS notification. Installing this
+additional scheduled job is an **owner action**; agents build and test only.
+
+### Install
+
+The owner runs these commands from the checkout containing the reviewed and
+landed template:
+
+```bash
+mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/job_health \
+  /Users/carsynstephenson/options-validator-ops/.tmp/job_health_digest
+cp tools/launchagents/com.carsyn.options-validator.job-health-digest.plist \
+  ~/Library/LaunchAgents/
+launchctl bootstrap gui/$UID \
+  ~/Library/LaunchAgents/com.carsyn.options-validator.job-health-digest.plist
+launchctl enable gui/$UID/com.carsyn.options-validator.job-health-digest
+```
+
+### Verify
+
+```bash
+launchctl print gui/$UID/com.carsyn.options-validator.job-health-digest
+ls -l /Users/carsynstephenson/options-validator-ops/.tmp/job_health/
+ls -l /Users/carsynstephenson/options-validator-ops/.tmp/job_health_digest/
+```
+
+### Uninstall
+
+```bash
+launchctl bootout gui/$UID/com.carsyn.options-validator.job-health-digest
+rm ~/Library/LaunchAgents/com.carsyn.options-validator.job-health-digest.plist
+```
+
 ## Live dashboard
 
 `com.carsyn.options-validator.live-dashboard.plist` keeps the read-only
