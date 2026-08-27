@@ -1,0 +1,82 @@
+# PR #93 fix-round independent adversarial review — 2026-08-27
+
+- **Reviewed head (exact):** `36a167e6bf2942ea54a993790acc692f0b288a3f` (branch `codex/brief27-implementation`, draft PR #93)
+- **Reviewer:** independent Opus subagent commissioned by the orchestrating Claude session, adversarial framing ("assume the receipt could be lying"), read/run-only in a detached review worktree (`.tmp/worktrees/pr93-review-0827`)
+- **Inputs:** fix-round receipt `reports/2026-08-27-pr93-fix-round-receipt.md` (committed at the reviewed head); prior FAIL findings at `58779390528719ed6c8447c9b8f1aad0ede741ce` (SDD ledger `.superpowers/sdd/2026-08-26-audit-closeout-handoff-package/progress.md`, A6 entry)
+- **Method:** diff audit, per-finding revert probes (delete the claimed fix, observe whether a test goes RED), behavioral probes, receipt line-cite/count reproduction
+- **Out of scope by prior ruling:** the two schedule-test failures inherited from main (fixed separately in PR #116); confirmed the ONLY full-suite failures at this head and untouched by this PR
+
+## OVERALL: FAIL for head `36a167e`
+
+Three of five findings survive scrutiny (P1-c, P2-a, P2-b). **P1-b is not closed** — the named mechanism is intact and was reproduced. **P1-a is partial** — the larger half of the change is exercised by no test, and the divergence class it names is still accepted. Two Important new defects were introduced by the P1-c fix. The receipt is substantially honest on counts and lint/type gates but overclaims RED-first evidence for P1-a and has imprecise line cites.
+
+## Scope audit — clean
+
+Fix-round-only diff (`cc580ba..36a167e`), exactly as claimed:
+
+```
+options_researcher/attractiveness_dashboard.py |   8 +-
+options_researcher/pick_tracker.py             | 321 ++++++++++---
+reports/2026-08-27-pr93-fix-round-receipt.md   |  54 +++
+tests/test_attractiveness_dashboard.py         |  16 +-
+tests/test_pick_tracker.py                     | 294 ++++++++++-
+```
+
+- Governed paths touched: NONE (`ledger/`, `config.py`, `docs/superpowers/`, `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/` all clean).
+- No pre-existing test deleted, renamed, or loosened (`git diff cc580ba 36a167e -- tests/ | grep -E "^-.*def test_|^-.*assert"` → empty). Test count 30 → 36.
+- Fixture helpers were made stricter (real SHA-256s replacing `"a"*64`/`"c"*64`), not weaker.
+- Whole-PR-vs-main context: adds `docs/superpowers/plans/2026-08-25-pick-tracker-registration-packet-DRAFT.md` (correctly labeled "Status: DRAFT — NOT REGISTERED"), modifies `tools/daily_ritual.sh` and `tests/test_daily_ritual_provenance.py`.
+
+## Per-finding verdicts
+
+### P1-a — snapshot source-row/render divergence → PARTIAL
+
+- (a) Changes exist as cited. Repo-verified: `pick_tracker.py:132-169` adds exact-field-set check, candidate/leg identity match, and source-row hash recomputation; `:173-187` recomputes `render_id`; producer `attractiveness_dashboard.py:4840-4847` now embeds all 7 hashed source-row fields.
+- (b) **The cited regression test does NOT exercise the source-row work.** REVERT-PROBE R1: deleting the entire `SNAPSHOT_SOURCE_ROW_MISMATCH` guard (`:168-169`) leaves the snapshot suite GREEN (12 tests, exit 0). `grep -rn "SNAPSHOT_SOURCE_ROW_MISMATCH" tests/` → zero hits. R2 (remove only the render_id check) → RED, so the render_id half is covered.
+- (c) **The fix is bypassable for the class the finding names.** Probe A: mutate `raw_quote["bid"] 1.0 → 1.1`, re-derive `source_row_hash`, `source_row_hashes`, and `render_id`, leave the HTML bytes untouched → **ACCEPTED** — snapshot claims bid=1.1 while the rendered HTML says 1.00. `render_id` binds the snapshot to the HTML bytes, not to the values rendered. The fix genuinely adds detection of partial post-hoc snapshot edits; that is narrower than "source-row/render divergence is rejected."
+- Positive control: `tests/test_attractiveness_dashboard.py:2378-2433` is a genuine producer→validator round trip and survives; only a `put`-lane card is driven through the strict identity match.
+
+### P1-b — mutable portfolio retroactively rewrites CC/PMCC history → NOT-CLOSED
+
+- The named mechanism is untouched: `pick_tracker.py:599-609` `_current_coverage_validator` ignores its session argument and reads `load_holdings()`/`load_positions()` (today's state); `evaluate_cli` (`:1474-1491`) rebuilds the entire journal every run with exactly this validator. Every historical CC/PMCC decision is re-adjudicated against today's portfolio.
+- **Reproduced (Probe B, exit 0):** day-1 evaluation records `frozen_baseline OPEN` for decision_session 2026-08-25; mutate holdings 100 → 0 shares; day-2 evaluation (new dated directory) records `CANCELLED_COVERAGE_CHANGED` for the SAME historical decision, **written with no conflict**. Same-day rerun after mutation correctly raises `IMMUTABLE_HISTORY_CONFLICT` — the immutability fix protects one dated directory from overwrite, not history from rewrite. The cumulative scoreboard the dashboard reads is always the newest dated artifact.
+- The cited test (`tests/test_pick_tracker.py:688-776`) asserts only byte-stability of the already-written directory; it never asserts the outcomes are unchanged in later artifacts. R5 confirms the test discriminates for the narrow property it tests.
+- Applying today's portfolio to a historical decision timestamp is also a live **NO LOOK-AHEAD** hard-guardrail violation (`.cursorrules`), not merely a bookkeeping issue.
+
+### P1-c — daily marking absent; drawdown ignores zero-return entry → CONFIRMED-CLOSED (introduces N1/N2)
+
+- Zero-return entry mark `:933-942`; daily series `:928-984`; drawdown over the daily series unconditionally `:1055-1060`.
+- Causality holds for the price path: each mark reads only `chain_loader(symbol, mark_session)`; `daily_end` clamped by `as_of`. Off-by-one clean at both ends (entry excluded from the series, expiry appended as the terminal mark).
+- R4 (delete the ENTRY mark) → RED. The zero entry point is load-bearing.
+
+### P2-a — FAILED/DISABLED arms synthesize exits/re-entries → CONFIRMED-CLOSED (narrow; see N4)
+
+`pick_tracker.py:376-388` carries prior slots forward with empty entries/restrikes/exits. R3 → RED (2 failures). Three-session lifecycle covered for both states.
+
+### P2-b — WP-D reports omit cohort/cancellation/scoreboard content → CONFIRMED-CLOSED
+
+Checked against the brief itself (`docs/superpowers/plans/2026-08-25-27-pick-tracker-scoreboard-codex-brief.md:400-425`, WP-D.1), not just the receipt. Every WP-D.1 element present in a live-rendered `scoreboard.md`; raw dollars never pooled across lanes. R6 → RED.
+
+## New findings
+
+- **N1 — Important — the P1-c fix amplifies the P1-b look-ahead.** `pick_tracker.py:945-948`: the coverage validator was previously called at ~3 scheduled offsets; it now runs on every trading session, so a portfolio change retroactively cancels a historical CC/PMCC position at `elapsed_sessions=1` instead of at the first scheduled mark. Blast radius strictly larger.
+- **N2 — Important — chain-load volume explosion inside the daily ritual.** `schwab_chain_view.py:213-231` `load_chain` is an uncached `pd.read_parquet` per call. Measured: one position, lane=leaps → 188 chain_loader calls (pre-fix bound ≈ 8); lane=long_call → 42. `evaluate_records` now scales O(records × candidates × sessions-since-fill) and runs inside `tools/daily_ritual.sh:475`. No caching, no memoization, no bound.
+- **N3 — Important — first write of a date is permanent and later conflict is silent.** `daily_ritual.sh:475` swallows evaluator failure (`|| note`), and this PR adds `reports/pick_tracker` to the ritual auto-commit allow-list (`:550`). The first successful evaluate for date D is committed and pushed; any later, more complete rerun for D raises `IMMUTABLE_HISTORY_CONFLICT`, is swallowed, and the stale artifact stands. No supersede path, no documented recovery, no test for operator recovery.
+- **N4 — Minor — allowlist/denylist asymmetry on arm state.** `:377` guards `{"FAILED", "DISABLED"}` but `evaluate_records:875` treats anything `!= "READY"` as unavailable. Latent until a fourth producer state exists.
+- **N5 — Minor — `_immutable_write` leaks an unhandled `FileExistsError`** from `tmp.open("xb")` on a leftover same-PID tmp file (`:1275-1287`); only the `os.link` `FileExistsError` is caught.
+- **N6 — Minor — `_write_evaluation_reports` bypasses the dry-run write boundary** (`:1396-1421`, no `_enforce_write_path`); safe today only because the caller hardcodes `DRYRUN_ROOT`.
+- **N7 — Minor — a scheduled checkpoint miss appends nothing and does not increment `unreachable_marks`** (`:998-1003`); no live construction found, but the previously-guaranteed mark is now conditional with no loud path.
+- **Guardrail check — clean.** No live-order path, no brokerage endpoint, no paper-book mutation, no ledger write; both new payloads carry `"authority": "NONE — descriptive tracking, dry-run"`. Nothing verdict-bearing or FIRE-capable.
+
+## Receipt audit
+
+- Focused-suite counts (36 / 198, exit 0) and full-suite result (3,412 tests, 2 inherited failures, exit 1), ruff 0, pyright 0: **reproduced exactly** (via `unittest discover`; the dotted and path invocation forms in the receipt are broken in fresh venvs because `schwab-py` and `lumiwealth_tradier` install a top-level `tests` package that shadows the repo's — use `discover`).
+- "Each testable finding was observed RED before its implementation": **overclaimed for P1-a** — R1 shows the source-row guard can be deleted with the suite green; whatever went RED exercised only the render_id half.
+- Line cites: mostly accurate; four cites off by small margins (`1396-1438` → actual 1396-1421; `815-906` → 823-906; `1158` → 1156; `128-185` → 128-187).
+- The receipt does not disclose (a) the untested P1-a source-row guard, (b) that the P1-b rewrite mechanism remains live in every newly-dated artifact, (c) the N1/N2 side effects. Framing all five findings as flat "Fixed" is the receipt's main overstatement. Otherwise honest, including its explicit non-claim of A6 readiness.
+
+## Controller disposition
+
+- P1-a adjudicated against the original A6 wording: Probe A reproduces the named divergence class verbatim → not closed as worded.
+- Verdict for the A6 gate: **HOLD** — PR #93 is not ready. A bounded round-4 fix is required for: P1-a (full closure + missing test), P1-b (causal/frozen history redesign; also resolves N1), N2 (bounded chain loads), N3 (loud conflict + supersede/recovery design), and the four minors.
+- P1-c, P2-a, P2-b are closed and must not regress in round 4.
