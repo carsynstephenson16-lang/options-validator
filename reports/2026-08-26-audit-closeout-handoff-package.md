@@ -101,3 +101,40 @@ review-passed; brief 31 created (rev 2, WP-A ready); briefs 20/21 status
 addenda + PR-#66 record correction; registry rows 28-31 reconciled; this
 package + the combined review receipt; PROJECT_STATE status refresh. No
 code, no ledger, no config, no authority, no frozen values.
+
+## Update 2026-08-27 morning (post-Codex-execution; Repo-verified against remote main `5b1ed04` + live machine)
+
+**Executed by Codex overnight:** all five dispatches implemented as separate
+draft PRs — #96 (brief 29), #97 (brief 24 WP-C/D), #98 (brief 31 WP-A), #99
+(brief 31 WP-B — built under the owner's "execute the plan then" wording,
+recorded in its PR body; D1 confirmation still requested below), #100
+(brief 30 WP-A, correctly self-held pending the brief-27 lane). A2 executed
+for #60/#61/#71/#88/#89 (now drafts); #87 could not be converted — it had
+already automerged at 08:48 under the OLD deployed script (four Aug-11
+docs-only plugin-design specs; owner post-hoc review). A1 partially done:
+`~/bin/repo-reconcile` now byte-equals main (`40a13c8`), `gh-login` cached,
+canonical digest fresh — so **the guard now runs daily in the reconciler**,
+and the governed-path automerge guard is live (verified: it is what blocked
+kalshi #18/#19 from being merge-eligible).
+
+**Corrections to this package:**
+- A8 was partly wrong: `~/Claude` DOES have a GitHub origin
+  (kalshi-weather-bot); only `~/Claude.prod` is local-pathed (that is D8).
+  The reconciler's 09:09 kickstart created kalshi PRs #17 (draft),
+  #18/#19 (non-draft) from stranded branches — #19 is a ~90-commit
+  accumulated branch whose title reflects only its tip commit.
+- New reconciler-created non-draft PRs #101/#102/#103 (H7 packet draft /
+  brief09 variant menu / A2 outcome battery). #101 and #102 touch only
+  `reports/`+`tools/` paths NOT covered by the governed-path guard —
+  automerge-eligible if their checks go green. Draft conversion routed to
+  Codex (this session remains permission-blocked on PR state changes).
+
+**A1 residual, precisely:** the launchd exit-1 is the new script's designed
+loud failure — the Desktop copy `mv` is TCC-denied, the canonical digest
+succeeds, and the script has NO supported disable for the Desktop step
+(`${DIGEST_DESKTOP:-…}` treats empty as unset). Closing A1 = owner TCC
+decision: grant Full Disk Access to the LaunchAgent's interpreter, or
+redirect `DIGEST_DESKTOP` to a non-TCC path via the plist (a small spec'd
+change if chosen). The full installer (post-commit hook with the ownership
+gate + nohup fix, session-rescue, worktree-guard) remains the owner-run
+WP-B step — Codex correctly refused to run it.
