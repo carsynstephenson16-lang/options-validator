@@ -1,0 +1,125 @@
+{
+  "probed_at_utc": "2026-08-26T13:31:33.594575+00:00",
+  "ny_date": "2026-08-26",
+  "provider": "schwab",
+  "provider_version": "1.5.1",
+  "stock_entitled": true,
+  "probe_symbol": "VST",
+  "monthly_expiration": "2026-09-18",
+  "endpoints": {
+    "stock_snapshot_quote": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "bid",
+        "ask",
+        "last",
+        "mark",
+        "open",
+        "high",
+        "low",
+        "previous_close",
+        "volume",
+        "security_status",
+        "realtime",
+        "timestamp",
+        "trade_timestamp",
+        "regular_last",
+        "regular_timestamp",
+        "extended_bid",
+        "extended_ask",
+        "extended_last",
+        "extended_mark",
+        "extended_timestamp"
+      ],
+      "error": null
+    },
+    "option_list_expirations": {
+      "ok": true,
+      "columns": [
+        "expiration",
+        "days_to_expiration",
+        "expiration_type",
+        "settlement_type",
+        "standard",
+        "option_roots"
+      ],
+      "error": null
+    },
+    "option_snapshot_quote": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "contract_symbol",
+        "bid",
+        "ask",
+        "last",
+        "mark",
+        "volume",
+        "timestamp",
+        "trade_timestamp",
+        "multiplier",
+        "non_standard",
+        "mini",
+        "chain_is_delayed",
+        "chain_is_truncated",
+        "chain_status"
+      ],
+      "error": null
+    },
+    "option_snapshot_greeks_all": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "bid",
+        "ask",
+        "last",
+        "mark",
+        "volume",
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "rho",
+        "implied_vol",
+        "intrinsic_value",
+        "extrinsic_value",
+        "days_to_expiration",
+        "contract_symbol",
+        "multiplier",
+        "non_standard",
+        "mini",
+        "timestamp",
+        "trade_timestamp",
+        "chain_is_delayed",
+        "chain_is_truncated",
+        "chain_status"
+      ],
+      "error": null
+    },
+    "option_snapshot_open_interest": {
+      "ok": true,
+      "columns": [
+        "symbol",
+        "expiration",
+        "strike",
+        "right",
+        "contract_symbol",
+        "open_interest",
+        "timestamp",
+        "multiplier",
+        "non_standard",
+        "chain_is_delayed",
+        "chain_is_truncated",
+        "chain_status"
+      ],
+      "error": null
+    }
+  }
+}

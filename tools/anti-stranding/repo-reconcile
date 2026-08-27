@@ -23,7 +23,13 @@ new_prs=0
 # of openai/codex-plugin-cc — without this guard the loops would enumerate
 # and try to push/PR/merge OTHER PEOPLE'S work there (blocked today only by
 # GitHub permissions, which is not a safety design).
-GH_LOGIN=$(gh api user -q .login 2>/dev/null)
+OWNER_VERIFIER_AVAILABLE=0
+if [ -r "$HOME/bin/anti-stranding-lib.sh" ] \
+  && source "$HOME/bin/anti-stranding-lib.sh"; then
+  OWNER_VERIFIER_AVAILABLE=1
+fi
+GH_LOGIN=$(cat "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null)
+[ -n "$GH_LOGIN" ] || GH_LOGIN=$(gh api user -q .login 2>/dev/null)
 mkdir -p "$HOME/.local/log" "${DIGEST_CANON:h}"
 : >"$DIGEST_CANON.tmp"
 
@@ -122,10 +128,10 @@ for repo in "${REPOS[@]}"; do
 
   # Ownership gate for every side-effect loop below (push, PR create, merge).
   owner_ok=0
-  origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null)
-  [ -n "$GH_LOGIN" ] && case "$origin_url" in
-    *"/$GH_LOGIN/"*|*":$GH_LOGIN/"*) owner_ok=1;;
-  esac
+  if [ "$OWNER_VERIFIER_AVAILABLE" = "1" ] \
+    && anti_stranding_remote_owner_ok "$repo" "$GH_LOGIN"; then
+    owner_ok=1
+  fi
   if [ "$owner_ok" != "1" ]; then
     say "- 👀 $name: origin is not $GH_LOGIN's — inventory only, no push/PR/merge."
     continue
@@ -175,10 +181,9 @@ for repo in "${REPOS[@]}"; do
       # branch name must not hide new commits forever.
       pr=$(cd "$repo" && gh pr list --head "$br" --state open --json number -q 'length' 2>/dev/null)
       [ "${pr:-0}" != "0" ] && continue
-      draft=""; [[ "$br" == wip/* ]] && draft="--draft"
       if act "gh pr create for $br"; then
-        (cd "$repo" && gh pr create --fill --head "$br" --base main $draft >/dev/null 2>&1) \
-          && { say "- 📬 $name/$br: opened a PR so you can review/merge from anywhere."; new_prs=$((new_prs+1)); logl "PR $repo $br"; }
+        (cd "$repo" && gh pr create --fill --head "$br" --base main --draft >/dev/null 2>&1) \
+          && { say "- 📬 $name/$br: opened a DRAFT PR awaiting the owner's make-ready."; new_prs=$((new_prs+1)); logl "PR $repo $br"; }
       else
         new_prs=$((new_prs+1))   # dry-run: count so the throttle previews honestly
       fi

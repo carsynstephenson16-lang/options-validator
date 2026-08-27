@@ -21,9 +21,9 @@
       "total_bytes": 3167350
     },
     ".cache/schwab_chains": {
-      "file_count": 0,
-      "present": false,
-      "total_bytes": 0
+      "file_count": 90,
+      "present": true,
+      "total_bytes": 9700050
     },
     ".cache/underlying": {
       "file_count": 25,

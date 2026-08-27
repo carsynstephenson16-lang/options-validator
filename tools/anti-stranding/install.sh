@@ -8,6 +8,7 @@ here=${0:a:h}
 
 echo "== L1: global git auto-push hook =="
 mkdir -p "$HOME/.githooks" "$HOME/.local/log" "$HOME/bin"
+cp "$here/anti-stranding-lib.sh" "$HOME/bin/anti-stranding-lib.sh"
 cp "$here/post-commit" "$HOME/.githooks/post-commit"
 chmod +x "$HOME/.githooks/post-commit"
 git config --global core.hooksPath "$HOME/.githooks"

@@ -42,3 +42,15 @@ uv run python -m unittest discover -s tests
 uv run ruff check . && uv run pyright
 ```
 Exit codes define done. Additionally: running the tool read-only with `--root ~/options-validator-ops --as-of 2026-08-21` must classify that day as problems-found via the absent-artifact path (that is the incident that motivated the tool); state the observed output in the PR description and confirm nothing was written under the ops checkout.
+
+## Status addendum 2026-08-26 (orchestrating session)
+
+**IMPLEMENTED AND MERGED.** v1 via PR #67 (merge `53f0a84`, 2026-08-23);
+every rev-2 hardening via PR #81 (merge `16659ff`, 2026-08-26) with
+RED-before-GREEN and the mandated read-only 2026-08-21 ops acceptance run
+("10 PROBLEMS"; ops fingerprint identical before/after). Remaining
+follow-ups this brief declared out of scope: invocation wiring is now
+specified in brief 31
+(`docs/superpowers/plans/2026-08-26-31-audit-closeout-followups-codex-brief.md`,
+WP-B — build-only; install stays owner-run); alerting remains a later owner
+decision.
