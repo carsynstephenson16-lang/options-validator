@@ -39,6 +39,7 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -50,6 +51,7 @@ DATA_TIER_MODULES = (
     "options_researcher.qm_dashboard",  # OHLCV refresh (data-tier island)
     "options_researcher.dashboard",
     "options_researcher.attractiveness_dashboard",
+    "options_researcher.pick_tracker",
     "options_researcher.ritual_receipt",
 )
 H7_TIER_SURFACES = (
@@ -123,12 +125,12 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
     "mkdir -p reports/h5": (416,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (564,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (567,),  # data tier
-    "git fetch": (577,),  # data tier
-    "git merge": (578,),  # data tier — mutates the working tree unattended
-    "git push": (579,),  # data tier
-    "restic backup": (596,),  # data tier
+    "git add": (570,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (573,),  # data tier
+    "git fetch": (583,),  # data tier
+    "git merge": (584,),  # data tier — mutates the working tree unattended
+    "git push": (585,),  # data tier
+    "restic backup": (602,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -220,6 +222,85 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                 self.assertIsNotNone(match, verb)
                 self.assertLess(gate, match.start())
 
+    def test_pick_tracker_is_fail_soft_between_board_and_capture_receipt(self):
+        source = _source()
+        dashboard = source.index("python -m options_researcher.attractiveness_dashboard")
+        record = source.index("python -m options_researcher.pick_tracker record")
+        evaluate = source.index("python -m options_researcher.pick_tracker evaluate")
+        receipt = source.index("python -m options_researcher.ritual_receipt")
+        self.assertLess(dashboard, record)
+        self.assertLess(record, evaluate)
+        self.assertLess(evaluate, receipt)
+        record_line = next(
+            line
+            for line in source.splitlines()
+            if "python -m options_researcher.pick_tracker record" in line
+        )
+        evaluate_line = next(
+            line
+            for line in source.splitlines()
+            if "python -m options_researcher.pick_tracker evaluate" in line
+        )
+        self.assertIn('|| note "pick tracker recorder: FAILED (isolated)"', record_line)
+        self.assertIn("IMMUTABLE_HISTORY_CONFLICT", evaluate_line)
+        self.assertIn('note "pick tracker evaluator: FAILED (isolated)"', evaluate_line)
+        branch_start = evaluate_line.index("; if ")
+        conflict_branch = evaluate_line.index("; elif ", branch_start)
+        generic_branch = evaluate_line.index("; else ", conflict_branch)
+        generic_note = evaluate_line.index(
+            'note "pick tracker evaluator: FAILED (isolated)"', generic_branch
+        )
+        branch_end = evaluate_line.rindex("; fi")
+        self.assertLess(branch_start, conflict_branch)
+        self.assertLess(conflict_branch, generic_branch)
+        self.assertLess(generic_branch, generic_note)
+        self.assertLess(generic_note, branch_end)
+        self.assertNotIn("exit ", evaluate_line[branch_start:branch_end])
+        invocation = evaluate_line.split("2>&1", 1)[0]
+        self.assertNotIn("--supersede-reason", invocation)
+
+    def test_pick_tracker_immutability_conflict_is_named_in_ritual_output(self):
+        """Execute the real evaluator line; generic isolation must not hide conflicts."""
+        zsh = shutil.which("zsh")
+        if not zsh:
+            self.skipTest("zsh is required")
+        source = _source()
+        evaluate_line = next(
+            line
+            for line in source.splitlines()
+            if "python -m options_researcher.pick_tracker evaluate" in line
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = Path(tmp) / "uv-stub"
+            stub.write_text(
+                "#!/bin/zsh\n"
+                "print -u2 -- 'TrackerConflict: IMMUTABLE_HISTORY_CONFLICT: outcomes.json'\n"
+                "exit 1\n"
+            )
+            stub.chmod(0o755)
+            completed = subprocess.run(
+                [
+                    zsh,
+                    "-c",
+                    "\n".join(
+                        (
+                            f'UV="{stub}"',
+                            'AS_OF="2026-08-27"',
+                            f'LOGDIR="{tmp}"',
+                            'note() { print -r -- "$1"; }',
+                            evaluate_line,
+                        )
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        output = completed.stdout + completed.stderr
+        self.assertEqual(completed.returncode, 0, output)
+        self.assertIn("pick tracker evaluator: IMMUTABLE_HISTORY_CONFLICT", output)
+        self.assertNotIn("pick tracker evaluator: FAILED (isolated)", output)
+
     # ---- P2 -----------------------------------------------------------------
     def test_require_full_precedes_every_h7_surface(self):
         source = _source()
@@ -243,7 +324,9 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertLess(require_data, require_full)
         # status exec's, so it reaches no gate at all.
         self.assertLess(source.index('if [ "$RITUAL_MODE" = "status" ]; then'), require_data)
-        self.assertIn('exec env PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m data.ritual_authority status', source)
+        self.assertIn(
+            'exec env PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m data.ritual_authority status', source
+        )
         self.assertIn('PYTHON="$REPO/.venv/bin/python"', source)
         self.assertIn('PYTHONDONTWRITEBYTECODE=1 "$PYTHON"', source)
         self.assertNotIn('$UV" run python -m data.ritual_authority', source)
@@ -255,12 +338,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         module_sites = [match.group(1) for match in MODULE_SITE_RE.finditer(source)]
         self.assertEqual(
             set(module_sites),
-            set(
-                DATA_TIER_MODULES
-                + H7_TIER_SURFACES
-                + GATE_GO_SURFACES
-                + SCHWAB_LANE_SURFACES
-            ),
+            set(DATA_TIER_MODULES + H7_TIER_SURFACES + GATE_GO_SURFACES + SCHWAB_LANE_SURFACES),
         )
         # The gate is not a gated surface: requiring it to precede itself is
         # incoherent. It is invoked as `"$PYTHON" -m`, so the `python -m`
@@ -270,32 +348,20 @@ class DailyRitualProvenanceTests(unittest.TestCase):
             self.assertNotIn(gate_module, module_sites)
             self.assertIn(f'"$PYTHON" -m {gate_module}', source)
 
-        dash_c_lines = [
-            number for number, line in _code_lines(source) if "python -c" in line
-        ]
+        dash_c_lines = [number for number, line in _code_lines(source) if "python -c" in line]
         self.assertEqual(set(dash_c_lines), set(PYTHON_DASH_C_CLASSIFICATION))
 
         verb_lines: dict[str, tuple[int, ...]] = {}
         for verb, pattern in MUTATION_VERB_PATTERNS.items():
-            hits = tuple(
-                number
-                for number, line in _code_lines(source)
-                if re.search(pattern, line)
-            )
+            hits = tuple(number for number, line in _code_lines(source) if re.search(pattern, line))
             if hits:
                 verb_lines[verb] = hits
         self.assertEqual(verb_lines, MUTATION_VERB_SITES)
 
         # Closure over the verb families themselves: an unregistered mkdir/git/
         # restic verb anywhere in executable text fails here (mutation M10).
-        registered = {
-            number for numbers in MUTATION_VERB_SITES.values() for number in numbers
-        }
-        seen = {
-            number
-            for number, line in _code_lines(source)
-            if ANY_MUTATION_VERB_RE.search(line)
-        }
+        registered = {number for numbers in MUTATION_VERB_SITES.values() for number in numbers}
+        seen = {number for number, line in _code_lines(source) if ANY_MUTATION_VERB_RE.search(line)}
         self.assertEqual(seen, registered)
 
     def test_dash_c_sites_are_classified_and_data_tier_ones_are_unfenced(self):
@@ -551,7 +617,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         source = _source()
         closes_step = (
             '"$UV" run python -c "from data.recent_topup import '
-            'refresh_closes_guarded; import json;'
+            "refresh_closes_guarded; import json;"
         )
         features_step = '"$UV" run python -c "from options_researcher.features import build_all;'
         self.assertIn(closes_step, source)
@@ -562,7 +628,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
 
     def test_durability_allow_list_is_tier_scoped(self):
         source = _source()
-        durability = source[source.index("# Step 8 — DURABILITY"):]
+        durability = source[source.index("# Step 8 — DURABILITY") :]
         full_branch = durability.index('if [ "$FULL_AUTHORITY_RC" -eq 0 ]; then')
         git_add = durability.index("git add --")
         self.assertLess(full_branch, git_add)
@@ -613,9 +679,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
 
         # The commit message must not describe data-phase artifacts as H7
         # evidence (caution C6).
-        self.assertIn(
-            "data(ritual): daily ritual data-phase artifacts ${RUN_DATE}", durability
-        )
+        self.assertIn("data(ritual): daily ritual data-phase artifacts ${RUN_DATE}", durability)
         self.assertIn("data(h7): daily ritual evidence ${RUN_DATE}", durability)
         self.assertGreater(
             durability.index("data(h7): daily ritual evidence ${RUN_DATE}"), full_branch
@@ -630,9 +694,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
 
         def _executable(start_marker: str, end_marker: str) -> str:
             block = source[source.index(start_marker) : source.index(end_marker)]
-            return "\n".join(
-                line for line in block.split("\n") if not line.strip().startswith("#")
-            )
+            return "\n".join(line for line in block.split("\n") if not line.strip().startswith("#"))
 
         # Region A's else-branch: a deliberately paused lane is not a failure.
         # The pre-restructure crit here would have fired every single day under
@@ -782,7 +844,7 @@ class CacheEdgeZshExecutionTests(unittest.TestCase):
         script = "\n".join(
             [
                 "set -u",
-                "note() { print -r -- \"$1\"; }",
+                'note() { print -r -- "$1"; }',
                 f"AS_OF={as_of}",
                 "DATA_STARVED=0",
                 block,
@@ -792,9 +854,7 @@ class CacheEdgeZshExecutionTests(unittest.TestCase):
         completed = _sp.run(
             [zsh, "-c", script], cwd=tmp, capture_output=True, text=True, timeout=30
         )
-        self.assertEqual(
-            completed.returncode, 0, completed.stdout + completed.stderr
-        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertNotIn("condition expected", completed.stderr)
         return completed.stdout
 
@@ -829,9 +889,7 @@ class SchwabPrecloseLaneTests(unittest.TestCase):
     def _lane_code(self, source: str) -> str:
         """Lane text with comment-only lines removed (executable text only)."""
         return "\n".join(
-            line
-            for line in self._lane(source).split("\n")
-            if not line.strip().startswith("#")
+            line for line in self._lane(source).split("\n") if not line.strip().startswith("#")
         )
 
     def test_lane_sits_outside_both_full_tier_fences(self):
@@ -864,9 +922,7 @@ class SchwabPrecloseLaneTests(unittest.TestCase):
         self.assertIn("from options_researcher.schwab_chain_view import verified_sessions", lane)
         # Fail-closed default: SCHWAB_LANE is UNVERIFIED before the probe runs,
         # so a missing AS_OF or an unreadable view skips rather than proceeds.
-        self.assertLess(
-            code.index('SCHWAB_LANE="UNVERIFIED"'), code.index("verified_sessions")
-        )
+        self.assertLess(code.index('SCHWAB_LANE="UNVERIFIED"'), code.index("verified_sessions"))
         self.assertLess(
             code.index("verified_sessions"),
             code.index('if [ "$SCHWAB_LANE" = "VERIFIED" ]; then'),
