@@ -2384,11 +2384,21 @@ class ContextLaneRenderTests(unittest.TestCase):
 
         data = self._data(count=1)
         card = data["symbols"][0]["groups"][0]["cards"][0]
+        raw_quote = {
+            "symbol": "S0",
+            "right": "P",
+            "strike": float(card["strike"]),
+            "expiry": str(card["expiry"]),
+            "bid": 1.0,
+            "ask": 1.2,
+            "open_interest": 500,
+        }
         data["symbols"][0]["groups"][0]["pick_tracker_quotes"] = {
             f"{card['expiry']}:{float(card['strike']):.2f}": {
-                "bid": 1.0,
-                "ask": 1.2,
-                "source_row_hash": "a" * 64,
+                **raw_quote,
+                "source_row_hash": hashlib.sha256(
+                    json.dumps(raw_quote, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest(),
             }
         }
         with (

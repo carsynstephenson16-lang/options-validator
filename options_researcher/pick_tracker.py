@@ -127,16 +127,64 @@ def validate_snapshot(
                 raise TrackerError(f"snapshot arm {arm} candidate is malformed")
             raw_quote = candidate.get("raw_quote")
             source_hash = candidate.get("source_row_hash")
+            position = candidate.get("pick_position")
+            leg = position.get("evaluated_leg") if isinstance(position, Mapping) else None
+            source_fields = {
+                "symbol",
+                "right",
+                "strike",
+                "expiry",
+                "bid",
+                "ask",
+                "open_interest",
+            }
             if (
                 not isinstance(raw_quote, Mapping)
+                or set(raw_quote) != source_fields
                 or not quote_valid(raw_quote.get("bid"), raw_quote.get("ask"))
                 or not isinstance(source_hash, str)
                 or not source_hash
+                or not isinstance(leg, Mapping)
             ):
                 raise TrackerError(f"snapshot arm {arm} raw quote provenance is malformed")
+            raw_strike = raw_quote["strike"]
+            candidate_strike = candidate.get("strike")
+            try:
+                identity_matches = (
+                    raw_quote["symbol"] == candidate.get("symbol") == leg.get("symbol")
+                    and str(raw_quote["right"]).upper() == str(leg.get("right")).upper()
+                    and isinstance(raw_strike, (int, float))
+                    and not isinstance(raw_strike, bool)
+                    and isinstance(candidate_strike, (int, float))
+                    and not isinstance(candidate_strike, bool)
+                    and math.isclose(float(raw_strike), float(candidate_strike))
+                    and raw_quote["expiry"] == candidate.get("expiry") == leg.get("expiry")
+                    and isinstance(raw_quote["open_interest"], int)
+                    and not isinstance(raw_quote["open_interest"], bool)
+                    and raw_quote["open_interest"] >= 0
+                )
+            except (TypeError, ValueError):
+                identity_matches = False
+            if not identity_matches or _sha256_bytes(_canonical_bytes(raw_quote)) != source_hash:
+                raise TrackerError(f"SNAPSHOT_SOURCE_ROW_MISMATCH: arm={arm}")
             observed_hashes.add(source_hash)
     if observed_hashes != set(hashes):
         raise TrackerError("snapshot source_row_hashes do not match candidate rows")
+    render_snapshot = copy.deepcopy(dict(payload))
+    expected_render_id = render_snapshot.pop("render_id")
+    actual_render_id = _sha256_bytes(
+        _canonical_bytes(
+            {
+                "html_sha256": actual,
+                "snapshot": render_snapshot,
+            }
+        )
+    )
+    if expected_render_id != actual_render_id:
+        raise TrackerError(
+            "SNAPSHOT_RENDER_ID_MISMATCH: "
+            f"snapshot={expected_render_id!r} actual={actual_render_id}"
+        )
     if input_root is not None:
         receipt_path = input_root / str(payload["capture_receipt_path"])
         try:
@@ -325,8 +373,17 @@ def append_membership(
             prior_arm = prior_arm if isinstance(prior_arm, Mapping) else {}
             previous_slots = prior_arm.get("current_slots")
             previous_slots = previous_slots if isinstance(previous_slots, Mapping) else {}
-            arm_record = _arm_record(arm, candidates, previous_slots)
-            arm_record["state"] = str(arm_value.get("state") or "FAILED")
+            arm_state = str(arm_value.get("state") or "FAILED")
+            if arm_state in {"FAILED", "DISABLED"}:
+                arm_record = {
+                    "entries": [],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": copy.deepcopy(dict(previous_slots)),
+                }
+            else:
+                arm_record = _arm_record(arm, candidates, previous_slots)
+            arm_record["state"] = arm_state
             arm_record["error"] = arm_value.get("error")
             arms[arm] = arm_record
         record = {
@@ -866,9 +923,67 @@ def evaluate_records(
                     offsets,
                     trading_days_fn=trading_days_fn,
                 )
+                settlement_session = min(expiry, scheduled[-1][1])
+                daily_end = min(as_of, settlement_session)
+                daily_sessions = [
+                    session
+                    for session in trading_days_fn(fill_session, daily_end)
+                    if fill_session < session <= daily_end and session < expiry
+                ]
+                daily_marks: list[dict[str, object]] = [
+                    {
+                        "status": "ENTRY",
+                        "mark_session": fill_session,
+                        "elapsed_sessions": 0,
+                        "evaluated_leg_pnl": 0.0,
+                        "return_on_risk_basis": 0.0,
+                        "pnl_scope": "INCREMENTAL_OPTION_LEG_ONLY",
+                    }
+                ]
+                daily_by_session: dict[str, dict[str, object]] = {}
+                coverage_changed = False
+                for elapsed, mark_session in enumerate(daily_sessions, start=1):
+                    if candidate.get("lane") in {"cc", "pmcc"} and (
+                        coverage_validator is None or not coverage_validator(position, mark_session)
+                    ):
+                        coverage_changed = True
+                        result["status"] = "CANCELLED_COVERAGE_CHANGED"
+                        daily_mark = {
+                            "status": "CANCELLED_COVERAGE_CHANGED",
+                            "elapsed_sessions": elapsed,
+                            "mark_session": mark_session,
+                        }
+                        daily_marks.append(daily_mark)
+                        daily_by_session[mark_session] = daily_mark
+                        break
+                    if mark_session not in verified:
+                        daily_mark = {
+                            "status": "MARK_GAP",
+                            "elapsed_sessions": elapsed,
+                            "mark_session": mark_session,
+                            "reason": "SESSION_UNVERIFIED",
+                        }
+                    else:
+                        try:
+                            frame = chain_loader(str(leg["symbol"]), mark_session)
+                        except (OSError, ValueError) as exc:
+                            daily_mark = {
+                                "status": "MARK_GAP",
+                                "elapsed_sessions": elapsed,
+                                "mark_session": mark_session,
+                                "reason": type(exc).__name__,
+                            }
+                        else:
+                            daily_mark = mark_position(
+                                result,
+                                chain_frame=frame,
+                                mark_session=mark_session,
+                            )
+                            daily_mark["elapsed_sessions"] = elapsed
+                    daily_marks.append(daily_mark)
+                    daily_by_session[mark_session] = daily_mark
                 marks: list[dict[str, object]] = []
                 unreachable = 0
-                coverage_changed = False
                 for offset, mark_session in scheduled:
                     if mark_session >= expiry:
                         if mark_session > expiry:
@@ -881,48 +996,11 @@ def evaluate_records(
                             )
                             unreachable += 1
                     elif mark_session <= as_of:
-                        if candidate.get("lane") in {"cc", "pmcc"} and (
-                            coverage_validator is None
-                            or not coverage_validator(position, mark_session)
-                        ):
-                            coverage_changed = True
-                            result["status"] = "CANCELLED_COVERAGE_CHANGED"
-                            marks.append(
-                                {
-                                    "status": "CANCELLED_COVERAGE_CHANGED",
-                                    "mark_session": mark_session,
-                                }
-                            )
-                            break
-                        if mark_session not in verified:
-                            marks.append(
-                                {
-                                    "status": "MARK_GAP",
-                                    "elapsed_sessions": offset,
-                                    "mark_session": mark_session,
-                                    "reason": "SESSION_UNVERIFIED",
-                                }
-                            )
-                        else:
-                            try:
-                                frame = chain_loader(str(leg["symbol"]), mark_session)
-                            except (OSError, ValueError) as exc:
-                                marks.append(
-                                    {
-                                        "status": "MARK_GAP",
-                                        "elapsed_sessions": offset,
-                                        "mark_session": mark_session,
-                                        "reason": type(exc).__name__,
-                                    }
-                                )
-                            else:
-                                mark = mark_position(
-                                    result,
-                                    chain_frame=frame,
-                                    mark_session=mark_session,
-                                )
-                                mark["elapsed_sessions"] = offset
-                                marks.append(mark)
+                        daily_mark = daily_by_session.get(mark_session)
+                        if daily_mark is not None:
+                            checkpoint = copy.deepcopy(daily_mark)
+                            checkpoint["elapsed_sessions"] = offset
+                            marks.append(checkpoint)
                 if (
                     not coverage_changed
                     and expiry <= as_of
@@ -950,13 +1028,13 @@ def evaluate_records(
                             }
                         )
                     else:
-                        marks.append(
-                            mark_at_expiry(
-                                result,
-                                underlying_close=underlying_close,
-                                expiry_session=expiry,
-                            )
+                        terminal_mark = mark_at_expiry(
+                            result,
+                            underlying_close=underlying_close,
+                            expiry_session=expiry,
                         )
+                        marks.append(terminal_mark)
+                        daily_marks.append(copy.deepcopy(terminal_mark))
                     result["status"] = "SETTLED"
                 elif not coverage_changed and scheduled and scheduled[-1][1] <= as_of:
                     result["status"] = "SETTLED"
@@ -971,12 +1049,16 @@ def evaluate_records(
                     latest = valid_marks[-1]
                     result["pnl"] = latest["evaluated_leg_pnl"]
                     result["return"] = latest["return_on_risk_basis"]
-                    result["max_drawdown"] = max_drawdown(
-                        [float(mark["return_on_risk_basis"]) for mark in valid_marks]
-                    )
                     result["outcome_word"] = (
                         "gained after costs" if float(result["pnl"]) >= 0 else "lost after costs"
                     )
+                daily_returns = [
+                    float(mark["return_on_risk_basis"])
+                    for mark in daily_marks
+                    if isinstance(mark.get("return_on_risk_basis"), (int, float))
+                ]
+                result["max_drawdown"] = max_drawdown(daily_returns)
+                result["daily_marks"] = daily_marks
                 result["marks"] = marks
                 result["unreachable_marks"] = unreachable
                 result["coverage_context_status"] = (
@@ -1179,14 +1261,29 @@ def build_scoreboard(
     }
 
 
-def _atomic_write(path: Path, raw: bytes) -> None:
+def _immutable_write(path: Path, raw: bytes) -> None:
+    """Create a dated artifact once; identical reruns are idempotent."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        if path.read_bytes() == raw:
+            return
+        raise TrackerConflict(f"IMMUTABLE_HISTORY_CONFLICT: {path}")
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with tmp.open("wb") as handle:
-        handle.write(raw)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp, path)
+    try:
+        with tmp.open("xb") as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            if path.read_bytes() != raw:
+                raise TrackerConflict(f"IMMUTABLE_HISTORY_CONFLICT: {path}") from None
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
     directory_fd = os.open(path.parent, os.O_RDONLY)
     try:
         os.fsync(directory_fd)
@@ -1202,8 +1299,8 @@ def _scoreboard_markdown(board: Mapping[str, object]) -> str:
         "",
         "This dry-run scoreboard contains no registered evidence and no verdict.",
         "",
-        "| Arm | Lane | State | Entries | Open | Settled | Raw leg P&L | Mean return | Unreachable marks |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Arm | Lane | State | Entries | Cancellations by kind | Open | Settled | Raw leg P&L | Mean return | Unreachable marks |",
+        "|---|---|---:|---:|---|---:|---:|---:|---:|---:|",
     ]
     lanes = board.get("lanes")
     if isinstance(lanes, Mapping):
@@ -1215,6 +1312,12 @@ def _scoreboard_markdown(board: Mapping[str, object]) -> str:
                 row = arm_lanes.get(lane)
                 if not isinstance(row, Mapping):
                     continue
+                cancellations = row.get("cancellations")
+                cancellation_text = (
+                    ", ".join(f"{kind}: {count}" for kind, count in sorted(cancellations.items()))
+                    if isinstance(cancellations, Mapping) and cancellations
+                    else "none"
+                )
                 lines.append(
                     "| "
                     + " | ".join(
@@ -1224,6 +1327,7 @@ def _scoreboard_markdown(board: Mapping[str, object]) -> str:
                             lane,
                             row.get("state"),
                             row.get("entries"),
+                            cancellation_text,
                             row.get("open"),
                             row.get("settled"),
                             row.get("raw_pnl"),
@@ -1233,9 +1337,88 @@ def _scoreboard_markdown(board: Mapping[str, object]) -> str:
                     )
                     + " |"
                 )
+    arm_states = board.get("arm_states")
+    lines.extend(["", "## Arm availability", ""])
+    if isinstance(arm_states, Mapping):
+        for arm in _SCORED_ARMS:
+            lines.append(f"- {arm}: {arm_states.get(arm)}")
+    unmatched = board.get("unmatched_lane_counts")
+    lines.extend(["", "## Unmatched-lane counts", ""])
+    if isinstance(unmatched, Mapping):
+        lines.extend(
+            [
+                f"- frozen_baseline_only: {unmatched.get('frozen_baseline_only')}",
+                f"- context_lane_only: {unmatched.get('context_lane_only')}",
+            ]
+        )
     primary = board.get("primary_contrast")
     lines.extend(["", "## Primary paired-lane contrast", "", f"`{primary}`", ""])
+    lines.extend(
+        [
+            "## Weekly non-overlapping cohorts",
+            "",
+            "| Week | Contrast | Paired lanes | Unmatched lanes | Arm-only disclosure |",
+            "|---|---:|---|---|---|",
+        ]
+    )
+    cohorts = board.get("weekly_cohorts")
+    if isinstance(cohorts, list) and cohorts:
+        for cohort in cohorts:
+            if not isinstance(cohort, Mapping):
+                continue
+
+            def lane_text(key: str) -> str:
+                value = cohort.get(key)
+                return ",".join(str(item) for item in value) if isinstance(value, list) else ""
+
+            lines.append(
+                "| "
+                + " | ".join(
+                    (
+                        str(cohort.get("week")),
+                        str(cohort.get("contrast")),
+                        lane_text("paired_lanes") or "none",
+                        lane_text("unmatched_lanes") or "none",
+                        (
+                            f"frozen_baseline_only={lane_text('frozen_baseline_only') or 'none'}; "
+                            f"context_lane_only={lane_text('context_lane_only') or 'none'}"
+                        ),
+                    )
+                )
+                + " |"
+            )
+    else:
+        lines.append("| no cohorts | None | none | none | none |")
+    lines.append("")
     return "\n".join(lines)
+
+
+def _write_evaluation_reports(
+    destination: Path,
+    *,
+    as_of: str,
+    outcomes: Sequence[Mapping[str, object]],
+    board: Mapping[str, object],
+) -> None:
+    board_payload = copy.deepcopy(dict(board))
+    board_payload["as_of"] = as_of
+    board_payload["authority"] = "NONE — descriptive tracking, dry-run"
+    outcome_payload = {
+        "schema": "pick_tracker_outcomes/v1",
+        "as_of": as_of,
+        "authority": "NONE — descriptive tracking, dry-run",
+        "outcomes": [copy.deepcopy(dict(row)) for row in outcomes],
+    }
+    artifacts = {
+        destination / "outcomes.json": _canonical_bytes(outcome_payload) + b"\n",
+        destination / "scoreboard.json": _canonical_bytes(board_payload) + b"\n",
+        destination / "scoreboard.md": _scoreboard_markdown(board_payload).encode(),
+    }
+    for path, raw in artifacts.items():
+        if path.exists() and path.read_bytes() != raw:
+            raise TrackerConflict(f"IMMUTABLE_HISTORY_CONFLICT: {path}")
+    for path, raw in artifacts.items():
+        _immutable_write(path, raw)
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -1299,16 +1482,12 @@ def evaluate_cli(as_of: str) -> None:
         coverage_validator=_current_coverage_validator,
     )
     board = build_scoreboard(outcomes)
-    board["as_of"] = as_of
-    board["authority"] = "NONE — descriptive tracking, dry-run"
     destination = DRYRUN_ROOT / as_of
-    _atomic_write(
-        destination / "scoreboard.json",
-        _canonical_bytes(board) + b"\n",
-    )
-    _atomic_write(
-        destination / "scoreboard.md",
-        _scoreboard_markdown(board).encode(),
+    _write_evaluation_reports(
+        destination,
+        as_of=as_of,
+        outcomes=outcomes,
+        board=board,
     )
 
 

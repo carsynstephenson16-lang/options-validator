@@ -4838,12 +4838,8 @@ def _snapshot_pick(
         "expiry": str(pick.get("expiry") or ""),
         "dte": pick.get("dte"),
         "raw_quote": {
-            "bid": _finite_number(
-                quote_context.get("bid") if quote_context is not None else None
-            ),
-            "ask": _finite_number(
-                quote_context.get("ask") if quote_context is not None else None
-            ),
+            key: copy.deepcopy(quote_context.get(key) if quote_context is not None else None)
+            for key in ("symbol", "right", "strike", "expiry", "bid", "ask", "open_interest")
         },
         "source_row_hash": (
             quote_context.get("source_row_hash")

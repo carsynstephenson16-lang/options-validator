@@ -28,6 +28,18 @@ def candidate(
     risk_value: float | None = None,
     coverage: dict | None = None,
 ) -> dict:
+    raw_quote = {
+        "symbol": symbol,
+        "right": right,
+        "strike": strike,
+        "expiry": expiry,
+        "bid": 1.0,
+        "ask": 1.2,
+        "open_interest": 500,
+    }
+    source_row_hash = hashlib.sha256(
+        json.dumps(raw_quote, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     return {
         "candidate_id": candidate_id,
         "symbol": symbol,
@@ -35,8 +47,8 @@ def candidate(
         "strike": strike,
         "expiry": expiry,
         "dte": 24,
-        "raw_quote": {"bid": 1.0, "ask": 1.2},
-        "source_row_hash": "a" * 64,
+        "raw_quote": raw_quote,
+        "source_row_hash": source_row_hash,
         "pick_position": {
             "schema": "pick_position/v1",
             "evaluated_leg": {
@@ -59,16 +71,16 @@ def candidate(
 
 
 def snapshot(as_of: str, items: list[dict], *, context_items: list[dict] | None = None) -> dict:
-    return {
+    all_items = [*items, *(context_items if context_items is not None else items)]
+    payload = {
         "schema": "picks_snapshot/v1",
         "evaluation_date": as_of,
         "data_as_of": as_of,
         "html_sha256": "b" * 64,
-        "render_id": "c" * 64,
         "capture_receipt_path": f"reports/schwab_chains/{as_of}/preclose.json",
         "capture_receipt_sha256": "d" * 64,
         "config_hash": "e" * 64,
-        "source_row_hashes": ["a" * 64],
+        "source_row_hashes": sorted({item["source_row_hash"] for item in all_items}),
         "frozen_baseline": {
             "state": "READY",
             "watch_included": False,
@@ -95,6 +107,20 @@ def snapshot(as_of: str, items: list[dict], *, context_items: list[dict] | None 
             )
         },
     }
+    bind_render_id(payload)
+    return payload
+
+
+def bind_render_id(payload: dict) -> None:
+    snapshot_payload = json.loads(json.dumps(payload))
+    snapshot_payload.pop("render_id", None)
+    payload["render_id"] = hashlib.sha256(
+        json.dumps(
+            {"html_sha256": payload["html_sha256"], "snapshot": snapshot_payload},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
 
 
 def chain(
@@ -128,6 +154,22 @@ class SnapshotAndMembershipTests(unittest.TestCase):
         with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_RENDER_MISMATCH"):
             tracker.validate_snapshot(payload, b"different html")
 
+    def test_snapshot_source_row_mutation_fails_closed(self):
+        html = b"bound html"
+        payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
+        payload["html_sha256"] = hashlib.sha256(html).hexdigest()
+        bind_render_id(payload)
+        payload["frozen_baseline"]["candidates"][0]["raw_quote"]["bid"] = 1.1
+        changed_quote = payload["frozen_baseline"]["candidates"][0]["raw_quote"]
+        changed_hash = hashlib.sha256(
+            json.dumps(changed_quote, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        payload["frozen_baseline"]["candidates"][0]["source_row_hash"] = changed_hash
+        payload["source_row_hashes"] = [changed_hash]
+
+        with self.assertRaisesRegex(tracker.TrackerError, "SNAPSHOT_RENDER_ID_MISMATCH"):
+            tracker.validate_snapshot(payload, html)
+
     def test_snapshot_capture_receipt_hash_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -138,6 +180,7 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             payload = snapshot("2026-08-25", [candidate("VST:long_call:one")])
             payload["html_sha256"] = hashlib.sha256(html).hexdigest()
             payload["capture_receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            bind_render_id(payload)
             tracker.validate_snapshot(payload, html, input_root=root)
             receipt.write_bytes(b"tampered")
             with self.assertRaisesRegex(tracker.TrackerError, "CAPTURE_RECEIPT_MISMATCH"):
@@ -314,6 +357,7 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             payload["evaluation_date"] = "2026-08-26"
             payload["html_sha256"] = hashlib.sha256(html).hexdigest()
             payload["capture_receipt_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            bind_render_id(payload)
             snapshot_path = root / tracker.SNAPSHOT_PATH
             snapshot_path.parent.mkdir(parents=True)
             snapshot_path.write_text(json.dumps(payload))
@@ -332,6 +376,38 @@ class SnapshotAndMembershipTests(unittest.TestCase):
             journal = root / "reports/pick_tracker/dryrun/events.jsonl"
             records = [json.loads(line) for line in journal.read_text().splitlines()]
             self.assertEqual([record["as_of"] for record in records], ["2026-08-25"])
+
+    def test_unavailable_arms_never_synthesize_exits_or_reentries(self):
+        for unavailable_state in ("FAILED", "DISABLED"):
+            with self.subTest(state=unavailable_state), tempfile.TemporaryDirectory() as tmp:
+                journal = Path(tmp) / "reports/pick_tracker/dryrun/events.jsonl"
+                reports_root = journal.parent.parent
+                opening = candidate("VST:long_call:one")
+                first = tracker.append_membership(
+                    snapshot("2026-08-25", [opening]),
+                    journal_path=journal,
+                    reports_root=reports_root,
+                    verified_sessions=["2026-08-25"],
+                )
+                unavailable = snapshot("2026-08-26", [opening], context_items=[])
+                unavailable["context_lane"]["state"] = unavailable_state
+                middle = tracker.append_membership(
+                    unavailable,
+                    journal_path=journal,
+                    reports_root=reports_root,
+                    verified_sessions=["2026-08-26"],
+                )
+                resumed = tracker.append_membership(
+                    snapshot("2026-08-27", [opening]),
+                    journal_path=journal,
+                    reports_root=reports_root,
+                    verified_sessions=["2026-08-27"],
+                )
+
+                prior_slots = first["arms"]["context_lane"]["current_slots"]
+                self.assertEqual(middle["arms"]["context_lane"]["current_slots"], prior_slots)
+                self.assertEqual(middle["arms"]["context_lane"]["exits"], [])
+                self.assertEqual(resumed["arms"]["context_lane"]["entries"], [])
 
     def test_disabled_context_arm_is_loud_and_refuses_primary_contrast(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -609,6 +685,97 @@ class FillAndPositionTests(unittest.TestCase):
             tracker.coverage_identity_matches(position, holdings=holdings, positions=positions)
         )
 
+    def test_recorded_cc_history_is_byte_stable_after_portfolio_mutation(self):
+        identity = {
+            "symbol": "VST",
+            "shares": 100,
+            "declared_shares": 100,
+            "cost_basis": 100.0,
+            "acquired": "2025-01-02",
+        }
+        identity["source_row_hash"] = tracker._identity_hash(identity)
+        opening = candidate(
+            "VST:cc:immutable",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage=identity,
+        )
+        record = {
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:cc", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:cc": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+        holdings = pd.DataFrame(
+            [{"symbol": "VST", "shares": 100, "cost_basis": 100.0, "acquired": "2025-01-02"}]
+        )
+        positions = pd.DataFrame(
+            columns=(
+                "id",
+                "structure",
+                "symbol",
+                "right",
+                "strike",
+                "expiration",
+                "contracts",
+                "entry_price",
+            )
+        )
+
+        def calendar(start: str, end: str) -> list[str]:
+            cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+            while cursor <= stop:
+                if cursor.weekday() < 5:
+                    days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            return days
+
+        def evaluate() -> list[dict[str, object]]:
+            return tracker.evaluate_records(
+                [record],
+                as_of="2026-08-27",
+                verified_sessions=calendar("2026-08-25", "2026-08-27"),
+                chain_loader=lambda _symbol, _session: chain(),
+                trading_days_fn=calendar,
+                close_loader=lambda _symbol, _session: 100.0,
+                coverage_validator=lambda position, _session: tracker.coverage_identity_matches(
+                    position, holdings=holdings, positions=positions
+                ),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "2026-08-27"
+            first_outcomes = evaluate()
+            tracker._write_evaluation_reports(
+                destination,
+                as_of="2026-08-27",
+                outcomes=first_outcomes,
+                board=tracker.build_scoreboard(first_outcomes),
+            )
+            before = {path.name: path.read_bytes() for path in destination.iterdir()}
+
+            holdings.loc[0, "shares"] = 0
+            changed_outcomes = evaluate()
+            with self.assertRaisesRegex(tracker.TrackerConflict, "IMMUTABLE_HISTORY_CONFLICT"):
+                tracker._write_evaluation_reports(
+                    destination,
+                    as_of="2026-08-27",
+                    outcomes=changed_outcomes,
+                    board=tracker.build_scoreboard(changed_outcomes),
+                )
+
+            after = {path.name: path.read_bytes() for path in destination.iterdir()}
+            self.assertEqual(after, before)
+
     def test_mark_gap_and_coverage_pnl_exclusion(self):
         filled = tracker.resolve_fill(
             candidate("VST:long_call:one"),
@@ -651,6 +818,91 @@ class FillAndPositionTests(unittest.TestCase):
         self.assertAlmostEqual(
             tracker.max_drawdown([0.10, -0.05, 0.20, 0.15]),
             -0.15,
+        )
+
+    def test_evaluator_marks_daily_and_drawdown_starts_at_zero_return_entry(self):
+        opening = candidate("VST:long_call:daily")
+        record = {
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:long_call", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:long_call": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+        sessions = ["2026-08-25", "2026-08-26", "2026-08-27"]
+
+        def calendar(start: str, end: str) -> list[str]:
+            cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+            while cursor <= stop:
+                if cursor.weekday() < 5:
+                    days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            return days
+
+        outcomes = tracker.evaluate_records(
+            [record],
+            as_of="2026-08-27",
+            verified_sessions=sessions,
+            chain_loader=lambda _symbol, session: (
+                chain(bid=2.0, ask=2.2) if session == "2026-08-26" else chain(bid=1.0, ask=1.2)
+            ),
+            trading_days_fn=calendar,
+            close_loader=lambda _symbol, _session: 100.0,
+        )
+
+        first = outcomes[0]
+        self.assertEqual(
+            [(mark["mark_session"], mark["status"]) for mark in first["daily_marks"]],
+            [("2026-08-26", "ENTRY"), ("2026-08-27", "MARKED")],
+        )
+        self.assertEqual(first["daily_marks"][0]["return_on_risk_basis"], 0.0)
+        self.assertLess(first["max_drawdown"], 0.0)
+
+    def test_daily_marks_stop_at_the_recorded_settlement_checkpoint(self):
+        opening = candidate("VST:long_call:horizon", expiry="2026-10-30")
+        record = {
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:long_call", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:long_call": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+
+        def calendar(start: str, end: str) -> list[str]:
+            cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+            while cursor <= stop:
+                if cursor.weekday() < 5:
+                    days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            return days
+
+        outcomes = tracker.evaluate_records(
+            [record],
+            as_of="2026-10-01",
+            verified_sessions=calendar("2026-08-25", "2026-10-01"),
+            chain_loader=lambda _symbol, _session: chain(expiry="2026-10-30"),
+            trading_days_fn=calendar,
+            close_loader=lambda _symbol, _session: 100.0,
+        )
+
+        first = outcomes[0]
+        self.assertEqual(first["status"], "SETTLED")
+        self.assertEqual(first["marks"][-1]["termination"], "longest_applicable_mark")
+        self.assertEqual(
+            first["daily_marks"][-1]["mark_session"],
+            first["marks"][-1]["mark_session"],
         )
 
     def test_evaluator_applies_marks_then_expiry_and_omits_post_expiry_marks(self):
@@ -900,6 +1152,38 @@ class ScoreboardTests(unittest.TestCase):
         board = tracker.build_scoreboard([], weekly_cohorts=[])
         self.assertIn("A2-v1 (ledger seq 19/27) retains interpretive authority", board["header"])
         self.assertIn("effective sample is far smaller than the row count", board["header"])
+
+    def test_markdown_carries_wp_d_cancellations_cohorts_and_scoreboard_context(self):
+        outcomes = [
+            {
+                "arm": "frozen_baseline",
+                "lane": "put",
+                "decision_session": "2026-08-03",
+                "status": "CANCELLED_NO_FILL_DATA",
+            }
+        ]
+        cohorts = [
+            {
+                "week": "2026-08-03",
+                "contrast": 0.05,
+                "paired_lanes": ["long_call"],
+                "unmatched_lanes": ["put"],
+                "frozen_baseline_only": ["put"],
+                "context_lane_only": [],
+            }
+        ]
+        markdown = tracker._scoreboard_markdown(
+            tracker.build_scoreboard(outcomes, weekly_cohorts=cohorts)
+        )
+
+        self.assertIn("Cancellations by kind", markdown)
+        self.assertIn("CANCELLED_NO_FILL_DATA: 1", markdown)
+        self.assertIn("## Arm availability", markdown)
+        self.assertIn("## Unmatched-lane counts", markdown)
+        self.assertIn("## Weekly non-overlapping cohorts", markdown)
+        self.assertIn("2026-08-03", markdown)
+        self.assertIn("long_call", markdown)
+        self.assertIn("frozen_baseline_only=put", markdown)
 
 
 if __name__ == "__main__":
