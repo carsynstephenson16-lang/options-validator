@@ -249,7 +249,7 @@ class ProducerPlistTest(unittest.TestCase):
         expected = {
             (weekday, hour, minute)
             for weekday in range(1, 6)
-            for hour, minute in ((7, 40), (8, 10))
+            for hour, minute in ((10, 0), (10, 30))
         }
         self.assertEqual(actual, expected)
         self.assertEqual(
