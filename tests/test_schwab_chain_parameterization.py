@@ -204,12 +204,20 @@ class SchwabChainParameterizationTests(unittest.TestCase):
         )
 
     def test_manifest_core_accepts_isolated_lane_identity_keywords(self):
-        expected = {
-            "convention": manifest.SESSION_CHAIN_CONVENTION,
-            "receipt_filename": "preclose.json",
-            "session_tag": "preclose",
+        expected_by_function = {
+            manifest.build_manifest: {
+                "convention": manifest.SESSION_CHAIN_CONVENTION,
+                "receipt_filename": "preclose.json",
+                "session_tag": "preclose",
+            },
+            manifest.verify_session: {
+                "convention": manifest.SESSION_CHAIN_CONVENTION,
+                "receipt_filename": "preclose.json",
+                "session_tag": "preclose",
+                "receipt_kind": "schwab_chain_capture/v1",
+            },
         }
-        for function in (manifest.build_manifest, manifest.verify_session):
+        for function, expected in expected_by_function.items():
             with self.subTest(function=function.__name__):
                 parameters = inspect.signature(function).parameters
                 self.assertEqual(
@@ -223,6 +231,35 @@ class SchwabChainParameterizationTests(unittest.TestCase):
                     },
                     expected,
                 )
+                self.assertTrue(
+                    all(
+                        parameters[name].kind is inspect.Parameter.KEYWORD_ONLY for name in expected
+                    )
+                )
+
+    def test_manifest_core_retains_pre_existing_positional_call_compatibility(self):
+        with self._isolated_capture():
+            exit_code, _ = capture.capture(
+                client=FakeClient(),
+                now_ny=PRECLOSE,
+                universe=["AAA"],
+                chain_dir=Path("chains"),
+                reports_dir=Path("reports"),
+                force=False,
+            )
+            self.assertEqual(exit_code, 0)
+
+            rebuilt = manifest.build_manifest("2026-08-10", ["AAA"], Path("chains"))
+            verified = manifest.verify_session(
+                "2026-08-10",
+                ["AAA"],
+                Path("chains"),
+                Path("reports/2026-08-10/manifest.json"),
+                Path("reports/2026-08-10/preclose.json"),
+            )
+
+            self.assertEqual(rebuilt["manifest_hash"], verified["manifest_hash"])
+            self.assertEqual(verified["session_chain_convention"], "preclose_snapshot_v1")
 
     def test_custom_identity_is_threaded_through_capture_manifest_verify_and_fact(self):
         with self._isolated_capture():
@@ -257,6 +294,71 @@ class SchwabChainParameterizationTests(unittest.TestCase):
             )
             _, fact = Path("ledger/facts.log").read_text().strip().split("\t", 1)
             self.assertTrue(fact.startswith("SCHWAB_CHAIN_MIDDAY session=2026-08-10 "))
+
+    def test_preclose_declared_receipt_cannot_verify_as_midday(self):
+        with self._isolated_capture():
+            exit_code, _ = capture.capture(
+                client=FakeClient(),
+                now_ny=MIDDAY,
+                universe=["AAA"],
+                chain_dir=Path("chains"),
+                reports_dir=Path("reports"),
+                force=False,
+                session_tag="midday",
+                receipt_filename="midday.json",
+                fact_prefix="SCHWAB_CHAIN_MIDDAY",
+                receipt_kind="schwab_chain_midday/v1",
+                convention="midday_snapshot_v1",
+            )
+            self.assertEqual(exit_code, 0)
+            receipt_path = Path("reports/2026-08-10/midday.json")
+            receipt = json.loads(receipt_path.read_text())
+            receipt["scheduled_session_tag"] = "preclose"
+            receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+
+            with self.assertRaisesRegex(
+                manifest.SchwabChainManifestError,
+                "scheduled session tag does not match",
+            ):
+                manifest.verify_session(
+                    "2026-08-10",
+                    ["AAA"],
+                    Path("chains"),
+                    Path("reports/2026-08-10/manifest.json"),
+                    receipt_path,
+                    convention="midday_snapshot_v1",
+                    receipt_filename="midday.json",
+                    session_tag="midday",
+                    receipt_kind="schwab_chain_midday/v1",
+                )
+
+    def test_midday_declared_receipt_cannot_verify_as_preclose(self):
+        with self._isolated_capture():
+            exit_code, _ = capture.capture(
+                client=FakeClient(),
+                now_ny=PRECLOSE,
+                universe=["AAA"],
+                chain_dir=Path("chains"),
+                reports_dir=Path("reports"),
+                force=False,
+            )
+            self.assertEqual(exit_code, 0)
+            receipt_path = Path("reports/2026-08-10/preclose.json")
+            receipt = json.loads(receipt_path.read_text())
+            receipt["scheduled_session_tag"] = "midday"
+            receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+
+            with self.assertRaisesRegex(
+                manifest.SchwabChainManifestError,
+                "scheduled session tag does not match",
+            ):
+                manifest.verify_session(
+                    "2026-08-10",
+                    ["AAA"],
+                    Path("chains"),
+                    Path("reports/2026-08-10/manifest.json"),
+                    receipt_path,
+                )
 
     def test_cli_with_no_identity_arguments_resolves_preclose_defaults(self):
         observed = {}

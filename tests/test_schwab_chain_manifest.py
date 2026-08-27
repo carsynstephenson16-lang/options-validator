@@ -76,6 +76,7 @@ class SchwabChainManifestTests(unittest.TestCase):
             "session": receipt_session,
             "session_chain_convention": "preclose_snapshot_v1",
             "captured_at_et": captured_at_et,
+            "scheduled_session_tag": "preclose",
             "force": force,
             "universe": SYMBOLS,
             "overall_status": "ok",

@@ -93,6 +93,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
             "session": receipt_session,
             "session_chain_convention": "preclose_snapshot_v1",
             "captured_at_et": "2026-08-10T15:45:00-04:00",
+            "scheduled_session_tag": "preclose",
             "force": False,
             "universe": SYMBOLS,
             "overall_status": "ok",

@@ -195,6 +195,8 @@ def verify_session(
         raise SchwabChainManifestError("receipt kind does not match")
     if receipt.get("session") != session:
         raise SchwabChainManifestError("receipt session does not match request")
+    if receipt.get("scheduled_session_tag") != session_tag:
+        raise SchwabChainManifestError("receipt scheduled session tag does not match")
     _captured_at_session(receipt.get("captured_at_et"), session, session_tag)
     if receipt.get("force") is not False:
         raise SchwabChainManifestError("receipt force must be false; require force=false")
