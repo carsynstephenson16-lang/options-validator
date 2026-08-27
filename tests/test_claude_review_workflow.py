@@ -21,17 +21,17 @@ EXPECTED_REVIEW_CONDITION = (
     "github.event.comment.author_association == 'COLLABORATOR'))"
 )
 EXPECTED_TRIGGER_BLOCK = """on:
-pull_request:
-types: [opened, synchronize, reopened, ready_for_review]
-issue_comment:
-types: [created]
-pull_request_review_comment:
-types: [created]"""
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]"""
 EXPECTED_PERMISSIONS_BLOCK = """permissions:
-contents: read
-pull-requests: write
-issues: write
-id-token: write"""
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write"""
 AUTH_ENABLED_GUARD = "if: steps.auth.outputs.enabled == 'true'"
 
 
@@ -45,7 +45,7 @@ def _assert_exact_review_condition(condition: str) -> None:
 
 def _normalize_yaml_block(block: str) -> str:
     semantic_lines = [
-        " ".join(line.split())
+        f"{line[: len(line) - len(line.lstrip())]}{' '.join(line.split())}"
         for line in block.splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
@@ -53,6 +53,10 @@ def _normalize_yaml_block(block: str) -> str:
 
 
 def _extract_anchored_block(workflow: str, start: str, end: str) -> str:
+    start_anchors = re.findall(rf"^{re.escape(start)}:", workflow, re.MULTILINE)
+    end_anchors = re.findall(rf"^{re.escape(end)}:", workflow, re.MULTILINE)
+    if len(start_anchors) != 1 or len(end_anchors) != 1:
+        raise AssertionError(f"{start} contract anchors must appear exactly once")
     match = re.search(
         rf"^{re.escape(start)}:\n(?P<block>.*?)^{re.escape(end)}:",
         workflow,
@@ -77,7 +81,7 @@ def _assert_exact_permissions_contract(workflow: str) -> None:
 
 def _workflow_steps(workflow: str) -> list[tuple[str, str]]:
     return re.findall(
-        r"^      - name: (?P<name>.*?)\n(?P<body>.*?)(?=^      - name:|\Z)",
+        r"^      -(?P<header>.*?)(?:\n|$)(?P<body>.*?)(?=^      -(?:\s|$)|\Z)",
         workflow,
         re.MULTILINE | re.DOTALL,
     )
@@ -85,22 +89,28 @@ def _workflow_steps(workflow: str) -> list[tuple[str, str]]:
 
 def _assert_auth_gate_wiring(workflow: str) -> None:
     steps = _workflow_steps(workflow)
-    auth_steps = [body for name, body in steps if name == "Check Claude authentication"]
+    auth_steps = [body for header, body in steps if header == " name: Check Claude authentication"]
     charter_steps = [
-        body for name, body in steps if name == "Load review charter from the base branch"
+        body
+        for header, body in steps
+        if header == " name: Load review charter from the base branch"
     ]
     if len(auth_steps) != 1 or not re.search(r"^        id: auth$", auth_steps[0], re.MULTILINE):
         raise AssertionError("auth-gate wiring must retain the Check Claude authentication step")
 
     action_steps = [
-        body
-        for _, body in steps
-        if re.search(r"^        uses: anthropics/claude-code-action@", body, re.MULTILINE)
+        (header, body)
+        for header, body in steps
+        if re.search(
+            r"(?:^|\n)        uses: anthropics/claude-code-action@",
+            f"{header}\n{body}",
+        )
     ]
-    guarded_steps = [*charter_steps, *action_steps]
+    guarded_steps = [*charter_steps, *(body for _, body in action_steps)]
     if (
         len(charter_steps) != 1
         or len(action_steps) != 1
+        or action_steps[0][0] != " name: Claude review"
         or any(
             step is None
             or not re.search(rf"^        {re.escape(AUTH_ENABLED_GUARD)}$", step, re.MULTILINE)
@@ -111,6 +121,30 @@ def _assert_auth_gate_wiring(workflow: str) -> None:
 
 
 class ClaudeReviewWorkflowTests(unittest.TestCase):
+    def test_trigger_contract_rejects_dedented_trigger_child(self):
+        """A trigger cannot become a second top-level workflow key."""
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        mutated = workflow.replace("  pull_request:\n", "pull_request:\n", 1)
+
+        with self.assertRaisesRegex(AssertionError, "trigger contract"):
+            _assert_exact_trigger_contract(mutated)
+
+    def test_permissions_contract_rejects_dedented_permission_child(self):
+        """A permission cannot become a second top-level workflow key."""
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        mutated = workflow.replace("  contents: read\n", "contents: read\n", 1)
+
+        with self.assertRaisesRegex(AssertionError, "permissions contract"):
+            _assert_exact_permissions_contract(mutated)
+
+    def test_trigger_contract_rejects_a_second_top_level_on_anchor(self):
+        """A later trigger contract cannot evade the anchored-block assertion."""
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        mutated = workflow + "\non:\n  workflow_run:\n"
+
+        with self.assertRaisesRegex(AssertionError, "contract anchors"):
+            _assert_exact_trigger_contract(mutated)
+
     def test_trigger_contract_rejects_an_added_pull_request_target_trigger(self):
         """Adding a privileged PR trigger changes the workflow contract."""
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -143,6 +177,20 @@ class ClaudeReviewWorkflowTests(unittest.TestCase):
         """The base-branch charter read cannot run without Claude authentication."""
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         mutated = workflow.replace(AUTH_ENABLED_GUARD + "\n        shell: bash", "shell: bash", 1)
+
+        with self.assertRaisesRegex(AssertionError, "auth-gate wiring"):
+            _assert_auth_gate_wiring(mutated)
+
+    def test_auth_gate_wiring_rejects_an_unnamed_unguarded_claude_action_step(self):
+        """An unnamed sequence item cannot inherit the charter step's guard."""
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        mutated = workflow.replace(
+            "      - name: Claude review\n"
+            "        if: steps.auth.outputs.enabled == 'true'\n"
+            "        uses: anthropics/claude-code-action@",
+            "      -\n        uses: anthropics/claude-code-action@",
+            1,
+        )
 
         with self.assertRaisesRegex(AssertionError, "auth-gate wiring"):
             _assert_auth_gate_wiring(mutated)
