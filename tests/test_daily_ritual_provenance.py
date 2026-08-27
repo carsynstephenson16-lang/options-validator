@@ -271,6 +271,7 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                         (
                             f'UV="{stub}"',
                             'AS_OF="2026-08-27"',
+                            f'LOGDIR="{tmp}"',
                             'note() { print -r -- "$1"; }',
                             evaluate_line,
                         )
