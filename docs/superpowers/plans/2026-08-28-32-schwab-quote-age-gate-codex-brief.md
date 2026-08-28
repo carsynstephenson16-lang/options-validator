@@ -1,82 +1,130 @@
-# Codex brief 32 — per-quote age audit + owner-gated staleness gate (DATA-02)
+# Codex brief 32 — per-quote age audit + owner-gated staleness gate (DATA-02), rev 2
 
-**Date:** 2026-08-28
+**Date:** 2026-08-28 (rev 2 — round-1 FAIL findings B1–B5, A1–A5, C1–C2
+all addressed)
 **Author:** Claude orchestrating session (Fable), deferred-closeout session
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT — pending independent adversarial review before hand-off
-**Provenance:** Repo-verified against origin/main @`704a138` unless labeled
-otherwise. Finding source: 2026-08-25 audit D3-2/DATA-02
-(`reports/repository-audits/2026-08-25-options-validator/agents/03-data-provenance.md:25-31`).
-**Owner directive:** Carsyn in-session 2026-08-28 — "finish everything
-that's deferred"; DATA-02 ruled "Commission now" via decision prompt.
+**Status:** DRAFT rev 2 — pending FRESH independent adversarial review
+(round 1 verdict was FAIL; a failed brief needs a new written PASS before
+hand-off — brief-29 precedent).
+**Provenance:** Repo-verified against origin/main @`704a138`; round-1
+review measurements (2026-08-27 package: 78% of rows timestamped AFTER the
+receipt's capture-start time; 0 of 7,746 selectable rows >15 min old) are
+Reviewer-measured 2026-08-28.
+**Owner directive:** Carsyn in-session 2026-08-28 — DATA-02 "Commission
+now".
 
 ## Why this exists (plain language)
 
-The daily Schwab capture's verifier proves WHEN the package was downloaded
-(the receipt's capture time) but never checks how old each option quote
-inside it is. Schwab returns stale quotes for options that haven't traded
-recently — the audit sampled ~3,300 rows older than 15 minutes and one from
-the prior session. None was selectable, so no harm yet; this brief adds the
-missing check #9 from the data-audit standard, WARN-first, with BLOCK
-authority owner-gated.
+The Schwab package verifier proves when the download happened but never
+checks how old each quote inside is. This adds the missing per-quote age
+check — warn-first, with blocking authority impossible until the owner
+types a threshold. Round 1 failed because the obvious design breaks three
+real mechanisms; this rev is built around them.
 
-## Verified facts
+## The three mechanisms this rev is built around (round-1 B1/B2/B3)
 
-- Capture persists per-row `timestamp` and `trade_timestamp`
-  (`options_researcher/schwab_chain_capture.py:64-65,83-84`).
-- `tools/schwab_chain_manifest.py`: `build_manifest` `:85`,
-  `verify_session` `:151`, receipt-time check `_captured_at_session` `:60`.
-  No per-row age check anywhere in the file.
-- `options_researcher/h7_data_gate.py` per-row checks (`NUMERIC_CHAIN_COLUMNS`
-  loops `:182,:317`, crossed-market fields `:240`) contain no timestamp-age
-  check. Its `CHAIN_STALE` is filename/session-date based, not per-row.
-- Frozen-numbers rule: a decision-bearing threshold must be OWNER-TYPED.
-  Nothing in this brief may activate blocking with an LLM-proposed number.
+1. **Reason codes ARE the verdict.** `options_researcher/h7_data_gate.py:417`:
+   `verdict = "GO" if not codes else "NO_GO"`. Therefore warn-mode output
+   MUST NEVER touch `reason_codes` — it goes in a separate
+   `quote_age_audit` summary surfaced via `_print_summary`
+   (`h7_data_gate.py:786-796`, which the ritual echoes at
+   `tools/daily_ritual.sh:185`). Only `block_selectable` mode may append
+   the new `QUOTE_STALE` code.
+2. **The receipt capture time is NOT an age reference.** `captured_at_et`
+   is stamped at capture START (`schwab_chain_capture.py:315`); on the
+   real 2026-08-27 package, 78% of quote timestamps are LATER than it.
+   Reference time = the package's own MAXIMUM quote timestamp per symbol.
+   Age of a row = `max_ts - row_ts`, floored at 0. Prior-session detection
+   is absolute: `date(row_ts) < session`. Reuse
+   `options_researcher/live_quotes.py:127 quote_is_fresh` semantics for
+   None/naive/future handling where applicable rather than re-inventing.
+3. **The gate receipt is re-verified by exact dict equality.**
+   `options_researcher/h7_schwab_data_gate.py:73-77` compares the stored
+   `audit_receipt` against a fresh `verify_session(...)` result and raises
+   on ANY difference (reached from `h7_schwab_window_registration.py:150`).
+   Therefore `verify_session`'s RETURN DICT IS UNTOUCHABLE, and no age
+   output may enter any immutable receipt. The age audit is a separate
+   pure function (new helper in `options_researcher/h7_data_gate.py`)
+   whose output lives only in the run summary/log.
 
-## Design (mode-gated, warn-first)
+## Design
 
-New `config.py` constants (provenance comments required):
-- `SCHWAB_QUOTE_AGE_MODE = "warn"` — `"off" | "warn" | "block_selectable"`.
-  Default `"warn"` adds visibility only; NO GO/NO_GO outcome may change in
-  `off` or `warn` mode (golden-tested).
-- `SCHWAB_QUOTE_MAX_AGE_MINUTES = None` — placeholder. The brief SHIPS it
-  as `None`; `block_selectable` mode must hard-fail at import/config-load
-  if the threshold is `None` (activation is impossible until the owner
-  types a number). Candidate values for the owner, ALL labeled
-  LLM-proposed, NOT frozen: **10** (tight; risks over-blocking thin names),
-  **15** (the audit's sampling boundary; matches the receipt tolerance
-  scale), **20** (loose; only catches clearly dead quotes). Prior-session
-  timestamps are categorically wrong in an exact-session package and are
-  flagged regardless of threshold.
+`config.py` constants (both appended, with provenance comments):
+- `SCHWAB_QUOTE_AGE_MODE = "warn"` (`"off" | "warn" | "block_selectable"`).
+- `SCHWAB_QUOTE_MAX_AGE_MINUTES = None` — owner-typed only. Candidates for
+  the owner, ALL labeled LLM-proposed, NOT frozen: 10 / 15 / 20 minutes.
+  (Context, round-1 A1: the live display lane has
+  `LIVE_QUOTE_MAX_AGE_SECONDS = 120` at `config.py:690` — a different
+  regime, real-time display vs preclose package; do not conflate, say so
+  in the constant's comment. This brief's owner-typed insistence is
+  deliberately stricter than the `CHAIN_STALE_WARN/BLOCK_SESSIONS`
+  precedent at `config.py:676-677`.)
+- The `block_selectable`+`None` fail-closed check lives AT GATE ENTRY in
+  `h7_data_gate.py` (round-1 A3: never raise inside `config.py` — that
+  breaks every importer including `config_hash()`).
 
 Surfaces:
-1. `verify_session` gains a non-fatal per-row age AUDIT: counts of rows
-   older than the (configured or candidate-15 informational) age vs the
-   receipt capture time, and any prior-session timestamps, reported in the
-   verification output. Never changes the verify pass/fail in warn mode.
-2. `h7_data_gate` selection path: in `block_selectable` mode ONLY, a
-   selectable row with a prior-session quote timestamp or age beyond the
-   owner-typed threshold is rejected fail-closed with a named reason code
-   (e.g. `QUOTE_STALE`); in `warn` mode the same condition logs/annotates
-   without changing selection or GO/NO_GO.
+1. New pure helper computing the per-symbol age audit (counts over/under
+   threshold-or-candidate-15-informational, prior-session count, max/min
+   quote ts) from a chain frame. Called from the gate evaluation path for
+   frames that carry a `timestamp` column ONLY — Schwab/v2. Legacy v1
+   partitions (`data/cache_schema.py:43-54` — no timestamp column) are
+   explicitly reported `quote_age_audit: NOT_EVALUABLE_V1` (round-1 A5).
+2. `warn` mode: audit summary added to `_print_summary` output and the
+   gate's log line. NO change to `reason_codes`, NO change to any receipt,
+   NO change to GO/NO_GO — golden-tested.
+3. `block_selectable` mode (inert until owner-typed threshold): within the
+   gate's own per-row evaluation (`h7_data_gate.py:302-355` region), a row
+   that passes all EXISTING checks but has a prior-session timestamp or
+   age beyond threshold gets `QUOTE_STALE` appended per current code
+   conventions. Do NOT touch `data/recent_topup.py` (round-1 A4/C2 — the
+   selectable-mask there is out of bounds; brief 33 owns that file).
+
+## Required same-commit updates (round-1 B4/A2)
+
+- `tests/test_ritual_switch_on_hash_containment.py:147` pins the exact
+  tuple of uppercase config names (`FROZEN_CONFIG_UPPERCASE_NAMES`) —
+  update the pin in the same commit; that is its sanctioned maintenance
+  path.
+- `config.py` edits change `config_hash()` (`config.py:528`;
+  compared at `research/diagnostics.py:152`, `research/experiments.py:272`).
+  State in the PR body that stored-vs-live hash comparisons will show the
+  new baseline — the established batch-landing disclosure.
+- **v2 audit closure (round-1 C1):** `config.py` and
+  `options_researcher/h7_data_gate.py` are in `V2_FULL_AUDIT_SOURCE_PATHS`
+  (`data/cache_schema.py:20-40`); `validate_v2_audit_receipt` re-hashes
+  them and a live receipt exists at
+  `.cache/chains_v2/od1-2026-08-01/_meta/full_audit.json`. Landing this
+  invalidates that receipt (`CHAIN_V2_AUDIT_RECEIPT_INVALID` → NO_GO on
+  the v2 lane) until re-audited. Check for live receipts before landing
+  and DISCLOSE the consequence in the PR body; the Schwab lane's override
+  insulates the daily ritual.
 
 ## Scope
 
-**IN:** the two surfaces above + constants + tests.
-**OUT (hard stops):** no ledger writes; no registered-hypothesis or receipt
-FORMAT change (additive report fields only); no provider calls; no
-activation of `block_selectable`; no invented frozen number; no
-`tools/daily_ritual.sh` edits; no changes to existing NO_GO reason codes.
+**IN:** the helper, the two mode behaviors, the constants, the same-commit
+pin updates, tests.
+**OUT (hard stops):** no change to `verify_session`'s return or ANY
+receipt content; no `reason_codes` change outside `block_selectable`; no
+edits to `data/recent_topup.py`, `tools/schwab_chain_manifest.py`, or
+`tools/daily_ritual.sh`; no provider calls; no activation (mode flip +
+threshold are a separate owner-controlled commit); no ledger writes.
 
-## Tests (unittest, offline, synthetic fixtures)
+## Tests (unittest, offline, synthetic frames)
 
-1. Same-session-old selectable row: warn mode → selection unchanged +
-   annotation present; block mode (test-injected threshold) → rejected
-   with `QUOTE_STALE`.
-2. Prior-session selectable row: warn → flagged; block → rejected.
-3. Golden: mode `off`/`warn` produce byte-identical gate outcomes to
-   current behavior on the existing fixtures.
-4. `block_selectable` + `None` threshold → hard config error (fail-closed).
+1. Warn mode, stale + prior-session rows present: `reason_codes`
+   byte-identical to pre-change, GO/NO_GO unchanged, audit summary
+   present.
+2. Block mode (test-injected threshold): stale selectable row →
+   `QUOTE_STALE` in codes → NO_GO; prior-session row likewise.
+3. Age reference: rows newer than max_ts impossible by construction;
+   age floors at 0 (no negative ages).
+4. v1 frame (no timestamp column) → `NOT_EVALUABLE_V1`, no error.
+5. Block mode + `None` threshold → fail-closed error at gate entry.
+6. Receipt-stability regression: `verify_session` output and the gate
+   receipt dict are byte-identical to pre-change on existing fixtures
+   (this is the round-1 B3 protection — make it an explicit test).
 
 ## Acceptance
 
@@ -84,7 +132,5 @@ activation of `block_selectable`; no invented frozen number; no
 uv run python -m unittest discover -s tests
 uv run ruff check . && uv run pyright
 ```
-RED/GREEN demonstrated for tests 1-2. Land via born-draft PR (reconciler
-default post-#97); the owner types the threshold and flips the mode in a
-SEPARATE owner-controlled commit — an intention to activate is not an
-activation.
+RED/GREEN for tests 1-2. Born-draft PR; owner types threshold + flips
+mode in a separate commit if/when desired.
