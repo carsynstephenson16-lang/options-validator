@@ -1,5 +1,62 @@
 # Dashboard and intraday LaunchAgents
 
+## Daily ritual (09:09 ET, weekdays)
+
+`com.carsyn.options-validator.daily-ritual.plist` runs `tools/daily_ritual.sh`
+at **09:09 ET on weekdays** from the **ops** checkout. It is installed and
+loaded in production.
+
+Retimed 2026-08-26 (owner-directed, in-session) from its original 07:10 slot.
+This plist was untracked until that change — it lived only in
+`~/Library/LaunchAgents/` on one laptop, unlike every other job here — so the
+copy in this directory starts at 09:09 and has no 07:10 history.
+
+**The 09:09 slot sits after the daily automerge, and that is load-bearing.**
+`~/bin/repo-reconcile` auto-squash-merges green PRs around 08:15, which
+advances `origin/main` while the ops checkout stays put. The ritual's first
+gate refuses a misaligned checkout:
+
+```
+CRITICAL: main is not exactly aligned with origin/main -- refusing cache publisher authority
+```
+
+A refusal is not merely a skipped run — the ritual never reaches its Step 8
+evidence commit, so that day's capture receipts and `ledger/facts.log` appends
+are left uncommitted in ops and exist on one machine only. That is the same
+failure class as the 2026-08-20/24 Schwab receipt loss. At 07:10 the ritual
+ran *before* the automerge and was usually aligned by default; at 09:09 it
+runs *after*, so the ops pull has to actually happen:
+
+```bash
+git -C ~/options-validator-ops pull --ff-only
+```
+
+The installed copy at `~/Library/LaunchAgents/` is a byte-copy; editing the
+template in this directory does **not** change what launchd runs, and even
+editing the installed file does nothing until the job is reloaded — launchd
+caches the schedule at bootstrap time:
+
+```bash
+cp tools/launchagents/com.carsyn.options-validator.daily-ritual.plist \
+   ~/Library/LaunchAgents/
+launchctl bootout gui/$(id -u)/com.carsyn.options-validator.daily-ritual 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) \
+   ~/Library/LaunchAgents/com.carsyn.options-validator.daily-ritual.plist
+launchctl print gui/$(id -u)/com.carsyn.options-validator.daily-ritual \
+  | grep -E '"(Hour|Minute|Weekday)"'
+```
+
+That last line is the only honest verification: it prints what launchd holds,
+not what the file says. Expect five descriptors, Hour 9 / Minute 9,
+Weekdays 1–5.
+
+Note on who may run these: the alignment-check section below states that a
+Claude session cannot run `launchctl` because the classifier denies it. That
+was not true on 2026-08-26 — the session that performed this retime ran
+`bootout` + `bootstrap` + `print` successfully (both rc=0). Treat the claim as
+unverified rather than as a guarantee, and confirm with `launchctl print`
+either way.
+
 ## Ops alignment check (15:30 ET, detection only)
 
 `com.carsyn.options-validator.alignment-check.plist` runs
@@ -300,9 +357,9 @@ rm ~/Library/LaunchAgents/com.carsyn.options-validator.intraday-capture.plist
   disposable) — the durable record is the receipt under
   `reports/intraday_capture/`, picked up by the daily ritual's evidence
   commit step.
-- This LaunchAgent and `tools/daily_ritual.sh`'s existing 07:10 LaunchAgent
-  are independent: intraday_capture.sh never commits or pushes anything
-  itself.
+- This LaunchAgent and `tools/daily_ritual.sh`'s 09:09 LaunchAgent (07:10
+  before 2026-08-26) are independent: intraday_capture.sh never commits or
+  pushes anything itself.
 
 ## Display-only research views
 
