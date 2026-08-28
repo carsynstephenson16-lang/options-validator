@@ -1,147 +1,106 @@
-# Codex brief 32 — per-quote age audit + owner-gated staleness gate (DATA-02), rev 2
+# Codex brief 32 — daily quote-age REPORT for Schwab captures (DATA-02, rev 3 — regated)
 
-**Date:** 2026-08-28 (rev 2 — round-1 FAIL findings B1–B5, A1–A5, C1–C2
-all addressed)
+**Date:** 2026-08-28 (rev 3 — owner rerouted after two review FAILs)
 **Author:** Claude orchestrating session (Fable), deferred-closeout session
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** BLOCKED — round-2 fresh independent review (Opus, 2026-08-28)
-verdict FAIL on STRUCTURAL grounds (finding N1): the production data gate
-reads only the frozen v1 cache (`.cache/chains`, no timestamp columns,
-newest file 2026-07-27), and `h7_schwab_data_gate` — the only module that
-reads the timestamped Schwab packages — has ZERO production callers (it
-is pre-wired for the future H7 Schwab window registration). As scoped,
-the gate would land inert: no quote would ever be aged. Also blocking:
-N2 (a per-symbol audit under `result["symbols"]` leaks into the immutable
-receipt via `build_receipt`, `h7_data_gate.py:645`), N3 (test 6
-unwritable — `config_hash`/`source_hash` move with this very PR), N4
-(the selectable mask is private in `data/recent_topup.py:489` and
-out-of-scope). Owner-relevant round-2 measurement (keep for any future
-threshold ruling): worst SELECTABLE quote age across the seven
-timestamped sessions on disk = 0.61–10.38 min (08-25 peaked at 10.38 —
-a 10-minute block threshold would have NO_GO'd 1 of 7 sessions; 15/20
-would have blocked none; n=7, LLM-measured, not owner-typed). DO NOT
-IMPLEMENT from this revision. Routing decision pending owner 2026-08-28:
-descriptive daily age report now + gate deferred to the H7 Schwab
-registration arc, vs everything deferred to that arc, vs a rev-3
-standalone redesign.
-**Provenance:** Repo-verified against origin/main @`704a138`; round-1
-review measurements (2026-08-27 package: 78% of rows timestamped AFTER the
-receipt's capture-start time; 0 of 7,746 selectable rows >15 min old) are
-Reviewer-measured 2026-08-28.
-**Owner directive:** Carsyn in-session 2026-08-28 — DATA-02 "Commission
-now".
+**Status:** DRAFT rev 3 — pending FRESH independent adversarial review
+(rounds 1 and 2 FAILED earlier gate designs; this rev is a different,
+smaller deliverable per owner ruling).
+**Owner ruling (2026-08-28 in-session, decision prompt):** "Report now,
+gate later" — a descriptive daily quote-age report ships now; the
+BLOCKING gate + owner-typed threshold are a **binding requirement of the
+H7 Schwab window registration arc** (recorded below). Rationale: round-2
+finding N1 proved the gate has no production surface today — the daily
+gate reads only the frozen v1 cache (no timestamp columns) and
+`h7_schwab_data_gate` has zero production callers.
+**Provenance:** Repo-verified against origin/main @`704a138`; round-2
+review measurements (Opus, 2026-08-28) labeled Reviewer-measured.
 
-## Why this exists (plain language)
+## What ships now (plain language)
 
-The Schwab package verifier proves when the download happened but never
-checks how old each quote inside is. This adds the missing per-quote age
-check — warn-first, with blocking authority impossible until the owner
-types a threshold. Round 1 failed because the obvious design breaks three
-real mechanisms; this rev is built around them.
+Every day at 15:45 the Schwab capture writes option-chain files plus a
+manifest and receipt. This brief adds one SIDECAR report per capture —
+`reports/schwab_chains/<session>/quote_age.json` — describing how old the
+quotes inside that day's package are. Display-only, no gate, no
+threshold, no effect on any verdict, receipt, or GO/NO_GO.
 
-## The three mechanisms this rev is built around (round-1 B1/B2/B3)
+## Design constraints carried from the two failed rounds (all binding)
 
-1. **Reason codes ARE the verdict.** `options_researcher/h7_data_gate.py:417`:
-   `verdict = "GO" if not codes else "NO_GO"`. Therefore warn-mode output
-   MUST NEVER touch `reason_codes` — it goes in a separate
-   `quote_age_audit` summary surfaced via `_print_summary`
-   (`h7_data_gate.py:786-796`, which the ritual echoes at
-   `tools/daily_ritual.sh:185`). Only `block_selectable` mode may append
-   the new `QUOTE_STALE` code.
-2. **The receipt capture time is NOT an age reference.** `captured_at_et`
-   is stamped at capture START (`schwab_chain_capture.py:315`); on the
-   real 2026-08-27 package, 78% of quote timestamps are LATER than it.
-   Reference time = the package's own MAXIMUM quote timestamp per symbol.
-   Age of a row = `max_ts - row_ts`, floored at 0. Prior-session detection
-   is absolute: `date(row_ts) < session`. Reuse
-   `options_researcher/live_quotes.py:127 quote_is_fresh` semantics for
-   None/naive/future handling where applicable rather than re-inventing.
-3. **The gate receipt is re-verified by exact dict equality.**
-   `options_researcher/h7_schwab_data_gate.py:73-77` compares the stored
-   `audit_receipt` against a fresh `verify_session(...)` result and raises
-   on ANY difference (reached from `h7_schwab_window_registration.py:150`).
-   Therefore `verify_session`'s RETURN DICT IS UNTOUCHABLE, and no age
-   output may enter any immutable receipt. The age audit is a separate
-   pure function (new helper in `options_researcher/h7_data_gate.py`)
-   whose output lives only in the run summary/log.
+1. **Surface (round-2 N1):** the report reads `.cache/schwab_chains/*_<session>.parquet`
+   bound to `reports/schwab_chains/<session>/manifest.json` — the only
+   production data that has timestamps. Implement as a small standalone
+   module (e.g. `options_researcher/schwab_quote_age_report.py`) invoked
+   from the capture flow AFTER the manifest/receipt are written, wrapped
+   fail-soft (try/except + logged note): a report failure must be
+   INCAPABLE of failing or altering the capture, manifest, or receipt.
+2. **No receipt/verifier coupling (rounds 1-2 B3/N2):** `verify_session`'s
+   return, the capture receipt, and the data-gate receipt are untouched.
+   The report is its own file. Do not add any key to any existing
+   dict/receipt/artifact.
+3. **Both timestamp columns (round-2 N6):** the frames carry `timestamp`
+   AND `trade_timestamp` (nullable). Report stats for BOTH, per symbol
+   and package-wide: null counts, min/max, and the age distribution
+   (p50/p90/max minutes) relative to the per-symbol MAX of that column.
+4. **Honest vocabulary (round-2 N10 note):** the per-symbol-max reference
+   is a WITHIN-PACKAGE DISPERSION measure, not absolute wall-clock age —
+   a wholly-late package reads as fresh. Say exactly that in the report's
+   own `"semantics"` field. Absolute cross-day staleness IS covered:
+   prior-session detection compares `tz_convert("America/New_York")` of
+   each timestamp to the session date (round-2 N9 — pin the tz step; the
+   stored dtype is `datetime64[ns, UTC]`).
+5. **Durability is already free:** `reports/schwab_chains` is in the
+   ritual's `DATA_TIER_PATHS` (PR #76) — the sidecar rides the existing
+   entry. NO edit to `tools/daily_ritual.sh`, none, at all.
+6. **Overwrite guard:** same pattern as brief 33 M1 — pre-write
+   `path.exists()` check, `FileExistsError` unless byte-identical.
+7. **Hash disclosure (round-2 M6 class):** `options_researcher/` is
+   inside `DIAGNOSTIC_SOURCE_PATHS_V3`; this landing moves
+   `diagnostic_source_hash()`. Measured harmless today (all existing
+   data-gate receipts already mismatch live hashes); one PR-body
+   sentence, and any receipt intended for a future Schwab registration
+   is generated after the last code landing.
+8. **No config constants.** A report needs no threshold — so no
+   `FROZEN_CONFIG_UPPERCASE_NAMES` pin update and no `config_hash()`
+   move from this brief.
 
-## Design
+## Recorded for the H7 registration arc (binding hand-forward)
 
-`config.py` constants (both appended, with provenance comments):
-- `SCHWAB_QUOTE_AGE_MODE = "warn"` (`"off" | "warn" | "block_selectable"`).
-- `SCHWAB_QUOTE_MAX_AGE_MINUTES = None` — owner-typed only. Candidates for
-  the owner, ALL labeled LLM-proposed, NOT frozen: 10 / 15 / 20 minutes.
-  (Context, round-1 A1: the live display lane has
-  `LIVE_QUOTE_MAX_AGE_SECONDS = 120` at `config.py:690` — a different
-  regime, real-time display vs preclose package; do not conflate, say so
-  in the constant's comment. This brief's owner-typed insistence is
-  deliberately stricter than the `CHAIN_STALE_WARN/BLOCK_SESSIONS`
-  precedent at `config.py:676-677`.)
-- The `block_selectable`+`None` fail-closed check lives AT GATE ENTRY in
-  `h7_data_gate.py` (round-1 A3: never raise inside `config.py` — that
-  breaks every importer including `config_hash()`).
-
-Surfaces:
-1. New pure helper computing the per-symbol age audit (counts over/under
-   threshold-or-candidate-15-informational, prior-session count, max/min
-   quote ts) from a chain frame. Called from the gate evaluation path for
-   frames that carry a `timestamp` column ONLY — Schwab/v2. Legacy v1
-   partitions (`data/cache_schema.py:43-54` — no timestamp column) are
-   explicitly reported `quote_age_audit: NOT_EVALUABLE_V1` (round-1 A5).
-2. `warn` mode: audit summary added to `_print_summary` output and the
-   gate's log line. NO change to `reason_codes`, NO change to any receipt,
-   NO change to GO/NO_GO — golden-tested.
-3. `block_selectable` mode (inert until owner-typed threshold): within the
-   gate's own per-row evaluation (`h7_data_gate.py:302-355` region), a row
-   that passes all EXISTING checks but has a prior-session timestamp or
-   age beyond threshold gets `QUOTE_STALE` appended per current code
-   conventions. Do NOT touch `data/recent_topup.py` (round-1 A4/C2 — the
-   selectable-mask there is out of bounds; brief 33 owns that file).
-
-## Required same-commit updates (round-1 B4/A2)
-
-- `tests/test_ritual_switch_on_hash_containment.py:147` pins the exact
-  tuple of uppercase config names (`FROZEN_CONFIG_UPPERCASE_NAMES`) —
-  update the pin in the same commit; that is its sanctioned maintenance
-  path.
-- `config.py` edits change `config_hash()` (`config.py:528`;
-  compared at `research/diagnostics.py:152`, `research/experiments.py:272`).
-  State in the PR body that stored-vs-live hash comparisons will show the
-  new baseline — the established batch-landing disclosure.
-- **v2 audit closure (round-1 C1):** `config.py` and
-  `options_researcher/h7_data_gate.py` are in `V2_FULL_AUDIT_SOURCE_PATHS`
-  (`data/cache_schema.py:20-40`); `validate_v2_audit_receipt` re-hashes
-  them and a live receipt exists at
-  `.cache/chains_v2/od1-2026-08-01/_meta/full_audit.json`. Landing this
-  invalidates that receipt (`CHAIN_V2_AUDIT_RECEIPT_INVALID` → NO_GO on
-  the v2 lane) until re-audited. Check for live receipts before landing
-  and DISCLOSE the consequence in the PR body; the Schwab lane's override
-  insulates the daily ritual.
+When the H7 Schwab window registers and `h7_schwab_data_gate` gains a
+production caller, the BLOCKING per-quote age gate becomes a REQUIRED
+work package of that arc, with: an owner-typed threshold (evidence
+already gathered, Reviewer-measured 2026-08-28 across all seven
+timestamped sessions — worst SELECTABLE age 0.61–10.38 min; a 10-min
+block would have NO_GO'd 1 of 7 sessions, 15/20 min none; n=7), a
+public selectable-mask accessor in `data/recent_topup.py` (round-2 N4 —
+the mask is private at `:489`; brief 33 owns that file, so ordering is
+33 → gate), and reason-code semantics designed against
+`h7_data_gate.py:417` and `build_receipt` `:645` (rounds 1-2 B1/N2).
+This paragraph is the DATA-02 disposition of record; do not re-propose a
+standalone gate outside that arc.
 
 ## Scope
 
-**IN:** the helper, the two mode behaviors, the constants, the same-commit
-pin updates, tests.
-**OUT (hard stops):** no change to `verify_session`'s return or ANY
-receipt content; no `reason_codes` change outside `block_selectable`; no
-edits to `data/recent_topup.py`, `tools/schwab_chain_manifest.py`, or
-`tools/daily_ritual.sh`; no provider calls; no activation (mode flip +
-threshold are a separate owner-controlled commit); no ledger writes.
+**IN:** the report module, its fail-soft invocation from the capture
+flow, tests.
+**OUT (hard stops):** no gate, no threshold, no config changes; no edits
+to `tools/schwab_chain_manifest.py` `verify_session` return, any receipt,
+`options_researcher/h7_data_gate.py`, `data/recent_topup.py`, `config.py`,
+or `tools/daily_ritual.sh`; no provider calls; report failures never
+propagate; nothing verdict-bearing — the report file carries
+`"authority": "descriptive-only"` and its max as-of session.
 
-## Tests (unittest, offline, synthetic frames)
+## Tests (unittest, offline, synthetic parquet fixtures)
 
-1. Warn mode, stale + prior-session rows present: `reason_codes`
-   byte-identical to pre-change, GO/NO_GO unchanged, audit summary
-   present.
-2. Block mode (test-injected threshold): stale selectable row →
-   `QUOTE_STALE` in codes → NO_GO; prior-session row likewise.
-3. Age reference: rows newer than max_ts impossible by construction;
-   age floors at 0 (no negative ages).
-4. v1 frame (no timestamp column) → `NOT_EVALUABLE_V1`, no error.
-5. Block mode + `None` threshold → fail-closed error at gate entry.
-6. Receipt-stability regression: `verify_session` output and the gate
-   receipt dict are byte-identical to pre-change on existing fixtures
-   (this is the round-1 B3 protection — make it an explicit test).
+1. Synthetic package (both timestamp columns, some nulls, one
+   prior-session row) → report written with correct per-symbol stats,
+   prior-session count, semantics field, as-of stamp.
+2. Capture-flow integration: report writer raising → capture result,
+   manifest, receipt byte-identical to pre-change; failure note logged
+   (fail-soft proof, RED/GREEN).
+3. Overwrite guard: differing same-session rewrite refuses; identical
+   no-op.
+4. No-coupling regression: `verify_session` output on existing fixtures
+   byte-identical to pre-change.
 
 ## Acceptance
 
@@ -149,5 +108,5 @@ threshold are a separate owner-controlled commit); no ledger writes.
 uv run python -m unittest discover -s tests
 uv run ruff check . && uv run pyright
 ```
-RED/GREEN for tests 1-2. Born-draft PR; owner types threshold + flips
-mode in a separate commit if/when desired.
+Born-draft PR; owner un-drafts. Independent of briefs 33/34/35 (no shared
+files); no landing-order constraint.
