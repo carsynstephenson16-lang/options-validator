@@ -4,8 +4,11 @@
 all addressed)
 **Author:** Claude orchestrating session (Fable), deferred-closeout session
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 2 — pending FRESH independent adversarial review
-(round 1 verdict was FAIL).
+**Status:** HANDED OFF TO CODEX (rev 3) — round-1 FAIL; round-2 fresh
+independent review (Opus, 2026-08-28) verdict PASS WITH FIXES M1–M6, all
+applied in this rev (both core mechanisms independently reproduced by the
+round-2 reviewer); Fable sign-off recorded. Owner directive to proceed:
+2026-08-28 in-session.
 **Provenance:** Repo-verified against origin/main @`704a138`. Finding
 source: 2026-08-25 audit D3-3/DATA-03. Guard non-interaction adjudication:
 R3-F14 at `docs/superpowers/plans/2026-08-25-29-schwab-inventory-binding-codex-brief.md:77`
@@ -26,8 +29,8 @@ commit. This rev is built around both.
 ## The two mechanisms this rev is built around (round-1 B1/B2)
 
 1. **There is no fetched frame.** `fetch_underlying_eod_yahoo(symbol) -> str`
-   returns a PATH (`data/underlying_closes.py:265`, `:341` returns
-   `store_closes(...)`); `refresh_closes_guarded`
+   returns a PATH (`data/underlying_closes.py:265`, `:290` returns
+   `store_closes(...)` — M3 corrected the line); `refresh_closes_guarded`
    (`data/recent_topup.py:107`) even discards the return (`:168`) and
    re-reads from disk. So the receipt binds exactly ONE hash class:
    the STORED close file's sha256 immediately after the refresh step, per
@@ -47,19 +50,29 @@ commit. This rev is built around both.
 
 Receipt: `reports/closes_receipts/<YYYY-MM-DD>/<scope>.json` (dated
 subdirectory + scope discriminator, the `reports/schwab_chains/<date>/`
-precedent — round-1 A2; two same-day runs with different scopes get
-distinct files; an exact re-run refuses to overwrite via
-`atomic_text_write`'s exclusive create — note its TEXT-FIRST argument
-order, `data/atomic_io.py` (round-1 A1)).
+precedent — round-1 A2). Scope values are FROZEN in this brief (round-2
+M2): the guarded producer writes `guarded-all-cached.json`; plain
+`refresh_closes` uses its CLI `--scope` value verbatim
+(`core`/`h7`/`display-extra`). The receipt carries a `producer` field
+naming the generating function. Overwrite protection (round-2 M1 —
+`atomic_text_write`'s exclusive create is on the PID temp file only;
+`os.replace` overwrites the destination unconditionally,
+`data/atomic_io.py:66-87`): an explicit pre-write `path.exists()` guard
+raises `FileExistsError` unless the new payload is byte-identical
+(no-op) — the `write_artifact` precedent at
+`options_researcher/h7_data_gate.py:768-771`. Note `atomic_text_write`'s
+TEXT-FIRST argument order (round-1 A1).
 
 Contents: schema version; provider identity; retrieval UTC timestamp;
-requested symbols; per-symbol OUTCOME — one of
-`refreshed | restored | failed | skipped` — with `stored_file_sha256` and
-max session for every symbol that has a stored file after the run.
-`restored` (the guard rolled the file back, `data/recent_topup.py:197-220`)
-records the RESTORED file's hash — that is the true post-run state
-(round-1 A3). All-failed runs still emit the receipt with `failed`
-outcomes — fail-visible (round-1 A4).
+requested symbols; per-symbol OUTCOME with `stored_file_sha256` and max
+session for every symbol that has a stored file after the run. Outcome
+vocabulary maps EXACTLY onto the guarded path's real terminal states
+(round-2 M4 — no `skipped`; every globed symbol is attempted):
+`refreshed` (clean, `:221-223`), `restored` (guard rolled back,
+`:212-220` — records the RESTORED file's hash, the true post-run state,
+round-1 A3), `failed` with a `stage` field of
+`pre_read | fetch | post_read` (`:161-165`, `:167-172`, `:174-189`).
+All-failed runs still emit the receipt — fail-visible (round-1 A4).
 
 Producers: wire into `refresh_closes_guarded` (`data/recent_topup.py:107` —
 the ONLY production caller, via `tools/daily_ritual.sh:290`) AND plain
@@ -81,26 +94,35 @@ is an integrity alarm.
 ## Ritual durability edit (round-1 B3 — exact constraint)
 
 `tests/test_daily_ritual_provenance.py:88-134` pins `tools/daily_ritual.sh`
-BY EXACT LINE NUMBER (python-dash-c sites at keys 120…437; mutation verbs:
-`git add` 570, `git commit` 573, `git fetch` 583, `git merge` 584,
-`git push` 585, `restic backup` 602; asserted with `assertEqual` at
-`:352,:359,:365`). Therefore the `DATA_TIER_PATHS` addition MUST be an
-INLINE edit on the existing path-list line (`tools/daily_ritual.sh:550`,
-the `reports/pick_tracker` precedent) — NO inserted lines at or above
-`:570`, no comment blocks. If the receipt-producer call itself must be
-added to the ritual, it goes through the same inline/no-shift discipline
-or below `:602`, and the pinned registries are updated in the same commit
-ONLY if a shift is truly unavoidable (prefer: no shift at all).
+BY EXACT LINE NUMBER (python-dash-c sites at keys 120…437 — key 290 IS
+`refresh_closes_guarded`'s invocation; mutation verbs: `git add` 570,
+`git commit` 573, `git fetch` 583, `git merge` 584, `git push` 585,
+`restic backup` 602; asserted with `assertEqual` at `:352,:359,:365`).
+HARD CONSTRAINT (round-2 M5): **the receipt producer is Python-side
+only** — it lives inside `refresh_closes_guarded` / `refresh_closes`,
+which the ritual already invokes at the pinned (but content-unpinned)
+`python -c` site on `:290`; NO new ritual step exists. The SOLE permitted
+`tools/daily_ritual.sh` change is appending `reports/closes_receipts` to
+the existing array line at `:550`, kept on ONE physical line (~124 chars;
+no shell linter exists in `.github/workflows/`). If any edit shifts line
+numbers, `assertEqual` at `:359` fails loudly — that is the tripwire, not
+a thing to work around.
 
 ## v2 audit closure (round-1 C1)
 
 `data/recent_topup.py` and `data/underlying_closes.py` are in
-`V2_FULL_AUDIT_SOURCE_PATHS` (`data/cache_schema.py:20-40`); a live
+`V2_FULL_AUDIT_SOURCE_PATHS` (`data/cache_schema.py:20-41`); a live
 receipt exists at `.cache/chains_v2/od1-2026-08-01/_meta/full_audit.json`
 and re-hash validation raises on change → `CHAIN_V2_AUDIT_RECEIPT_INVALID`
 on the v2 lane until re-audited. Check for live receipts before landing;
 disclose the consequence in the PR body. The Schwab-lane override
-insulates the daily ritual.
+insulates the daily ritual. Additionally (round-2 M6): `data/` and
+`config.py` are in `SOURCE_HASH_PATHS` (`research/hashing.py:17-27`), so
+this landing moves `source_hash()`/`diagnostic_source_hash()` — measured
+harmless today (every existing H7 data-gate receipt already mismatches
+the live hashes), but any data-gate receipt intended for a FUTURE Schwab
+window registration must be generated AFTER the last code landing. One
+sentence in the PR body.
 
 ## Scope
 
@@ -126,6 +148,9 @@ calls in tests (synthetic `fetch_fn`); no guard/inventory changes
 5. All-fetches-fail run → receipt with `failed` outcomes (fail-visible).
 6. Ritual line-pin regression: `tests/test_daily_ritual_provenance.py`
    passes unmodified (proving the inline edit shifted nothing).
+7. Overwrite guard (M1): same-day same-scope re-run with DIFFERING
+   payload → `FileExistsError`, first receipt intact; byte-identical
+   payload → no-op success.
 
 ## Acceptance
 

@@ -4,9 +4,26 @@
 all addressed)
 **Author:** Claude orchestrating session (Fable), deferred-closeout session
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT rev 2 — pending FRESH independent adversarial review
-(round 1 verdict was FAIL; a failed brief needs a new written PASS before
-hand-off — brief-29 precedent).
+**Status:** BLOCKED — round-2 fresh independent review (Opus, 2026-08-28)
+verdict FAIL on STRUCTURAL grounds (finding N1): the production data gate
+reads only the frozen v1 cache (`.cache/chains`, no timestamp columns,
+newest file 2026-07-27), and `h7_schwab_data_gate` — the only module that
+reads the timestamped Schwab packages — has ZERO production callers (it
+is pre-wired for the future H7 Schwab window registration). As scoped,
+the gate would land inert: no quote would ever be aged. Also blocking:
+N2 (a per-symbol audit under `result["symbols"]` leaks into the immutable
+receipt via `build_receipt`, `h7_data_gate.py:645`), N3 (test 6
+unwritable — `config_hash`/`source_hash` move with this very PR), N4
+(the selectable mask is private in `data/recent_topup.py:489` and
+out-of-scope). Owner-relevant round-2 measurement (keep for any future
+threshold ruling): worst SELECTABLE quote age across the seven
+timestamped sessions on disk = 0.61–10.38 min (08-25 peaked at 10.38 —
+a 10-minute block threshold would have NO_GO'd 1 of 7 sessions; 15/20
+would have blocked none; n=7, LLM-measured, not owner-typed). DO NOT
+IMPLEMENT from this revision. Routing decision pending owner 2026-08-28:
+descriptive daily age report now + gate deferred to the H7 Schwab
+registration arc, vs everything deferred to that arc, vs a rev-3
+standalone redesign.
 **Provenance:** Repo-verified against origin/main @`704a138`; round-1
 review measurements (2026-08-27 package: 78% of rows timestamped AFTER the
 receipt's capture-start time; 0 of 7,746 selectable rows >15 min old) are
