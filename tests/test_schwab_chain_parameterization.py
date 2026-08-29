@@ -1,8 +1,16 @@
-"""Characterization tests for Schwab chain capture core parameterization."""
+"""Characterization tests for Schwab chain capture core parameterization.
+
+Brief 32 adds the two capture-flow tests at the bottom of this file: they reuse
+this module's `_isolated_capture()` harness to prove the descriptive quote-age
+sidecar cannot alter the capture's bytes, exit code, or `verify_session`'s
+output.
+"""
 
 from __future__ import annotations
 
+import contextlib
 import inspect
+import io
 import json
 import os
 import tempfile
@@ -15,6 +23,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from options_researcher import schwab_chain_capture as capture
+from options_researcher import schwab_quote_age_report as quote_age
 from tools import schwab_chain_manifest as manifest
 
 NY = ZoneInfo("America/New_York")
@@ -392,6 +401,136 @@ class SchwabChainParameterizationTests(unittest.TestCase):
                 "convention": manifest.SESSION_CHAIN_CONVENTION,
             },
         )
+
+    # --- brief 32: the quote-age sidecar is incapable of touching capture ---
+    #
+    # Within-run A/B rather than a stored pre-change artifact: the receipt
+    # embeds the landing's own code_sha, so it can never match a pre-change
+    # golden file. Lane A runs the real sidecar writer; lane B forces it to
+    # raise. Everything the capture is responsible for must be identical.
+    #
+    # HARNESS DEPENDENCY (keep this in mind before touching _isolated_capture):
+    # the working lane only produces a real sidecar because the harness's
+    # `mock.patch.object(manifest.pd, "read_parquet", ...)` patches the GLOBAL
+    # pandas, so the report module's own read returns the golden frame instead
+    # of the `b"golden-chain\n"` placeholder the mocked writer puts on disk. If
+    # that patch is ever narrowed to the manifest module alone, lane A silently
+    # falls through to fail-soft for an unrelated reason and stops proving the
+    # success path -- the assertion that lane A wrote a sidecar is what would
+    # fail, so the breakage is loud rather than silent.
+
+    def _run_capture_lane(self, *, break_report: bool):
+        stdout = io.StringIO()
+        with self._isolated_capture():
+            patches = contextlib.nullcontext()
+            if break_report:
+                patches = mock.patch.object(
+                    capture,
+                    "write_quote_age_report",
+                    side_effect=RuntimeError("forced sidecar failure"),
+                )
+            with patches, contextlib.redirect_stdout(stdout):
+                exit_code, receipt = capture.capture(
+                    client=FakeClient(),
+                    now_ny=PRECLOSE,
+                    universe=["AAA"],
+                    chain_dir=Path("chains"),
+                    reports_dir=Path("reports"),
+                    force=False,
+                )
+            sidecar = Path("reports/2026-08-10/preclose.quote_age.json")
+            return {
+                "exit_code": exit_code,
+                "receipt": receipt,
+                "manifest_bytes": Path("reports/2026-08-10/manifest.json").read_bytes(),
+                "receipt_bytes": Path("reports/2026-08-10/preclose.json").read_bytes(),
+                "verified": manifest.verify_session(
+                    "2026-08-10",
+                    ["AAA"],
+                    Path("chains"),
+                    Path("reports/2026-08-10/manifest.json"),
+                    Path("reports/2026-08-10/preclose.json"),
+                ),
+                "sidecar_text": sidecar.read_text() if sidecar.is_file() else None,
+                "stdout": stdout.getvalue(),
+            }
+
+    def test_quote_age_sidecar_failure_cannot_change_capture_bytes_or_exit_code(self):
+        working = self._run_capture_lane(break_report=False)
+        broken = self._run_capture_lane(break_report=True)
+
+        self.assertEqual(working["exit_code"], 0)
+        self.assertEqual(broken["exit_code"], working["exit_code"])
+        self.assertEqual(broken["manifest_bytes"], working["manifest_bytes"])
+        self.assertEqual(broken["receipt_bytes"], working["receipt_bytes"])
+        self.assertEqual(broken["receipt"], working["receipt"])
+        self.assertEqual(broken["verified"], working["verified"])
+
+        # The working lane really did write a sidecar; the broken lane wrote
+        # nothing and said so with the distinct, greppable prefix.
+        self.assertIsNotNone(working["sidecar_text"])
+        assert working["sidecar_text"] is not None
+        written = json.loads(working["sidecar_text"])
+        self.assertIs(written["display_only"], True)
+        self.assertIs(written["verdict_eligible"], False)
+        self.assertEqual(written["session"], "2026-08-10")
+        self.assertIsNone(broken["sidecar_text"])
+        self.assertIn(quote_age.SKIP_NOTE_PREFIX, broken["stdout"])
+        self.assertIn("forced sidecar failure", broken["stdout"])
+        self.assertNotIn(quote_age.SKIP_NOTE_PREFIX, working["stdout"])
+
+        # The fail-soft note must not be mistakable for one of the four
+        # anchored capture classifications the ops wrapper greps for.
+        for label in ("auth EXPIRED", "refused", "receipt CONFLICT", "failed"):
+            self.assertNotIn(f"schwab_chain_capture {label}:", broken["stdout"])
+        for lane in (working, broken):
+            self.assertIn("schwab_chain_capture complete: 1/1", lane["stdout"])
+
+    def test_verify_session_output_is_unchanged_by_the_sidecar(self):
+        """No-coupling regression: verify_session's return is byte-identical
+        to its pre-change value, with and without the sidecar present."""
+        expected = {
+            "provider": "schwab",
+            "session": "2026-08-10",
+            "session_chain_convention": "preclose_snapshot_v1",
+            "manifest_hash": "a1667c3e89511d76882aa4afc2953ce48a47799ed334f1be38a438efd8e8a9f0",
+            "manifest_path": "reports/2026-08-10/manifest.json",
+            "receipt_path": "reports/2026-08-10/preclose.json",
+        }
+        expected_bytes = json.dumps(expected, indent=2, sort_keys=True).encode()
+
+        def verified_bytes() -> bytes:
+            return json.dumps(
+                manifest.verify_session(
+                    "2026-08-10",
+                    ["AAA"],
+                    Path("chains"),
+                    Path("reports/2026-08-10/manifest.json"),
+                    Path("reports/2026-08-10/preclose.json"),
+                ),
+                indent=2,
+                sort_keys=True,
+            ).encode()
+
+        with self._isolated_capture():
+            exit_code, _ = capture.capture(
+                client=FakeClient(),
+                now_ny=PRECLOSE,
+                universe=["AAA"],
+                chain_dir=Path("chains"),
+                reports_dir=Path("reports"),
+                force=False,
+            )
+            self.assertEqual(exit_code, 0)
+
+            sidecar = Path("reports/2026-08-10/preclose.quote_age.json")
+            self.assertTrue(sidecar.is_file())
+            with_sidecar = verified_bytes()
+            sidecar.unlink()
+            without_sidecar = verified_bytes()
+
+        self.assertEqual(with_sidecar, expected_bytes)
+        self.assertEqual(without_sidecar, expected_bytes)
 
 
 if __name__ == "__main__":
