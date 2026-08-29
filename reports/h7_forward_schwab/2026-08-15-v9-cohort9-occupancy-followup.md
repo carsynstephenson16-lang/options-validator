@@ -54,7 +54,7 @@ rewritten; the existing files remain authoritative.
 | **Occupancy-constrained (42-session lockout — primary schedule assumption)** | **7** |
 | Occupancy-constrained (21-session lockout — generous alternate) | 11 |
 | Top-symbol concentration | PLTR 38/80 = 47.5% |
-| Names contributing | 3 of 9 (MSFT 12, NOW 28, PLTR 38, VST 2; AMD/AMZN/CEG/ET/TEM = 0) |
+| Names contributing | 4 of 9 (MSFT 12, NOW 28, PLTR 38, VST 2; AMD/AMZN/CEG/ET/TEM = 0) |
 
 **The measured, receipt-bound number is 7 expected entries** per 70-session
 window (42-session occupancy lockout, the schedule's primary assumption), or
