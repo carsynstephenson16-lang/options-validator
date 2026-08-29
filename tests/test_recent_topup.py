@@ -362,6 +362,7 @@ class RefreshClosesTests(unittest.TestCase):
                 today="2026-07-29",
                 ledger_dir=ledger_dir,
                 fetch_fn=lambda symbol: calls.append(symbol) or f"{symbol}.parquet",
+                receipts_dir=Path(ledger_dir) / "closes_receipts",
             )
             fact = (Path(ledger_dir) / "facts.log").read_text()
         self.assertEqual(calls, ["MSFT", "AMZN"])
@@ -376,6 +377,10 @@ class RefreshClosesGuardedTests(unittest.TestCase):
         self.cache_dir = Path(self.tmp.name) / "underlying"
         self.cache_dir.mkdir()
         self.ledger_dir = Path(self.tmp.name) / "ledger"
+        # Brief 33: the guarded producer now writes a provenance receipt.
+        # Isolate it, or these tests would write into the repo's real
+        # reports/closes_receipts/ and collide with each other.
+        self.receipts_dir = Path(self.tmp.name) / "closes_receipts"
         self.patch_cache = mock.patch.object(
             underlying_closes, "CACHE_DIR", str(self.cache_dir)
         )
@@ -400,7 +405,10 @@ class RefreshClosesGuardedTests(unittest.TestCase):
             return str(self.cache_dir / f"{symbol}.parquet")
 
         result = recent_topup.refresh_closes_guarded(
-            today="2026-07-30", ledger_dir=str(self.ledger_dir), fetch_fn=fetch
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
         )
         self.assertEqual(result["max_dates"], {"AMZN": "2026-07-29", "MSFT": "2026-07-29"})
         self.assertEqual(result["restored_symbols"], {})
@@ -418,7 +426,10 @@ class RefreshClosesGuardedTests(unittest.TestCase):
                 self._store(symbol, [("2026-07-28", 200.0), ("2026-07-29", 201.0)])
 
         result = recent_topup.refresh_closes_guarded(
-            today="2026-07-30", ledger_dir=str(self.ledger_dir), fetch_fn=fetch
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
         )
         self.assertEqual(result["restored_symbols"], {"MSFT": "2026-07-28"})
         self.assertEqual(result["max_dates"]["MSFT"], "2026-07-28")
@@ -440,7 +451,10 @@ class RefreshClosesGuardedTests(unittest.TestCase):
                 self._store(symbol, [("2026-07-28", 200.0), ("2026-07-29", 201.0)])
 
         result = recent_topup.refresh_closes_guarded(
-            today="2026-07-30", ledger_dir=str(self.ledger_dir), fetch_fn=fetch
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
         )
         self.assertEqual(result["restored_symbols"], {"MSFT": "2026-07-25"})
         self.assertEqual(result["max_dates"]["MSFT"], "2026-07-28")
@@ -471,7 +485,10 @@ class RefreshClosesGuardedTests(unittest.TestCase):
 
         with mock.patch.object(underlying_closes, "store_closes", failing_store):
             result = recent_topup.refresh_closes_guarded(
-                today="2026-07-30", ledger_dir=str(self.ledger_dir), fetch_fn=fetch
+                today="2026-07-30",
+                ledger_dir=str(self.ledger_dir),
+                fetch_fn=fetch,
+                receipts_dir=self.receipts_dir,
             )
         self.assertEqual(result["restored_symbols"], {})
         self.assertIn("MSFT", result["restore_failed"])
@@ -491,7 +508,10 @@ class RefreshClosesGuardedTests(unittest.TestCase):
             self._store(symbol, [("2026-07-28", 200.0), ("2026-07-29", 201.0)])
 
         result = recent_topup.refresh_closes_guarded(
-            today="2026-07-30", ledger_dir=str(self.ledger_dir), fetch_fn=fetch
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
         )
         self.assertIn("simulated fetch failure", result["fetch_errors"]["MSFT"][0])
         self.assertEqual(result["max_dates"]["AMZN"], "2026-07-29")
@@ -513,6 +533,7 @@ class RefreshClosesGuardedTests(unittest.TestCase):
             today="2026-07-30",
             ledger_dir=str(self.ledger_dir),
             fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
         )
         self.assertIn("pre-read", result["fetch_errors"]["BAD"][0])
         self.assertIn("post-read", result["fetch_errors"]["POST"][0])
