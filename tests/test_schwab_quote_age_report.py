@@ -135,6 +135,61 @@ def synthetic_frame() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def boundary_frame() -> pd.DataFrame:
+    """Rows placed exactly on the selectability boundaries, for anti-drift.
+
+    A "does the count match" test only discriminates if the fixture straddles
+    every decision the mask makes. Each row below is here to make one specific
+    realistic drift in data/recent_topup.py's private default mask show up as a
+    divergence; a plausible fixture of ordinary mid-band contracts catches none
+    of them. Baseline: five selectable rows (1, 3, 4, 8, 10).
+
+    1.  open_interest EXACTLY at MIN_OPEN_INTEREST  -> catches `>=` weakened to `>`
+    2.  open_interest one below the floor            (stays out either way)
+    3.  |delta| EXACTLY at the low band edge       -> catches a band narrowing
+    4.  |delta| EXACTLY at the high band edge      -> catches a band narrowing
+    5.  |delta| just below the low edge              (stays out either way)
+    6.  |delta| just above the high edge             (stays out either way)
+    7.  spread straddling the mid-vs-ask denominator choice
+                                                   -> catches (ask-bid)/ask
+    8.  wide ABSOLUTE spread but narrow percentage -> catches an abs-dollar gate
+    9.  bid = 0, narrow absolute spread            -> catches an abs-dollar gate
+    10. zero spread                                  (boundary sanity)
+    """
+    common = {
+        "timestamp": "2026-08-10T19:45:00Z",
+        "trade_timestamp": "2026-08-10T19:44:00Z",
+        "expiration": "2026-08-21",
+    }
+    specs = [
+        # (strike, right, bid, ask, open_interest, delta)
+        (100.0, "C", 1.00, 1.05, 100, 0.40),
+        (101.0, "C", 1.00, 1.05, 99, 0.40),
+        (102.0, "C", 1.00, 1.05, 500, 0.15),
+        (103.0, "P", 1.00, 1.05, 500, -0.85),
+        (104.0, "C", 1.00, 1.05, 500, 0.14),
+        (105.0, "P", 1.00, 1.05, 500, -0.86),
+        (106.0, "C", 0.90, 1.00, 500, 0.40),
+        (107.0, "C", 10.00, 10.40, 500, 0.40),
+        (108.0, "C", 0.00, 0.05, 500, 0.40),
+        (109.0, "C", 2.00, 2.00, 500, 0.40),
+    ]
+    return pd.DataFrame(
+        [
+            _row(
+                right=right,
+                strike=strike,
+                bid=bid,
+                ask=ask,
+                open_interest=open_interest,
+                delta=delta,
+                **common,
+            )
+            for strike, right, bid, ask, open_interest, delta in specs
+        ]
+    )
+
+
 class SyntheticPackage:
     """A tmp chain dir + reports dir holding one synthetic AAA package."""
 
@@ -259,14 +314,40 @@ class QuoteAgeStatisticsTests(unittest.TestCase):
     def test_selectable_mask_matches_the_recent_topup_default_audit_mask(self):
         """Anti-drift: the inline mask must stay equal to the source of truth.
 
-        data/recent_topup.py's default mask is private and this module cannot
-        import it without dragging the ThetaData adapter onto the capture's
-        import path, so the definition is duplicated -- and pinned here.
+        data/recent_topup.py's default mask is private (`_liquid_mask`) and
+        that file is out of scope for this brief, so the definition is
+        duplicated in the report module -- and pinned here, against
+        recent_topup's PUBLIC audit_chain.
+
+        Two levels of comparison, because a bare whole-frame count is weak:
+        a one-row frame's `selectable` count IS that row's mask value, so
+        looping gives an ELEMENT-WISE comparison through the public API and
+        catches drifts that would leave the total unchanged. The boundary
+        fixture supplies rows that straddle every decision the mask makes;
+        see its docstring for which drift each row is there to catch.
         """
         self.assertEqual(quote_age.SELECTABLE_ABS_DELTA, recent_topup.SELECTABLE_ABS_DELTA)
-        frame = synthetic_frame()
-        audited = recent_topup.audit_chain(frame)
-        self.assertEqual(int(quote_age.selectable_mask(frame).sum()), audited["selectable"])
+        fixtures = (
+            ("statistics fixture", synthetic_frame(), 3),
+            ("boundary fixture", boundary_frame(), 5),
+        )
+        for label, frame, expected_selectable in fixtures:
+            with self.subTest(fixture=label):
+                mine = quote_age.selectable_mask(frame)
+
+                # The fixture must actually discriminate, not pass vacuously.
+                self.assertEqual(int(mine.sum()), expected_selectable)
+                self.assertGreater(int(mine.sum()), 0)
+                self.assertLess(int(mine.sum()), len(frame))
+
+                self.assertEqual(int(mine.sum()), recent_topup.audit_chain(frame)["selectable"])
+                self.assertEqual(
+                    [int(value) for value in mine.tolist()],
+                    [
+                        int(recent_topup.audit_chain(frame.iloc[[position]])["selectable"])
+                        for position in range(len(frame))
+                    ],
+                )
 
     def test_report_is_deterministic_and_carries_no_wall_clock_stamp(self):
         with tempfile.TemporaryDirectory() as tmp:

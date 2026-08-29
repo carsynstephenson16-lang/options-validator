@@ -32,8 +32,12 @@ stored dtype is ``datetime64[ns, UTC]``, so the tz conversion is explicit).
 Statistics are reported for BOTH timestamp columns and for TWO row populations
 -- all rows, and the selectable subset -- because a single blended number reads
 as a false alarm. Reviewer-measured 2026-08-28 across the seven timestamped
-sessions: worst all-rows age 375-1,787 minutes (dominated by illiquid
-contracts) against 0.61-10.38 minutes for the selectable subset.
+sessions, FOR THE ``timestamp`` (quote) COLUMN ONLY: worst all-rows age
+375-1,787 minutes (dominated by illiquid contracts) against 0.61-10.38 minutes
+for the selectable subset. Those figures do NOT generalize to
+``trade_timestamp``, whose worst selectable value on 2026-08-27 was ~402,042
+minutes (~279 days) -- last-trade times are genuinely old even for liquid
+contracts, which is why the columns are never pooled.
 
 Determinism
 -----------
@@ -78,13 +82,19 @@ POPULATIONS = ("all_rows", "selectable")
 SKIP_NOTE_PREFIX = "schwab_quote_age_report skipped:"
 
 # Strategy-selectable moneyness band, mirroring data/recent_topup.py's
-# SELECTABLE_ABS_DELTA. That module's default mask is private (`_liquid_mask`)
-# and a public accessor for it is future work owned by the H7 registration arc,
-# so the band is duplicated here rather than imported: importing
-# data.recent_topup would drag data.thetadata_adapter onto the 15:45 capture's
-# import path for a display-only sidecar. tests/test_schwab_quote_age_report.py
-# asserts this tuple still equals the source of truth, so the copy cannot drift
-# silently. The two liquidity thresholds come from config.py (no magic numbers).
+# SELECTABLE_ABS_DELTA. The band and the liquidity gate are reimplemented here
+# rather than imported for two reasons, both about ownership, not imports:
+# recent_topup's default mask is PRIVATE (`_liquid_mask`, data/recent_topup.py:469)
+# with no public accessor, and that file is out of scope for this brief -- it is
+# owned by brief 33, and a public accessor for the default mask is a recorded
+# work package of the H7 registration arc. (An earlier revision of this comment
+# also claimed importing recent_topup would drag data.thetadata_adapter onto the
+# capture's import path. That was measurably FALSE -- thetadata_adapter and
+# lumibot are already imported transitively by schwab_chain_capture on base main
+# -- and has been removed rather than left as a flattering rationalization.)
+# tests/test_schwab_quote_age_report.py pins both this tuple AND the resulting
+# per-row mask against recent_topup's public audit_chain, so the copy cannot
+# drift silently. The two liquidity thresholds come from config.py.
 SELECTABLE_ABS_DELTA = (0.15, 0.85)
 
 SEMANTICS = (
@@ -94,9 +104,12 @@ SEMANTICS = (
     "late reads as fresh. Absolute cross-day staleness appears only in "
     "prior_session_rows / after_session_rows, which compare each timestamp "
     "converted to America/New_York against the capture session date. All-rows "
-    "statistics are dominated by illiquid contracts and run orders of magnitude "
-    "worse than the selectable subset, so the two populations are reported "
-    "separately; a single blended statistic reads as a false alarm. Descriptive "
+    "statistics are dominated by illiquid contracts and run worse than the "
+    "selectable subset by a margin that VARIES BY COLUMN -- orders of magnitude "
+    "for the quote timestamp column, far less for trade_timestamp, whose "
+    "selectable rows carry genuinely old last-trade times -- so the two "
+    "populations are reported separately; a single blended statistic reads as a "
+    "false alarm. Descriptive "
     "only -- no threshold, no gate, no effect on any receipt, verdict, or "
     "GO/NO_GO decision."
 )

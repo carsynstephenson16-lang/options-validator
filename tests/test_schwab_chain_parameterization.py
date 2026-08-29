@@ -408,6 +408,16 @@ class SchwabChainParameterizationTests(unittest.TestCase):
     # embeds the landing's own code_sha, so it can never match a pre-change
     # golden file. Lane A runs the real sidecar writer; lane B forces it to
     # raise. Everything the capture is responsible for must be identical.
+    #
+    # HARNESS DEPENDENCY (keep this in mind before touching _isolated_capture):
+    # the working lane only produces a real sidecar because the harness's
+    # `mock.patch.object(manifest.pd, "read_parquet", ...)` patches the GLOBAL
+    # pandas, so the report module's own read returns the golden frame instead
+    # of the `b"golden-chain\n"` placeholder the mocked writer puts on disk. If
+    # that patch is ever narrowed to the manifest module alone, lane A silently
+    # falls through to fail-soft for an unrelated reason and stops proving the
+    # success path -- the assertion that lane A wrote a sidecar is what would
+    # fail, so the breakage is loud rather than silent.
 
     def _run_capture_lane(self, *, break_report: bool):
         stdout = io.StringIO()
