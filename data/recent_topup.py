@@ -37,6 +37,7 @@ import json
 import math
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -47,6 +48,7 @@ from data import (
     provider_policy,  # noqa: E402
     thetadata_adapter,  # noqa: E402
 )
+from data.atomic_io import atomic_text_write  # noqa: E402
 
 # Strategy-selectable moneyness band (|delta|). Deep-ITM (|delta|~1) contracts
 # carry benign IV=0 solver artifacts and far-OTM tails carry wide spreads; the
@@ -81,7 +83,172 @@ def _append_closes_fact(text: str, *, ledger_dir: str) -> None:
     facts.append_fact(text, base_dir=ledger_dir)
 
 
-def refresh_closes(symbols, *, today: str, ledger_dir: str = "ledger", fetch_fn=None) -> dict:
+# --------------------------------------------------------------------------
+# Closes-refresh provenance receipt (finding DATA-03; brief 33).
+#
+# HONESTY CONSTRAINT -- read before extending this schema. The closes fetchers
+# return a PATH, never a data frame and never the provider's raw response
+# (data/underlying_closes.py:265 -> store_closes(...) at :290), and
+# refresh_closes_guarded discards the return value and re-reads the file from
+# disk. The receipt can therefore bind exactly ONE hash class: the sha256 of
+# the STORED close parquet, read back immediately after that symbol's refresh
+# step. That is a stored-artifact binding at acquisition time, NOT a hash of
+# raw provider bytes -- nothing in this repo retains those bytes, and a field
+# claiming otherwise would be false provenance.
+# --------------------------------------------------------------------------
+
+CLOSES_RECEIPT_DIR = Path("reports") / "closes_receipts"
+CLOSES_RECEIPT_SCHEMA = "closes_refresh_receipt/v1"
+CLOSES_VERIFICATION_SCHEMA = "closes_refresh_receipt_verification/v1"
+# Scope discriminators are frozen: the guarded producer always writes
+# `guarded-all-cached.json`; plain refresh_closes uses its CLI --scope value
+# verbatim (core / h7 / display-extra).
+GUARDED_CLOSES_SCOPE = "guarded-all-cached"
+CLOSES_HASH_BINDING = (
+    "stored_file_sha256 is the sha256 of the STORED close parquet, read back "
+    "from disk immediately after that symbol's refresh step. It is NOT a hash "
+    "of the provider's raw response: the fetcher returns a path and retains no "
+    "raw bytes."
+)
+# Frozen outcome vocabulary. Every globbed symbol is attempted, so there is no
+# `skipped` state; `failed` always carries one of CLOSES_FAILURE_STAGES.
+CLOSES_OUTCOMES = ("refreshed", "restored", "failed")
+CLOSES_FAILURE_STAGES = ("pre_read", "fetch", "post_read")
+
+
+def _provider_identity(fetch_fn) -> str:
+    """Dotted identity of the function that performed the acquisition."""
+    module = getattr(fetch_fn, "__module__", None) or "unknown"
+    name = getattr(fetch_fn, "__qualname__", None) or repr(fetch_fn)
+    return f"{module}.{name}"
+
+
+def _stored_file_fields(path: Path | None) -> dict:
+    """`stored_file` + `stored_file_sha256` for one symbol's close parquet.
+
+    A missing file yields a null hash rather than an exception: a symbol whose
+    file vanished mid-run must still appear in the receipt.
+    """
+    if path is None:
+        return {"stored_file": None, "stored_file_sha256": None}
+    fields: dict = {"stored_file": str(path), "stored_file_sha256": None}
+    try:
+        if path.is_file():
+            fields["stored_file_sha256"] = _sha256(path)
+    except OSError as error:
+        fields["stored_file_error"] = f"{type(error).__name__}: {error}"
+    return fields
+
+
+def _closes_entry(outcome: str, path: Path | None, max_session, **extra) -> dict:
+    """One per-symbol receipt entry in the frozen vocabulary."""
+    if outcome not in CLOSES_OUTCOMES:
+        raise ValueError(f"unknown closes outcome: {outcome!r}")
+    stage = extra.pop("stage", None)
+    if outcome == "failed":
+        if stage not in CLOSES_FAILURE_STAGES:
+            raise ValueError(f"failed outcome needs a known stage, got {stage!r}")
+    elif stage is not None:
+        raise ValueError(f"stage is only valid on a failed outcome, got {outcome!r}")
+    entry = {"outcome": outcome, "max_session": max_session, **_stored_file_fields(path)}
+    if stage is not None:
+        entry["stage"] = stage
+    entry.update(extra)
+    return entry
+
+
+def _closes_receipt_payload(
+    *, producer: str, scope: str, run_date: str, provider: str, requested_symbols, symbols: dict
+) -> dict:
+    return {
+        "schema": CLOSES_RECEIPT_SCHEMA,
+        "producer": producer,
+        "scope": scope,
+        "run_date": run_date,
+        "retrieved_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "provider": provider,
+        "hash_binding": CLOSES_HASH_BINDING,
+        "requested_symbols": list(requested_symbols),
+        "symbols": symbols,
+    }
+
+
+def write_closes_receipt(payload: dict, *, receipts_dir: Path | str = CLOSES_RECEIPT_DIR) -> Path:
+    """Create one dated, scoped closes receipt; byte-identical replay is a no-op.
+
+    ``atomic_text_write``'s exclusive create (``temp.open("x")``) applies to
+    its PID-named TEMP file only, and its ``os.replace`` then overwrites the
+    destination unconditionally (data/atomic_io.py:70-76). The explicit
+    pre-write existence check below is therefore the actual overwrite
+    protection -- the same shape as
+    ``options_researcher.h7_data_gate.write_artifact`` (:768-771).
+    """
+    path = Path(receipts_dir) / str(payload["run_date"]) / f"{payload['scope']}.json"
+    text = json.dumps(payload, sort_keys=True, indent=1, ensure_ascii=True, allow_nan=False) + "\n"
+    if path.exists():
+        if path.read_text() != text:
+            raise FileExistsError(f"refusing to overwrite closes receipt: {path}")
+        return path
+    atomic_text_write(text, path)
+    return path
+
+
+def _emit_closes_receipt(payload: dict, *, receipts_dir) -> tuple[Path | None, Exception | None]:
+    """Write the receipt without losing the failure.
+
+    The caller records the outcome in its DATA_PULL fact -- so a refresh that
+    really happened is never unrecorded -- and then re-raises.
+    """
+    try:
+        return write_closes_receipt(payload, receipts_dir=receipts_dir), None
+    except Exception as error:
+        return None, error
+
+
+def _receipt_fact_token(path: Path | None, error: Exception | None) -> str:
+    if error is not None:
+        return f"UNWRITTEN ({type(error).__name__}: {error})"
+    return str(path)
+
+
+def _resolve_stored_close_path(returned, symbol: str, cache_dir) -> Path:
+    """The stored close file for `symbol`, preferring the fetcher's own path."""
+    candidates = []
+    if isinstance(returned, (str, Path)):
+        candidates.append(Path(returned))
+    candidates.append(Path(cache_dir) / f"{symbol}.parquet")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
+
+
+def _stored_max_session(path: Path) -> str | None:
+    """Newest session in a stored close file; None when unreadable.
+
+    Descriptive only. The guarded producer uses its own guard-aware max dates
+    instead, so this never competes with the guard's decision logic.
+    """
+    if not path.is_file():
+        return None
+    try:
+        frame = pd.read_parquet(path)
+    except Exception:
+        return None
+    if "date" not in frame.columns or frame.empty:
+        return None
+    return max(str(value) for value in frame["date"])
+
+
+def refresh_closes(
+    symbols,
+    *,
+    today: str,
+    ledger_dir: str = "ledger",
+    fetch_fn=None,
+    scope: str = "core",
+    receipts_dir: Path | str = CLOSES_RECEIPT_DIR,
+) -> dict:
     """Refresh independent Yahoo closes for exactly the selected scope.
 
     This is an explicit network path used by the owner-run cancellation
@@ -90,21 +257,52 @@ def refresh_closes(symbols, *, today: str, ledger_dir: str = "ledger", fetch_fn=
     2026-08-20 (Decision 2 = yes: automate the Yahoo closes refresh as a
     guarded daily ritual step); see
     docs/superpowers/plans/2026-08-20-18-ok-starved-and-closes-cadence-codex-brief.md.
+
+    A provenance receipt is written under ``receipts_dir/<today>/<scope>.json``
+    and its path is named in the DATA_PULL fact. Unlike the guarded producer
+    this path has no per-symbol error isolation -- a fetch exception aborts the
+    whole call, exactly as before -- so a receipt is emitted only for a run
+    that attempted every symbol. Emitting a partial receipt would require an
+    "unattempted" outcome, which the frozen vocabulary deliberately excludes.
     """
     if fetch_fn is None:
         from data.underlying_closes import fetch_underlying_eod_yahoo
 
         fetch_fn = fetch_underlying_eod_yahoo
+    from data import underlying_closes
+
     result = {symbol: fetch_fn(symbol) for symbol in symbols}
+    entries = {}
+    for symbol, returned in result.items():
+        path = _resolve_stored_close_path(returned, symbol, underlying_closes.CACHE_DIR)
+        entries[symbol] = _closes_entry("refreshed", path, _stored_max_session(path))
+    payload = _closes_receipt_payload(
+        producer="data.recent_topup.refresh_closes",
+        scope=scope,
+        run_date=today,
+        provider=_provider_identity(fetch_fn),
+        requested_symbols=symbols,
+        symbols=entries,
+    )
+    receipt_path, receipt_error = _emit_closes_receipt(payload, receipts_dir=receipts_dir)
     _append_closes_fact(
         f"DATA_PULL {today}: Yahoo closes refresh for forward scope "
-        f"({'/'.join(symbols)}); same-day partial rows excluded by fetcher.",
+        f"({'/'.join(symbols)}); same-day partial rows excluded by fetcher. "
+        f"receipt={_receipt_fact_token(receipt_path, receipt_error)}",
         ledger_dir=ledger_dir,
     )
+    if receipt_error is not None:
+        raise receipt_error
     return result
 
 
-def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=None) -> dict:
+def refresh_closes_guarded(
+    *,
+    today: str,
+    ledger_dir: str = "ledger",
+    fetch_fn=None,
+    receipts_dir: Path | str = CLOSES_RECEIPT_DIR,
+) -> dict:
     """Refresh every existing Yahoo closes cache with a retroactive-change guard.
 
     Each symbol is read before fetching and again afterward. If a fetched
@@ -119,7 +317,14 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
 
     Per-symbol read, fetch, and restore failures are recorded and do not abort
     the remaining symbols. Exactly one descriptive DATA_PULL fact is appended
-    for every invocation, including when every symbol fails.
+    for every invocation, including when every symbol fails and including a
+    run whose receipt could not be written (the fact says so, and the receipt
+    error is then re-raised).
+
+    A provenance receipt is written to
+    ``receipts_dir/<today>/guarded-all-cached.json`` binding each symbol's
+    stored-file sha256 at acquisition time; see the honesty constraint above
+    ``CLOSES_RECEIPT_DIR``.
     """
     from data import underlying_closes
 
@@ -134,6 +339,9 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
     restored_symbols: dict[str, str] = {}
     restore_failed: dict[str, str] = {}
     fetch_errors: dict[str, list[str]] = {}
+    # Per-symbol receipt entries, recorded at each terminal state so the hash
+    # is taken immediately after that symbol's refresh step.
+    outcomes: dict[str, dict] = {}
     ok_count = 0
 
     def _read_frame(path: Path, phase: str) -> pd.DataFrame:
@@ -162,6 +370,13 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
         except Exception as error:
             fetch_errors[symbol] = [f"pre-read: {type(error).__name__}: {error}"]
             max_dates[symbol] = None
+            outcomes[symbol] = _closes_entry(
+                "failed",
+                path,
+                max_dates[symbol],
+                stage="pre_read",
+                error=f"{type(error).__name__}: {error}",
+            )
             continue
 
         try:
@@ -169,6 +384,13 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
         except Exception as error:
             fetch_errors[symbol] = [f"fetch: {type(error).__name__}: {error}"]
             max_dates[symbol] = _max_date(before)
+            outcomes[symbol] = _closes_entry(
+                "failed",
+                path,
+                max_dates[symbol],
+                stage="fetch",
+                error=f"{type(error).__name__}: {error}",
+            )
             continue
 
         try:
@@ -176,6 +398,13 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
         except Exception as error:
             fetch_errors[symbol] = [f"post-read: {type(error).__name__}: {error}"]
             max_dates[symbol] = None
+            outcomes[symbol] = _closes_entry(
+                "failed",
+                path,
+                max_dates[symbol],
+                stage="post_read",
+                error=f"{type(error).__name__}: {error}",
+            )
             continue
 
         try:
@@ -186,6 +415,13 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
                 f"post-read: {type(error).__name__}: {error}"
             ]
             max_dates[symbol] = _max_date(after)
+            outcomes[symbol] = _closes_entry(
+                "failed",
+                path,
+                max_dates[symbol],
+                stage="post_read",
+                error=f"{type(error).__name__}: {error}",
+            )
             continue
         first_difference: str | None = None
         for day in sorted(set(before_by_date) & set(after_by_date)):
@@ -215,25 +451,143 @@ def refresh_closes_guarded(*, today: str, ledger_dir: str = "ledger", fetch_fn=N
             except Exception as error:
                 restore_failed[symbol] = f"{type(error).__name__}: {error}"
                 max_dates[symbol] = _max_date(after)
+                # The guard did NOT roll back, so the bytes on disk are the
+                # CHANGED ones. Labelling this `restored` would be false
+                # provenance; it is a failure detected and acted on in the
+                # post-read stage, so it takes that frozen stage value.
+                outcomes[symbol] = _closes_entry(
+                    "failed",
+                    path,
+                    max_dates[symbol],
+                    stage="post_read",
+                    error=(
+                        f"restore after retroactive change at {first_difference} "
+                        f"failed: {type(error).__name__}: {error}"
+                    ),
+                    retroactive_change_session=first_difference,
+                )
             else:
                 restored_symbols[symbol] = first_difference
                 max_dates[symbol] = _max_date(before)
+                # Hash the RESTORED file: the true post-run state.
+                outcomes[symbol] = _closes_entry(
+                    "restored",
+                    path,
+                    max_dates[symbol],
+                    retroactive_change_session=first_difference,
+                )
         else:
             max_dates[symbol] = _max_date(after)
             ok_count += 1
+            outcomes[symbol] = _closes_entry("refreshed", path, max_dates[symbol])
 
+    payload = _closes_receipt_payload(
+        producer="data.recent_topup.refresh_closes_guarded",
+        scope=GUARDED_CLOSES_SCOPE,
+        run_date=today,
+        provider=_provider_identity(fetch_fn),
+        requested_symbols=symbols,
+        symbols=outcomes,
+    )
+    receipt_path, receipt_error = _emit_closes_receipt(payload, receipts_dir=receipts_dir)
     _append_closes_fact(
         f"DATA_PULL {today}: Yahoo closes guarded refresh for cached symbols; "
         f"guard: {ok_count} ok, {len(restored_symbols)} restored, "
         f"{len(restore_failed)} restore failures, "
-        f"{len(fetch_errors)} fetch errors.",
+        f"{len(fetch_errors)} fetch errors. "
+        f"receipt={_receipt_fact_token(receipt_path, receipt_error)}",
         ledger_dir=ledger_dir,
     )
+    if receipt_error is not None:
+        raise receipt_error
     return {
         "max_dates": max_dates,
         "restored_symbols": restored_symbols,
         "restore_failed": restore_failed,
         "fetch_errors": fetch_errors,
+        "receipt": str(receipt_path),
+    }
+
+
+def _load_closes_receipt(path: Path) -> dict:
+    payload = json.loads(Path(path).read_text())
+    if payload.get("schema") != CLOSES_RECEIPT_SCHEMA:
+        raise ValueError(f"receipt schema must be {CLOSES_RECEIPT_SCHEMA}: {path}")
+    return payload
+
+
+def _closes_receipt_order(payload: dict) -> tuple[str, str]:
+    """Total order over receipts: run date first, then retrieval timestamp."""
+    return (str(payload.get("run_date") or ""), str(payload.get("retrieved_utc") or ""))
+
+
+def verify_closes_receipt(receipt_path: Path | str, *, receipts_dir: Path | str | None = None):
+    """Re-hash every stored close file a receipt binds. Offline; writes nothing.
+
+    VALIDITY WINDOW: close files are rewritten in place -- one file per symbol
+    (data/underlying_closes.py:24-25) -- so a receipt's hashes are a
+    CURRENT-BYTES claim only until that symbol's next refresh, after which the
+    receipt is a historical acquisition record. A symbol whose bytes changed
+    AND for which a NEWER receipt exists is therefore reported ``superseded``,
+    not a mismatch; only a mismatch against the LATEST receipt for that symbol
+    is an integrity alarm.
+    """
+    receipt_path = Path(receipt_path)
+    payload = _load_closes_receipt(receipt_path)
+    root = Path(receipts_dir) if receipts_dir is not None else receipt_path.parent.parent
+    this_order = _closes_receipt_order(payload)
+
+    newer_by_symbol: dict[str, str] = {}
+    for other in sorted(root.glob("*/*.json")):
+        if other.resolve() == receipt_path.resolve():
+            continue
+        try:
+            other_payload = _load_closes_receipt(other)
+        except (OSError, ValueError):
+            continue  # not a closes receipt; not evidence either way
+        if _closes_receipt_order(other_payload) <= this_order:
+            continue
+        for symbol in other_payload.get("symbols") or {}:
+            newer_by_symbol.setdefault(symbol, str(other))
+
+    symbols: dict[str, dict] = {}
+    mismatches: list[str] = []
+    superseded: list[str] = []
+    for symbol, entry in sorted((payload.get("symbols") or {}).items()):
+        expected = entry.get("stored_file_sha256")
+        stored = entry.get("stored_file")
+        record: dict = {"expected_sha256": expected, "stored_file": stored}
+        if symbol in newer_by_symbol:
+            record["superseded_by"] = newer_by_symbol[symbol]
+        if expected is None:
+            # The receipt made no hash claim for this symbol (no stored file
+            # after the run), so there is nothing to verify.
+            record["status"] = "no_hash_claim"
+            symbols[symbol] = record
+            continue
+        path = Path(stored) if stored else None
+        record["actual_sha256"] = (
+            _sha256(path) if path is not None and path.is_file() else None
+        )
+        if record["actual_sha256"] == expected:
+            record["status"] = "match"
+        elif symbol in newer_by_symbol:
+            record["status"] = "superseded"
+            superseded.append(symbol)
+        else:
+            record["status"] = "mismatch"
+            mismatches.append(symbol)
+        symbols[symbol] = record
+
+    return {
+        "schema": CLOSES_VERIFICATION_SCHEMA,
+        "receipt": str(receipt_path),
+        "run_date": payload.get("run_date"),
+        "scope": payload.get("scope"),
+        "status": "MISMATCH" if mismatches else "OK",
+        "mismatches": mismatches,
+        "superseded": superseded,
+        "symbols": symbols,
     }
 
 
@@ -689,7 +1043,18 @@ def main(argv=None) -> int:
     p.add_argument(
         "--repair-manifest", type=Path, help="reviewed cache_recovery/v1 manifest; network-free"
     )
+    p.add_argument(
+        "--verify-closes-receipt",
+        type=Path,
+        help="re-hash the stored close files a closes receipt binds (offline, "
+        "writes nothing); exit 1 only on a mismatch against the latest "
+        "receipt for that symbol",
+    )
     args = p.parse_args(argv)
+    if args.verify_closes_receipt:
+        report = verify_closes_receipt(args.verify_closes_receipt)
+        print(json.dumps(report, sort_keys=True, indent=1))
+        return 0 if report["status"] == "OK" else 1
     symbols = scope_symbols(args.scope)
     if args.repair_manifest:
         if not args.as_of:
@@ -712,7 +1077,7 @@ def main(argv=None) -> int:
         manifest_path=Path("reports/cache_runs") / f"recent_topup_{args.scope}.json",
     )
     if args.refresh_closes and not args.dry_run and result.get("audit_verdict") != "BLOCK":
-        closes = refresh_closes(symbols, today=result["today"])
+        closes = refresh_closes(symbols, today=result["today"], scope=args.scope)
         print(f"closes: refreshed {len(closes)}/{len(symbols)} symbols")
     return 2 if result.get("audit_verdict") == "BLOCK" else 0
 
