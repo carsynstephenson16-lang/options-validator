@@ -1,7 +1,11 @@
 """tests/test_attractiveness_dashboard.py"""
+import json
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
+import config
 from options_researcher import attractiveness_dashboard as ad
 from options_researcher.hypothesis_evidence import (
     EvidenceRow,
@@ -557,6 +561,23 @@ class SelectTopPicksTests(unittest.TestCase):
                   if p["symbol"] == "BBB" and p["strike"] == 45.0]
         self.assertEqual(vetoed, [])
 
+    def test_default_shortlist_width_is_configured_top_n(self):
+        data = {"symbols": []}
+        for index in range(6):
+            data["symbols"].append({
+                "symbol": f"S{index}", "close": 100.0, "iv_rank": 0.5,
+                "as_of": "2026-07-01", "groups": [{
+                    "kind": "put", "title": "P", "empty": None,
+                    "cards": [_pick_card(
+                        95.0, "2026-08-21", grades={"liquidity": "GREEN"},
+                        lane_fields={"credit": 200.0,
+                                     "annualized_yield": 0.30 - index / 100})],
+                }],
+            })
+        picks = ad.select_top_picks(data)
+        self.assertEqual(len(picks), config.PICK_TOP_N)
+        self.assertEqual(config.PICK_TOP_N, 5)
+
     def test_scoring_greens_leader_and_tech_bonus(self):
         # The legacy display score stays on each pick for the audit line;
         # one-per-symbol means each symbol surfaces only its best card, so
@@ -710,6 +731,200 @@ class SelectTopPicksTests(unittest.TestCase):
         self.assertNotIn("CLSK", {symbol for symbol, _, _ in actual_picks})
 
 
+def _dominance_card(*, annualized_yield=0.20, cushion=0.10, upside=0.10,
+                    cost=500.0, breakeven=105.0, breakeven_move=0.05,
+                    grades=None, **extra):
+    card = {
+        "headline": extra.pop("headline", "candidate"),
+        "annualized_yield": annualized_yield, "cushion": cushion,
+        "upside": upside, "cost": cost, "breakeven": breakeven,
+        "breakeven_move": breakeven_move,
+        "grades": grades or {"liquidity": "GREEN", "portfolio": "GREEN"},
+        "top3_snapshot": {"rank_eligible": True,
+                          "selection_status": "ELIGIBLE",
+                          "policy": {"status": "ELIGIBLE", "reason_codes": []}},
+    }
+    card.update(extra)
+    return card
+
+
+class DominancePartitionTests(unittest.TestCase):
+    def test_put_dominance_hides_only_directly_dominated_card(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        worse = _dominance_card(annualized_yield=0.20, cushion=0.10)
+        tradeoff = _dominance_card(annualized_yield=0.40, cushion=0.05)
+        shown, hidden = ad.dominated_partition([best, worse, tradeoff], "put", 100.0)
+        self.assertEqual(shown, [best, tradeoff])
+        self.assertEqual(hidden, [(worse, best)])
+
+    def test_missing_axis_is_incomparable_and_never_hidden(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        incomparable = _dominance_card(annualized_yield=0.20, cushion=None)
+        third = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        shown, hidden = ad.dominated_partition([best, incomparable, third], "put", 100.0)
+        self.assertIn(incomparable, shown)
+        self.assertNotIn(incomparable, [card for card, _ in hidden])
+
+    def test_liquidity_red_and_blocked_cards_are_never_hidden(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        liquidity_red = _dominance_card(
+            annualized_yield=0.20, cushion=0.10,
+            grades={"liquidity": "RED", "portfolio": "RED"})
+        blocked = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        blocked["top3_snapshot"] = {"selection_status": "DATA_BLOCKED"}
+        shown, hidden = ad.dominated_partition(
+            [best, liquidity_red, blocked], "put", 100.0)
+        self.assertEqual(shown, [best, liquidity_red, blocked])
+        self.assertEqual(hidden, [])
+
+    def test_portfolio_red_only_card_is_hideable(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        worse = _dominance_card(annualized_yield=0.20, cushion=0.10,
+                                grades={"liquidity": "GREEN", "portfolio": "RED"})
+        third = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        _shown, hidden = ad.dominated_partition([best, worse, third], "put", 100.0)
+        self.assertIn(worse, [card for card, _ in hidden])
+
+    def test_two_card_and_pmcc_lanes_are_exempt(self):
+        best = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        worse = _dominance_card(annualized_yield=0.20, cushion=0.10)
+        third = _dominance_card(annualized_yield=0.10, cushion=0.05)
+        self.assertEqual(ad.dominated_partition([best, worse], "put", 100.0),
+                         ([best, worse], []))
+        self.assertEqual(ad.dominated_partition([best, worse, third], "pmcc", 100.0),
+                         ([best, worse, third], []))
+
+    def test_hidden_cards_have_a_shown_front_dominator(self):
+        front = _dominance_card(annualized_yield=0.40, cushion=0.20)
+        middle = _dominance_card(annualized_yield=0.30, cushion=0.15)
+        low = _dominance_card(annualized_yield=0.20, cushion=0.10)
+        shown, hidden = ad.dominated_partition([front, middle, low], "put", 100.0)
+        self.assertEqual(shown, [front])
+        self.assertEqual(hidden, [(middle, front), (low, front)])
+
+    def test_group_render_keeps_liquidity_warning_outside_hidden_details(self):
+        def renderable(card, headline):
+            card.update({"headline": headline, "strike": 95.0,
+                         "expiry": "2026-08-21", "dte": 45, "risk": {},
+                         "scenarios": [], "bbb": [], "verdict": "display only"})
+            return card
+        best = renderable(_dominance_card(annualized_yield=0.30, cushion=0.15),
+                          "best shown")
+        warning = renderable(_dominance_card(
+            annualized_yield=0.20, cushion=0.10,
+            grades={"liquidity": "RED", "portfolio": "RED"}),
+            "liquidity warning shown")
+        hideable = renderable(_dominance_card(
+            annualized_yield=0.10, cushion=0.05,
+            grades={"liquidity": "GREEN", "portfolio": "RED"}),
+            "portfolio-only hidden")
+        html = ad._group_html({"kind": "put", "title": "PUT",
+                               "cards": [best, warning, hideable]},
+                              rank=1, close=100.0)
+        hidden_start = html.index('<details class="dominated-candidates">')
+        self.assertLess(html.index("liquidity warning shown"), hidden_start)
+        self.assertGreater(html.index("portfolio-only hidden"), hidden_start)
+
+    def test_group_dom_records_each_candidate_identity_once(self):
+        def renderable(card, ident, headline):
+            card.update({"headline": headline, "strike": 95.0,
+                         "expiry": "2026-08-21", "dte": 45, "risk": {},
+                         "scenarios": [], "bbb": [], "verdict": "display only"})
+            card["top3_snapshot"]["candidate_id"] = ident
+            return card
+
+        best = renderable(
+            _dominance_card(annualized_yield=0.30, cushion=0.15),
+            "AAA:put:best", "best shown")
+        hidden = renderable(
+            _dominance_card(annualized_yield=0.20, cushion=0.10),
+            "AAA:put:hidden", "hidden but retained")
+        tradeoff = renderable(
+            _dominance_card(annualized_yield=0.40, cushion=0.05),
+            "AAA:put:tradeoff", "tradeoff shown")
+
+        html = ad._group_html(
+            {"kind": "put", "title": "PUT", "cards": [best, hidden, tradeoff]},
+            rank=1, close=100.0)
+
+        for ident in ("AAA:put:best", "AAA:put:hidden", "AAA:put:tradeoff"):
+            self.assertEqual(html.count(f'data-candidate-id="{ident}"'), 1)
+
+
+class SymbolPanelStatusTests(unittest.TestCase):
+    def test_fail_visible_labels_open_panel(self):
+        blocked = _dominance_card()
+        blocked["top3_snapshot"] = {"selection_status": "DATA_BLOCKED"}
+        section = {"symbol": "AAA", "features_stale": True,
+                   "groups": [{"cards": [blocked, {"skipped": "no quote"}]}]}
+        self.assertEqual(ad._panel_status(section, {"AAA"}),
+                         (["DATA_BLOCKED", "STALE", "SKIPPED"], True))
+
+    def test_liquidity_warning_only_panel_is_collapsed(self):
+        card = _dominance_card(grades={"liquidity": "RED"})
+        section = {"symbol": "AAA", "groups": [{"cards": [card]}]}
+        self.assertEqual(ad._panel_status(section, set()),
+                         (["LIQUIDITY WARNING"], False))
+
+    def test_clean_panel_is_current_and_collapsed(self):
+        section = {"symbol": "AAA", "groups": [{"cards": [_dominance_card()]}]}
+        self.assertEqual(ad._panel_status(section, set()), (["CURRENT"], False))
+
+    def test_render_uses_details_and_fail_visible_open_attribute(self):
+        section = _v2_section()
+        section["symbol"] = "AMZN"
+        data = ad.assemble(symbol_sections=[section],
+                           rv21_by_symbol={"AMZN": math.sqrt(12) * 0.11})
+        data["stale_symbols"] = []
+        data["symbols"][0]["features_stale"] = False
+        data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"].update(
+            {"rank_eligible": True, "selection_status": "ELIGIBLE"})
+        clean_html = ad.render(data)
+        self.assertIn('<details class="panel symbol-panel">', clean_html)
+        self.assertNotIn('<details class="panel symbol-panel" open>', clean_html)
+        data["symbols"][0]["features_stale"] = True
+        self.assertIn('<details class="panel symbol-panel" open>', ad.render(data))
+
+
+class RegimeStripTests(unittest.TestCase):
+    def _status(self, root: Path, *, evaluation_date="2026-08-26",
+                max_asof="2026-08-25"):
+        sidecar = {
+            "schema": "regime_report/v1",
+            "as_of_written": "2026-08-26T12:00:00.000000Z",
+            "evaluation_date": evaluation_date,
+            "symbols": {symbol: {"label": index,
+                                  "high_dispersion": bool(index % 2),
+                                  "max_asof": max_asof,
+                                  "skipped_reason": None}
+                        for index, symbol in enumerate(config.REGIME_SYMBOLS)},
+        }
+        path = root / "wasserstein-regime.json"
+        path.write_text(json.dumps(sidecar, sort_keys=True,
+                                   separators=(",", ":")) + "\n")
+        return {"state": "published", "generation_id":
+                "20260826T120000000000Z-0123456789abcdef0123456789abcdef",
+                "artifacts": {"wasserstein-regime.json": path}}
+
+    def test_regime_strip_renders_valid_sidecar_and_shared_disclaimer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            html = ad._regime_strip_html(self._status(Path(tmp)), "2026-08-26")
+        self.assertIn("REGIME (descriptive)", html)
+        for symbol in config.REGIME_SYMBOLS:
+            self.assertIn(symbol, html)
+        self.assertIn("not a registered signal", html)
+        self.assertNotIn("regime view unpublished/stale", html)
+
+    def test_absent_or_future_sidecar_is_loud(self):
+        self.assertIn("regime view unpublished/stale — see Experiments shelf",
+                      ad._regime_strip_html({"state": "absent"}, "2026-08-26"))
+        with tempfile.TemporaryDirectory() as tmp:
+            status = self._status(Path(tmp), evaluation_date="2026-08-27",
+                                  max_asof="2026-08-27")
+            html = ad._regime_strip_html(status, "2026-08-26")
+        self.assertIn("regime view unpublished/stale — see Experiments shelf", html)
+
+
 class SelectQmTopPicksTests(unittest.TestCase):
     @staticmethod
     def _context(*, as_of="2026-07-01", breakout=True, parabolic=False, status="CURRENT"):
@@ -731,6 +946,32 @@ class SelectQmTopPicksTests(unittest.TestCase):
                 },
             },
         }
+
+    def test_an_uncovered_pick_keeps_its_slot_instead_of_blanking_the_panel(self):
+        # brief 12 D5 gate 5: a mechanical pick the frozen study never covered
+        # is a permanent fact about that name. Dropping every slot over it hid
+        # the covered names' context forever; QM still selects nothing.
+        data = SelectTopPicksTests()._data()
+        data["data_as_of"] = "2026-07-01"
+        context = self._context()
+        context["symbols"]["BBB"] = {
+            "status": "NOT_IN_FROZEN_STUDY",
+            "reason": "BBB is not in the frozen QM study sidecar",
+        }
+        context["not_covered"] = ["BBB"]
+
+        mechanical = [(p["symbol"], p["lane"], p["strike"])
+                      for p in ad.select_top_picks(data, include_csp_watch=True)]
+        picks = ad.select_qm_top_picks(data, context, include_csp_watch=True)
+        self.assertEqual([(p["symbol"], p["lane"], p["strike"]) for p in picks],
+                         mechanical)
+        self.assertIn("BBB", {p["symbol"] for p in picks})
+
+        card_html = ad._qm_card_context_html(
+            picks[-1], context["symbols"]["BBB"])
+        self.assertIn("QM NOT COVERED", card_html)
+        self.assertIn("not in the frozen QM study", card_html)
+        self.assertNotIn("QM DATA BLOCKED", card_html)
 
     def test_qm_context_uses_exact_mechanical_picks_without_changing_selector(self):
         import json
@@ -1272,6 +1513,140 @@ class LoadContextTests(unittest.TestCase):
     def test_non_date_as_of_returns_none_none(self):
         self.assertEqual(ad.load_context("no cached data"), (None, None))
 
+    def test_evidence_loader_hashes_the_same_single_byte_snapshot_it_parses(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        raw = b'{"as_of":"2026-07-15","annotations":{}}\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "2026-07-15.json"
+            path.write_bytes(raw)
+            with mock.patch.object(Path, "read_bytes", return_value=raw) as read:
+                evidence = ad.load_context_evidence("2026-07-15", base_dir=tmp)
+
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(evidence["context"]["as_of"], "2026-07-15")
+        self.assertEqual(evidence["sha256"], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(evidence["source_path"], str(path.resolve()))
+
+    def test_evidence_hash_drift_fails_closed_without_reparsing_new_bytes(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "2026-07-15.json"
+            path.write_text('{"as_of":"2026-07-15","annotations":{}}\n')
+            evidence = ad.load_context_evidence("2026-07-15", base_dir=tmp)
+            path.write_text('{"as_of":"2026-07-14","annotations":{}}\n')
+
+            verified = ad._verify_context_evidence(evidence)
+
+        self.assertEqual(verified["state"], "integrity_failed")
+        self.assertIsNone(verified["context"])
+        self.assertIn("hash drift", verified["warning"])
+
+    def test_evidence_loader_rejects_a_dated_symlink_outside_context_root(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "context"
+            root.mkdir()
+            outside = Path(tmp) / "outside.json"
+            outside.write_text('{"as_of":"2026-07-15","annotations":{}}\n')
+            (root / "2026-07-15.json").symlink_to(outside)
+
+            evidence = ad.load_context_evidence("2026-07-15", base_dir=str(root))
+
+        self.assertEqual(evidence["state"], "integrity_failed")
+        self.assertIsNone(evidence["context"])
+        self.assertIn("escapes context root", evidence["warning"])
+
+    def test_evidence_loader_classifies_a_symlink_loop_as_integrity_failed(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "context"
+            root.mkdir()
+            loop = root / "2026-07-15.json"
+            loop.symlink_to(loop.name)
+
+            evidence = ad.load_context_evidence("2026-07-15", base_dir=str(root))
+
+        self.assertEqual(evidence["state"], "integrity_failed")
+        self.assertIsNone(evidence["context"])
+        self.assertIn("unreadable", evidence["warning"])
+
+    def test_rendered_context_freshness_has_all_evidence_derived_states(self):
+        data = {
+            "symbols": [], "blocked": [], "data_as_of": "2026-07-15",
+            "evaluation_date": "2026-08-26", "composite_signals": [],
+            "family_evidence": [],
+            "underlying_closes_freshness": {
+                "state": "unavailable", "detail": "fixture"},
+        }
+
+        def chip(context, evidence):
+            html = ad.render(data, context=context, context_evidence=evidence)
+            start = html.index("Research context")
+            return html[start:html.index("</span>", start)]
+
+        exact = {"as_of": "2026-07-15", "annotations": {}}
+        stale = {"as_of": "2026-07-14", "annotations": {}}
+        loaded = {"state": "loaded", "source_path": "/fixture/context.json",
+                  "sha256": "a" * 64}
+        self.assertIn(
+            "Research context EXACT — context as of 2026-07-15; board as of 2026-07-15.",
+            chip(exact, {**loaded, "context": exact}),
+        )
+        self.assertIn(
+            "Research context STALE — context as of 2026-07-14; board as of 2026-07-15.",
+            chip(stale, {**loaded, "context": stale}),
+        )
+        self.assertIn(
+            "Research context UNAVAILABLE — context as of unavailable; board as of 2026-07-15.",
+            chip(None, {"state": "unavailable", "context": None}),
+        )
+        self.assertIn(
+            "Research context INTEGRITY_FAILED — context as of unavailable; board as of 2026-07-15.",
+            chip(None, {"state": "integrity_failed", "context": None}),
+        )
+        future = {"as_of": "2026-07-16", "annotations": {}}
+        self.assertIn("Research context INTEGRITY_FAILED", chip(
+            future, {**loaded, "context": future}))
+        invalid_annotations = {"as_of": "2026-07-15", "annotations": []}
+        self.assertIn("Research context INTEGRITY_FAILED", chip(
+            invalid_annotations, {**loaded, "context": invalid_annotations}))
+
+    def test_mutable_refresh_files_cannot_change_injected_context_chip(self):
+        import tempfile
+        from pathlib import Path
+
+        data = {
+            "symbols": [], "blocked": [], "data_as_of": "2026-07-15",
+            "evaluation_date": "2026-08-26", "composite_signals": [],
+            "family_evidence": [],
+            "underlying_closes_freshness": {
+                "state": "unavailable", "detail": "fixture"},
+        }
+        context = {"as_of": "2026-07-15", "annotations": {}}
+        evidence = {"state": "loaded", "context": context,
+                    "source_path": "/fixture/context.json", "sha256": "a" * 64}
+        with tempfile.TemporaryDirectory() as tmp:
+            files = [Path(tmp) / name for name in (
+                "guard.json", "refresh.log", "final-manifest.json")]
+            for path in files:
+                path.write_text("before")
+            before = ad.render(data, context=context, context_evidence=evidence)
+            for path in files:
+                path.write_text("after")
+            after = ad.render(data, context=context, context_evidence=evidence)
+
+        self.assertEqual(before, after)
+
 
 def _v2_section():
     return {
@@ -1341,7 +1716,7 @@ class V2RenderTests(unittest.TestCase):
 
     def test_hero_with_matched_context_pick(self):
         html = ad.render(self._assembled(), context=_v2_context())
-        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertIn("TOP 5 PICKS TODAY", html)
         self.assertIn("Legacy agent-selected top_picks were ignored", html)
         self.assertNotIn("IV elevated vs realized", html)
         self.assertNotIn("cushion exceeds monthly move", html)
@@ -1426,7 +1801,7 @@ class V2RenderTests(unittest.TestCase):
 
     def test_missing_context_renders_honest_quant_shortlist(self):
         html = ad.render(self._assembled())
-        self.assertIn("TOP 3 PICKS TODAY", html)
+        self.assertIn("TOP 5 PICKS TODAY", html)
         self.assertIn("No qualifying contract", html)
         # honesty: no narrative vocabulary invented
         self.assertNotIn("why now", html)
@@ -1530,7 +1905,133 @@ class V2RenderTests(unittest.TestCase):
             },
         }
 
-    def test_six_slots_render_as_two_lists_and_duplicate_is_allowed(self):
+    @staticmethod
+    def _movement_context(*, statuses=("BREAKOUT",), uncovered=False):
+        context = V2RenderTests._qm_context()
+        context["movement_as_of"] = "2026-06-30"
+        context["movement_symbols"] = {
+            f"SYM{index}": {
+                "status": "CURRENT",
+                "signal_status": status,
+                "breakout_fire": "BREAKOUT" in status,
+                "parabolic_fire": "PARABOLIC WARNING" in status,
+                "frozen_study_coverage": "NOT_COVERED" if uncovered else "COVERED",
+                "frozen_study_reason": "SYM0 is not covered by the frozen study"
+                if uncovered and index == 0 else "",
+            }
+            for index, status in enumerate(statuses)
+        }
+        return context
+
+    def test_movement_lane_renders_current_fire_without_mechanical_card(self):
+        html = ad.render(
+            self._assembled(),
+            qm_context=self._movement_context(statuses=("BREAKOUT + PARABOLIC WARNING",)),
+        )
+
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        lane = html[movement_start:movement_end]
+        self.assertIn("SYM0", lane)
+        self.assertIn("BREAKOUT + PARABOLIC WARNING", lane)
+        self.assertIn("DESCRIPTIVE ONLY — NOT A TRADE RANKING", lane)
+        self.assertIn("UNVALIDATED SIGNAL -- descriptive screen; no forward evidence exists until the SS5 study reports; not an entry recommendation; no book path.", lane)
+
+    def test_movement_lane_uncovered_card_omits_frozen_study_evidence(self):
+        context = self._movement_context(statuses=("BREAKOUT",), uncovered=True)
+        context["movement_symbols"]["SYM0"].update({
+            "historical_breakout_fires": 99,
+            "historical_parabolic_fires": 88,
+            "thesis": "must not render",
+            "counter_case": "must not render",
+            "option_candidates": {"must-not": "render"},
+        })
+        html = ad.render(self._assembled(), qm_context=context)
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        lane = html[movement_start:movement_end]
+
+        self.assertIn("not covered by the frozen study", lane)
+        for forbidden in (
+            "99", "88", "must not render", "Frozen study evidence", "breakeven", "candidate",
+        ):
+            self.assertNotIn(forbidden, lane)
+
+    def test_movement_lane_no_fires_renders_exact_empty_state_without_placeholders(self):
+        html = ad.render(
+            self._assembled(),
+            qm_context=self._movement_context(statuses=("NO FIRE", "NO FIRE")),
+        )
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        lane = html[movement_start:movement_end]
+
+        self.assertIn(
+            "No movement fires today. Expected — these patterns fired ~46 times in nine years across twelve names.",
+            lane,
+        )
+        self.assertNotIn('class="movement-card"', lane)
+
+    def test_movement_lane_blocked_context_never_claims_no_fires(self):
+        """A gate-blocked/no-data lane must render BLOCKED, not a no-fires observation."""
+        context = self._qm_context()
+        context["status"] = "DATA_BLOCKED"
+        context["reason"] = "pre-registration gate refused"
+        # No movement_symbols key at all — the shape load_qm_context returns when blocked.
+        html = ad.render(self._assembled(), qm_context=context)
+        movement_start = html.index("QM MOVEMENT LANE")
+        movement_end = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        lane = html[movement_start:movement_end]
+
+        self.assertIn("BLOCKED — movement state is unavailable this session", lane)
+        self.assertIn("pre-registration gate refused", lane)
+        self.assertNotIn("No movement fires today", lane)
+
+        context_all_dead = self._movement_context(statuses=("BREAKOUT",))
+        for item in context_all_dead["movement_symbols"].values():
+            item["status"] = "DATA_BLOCKED"
+        html = ad.render(self._assembled(), qm_context=context_all_dead)
+        lane = html[html.index("QM MOVEMENT LANE"):html.index("QM + MOVING-AVERAGE CONTEXT")]
+        self.assertIn("BLOCKED — movement state is unavailable this session", lane)
+        self.assertNotIn("No movement fires today", lane)
+
+    def test_movement_lane_discloses_partially_unavailable_names(self):
+        context = self._movement_context(statuses=("NO FIRE", "NO FIRE"))
+        context["movement_symbols"]["SYM1"] = {
+            "status": "NO_DATA",
+            "reason": "no cached adjusted OHLCV",
+        }
+        html = ad.render(self._assembled(), qm_context=context)
+        lane = html[html.index("QM MOVEMENT LANE"):html.index("QM + MOVING-AVERAGE CONTEXT")]
+
+        self.assertIn("No movement fires today", lane)
+        self.assertIn("Not evaluated this session: SYM1 (NO_DATA).", lane)
+
+    def test_movement_fires_leave_canonical_mechanical_selection_bytes_unchanged(self):
+        import json
+
+        data = self._assembled()
+        baseline = json.dumps(
+            ad.select_top_picks(data), sort_keys=True, separators=(",", ":")
+        ).encode()
+        for statuses in ((), ("BREAKOUT",), ("PARABOLIC WARNING",),
+                         ("BREAKOUT + PARABOLIC WARNING",)):
+            with self.subTest(statuses=statuses):
+                ad.render(data, qm_context=self._movement_context(statuses=statuses))
+                actual = json.dumps(
+                    ad.select_top_picks(data), sort_keys=True, separators=(",", ":")
+                ).encode()
+                self.assertEqual(actual, baseline)
+
+    def test_movement_lane_sits_between_mechanical_top_three_and_retained_comparison(self):
+        html = ad.render(self._assembled(), qm_context=self._movement_context())
+        self.assertLess(html.index("Rule-based top 5"), html.index("QM MOVEMENT LANE"))
+        self.assertLess(
+            html.index("QM MOVEMENT LANE"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
+        )
+
+    def test_configured_slots_render_as_three_lists_and_duplicate_is_allowed(self):
         section = _v2_section()
         section["symbol"] = "AMZN"  # registered CSP name; appears as WATCH
         data = ad.assemble(symbol_sections=[section], rv21_by_symbol={"AMZN": math.sqrt(12) * 0.11})
@@ -1541,12 +2042,12 @@ class V2RenderTests(unittest.TestCase):
         qm_context = self._qm_context()
         qm_context["symbols"]["AMZN"] = qm_context["symbols"].pop("MSFT")
         html = ad.render(data, qm_context=qm_context)
-        self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3", html)
-        self.assertIn("ORIGINAL MECHANICAL TOP 3", html)
-        self.assertEqual(html.count('class="hero-card '), 6)
-        self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 2)
-        original_start = html.index("ORIGINAL MECHANICAL TOP 3")
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
+        self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", html)
+        self.assertIn("Rule-based top 5", html)
+        self.assertEqual(html.count('class="hero-card '), 3 * config.PICK_TOP_N)
+        self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 3)
+        original_start = html.index("Rule-based top 5")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         self.assertNotIn("Current QM signal", html[original_start:qm_start])
         self.assertIn(
             "QM is descriptive context only; it cannot change this mechanical card's "
@@ -1590,23 +2091,23 @@ class V2RenderTests(unittest.TestCase):
         self.assertIn("frozen study records aggregate excursions, not per-fire moves", html)
         self.assertIn("not recomputed from today&#x27;s cache", html)
 
-    def test_stale_qm_context_renders_three_blocked_slots_but_original_remains(self):
+    def test_stale_qm_context_renders_configured_blocked_slots_but_original_remains(self):
         html = ad.render(
             self._assembled(),
             qm_context=self._qm_context(status="DATA_BLOCKED", as_of="2026-06-29"),
         )
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
-        original_start = html.index("ORIGINAL MECHANICAL TOP 3")
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        original_start = html.index("Rule-based top 5")
         qm_section = html[qm_start:]
-        self.assertEqual(qm_section.count("DATA BLOCKED"), 3)
+        self.assertEqual(qm_section.count("DATA BLOCKED"), config.PICK_TOP_N)
         self.assertIn("Sell the MSFT $350 put", html[original_start:])
 
-    def test_incomplete_current_qm_context_renders_three_blocked_slots(self):
+    def test_incomplete_current_qm_context_renders_configured_blocked_slots(self):
         context = self._qm_context()
         del context["symbols"]["MSFT"]
         html = ad.render(self._assembled(), qm_context=context)
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
-        self.assertEqual(html[qm_start:].count("DATA BLOCKED"), 3)
+        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
+        self.assertEqual(html[qm_start:].count("DATA BLOCKED"), config.PICK_TOP_N)
         self.assertIn("QM context missing or stale for: MSFT", html)
 
     def test_qm_section_reports_dropped_research_annotation(self):
@@ -1617,18 +2118,18 @@ class V2RenderTests(unittest.TestCase):
 
         html = ad.render(self._assembled(), context=context, qm_context=self._qm_context())
 
-        qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3")
-        qm_end = html.index("Quant-want background")
-        self.assertIn("research annotation(s) do not match any card", html[qm_start:qm_end])
+        desk_start = html.index("RESEARCH DESK")
+        desk_end = html.index("EXPERIMENTS SHELF")
+        self.assertIn("research annotation(s) do not match any card", html[desk_start:desk_end])
 
     def test_page_order_puts_mechanical_list_before_descriptive_qm_comparison(self):
         html = ad.render(self._assembled(), context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("ORIGINAL MECHANICAL TOP 3"),
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("Rule-based top 5"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
         )
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
             html.index("Quant-want background"),
         )
         self.assertLess(html.index("Quant-want background"), html.index("Market context"))
@@ -1645,7 +2146,7 @@ class V2RenderTests(unittest.TestCase):
         data["composite_signals"] = [blocked_card]
         html = ad.render(data, context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
             html.index("Composite signal board"),
         )
         self.assertLess(
@@ -1653,8 +2154,621 @@ class V2RenderTests(unittest.TestCase):
         )
 
 
+class ContextLaneRenderTests(unittest.TestCase):
+    def _data(self, count=6):
+        sections = []
+        for index in range(count):
+            sections.append({
+                "symbol": f"S{index}",
+                "as_of": "2026-08-25",
+                "close": 100.0,
+                "iv_rank": 0.5,
+                "groups": [{
+                    "kind": "put",
+                    "title": "SELL A PUT?",
+                    "cards": [{
+                        "strike": 95.0,
+                        "expiry": "2026-09-18",
+                        "dte": 24,
+                        "credit": 100.0 + (count - index),
+                        "annualized_yield": 0.30 - index / 100.0,
+                        "cushion": 0.05,
+                        "grades": {"yield": "GREEN", "liquidity": "GREEN"},
+                        "verdict": "display only",
+                    }],
+                    "empty": None,
+                }],
+            })
+        data = ad.assemble(
+            symbol_sections=sections,
+            rv21_by_symbol={},
+            today="2026-08-25",
+            composite_signals=[],
+        )
+        for section in data["symbols"]:
+            snapshot = section["groups"][0]["cards"][0]["top3_snapshot"]
+            snapshot.update({
+                "rank_eligible": True,
+                "selection_status": "ELIGIBLE",
+                "policy": {"status": "ELIGIBLE", "reason_codes": []},
+            })
+        return data
+
+    @staticmethod
+    def _composite(symbol, *, count=3, trend="UP", grade="A"):
+        return {
+            "symbol": symbol,
+            "grade": grade,
+            "aligned_count": count,
+            "max_asof": "2026-08-25",
+            "trend": {"state": trend, "data_blocked": trend == "DATA_BLOCKED"},
+            "vol_premium": {"state": "CHEAP" if count >= 2 else "NEUTRAL",
+                            "data_blocked": False},
+            "regime": {"state": "CALM", "high_dispersion": count < 3,
+                       "data_blocked": False},
+            "internals": {"state": "CONFIRM" if count >= 4 else "NEUTRAL",
+                          "data_blocked": False},
+        }
+
+    def test_flag_off_matches_post_brief26_golden_bytes(self):
+        import hashlib
+        import re
+        from unittest import mock
+
+        case = LaneBoardPresentationTests()
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", False):
+            html = ad.render(
+                case._data(),
+                context=case._context(),
+                qm_context={"status": "DATA_BLOCKED"},
+                research_views_status={"state": "absent"},
+            )
+
+        pre_tracker_bytes = re.sub(
+            r'<section class="panel pick-tracker">.*?</section>',
+            "",
+            html,
+            flags=re.S,
+        )
+        self.assertEqual(
+            hashlib.sha256(pre_tracker_bytes.encode()).hexdigest(),
+            "f092f03e0c58a904a7126a03e6107494ee4740695e7c7e717eb965b9570c5af7",
+        )
+        self.assertNotIn("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL", html)
+
+    def test_render_is_pure_and_preserves_selection_and_event_inputs(self):
+        """Characterize the Brief 28 render boundary before tracker wiring.
+
+        Catches a render-time file read/write, mutation of candidate sections,
+        selection drift between identical calls, or mutation of the frozen
+        EventView supplied by the caller.
+        """
+        from unittest import mock
+
+        from options_researcher.event_calendar import EventView
+
+        data = self._data(count=2)
+        data["composite_signals"] = [
+            self._composite("S0", count=3),
+            self._composite("S1", count=4),
+        ]
+        sections_before = ad.sections_json(data["symbols"])
+        picks_before = json.dumps(
+            ad.select_top_picks(data, include_csp_watch=True),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        view = EventView.create(
+            [],
+            {"S0": {"events": ["fixture"]}},
+            {"S0": {"text": "UNAVAILABLE", "reason": "fixture"}},
+            {},
+        )
+        view_before = (
+            tuple(view.calendar),
+            repr(view.complex_map),
+            repr(view.implied_moves),
+            repr(view.failures),
+        )
+
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch("builtins.open", side_effect=AssertionError("render touched a file")),
+        ):
+            first = ad.render(data, event_view=view)
+            second = ad.render(data, event_view=view)
+
+        self.assertIsInstance(first, str)
+        self.assertEqual(first, second)
+        self.assertEqual(ad.sections_json(data["symbols"]), sections_before)
+        self.assertEqual(
+            json.dumps(
+                ad.select_top_picks(data, include_csp_watch=True),
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            picks_before,
+        )
+        self.assertEqual(
+            (
+                tuple(view.calendar),
+                repr(view.complex_map),
+                repr(view.implied_moves),
+                repr(view.failures),
+            ),
+            view_before,
+        )
+
+    def test_context_membership_is_independent_of_event_view(self):
+        """Characterize events as presentation-only, never a ranking input."""
+        import re
+        from unittest import mock
+
+        data = self._data(count=6)
+        data["composite_signals"] = [
+            self._composite(f"S{index}", count=(4 if index == 5 else 3))
+            for index in range(6)
+        ]
+        plain_view = {"calendar": (), "complex_map": {}, "implied_moves": {}, "failures": {}}
+        noisy_view = {
+            "calendar": (),
+            "complex_map": {"S0": {"events": ("fixture",)}},
+            "implied_moves": {"S0": {"text": "99%"}},
+            "failures": {"S1": "FixtureFailure"},
+        }
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            plain = ad.render(data, event_view=plain_view)
+            noisy = ad.render(data, event_view=noisy_view)
+
+        pattern = r'data-context-symbol="([^"]+)"'
+        self.assertEqual(re.findall(pattern, noisy), re.findall(pattern, plain))
+        self.assertEqual(re.findall(pattern, plain), ["S5", "S0", "S1", "S2", "S3"])
+
+    def test_render_result_selects_tracker_arms_once_and_returns_rendered_membership(self):
+        """Catches rerunning a tracker selector after rendering its cards."""
+        from unittest import mock
+
+        from options_researcher import context_lane
+
+        data = self._data(count=6)
+        data["composite_signals"] = [
+            self._composite(f"S{index}", count=(4 if index == 5 else 3))
+            for index in range(6)
+        ]
+        sections_before = ad.sections_json(data["symbols"])
+        real_select = ad.select_top_picks
+        real_rank = context_lane.rank_context_lane
+
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", []),
+            mock.patch.object(ad, "select_top_picks", wraps=real_select) as select,
+            mock.patch.object(context_lane, "rank_context_lane", wraps=real_rank) as rank,
+        ):
+            result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+
+        self.assertEqual(select.call_count, 2)
+        self.assertEqual(rank.call_count, 1)
+        self.assertIsInstance(result.html, str)
+        self.assertEqual(result.selection_snapshot["schema"], "picks_snapshot/v1")
+        self.assertEqual(
+            [item["candidate_id"] for item in result.selection_snapshot["context_lane"]["candidates"]],
+            [
+                "S5:put:2026-09-18:95.00",
+                "S0:put:2026-09-18:95.00",
+                "S1:put:2026-09-18:95.00",
+                "S2:put:2026-09-18:95.00",
+                "S3:put:2026-09-18:95.00",
+            ],
+        )
+        context_section = result.html[
+            result.html.index("CONTEXT-AWARE SHORTLIST") : result.html.index("QM MOVEMENT LANE")
+        ]
+        for item in result.selection_snapshot["context_lane"]["candidates"]:
+            self.assertIn(f'data-context-symbol="{item["symbol"]}"', context_section)
+        self.assertEqual(ad.sections_json(data["symbols"]), sections_before)
+
+    def test_pick_tracker_section_is_loud_when_scoreboard_is_unbuilt(self):
+        """Catches a missing scoreboard being rendered as an empty success."""
+        html = ad.render(self._data(count=1), research_views_status={"state": "absent"})
+        self.assertIn("PICK TRACKER (descriptive)", html)
+        self.assertIn("UNBUILT", html)
+
+    def test_dashboard_artifacts_bind_exact_html_and_capture_receipt(self):
+        """Catches a snapshot paired with stale HTML or unbound source evidence."""
+        import hashlib
+        from unittest import mock
+
+        from options_researcher import pick_tracker
+
+        data = self._data(count=1)
+        card = data["symbols"][0]["groups"][0]["cards"][0]
+        raw_quote = {
+            "symbol": "S0",
+            "right": "P",
+            "strike": float(card["strike"]),
+            "expiry": str(card["expiry"]),
+            "bid": 1.0,
+            "ask": 1.2,
+            "open_interest": 500,
+        }
+        data["symbols"][0]["groups"][0]["pick_tracker_quotes"] = {
+            f"{card['expiry']}:{float(card['strike']):.2f}": {
+                **raw_quote,
+                "source_row_hash": hashlib.sha256(
+                    json.dumps(raw_quote, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest(),
+            }
+        }
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", []),
+        ):
+            result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
+            html_path = root / ".tmp/dashboard/attractiveness.html"
+            snapshot_path = root / ".tmp/dashboard/picks_snapshot.json"
+            with mock.patch(
+                "research.hashing.config_hash", return_value="e" * 64
+            ):
+                ad._write_dashboard_result(
+                    result,
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
+                    input_root=root,
+                )
+
+            payload = json.loads(snapshot_path.read_text())
+            self.assertEqual(payload["html_sha256"], hashlib.sha256(html_path.read_bytes()).hexdigest())
+            self.assertEqual(payload["capture_receipt_sha256"], hashlib.sha256(receipt.read_bytes()).hexdigest())
+            self.assertEqual(payload["config_hash"], "e" * 64)
+            pick_tracker.validate_snapshot(
+                payload, html_path.read_bytes(), input_root=root
+            )
+            self.assertEqual(list(html_path.parent.glob("*.tmp")), [])
+
+    def test_rendered_dataset_x_rejects_self_consistent_snapshot_dataset_y(self):
+        """A3: the HTML marker must originate from the render-side rows."""
+        import copy
+        import hashlib
+        from dataclasses import replace
+        from unittest import mock
+
+        from options_researcher import pick_tracker
+
+        data = self._data(count=1)
+        card = data["symbols"][0]["groups"][0]["cards"][0]
+        raw_quote = {
+            "symbol": "S0",
+            "right": "P",
+            "strike": float(card["strike"]),
+            "expiry": str(card["expiry"]),
+            "bid": 1.0,
+            "ask": 1.2,
+            "open_interest": 500,
+        }
+        data["symbols"][0]["groups"][0]["pick_tracker_quotes"] = {
+            f"{card['expiry']}:{float(card['strike']):.2f}": {
+                **raw_quote,
+                "source_row_hash": hashlib.sha256(
+                    json.dumps(raw_quote, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest(),
+            }
+        }
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", []),
+        ):
+            rendered_x = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+
+        snapshot_y = copy.deepcopy(rendered_x.selection_snapshot)
+        for arm_name in (
+            "frozen_baseline",
+            "frozen_baseline_watch_inclusive",
+            "context_lane",
+        ):
+            for item in snapshot_y[arm_name]["candidates"]:
+                item["raw_quote"]["bid"] = 1.1
+                item["source_row_hash"] = hashlib.sha256(
+                    json.dumps(
+                        item["raw_quote"], sort_keys=True, separators=(",", ":")
+                    ).encode()
+                ).hexdigest()
+        divergent = replace(rendered_x, selection_snapshot=snapshot_y)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
+            html_path = root / "attractiveness.html"
+            snapshot_path = root / "picks_snapshot.json"
+            with mock.patch("research.hashing.config_hash", return_value="e" * 64):
+                ad._write_dashboard_result(
+                    divergent,
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
+                    input_root=root,
+                )
+
+            published_y = json.loads(snapshot_path.read_text())
+            with self.assertRaisesRegex(
+                pick_tracker.TrackerError, "SNAPSHOT_HTML_SOURCE_MISMATCH"
+            ):
+                pick_tracker.validate_snapshot(
+                    published_y, html_path.read_bytes(), input_root=root
+                )
+
+    def test_dashboard_publishes_html_but_marks_snapshot_unavailable_without_provenance(self):
+        from unittest import mock
+
+        data = self._data(count=1)
+        result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            html_path = root / "attractiveness.html"
+            snapshot_path = root / "picks_snapshot.json"
+            with mock.patch("research.hashing.config_hash", return_value="e" * 64):
+                unavailable = ad._write_dashboard_result(
+                    result,
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
+                    input_root=root,
+                )
+            self.assertEqual(unavailable["state"], "UNAVAILABLE")
+            self.assertEqual(unavailable["reason_code"], "CAPTURE_RECEIPT_UNAVAILABLE")
+            self.assertEqual(html_path.read_text(), result.html)
+            self.assertEqual(json.loads(snapshot_path.read_text()), unavailable)
+
+            receipt = root / "reports/schwab_chains/2026-08-25/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
+            with mock.patch("research.hashing.config_hash", return_value="e" * 64):
+                unavailable = ad._write_dashboard_result(
+                    result,
+                    html_path=html_path,
+                    snapshot_path=snapshot_path,
+                    input_root=root,
+                )
+            self.assertEqual(unavailable["state"], "UNAVAILABLE")
+            self.assertEqual(unavailable["reason_code"], "RAW_QUOTE_PROVENANCE_UNAVAILABLE")
+            self.assertEqual(html_path.read_text(), result.html)
+
+    def test_snapshot_carries_frozen_coverage_basis_without_changing_sections_json(self):
+        data = self._data(count=1)
+        group = data["symbols"][0]["groups"][0]
+        group["kind"] = "cc"
+        group["pick_tracker_coverage"] = {
+            "symbol": "S0",
+            "shares": 100,
+            "declared_shares": 100,
+            "cost_basis": 72.5,
+            "acquired": "2025-01-02",
+            "source_row_hash": "a" * 64,
+        }
+        card = group["cards"][0]
+        card["top3_snapshot"].update(
+            {"candidate_id": "S0:cc:2026-09-18:95.00", "lane": "cc"}
+        )
+        before = ad.sections_json(data["symbols"])
+
+        result = ad._render_result(data, qm_context={"status": "DATA_BLOCKED"})
+
+        position = result.selection_snapshot["frozen_baseline"]["candidates"][0][
+            "pick_position"
+        ]
+        self.assertEqual(position["risk_basis"]["value"], 7_250.0)
+        self.assertEqual(position["coverage_context"]["source_row_hash"], "a" * 64)
+        self.assertEqual(ad.sections_json(data["symbols"]), before)
+
+    def test_flag_on_reorders_full_pool_and_diagnoses_displaced_frozen_name(self):
+        from unittest import mock
+
+        data = self._data()
+        data["composite_signals"] = [
+            self._composite(f"S{index}", count=(4 if index == 5 else 3))
+            for index in range(6)
+        ]
+        data["composite_signals"][4] = self._composite(
+            "S4", count=0, trend="MIXED", grade="B"
+        )
+        frozen = [pick["symbol"] for pick in ad.select_top_picks(
+            data, include_csp_watch=True)]
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            html = ad.render(data)
+
+        section_start = html.index("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL")
+        section_end = html.index("QM MOVEMENT LANE")
+        section = html[section_start:section_end]
+        self.assertEqual(frozen, ["S0", "S1", "S2", "S3", "S4"])
+        self.assertIn('data-context-symbol="S5"', section)
+        self.assertNotIn('data-context-symbol="S4"', section)
+        expected_reasons = {
+            "S0": "TREND, VOL_PREMIUM, REGIME",
+            "S1": "TREND, VOL_PREMIUM, REGIME",
+            "S2": "TREND, VOL_PREMIUM, REGIME",
+            "S3": "TREND, VOL_PREMIUM, REGIME",
+            "S4": "DISPLACED",
+        }
+        for symbol, reason in expected_reasons.items():
+            self.assertIn(f'data-diagnostic-symbol="{symbol}"', section)
+            self.assertIn(f'>{symbol} — {reason}</span>', section)
+        self.assertLess(html.index("Rule-based top 5"), section_start)
+        self.assertLess(section_start, html.index("QM MOVEMENT LANE"))
+        self.assertIn(
+            "Experimental re-ordering by market context. The rule-based list above is "
+            "the registered baseline. This lane is display-only and carries no verdict "
+            "or trade authority; once the pick tracker is live its picks will be tracked "
+            "descriptively against the baseline.",
+            section,
+        )
+
+    def test_selected_blocked_composite_stays_in_slot_with_reason(self):
+        from unittest import mock
+
+        data = self._data(count=1)
+        data["composite_signals"] = [
+            self._composite("S0", count=0, trend="DATA_BLOCKED", grade="C")
+        ]
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            html = ad.render(data)
+
+        section = html[
+            html.index("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL"):
+            html.index("QM MOVEMENT LANE")
+        ]
+        self.assertIn('data-context-symbol="S0"', section)
+        self.assertIn("BLOCKED", section)
+
+    def test_flag_on_shows_zero_credit_for_vetoed_down_and_mixed_context(self):
+        from unittest import mock
+
+        data = self._data(count=3)
+        data["composite_signals"] = [
+            self._composite("S0", count=3, grade="C"),
+            self._composite("S1", count=3, trend="DOWN"),
+            self._composite("S2", count=0, trend="MIXED"),
+        ]
+
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            html = ad.render(data)
+
+        section = html[
+            html.index("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL") :
+            html.index("QM MOVEMENT LANE")
+        ]
+        for symbol, reason in (
+            ("S0", "VETOED"),
+            ("S1", "DIRECTION_MISMATCH"),
+            ("S2", "DIRECTION_MISMATCH"),
+        ):
+            start = section.index(f'data-context-symbol="{symbol}"')
+            card = section[start : section.index("</details></div>", start)]
+            self.assertIn(reason, card)
+            self.assertIn("context term 0", card)
+
+    def test_scoring_exception_renders_loud_failure(self):
+        from unittest import mock
+
+        with (
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch(
+                "options_researcher.context_lane.rank_context_lane",
+                side_effect=RuntimeError("injected"),
+            ),
+        ):
+            html = ad.render(self._data(count=1))
+
+        self.assertIn("CONTEXT LANE FAILED — RuntimeError", html)
+
+
+class InputRootFallbackTests(unittest.TestCase):
+    """ATTRACTIVENESS_INPUT_ROOT unset -> default to the ops checkout.
+
+    Owner-directed 2026-08-25: a repo/dev build must read board inputs
+    (receipts, caches) from the ops checkout by default, because capture
+    receipts are written only there; reading the dev checkout's own
+    reports/ renders a falsely stale board.
+    """
+
+    def _run(self, fallback, env_value=None):
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        del tempfile  # helper signature symmetry; dirs made by callers
+        with mock.patch.dict(os.environ):
+            os.environ.pop("ATTRACTIVENESS_INPUT_ROOT", None)
+            if env_value is not None:
+                os.environ["ATTRACTIVENESS_INPUT_ROOT"] = env_value
+            with mock.patch.object(ad, "OPS_CHECKOUT_FALLBACK", fallback):
+                before = Path.cwd()
+                with ad._input_root_cwd() as root:
+                    inside = Path.cwd()
+                after = Path.cwd()
+        return before, root, inside, after
+
+    def test_unset_env_defaults_to_existing_ops_checkout(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ops = Path(tmp) / "options-validator-ops"
+            ops.mkdir()
+            before, root, inside, after = self._run(ops)
+        self.assertEqual(root, ops.resolve())
+        self.assertEqual(inside, ops.resolve())
+        self.assertEqual(after, before)
+
+    def test_unset_env_without_ops_checkout_stays_in_cwd(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "no-such-checkout"
+            before, root, inside, after = self._run(missing)
+        self.assertEqual(root, before)
+        self.assertEqual(inside, before)
+        self.assertEqual(after, before)
+
+    def test_explicit_env_wins_over_ops_fallback(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ops = Path(tmp) / "options-validator-ops"
+            ops.mkdir()
+            explicit = Path(tmp) / "explicit-root"
+            explicit.mkdir()
+            before, root, inside, after = self._run(
+                ops, env_value=str(explicit))
+        self.assertEqual(root, explicit.resolve())
+        self.assertEqual(inside, explicit.resolve())
+        self.assertEqual(after, before)
+
+    def test_env_dot_forces_current_checkout(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ops = Path(tmp) / "options-validator-ops"
+            ops.mkdir()
+            before, root, inside, after = self._run(ops, env_value=".")
+        self.assertEqual(root, before.resolve())
+        self.assertEqual(inside, before.resolve())
+        self.assertEqual(after, before)
+
+    def test_fallback_equal_to_cwd_does_not_chdir(self):
+        from pathlib import Path
+
+        before, root, inside, after = self._run(Path.cwd())
+        self.assertEqual(root, before)
+        self.assertEqual(inside, before)
+        self.assertEqual(after, before)
+
+
 class MainTests(unittest.TestCase):
-    def test_main_reads_external_board_and_restores_output_cwd(self):
+    def setUp(self):
+        # Hermeticity: keep env-unset builds in the test cwd even on the
+        # machine where the real ops checkout exists (the default-input-root
+        # fallback is covered by InputRootFallbackTests above).
+        from pathlib import Path
+        from unittest import mock
+
+        patcher = mock.patch.object(
+            ad, "OPS_CHECKOUT_FALLBACK", Path("/nonexistent-ops-checkout"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_main_loads_board_and_context_from_same_external_root(self):
         import os
         import tempfile
         from pathlib import Path
@@ -1677,16 +2791,21 @@ class MainTests(unittest.TestCase):
 
         def gather():
             observed["board"] = Path.cwd()
-            return [section], {"MSFT": 1.1}, []
+            return [section], {"MSFT": 1.1}, [], {
+                "verified_sessions": [], "failures": [], "receipts_found": False}
 
-        def load_context(_as_of):
-            observed["output"] = Path.cwd()
-            return None, None
+        def load_context_evidence(_as_of):
+            observed["context"] = Path.cwd()
+            return {"state": "unavailable", "context": None,
+                    "warning": None, "source_path": None, "sha256": None}
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             board_root = (root / "ops").resolve()
             board_root.mkdir()
+            receipt = board_root / "reports/schwab_chains/2026-07-24/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
             output = root / "research" / "attractiveness.html"
             with (
                 mock.patch.dict(
@@ -1694,7 +2813,9 @@ class MainTests(unittest.TestCase):
                     {"ATTRACTIVENESS_INPUT_ROOT": str(board_root)},
                 ),
                 mock.patch.object(ad, "_gather_all", side_effect=gather),
-                mock.patch.object(ad, "load_context", side_effect=load_context),
+                mock.patch.object(
+                    ad, "load_context_evidence", side_effect=load_context_evidence),
+                mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
                 mock.patch.object(ad, "OUTPUT_PATH", str(output)),
                 mock.patch(
                     "options_researcher.hypothesis_evidence.gather_hypothesis_evidence",
@@ -1708,9 +2829,93 @@ class MainTests(unittest.TestCase):
                 path = ad.main()
 
         self.assertEqual(observed["board"], board_root)
-        self.assertEqual(observed["output"], original_cwd)
+        self.assertEqual(observed["context"], board_root)
         self.assertEqual(Path.cwd(), original_cwd)
         self.assertEqual(Path(path).resolve(), output.resolve())
+
+    def test_flag_off_build_uses_same_root_context_but_keeps_legacy_chip_path(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        section = {
+            "symbol": "MSFT",
+            "as_of": "2026-07-24",
+            "close": 373.02,
+            "iv_rank": 0.88,
+            "groups": [{
+                "kind": "put",
+                "title": "SELL A PUT?",
+                "cards": [],
+                "empty": "none this cycle",
+            }],
+        }
+        context = {"as_of": "2026-07-24", "annotations": {}}
+        with tempfile.TemporaryDirectory() as temp:
+            board_root = (Path(temp) / "input-root").resolve()
+            board_root.mkdir()
+            receipt = board_root / "reports/schwab_chains/2026-07-24/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
+            output = Path(temp) / "deployment" / "attractiveness.html"
+            observed = {}
+
+            def load_evidence(_as_of):
+                observed["context_cwd"] = Path.cwd()
+                return {
+                    "state": "loaded",
+                    "context": context,
+                    "warning": None,
+                    "source_path": str(board_root / "context.json"),
+                    "sha256": "a" * 64,
+                }
+
+            with (
+                mock.patch.object(config, "CONTEXT_LANE_ENABLED", False),
+                mock.patch.dict(
+                    os.environ, {"ATTRACTIVENESS_INPUT_ROOT": str(board_root)}
+                ),
+                mock.patch.object(ad, "load_context") as legacy,
+                mock.patch.object(
+                    ad, "load_context_evidence", side_effect=load_evidence
+                ) as evidence,
+                mock.patch.object(
+                    ad, "_verify_context_evidence", side_effect=lambda value: value
+                ),
+                mock.patch.object(
+                    ad,
+                    "_render_result",
+                    return_value=ad.DashboardRenderResult(
+                        html="baseline-bytes",
+                        selection_snapshot={
+                            "schema": "picks_snapshot/v1",
+                            "data_as_of": "2026-07-24",
+                            "frozen_baseline": {"candidates": []},
+                            "context_lane": {"candidates": []},
+                        },
+                    ),
+                ) as render,
+                mock.patch.object(ad, "OUTPUT_PATH", str(output)),
+                mock.patch.object(
+                    ad, "PICKS_SNAPSHOT_PATH", Path(temp) / "deployment/picks_snapshot.json"
+                ),
+                mock.patch(
+                    "options_researcher.research_views_publication.copy_publication"
+                ),
+                mock.patch(
+                    "options_researcher.qm_dashboard.load_qm_context", return_value={}
+                ),
+            ):
+                ad._build_and_write(
+                    symbol_sections=[section], rv21_by_symbol={"MSFT": 1.1}
+                )
+
+        legacy.assert_not_called()
+        evidence.assert_called_once_with("2026-07-24")
+        self.assertEqual(observed["context_cwd"], board_root)
+        self.assertIsNone(render.call_args.kwargs["context_evidence"])
+        self.assertEqual(render.call_args.kwargs["context"], context)
 
     def test_main_writes_file_and_prints_path(self):
         import io
@@ -1724,8 +2929,17 @@ class MainTests(unittest.TestCase):
                    "groups": [{"kind": "put", "title": "SELL A PUT?",
                                "cards": [], "empty": "none this cycle"}]}
         with tempfile.TemporaryDirectory() as tmp:
+            input_root = Path(tmp) / "input-root"
+            receipt = input_root / "reports/schwab_chains/2026-06-30/preclose.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"schema":"fixture"}\n')
             out = os.path.join(tmp, "dashboard", "attractiveness.html")
-            with mock.patch.object(ad, "OUTPUT_PATH", out):
+            with (
+                mock.patch.object(ad, "OUTPUT_PATH", out),
+                mock.patch.dict(
+                    os.environ, {"ATTRACTIVENESS_INPUT_ROOT": str(input_root)}
+                ),
+            ):
                 buf = io.StringIO()
                 with redirect_stdout(buf):
                     path = ad.main(symbol_sections=[section],
@@ -1733,6 +2947,361 @@ class MainTests(unittest.TestCase):
                 self.assertTrue(os.path.exists(out))
                 self.assertIn("attractiveness.html", buf.getvalue())
                 self.assertEqual(path, os.path.abspath(out))
+
+
+# ---------------------------------------------------------------------------
+# Brief 13: passive Lane Board presentation surfaces.
+# ---------------------------------------------------------------------------
+
+
+class LaneBoardPresentationTests(unittest.TestCase):
+    """Presentation-only board surfaces must stay injected and fail-visible."""
+
+    def _data(self):
+        data = ad.assemble(
+            symbol_sections=[
+                _fresh_section("NVDA", "2026-08-14", closes_as_of="2026-08-13"),
+                _stale_section("MSFT", "2026-08-11", closes_as_of="2026-08-12"),
+            ],
+            rv21_by_symbol={},
+            today="2026-08-14",
+            composite_signals=[
+                {"symbol": "NVDA", "grade": "A", "max_asof": "2026-08-13"},
+                {"symbol": "MSFT", "grade": "B", "max_asof": "2026-08-12"},
+            ],
+        )
+        return data
+
+    def _context(self):
+        return {
+            "as_of": "2026-08-14",
+            "researched_on": "2026-08-14",
+            "provenance": "fixture provenance",
+            "symbols": {"NVDA": {"news_summary": "covered"}},
+        }
+
+    def test_status_reader_accepts_only_validated_current_generation(self):
+        from options_researcher import research_views_publication as publication
+
+        generation_id = "20260815T113000000000Z-0123456789abcdef0123456789abcdef"
+        with tempfile.TemporaryDirectory() as tmp:
+            dashboard = Path(tmp)
+            staging = dashboard / "research-views-generations" / f".staging-{generation_id}"
+            staging.mkdir(parents=True)
+            for name in publication.ARTIFACTS:
+                (staging / name).write_text(f"{name}\n")
+            publication.publish_generation(
+                dashboard_dir=dashboard, staging_dir=staging,
+                generation_id=generation_id,
+                published_at="2026-08-15T11:30:00.000000Z",
+                producer_commit="a" * 40)
+            status = ad.load_research_views_status(dashboard)
+            self.assertEqual(status["state"], "published")
+            self.assertEqual(status["generation_id"], generation_id)
+            status_path = status["artifacts"]["research-views-status.txt"]
+            status_path.write_bytes(status_path.read_bytes() + b"x")
+            self.assertEqual(ad.load_research_views_status(dashboard)["state"],
+                             "integrity_failed")
+
+    def test_freshness_research_composite_and_shelf_are_visible_in_board_order(self):
+        html = ad.render(
+            self._data(),
+            context=self._context(),
+            qm_context={"status": "DATA_BLOCKED"},
+            research_views_status={
+                "state": "published",
+                "published_at": "2026-08-15T11:30:00.000000Z",
+                "generation_id": "20260815T113000000000Z-0123456789abcdef0123456789abcdef",
+            },
+        )
+        self.assertIn("DATA FRESHNESS", html)
+        self.assertIn("Frozen EOD (.cache/chains)", html)
+        self.assertIn("Verified Schwab 15:45 pre-close (.cache/schwab_chains)", html)
+        self.assertIn("Underlying closes", html)
+        self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)
+        self.assertIn(
+            "Chosen by fixed rules (green-check fraction, one pick per stock). This is a fit ranking, not a prediction; whether it predicts anything is exactly what the registered RQ2/A2 studies will measure.",
+            html,
+        )
+        self.assertIn("Highest agreement today: NVDA", html)
+        self.assertIn("RESEARCH DESK", html)
+        self.assertEqual(html.count('class="research-coverage-row"'), 18)
+        self.assertIn("EXPERIMENTS SHELF", html)
+        self.assertIn('href="research-views-generations/', html)
+        self.assertIn("experiments: OK", html)
+        self.assertIn("wasserstein: OK", html)
+        for earlier, later in (
+            ("DATA FRESHNESS", "Rule-based top 5"),
+            ("Rule-based top 5", "QM MOVEMENT LANE"),
+            ("QM MOVEMENT LANE", "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
+            ("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", "Composite signal board"),
+            ("Composite signal board", "RESEARCH DESK"),
+            ("RESEARCH DESK", "EXPERIMENTS SHELF"),
+            ("EXPERIMENTS SHELF", "Symbol review"),
+        ):
+            self.assertLess(html.index(earlier), html.index(later))
+
+    def test_experiments_views_freshness_chip_is_inside_top_freshness_strip(self):
+        """A shelf-only status must not satisfy the top-strip freshness contract."""
+        html = ad.render(
+            self._data(),
+            context=self._context(),
+            research_views_status={
+                "state": "published",
+                "published_at": "2026-08-15T11:30:00.000000Z",
+                "generation_id": "20260815T113000000000Z-0123456789abcdef0123456789abcdef",
+            },
+        )
+
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
+        self.assertIn("Experiments views</strong>", freshness)
+        self.assertIn("2026-08-15T11:30:00.000000Z", freshness)
+        self.assertIn("experiments: OK", freshness)
+        self.assertIn("wasserstein: OK", freshness)
+
+    def test_experiments_views_absent_chip_honestly_says_not_published(self):
+        html = ad.render(self._data(), research_views_status={"state": "absent"})
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
+        self.assertIn("Experiments views</strong> not published", freshness)
+        self.assertIn("BLOCKED", freshness)
+
+    def test_underlying_closes_freshness_uses_configured_store_max_not_section_date(self):
+        import tempfile
+        from unittest import mock
+
+        import pandas as pd
+
+        from data import underlying_closes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(underlying_closes, "CACHE_DIR", tmp):
+                underlying_closes.store_closes(
+                    "NVDA",
+                    pd.DataFrame({
+                        "date": ["2026-08-13", "2026-08-14"],
+                        "close": [100.0, 101.0],
+                    }),
+                )
+                freshness = ad._underlying_closes_store_freshness(("NVDA",))
+
+            data = ad.assemble(
+                symbol_sections=[
+                    _fresh_section("NVDA", "2026-08-13", closes_as_of="2026-08-13"),
+                ],
+                rv21_by_symbol={},
+                today="2026-08-14",
+                underlying_closes_freshness=freshness,
+            )
+
+        html = ad.render(data)
+        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
+        self.assertIn("Underlying closes</strong> max session 2026-08-14", strip)
+        self.assertNotIn("Underlying closes</strong> as of 2026-08-13", strip)
+
+    def test_underlying_closes_freshness_fails_honestly_for_missing_and_malformed_store(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        import pandas as pd
+
+        from data import underlying_closes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            with mock.patch.object(underlying_closes, "CACHE_DIR", tmp):
+                underlying_closes.store_closes(
+                    "NVDA",
+                    pd.DataFrame({"date": ["2026-08-14"], "close": [101.0]}),
+                )
+                missing = ad._underlying_closes_store_freshness(("NVDA", "MSFT"))
+                (cache / "MSFT.parquet").write_text("not a parquet file")
+                malformed = ad._underlying_closes_store_freshness(("NVDA", "MSFT"))
+
+        self.assertEqual(missing["state"], "unavailable")
+        self.assertIn("missing", missing["detail"])
+        self.assertEqual(malformed["state"], "unavailable")
+        self.assertIn("malformed", malformed["detail"])
+
+        data = self._data()
+        data["underlying_closes_freshness"] = malformed
+        html = ad.render(data)
+        strip = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
+        self.assertIn("Underlying closes</strong> unavailable", strip)
+        self.assertIn("BLOCKED", strip)
+
+    def test_registered_bets_tracker_escapes_states_and_sits_before_shelf(self):
+        """A raw receipt summary remains escaped, descriptive, and unranked."""
+        data = self._data()
+        data["family_evidence"] = [{
+            "family": "H5<script>",
+            "ritual_state": "MISSING",
+            "ritual_detail": "NO RECEIPT <unsafe>",
+            "raw_state_counts": [{"state": "UNKNOWN", "count": 2}],
+            "evaluation_session": None,
+            "run_date": None,
+            "sources": [{"path": "reports/<unsafe>.json"}],
+            "registered_window_end": None,
+            "registered_window_metadata": None,
+        }]
+
+        html = ad.render(data, context=self._context())
+
+        self.assertIn("REGISTERED-BETS TRACKER", html)
+        self.assertIn("H5&lt;script&gt;", html)
+        self.assertIn("NO RECEIPT &lt;unsafe&gt;", html)
+        self.assertIn("evidence UNKNOWN: 2", html)
+        self.assertIn("read-only receipt summary", html)
+        self.assertIn("cannot activate, rank, or place a trade", html)
+        self.assertNotIn("<script>", html)
+        self.assertLess(html.index("RESEARCH DESK"), html.index("REGISTERED-BETS TRACKER"))
+        self.assertLess(html.index("REGISTERED-BETS TRACKER"), html.index("EXPERIMENTS SHELF"))
+
+    def test_tracker_attachment_cannot_change_mechanical_selection_bytes(self):
+        """A family rollup is presentation data, never a selection input."""
+        import json
+
+        baseline = self._data()
+        tracked = self._data()
+        tracked["family_evidence"] = [{
+            "family": "H10a",
+            "ritual_state": "REFUSED",
+            "ritual_detail": "preflight exit 1",
+            "raw_state_counts": [{"state": "UNKNOWN", "count": 1}],
+            "evaluation_session": None,
+            "run_date": None,
+            "sources": [],
+            "registered_window_end": "2026-10-06",
+            "registered_window_metadata": "registered-window metadata",
+        }]
+        baseline_bytes = json.dumps(
+            ad.select_top_picks(baseline), sort_keys=True, separators=(",", ":")
+        ).encode()
+
+        ad.render(tracked)
+
+        self.assertEqual(
+            json.dumps(
+                ad.select_top_picks(tracked), sort_keys=True, separators=(",", ":")
+            ).encode(),
+            baseline_bytes,
+        )
+
+    def test_full_lane_board_order_keeps_named_sections_distinct(self):
+        """The retained QM comparison stays below movement without merging lanes."""
+        data = self._data()
+        data["family_evidence"] = [{
+            "family": "H5",
+            "ritual_state": "NO_SIGNAL",
+            "ritual_detail": "no signal",
+            "raw_state_counts": [{"state": "WAIT", "count": 1}],
+            "evaluation_session": "2026-08-14",
+            "run_date": "2026-08-14",
+            "sources": [],
+            "registered_window_end": None,
+            "registered_window_metadata": None,
+        }]
+        context = self._context()
+        context["market"] = {"summary": "Fixture market context."}
+        html = ad.render(
+            data,
+            context=context,
+            qm_context={"status": "DATA_BLOCKED"},
+            research_views_status={"state": "absent"},
+        )
+        headings = (
+            "DATA FRESHNESS",
+            "Rule-based top 5",
+            "QM MOVEMENT LANE",
+            "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5",
+            "Composite signal board",
+            "RESEARCH DESK",
+            "REGISTERED-BETS TRACKER",
+            "EXPERIMENTS SHELF",
+            "CORE NAMES",
+            "Market context",
+            "Symbol review",
+        )
+        for earlier, later in zip(headings, headings[1:]):
+            self.assertLess(html.index(earlier), html.index(later))
+
+    def test_unknown_freshness_and_absent_research_are_blocked_not_ok(self):
+        data = self._data()
+        data["symbols"][0]["as_of"] = "not-a-date"
+        data["symbols"][0]["closes_as_of"] = "not-a-date"
+        data["chain_age_sessions"] = None
+        html = ad.render(data, research_views_status={"state": "absent"})
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
+        self.assertIn("UNKNOWN", freshness)
+        self.assertIn("BLOCKED", freshness)
+        self.assertIn("research: none", html)
+        self.assertIn("not published", html)
+
+    def test_research_desk_marks_stale_and_scalar_packets_uncovered(self):
+        context = self._context()
+        context.update({"as_of": "2026-08-11", "symbols": {"NVDA": "bad packet"}})
+        html = ad.render(self._data(), context=context)
+        desk = html[html.index("RESEARCH DESK"):html.index("EXPERIMENTS SHELF")]
+        self.assertIn("stale by 3 sessions", desk)
+        self.assertIn("NVDA</strong> · no mapping-valued packet", desk)
+        self.assertEqual(desk.count('class="research-coverage-row"'), 18)
+
+    def test_research_freshness_uses_later_board_evaluation_not_mixed_source_date(self):
+        data = self._data()
+        data["evaluation_date"] = "2026-08-17"
+        html = ad.render(data, context=self._context())
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
+        self.assertIn("Research</strong> as of 2026-08-14; researched on 2026-08-14; stale by 1 sessions; WARN", freshness)
+
+    def test_schwab_freshness_uses_stalest_constituent_date(self):
+        data = ad.assemble(
+            symbol_sections=[
+                _fresh_section("NVDA", "2026-08-11"),
+                _fresh_section("AMD", "2026-08-14"),
+            ],
+            rv21_by_symbol={},
+            today="2026-08-14",
+        )
+        html = ad.render(data)
+        freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
+        schwab = freshness[freshness.index("Verified Schwab"):freshness.index("Underlying closes")]
+        self.assertIn("as of 2026-08-11; 3 sessions old", schwab)
+        self.assertIn("BLOCKED", schwab)
+
+    def test_hard_chain_block_banner_survives_freshness_strip(self):
+        data = ad.assemble(
+            symbol_sections=[_stale_section("MSFT", "2026-08-11")],
+            rv21_by_symbol={},
+            today="2026-08-14",
+        )
+        html = ad.render(data)
+        self.assertIn("STALE BOARD", html)
+        self.assertLess(html.index("DATA FRESHNESS"), html.index("STALE BOARD"))
+
+    def test_composite_summary_never_promotes_malformed_or_non_a_cards(self):
+        html = ad._composite_html({
+            "composite_signals": [
+                {"symbol": "MSFT", "grade": "B"},
+                {"symbol": "bad", "grade": None},
+                "not-a-card",
+            ]
+        })
+        self.assertIn("Highest agreement today: none at grade A", html)
+
+    def test_empty_composite_lane_is_rendered_with_honest_no_data_state_in_order(self):
+        data = self._data()
+        data["composite_signals"] = []
+        html = ad.render(data, context=self._context())
+        composite = html[html.index("Composite signal board"):html.index("RESEARCH DESK")]
+
+        self.assertIn("display-only", composite)
+        self.assertIn("Highest agreement today: none at grade A", composite)
+        self.assertIn("No composite cards are available for this board.", composite)
+        self.assertLess(
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
+            html.index("Composite signal board"),
+        )
+        self.assertLess(html.index("Composite signal board"), html.index("RESEARCH DESK"))
 
 
 class ChainAgeBannerTests(unittest.TestCase):
@@ -1806,3 +3375,335 @@ class ChainAgeBannerTests(unittest.TestCase):
         data = self._assemble("2026-08-05", "2026-08-04")
         self.assertIsNone(data["chain_age_sessions"])
         self.assertIn("UNKNOWN", ad.render(data))
+
+
+# ---------------------------------------------------------------------------
+# Brief 12 (rev-2): Schwab pre-close display freshness.
+# ---------------------------------------------------------------------------
+
+SCHWAB_SOURCE = "schwab_preclose"
+THETA_SOURCE = "thetadata_eod"
+
+
+def _fresh_section(symbol="NVDA", as_of="2026-08-14", **overrides):
+    section = {
+        "symbol": symbol,
+        "as_of": as_of,
+        "close": 225.08,
+        "iv_rank": float("nan"),
+        "chain_source": SCHWAB_SOURCE,
+        "close_as_of": as_of,
+        "close_kind": "preclose_mid_1545",
+        "closes_as_of": "2026-08-04",
+        "technicals_as_of": "2026-08-04",
+        "features_as_of": as_of,
+        "features_stale": False,
+        "features_source": "schwab_preclose_session",
+        "atm_iv": 0.4772,
+        "feature_unavailable": [
+            {"field": "rv21",
+             "reason": "underlying closes end 2026-08-04, before this "
+                       "2026-08-14 session"},
+        ],
+        "groups": [{"kind": "put", "title": "SELL A PUT?", "cards": [],
+                    "empty": "none this cycle"}],
+    }
+    section.update(overrides)
+    return section
+
+
+def _stale_section(symbol="MSFT", as_of="2026-07-27", **overrides):
+    section = {
+        "symbol": symbol,
+        "as_of": as_of,
+        "close": 180.0,
+        "iv_rank": 0.42,
+        "chain_source": THETA_SOURCE,
+        "close_as_of": as_of,
+        "close_kind": "eod_close",
+        "features_as_of": as_of,
+        "features_stale": False,
+        "groups": [{"kind": "put", "title": "SELL A PUT?", "cards": [],
+                    "empty": "none this cycle"}],
+    }
+    section.update(overrides)
+    return section
+
+
+class SchwabFreshnessPageDateTests(unittest.TestCase):
+    """D3: one date can no longer describe two sources, so the page says both."""
+
+    def test_page_date_follows_the_newest_verified_fresh_session(self):
+        sections = [_fresh_section("NVDA", "2026-08-14"),
+                    _stale_section("MSFT", "2026-07-27")]
+        self.assertEqual(ad._page_data_as_of(sections), "2026-08-14")
+        self.assertEqual(ad._page_as_of_kind(sections), SCHWAB_SOURCE)
+        self.assertEqual(ad._stale_path_as_of(sections),
+                         ("2026-07-27", ["MSFT"]))
+
+    def test_without_a_fresh_source_the_earliest_date_still_wins(self):
+        sections = [_stale_section("MSFT", "2026-07-27"),
+                    _stale_section("CLSK", "2026-07-01")]
+        self.assertEqual(ad._page_data_as_of(sections), "2026-07-01")
+        self.assertEqual(ad._page_as_of_kind(sections), THETA_SOURCE)
+
+    def test_assemble_publishes_both_sides_of_a_mixed_board(self):
+        data = ad.assemble(
+            symbol_sections=[_fresh_section("NVDA", "2026-08-14"),
+                             _stale_section("MSFT", "2026-07-27")],
+            rv21_by_symbol={}, today="2026-08-14")
+        self.assertEqual(data["data_as_of"], "2026-08-14")
+        self.assertEqual(data["as_of_kind"], SCHWAB_SOURCE)
+        self.assertEqual(data["fresh_symbols"], ["NVDA"])
+        self.assertEqual(data["stale_symbols"], ["MSFT"])
+        self.assertEqual(data["stale_as_of"], "2026-07-27")
+        self.assertEqual(data["stale_chain_age_sessions"], 14)
+
+    def test_banner_states_the_pre_close_source_and_the_stale_names(self):
+        data = ad.assemble(
+            symbol_sections=[_fresh_section("NVDA", "2026-08-14"),
+                             _stale_section("MSFT", "2026-07-27")],
+            rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        # The BANNER's own sentence -- the per-section line carries the same
+        # label, so a page-wide substring would pass with the banner gutted.
+        self.assertIn(
+            "<strong>Option quotes: 15:45 pre-close (Schwab) session "
+            "2026-08-14</strong>", html)
+        self.assertIn("a 15:45 ET snapshot, NOT an end-of-day close", html)
+        self.assertIn("STALE BOARD for MSFT", html)
+        self.assertIn("14 trading sessions old", html)
+
+    def test_header_chip_never_calls_a_pre_close_snapshot_a_close(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("<strong>Pre-close 15:45 (Schwab)</strong> 2026-08-14",
+                      html)
+        self.assertNotIn("<strong>Market close</strong> 2026-08-14", html)
+
+    def test_thetadata_only_board_keeps_the_market_close_chip(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("<strong>Market close</strong> 2026-07-27", html)
+        self.assertNotIn("Pre-close 15:45", html)
+
+    def test_fresh_card_passes_the_wall_clock_gate_that_stale_cards_fail(self):
+        # The per-card CHAIN_STALE_VS_TODAY gate is UNCHANGED. It stands down
+        # for fresh cards because their session really is today's, and it still
+        # blocks the frozen-cache names on the same board.
+        card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
+                "credit": 400.0, "annualized_yield": 0.2,
+                "grades": {"liquidity": "GREEN"}, "verdict": "…"}
+        fresh = _fresh_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                        "cards": [dict(card)], "empty": None}])
+        stale = _stale_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                        "cards": [dict(card)], "empty": None}])
+        data = ad.assemble(symbol_sections=[fresh, stale],
+                           rv21_by_symbol={}, today="2026-08-14")
+        fresh_snapshot = data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"]
+        stale_snapshot = data["symbols"][1]["groups"][0]["cards"][0]["top3_snapshot"]
+        self.assertNotIn("CHAIN_STALE_VS_TODAY",
+                         fresh_snapshot["integrity"]["reason_codes"])
+        self.assertIn("CHAIN_STALE_VS_TODAY",
+                      stale_snapshot["integrity"]["reason_codes"])
+
+    def test_section_states_its_source_and_that_the_price_is_a_1545_mid(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("Quotes: 15:45 pre-close (Schwab) session 2026-08-14",
+                      html)
+        self.assertIn("15:45 spot mid from the same capture instant", html)
+        self.assertIn("<span>Spot 15:45 pre-close</span>", html)
+        self.assertIn("closes through 2026-08-04", html)
+
+    def test_refused_fresh_chain_is_visible_not_silent(self):
+        section = _stale_section(
+            "NVDA", "2026-07-27",
+            fresh_refusal_reason=("no verified 15:45 spot for 2026-08-14 — "
+                                  "fresh 15:45 pre-close (Schwab) chain not "
+                                  "rendered; this symbol stays on the frozen "
+                                  "cache below"))
+        html = ad.render(ad.assemble(symbol_sections=[section],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("no verified 15:45 spot for 2026-08-14", html)
+
+    def test_verification_failure_is_loud_on_the_page(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        data["schwab_lane"] = {
+            "verified_sessions": [],
+            "failures": [{"session": "2026-08-14",
+                          "reason": "SchwabChainManifestError: hash mismatch for NVDA"}],
+            "receipts_found": True,
+        }
+        html = ad.render(data)
+        self.assertIn("Schwab capture session 2026-08-14 FAILED verification",
+                      html)
+        self.assertIn("hash mismatch for NVDA", html)
+        self.assertIn("chains were NOT used", html)
+
+    def test_footer_says_the_two_dashboards_date_independently(self):
+        # rev-2 D3: mission control is out of scope and keeps its own
+        # closes-derived date, so the difference must be stated, not left to
+        # look like one of the two being broken.
+        html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("mission-control dashboard date INDEPENDENTLY", html)
+        self.assertIn("a difference between the two is expected", html)
+
+    def test_a_checkout_with_no_receipts_says_so(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        data["schwab_lane"] = {"verified_sessions": [], "failures": [],
+                               "receipts_found": False}
+        html = ad.render(data)
+        self.assertIn("No Schwab pre-close capture receipts found", html)
+
+
+class FailClosedFeatureTests(unittest.TestCase):
+    """D4a: a missing input renders UNKNOWN, never a default that reads GREEN."""
+
+    def test_missing_iv_rank_does_not_grade_a_buyer_green(self):
+        import config
+        from options_researcher.attractiveness import grade
+
+        self.assertEqual(
+            grade(0.0, config.H5_IVR_BUY_GREEN, config.H5_IVR_BUY_RED,
+                  higher_is_better=False),
+            "GREEN")
+        self.assertEqual(
+            grade(float("nan"), config.H5_IVR_BUY_GREEN, config.H5_IVR_BUY_RED,
+                  higher_is_better=False),
+            "UNKNOWN")
+
+    def test_missing_vrp_does_not_clear_a_zero_threshold(self):
+        from options_researcher.attractiveness import _vrp_seller_grade
+
+        self.assertEqual(_vrp_seller_grade(0.0), "GREEN")
+        self.assertEqual(_vrp_seller_grade(float("nan")), "UNKNOWN")
+
+    def test_missing_iv_rank_does_not_grade_a_seller(self):
+        from options_researcher.attractiveness import _iv_seller_grade
+
+        self.assertEqual(_iv_seller_grade(0.9), "GREEN")
+        self.assertEqual(_iv_seller_grade(float("nan")), "UNKNOWN")
+
+    def test_unavailable_iv_rank_is_words_not_a_number(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()],
+                           rv21_by_symbol={}, today="2026-08-14")
+        html = ad.render(data)
+        self.assertIn("<span>IV rank</span><strong>unavailable</strong>", html)
+        self.assertNotIn("<span>IV rank</span><strong>0.00</strong>", html)
+
+    def test_unavailable_features_are_named_with_their_reason(self):
+        html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("Unavailable for this session", html)
+        self.assertIn("rv21: underlying closes end 2026-08-04", html)
+        self.assertIn("show UNKNOWN (never a default value)", html)
+
+    def test_absent_scenario_table_says_why(self):
+        card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
+                "credit": 400.0, "annualized_yield": 0.2,
+                "grades": {"liquidity": "GREEN"}, "verdict": "…"}
+        section = _fresh_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                          "cards": [card], "empty": None}])
+        data = ad.assemble(symbol_sections=[section],
+                           rv21_by_symbol={"NVDA": float("nan")},
+                           today="2026-08-14")
+        enriched = data["symbols"][0]["groups"][0]["cards"][0]
+        self.assertEqual(enriched["bbb"], [])
+        self.assertIn("underlying closes end 2026-08-04", enriched["bbb_absent"])
+        html = ad.render(data)
+        self.assertIn("Scenario table unavailable", html)
+
+    def test_atm_iv_from_the_fresh_session_is_shown(self):
+        html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
+                                     rv21_by_symbol={}, today="2026-08-14"))
+        self.assertIn("<span>ATM IV</span><strong>47.7%</strong>", html)
+
+    def test_receipt_without_local_chains_is_stated_without_a_false_alarm(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
+                           rv21_by_symbol={}, today="2026-08-14")
+        data["schwab_lane"] = {
+            "verified_sessions": [],
+            "failures": [{"session": "2026-08-14", "kind": "chains_absent",
+                          "reason": "no chain files for session 2026-08-14"}],
+            "receipts_found": True,
+        }
+        html = ad.render(data)
+        self.assertIn("are present, but its chain files are not in this checkout",
+                      html)
+        self.assertNotIn("FAILED verification", html)
+
+
+class FreshSourceAgesTests(unittest.TestCase):
+    """N1: "verified pre-close" describes the SOURCE, never the clock.
+
+    If captures stop, the newest verified session keeps its badge while
+    silently becoming days old. The fresh line and the header chip therefore
+    read the same chain_age_sessions the cards do.
+    """
+
+    def _data(self, today):
+        card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
+                "credit": 400.0, "annualized_yield": 0.2,
+                "grades": {"liquidity": "GREEN"}, "verdict": "…"}
+        section = _fresh_section(groups=[{"kind": "put", "title": "SELL A PUT?",
+                                          "cards": [card], "empty": None}])
+        return ad.assemble(symbol_sections=[section], rv21_by_symbol={},
+                           today=today)
+
+    def test_same_day_capture_is_calm_info(self):
+        data = self._data("2026-08-14")
+        self.assertEqual(data["chain_age_sessions"], 0)
+        html = ad.render(data)
+        self.assertIn('<div class="notice info"><strong>Option quotes: '
+                      "15:45 pre-close (Schwab) session 2026-08-14</strong>",
+                      html)
+        self.assertNotIn("captures have STOPPED", html)
+        self.assertIn("<strong>Pre-close 15:45 (Schwab)</strong>", html)
+
+    def test_one_session_old_warns_and_says_how_old(self):
+        data = self._data("2026-08-17")           # Mon after a Fri capture
+        self.assertEqual(data["chain_age_sessions"], 1)
+        html = ad.render(data)
+        self.assertIn("now 1 trading session old", html)
+        self.assertIn('<div class="notice watch">', html)
+        self.assertIn("Pre-close 15:45 (Schwab) · 1 sessions old", html)
+        self.assertNotIn("captures have STOPPED", html)
+
+    def test_past_the_block_bar_the_fresh_line_is_loud_not_calm(self):
+        data = self._data("2026-08-20")           # 4 sessions after 08-14
+        self.assertEqual(data["chain_age_sessions"], 4)
+        html = ad.render(data)
+        self.assertIn("STALE BOARD — pre-close captures have STOPPED", html)
+        self.assertIn("newest verified session (2026-08-14) is 4 trading "
+                      "sessions old", html)
+        self.assertIn('<div class="notice bad">', html)
+        # The exact failure the reviewer demonstrated: the calm info line must
+        # be gone, not merely accompanied by a warning.
+        self.assertNotIn('<div class="notice info"><strong>Option quotes: ',
+                         html)
+        self.assertIn("STALE · Pre-close 15:45 (Schwab) · 4 sessions old", html)
+
+    def test_a_long_capture_outage_cannot_read_like_a_current_board(self):
+        data = self._data("2026-09-15")           # 22 sessions after 08-14
+        self.assertEqual(data["chain_age_sessions"], 22)
+        html = ad.render(data)
+        self.assertIn("is 22 trading sessions old", html)
+        self.assertIn("captures have STOPPED", html)
+        snapshot = data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"]
+        # The banner's tone now matches what the cards already did.
+        self.assertIn("CHAIN_STALE_VS_TODAY",
+                      snapshot["integrity"]["reason_codes"])
+
+    def test_unknown_age_on_a_fresh_source_says_unknown(self):
+        data = self._data(None)
+        self.assertIsNone(data["chain_age_sessions"])
+        html = ad.render(data)
+        self.assertIn("could NOT be compared with the evaluation date", html)
+        self.assertIn("age UNKNOWN", html)

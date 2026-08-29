@@ -106,6 +106,14 @@ fi
 
 # Provider selection is explicit. Trading remains fail-closed even if the
 # caller's environment says otherwise.
+#
+# DO NOT ADD OPTIONS_VALIDATOR_INVOCATION_SOURCE HERE (rev-2.1 item 3a, spec
+# §7 condition 3). That marker is set by the schwab-chain-preclose plist and
+# by nothing else, so the receipt's invocation_source distinguishes a
+# LaunchAgent fire from a hand-run of this wrapper. Setting it here would make
+# every manual run claim "launchd" and would silently void S1's condition 3.
+# The `env` prefix below deliberately has no `-i`: the plist's marker must be
+# inherited through to python, not cleared.
 CAP_OUT="$(env LIVE_MARKET_DATA_PROVIDER=schwab \
   SCHWAB_TRADING_ENABLED=false \
   "$UV" run python -m options_researcher.schwab_chain_capture 2>&1)"

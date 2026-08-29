@@ -22,6 +22,9 @@ from data.atomic_io import (
     publish_staged_file,
     stage_parquet_write,
 )
+from options_researcher import (
+    INVOCATION_MARKER_AT_IMPORT as _INVOCATION_MARKER_AT_IMPORT,
+)
 from options_researcher.h7_scope import watch_universe
 from options_researcher.intraday_capture import validate_session_tag
 from options_researcher.live_quotes import in_regular_session
@@ -82,6 +85,72 @@ ADAPTER_COLUMNS = [
 ]
 
 
+# --- rev-2.1 item 3a: unattended-vs-manual capture provenance --------------
+#
+# Spec: docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md
+# §7 condition 3, option 3a -- "The capture receipt gains an
+# `invocation_source` field with values \"launchd\" / \"manual\", set from an
+# environment marker the plist sets and the wrapper does not."
+# Owner-ratified: reports/2026-08-14-owner-answers-decision-menu.md item 3.
+#
+# The spec names the field and its two values but not the variable, so the
+# smallest mechanism consistent with its wording is used: ONE env var, set to
+# the field's own "launchd" value by
+# tools/launchagents/com.carsyn.options-validator.schwab-chain-preclose.plist
+# and by nothing else. tools/schwab_chain_capture.sh deliberately never sets
+# it -- a wrapper-set marker would make every hand-run capture forge
+# unattended provenance, which is exactly the claim S1's condition 3 exists to
+# stop an operator asserting from memory.
+#
+# HONEST LIMIT (Inference, not Test-verified): this records a *convention*,
+# not an unforgeable proof. Anyone who exports the marker by hand gets a
+# receipt that says "launchd". It removes the from-memory assertion the S1 bar
+# was criticised for (caution C-f); it does not defeat a determined operator.
+# Two further false-positive paths, named so nobody "fixes" them in:
+#  - .env: NEVER put this key in any .env file. The import-time snapshot above
+#    ignores dotenv-injected values on the capture entry path, but .env is
+#    still a forbidden setter by convention (review 2026-08-15 finding F2).
+#  - `launchctl kickstart` of the preclose job runs under launchd's
+#    environment, so an operator-triggered kickstart inside the 15:35-15:55
+#    window yields an honest-looking "launchd" receipt (finding F3). S1
+#    adjudication should cross-check receipt times against the schedule.
+INVOCATION_SOURCE_ENV = "OPTIONS_VALIDATOR_INVOCATION_SOURCE"
+INVOCATION_SOURCE_LAUNCHD = "launchd"
+INVOCATION_SOURCE_MANUAL = "manual"
+
+
+def resolve_invocation_source(environ: dict[str, str] | None = None) -> str:
+    """Return ``"launchd"`` only for an exact marker match, else ``"manual"``.
+
+    Fail-closed in the direction that matters: an absent, empty, misspelled,
+    or differently-cased value degrades to ``"manual"`` rather than raising.
+    This sits on the irreplaceable-capture critical path, so a bad env var
+    must cost provenance precision, never the 15:45 capture itself -- and it
+    must never round *up* to an unattended claim.
+    """
+    if environ is not None:
+        source = environ.get(INVOCATION_SOURCE_ENV)
+    else:
+        # Import-time snapshot, not os.environ: a dotenv load (schwab_adapter,
+        # LumiBot) mutates os.environ at runtime and must not be able to
+        # promote a hand-run capture to "launchd".
+        source = _INVOCATION_MARKER_AT_IMPORT
+    if source == INVOCATION_SOURCE_LAUNCHD:
+        return INVOCATION_SOURCE_LAUNCHD
+    return INVOCATION_SOURCE_MANUAL
+
+
+def receipt_is_unattended(receipt: dict) -> bool:
+    """S1 condition 3's predicate over one capture receipt.
+
+    A receipt written before item 3a landed has NO ``invocation_source`` key.
+    That is "provenance unknown", which must count as NOT unattended -- the
+    sealed 2026-08-14 canary receipt is exactly such a receipt, and the S1 bar
+    must not credit it toward the three unattended sessions.
+    """
+    return receipt.get("invocation_source") == INVOCATION_SOURCE_LAUNCHD
+
+
 class SchwabChainCaptureError(RuntimeError):
     """A symbol or immutable output failed closed."""
 
@@ -108,9 +177,7 @@ def _normalize(frame: pd.DataFrame, symbol: str) -> pd.DataFrame:
         raise SchwabChainCaptureError(
             f"{symbol}: full chain missing required columns entirely: {missing}"
         )
-    normalized = frame.loc[:, ADAPTER_COLUMNS].rename(
-        columns={"implied_vol": "iv"}
-    )
+    normalized = frame.loc[:, ADAPTER_COLUMNS].rename(columns={"implied_vol": "iv"})
     normalized = normalized.reindex(columns=H7_CHAIN_COLUMNS)
     if normalized.empty:
         raise SchwabChainCaptureError(f"{symbol}: full chain is empty")
@@ -163,6 +230,11 @@ def capture(
     chain_dir: Path = CHAIN_DIR,
     reports_dir: Path = REPORTS_DIR,
     force: bool = False,
+    session_tag: str = "preclose",
+    receipt_filename: str = "preclose.json",
+    fact_prefix: str = "SCHWAB_CHAIN_CAPTURE",
+    receipt_kind: str = "schwab_chain_capture/v1",
+    convention: str = SESSION_CHAIN_CONVENTION,
 ) -> tuple[int, dict | None]:
     """Capture one official preclose package; 0 ok, 1 failed, 2 conflict."""
     if force:
@@ -184,7 +256,7 @@ def capture(
             "the NY regular session"
         )
         return 1, None
-    timing_ok, timing_reason = validate_session_tag("preclose", now_ny, force=force)
+    timing_ok, timing_reason = validate_session_tag(session_tag, now_ny, force=force)
     if not timing_ok:
         print(f"schwab_chain_capture refused: {timing_reason}")
         return 1, None
@@ -208,9 +280,7 @@ def capture(
             records[symbol] = {
                 "status": "ok",
                 "row_count": int(len(normalized)),
-                "expiration_count": int(
-                    normalized["expiration"].nunique(dropna=True)
-                ),
+                "expiration_count": int(normalized["expiration"].nunique(dropna=True)),
                 "sha256": sha256_file(path),
                 "size_bytes": path.stat().st_size,
                 "path": str(path),
@@ -227,19 +297,27 @@ def capture(
     manifest_hash = None
     manifest_path = session_reports / "manifest.json"
     if complete:
-        built = build_manifest(session, names, chain_dir)
+        built = build_manifest(
+            session,
+            names,
+            chain_dir,
+            convention=convention,
+            receipt_filename=receipt_filename,
+            session_tag=session_tag,
+        )
         write_manifest(built, manifest_path)
         manifest_hash = built["manifest_hash"]
 
     receipt = {
-        "receipt_kind": "schwab_chain_capture/v1",
+        "receipt_kind": receipt_kind,
         "session": session,
-        "session_chain_convention": SESSION_CHAIN_CONVENTION,
+        "session_chain_convention": convention,
         "captured_at_et": now_ny.isoformat(),
         "captured_at_utc": now_utc.isoformat(),
-        "scheduled_session_tag": "preclose",
+        "scheduled_session_tag": session_tag,
         "timing_validation": timing_reason,
         "force": bool(force),
+        "invocation_source": resolve_invocation_source(),
         "provider": getattr(client, "provider_name", "schwab"),
         "provider_version": getattr(client, "provider_version", "unknown"),
         "universe": names,
@@ -250,18 +328,28 @@ def capture(
         "config_hash": config_hash(),
         "code_sha": _code_sha(),
     }
-    receipt_path = session_reports / "preclose.json"
+    receipt_path = session_reports / receipt_filename
     if not _write_receipt(receipt, receipt_path):
         print(f"schwab_chain_capture receipt CONFLICT: {receipt_path}")
         return 2, receipt
     if complete:
-        verify_session(session, names, chain_dir, manifest_path, receipt_path)
-        fact_prefix = f"SCHWAB_CHAIN_CAPTURE session={session} "
+        verify_session(
+            session,
+            names,
+            chain_dir,
+            manifest_path,
+            receipt_path,
+            convention=convention,
+            receipt_filename=receipt_filename,
+            session_tag=session_tag,
+            receipt_kind=receipt_kind,
+        )
+        fact_dedupe_prefix = f"{fact_prefix} session={session} "
         append_fact(
-            f"{fact_prefix}manifest_hash={manifest_hash} "
+            f"{fact_dedupe_prefix}manifest_hash={manifest_hash} "
             f"receipt_hash={sha256_file(receipt_path)}",
             base_dir=FACTS_DIR,
-            dedupe_prefix=fact_prefix,
+            dedupe_prefix=fact_dedupe_prefix,
         )
         print(f"schwab_chain_capture complete: {len(names)}/{len(names)} {receipt_path}")
         return 0, receipt

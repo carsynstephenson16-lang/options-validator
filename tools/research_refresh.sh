@@ -44,7 +44,7 @@ WINDOW_ARGS=()
   "${NOW_ARGS[@]}" "${WINDOW_ARGS[@]}"
 WINDOW_RC=$?
 if [ "$WINDOW_RC" -ne 0 ]; then
-  echo "SCHEDULE_BLOCKED: research refresh is weekday premarket only"
+  echo "SCHEDULE_BLOCKED: research refresh runs weekdays 09:50-10:50 ET only"
   exit "$WINDOW_RC"
 fi
 
@@ -59,7 +59,7 @@ fi
 export RESEARCH_BOARD_ROOT="$BOARD_ROOT"
 export ATTRACTIVENESS_INPUT_ROOT="$BOARD_ROOT"
 
-SLOT="premarket"
+SLOT="midmorning"
 
 # The board is read-only here. A test-only override avoids touching live board
 # data while exercising the fail-closed shell path.

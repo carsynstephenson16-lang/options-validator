@@ -1,0 +1,1445 @@
+{
+  "candidate_ids": [],
+  "dashboard_verification": {
+    "path": ".tmp/dashboard/attractiveness.html",
+    "sha256": "12e6284d5886b54ff8325adc63621ca672a916f9d77910d1f0eb7fe27ed11bbe",
+    "verified_at_et": "2026-08-15T14:41:14.756186-04:00",
+    "verified_at_utc": "2026-08-15T18:41:14.756186Z"
+  },
+  "input_identity_sha256": "713b52861ba141946c1ad3d51413e5c79ab2e852418b7f50f676efb5a786af1f",
+  "input_packets": {
+    "amat.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/amat.json",
+      "sha256": "81eea02bbf772e2952ed28bac2e4988ad897e284dc08e1d261152074c41baf9b"
+    },
+    "amd.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/amd.json",
+      "sha256": "a19905e175aeea211f0dadc78367031ad5007098cee81b93dd38308905c23b49"
+    },
+    "amzn.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/amzn.json",
+      "sha256": "9c713fdd618211e0eed2af217ef87739d370a18b4ab121d8ee6268a08eded185"
+    },
+    "avgo.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/avgo.json",
+      "sha256": "12b093c4638b8a6411eb8ffaeac0caed3d2781ce97e4fe1d2db5d964fc535584"
+    },
+    "ceg.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/ceg.json",
+      "sha256": "45c5f7a8ab4d79d23343f4ced246b04b9fcd389f23bf3cf5cd174953e9402aa5"
+    },
+    "clsk.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/clsk.json",
+      "sha256": "596d06508fbbb9c1c5f84b7a3410ad0816bf7b9d9efd4eac6fe2f2e2f26186c3"
+    },
+    "crwv.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/crwv.json",
+      "sha256": "5e3471a07cf690f45671d5239a87803a4f95510cbc7a3005f1f1d79c6056f801"
+    },
+    "et.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/et.json",
+      "sha256": "6fefa9fcc490137eef8bca34b7765fc0b067ab4a7ef78ce765e1d090123624c6"
+    },
+    "iren.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/iren.json",
+      "sha256": "4e5b9c93e6deacdadb197ba1ae7d287241dda2f7471e225e29f6ce083dbdb924"
+    },
+    "market.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/market.json",
+      "sha256": "e145164e3c030939b7f2b0b35a33e9238ec4607e62a309d813e98201c986b6c8"
+    },
+    "msft.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/msft.json",
+      "sha256": "745a8f85b39d23c4a51eee2986b969a2ac3b904f6dd437b509c884b33e4bac2e"
+    },
+    "nbis.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/nbis.json",
+      "sha256": "31cb76b82dbb002c3fc66e885d263d8b417a1ccd3e4717236de02eb73a99018d"
+    },
+    "now.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/now.json",
+      "sha256": "3d4c2df8e5d5c211cd70c8833f26f050a216f5870dca5757fa5e0c9cc0d41849"
+    },
+    "nvda.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/nvda.json",
+      "sha256": "7a511c526aaef2ba2edab85e3e784880b639f5201da642490fe25931a5a35f6a"
+    },
+    "pltr.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/pltr.json",
+      "sha256": "1c0b1af9694456a50991a5e511c0aa64eeb11c5b45d07561dd4bae0d3f80b50e"
+    },
+    "smci.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/smci.json",
+      "sha256": "be8c43554201c13c4c989f87213b34b60af5bfb565203f9438099ddab7bfe21b"
+    },
+    "tem.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/tem.json",
+      "sha256": "86e8df253a58be1fb748de89166390d2468330d28e9027b1c3038cf7569d88e0"
+    },
+    "usar.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/usar.json",
+      "sha256": "e49574313ea8c45ff054c1cb741a670dea7a4250db79a4496df2e9fae079265d"
+    },
+    "vst.json": {
+      "path": "reports/attractiveness_research/2026-07-27/runs/research-2026-07-27-713b52861ba14194/packets/vst.json",
+      "sha256": "470ab3ee5ea91d0f6f47b385b1095ab740a57eeb34efed7ad940c06108e760ca"
+    }
+  },
+  "market_as_of_date": "2026-07-27",
+  "outputs": {
+    "context": {
+      "path": "reports/attractiveness_context/2026-07-27.json",
+      "sha256": "07e1944ffd0fa7469d1229f7cc2968e19e11c2d7d28d2962cb85874c9177646f"
+    },
+    "markdown": {
+      "path": "reports/2026-07-27-attractiveness-research-context.md",
+      "sha256": "7072bee9aa837deb51222b426a70a7f83c56892448bd1eb66ed723e1ab1c4181"
+    }
+  },
+  "pinned_symbols": [
+    "VST",
+    "AMZN"
+  ],
+  "producer_attempt_id": "manual-2026-08-15-01",
+  "producer_code_sha": "b55a6d665fb6cce0d7abe67647f9d8f7cad3931b",
+  "producer_source_sha256": "c78c7c5c98c2cf45cd3e3a0a585a6dffd065faa1474278bd9d2ee22f5d68dcd5",
+  "publication_status": "FINAL",
+  "required_symbols": [
+    "AMZN",
+    "CEG",
+    "VST"
+  ],
+  "research_finished_at_et": "2026-08-15T14:38:35.551464-04:00",
+  "research_finished_at_utc": "2026-08-15T18:38:35.551464Z",
+  "research_started_at_et": "2026-08-15T13:12:59-04:00",
+  "research_started_at_utc": "2026-08-15T17:12:59Z",
+  "ritual": {
+    "as_of": "2026-07-27",
+    "evidence_sha256": {
+      "H10": "49d0f6afe2280fe632f38ac07177bc5ae3471f398808f79c1451d3d2956e07dc",
+      "H5": "d781d035ef2e39bfc13f3352940eba45284bd1ede0c34e038fd0dcc1466ec144",
+      "H6": "7944adf126265c69ab15d4c0a43885949e030984622b99e3f6c38a6020e8291d",
+      "H7": "afc2d8234bc58858ca50e1aed48ed0753aa23d502a279e34530420fafd41458e",
+      "H8": "c906f39c6ef06b5c0f6d32cb2bad153fa7bea9636ac25c86df951d8c214a93cb"
+    },
+    "receipt_path": "reports/ritual/capture_receipt_2026-07-27.json",
+    "receipt_sha256": "f95cb8e16f57760aa099e7f341b1ef17521544e7fea9892b28acd51e54b493f5",
+    "ritual_code_sha": "f9065d62fce23b8b0bd0f520991d7335ad769c43",
+    "run_date": "2026-07-28",
+    "run_status_path": "reports/ritual/run_status_2026-07-27.json",
+    "run_status_sha256": "9306fc5cc3a9bb70d00d93785ad499b1148102453c7a5a53b2b4d3e6bf716e25"
+  },
+  "run_id": "research-2026-07-27-713b52861ba14194",
+  "schema_version": "attractiveness_research/v2",
+  "sources": [
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; article covers the Aug 13, 2026 earnings report.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://247wallst.com/cards/applied-materials-q3-2026-earnings-amat-01kzybvthd5qqamwrtqk59k25x",
+      "used_by": [
+        "AMAT"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 4, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:50:00Z",
+      "source_tier": "secondary",
+      "url": "https://247wallst.com/cards/energy-transfer-lp-q2-2026-earnings-et-01kz69jq8yjrpk4gajxxvdye1m",
+      "used_by": [
+        "ET"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-12 publication; exact time-of-day not captured in retrieved content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://247wallst.com/investing/2026/08/12/coreweave-bulls-just-got-what-they-wanted-but-its-massive-debt-problem-isnt-going-away/",
+      "used_by": [
+        "CRWV"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; article is a pre-earnings preview published ahead of the Aug 13, 2026 report.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://blockonomi.com/applied-materials-amat-earnings-preview-q3-results-due-thursday-august-13/",
+      "used_by": [
+        "AMAT"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 4, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:10:00Z",
+      "source_tier": "secondary",
+      "url": "https://finance.yahoo.com/energy/articles/constellation-energy-corporation-declares-dividend-182300822.html",
+      "used_by": [
+        "CEG"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (June 30, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:48:00Z",
+      "source_tier": "secondary",
+      "url": "https://finance.yahoo.com/energy/articles/energy-transfer-announces-second-quarter-170000831.html",
+      "used_by": [
+        "ET"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Yahoo Finance live market-recap blog page has no visible per-article byline timestamp in the fetched content; the page content is dated to the Aug 14, 2026 session by its URL slug and body text only.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:15:40Z",
+      "source_tier": "secondary",
+      "url": "https://finance.yahoo.com/markets/live/stock-market-today-friday-august-14-dow-sp-500-nasdaq-102635519.html",
+      "used_by": [
+        "market"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-08-03T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:10:00Z",
+      "source_tier": "secondary",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/broadcom-inc-announce-third-quarter-120000388.html",
+      "used_by": [
+        "AVGO"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Article carries no explicit timestamp in fetched content beyond the 2026-08-03 earnings date referenced throughout.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/palantir-reports-q2-2026-u-200500706.html",
+      "used_by": [
+        "PLTR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Date not shown in the retrieved content; the $56B FY2026 AI-revenue guidance it reports ties to the June 3, 2026 Q2 earnings call per cross-referenced coverage, but no explicit article dateline was captured.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:02:00Z",
+      "source_tier": "secondary",
+      "url": "https://finance.yahoo.com/news/broadcom-forecasts-fourth-quarter-revenue-203506882.html",
+      "used_by": [
+        "AVGO"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://finance.yahoo.com/sectors/technology/articles/acquisitions-strengthening-nebius-ai-cloud-140100500.html",
+      "used_by": [
+        "NBIS"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-07-30T20:32:00-04:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:31:00Z",
+      "source_tier": "secondary",
+      "url": "https://fortune.com/2026/07/30/andy-jassy-amazon-capex-demand-aws-pga-tour/",
+      "used_by": [
+        "AMZN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page (PJM Inside Lines, a pjm.com subdomain) showed only a publish date (July 14, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:20:00Z",
+      "source_tier": "market_operator",
+      "url": "https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/",
+      "used_by": [
+        "CEG",
+        "VST"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "IR financial-reports index page is undated; it displays NVIDIA's Q1 FY2027 results (originally issued May 20, 2026) without its own page-level timestamp.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:16:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investor.nvidia.com/financial-info/financial-reports/default.aspx",
+      "used_by": [
+        "NVDA"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Page confirms the July 22, 2026 release date but no specific time-of-day was shown on the fetched content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:15:20Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investor.servicenow.com/news/news-details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+      "used_by": [
+        "NOW"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (August 5, 2026) but no time-of-day or timezone in the extracted content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:23:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Releases-July-2026-Operational-Update/default.aspx",
+      "used_by": [
+        "CLSK"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (August 6, 2026) but no time-of-day or timezone in the extracted content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:40:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Reports-Third-Fiscal-Quarter-2026-Results/default.aspx",
+      "used_by": [
+        "CLSK"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (July 14, 2026) but no time-of-day or timezone in the extracted content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:41:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Secures-Twenty-Year-Lease-with-High-Investment-Grade-Global-Technology-Company-for-Data-Center-in-Sandersville-Georgia/default.aspx",
+      "used_by": [
+        "CLSK"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR release page did not surface an explicit publish timestamp; earnings call was held 2026-08-11 at 5:00pm ET (21:00 UTC) per corroborating secondary coverage.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-Reports-Strong-Second-Quarter-2026-Results/default.aspx",
+      "used_by": [
+        "CRWV"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR release confirms 2026-06-12 announcement / 2026-06-22 effective date but no intraday timestamp.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.coreweave.com/news/news-details/2026/CoreWeave-to-Join-Nasdaq-100-Index/default.aspx",
+      "used_by": [
+        "CRWV"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR page rendered only site navigation, not the release body with a timestamp; corroborating secondary coverage places the release and 5:00pm ET (21:00 UTC) earnings webcast on 2026-08-03.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.palantir.com/news-details/2026/Palantir-Reports-Q2-2026-U-S--Comm-Revenue-Growth-of-149-YY-and-Revenue-Growth-of-93-YY-Raises-FY-2026-Revenue-Guidance-to-82-YY-Growth-and-U-S--Comm-Revenue-Guidance-to-134-YY-Crushing-Consensus-Expectations/",
+      "used_by": [
+        "PLTR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Direct WebFetch of this IR page timed out during this session; URL and headline content were confirmed live via search retrieval, but no page timestamp was captured.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.tempus.com/news-releases/news-release-details/tempus-reports-second-quarter-2026-results",
+      "used_by": [
+        "TEM"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Direct WebFetch of this IR page timed out during this session; exact publication date is unconfirmed (search coverage places related coverage in early August 2026 but a same-titled fetch of a related release returned May 29, 2026 ASCO content instead).",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.tempus.com/news-releases/news-release-details/tempus-study-published-nature-medicine-demonstrates-best-class",
+      "used_by": [
+        "TEM"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Search-indexed page title gives date/time as 'Mon, 04/20/2026 - 06:00' with no explicit UTC offset confirmed on the fetched content; time zone not independently verified.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-announces-definitive-agreement-acquire-serra",
+      "used_by": [
+        "USAR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Search-indexed page title gives date/time as 'Wed, 06/03/2026 - 08:15' with no explicit UTC offset confirmed on the fetched content; time zone not independently verified.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "issuer_ir",
+      "url": "https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-finalizes-definitive-agreements-us-department",
+      "used_by": [
+        "USAR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Page confirms the July 30, 2026 release date but no specific time-of-day was shown on the fetched content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:19:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-Second-Quarter-Results/",
+      "used_by": [
+        "AMZN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-07-08T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:17:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://ir.amd.com/news-events/press-releases/detail/1289/amd-to-report-fiscal-second-quarter-2026-financial-results",
+      "used_by": [
+        "AMD"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-08-04T20:05:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:58:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://ir.amd.com/news-events/press-releases/detail/1295/amd-reports-second-quarter-2026-financial-results",
+      "used_by": [
+        "AMD"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (August 11, 2026) but no time-of-day or timezone in the extracted content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:18:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Announces-Fourth-Quarter-and-Full-Fiscal-Year-2026-Financial-Results/default.aspx",
+      "used_by": [
+        "SMCI"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (July 21, 2026) but no time-of-day or timezone in the extracted content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:18:30Z",
+      "source_tier": "issuer_ir",
+      "url": "https://ir.supermicro.com/news/news-details/2026/Supermicro-Provides-Fourth-Quarter-of-Fiscal-Year-2026-Preliminary-Business-Update/default.aspx",
+      "used_by": [
+        "SMCI"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page is an events calendar listing the August 27, 2026 FY26 results call date without a specific publish timestamp/timezone for the page itself (the event start time, 5:00pm ET, is a scheduled call time, not a publication time).",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:35:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://iren.com/investors/events",
+      "used_by": [
+        "IREN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page is an aggregated news index listing dated headlines (2026-08-13, 2026-08-04, 2026-07-20) without a single publish timestamp or timezone for the page itself.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:34:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://iren.com/investors/news",
+      "used_by": [
+        "IREN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-05-31T20:19:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:52:00Z",
+      "source_tier": "secondary",
+      "url": "https://m.investing.com/news/stock-market-news/nvidia-and-amd-face-new-export-limits-on-china-subsidiaries-4717940?ampMode=1",
+      "used_by": [
+        "AMD",
+        "NVDA"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article discusses dated events (indictment 2026-03-19, investigation launch 2026-04-07) but the article's own publish date/timezone was not present in the extracted content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:31:00Z",
+      "source_tier": "secondary",
+      "url": "https://natlawreview.com/article/super-micros-export-control-issues-compliance-and-financial-reporting-implications",
+      "used_by": [
+        "SMCI"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page confirms the publication date as April 29, 2026 but does not display a time-of-day or UTC offset.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "issuer_ir",
+      "url": "https://nebius.com/blog/posts/nebius-achieves-nvidia-exemplar-cloud-on-nvidia-gb300-for-training",
+      "used_by": [
+        "NBIS"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page confirms the release date as August 12, 2026 and references an 8:00 a.m. Eastern Time webcast, but does not give an explicit UTC offset for the release timestamp itself.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "issuer_ir",
+      "url": "https://nebius.com/newsroom/nebius-reports-second-quarter-2026-financial-results",
+      "used_by": [
+        "NBIS"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page confirms the publication date as May 12, 2026 but does not display a time-of-day or UTC offset.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "issuer_ir",
+      "url": "https://nebius.com/newsroom/nebius-welcomes-clarifai-s-core-team-and-licenses-inference-ip-to-strengthen-nebius-token-factory",
+      "used_by": [
+        "NBIS"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Issuer project page carries no dateline; content describes the campus plan as of the retrieval date.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "issuer_ir",
+      "url": "https://nebius.com/schuylkillcountypa",
+      "used_by": [
+        "NBIS"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Page confirms the August 4, 2026 publish date but no specific time-of-day was shown on the fetched content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:21:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-delivers-Autonomous-Security-the-industrys-most-complete-security-offering/default.aspx",
+      "used_by": [
+        "NOW"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-05-05T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:17:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-expands-AI-agent-governance-through-deeper-integration-with-Microsoft/default.aspx",
+      "used_by": [
+        "NOW"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-07-29T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:20:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://nvidianews.nvidia.com/news/nvidia-sets-conference-call-for-second-quarter-financial-results-6927195",
+      "used_by": [
+        "NVDA"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-05-31T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:32:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://nvidianews.nvidia.com/news/vera-rubin-full-production-agentic-ai-factory",
+      "used_by": [
+        "NVDA"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (July 29, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:12:00Z",
+      "source_tier": "secondary",
+      "url": "https://pgjonline.com/news/2026/july/shell-phillips-66-weigh-sale-of-stakes-in-35-billion-us-pipeline-explorer-sources-say",
+      "used_by": [
+        "ET"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Live market-data/news-aggregation page, not a single dated publication.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:15:00Z",
+      "source_tier": "secondary",
+      "url": "https://stockanalysis.com/stocks/vst/",
+      "used_by": [
+        "VST"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-08 publication; exact time-of-day not captured in retrieved content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://stockstotrade.com/news/tempusaiinc-tem-news-2026_08_08/",
+      "used_by": [
+        "TEM"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Publish date 2026-06-18 is confirmed by the article URL slug and dateline; exact time-of-day was not shown on the fetched page content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:17:10Z",
+      "source_tier": "secondary",
+      "url": "https://techcrunch.com/2026/06/18/amazon-hopes-to-challenge-nvidia-more-directly-by-selling-its-ai-chips/",
+      "used_by": [
+        "AMZN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Publish date 2026-07-29 is confirmed by the article URL slug and dateline; exact time-of-day was not shown on the fetched page content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:23:00Z",
+      "source_tier": "secondary",
+      "url": "https://techcrunch.com/2026/07/29/microsoft-logs-3-2b-from-anthropic-investment-but-openai-was-a-mixed-bag/",
+      "used_by": [
+        "MSFT"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Page states the release date as July 30, 2026, but no specific time-of-day was shown on the fetched content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:15:10Z",
+      "source_tier": "issuer_ir",
+      "url": "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report",
+      "used_by": [
+        "AMZN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed a time (9:39 AM, August 13, 2026) without an explicit timezone label, so an exact UTC-offset timestamp cannot be verified.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:00:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.ans.org/news/2026-08-13/article-8291/secondquarter-updates-from-constellation-new-ppas-crane-restart-and-more/",
+      "used_by": [
+        "CEG"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-08-13T15:01:00-05:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://www.barchart.com/story/news/3837919/applied-materials-announces-third-quarter-2026-results",
+      "used_by": [
+        "AMAT"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Direct WebFetch returned HTTP 403; content confirmed live via search retrieval, no page timestamp captured.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.benzinga.com/trading-ideas/movers/26/08/61052166/why-is-tempus-ai-stock-surging-on-friday",
+      "used_by": [
+        "TEM"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-08-07T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:41:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.bloomberg.com/news/articles/2026-08-07/us-reviews-china-s-offshore-access-to-nvidia-chips-after-ai-breakthroughs",
+      "used_by": [
+        "NVDA"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Company news page fetched successfully but the extracted text contains only the headline, with no explicit dateline; date corroborated by the PRNewswire source above.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:15:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://www.broadcom.com/company/news/financial-releases/64371",
+      "used_by": [
+        "AVGO"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Company news page fetched successfully but the extracted text contains no explicit dateline; the Sept 2, 2026 report date and Aug 3, 2026 announcement date are corroborated by the secondary source below.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:29:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://www.broadcom.com/company/news/financial-releases/64621",
+      "used_by": [
+        "AVGO"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Direct WebFetch of this wire release timed out during this session; URL and content were confirmed live via search retrieval, but no page timestamp was captured.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.businesswire.com/news/home/20260720857328/en/Tempus-to-Acquire-Personalis-More-Tightly-Integrating-Molecular-Residual-Disease-MRD-into-Its-AI-Enabled-Precision-Oncology-Platform",
+      "used_by": [
+        "TEM"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-03 publication; exact time-of-day not captured (direct fetch returned HTTP 403, content obtained via live search retrieval).",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.cnbc.com/2026/08/03/palantir-pltr-earnings-q2-2026.html",
+      "used_by": [
+        "PLTR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "URL path indicates 2026-08-11 publication; exact time-of-day not captured (direct fetch returned HTTP 403, content obtained via live search retrieval).",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.cnbc.com/2026/08/11/coreweave-crwv-q2-earnings-report-2026.html",
+      "used_by": [
+        "CRWV"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; coverage places the article in early August 2026 around the Aug 6 community open house.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://www.datacenterdynamics.com/en/news/nebius-details-plans-for-12gw-data-center-campus-in-pennsylvania/",
+      "used_by": [
+        "NBIS"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Federal Reserve meeting-calendar page is a continuously maintained reference page with no per-page publication timestamp; dates are the Committee's own tentative 2026 schedule as currently posted.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:13:20Z",
+      "source_tier": "regulator",
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "used_by": [
+        "market"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Event-calendar listing page carries no visible publication or last-updated timestamp in the fetched content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:16:05Z",
+      "source_tier": "secondary",
+      "url": "https://www.financecalendar.com/event/jackson-hole-economic-symposium-2026/",
+      "used_by": [
+        "market"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-08-06T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:05:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.globenewswire.com/de/news-release/2026/08/06/3340327/19933/en/Broadcom-Enables-Enterprises-to-Strengthen-Multi-Layer-Cyber-Defense-and-Operational-Efficiency-with-New-vDefend-and-Avi-Load-Balancer-Capabilities.html",
+      "used_by": [
+        "AVGO"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (Monday, 29 June 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.hydrocarbonengineering.com/tanks-terminals/29062026/energy-transfer-announces-export-expansion-project/",
+      "used_by": [
+        "ET"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page; no article-level publish timestamp is shown.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:27:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.investing.com/equities/amazon-com-inc-earnings",
+      "used_by": [
+        "AMZN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page; no article-level publish timestamp is shown.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:25:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.investing.com/equities/microsoft-corp-earnings",
+      "used_by": [
+        "MSFT"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page; no article-level publish timestamp is shown.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:27:10Z",
+      "source_tier": "secondary",
+      "url": "https://www.investing.com/equities/servicenow-inc-earnings",
+      "used_by": [
+        "NOW"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 6, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:45:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.investing.com/news/company-news/constellation-q2-2026-slides-nuclear-contracts-drive-20-growth-outlook-93CH-4843690",
+      "used_by": [
+        "CEG"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page states 'Published 08/14/2026, 05:08 PM' with no explicit UTC offset shown in the retrieved content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://www.investing.com/news/sec-filings/usa-rare-earth-completes-merger-with-texas-mineral-resources-93CH-4861525",
+      "used_by": [
+        "USAR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Wire-syndicated mirror of an August 4, 2026 GlobeNewswire release; extracted content shows the date but not a specific time-of-day/timezone.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:30Z",
+      "source_tier": "secondary",
+      "url": "https://www.manilatimes.net/2026/08/04/tmt-newswire/globenewswire/iren-completes-acquisition-of-mirantis/2397845",
+      "used_by": [
+        "IREN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Wire-syndicated mirror of an August 13, 2026 GlobeNewswire release; extracted content shows the date but not a specific time-of-day/timezone.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.manilatimes.net/2026/08/13/tmt-newswire/globenewswire/iren-delivers-horizon-1-to-microsoft-and-achieves-nvidia-exemplar-cloud-status-on-gb300-nvl72/2404794",
+      "used_by": [
+        "IREN"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-07-29T17:30:00-04:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:15:00Z",
+      "source_tier": "issuer_ir",
+      "url": "https://www.microsoft.com/en-us/Investor/earnings/FY-2026-Q4/press-release-webcast",
+      "used_by": [
+        "MSFT"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "URL path indicates August 2026 publication; exact day/time not shown in fetched article content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.nextgov.com/acquisition/2026/08/palantirs-no-bid-pipeline-just-got-bigger/415379/",
+      "used_by": [
+        "PLTR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Live capacity-market (RPM) information page with rolling updates to planning documents; no single publish timestamp is displayed.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:22:00Z",
+      "source_tier": "market_operator",
+      "url": "https://www.pjm.com/markets-and-operations/rpm",
+      "used_by": [
+        "CEG",
+        "VST"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-06-03T00:00:00+00:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:19:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.prnewswire.com/news-releases/broadcom-inc-announces-second-quarter-fiscal-year-2026-financial-results-and-quarterly-dividend-302790698.html",
+      "used_by": [
+        "AVGO"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Wire-service distribution of the August 6, 2026 CleanSpark release; extracted content shows the date but not a specific time-of-day/timezone.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:19:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.prnewswire.com/news-releases/cleanspark-reports-third-fiscal-quarter-2026-results-302845377.html",
+      "used_by": [
+        "CLSK"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": null,
+      "published_at": "2026-08-07T07:00:00-04:00",
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:25:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.prnewswire.com/news-releases/vistra-reports-second-quarter-2026-results-302845874.html",
+      "used_by": [
+        "VST"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (August 6, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:40:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.rtoinsider.com/138538-ferc-approves-vistra-cogentrix-merger-despite-monitor-concerns/",
+      "used_by": [
+        "VST"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page states publication as 'July 23, 2026 at 7:30 AM' with no explicit UTC offset shown in the retrieved content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://www.stocktitan.net/news/AMAT/applied-materials-to-report-fiscal-third-quarter-2026-results-on-aug-rksf3xoilh6u.html",
+      "used_by": [
+        "AMAT"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (July 27, 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T18:25:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.stocktitan.net/news/ET/energy-transfer-announces-nineteenth-consecutive-increase-in-o1bwt4wepjrn.html",
+      "used_by": [
+        "ET"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched page states publication as 'August 6, 2026, 7:00 AM' with no explicit UTC offset shown in the retrieved content.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://www.stocktitan.net/news/USAR/usa-rare-earth-announces-date-for-release-of-second-quarter-2026-qj2h8v13ntzc.html",
+      "used_by": [
+        "USAR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Content retrieved via live search aggregation rather than a direct page fetch showing a byline timestamp with UTC offset; article is dated August 10-11, 2026 per surrounding coverage but exact time/zone not independently confirmed.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:26:37Z",
+      "source_tier": "secondary",
+      "url": "https://www.stocktitan.net/news/USAR/usa-rare-earth-reports-second-quarter-2026-financial-dfolsz2mzdvm.html",
+      "used_by": [
+        "USAR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Wire-syndicated press-release reprint; no explicit publish timestamp shown in fetched content beyond the 2026-07-30 report date referenced throughout.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.theglobeandmail.com/investing/markets/stocks/TEM/pressreleases/3585894/tempus-ai-posts-strong-q2-results-raises-2026-outlook/",
+      "used_by": [
+        "TEM"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page with no article dateline; the page itself flags the Nov 3, 2026 date as unconfirmed.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:15:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.tipranks.com/stocks/amd/earnings",
+      "used_by": [
+        "AMD"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Earnings-calendar page is continuously updated (not a dated article); reflects estimates as retrieved during this session.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.tipranks.com/stocks/pltr/earnings",
+      "used_by": [
+        "PLTR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "No explicit publish timestamp captured in retrieved content; article discusses a multi-day price slide rather than a single dated event.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.tradingkey.com/analysis/stocks/us-stocks/262034116-coreweave-extends-slide-5th-day-7x-leverage-tradingkey",
+      "used_by": [
+        "CRWV"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Aggregated trend article covering a rolling multi-month window; no single publication timestamp confirmed.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:30:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.tradingview.com/news/gurufocus:ca743bcd6094b:0-palantir-heavy-insider-selling-meets-strong-momentum-what-it-means/",
+      "used_by": [
+        "PLTR"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Two direct attempts to fetch the official BLS CPI schedule pages (bls.gov/cpi/ and bls.gov/news.release/cpi.nr0.htm) both returned HTTP 403; this secondary page mirrors the same BLS-published schedule (Aug 2026 data on Sep 11, Sep 2026 data on Oct 14) and has no visible per-page timestamp itself.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:18:10Z",
+      "source_tier": "secondary",
+      "url": "https://www.usinflationcalculator.com/inflation/consumer-price-index-release-schedule/",
+      "used_by": [
+        "market"
+      ]
+    },
+    {
+      "capture_sha256": null,
+      "fetched_via": null,
+      "final_url": null,
+      "independence_group": null,
+      "publication_time_unknown_rationale": "Fetched article page showed only a publish date (Monday, 8 June 2026) with no time-of-day.",
+      "published_at": null,
+      "publisher": null,
+      "retrieved_at_utc": "2026-08-15T17:55:00Z",
+      "source_tier": "secondary",
+      "url": "https://www.world-nuclear-news.org/articles/ferc-waiver-clears-way-for-crane-clean-nuclear-interconnection",
+      "used_by": [
+        "CEG"
+      ]
+    }
+  ],
+  "uv_lock_sha256": "816902724a44d93caa69752bd332ffa92ba511a5adba02a2fb80624ee9361a82"
+}

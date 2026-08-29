@@ -1,0 +1,88 @@
+{
+  "symbol": "AMZN",
+  "news_summary": "Amazon reported Q2 2026 results on July 30, 2026: net sales of $200.6B (+20% YoY, well above the ~$196.5B estimate), net income of $62.6B ($5.75/diluted share), and operating income of $27.5B (+43% YoY). AWS was the standout, growing 37% YoY to $42.2B in revenue -- its fastest growth in 18 quarters -- with Amazon's AI and custom-chip businesses each exceeding $25B in annualized revenue run rate. Q2 net income was flattered by a roughly $53.4B non-operating pre-tax gain primarily from Amazon's Anthropic investment. On the earnings call, CEO Andy Jassy raised 2026 cash capex guidance to approximately $220B (from a prior ~$200B), citing higher memory costs, while cautioning that AWS still will not have enough capacity to meet 2026 demand and expects the same into 2027. Separately, AWS has been in talks (reported mid-June 2026) to sell its Trainium AI chips directly to external data-center operators, a break from AWS-only distribution; Jassy has floated a standalone chip business running near a $50B annual rate. Q3 2026 guidance calls for net sales of $197.0-$202.0B and operating income of $22.5-$26.5B. Next earnings (Q3 2026) is tracked for around October 22, 2026 by third-party trackers, not yet formally confirmed by Amazon as of this run.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "amzn-q2-earnings",
+      "what": "Q2 2026 results beat: net sales $200.6B (+20% YoY) vs. ~$196.5B expected; net income $62.6B ($5.75/diluted share); AWS revenue $42.2B (+37% YoY, fastest AWS growth in 18 quarters); operating income $27.5B (+43% YoY).",
+      "date": "2026-07-30",
+      "confirmed": true,
+      "source": "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report"
+    },
+    {
+      "id": "amzn-anthropic-gain",
+      "what": "Q2 2026 net income included approximately $53.4 billion in non-operating pre-tax other income, which Amazon's release states was primarily from its investments in Anthropic.",
+      "date": "2026-07-30",
+      "confirmed": true,
+      "source": "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report"
+    },
+    {
+      "id": "amzn-capex-raise",
+      "what": "Amazon raised 2026 cash capex guidance to approximately $220 billion (from a prior ~$200B), with CEO Andy Jassy attributing the increase to higher memory costs; Jassy said Amazon still will not have enough capacity to meet all 2026 demand, and expects that dynamic to persist into 2027.",
+      "date": "2026-07-30",
+      "confirmed": false,
+      "source": "https://fortune.com/2026/07/30/andy-jassy-amazon-capex-demand-aws-pga-tour/"
+    },
+    {
+      "id": "amzn-trainium-external",
+      "what": "AWS is reportedly in talks to sell its Trainium AI chips directly to external companies/data centers, a break from AWS-only distribution; Amazon's custom-silicon business (Trainium, Graviton, Nitro) crossed a $20B annualized revenue run rate in Q1 2026 and is growing at a triple-digit pace, with Jassy estimating a standalone chip business could run near $50B annually.",
+      "date": "2026-06-18",
+      "confirmed": false,
+      "source": "https://techcrunch.com/2026/06/18/amazon-hopes-to-challenge-nvidia-more-directly-by-selling-its-ai-chips/"
+    },
+    {
+      "id": "amzn-q3-guidance",
+      "what": "Q3 2026 guidance: net sales of $197.0-$202.0 billion (9-12% YoY growth) and operating income of $22.5-$26.5 billion.",
+      "date": "2026-07-30",
+      "confirmed": true,
+      "source": "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-Second-Quarter-Results/"
+    },
+    {
+      "id": "amzn-next-earnings",
+      "what": "Amazon's next quarterly earnings release (Q3 2026) is tracked for October 22, 2026 per a third-party earnings calendar; other trackers show an unconfirmed date around October 29, 2026, and no official Amazon press release confirming a date was found during this session.",
+      "date": "2026-10-22",
+      "confirmed": false,
+      "source": "https://www.investing.com/equities/amazon-com-inc-earnings"
+    }
+  ],
+  "move_thesis": "AWS re-acceleration to 37% growth (fastest in 18 quarters) is the core fundamental driver -- it shows Amazon's cloud/AI unit is not just keeping pace with Azure and Google Cloud but gaining momentum, and the AI/chip sub-businesses crossing $25B run-rate each show monetization beyond pure infrastructure rental. The large Anthropic-driven non-operating gain ($53.4B) is a mark-to-market item, not operating performance, and should be discounted as a repeatable driver. The capex raise to ~$220B is the two-sided catalyst: bullish because it signals demand visibility into 2027-2028 that Amazon says it still cannot fully satisfy, bearish because free cash flow is now negative on a trailing-twelve-month basis and funding questions (Jassy declined to detail financing) are unresolved. The Trainium external-sales option, if it materializes, would be a new, still-unconfirmed revenue lever rather than a near-term financial catalyst. With the next print not until late October (date itself unconfirmed), the highest-probability sources of surprise between now and then are capex/financing headlines and any concrete Trainium customer announcements.",
+  "sources": [
+    {
+      "url": "https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Page states the release date as July 30, 2026, but no specific time-of-day was shown on the fetched content.",
+      "retrieved_at_utc": "2026-08-15T17:15:10Z"
+    },
+    {
+      "url": "https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-Announces-Second-Quarter-Results/",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Page confirms the July 30, 2026 release date but no specific time-of-day was shown on the fetched content.",
+      "retrieved_at_utc": "2026-08-15T17:19:00Z"
+    },
+    {
+      "url": "https://techcrunch.com/2026/06/18/amazon-hopes-to-challenge-nvidia-more-directly-by-selling-its-ai-chips/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Publish date 2026-06-18 is confirmed by the article URL slug and dateline; exact time-of-day was not shown on the fetched page content.",
+      "retrieved_at_utc": "2026-08-15T17:17:10Z"
+    },
+    {
+      "url": "https://fortune.com/2026/07/30/andy-jassy-amazon-capex-demand-aws-pga-tour/",
+      "source_tier": "secondary",
+      "published_at": "2026-07-30T20:32:00-04:00",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:31:00Z"
+    },
+    {
+      "url": "https://www.investing.com/equities/amazon-com-inc-earnings",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page; no article-level publish timestamp is shown.",
+      "retrieved_at_utc": "2026-08-15T17:27:00Z"
+    }
+  ],
+  "claims": []
+}

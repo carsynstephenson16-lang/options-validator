@@ -16,11 +16,14 @@ happened to trust the read — a winning streak alone proves nothing.
 ## H5 — Sector Income Core
 Sells income (covered calls, cash-secured puts) or buys long-dated calls on
 the four core names (VST/CEG/MSFT/AMZN) when price + IV-rank triggers align.
-Registered ledger trial 6, 2026-07-04 (`ledger/facts.log:10564`). Entry logic
-`options_researcher/entry_watch.py`, frozen triggers (VST ≤$160, AMZN ≤$220,
-IV-rank ≤0.5). Receipts: `reports/h5/entry_watch_<date>.txt`. Waiting on a
-fired entry to open cycle 1; verdict needs `MIN_LOSSES_FOR_VERDICT=10`
-(`config.py:185`) completed losing cycles.
+Registered ledger trial 6, 2026-07-04 (`ledger/facts.log:10564`).
+**Status as of 2026-08-26: entry trigger RETIRED, lane is OBSERVE-only**
+(ledger seq 29 `H5_AMENDMENT_V1`, owner-directed 2026-08-17) — no fires and
+no paper entries until an owner-typed new rule; the lane observes on the
+Schwab ramp. The old frozen triggers (VST ≤$160, AMZN ≤$220, IV-rank ≤0.5)
+are historical, not armed. Observer `options_researcher/entry_watch.py`;
+receipts `reports/h5/entry_watch_<date>.txt`. Verdict machinery
+(`MIN_LOSSES_FOR_VERDICT=10`, `config.py:185`) is dormant with the trigger.
 
 ## H6 — Post-earnings tactical long calls
 Buys a call on NVDA/PLTR/AMZN shortly after earnings, betting the
@@ -35,11 +38,15 @@ Three lanes (long call / debit spread / short-premium) chosen by IV vs.
 realized vol ([[decisions]] has the exact list). Registered ledger trial 8,
 2026-07-09, `f1887c9d` + amendments v1.1–v1.7. Its 2018–2026 historical
 version is **permanently withdrawn** (amendment v1.3) — earnings provenance
-can't be reconstructed causally. Sole verdict path now: the **forward paper
-window**, LIVE since 2026-07-20 (`ledger/h7_forward/events.jsonl` seq 0,
-hash-chained) over an immutable 9-name entry cohort, ending 2026-10-26.
-Daily chain: source health → data gate → exit fill/monitor → `h7_watch` →
-entry preflight; receipts under `reports/h7_receipts/h7-forward-15-v1/` and
+can't be reconstructed causally. Sole verdict path: the **forward paper
+window** (`ledger/h7_forward/events.jsonl` seq 0, hash-chained, immutable
+9-name entry cohort, opened 2026-07-20). **Status as of 2026-08-26: PAUSED
+per owner decision OD-3** — restart requires a NEW registration and
+namespace. A Schwab restart lane (`h7-forward-schwab-v1`) is
+PREPARED / NOT REGISTERED / NOT ACTIVATED (README "Scope status" lists the
+open gates). Daily chain when active: source health → data gate → exit
+fill/monitor → `h7_watch` → entry preflight; receipts under
+`reports/h7_receipts/h7-forward-15-v1/` and
 `reports/h7_data_gate/h7-forward-15-v1/`. Scores **once** at window end,
 ≥10 losses.
 
@@ -56,8 +63,12 @@ consecutive full-cap loss months.
 Own $2,000/month cap (not shared with H6/H8); buys a long call on a
 `H7_WATCHLIST` name that just fired a QM breakout (H10b) or parabolic-fade
 (H10a) signal. Registered `ledger/experiments.jsonl` seq 15/16, 2026-07-19.
-H10a window ends 2026-10-06; H10b ends 2027-01-06 (disclosed low fire
-rate — 11 historical events). Relaxed loss gate,
+**Status as of 2026-08-26:** H10a is **CLOSED** (2026-08-15, owner-ratified
+`H10A_RESULT` fact in `ledger/facts.log`): `INSUFFICIENT_SAMPLE — STARVED`,
+zero fires/trades/losses; any retest needs a new feasibility-clearing
+registration. H10b's window ends 2027-01-06 and its observation **RESUMED on
+the Schwab 15:45 preclose lane** per seq 28 `H10B_AMENDMENT_V1_1`
+(disclosed low fire rate — 11 historical events). Relaxed loss gate,
 `H10_MIN_LOSSES_FOR_VERDICT=7` (`config.py:598`, weaker-verdict disclosed).
 Receipts: `reports/h10/receipts/h10_watch_<date>.json`; log
 `reports/h10/observations.jsonl`.

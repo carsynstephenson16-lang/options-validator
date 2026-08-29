@@ -1,0 +1,35 @@
+{
+  "as_of": "2026-08-20",
+  "hypotheses": {
+    "H10": {
+      "detail": "watcher skipped: DATA",
+      "evidence": "reports/h10/receipts/h10_watch_2026-08-21.json",
+      "status": "REFUSED",
+      "unobserved_evaluation_sessions": {
+        "after_evaluation_session": "2026-07-27",
+        "before_evaluation_session": "2026-08-19"
+      }
+    },
+    "H5": {
+      "detail": "data gap",
+      "evidence": "reports/h5/entry_watch_2026-08-20.txt",
+      "status": "REFUSED"
+    },
+    "H6": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H7": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H8": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    }
+  },
+  "run_date": "2026-08-21"
+}

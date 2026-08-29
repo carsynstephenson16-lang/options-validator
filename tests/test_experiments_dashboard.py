@@ -51,8 +51,7 @@ class ExperimentsDashboardTests(unittest.TestCase):
         scratch = Path(scratch_ctx.name)
         self.addCleanup(scratch_ctx.cleanup)
         python_path = os.pathsep.join(
-            [str(repo_root)]
-            + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
+            [str(repo_root)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
         )
         env = {
             **os.environ,
@@ -77,7 +76,7 @@ class ExperimentsDashboardTests(unittest.TestCase):
         self.assertGreaterEqual(html.count("max as-of"), 4)
         self.assertIn("DATA BLOCKED", html)
         self.assertIn(
-            "display-only research experiments — not part of Top-3 ranking, no verdict authority",
+            "display-only research experiments — not part of Top-5 ranking, no verdict authority",
             html,
         )
 
@@ -140,6 +139,24 @@ class ExperimentsDashboardTests(unittest.TestCase):
         self.assertIn("no Treasury curve known by valuation close", health)
         self.assertIn("DATA BLOCKED as of 2026-08-03", line)
         self.assertIn("no ex-dividend-date data on disk yet", line)
+
+    def test_main_accepts_explicit_staging_output_and_evaluation_date(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "generation" / "experiments.html"
+            with mock.patch.object(
+                dashboard,
+                "build_experiment_lanes",
+                return_value={"exp_beta": [_card("EXP-BETA")]},
+            ) as build:
+                exit_code = dashboard.main(
+                    ["--out", str(output), "--evaluation-date", "2026-08-10"]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(output.is_file())
+            build.assert_called_once_with(
+                list(dashboard.config.ATTRACTIVENESS_UNIVERSE), asof="2026-08-10"
+            )
 
 
 if __name__ == "__main__":

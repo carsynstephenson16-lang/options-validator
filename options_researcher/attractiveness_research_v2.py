@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from data.atomic_io import atomic_text_write
+from options_researcher.source_policy import BANNED_HOST_FRAGMENTS
 from options_researcher.top3_context import (
     AnnotationValidationError,
     normalize_research_annotations,
@@ -26,6 +27,8 @@ RITUAL_STATUS_SCHEMA_VERSION: Final = "daily_ritual/run_status/v1"
 NEW_YORK: Final = ZoneInfo("America/New_York")
 SUCCESSFUL_RITUAL_STATUSES: Final = frozenset({"CAPTURED", "NO_SIGNAL"})
 RITUAL_HYPOTHESES: Final = ("H5", "H6", "H7", "H8", "H10")
+# Brief 18 owner ruling (2026-08-20): excuse chain-starved lanes only on OK_STARVED days.
+CHAIN_STARVED_HYPOTHESES: Final = frozenset({"H6", "H7", "H8"})
 PRIMARY_SOURCE_TIERS: Final = frozenset({"issuer_ir", "sec_filing", "regulator", "market_operator"})
 SOURCE_TIERS: Final = PRIMARY_SOURCE_TIERS | frozenset({"secondary"})
 PJM_SYMBOLS: Final = ("VST", "CEG")
@@ -55,18 +58,6 @@ SOURCE_FIELDS: Final = frozenset(
         "capture_sha256",
         "independence_group",
     }
-)
-BANNED_HOST_FRAGMENTS: Final = (
-    "reddit.",
-    "youtube.",
-    "youtu.be",
-    "seekingalpha.",
-    "medium.",
-    "substack.",
-    "wordpress.",
-    "blogspot.",
-    "stocktwits.",
-    "fool.",
 )
 
 
@@ -207,11 +198,7 @@ def validate_capture_sha256(value: object, *, where: str) -> str:
 
 
 def _require_attempt_id(value: object, *, where: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or any(character.isspace() for character in value)
-    ):
+    if not isinstance(value, str) or not value or any(character.isspace() for character in value):
         raise ResearchArtifactError(f"{where}: invalid producer attempt id")
     return value
 
@@ -363,8 +350,9 @@ def load_successful_ritual(
             f"ritual run status run_date mismatch: expected {expected_run_date}, "
             f"got {status.get('run_date')!r}"
         )
-    if status.get("status") != "OK":
-        raise UpstreamBlocked(f"ritual run status is not OK: {status.get('status')!r}")
+    run_status = status.get("status")
+    if run_status not in {"OK", "OK_STARVED"}:
+        raise UpstreamBlocked(f"ritual run status is not OK: {run_status!r}")
     ritual_code_sha = status.get("code_sha")
     if (
         not isinstance(ritual_code_sha, str)
@@ -399,6 +387,8 @@ def load_successful_ritual(
 
     evidence_hashes: dict[str, str] = {}
     for hypothesis in RITUAL_HYPOTHESES:
+        if run_status == "OK_STARVED" and hypothesis in CHAIN_STARVED_HYPOTHESES:
+            continue
         result = hypotheses.get(hypothesis)
         if not isinstance(result, dict):
             raise UpstreamBlocked(f"ritual receipt missing {hypothesis}")

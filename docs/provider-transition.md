@@ -108,3 +108,82 @@ payload SHA-256:
 The canonical top-up stayed declined. The later v2 capture was isolated from
 v1. Q7/P1.4 provider-disabled enforcement and Q9 offline readiness are complete;
 new acquisition remains refused.
+
+## 6. Schwab operating path — Phase A landed 2026-08-15 (display only)
+
+**Phase A (this brief, brief 12 rev-2): DISPLAY freshness.** The attractiveness
+board and QM panel gained a read path to the newest VERIFIED Schwab pre-close
+capture session through one boundary module,
+`options_researcher/schwab_chain_view.py`. No staleness gate was deleted,
+loosened, or re-thresholded — the gates stand down only where fresh data
+genuinely exists, and the per-card `CHAIN_STALE_VS_TODAY` rule is unchanged.
+
+What Phase A binds itself to:
+
+- **Verified only.** Chains are consumed only for sessions where
+  `tools.schwab_chain_manifest.verify_session` succeeds against the session's
+  OWN manifest universe. A verification failure makes the session absent AND
+  renders a loud page notice naming the session and the error; a checkout with
+  no receipts says that too.
+- **Never called a close.** Every date surface (page banner, header chip,
+  section line, close field) labels the data `15:45 pre-close (Schwab)` with
+  `close_kind = preclose_mid_1545`. A section renders fresh ONLY when the
+  matching 15:45 intraday receipt supplies an unforced `stock_snapshot`
+  `spot_mid`, so the underlying price and the option quotes are the same
+  instant; otherwise the symbol stays on the frozen cache with a visible
+  reason.
+- **IV is passed through.** The store's `iv` is already decimal —
+  `data/schwab_adapter.py:148-154` converts Schwab's percentage points at
+  capture. Nothing in the display path converts it again.
+- **Owner name scope.** `DISPLAY_EXCLUDED_SYMBOLS = {ET, USAR}`
+  (owner-directed in-session 2026-08-14) applies to the FRESH path only. Both
+  names still render from the frozen cache with their own older date; no
+  registered universe, cohort, or capture list changed.
+- **Nothing registered.** No hypothesis watcher reads this path; nothing here
+  is verdict-bearing or FIRE-capable; `.cache/chains` is never written (OD-2 /
+  OD-4 stand) and neither is the H5-registered feature store
+  `.tmp/research/attractiveness` — schwab-session feature values are computed
+  in memory and any value that cannot be computed honestly is null with a
+  named reason.
+
+**Phase B (owner-gated, NOT started): hypothesis inputs.** Feeding capture data
+to H5/H6/H7/H8/H10 watchers is a per-hypothesis registered-input amendment,
+draftable under the 2026-07-25 delegation with independent adversarial review.
+Display precedent does not authorize it.
+
+**Phase C (owner-gated, NOT started): `exact_session_source_active` (S1) flip
+and re-registration.** The ratified S1 bar is three consecutive verifying
+scheduled sessions; one exists (2026-08-14), so the earliest honest flip is
+approximately 2026-08-19 after the Mon/Tue/Wed captures. Any restart carries a
+new registration and namespace (OD-3) and must pass the 2026-07-24 feasibility
+gate.
+
+### What a research checkout sees (settled, measured 2026-08-15)
+
+The capture **receipts and manifests ARE tracked in git** (`reports/schwab_chains`,
+committed by `13d48a9` "first real Schwab preclose canary"); the chain
+**parquet is ops-only** (`.cache/schwab_chains` in `~/options-validator-ops`).
+So a research checkout holds the verification evidence but not the bytes it
+attests. That is an expected deployment fact, not an integrity failure, and the
+page says exactly that: "receipts for session S are present, but its chain
+files are not in this checkout". A genuine failure — a tampered hash, a forced
+receipt, a partially present session — still renders as a loud
+FAILED-verification notice, so the red state keeps its meaning.
+
+### Open follow-ups this brief did not close
+
+1. **`CHAIN_STALE_WARN_SESSIONS` / `CHAIN_STALE_BLOCK_SESSIONS` remain
+   LLM-asserted** (proposed 2026-08-04, owner-unconfirmed; `config.py:672-673`).
+   Phase A did not touch them, and this brief made no `config.py` change at
+   all — a config edit invalidates every capture receipt's `config_hash`
+   (`intraday_preview.py:81`) until the next live capture.
+2. **Freshness runway.** Captures are scheduled daily. If captures STOP, the
+   newest verified session keeps its "verified pre-close" badge while ageing:
+   the banner and header chip therefore read the same wall-clock age the cards
+   do and turn loud at the WARN/BLOCK bars, so a stopped capture lane can never
+   render as a current board.
+3. **The closes store (`.cache/underlying`) is still frozen at 2026-08-04.**
+   That is why `rv21`, `iv_minus_rv`, and the technicals of a pre-close section
+   are null / older-dated with named reasons rather than interpolated. Its
+   refresh is the subject of the 2026-08-14 drill-RED disposition and is owner
+   business, not this lane's.

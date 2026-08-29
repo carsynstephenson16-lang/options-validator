@@ -6,8 +6,10 @@ options_researcher/regime.py and options_researcher/regime_report.py for the
 DISPLAY-ONLY lane these tests cover (.cursorrules "Scope guard" owner-
 directed exception, 2026-08-03).
 """
+
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,9 +32,7 @@ class WassersteinDistanceTests(unittest.TestCase):
     def test_symmetry(self):
         a = np.array([0.01, -0.02, 0.03, 0.0])
         b = np.array([0.02, 0.01, -0.01, 0.05])
-        self.assertAlmostEqual(
-            regime.wasserstein_1d(a, b, p=1), regime.wasserstein_1d(b, a, p=1)
-        )
+        self.assertAlmostEqual(regime.wasserstein_1d(a, b, p=1), regime.wasserstein_1d(b, a, p=1))
 
     def test_shifted_samples_distance_equals_shift(self):
         a = np.array([0.0, 0.01, 0.02, 0.03, 0.04])
@@ -229,9 +229,38 @@ class BuildReportTests(unittest.TestCase):
             )
             self.assertTrue(out_path.is_file())
         self.assertEqual(exit_code, 0)
-        self.assertIn(str(closes.index[-1]), text)
+        self.assertIn("2021-06-01", text)
         self.assertIn("non-verdict-bearing", text)
         self.assertIn("historical frequencies, not forecasts", text)
+
+    def test_report_writes_strict_json_sidecar_for_same_evaluation_date(self):
+        closes = self._make_closes()
+        loader = self._loader({"VST": closes})
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "report.md"
+            json_path = Path(tmp) / "report.json"
+            _text, exit_code = regime_report.build_report(
+                ["VST"],
+                out_path=out_path,
+                json_out_path=json_path,
+                loader=loader,
+                end_iso="2021-06-01",
+            )
+            raw = json_path.read_bytes()
+            sidecar = json.loads(raw)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(raw, regime_report._canonical_json_bytes(sidecar))
+        self.assertEqual(set(sidecar), {"schema", "as_of_written", "evaluation_date", "symbols"})
+        self.assertEqual(sidecar["schema"], "regime_report/v1")
+        self.assertEqual(sidecar["evaluation_date"], "2021-06-01")
+        self.assertEqual(set(sidecar["symbols"]), {"VST"})
+        self.assertEqual(
+            set(sidecar["symbols"]["VST"]),
+            {"label", "high_dispersion", "max_asof", "skipped_reason"},
+        )
+        self.assertIsInstance(sidecar["symbols"]["VST"]["label"], int)
+        self.assertIs(sidecar["symbols"]["VST"]["skipped_reason"], None)
 
     def test_missing_symbol_is_skipped_not_crashed(self):
         closes = self._make_closes()

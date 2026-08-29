@@ -13,8 +13,12 @@ executor. CLAUDE.md's division of labor makes this hand-off standing policy;
 
 - Location: `docs/superpowers/plans/<YYYY-MM-DD>-<NN>-<slug>-codex-brief.md`
   (`NN` = the next number in the plans directory's running sequence — it does
-  NOT reset daily, and non-brief plans occupy slots too; check the highest
-  existing `NN` first).
+  NOT reset daily, and non-brief plans occupy slots too). Read
+  `docs/superpowers/plans/BRIEF-NUMBER-REGISTRY.md` first; a reservation there
+  takes precedence over the highest filename currently present. Then check the
+  highest existing `NN`. If the registry and filesystem conflict, stop and
+  record the collision; do not rename, stage, commit, or delete a concurrent
+  untracked draft to manufacture agreement.
 - Header block, in order: **Date**; **Author** (the orchestrating session);
   **Executor** (Codex model + reasoning tier); **Status** (`DRAFT — pending
   independent adversarial review before hand-off`); **Provenance** (the exact
@@ -47,5 +51,8 @@ executor. CLAUDE.md's division of labor makes this hand-off standing policy;
   Status line stays DRAFT until that review passes.
 - A brief delegates implementation, never authority: merge timing, frozen
   numbers, registrations, and verdicts stay with the owner.
+- Every implementation PR starts as a GitHub draft. The executor may not make
+  it ready, merge, deploy, sync an operational checkout, modify a ledger, or
+  flip authority. Green checks are review evidence, not landing authority.
 - Closest existing example:
   `docs/superpowers/plans/2026-08-13-07-h7-schwab-b2-receipt-path-codex-brief.md`.

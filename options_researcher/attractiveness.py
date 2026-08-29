@@ -23,13 +23,40 @@ DELTA_BAND = config.H5_INCOME_DELTA_BAND
 N_CANDIDATES = 3
 
 
+UNKNOWN = "UNKNOWN"
+
+
+def _unavailable(value: object) -> bool:
+    """True when a grading input carries no information at all.
+
+    An absent input is NOT a measurement. Coercing one to a neutral number
+    silently manufactures a verdict -- with `iv_for_buyer` (lower is better) a
+    missing IV rank read as 0.0 grades GREEN, i.e. "the cheapest implied vol
+    this name has ever shown", from no data whatsoever. Every such input now
+    grades UNKNOWN instead.
+    """
+    return (value is None
+            or isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value)))
+
+
 def grade(value: float, green: float, amber: float, *,
           higher_is_better: bool = True) -> str:
+    if _unavailable(value):
+        return UNKNOWN
     if higher_is_better:
         return "GREEN" if value >= green else ("AMBER" if value >= amber
                                                else "RED")
     return "GREEN" if value <= green else ("AMBER" if value <= amber
                                            else "RED")
+
+
+def _iv_seller_grade(iv_rank: float) -> str:
+    """IV-rank badge for a seller; UNKNOWN when the rank is unavailable."""
+    if _unavailable(iv_rank):
+        return UNKNOWN
+    return "GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN else "AMBER"
 
 
 def _expiry_rows(chain: pd.DataFrame, day: str, right: str,
@@ -135,7 +162,13 @@ def _vrp_seller_grade(iv_minus_rv: float) -> str:
     AMBER otherwise. NOT a true variance risk premium: trailing realized is
     not realized over the option's own cycle, and the tenors only roughly
     match. Surfaces premium richness vs recent realized -- which IV-rank
-    (IV vs its own history) cannot see -- but never forecasts future vol."""
+    (IV vs its own history) cannot see -- but never forecasts future vol.
+
+    UNKNOWN when iv_minus_rv is unavailable: the GREEN threshold is 0.0, so a
+    missing value coerced to zero renders as a clean GREEN premium reading
+    built on no measurement at all."""
+    if _unavailable(iv_minus_rv):
+        return UNKNOWN
     return "GREEN" if iv_minus_rv >= config.H5_VRP_SELL_GREEN else "AMBER"
 
 
@@ -166,8 +199,7 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                            config.H5_PUT_YIELD_AMBER),
             "cushion": grade(cushion, config.H5_CUSHION_GREEN,
                              config.H5_CUSHION_AMBER),
-            "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
-                              else "AMBER"),
+            "iv_for_seller": _iv_seller_grade(iv_rank),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": ("AMBER" if earnings_in_cycle
                          else "UNKNOWN" if earnings_unknown else "GREEN"),
@@ -176,13 +208,18 @@ def put_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                 r["open_interest"], r["bid"], r["ask"]) else "RED"),
         }
         ann = yield_mo * 365.0 / max(int(r["dte"]), 1)
+        wiggle = (f"its typical monthly wiggle is {100 * monthly_move:.1f}%."
+                  if not _unavailable(monthly_move)
+                  else ("its typical monthly wiggle is UNAVAILABLE (no "
+                        "realized-volatility input for this session), so the "
+                        "cushion badge is UNKNOWN."))
         verdict = (f"you'd be promising to buy 100 sh of {symbol} at "
                    f"${k:.0f} (${k * 100:,.0f} set aside); pays "
                    f"${credit:,.0f} now = {100 * yield_mo:.2f}% over "
                    f"{int(r['dte'])}d (~{100 * ann:.0f}%/yr) "
                    "(simple, not compounded); the stock is "
-                   f"{100 * otm:.1f}% above your promise level and its "
-                   f"typical monthly wiggle is {100 * monthly_move:.1f}%.")
+                   f"{100 * otm:.1f}% above your promise level and "
+                   f"{wiggle}")
         out.append({"strike": k, "expiry": r["exp_date"].isoformat(),
                     "dte": int(r["dte"]), "credit": credit,
                     "yield_mo": yield_mo, "cushion": cushion,
@@ -223,8 +260,7 @@ def cc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
                            config.H5_CC_YIELD_AMBER),
             "upside_room": ("GREEN" if upside >= config.H5_CC_UPSIDE_GREEN
                             else "AMBER"),
-            "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
-                              else "AMBER"),
+            "iv_for_seller": _iv_seller_grade(iv_rank),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": ("AMBER" if earnings_in_cycle
                          else "UNKNOWN" if earnings_unknown else "GREEN"),
@@ -283,8 +319,7 @@ def pmcc_card_rows(symbol: str, chain: pd.DataFrame, day: str, *,
             "yield": grade(yield_mo, config.H5_CC_YIELD_GREEN,
                            config.H5_CC_YIELD_AMBER),
             "safety": "GREEN",   # by construction: only safe strikes reach here
-            "iv_for_seller": ("GREEN" if iv_rank >= config.H5_IVR_SELL_GREEN
-                              else "AMBER"),
+            "iv_for_seller": _iv_seller_grade(iv_rank),
             "vrp_for_seller": _vrp_seller_grade(iv_minus_rv),
             "earnings": ("AMBER" if earnings_in_cycle
                          else "UNKNOWN" if earnings_unknown else "GREEN"),
@@ -437,28 +472,74 @@ def main():
 
     print("WHICH OPTIONS LOOK ATTRACTIVE TODAY? (frozen H5 rubric; "
           "attractiveness = price vs cushion vs liquidity, NOT prediction)")
-    # Same display universe as the HTML dashboard (equality with the H7
-    # scope is test-pinned); the two surfaces must never silently diverge.
+    # Same display universe AND the same quote source as the HTML dashboard
+    # (equality with the H7 scope is test-pinned); the two surfaces must never
+    # silently diverge. Both call schwab_chain_view.select_display_source, so
+    # neither can date a symbol differently from the other.
+    from options_researcher import schwab_chain_view as schwab_view
+
+    verified, _failures = schwab_view.verified_sessions()
     for symbol in config.ATTRACTIVENESS_UNIVERSE:
         files = sorted(glob.glob(os.path.join(".cache", "chains",
                                               f"{symbol}_*.parquet")))
-        if not files:
+        theta_day = (os.path.basename(files[-1]).split("_")[1]
+                     .replace(".parquet", "") if files else None)
+        source = schwab_view.select_display_source(
+            symbol, theta_day, have_verified_sessions=bool(verified))
+        if source.refusal:
+            print(f"\n{symbol}: {source.refusal}")
+        fresh = source.kind == schwab_view.CHAIN_SOURCE
+        if not fresh and theta_day is None:
             print(f"\n{symbol}: DATA BLOCKED -- no cached chains")
             continue
-        day = os.path.basename(files[-1]).split("_")[1].replace(".parquet", "")
-        chain = pd.read_parquet(files[-1])
+        if fresh:
+            day, chain = str(source.session), source.frame
+        else:
+            day, chain = str(theta_day), pd.read_parquet(files[-1])
         try:
-            feats = load_features(symbol)
-            row = feats.iloc[-1]
-            close = float(load_closes(symbol, "2018-01-01", day,
-                                      allow_oos=True).iloc[-1])
+            close_series = load_closes(symbol, "2018-01-01", day,
+                                       allow_oos=True)
+            if fresh:
+                # Same instant as the quotes: the closes store is frozen well
+                # behind a pre-close session, so its last close would misprice
+                # every moneyness figure on the card.
+                close = float(source.spot)
+                row = None
+            else:
+                row = load_features(symbol).iloc[-1]
+                close = float(close_series.iloc[-1])
         except FileNotFoundError as exc:
             print(f"\n{symbol}: DATA BLOCKED -- missing input: {exc}")
             continue
-        rv21 = float(row["rv21"])
-        iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else 0.0
-        iv_minus_rv = (float(row["iv_minus_rv"])
-                       if pd.notna(row["iv_minus_rv"]) else 0.0)
+        # FAIL-CLOSED, identically to the HTML board: an unavailable feature
+        # stays NaN and grades UNKNOWN. Coercing to 0.0 fabricated verdicts --
+        # iv_rank 0.0 grades iv_for_buyer GREEN ("cheapest IV this name has
+        # ever shown") and iv_minus_rv 0.0 clears the VRP GREEN threshold of
+        # exactly 0.0. Named with attractiveness_dashboard.py:1119-1122 as one
+        # task in docs/superpowers/plans/2026-07-20-p0-health-remediation.md
+        # :739-745; fixing only that site left this one fabricating GREENs.
+        nan = float("nan")
+        if row is None:
+            # A pre-close session has no realized-vol input (underlying closes
+            # end earlier) and no feature-store row; its IV rank is the capture
+            # lane's preview when one exists.
+            rv21 = nan
+            iv_minus_rv = nan
+            iv_rank = (float(source.iv_rank_preview)
+                       if source.iv_rank_preview is not None else nan)
+        else:
+            rv21 = float(row["rv21"]) if pd.notna(row["rv21"]) else nan
+            iv_rank = float(row["iv_rank"]) if pd.notna(row["iv_rank"]) else nan
+            iv_minus_rv = (float(row["iv_minus_rv"])
+                           if pd.notna(row["iv_minus_rv"]) else nan)
+        unavailable = [name for name, value in
+                       (("rv21", rv21), ("iv_rank", iv_rank),
+                        ("iv_minus_rv", iv_minus_rv))
+                       if value != value]
+        source_line = (
+            f"{schwab_view.CONVENTION_LABEL} snapshot "
+            f"(spot ${close:,.2f} at 15:45, NOT a close)" if fresh
+            else f"{day} close")
         # Core names keep the curated CSV; watchlist names grade earnings
         # from the v3 point-in-time store (UNKNOWN when it can't certify).
         try:
@@ -477,8 +558,14 @@ def main():
                         known_as_of=known_now)
                 return rows
         fomcs = load_fomc()
-        print(f"\n=== {symbol} @ {day}  close ${close:,.2f}  "
-              f"IV-rank {iv_rank:.2f} ===")
+        iv_rank_text = ("unavailable" if iv_rank != iv_rank
+                        else f"{iv_rank:.2f}")
+        print(f"\n=== {symbol} @ {day}  ${close:,.2f}  "
+              f"IV-rank {iv_rank_text} ===")
+        print(f"   source: {source_line}")
+        if unavailable:
+            print(f"   UNAVAILABLE this session: {', '.join(unavailable)} "
+                  "-- the badges these feed read UNKNOWN, never a default")
         print("-- SELL A PUT? (ladder; ranked by annualized income on capital)")
         rows = v3fix(ladder_cards(put_card_rows, symbol, chain, day,
                             rank_key="annualized_yield", higher_is_better=True,

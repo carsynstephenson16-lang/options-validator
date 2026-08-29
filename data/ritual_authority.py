@@ -37,7 +37,13 @@ class RitualAuthority:
 
 CURRENT_AUTHORITY = RitualAuthority(
     h7_active=False,
-    exact_session_source_active=False,
+    # owner-directed in-session 2026-08-23: S1's 3-session streak bar is
+    # overruled ("overule the watcher switch and turn those on"); sub-fork
+    # resolved as 3a (invocation_source field, already landed in the preclose
+    # receipt writer). Evidence at flip time: clean launchd receipts 08-19 and
+    # 08-20 (streak 2 of 3); the 08-21 gap was a network outage, not a source
+    # defect. Recorded under owner-delegated standing 2026-07-25.
+    exact_session_source_active=True,
     # owner-directed in-session 2026-08-14 (brief 11 §5); asserts NO source
     # and NO H7 authority
     ritual_data_phase_active=True,

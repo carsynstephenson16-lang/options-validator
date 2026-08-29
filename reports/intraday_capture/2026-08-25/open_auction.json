@@ -1,0 +1,421 @@
+{
+  "captured_at_et": "2026-08-25T09:31:11.900588-04:00",
+  "captured_at_utc": "2026-08-25T13:31:11.900588+00:00",
+  "config_hash": "a854273b899530669684224bd5f6aea4fcdc9c1ba63ec5d35d861a0574c64d3c",
+  "force": false,
+  "iv_rank_calibration": null,
+  "names": {
+    "AMD": {
+      "atm_iv": 0.54138,
+      "chain_cache_path": ".cache/intraday/AMD_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 55,
+        "P": 21
+      },
+      "chain_contracts_total": {
+        "C": 152,
+        "P": 152
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.373015873015873,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.011879966057239908,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 472.9,
+      "spot_bid": 472.57,
+      "spot_mid": 472.735,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.869000+00:00",
+      "status": "ok",
+      "symbol": "AMD"
+    },
+    "AMZN": {
+      "atm_iv": 0.3068,
+      "chain_cache_path": ".cache/intraday/AMZN_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 39,
+        "P": 13
+      },
+      "chain_contracts_total": {
+        "C": 68,
+        "P": 68
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.373015873015873,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.024893650543563996,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 263.64,
+      "spot_bid": 263.34,
+      "spot_mid": 263.49,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.669000+00:00",
+      "status": "ok",
+      "symbol": "AMZN"
+    },
+    "AVGO": {
+      "atm_iv": 0.53403,
+      "chain_cache_path": ".cache/intraday/AVGO_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 28,
+        "P": 19
+      },
+      "chain_contracts_total": {
+        "C": 101,
+        "P": 101
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.7698412698412699,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.01002302587024242,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 361.47,
+      "spot_bid": 361.09,
+      "spot_mid": 361.28,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.306000+00:00",
+      "status": "ok",
+      "symbol": "AVGO"
+    },
+    "CEG": {
+      "atm_iv": 0.44447000000000003,
+      "chain_cache_path": ".cache/intraday/CEG_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 2,
+        "P": 6
+      },
+      "chain_contracts_total": {
+        "C": 75,
+        "P": 75
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.16666666666666666,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.013114754098360656,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 274.96,
+      "spot_bid": 273.49,
+      "spot_mid": 274.225,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:10.815000+00:00",
+      "status": "ok",
+      "symbol": "CEG"
+    },
+    "CRWV": {
+      "atm_iv": 0.77547,
+      "chain_cache_path": ".cache/intraday/CRWV_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 20,
+        "P": 22
+      },
+      "chain_contracts_total": {
+        "C": 73,
+        "P": 73
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.06746031746031746,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.020822488287350338,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 88.14,
+      "spot_bid": 88.0,
+      "spot_mid": 88.07,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.840000+00:00",
+      "status": "ok",
+      "symbol": "CRWV"
+    },
+    "ET": {
+      "atm_iv": 0.18492999999999998,
+      "chain_cache_path": ".cache/intraday/ET_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 0,
+        "P": 0
+      },
+      "chain_contracts_total": {
+        "C": 29,
+        "P": 29
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.25793650793650796,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.11634349030470921,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 21.03,
+      "spot_bid": 20.98,
+      "spot_mid": 21.005000000000003,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:11.319000+00:00",
+      "status": "ok",
+      "symbol": "ET"
+    },
+    "IREN": {
+      "atm_iv": 1.02427,
+      "chain_cache_path": ".cache/intraday/IREN_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 21,
+        "P": 24
+      },
+      "chain_contracts_total": {
+        "C": 68,
+        "P": 68
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.28174603174603174,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.027808676307007785,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 40.51,
+      "spot_bid": 40.49,
+      "spot_mid": 40.5,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.902000+00:00",
+      "status": "ok",
+      "symbol": "IREN"
+    },
+    "MSFT": {
+      "atm_iv": 0.24867999999999998,
+      "chain_cache_path": ".cache/intraday/MSFT_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 36,
+        "P": 9
+      },
+      "chain_contracts_total": {
+        "C": 103,
+        "P": 103
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.3412698412698413,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.010981141083790846,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 486.82,
+      "spot_bid": 486.42,
+      "spot_mid": 486.62,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.731000+00:00",
+      "status": "ok",
+      "symbol": "MSFT"
+    },
+    "NOW": {
+      "atm_iv": 0.54998,
+      "chain_cache_path": ".cache/intraday/NOW_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 10,
+        "P": 0
+      },
+      "chain_contracts_total": {
+        "C": 121,
+        "P": 121
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.6944444444444444,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.045694200351493935,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 127.34,
+      "spot_bid": 127.02,
+      "spot_mid": 127.18,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.650000+00:00",
+      "status": "ok",
+      "symbol": "NOW"
+    },
+    "NVDA": {
+      "atm_iv": 0.4361,
+      "chain_cache_path": ".cache/intraday/NVDA_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 52,
+        "P": 23
+      },
+      "chain_contracts_total": {
+        "C": 87,
+        "P": 87
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.7182539682539683,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.012578616352201269,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 210.59,
+      "spot_bid": 210.52,
+      "spot_mid": 210.555,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.735000+00:00",
+      "status": "ok",
+      "symbol": "NVDA"
+    },
+    "PLTR": {
+      "atm_iv": 0.47845,
+      "chain_cache_path": ".cache/intraday/PLTR_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 33,
+        "P": 14
+      },
+      "chain_contracts_total": {
+        "C": 69,
+        "P": 69
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.1865079365079365,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.014674710582096854,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 178.27,
+      "spot_bid": 177.99,
+      "spot_mid": 178.13,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.154000+00:00",
+      "status": "ok",
+      "symbol": "PLTR"
+    },
+    "SMCI": {
+      "atm_iv": 0.7231000000000001,
+      "chain_cache_path": ".cache/intraday/SMCI_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 19,
+        "P": 13
+      },
+      "chain_contracts_total": {
+        "C": 73,
+        "P": 73
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.3968253968253968,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.034437086092715154,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 36.22,
+      "spot_bid": 36.21,
+      "spot_mid": 36.215,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.802000+00:00",
+      "status": "ok",
+      "symbol": "SMCI"
+    },
+    "TEM": {
+      "atm_iv": 0.7780800000000001,
+      "chain_cache_path": ".cache/intraday/TEM_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 4,
+        "P": 0
+      },
+      "chain_contracts_total": {
+        "C": 44,
+        "P": 44
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.7142857142857143,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.048050413548641153,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 66.01,
+      "spot_bid": 65.85,
+      "spot_mid": 65.93,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.019000+00:00",
+      "status": "ok",
+      "symbol": "TEM"
+    },
+    "USAR": {
+      "atm_iv": 0.90558,
+      "chain_cache_path": ".cache/intraday/USAR_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 5,
+        "P": 14
+      },
+      "chain_contracts_total": {
+        "C": 60,
+        "P": 60
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.03571428571428571,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.05128205128205133,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 18.35,
+      "spot_bid": 18.27,
+      "spot_mid": 18.310000000000002,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.109000+00:00",
+      "status": "ok",
+      "symbol": "USAR"
+    },
+    "VST": {
+      "atm_iv": 0.43718,
+      "chain_cache_path": ".cache/intraday/VST_2026-08-25T0931.parquet",
+      "chain_contracts_admitted": {
+        "C": 2,
+        "P": 3
+      },
+      "chain_contracts_total": {
+        "C": 65,
+        "P": 65
+      },
+      "greeks_note": null,
+      "iv_label": null,
+      "iv_rank_preview": 0.01984126984126984,
+      "iv_source": "greeks_endpoint",
+      "min_spread_pct_observed": 0.030083171120155724,
+      "monthly_expiration": "2026-09-18",
+      "open_interest_asof": "2026-08-25",
+      "spot_ask": 138.82,
+      "spot_bid": 138.51,
+      "spot_mid": 138.665,
+      "spot_source": "stock_snapshot",
+      "spot_ts": "2026-08-25T13:31:12.630000+00:00",
+      "status": "ok",
+      "symbol": "VST"
+    }
+  },
+  "probe_healed_this_run": false,
+  "probe_receipt_path": "reports/live_probe/2026-08-19.json",
+  "receipt_kind": "intraday_capture/v1",
+  "scheduled_et": "09:31",
+  "session_tag": "open_auction",
+  "universe": [
+    "CRWV",
+    "TEM",
+    "PLTR",
+    "NOW",
+    "SMCI",
+    "NVDA",
+    "AMD",
+    "AVGO",
+    "IREN",
+    "USAR",
+    "ET",
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN"
+  ]
+}

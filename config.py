@@ -612,6 +612,9 @@ H10_DTE_EXIT = 21  # ledger/experiments.jsonl seq 15/16
 H10_MIN_LOSSES_FOR_VERDICT = 7  # ledger/experiments.jsonl seq 15/16
 H10A_WINDOW_END = "2026-10-06"  # ledger/experiments.jsonl seq 15
 H10B_WINDOW_END = "2027-01-06"  # ledger/experiments.jsonl seq 16
+# mechanical floor per seq 28/29 clause 5; append date 2026-08-18 ET; updated at merge by the orchestrating session if the merge lands later
+H10B_RESUME_FLOOR_SESSION = "2026-08-19"
+H5_RESUME_FLOOR_SESSION = "2026-08-19"
 
 # ---------------------------------------------------------------------------
 # --- ATTRACTIVENESS DASHBOARD v2 TECHNICALS (presentation layer ONLY) ---
@@ -629,8 +632,9 @@ TECH_52W_LOOKBACK = 252            # ~52 weeks of sessions for high_52w
 
 # LLM-asserted presentation-layer ordering weights — dashboard display only,
 # NOT strategy gates; frozen H5/H6/H7 numbers untouched. They order the
-# dashboard's Top-3 shortlist (select_top_picks) and nothing else: they gate
+# dashboard's display shortlist (select_top_picks) and nothing else: they gate
 # nothing, size nothing, and never touch entry/exit logic.
+PICK_TOP_N: int = 5  # display-layer shortlist width; owner-directed in-session 2026-08-25 (spoken, not owner-typed); presentation only, never a strategy gate.
 PICK_GREEN_POINT = 1        # points per GREEN badge on a card
 PICK_RANK_LEADER_BONUS = 2  # bonus when the card is its lane's rank leader
 PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's direction
@@ -639,7 +643,7 @@ PICK_TECH_BONUS = 2         # bonus for technical confluence with the lane's dir
 # and AMZN I always want to see their picks"). Display only: each pinned
 # symbol's best ADMISSIBLE card renders in its own strip, labeled
 # "owner-pinned visibility — not ranked". Pinning never fabricates a card
-# (an inadmissible symbol shows an honest gap) and never touches the Top-3.
+# (an inadmissible symbol shows an honest gap) and never touches the shortlist.
 PICK_PINNED_SYMBOLS = ["VST", "AMZN"]
 
 # Earnings-calendar coverage horizon: a curated calendar whose last entry is
@@ -665,7 +669,7 @@ ATTRACTIVENESS_UNIVERSE = [
 # sessions (weekday count -- market holidays are counted as sessions, which
 # over-states age and therefore fails safe).
 #   WARN  -- render the age as a visible warning; still rankable.
-#   BLOCK -- DATA_BLOCKED, drops out of the Top-3 admissible pool.
+#   BLOCK -- DATA_BLOCKED, drops out of the display-shortlist admissible pool.
 # PROVENANCE: LLM-asserted 2026-08-04, pending owner confirmation. These are
 # display gates only: they bind no hypothesis, verdict, or registered trigger.
 # Evidence: reports/provider-transition/2026-08-04-scanner-staleness-diagnosis.md
@@ -832,9 +836,43 @@ COMPOSITE_GRADE_A_MIN_ALIGNED = 3 # aligned non-neutral angles needed for grade 
 COMPOSITE_GRADE_B_MIN_ALIGNED = 2 # aligned non-neutral angles needed for grade B
 
 # ---------------------------------------------------------------------------
+# Chain-consistency shadow flags 2026-08-24. LLM-proposed, not owner-typed;
+# display-only — bind no hypothesis, verdict, gate, or trigger.
+# CONSISTENCY_DELTA_JUMP_ABS=0.30 is a corruption-target Assumption per brief
+# 22 WP-0. CONSISTENCY_UNDERLYING_SMALL_MOVE=0.01 is an Assumption defining
+# "near-flat" conditioning. CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO=2.0 is an
+# Assumption defining a blowout relative to yesterday.
+# CONSISTENCY_MAX_EXAMPLES=20 is receipt ergonomics. Frozen all-pair
+# observations, columns GAP/EXPIRY/STRIKE/DELTA/SPREAD:
+#   2026-08-14->2026-08-19 (non-adjacent): 15/0/0/0/596
+#   2026-08-14->2026-08-20 (non-adjacent): 15/0/0/0/582
+#   2026-08-19->2026-08-20 (adjacent):      0/0/0/0/256
+# On that only adjacent clean pair, evaluated rates were GAP 0/15, EXPIRY
+# 0/237, STRIKE 0/11,571, DELTA 0/8,611, and SPREAD 256/11,571 (2.2124%).
+# IV_JUMP was removed under WP-0's pre-declared kill criterion after hitting
+# 131/8,611 (1.5213%, above 1%); its threshold was not widened.
+# Owner disposition A (2026-08-24, in-session): SPREAD_BLOWOUT stays computed
+# and fully receipted but is demoted from the worst-wins headline status (its
+# 2.2124% clean-pair rate read status=SPREAD_BLOWOUT on 15/15 symbols on a
+# clean day). Threshold unchanged. Pre-declared review: if no SPREAD_BLOWOUT
+# observation has been acted on after ~30 captured sessions, remove the flag
+# (plan §10 item 6) rather than tune it. See
+# data.chain_consistency.HEADLINE_DEMOTED_FLAGS.
+# ---------------------------------------------------------------------------
+CONSISTENCY_DELTA_JUMP_ABS = 0.30
+CONSISTENCY_UNDERLYING_SMALL_MOVE = 0.01
+CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO = 2.0
+CONSISTENCY_MAX_EXAMPLES = 20
+
+# CONTEXT-AWARE SHORTLIST LANE — display-only second ranking lane.
+# Owner-directed in-session 2026-08-25 (spoken, not owner-typed).
+# Enabled by owner-authorized in-chat draft override 2026-08-26.
+CONTEXT_LANE_ENABLED: bool = True
+
+# ---------------------------------------------------------------------------
 # ATTRACTIVENESS EXPERIMENT LANES -- display-only, cached-data-only, and
 # disabled by default. LLM-proposed 2026-08-09; standard-from-literature or
-# repo conventions; not owner-ratified. Nothing here changes Top-3 ranking,
+# repo conventions; not owner-ratified. Nothing here changes shortlist ranking,
 # registered hypotheses, verdicts, FIRE authority, or paper-book state.
 # ---------------------------------------------------------------------------
 
@@ -867,10 +905,10 @@ EXP_TBILL_TARGET_DELTA = 0.50
 EXPERIMENTS_OUTPUT_PATH = ".tmp/dashboard/experiments.html"
 
 # EXP-SHORT: issuer-level reported short positioning (FINRA Consolidated Short
-# Interest). Display-only, disabled by default, with no ranking, verdict,
+# Interest). Display-only, with no ranking, verdict,
 # entry, sizing, or execution authority. Design:
 # docs/superpowers/specs/2026-08-11-short-positioning-context-design.md
-SHORT_CONTEXT_ENABLED = False
+SHORT_CONTEXT_ENABLED = True  # owner-directed in-session 2026-08-14 (decision menu ruling 5)
 # Local, gitignored capture root. Provider rows never enter Git.
 SHORT_POSITIONING_ROOT = ".cache/short_positioning"
 # Display-health setting, NOT a predictive threshold: a symbol more than this

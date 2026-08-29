@@ -95,6 +95,14 @@ Never run destructive commands like `git reset --hard`, `git checkout --`, mass 
 Do not amend commits unless the user explicitly asks.
 If unexpected unrelated changes appear, stop and report the issue.
 
+### Draft-PR authority hold (owner-directed 2026-08-25)
+
+Every PR created by a worker starts as a GitHub draft. Workers may not make a
+PR ready, merge, deploy, sync an operational checkout, flip authority, or
+modify a ledger. Those actions require separate explicit owner authorization.
+A green draft is review evidence, not landing authority; automated
+reconciliation must continue to exclude drafts from merge eligibility.
+
 ### Worktree location rule (owner-directed 2026-08-03)
 
 Create worktrees only under `.tmp/worktrees/<short-name>`. Never in `/tmp` or

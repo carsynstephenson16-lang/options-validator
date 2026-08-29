@@ -29,9 +29,12 @@ LaunchAgent `com.carsyn.options-validator.daily-ritual` runs
 
 **Fail-closed semantics**: a branch guard refuses to run at all if the ops
 checkout isn't on `main` (`tools/daily_ritual.sh` — added after a 2026-07-20
-incident where a concurrent agent left a checkout on a feature branch);
-a missing `THETADATA_API_KEY` is surfaced loudly rather than silently
-running stale; the data gate NO_GO blocks the whole watcher chain; source
+incident where a concurrent agent left a checkout on a feature branch).
+(As of 2026-08-26 the ThetaData key check described here is historical —
+ThetaData acquisition is disabled, see [[data-layer]]; the ritual's data
+tier now revolves around cached reads plus the Schwab lane, and its Step 8
+durability allow-list includes `reports/schwab_chains` since PR #76.)
+The data gate NO_GO blocks the whole watcher chain; source
 health never blocks the board, only per-name entry bans. Every step logs a
 `note`/`crit` line to `.tmp/daily_ritual/<date>_<time>.log`, and the run ends
 with an explicit `RITUAL STATUS: OK` or `BROKEN` summary
@@ -42,6 +45,10 @@ LaunchAgent `com.carsyn.options-validator.intraday-capture` fires at 09:31,
 09:35, 11:00, 13:00, 15:45 ET, writing a 15-name board snapshot receipt under
 `reports/intraday_capture/<date>/`. It never commits — the next morning's
 07:10 ritual sweeps the prior day's receipts into its evidence commit.
+(As of 2026-08-26 the 15:45 slot is also when the Schwab preclose chain
+capture writes its exact-session packages — see [[data-layer]]; a 15:30
+alignment-check LaunchAgent warns if the ops checkout is behind
+`origin/main`, the condition that makes the capture wrapper refuse.)
 
 ## Repo-RAG health agent (installed 2026-07-25)
 LaunchAgent `com.carsyn.options-validator.repo-rag-health.plist` runs

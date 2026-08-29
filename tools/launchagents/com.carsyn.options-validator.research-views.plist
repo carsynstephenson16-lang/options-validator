@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Managed localhost server for display-only research views. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.carsyn.options-validator.research-views</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/carsynstephenson/options-validator-ops/.venv/bin/python</string>
+    <string>-m</string>
+    <string>http.server</string>
+    <string>8766</string>
+    <string>--bind</string>
+    <string>127.0.0.1</string>
+    <string>--directory</string>
+    <string>/Users/carsynstephenson/options-validator-ops/.tmp/dashboard</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/carsynstephenson/options-validator-ops</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/research_views/research-views.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/research_views/research-views.err.log</string>
+</dict>
+</plist>

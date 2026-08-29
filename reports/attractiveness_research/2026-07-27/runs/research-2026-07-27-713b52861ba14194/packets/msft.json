@@ -1,0 +1,67 @@
+{
+  "symbol": "MSFT",
+  "news_summary": "Microsoft reported fiscal Q4 2026 results on July 29, 2026: revenue of $90.0B (+18% YoY) beat consensus, GAAP diluted EPS of $4.81 (+32% YoY), Azure/cloud services revenue growth of 43%, Microsoft Cloud revenue of $59.3B (+27%), and Microsoft 365 Copilot surpassing 30 million paid seats. Azure crossed $100B in annual revenue for FY2026, up 41% for the year. Results included a $3.2B gain tied to Microsoft's Anthropic investment, which a TechCrunch report says lifted diluted EPS by roughly $0.33, while a ~$600M quarterly markdown on Microsoft's OpenAI stake was a modest EPS drag by comparison. Full FY2026 capex reached $115.9B (Q4 alone $35.8B), reflecting continued heavy AI-infrastructure spend. Next earnings (fiscal Q1 2027) is expected around October 27, 2026 per third-party trackers, but Microsoft has not yet issued an official confirmation press release as of this run.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "msft-q4fy26-earnings",
+      "what": "Q4 FY2026 earnings beat: revenue $90.0B (+18% YoY) vs. ~$87.6B expected, GAAP diluted EPS $4.81 (+32% YoY), Azure/cloud growth 43%, Microsoft Cloud revenue $59.3B (+27%), M365 Copilot surpassed 30 million paid seats, Azure exceeded $100B in annual FY26 revenue.",
+      "date": "2026-07-29",
+      "confirmed": true,
+      "source": "https://www.microsoft.com/en-us/Investor/earnings/FY-2026-Q4/press-release-webcast"
+    },
+    {
+      "id": "msft-anthropic-gain",
+      "what": "Microsoft recorded a $3.2 billion gain from its Anthropic investment as part of Q4 FY2026 results.",
+      "date": "2026-07-29",
+      "confirmed": true,
+      "source": "https://www.microsoft.com/en-us/Investor/earnings/FY-2026-Q4/press-release-webcast"
+    },
+    {
+      "id": "msft-anthropic-eps-detail",
+      "what": "The $3.2B Anthropic gain (stemming from Microsoft's Nov 2025 $5B Anthropic investment paired with Anthropic's $30B Azure purchase commitment) boosted Q4 diluted EPS by about $0.33; Microsoft's ~27%-owned OpenAI stake was marked down about $600M in Q4 (~$0.07 EPS drag), versus a $5B/$0.67-EPS gain from the OpenAI stake for the full fiscal year.",
+      "date": "2026-07-29",
+      "confirmed": false,
+      "source": "https://techcrunch.com/2026/07/29/microsoft-logs-3-2b-from-anthropic-investment-but-openai-was-a-mixed-bag/"
+    },
+    {
+      "id": "msft-capex-fy26",
+      "what": "Q4 FY2026 capital expenditures were $35.8B; full fiscal-year 2026 capex totaled $115.9B, reflecting continued AI-infrastructure buildout.",
+      "date": "2026-07-29",
+      "confirmed": true,
+      "source": "https://www.microsoft.com/en-us/Investor/earnings/FY-2026-Q4/press-release-webcast"
+    },
+    {
+      "id": "msft-next-earnings",
+      "what": "Microsoft's next quarterly earnings release (fiscal Q1 2027) is tracked for October 27, 2026, after market close, per a third-party earnings calendar; no official Microsoft press release confirming this date was found during this session.",
+      "date": "2026-10-27",
+      "confirmed": false,
+      "source": "https://www.investing.com/equities/microsoft-corp-earnings"
+    }
+  ],
+  "move_thesis": "The Q4 FY2026 print was a clean beat-and-raise on the metric that matters most to the market right now: Azure growth (43%, crossing $100B annualized) shows Microsoft is not losing the AI infrastructure race despite eye-watering capex, and 30M+ Copilot seats is evidence of monetizable AI adoption rather than just capacity spend. The one-time $3.2B Anthropic mark-to-market gain flatters headline EPS and is not a repeatable operating driver; strip it out and the story is still Azure-led cloud acceleration plus continued heavy capex (~$116B FY26) that management signaled will keep growing into FY27. The near-term catalyst calendar is thin until the next earnings print (unconfirmed, ~Oct 27, 2026); between now and then, incremental AI-partnership headlines (Anthropic/OpenAI diversification, new MAI models) are the more likely swing factors on sentiment rather than fundamentals.",
+  "sources": [
+    {
+      "url": "https://www.microsoft.com/en-us/Investor/earnings/FY-2026-Q4/press-release-webcast",
+      "source_tier": "issuer_ir",
+      "published_at": "2026-07-29T17:30:00-04:00",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:15:00Z"
+    },
+    {
+      "url": "https://techcrunch.com/2026/07/29/microsoft-logs-3-2b-from-anthropic-investment-but-openai-was-a-mixed-bag/",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Publish date 2026-07-29 is confirmed by the article URL slug and dateline; exact time-of-day was not shown on the fetched page content.",
+      "retrieved_at_utc": "2026-08-15T17:23:00Z"
+    },
+    {
+      "url": "https://www.investing.com/equities/microsoft-corp-earnings",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page; no article-level publish timestamp is shown.",
+      "retrieved_at_utc": "2026-08-15T17:25:00Z"
+    }
+  ],
+  "claims": []
+}

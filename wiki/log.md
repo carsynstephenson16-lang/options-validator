@@ -74,3 +74,53 @@ RAG health indexed 594 sources and 14879 chunks; 0 source failures were reported
 ## [2026-08-09] ingest | RAG health
 
 RAG health indexed 594 sources and 14879 chunks; 0 source failures were reported.
+
+
+## [2026-08-16] ingest | RAG health
+
+RAG health indexed 690 sources and 16355 chunks; 0 source failures were reported.
+
+
+## [2026-08-19] ingest | RAG health
+
+RAG health indexed 786 sources and 17607 chunks; 0 source failures were reported.
+
+
+## [2026-08-23] ingest | RAG health
+
+RAG health indexed 829 sources and 28365 chunks; 0 source failures were reported.
+
+## [2026-08-26] lint | WIKI-01 stale-status reconciliation (owner-authorized)
+
+Owner authorized the vault refresh 2026-08-26 in-session. Corrected against
+canonical sources (README "Scope status", ledger registry, PR #76/#82 history):
+hypotheses.md — H5 trigger RETIRED/observe-only (seq 29), H7 forward window
+PAUSED per OD-3 with the Schwab restart lane PREPARED/NOT REGISTERED, H10a
+CLOSED STARVED (2026-08-15), H10b resumed on the Schwab preclose lane
+(seq 28); data-layer.md — ThetaData retired ~2026-07-29 (stale
+"subscription through 2026-11-30" claim removed), Schwab 15:45 preclose
+lane documented as the capture path; automation.md — ThetaData key check
+marked historical, Schwab preclose + 15:30 alignment-check noted;
+decisions.md — "live forward window" and ThetaData-dependency claims
+stamped historical. All corrections carry as-of 2026-08-26 stamps. Evidence
+trail: audit finding WIKI-01
+(reports/repository-audits/2026-08-25-options-validator/, lands with PR #82)
+and reports/2026-08-25-codex-audit-verification-owner-package.md.
+
+
+## [2026-08-26] ingest | RAG health
+
+RAG health indexed 848 sources and 32824 chunks; 0 source failures were reported.
+
+## [2026-08-26] lint | merge-resolution correction
+
+data-layer.md: the brief-29 protection claim for `.cache/schwab_chains`
+corrected to reflect that brief 29 is BLOCKED pending re-review (receipt:
+`reports/2026-08-26-brief-29-independent-review-receipt.md`); the gap is
+still open.
+
+## [2026-08-26] lint | PR #90 review: token-lifetime claim labeled
+
+data-layer.md: the 7-day Schwab refresh-token claim now carries its
+mandatory claim labels (Official-source + Test-verified), per the Codex
+review of PR #90 and AGENTS.md claim discipline.

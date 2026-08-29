@@ -1,0 +1,74 @@
+{
+  "symbol": "NOW",
+  "news_summary": "ServiceNow reported Q2 2026 results on July 22, 2026: subscription revenue of $3,877M (+24.5% YoY), total revenue of $3,987M (+24% YoY), non-GAAP EPS of $0.90 (GAAP $0.29), cRPO of $13.2B (+21% YoY), and RPO of $29.0B (+21% YoY). ServiceNow AI annual contract value crossed $1 billion in the quarter, with agentic AI deployments up 9x in nine months and AI Control Tower adoption exceeding 500 customers in six months; renewal rate remained 98%. The company raised FY2026 subscription revenue guidance to $15,760-$15,780M (+22.5% YoY) and guided non-GAAP operating margin to 31.5% and free cash flow margin to 35%. On August 4, 2026, ServiceNow unveiled 'Autonomous Security,' a six-solution, prevention-first AI-native cybersecurity offering (unified exposure management, vulnerability detection, cyber-physical security, identity/access security, agentic incident response, and cyber risk/compliance), announced at Black Hat 2026; several capabilities (Tier 2 SOC AI Specialist, Vulnerability Resolution AI Specialist, agentic AI for continuous control monitoring, cryptography asset compliance) are deferred to December 2026. This builds on ServiceNow's 2026 acquisition spree, including the $7.75B Armis deal in April. Next earnings (Q3 2026) is tracked for around October 28, 2026 by third-party trackers, not yet formally confirmed by ServiceNow as of this run.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "now-q2-earnings",
+      "what": "Q2 2026 results beat across the board: subscription revenue $3,877M (+24.5% YoY), total revenue $3,987M (+24% YoY), non-GAAP EPS $0.90 (GAAP $0.29), cRPO $13.2B (+21% YoY), RPO $29.0B (+21% YoY); 123 deals over $1M in net-new ACV (+~40% YoY); renewal rate 98%.",
+      "date": "2026-07-22",
+      "confirmed": true,
+      "source": "https://investor.servicenow.com/news/news-details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx"
+    },
+    {
+      "id": "now-ai-acv",
+      "what": "ServiceNow AI annual contract value (ACV) crossed $1 billion in Q2 2026; agentic AI deployments increased ninefold over nine months; AI Control Tower adoption exceeded 500 customers within six months.",
+      "date": "2026-07-22",
+      "confirmed": true,
+      "source": "https://investor.servicenow.com/news/news-details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx"
+    },
+    {
+      "id": "now-fy26-guidance-raise",
+      "what": "FY2026 subscription revenue guidance raised to $15,760-$15,780 million (22.5% YoY growth); non-GAAP operating margin guided to 31.5%; free cash flow margin guided to 35%.",
+      "date": "2026-07-22",
+      "confirmed": true,
+      "source": "https://investor.servicenow.com/news/news-details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx"
+    },
+    {
+      "id": "now-autonomous-security",
+      "what": "ServiceNow launched 'Autonomous Security,' six unified security solutions with AI Specialists for prevention-first, AI-native cyber defense, announced at Black Hat 2026; four capabilities (Tier 2 SOC AI Specialist, Vulnerability Resolution AI Specialist, agentic AI for continuous control monitoring, cryptography asset compliance) are deferred to December 2026.",
+      "date": "2026-08-04",
+      "confirmed": true,
+      "source": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-delivers-Autonomous-Security-the-industrys-most-complete-security-offering/default.aspx"
+    },
+    {
+      "id": "now-next-earnings",
+      "what": "ServiceNow's next quarterly earnings release (Q3 2026) is tracked for October 28, 2026, after market close, per a third-party earnings calendar; no official ServiceNow press release confirming this date was found during this session.",
+      "date": "2026-10-28",
+      "confirmed": false,
+      "source": "https://www.investing.com/equities/servicenow-inc-earnings"
+    }
+  ],
+  "move_thesis": "The Q2 print was a clean beat-and-raise with the underlying growth engine intact: subscription revenue accelerating to 24.5% YoY, cRPO/RPO both up 21%, and a 98% renewal rate showing the core platform business is durable, not just growing on new-logo wins. The AI ACV crossing $1B and 9x growth in agentic deployments give the market a concrete, dollar-denominated proof point for ServiceNow's AI narrative, which had previously been mostly qualitative. The August 4 Autonomous Security launch extends ServiceNow's security/GRC push (following the $7.75B Armis acquisition) into a fast-growing category, but roughly a third of its named capabilities are not shipping until December 2026, so near-term revenue impact is limited and the catalyst is more about competitive positioning than an immediate financial trigger. With the next earnings print not confirmed until late October, the main sources of interim volatility are likely to be further AI-partnership or acquisition announcements (ServiceNow has been acquisitive throughout 2026) rather than fundamentals, which were reset higher by the raised FY2026 guidance.",
+  "sources": [
+    {
+      "url": "https://investor.servicenow.com/news/news-details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Page confirms the July 22, 2026 release date but no specific time-of-day was shown on the fetched content.",
+      "retrieved_at_utc": "2026-08-15T17:15:20Z"
+    },
+    {
+      "url": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-delivers-Autonomous-Security-the-industrys-most-complete-security-offering/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Page confirms the August 4, 2026 publish date but no specific time-of-day was shown on the fetched content.",
+      "retrieved_at_utc": "2026-08-15T17:21:00Z"
+    },
+    {
+      "url": "https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-expands-AI-agent-governance-through-deeper-integration-with-Microsoft/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": "2026-05-05T00:00:00Z",
+      "publication_time_unknown_rationale": null,
+      "retrieved_at_utc": "2026-08-15T17:17:00Z"
+    },
+    {
+      "url": "https://www.investing.com/equities/servicenow-inc-earnings",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Continuously-updated earnings-calendar aggregator page; no article-level publish timestamp is shown.",
+      "retrieved_at_utc": "2026-08-15T17:27:10Z"
+    }
+  ],
+  "claims": []
+}

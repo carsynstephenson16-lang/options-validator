@@ -7,9 +7,10 @@ merged. When the direct live adapter is unavailable, the preview lane may
 display the newest strictly validated same-day ``intraday_capture/v1`` receipt:
 
 - OFFICIAL H5 STATUS (completed sessions): rows verbatim from
-  entry_watch._gather() on completed-session closes. This is the ONLY lane
-  that may say FIRE -- the pre-registered rule (H5_ENTRY_TRIGGER_PREREG /
-  amendment v2) stays with entry_watch, untouched.
+  entry_watch._gather() on completed-session closes. Since ledger seq 29
+  clause 1 retired H5's entry trigger, those rows are OBSERVED / DATA_GAP
+  observations -- observational and non-verdict-bearing. NEITHER lane can say
+  FIRE, because no H5 trigger exists to fire.
 - LIVE PREVIEW -- awaiting close: intraday spot/gate preview. It can NEVER
   display FIRE or any FIRE-equivalent green state; at-trigger renders as
   "AT TRIGGER (preview -- awaiting close)" in amber.

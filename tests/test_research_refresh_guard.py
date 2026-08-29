@@ -37,12 +37,16 @@ def _at(day: int, hour: int, minute: int = 0) -> datetime:
 
 class ScheduleWindowTest(unittest.TestCase):
     def test_weekday_producer_times_are_allowed(self):
-        self.assertTrue(schedule_window_open(_at(27, 7, 40)))
-        self.assertTrue(schedule_window_open(_at(27, 8, 10)))
+        self.assertTrue(schedule_window_open(_at(27, 10, 0)))
+        self.assertTrue(schedule_window_open(_at(27, 10, 30)))
+
+    def test_retired_premarket_times_are_blocked(self):
+        self.assertFalse(schedule_window_open(_at(27, 7, 40)))
+        self.assertFalse(schedule_window_open(_at(27, 8, 10)))
 
     def test_postclose_and_weekend_are_blocked(self):
         self.assertFalse(schedule_window_open(_at(27, 16, 45)))
-        self.assertFalse(schedule_window_open(_at(25, 7, 40)))
+        self.assertFalse(schedule_window_open(_at(25, 10, 0)))
 
     def test_explicit_manual_override_is_required_outside_window(self):
         self.assertTrue(schedule_window_open(_at(25, 16, 45), manual_override=True))
@@ -249,7 +253,7 @@ class ProducerPlistTest(unittest.TestCase):
         expected = {
             (weekday, hour, minute)
             for weekday in range(1, 6)
-            for hour, minute in ((7, 40), (8, 10))
+            for hour, minute in ((10, 0), (10, 30))
         }
         self.assertEqual(actual, expected)
         self.assertEqual(

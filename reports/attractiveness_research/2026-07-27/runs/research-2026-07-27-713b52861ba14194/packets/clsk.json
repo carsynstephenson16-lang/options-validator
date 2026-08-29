@@ -1,0 +1,67 @@
+{
+  "symbol": "CLSK",
+  "news_summary": "CleanSpark's dominant story since late July 2026 is a pivot from pure bitcoin mining toward long-duration, contracted AI/HPC data-center leasing. On July 14, 2026, the company announced a 20-year triple-net infrastructure lease (with two 5-year extension options) for 175MW of critical IT load at its Sandersville, Georgia campus with an unnamed high-investment-grade global technology company, expected to generate $6.6B of contracted revenue over the initial term ($11.6B if both extensions are exercised), with deliveries beginning Q4 2027; the same tenant also executed a letter of intent and exclusivity arrangement covering CleanSpark's entire Texas portfolio (718 acres, up to 885MW of secured/planned power capacity across its Sealy and Brazoria campuses). In its July 2026 operational update (released August 5, 2026), CleanSpark reported 586 BTC produced in July (4,310 BTC year-to-date for calendar 2026), 50 EH/s operational hashrate, 230,507 miners deployed, and total bitcoin holdings of 13,931 BTC as of July 31, 2026, on 1.8GW of power under contract (808MW utilized). On August 6, 2026, CleanSpark reported Q3 FY2026 results (quarter ended June 30, 2026): revenue of $138.0 million, down 30.5% year over year; a net loss of $239.8 million ($0.89/share); adjusted EBITDA of negative $113.0 million versus positive $377.7 million a year earlier; cash of $202.6 million; bitcoin holdings (fair value) of $814.9 million; and total assets of $2.7 billion. Management stated the equity portion of the Sandersville project has been fully funded and long-lead equipment has been prepaid to meet the delivery schedule.",
+  "sentiment": "bull",
+  "catalysts": [
+    {
+      "id": "clsk-sandersville-lease",
+      "what": "Signed a 20-year triple-net infrastructure lease (two 5-year extension options) for 175MW of critical IT load at its Sandersville, GA campus with an unnamed high-investment-grade global technology company; $6.6B of contracted revenue expected over the initial term ($11.6B with both extensions exercised), deliveries expected to begin Q4 2027",
+      "date": "2026-07-14",
+      "confirmed": true,
+      "source": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Secures-Twenty-Year-Lease-with-High-Investment-Grade-Global-Technology-Company-for-Data-Center-in-Sandersville-Georgia/default.aspx"
+    },
+    {
+      "id": "clsk-texas-loi",
+      "what": "The Sandersville lease tenant also executed a letter of intent and exclusivity arrangement covering CleanSpark's entire Texas portfolio (718 acres, up to 885MW of secured and planned power capacity across the Sealy and Brazoria campuses)",
+      "date": "2026-07-14",
+      "confirmed": true,
+      "source": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Secures-Twenty-Year-Lease-with-High-Investment-Grade-Global-Technology-Company-for-Data-Center-in-Sandersville-Georgia/default.aspx"
+    },
+    {
+      "id": "clsk-q3fy26-results",
+      "what": "Q3 FY2026 results (quarter ended June 30, 2026): revenue $138.0M (down 30.5% YoY from $198.6M); net loss $239.8M ($0.89/share); adjusted EBITDA -$113.0M vs +$377.7M a year earlier; cash $202.6M; bitcoin holdings (fair value) $814.9M; total assets $2.7B; equity portion of the Sandersville project fully funded, long-lead equipment prepaid",
+      "date": "2026-08-06",
+      "confirmed": true,
+      "source": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Reports-Third-Fiscal-Quarter-2026-Results/default.aspx"
+    },
+    {
+      "id": "clsk-july-operational-update",
+      "what": "July 2026 operational update: 586 BTC produced in July (4,310 BTC year-to-date for calendar 2026); operational hashrate 50 EH/s (average 38.6 EH/s); 230,507 miners deployed, 16.07 J/TH peak fleet efficiency; total bitcoin holdings 13,931 BTC as of July 31, 2026; 1.8GW of power under contract (808MW utilized)",
+      "date": "2026-08-05",
+      "confirmed": true,
+      "source": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Releases-July-2026-Operational-Update/default.aspx"
+    }
+  ],
+  "move_thesis": "CleanSpark's investment case is pivoting from pure bitcoin-mining economics toward long-duration, high-investment-grade-backed data-center leasing: the July 14, 2026 Sandersville lease locks in $6.6B-$11.6B of contracted, high-margin revenue starting Q4 2027, and the accompanying Texas letter of intent signals a much larger relationship could follow across CleanSpark's 885MW Texas power portfolio. That optionality is being built while the core mining business is under real pressure -- Q3 FY2026 revenue fell 30.5% year over year and the company posted a $239.8M net loss with negative adjusted EBITDA -- so the near-term stock story depends on the market crediting the multi-year contracted cash flows (and management's stated full funding of the Sandersville equity commitment) over current bitcoin-mining margin compression. Sentiment is read as bull given the scale and duration of the newly contracted revenue relative to CleanSpark's existing size, while the weak quarterly mining financials remain a live offsetting risk.",
+  "sources": [
+    {
+      "url": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Secures-Twenty-Year-Lease-with-High-Investment-Grade-Global-Technology-Company-for-Data-Center-in-Sandersville-Georgia/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (July 14, 2026) but no time-of-day or timezone in the extracted content.",
+      "retrieved_at_utc": "2026-08-15T17:41:00Z"
+    },
+    {
+      "url": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Reports-Third-Fiscal-Quarter-2026-Results/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (August 6, 2026) but no time-of-day or timezone in the extracted content.",
+      "retrieved_at_utc": "2026-08-15T17:40:00Z"
+    },
+    {
+      "url": "https://investors.cleanspark.com/news/news-details/2026/CleanSpark-Releases-July-2026-Operational-Update/default.aspx",
+      "source_tier": "issuer_ir",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Fetched IR page shows the release date (August 5, 2026) but no time-of-day or timezone in the extracted content.",
+      "retrieved_at_utc": "2026-08-15T17:23:00Z"
+    },
+    {
+      "url": "https://www.prnewswire.com/news-releases/cleanspark-reports-third-fiscal-quarter-2026-results-302845377.html",
+      "source_tier": "secondary",
+      "published_at": null,
+      "publication_time_unknown_rationale": "Wire-service distribution of the August 6, 2026 CleanSpark release; extracted content shows the date but not a specific time-of-day/timezone.",
+      "retrieved_at_utc": "2026-08-15T17:19:00Z"
+    }
+  ],
+  "claims": []
+}

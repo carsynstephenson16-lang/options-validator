@@ -1,0 +1,23 @@
+{
+  "captured_at_et": "2026-08-21T15:47:09.562487-04:00",
+  "captured_at_utc": "2026-08-21T19:47:09.562487+00:00",
+  "code_sha": "accd165bd2a7aeacf8ff6f1630d0b3b815b39703",
+  "config_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "force": false,
+  "invocation_source": "launchd",
+  "manifest_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_path": "reports/schwab_chains/2026-08-21/manifest.json",
+  "names": {
+    "CEG": {"path": ".cache/schwab_chains/CEG_2026-08-21.parquet", "status": "ok"},
+    "VST": {"path": ".cache/schwab_chains/VST_2026-08-21.parquet", "status": "ok"}
+  },
+  "overall_status": "ok",
+  "provider": "schwab",
+  "provider_version": "1.5.1",
+  "receipt_kind": "schwab_chain_capture/v1",
+  "scheduled_session_tag": "preclose",
+  "session": "2026-08-21",
+  "session_chain_convention": "preclose_snapshot_v1",
+  "timing_validation": "within 10min of the scheduled time",
+  "universe": ["CEG", "VST"]
+}

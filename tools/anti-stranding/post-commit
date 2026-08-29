@@ -1,0 +1,51 @@
+#!/bin/zsh
+# Auto-push the current branch after every commit, as BACKUP (never integration).
+# Installed machine-wide via `git config --global core.hooksPath ~/.githooks`,
+# so it covers Claude Code, Codex, and manual commits in every repo/worktree.
+# Design rules: never --force, never `git add`, never block a commit (all exits 0).
+exec >/dev/null 2>>"$HOME/.local/log/autopush.log"
+set +e
+
+repo=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+gitdir=$(git rev-parse --git-dir 2>/dev/null) || exit 0
+
+# Never act mid-rebase / cherry-pick / merge / bisect (fires per replayed commit).
+for f in rebase-merge rebase-apply CHERRY_PICK_HEAD MERGE_HEAD BISECT_LOG; do
+  [ -e "$gitdir/$f" ] && exit 0
+done
+
+# Detached HEAD: nothing to push; the daily reconciler rescues these.
+br=$(git symbolic-ref --quiet --short HEAD) || exit 0
+
+# main/deploy are owner territory; ops + research checkouts are never automated.
+case "$br" in main|master|deploy/*) exit 0;; esac
+case "$repo" in
+  "$HOME/options-validator-ops"|"$HOME/options-validator-research") exit 0;;
+esac
+
+git remote get-url origin >/dev/null 2>&1 || exit 0
+
+# Ownership gate: this hook is GLOBAL, so it must never publish to an origin
+# the owner doesn't own (a cloned upstream where the owner has collaborator
+# access would otherwise receive local commits). install.sh caches the GitHub
+# login; no cached login => no auto-push (fail closed, reconciler reports).
+gh_login=$(cat "$HOME/.config/repo-reconcile/gh-login" 2>/dev/null)
+[ -n "$gh_login" ] || exit 0
+[ -r "$HOME/bin/anti-stranding-lib.sh" ] || exit 0
+source "$HOME/bin/anti-stranding-lib.sh" || exit 0
+anti_stranding_remote_owner_ok "$repo" "$gh_login" || exit 0
+
+# Secret scan of the new commit before anything leaves the machine (public repos).
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks git --no-banner --log-opts="-1" "$repo" >/dev/null 2>&1; then
+    echo "$(date -Iseconds) BLOCKED push $repo $br: gitleaks hit on last commit"
+    exit 0
+  fi
+fi
+
+# Backgrounded so the commit never waits on the network; plain push, never
+# forced. nohup, not setsid: setsid is not a standard macOS executable.
+( nohup git -C "$repo" push --quiet origin "refs/heads/$br:refs/heads/$br" \
+    </dev/null >/dev/null 2>&1 \
+  || echo "$(date -Iseconds) push FAILED $repo $br (diverged? reconciler will report)" >&2 ) &
+exit 0
