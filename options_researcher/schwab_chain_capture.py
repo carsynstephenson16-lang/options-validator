@@ -32,6 +32,12 @@ from options_researcher.schwab_auth_failure import (
     expired_auth_line,
     is_expired_refresh_token_error,
 )
+from options_researcher.schwab_quote_age_report import (
+    SKIP_NOTE_PREFIX as QUOTE_AGE_SKIP_NOTE_PREFIX,
+)
+from options_researcher.schwab_quote_age_report import (
+    write_quote_age_report,
+)
 from research.facts import append_fact
 from research.hashing import config_hash, sha256_file
 from tools.schwab_chain_manifest import (
@@ -351,6 +357,25 @@ def capture(
             base_dir=FACTS_DIR,
             dedupe_prefix=fact_dedupe_prefix,
         )
+        # Brief 32: descriptive quote-age sidecar, complete-package path only.
+        # FAIL-SOFT BY CONSTRUCTION -- this runs after the manifest, receipt,
+        # verification, and fact are already durable, and its failure must be
+        # incapable of changing the capture's exit code or any of those bytes.
+        # The note prefix is deliberately distinct from the four anchored
+        # `^schwab_chain_capture <label>:` classifications the wrapper greps,
+        # so a chronically failing report stays greppable instead of being
+        # misfiled as a capture failure (or hidden entirely).
+        try:
+            write_quote_age_report(
+                session=session,
+                symbols=names,
+                chain_dir=chain_dir,
+                reports_dir=reports_dir,
+                receipt_filename=receipt_filename,
+                manifest_hash=manifest_hash,
+            )
+        except Exception as exc:
+            print(f"{QUOTE_AGE_SKIP_NOTE_PREFIX} {type(exc).__name__}: {exc}")
         print(f"schwab_chain_capture complete: {len(names)}/{len(names)} {receipt_path}")
         return 0, receipt
     failed = [symbol for symbol, record in records.items() if record["status"] != "ok"]
