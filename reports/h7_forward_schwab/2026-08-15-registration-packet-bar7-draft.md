@@ -49,20 +49,16 @@ count.
 | 4 | **S1 — three consecutive verifying trading sessions** (§7 of `docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md`, ratified via owner decision D-4/menu item 3, sub-fork **3a**) | **CLEARED BY OWNER OVERRIDE — not by the observed streak (2026-08-23; verified 2026-08-29).** Three separate things happened; keeping them apart matters. **(i) 3a landed.** `invocation_source` is present on `origin/main` in `options_researcher/schwab_chain_capture.py`, `data/ritual_authority.py`, `tools/job_health_digest.py` and four test modules; introduced by `ef69c94` (2026-08-15 13:10 ET), merged via PR #50 (`9e3e304`, 2026-08-15). **(ii) Recomputed arithmetic (see §1).** 3a landed on a Saturday, which is not an XNYS session, so the three-session projection is unchanged from the 2026-08-15 estimate: Mon 2026-08-17 → Wed **2026-08-19**. **(iii) The streak itself never completed.** The first tracked preclose receipt carrying the field is `reports/schwab_chains/2026-08-19/preclose.json` (`invocation_source: "launchd"`), then 2026-08-20; **2026-08-21 has no tracked preclose receipt**, so the run stopped at 2 of 3. The owner then **overruled the streak bar in-session 2026-08-23**, recorded on main in `data/ritual_authority.py` beside `exact_session_source_active=True` (commit `2e7eb3e`): *"S1's 3-session streak bar is overruled … Evidence at flip time: clean launchd receipts 08-19 and 08-20 (streak 2 of 3); the 08-21 gap was a network outage, not a source defect."* **Not re-run for this refresh:** spec §7 condition 1 (executing `tools/schwab_chain_manifest.verify_session` across a span) and condition 5 (capturing `launchctl list` verbatim). This row is therefore cleared **by owner disposition**, not by the honesty bar being satisfied as written. **The override is now optional, though.** Four consecutive tracked preclose receipts carrying `invocation_source: "launchd"` exist for 2026-08-24 / 25 / 26 / 27, so conditions 1 and 5 could be satisfied on that span for the cost of one `verify_session` run plus one `launchctl list` capture — the owner can retire the override and clear this row on its own terms rather than rely on a waiver. | `git grep -l invocation_source origin/main -- '*.py'`; `git log -S invocation_source origin/main -- '*.py'`; `git show origin/main:data/ritual_authority.py`; `git ls-tree -r --name-only origin/main -- reports/schwab_chains/` |
 | 5 | **Fresh feasibility receipt at current config** (named as a remaining precondition by §4's registration-mechanics note; never tracked in this table before 2026-08-29) | **NOT MET.** Every variant receipt this packet cites was written at `baseline_config_hash 031e711a…`. `config_hash()` on `origin/main` @ `4790cba` is now **`b86b3188…`** — five unrelated constants moved (§8a, F8). The review that measured the drift verified that no H7 entry-stack or fill-realism constant changed, so this is not a silent redefinition of the strategy; but the receipts no longer reproduce against main's config by their own `write_receipt` check. **Whether a re-run at current config is required, or the drift is waived on the strength of that verification, is an owner call.** Nothing in this packet decides it. | `uv run python -c "from research.hashing import config_hash; print(config_hash())"` → `b86b3188…`; `V9_LANE_A_OR_COHORT9.json` `baseline_config_hash` → `031e711a…` |
 | 6 | **Owner final go** — registration through the guarded door, plus the still-blank OD-3 namespace line from `reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` ("`OD-3 2026-__-__: future H7 paper observations MUST USE NEW NAMESPACE h7-forward-schwab-v1`" — currently `[NOT TYPED / NOT AUTHORIZED]`), and (separately, see §4) explicit confirmation of which entry-rule variant is being frozen | **NOT MET (re-verified 2026-08-29).** Owner has typed the loss bar (7) and the drill disposition (B) in `reports/2026-08-14-owner-answers-decision-menu.md`. Of this row's three sub-items, **one is answered and two are not.** (a) **Entry-rule variant — ANSWERED 2026-08-15:** ruling 10 of `reports/2026-08-15-owner-rulings.md` records *"Start it, shortfall in writing"* — configuration **V0**, the current registered rule unchanged, loss bar 7, with the explicit starvation pre-acceptance. That selection is transcribed in §4 and is not re-asked anywhere in this packet. (b) **OD-3 namespace line — STILL BLANK:** on `origin/main`, `reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` still carries the un-typed template `OD-3 2026-__-__: …`. (c) **Final go — NOT GIVEN:** nothing has been registered through a guarded door, and §6 is unsigned. | `git show origin/main:reports/2026-08-15-owner-rulings.md` (ruling 10); `git show origin/main:reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` |
-| 7 | **Quote-age gate commitment recorded in registration text** (not a registration blocker — a forward obligation created BY registering) | **Not a gate on this registration.** A descriptive daily quote-age sidecar report is **implemented but not yet merged**: brief 32 rev 4 (HANDED OFF 2026-08-28) was implemented 2026-08-29 as `options_researcher/schwab_quote_age_report.py` on branch `claude/brief-32-quote-age-report` @ `f828e5e` — **born-draft PR #131, adversarial review pending; not on `origin/main`**. The `"display_only": true` / `"verdict_eligible": false` pair, the absence of a threshold, and the no-GO/NO_GO-effect rule are emitted by that implementation and test-enforced there, but remain **unmerged claims until PR #131 lands**. Owner ruled 2026-08-28 ("Report now, gate later"): the BLOCKING gate + owner-typed threshold are a binding requirement of the H7 Schwab registration **arc**, triggered by the registration event itself — explicitly NOT satisfied by merging PR #71's caller of `h7_schwab_data_gate.evaluate()` (brief 32 round-3 finding F2). The registration `reason` text must record this commitment and cite the evidence: worst SELECTABLE quote age 0.61–10.38 min across 7 timestamped sessions (10-min block ⇒ 1/7 NO_GO; 15/20-min ⇒ 0/7; n=7, Reviewer-measured 2026-08-28, not owner-typed). | `docs/superpowers/plans/2026-08-28-32-schwab-quote-age-gate-codex-brief.md` ("Recorded for the H7 registration arc"); `reports/2026-08-28-deferred-closeout-rulings.md` ruling 1 + correction addendum. **Both documents live only on `claude/deferred-closeout-2026-08-28` (PR #124, still OPEN and draft as of 2026-08-29) — neither is on `origin/main` yet.** |
+| 7 | **Quote-age gate commitment recorded in registration text** (not a registration blocker — a forward obligation created BY registering) | **Not a gate on this registration.** A descriptive daily quote-age sidecar report is **implemented, adversarially reviewed (APPROVE + one fix round), and MERGED to `origin/main`**: brief 32 rev 4 landed as `options_researcher/schwab_quote_age_report.py` via PR #131 (merged 2026-08-29, main @ `86e8ba6`). The `"display_only": true` / `"verdict_eligible": false` pair, the absence of a threshold, and the no-GO/NO_GO-effect rule are emitted and test-enforced on main; the sidecar runs from the next chain capture. Owner ruled 2026-08-28 ("Report now, gate later"): the BLOCKING gate + owner-typed threshold are a binding requirement of the H7 Schwab registration **arc**, triggered by the registration event itself — explicitly NOT satisfied by merging PR #71's caller of `h7_schwab_data_gate.evaluate()` (brief 32 round-3 finding F2). The registration `reason` text must record this commitment and cite the evidence: worst SELECTABLE quote age 0.61–10.38 min across 7 timestamped sessions (10-min block ⇒ 1/7 NO_GO; 15/20-min ⇒ 0/7; n=7, Reviewer-measured 2026-08-28, not owner-typed). | `docs/superpowers/plans/2026-08-28-32-schwab-quote-age-gate-codex-brief.md` ("Recorded for the H7 registration arc"); `reports/2026-08-28-deferred-closeout-rulings.md` ruling 1 + correction addendum. **Both documents landed on `origin/main` via PR #124 (merged 2026-08-29, `316b54f`).** |
 
-Evidence caveat: the variant receipts cited in §2a/§3a/§3b/§5 currently exist
-only on PR #102 (wt/brief09-variant-menu-0814, additive-only, conflict-free).
-Landing #102 before or alongside this ruling is a packet-integrity
-prerequisite; the numbers are otherwise branch-only evidence. **Verified
-2026-08-29: this applies to the WHOLE evidence base, not just the newest
-receipt** — `reports/h7_forward_schwab/variant-receipts/` contains **0** files
-on `origin/main` and **38** on the PR #102 branch, and even the
-`2026-08-14-entry-redesign-variant-menu.md` menu document is absent from main.
-That includes `V14_REGISTERED_COHORT_9.json`, the receipt cited inside §4's
-owner-ratified pre-accept block for the figure of 3. Nothing in §4 is edited
-here; the point is only that its citation resolves on PR #102's branch, not on
-main.
+Evidence status (updated 2026-08-29 evening): **PR #102 is MERGED** (squash,
+main @ `7ddc2ef`) — the packet-integrity prerequisite recorded in earlier
+revisions of this caveat is satisfied. All 38 variant receipts, the
+`2026-08-14-entry-redesign-variant-menu.md` menu document, and
+`V14_REGISTERED_COHORT_9.json` (the receipt cited inside §4's owner-ratified
+pre-accept block for the figure of 3) now resolve on `origin/main`. Verified:
+`git cat-file -e origin/main:reports/h7_forward_schwab/variant-receipts/comparable_70_common/V9_LANE_A_OR_COHORT9.json`
+exits 0. Nothing in §4 is edited here.
 
 Reconciliation note (2026-08-29): this branch previously carried the stale
 2026-08-15 00:38 ET draft of this packet, which never saw the 2026-08-15
@@ -193,14 +189,14 @@ applied, and offered an Inference of ≈7–8 instead. **That receipt now exists
 — `reports/h7_forward_schwab/variant-receipts/comparable_70_common/V9_LANE_A_OR_COHORT9.json`
 plus its write-up `reports/h7_forward_schwab/2026-08-15-v9-cohort9-occupancy-followup.md`
 — and it measures **7** occupancy-constrained entries (42-session lockout) or
-**11** (21-session alternate). **Provenance: receipt on PR #102
-(`wt/brief09-variant-menu-0814`), merge pending — not yet on `origin/main`.**
+**11** (21-session alternate). **Provenance: receipt on `origin/main` — PR #102
+(`wt/brief09-variant-menu-0814`) merged 2026-08-29, `7ddc2ef`.**
 The measured 7 sits inside the prior ≈7–8 Inference band: better-evidenced,
 same conclusion, still short of the 14-entry bar. The numbers below are laid
 out so the gap between "what the menu measured" and "what this registration
 would actually run against" stays visible rather than papered over.
 
-### 3a. Menu-computed numbers (exact, receipt-bound — every receipt below is on PR #102, merge pending, not on `origin/main`)
+### 3a. Menu-computed numbers (exact, receipt-bound — every receipt below is on `origin/main`; PR #102 merged 2026-08-29, `7ddc2ef`)
 
 | Configuration | Universe | Unconstrained entries / window | 95% CI | Occupancy-constrained (42-session hold, matches `H7_CLOSE_AT_DTE=30`) | Source |
 |---|---|---|---|---|---|
@@ -288,7 +284,7 @@ entry logic: 70 ÷ 42 sessions-per-position × 9 names ≈ **15**. So even a
 maximally permissive redesign on the registered cohort cannot structurally
 clear much past 15 entries in 70 sessions — only marginally above the
 14-entry bar (the menu doc's own wording is "the ceiling (~15, plus ~3)"), but the *measured* V9-on-cohort-9 figure (**7**, receipt on
-PR #102, merge pending) sits far below that ceiling, meaning firing frequency,
+`origin/main` via PR #102) sits far below that ceiling, meaning firing frequency,
 not the schedule, is what would need to close the gap.
 
 ### 3c. Conclusion against the 14-entry bar
@@ -297,7 +293,7 @@ not the schedule, is what would need to close the gap.
 |---|---|---|
 | V0/current rule, 9-name cohort, occupancy-constrained | 3 (menu-computed) | **No** |
 | V9, 15-name universe, occupancy-constrained | 10 (menu-computed) | **No** |
-| **V9, 9-name cohort, occupancy-constrained (42-session lockout)** | **7** (measured; receipt on PR #102, merge pending) | **No** |
+| **V9, 9-name cohort, occupancy-constrained (42-session lockout)** | **7** (measured; receipt on `origin/main` via PR #102) | **No** |
 | V9, 9-name cohort, occupancy-constrained (21-session alternate) | 11 (measured; same receipt) | **No** |
 
 **Every configuration this packet can price fails the 14-entry pass
@@ -367,14 +363,14 @@ guarded door, with the owner's §6 sign-off — per steps 5–9 below.
 | Feasibility bar | 14 (= 2×7) | Menu arithmetic rule (`docs/superpowers/2026-07-24-registration-feasibility-gate.md`), applied to the owner-typed number |
 | Window length | 70 sessions | **Inherited-registered** (`ledger/h7_forward/events.jsonl` seq 0) |
 | Cohort (9 names) | AMD/AMZN/CEG/ET/MSFT/NOW/PLTR/TEM/VST | **Inherited-registered** (same event, `universe.included`) |
-| V0/cohort-9 occupancy-constrained entries | 3 | **Menu-computed** (`V14_REGISTERED_COHORT_9.json`); **receipt on PR #102, merge pending — not on `origin/main`.** This is the figure §4's owner-ratified block cites |
-| V9/15-name occupancy-constrained entries | 10 | **Menu-computed** (`V9_LANE_A_OR.json`); **receipt on PR #102, merge pending — not on `origin/main`** |
-| V0/15-name occupancy-constrained entries | 3 | **Menu-computed** (`V0_BASELINE.json`); **receipt on PR #102, merge pending — not on `origin/main`** |
+| V0/cohort-9 occupancy-constrained entries | 3 | **Menu-computed** (`V14_REGISTERED_COHORT_9.json`); **receipt on `origin/main` (PR #102 merged 2026-08-29, `7ddc2ef`).** This is the figure §4's owner-ratified block cites |
+| V9/15-name occupancy-constrained entries | 10 | **Menu-computed** (`V9_LANE_A_OR.json`); **receipt on `origin/main` (PR #102 merged 2026-08-29, `7ddc2ef`)** |
+| V0/15-name occupancy-constrained entries | 3 | **Menu-computed** (`V0_BASELINE.json`); **receipt on `origin/main` (PR #102 merged 2026-08-29, `7ddc2ef`)** |
 | V9/cohort-9 unconstrained entries — superseded derivation | 79 | **Derived (superseded)** — arithmetic on the 15-name panel's per-symbol data; the measured cohort-9 run gives 80 (see F9 note in §3b) |
-| V9/cohort-9 unconstrained entries | 80 | **Tool-computed** — `V9_LANE_A_OR_COHORT9.json`; **receipt on PR #102, merge pending** |
-| V9/cohort-9 occupancy-constrained entries (42-session lockout) | **7** | **Tool-computed** — `V9_LANE_A_OR_COHORT9.json` (`occupancy_constrained_entries["42"]`); **receipt on PR #102, merge pending**. Supersedes the former ≈7–8 Inference, which it falls inside |
-| V9/cohort-9 occupancy-constrained entries (21-session alternate) | 11 | **Tool-computed** — same receipt, `occupancy_constrained_entries["21"]`; **PR #102, merge pending** |
-| Number of variants measured (multiple-testing disclosure) | **19** | **Tool-computed** — V0–V17 = 18 in `2026-08-14-entry-redesign-variant-menu.md`, plus the 2026-08-15 follow-up's 19th variant `V9_LANE_A_OR_COHORT9` (`variant_identity_hash 6e47a2cb…`), which is a distinct measured configuration and is counted as one. **All 38 receipt files and the menu document itself are on PR #102, merge pending — `reports/h7_forward_schwab/variant-receipts/` is empty on `origin/main`** |
+| V9/cohort-9 unconstrained entries | 80 | **Tool-computed** — `V9_LANE_A_OR_COHORT9.json`; **receipt on `origin/main` (PR #102 merged)** |
+| V9/cohort-9 occupancy-constrained entries (42-session lockout) | **7** | **Tool-computed** — `V9_LANE_A_OR_COHORT9.json` (`occupancy_constrained_entries["42"]`); **receipt on `origin/main` (PR #102 merged)**. Supersedes the former ≈7–8 Inference, which it falls inside |
+| V9/cohort-9 occupancy-constrained entries (21-session alternate) | 11 | **Tool-computed** — same receipt, `occupancy_constrained_entries["21"]`; **on `origin/main` (PR #102 merged)** |
+| Number of variants measured (multiple-testing disclosure) | **19** | **Tool-computed** — V0–V17 = 18 in `2026-08-14-entry-redesign-variant-menu.md`, plus the 2026-08-15 follow-up's 19th variant `V9_LANE_A_OR_COHORT9` (`variant_identity_hash 6e47a2cb…`), which is a distinct measured configuration and is counted as one. **All 38 receipt files and the menu document landed on `origin/main` via PR #102 (merged 2026-08-29, `7ddc2ef`)** |
 | All H7a/b/c structure, cost, liquidity, and exit constants | unchanged | **Inherited-registered** (`ledger/h7_forward/events.jsonl` seq 0, `frozen.stage456_parameters`) |
 | Entry-rule variant to freeze | **V0 — current rule, unchanged** | **Owner-selected in-session 2026-08-15** — `reports/2026-08-15-owner-rulings.md` ruling 10; transcribed in §4 |
 | S1 earliest completion | 2026-08-19 (projected; **never met** — the bar was owner-overridden 2026-08-23, §0 row 4) | Owner's own ruling record + trading-calendar arithmetic shown in §1; override recorded in `data/ritual_authority.py` (`2e7eb3e`) |
