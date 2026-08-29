@@ -1285,6 +1285,133 @@ class FillAndPositionTests(unittest.TestCase):
                 ],
             )
 
+    def test_production_timing_cancels_on_the_next_run_not_the_one_in_progress(self):
+        """NEW-C: the scheduled ritual evaluates the PRIOR completed session, so a
+        coverage change first seen on day D cancels in day D+1's run, and day D's
+        published output stays byte-stable. This is the disclosed cancellation lag.
+        """
+        from unittest import mock
+
+        identity = {
+            "symbol": "VST",
+            "shares": 100,
+            "declared_shares": 100,
+            "cost_basis": 100.0,
+            "acquired": "2025-01-02",
+        }
+        identity["source_row_hash"] = tracker._identity_hash(identity)
+        opening = candidate(
+            "VST:cc:lag",
+            lane="cc",
+            side="sell",
+            risk_kind="FROZEN_100_SHARE_COST_BASIS",
+            risk_value=10_000.0,
+            coverage=identity,
+        )
+        record = {
+            "schema": "pick_tracker_session/v1",
+            "as_of": "2026-08-25",
+            "arms": {
+                arm: {
+                    "state": "READY",
+                    "entries": [{"slot": "VST:cc", "candidate": opening}],
+                    "restrikes": [],
+                    "exits": [],
+                    "current_slots": {"VST:cc": opening},
+                }
+                for arm in ("frozen_baseline", "context_lane")
+            },
+        }
+        holdings = pd.DataFrame(
+            [{"symbol": "VST", "shares": 100, "cost_basis": 100.0, "acquired": "2025-01-02"}]
+        )
+        positions = pd.DataFrame(
+            columns=(
+                "id",
+                "structure",
+                "symbol",
+                "right",
+                "strike",
+                "expiration",
+                "contracts",
+                "entry_price",
+            )
+        )
+
+        def calendar(start: str, end: str) -> list[str]:
+            cursor, stop, days = date.fromisoformat(start), date.fromisoformat(end), []
+            while cursor <= stop:
+                if cursor.weekday() < 5:
+                    days.append(cursor.isoformat())
+                cursor += timedelta(days=1)
+            return days
+
+        sessions = calendar("2026-08-25", "2026-08-27")
+
+        def ritual_run(as_of: str, machine_session: str) -> None:
+            """One scheduled run: the machine date is the day AFTER the session."""
+            with (
+                mock.patch(
+                    "options_researcher.schwab_chain_view.verified_sessions",
+                    return_value=(sessions, []),
+                ),
+                mock.patch("options_researcher.schwab_chain_view.load_chain", return_value=chain()),
+                mock.patch("data.cache_runner.trading_days", side_effect=calendar),
+                mock.patch(
+                    "options_researcher.portfolio.load_holdings",
+                    side_effect=lambda: holdings.copy(),
+                ),
+                mock.patch("options_researcher.portfolio.load_positions", return_value=positions),
+                mock.patch.object(
+                    tracker,
+                    "_current_new_york_session",
+                    return_value=machine_session,
+                ),
+            ):
+                tracker.evaluate_cli(as_of)
+
+        def day_d_artifacts(directory: Path) -> dict[str, bytes]:
+            return {
+                path.name: path.read_bytes()
+                for path in sorted(directory.iterdir())
+                if path.is_file()
+            }
+
+        with tempfile.TemporaryDirectory() as tmp, chdir(tmp):
+            journal = Path("reports/pick_tracker/dryrun/events.jsonl")
+            journal.parent.mkdir(parents=True)
+            journal.write_bytes(tracker._canonical_bytes(record) + b"\n")
+
+            # Day D: coverage is already gone when the run starts, but the run
+            # evaluates the prior completed session (2026-08-26).
+            holdings.loc[0, "shares"] = 0
+            ritual_run("2026-08-26", "2026-08-27")
+
+            day_d = Path("reports/pick_tracker/dryrun/2026-08-26")
+            day_d_bytes = day_d_artifacts(day_d)
+            self.assertEqual(
+                json.loads(day_d_bytes["outcomes.json"])["outcomes"][0]["status"], "OPEN"
+            )
+            observation = json.loads(day_d_bytes["coverage_observations.json"])["observations"][0]
+            self.assertEqual(observation["observed_session"], "2026-08-27")
+            self.assertFalse(observation["matches"])
+
+            # Day D+1: the day-D observation is finally in range for session D.
+            ritual_run("2026-08-27", "2026-08-28")
+
+            day_d_plus_one = json.loads(
+                Path("reports/pick_tracker/dryrun/2026-08-27/outcomes.json").read_text()
+            )["outcomes"][0]
+            self.assertEqual(day_d_plus_one["status"], "CANCELLED_COVERAGE_CHANGED")
+            self.assertEqual(
+                day_d_plus_one["status_events"],
+                [
+                    {"session": "2026-08-26", "status": "OPEN"},
+                    {"session": "2026-08-27", "status": "CANCELLED_COVERAGE_CHANGED"},
+                ],
+            )
+            self.assertEqual(day_d_artifacts(day_d), day_d_bytes)
+
     def test_mark_gap_and_coverage_pnl_exclusion(self):
         filled = tracker.resolve_fill(
             candidate("VST:long_call:one"),
@@ -1709,6 +1836,13 @@ class ScoreboardTests(unittest.TestCase):
         board = tracker.build_scoreboard([], weekly_cohorts=[])
         self.assertIn("A2-v1 (ledger seq 19/27) retains interpretive authority", board["header"])
         self.assertIn("effective sample is far smaller than the row count", board["header"])
+        # NEW-C disclosure: the machine-date binding costs one ritual run of lag.
+        self.assertIn("CANCELLATION LAG", board["header"])
+        self.assertIn(
+            "cancelled in the NEXT daily run rather than the one in progress",
+            board["header"],
+        )
+        self.assertIn(str(board["header"]), tracker._scoreboard_markdown(board))
 
     def test_markdown_carries_wp_d_cancellations_cohorts_and_scoreboard_context(self):
         outcomes = [
