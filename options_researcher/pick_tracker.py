@@ -64,7 +64,10 @@ _HEADER = (
     "(ledger seq 19/27) retains interpretive authority for board-level "
     "outcome questions; CONCENTRATION: picks are drawn from one 18-name "
     "AI-infrastructure board and are correlated — the effective sample is "
-    "far smaller than the row count."
+    "far smaller than the row count; CANCELLATION LAG: a coverage change is "
+    "recorded on the day it is first seen, so the affected pick is cancelled "
+    "in the NEXT daily run rather than the one in progress, and an "
+    "already-published session is never rewritten."
 )
 
 
@@ -736,9 +739,11 @@ class _CausalCoverageValidator:
         if available:
             latest = max(available, key=lambda row: str(row["observed_session"]))
             return bool(latest["matches"])
-        if session <= self.as_of:
-            return True
-        raise TrackerError(f"coverage observation was not available for {session}")
+        # ``session > self.as_of`` already raised above, so every session that
+        # reaches here is in range: no observation at or before it simply means
+        # coverage was never contradicted for that session yet. The former
+        # trailing raise was unreachable dead code (review finding NEW-C).
+        return True
 
     def observations(self) -> list[dict[str, object]]:
         return [copy.deepcopy(self._current[key]) for key in sorted(self._current)]

@@ -255,7 +255,10 @@ class DailyRitualProvenanceTests(unittest.TestCase):
         self.assertLess(conflict_branch, generic_branch)
         self.assertLess(generic_branch, generic_note)
         self.assertLess(generic_note, branch_end)
-        self.assertNotIn("exit ", evaluate_line[branch_start:branch_end])
+        # Word-boundary match: a bare ``exit`` (no trailing space) evades
+        # ``assertNotIn("exit ", ...)`` and would make the isolated evaluator
+        # fail the whole ritual (review finding NEW-A, 2026-08-27).
+        self.assertNotRegex(evaluate_line[branch_start:branch_end], r"\bexit\b")
         invocation = evaluate_line.split("2>&1", 1)[0]
         self.assertNotIn("--supersede-reason", invocation)
 

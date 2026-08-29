@@ -133,4 +133,13 @@ resets the streak.
 > are permanently excluded from any registered window; A2-v1 (ledger seq
 > 19/27) retains interpretive authority for board-level outcome questions;
 > CONCENTRATION: picks are drawn from one 18-name AI-infrastructure board and
-> are correlated — the effective sample is far smaller than the row count.
+> are correlated — the effective sample is far smaller than the row count;
+> CANCELLATION LAG: a coverage change is recorded on the day it is first seen,
+> so the affected pick is cancelled in the NEXT daily run rather than the one
+> in progress, and an already-published session is never rewritten.
+
+The `CANCELLATION LAG` clause was added 2026-08-28 (round-5 review finding
+NEW-C). Immutable-history split, accepted deliberately: artifacts already
+published under `reports/pick_tracker/dryrun/2026-08-27/` keep the earlier
+header permanently — append-only is the point — and the new wording applies
+from the next `as_of` forward. No supersede was issued for 08-27.
