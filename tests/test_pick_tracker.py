@@ -1155,6 +1155,146 @@ class FillAndPositionTests(unittest.TestCase):
                 hashlib.sha256(canonical_before["outcomes.json"]).hexdigest(),
             )
 
+    @staticmethod
+    def _supersede_outcomes(status: str) -> list[dict[str, object]]:
+        return [
+            {
+                "arm": "frozen_baseline",
+                "lane": "cc",
+                "decision_session": "2026-08-25",
+                "status": status,
+            }
+        ]
+
+    def _write_canonical_supersede_fixture(self, root: Path) -> Path:
+        destination = root / "dryrun/2026-08-27"
+        outcomes = self._supersede_outcomes("OPEN")
+        tracker._write_evaluation_reports(
+            destination,
+            as_of="2026-08-27",
+            outcomes=outcomes,
+            board=tracker.build_scoreboard(outcomes),
+            reports_root=root,
+        )
+        return destination
+
+    def test_second_distinct_supersede_is_refused_as_already_recorded(self):
+        """N3: one recorded supersede per session; a second DISTINCT one is refused.
+
+        Pinned current behavior, deliberately NOT changed here: the second
+        attempt's replacement artifacts are written by ``_immutable_write``
+        BEFORE the receipt check raises, so the refusal is not a no-op on disk
+        — a stray ``supersedes/<as_of>-<new_id>/`` directory is left behind.
+        What the guard does protect is the receipt, which is what
+        ``_active_evaluation_artifact`` resolves through: exactly one receipt
+        survives, so the first supersede stays the one active replacement.
+        Reordering the check is out of scope for this test (behavior pinning).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "reports/pick_tracker"
+            destination = self._write_canonical_supersede_fixture(root)
+            canonical_before = {
+                path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()
+            }
+
+            first_replacement = self._supersede_outcomes("SETTLED")
+            first_receipt = tracker._write_evaluation_reports(
+                destination,
+                as_of="2026-08-27",
+                outcomes=first_replacement,
+                board=tracker.build_scoreboard(first_replacement),
+                reports_root=root,
+                supersede_reason="late verified close became available",
+            )
+            self.assertIsInstance(first_receipt, Path)
+            receipts_before = {
+                path.name: path.read_bytes()
+                for path in (destination / "supersede-receipts").glob("*.json")
+            }
+            self.assertEqual(len(receipts_before), 1)
+
+            second_replacement = self._supersede_outcomes("CANCELLED_COVERAGE_CHANGED")
+            with self.assertRaisesRegex(tracker.TrackerConflict, "SUPERSEDE_ALREADY_RECORDED"):
+                tracker._write_evaluation_reports(
+                    destination,
+                    as_of="2026-08-27",
+                    outcomes=second_replacement,
+                    board=tracker.build_scoreboard(second_replacement),
+                    reports_root=root,
+                    supersede_reason="a second, different correction",
+                )
+
+            self.assertEqual(
+                {
+                    path.name: path.read_bytes()
+                    for path in (destination / "supersede-receipts").glob("*.json")
+                },
+                receipts_before,
+            )
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()},
+                canonical_before,
+            )
+            assert first_receipt is not None
+            active = tracker._active_evaluation_artifact(destination, "outcomes.json")
+            self.assertEqual(
+                active,
+                destination
+                / json.loads(first_receipt.read_text())["replacement_path"]
+                / "outcomes.json",
+            )
+            self.assertEqual(json.loads(active.read_text())["outcomes"], first_replacement)
+
+    def test_supersede_reason_without_conflict_is_refused_as_not_required(self):
+        """N3 sibling: a reason offered when nothing conflicts is a refusal, not a rewrite."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "reports/pick_tracker"
+            destination = self._write_canonical_supersede_fixture(root)
+            canonical_before = {
+                path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()
+            }
+            unchanged = self._supersede_outcomes("OPEN")
+            with self.assertRaisesRegex(tracker.TrackerError, "SUPERSEDE_NOT_REQUIRED"):
+                tracker._write_evaluation_reports(
+                    destination,
+                    as_of="2026-08-27",
+                    outcomes=unchanged,
+                    board=tracker.build_scoreboard(unchanged),
+                    reports_root=root,
+                    supersede_reason="nothing actually changed",
+                )
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()},
+                canonical_before,
+            )
+            self.assertFalse((destination / "supersede-receipts").exists())
+            self.assertFalse((destination / "supersedes").exists())
+
+    def test_blank_supersede_reason_is_refused_before_anything_is_written(self):
+        """N3 sibling: a whitespace-only reason cannot buy a supersede."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "reports/pick_tracker"
+            destination = self._write_canonical_supersede_fixture(root)
+            canonical_before = {
+                path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()
+            }
+            replacement = self._supersede_outcomes("SETTLED")
+            with self.assertRaisesRegex(tracker.TrackerError, "SUPERSEDE_REASON_REQUIRED"):
+                tracker._write_evaluation_reports(
+                    destination,
+                    as_of="2026-08-27",
+                    outcomes=replacement,
+                    board=tracker.build_scoreboard(replacement),
+                    reports_root=root,
+                    supersede_reason="   ",
+                )
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in destination.iterdir() if path.is_file()},
+                canonical_before,
+            )
+            self.assertFalse((destination / "supersede-receipts").exists())
+            self.assertFalse((destination / "supersedes").exists())
+
     def test_immutable_write_wraps_stale_temp_file_as_tracker_conflict(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "artifact.json"
