@@ -25,6 +25,11 @@ from options_researcher.robustness.statistics import holm_step_down
 
 RECONCILIATION_TOLERANCE = 1e-12
 BUCKET_COUNT = 3
+# A cohort smaller than one name per tercile bucket cannot form a top/bottom
+# split at all (A2_AMENDMENT_V1_1, ledger seq 27: "terciles of the available
+# names" for a partial board).  This is derived from BUCKET_COUNT, not an
+# independently invented number.
+MIN_TERCILE_COHORT_SIZE = BUCKET_COUNT
 PERMUTATION_COUNT = 5_000
 HOLM_ALPHA = 0.10
 COST_STRESS_MULTIPLIERS = (0.5, 1.0, 1.5)
@@ -360,13 +365,38 @@ def non_overlapping_inference_rows(
     arm: str | None = None,
     expected_symbols: Sequence[str] | None = None,
     decision_dates: Sequence[str] | None = None,
+    board_symbols_by_date: Mapping[str, Sequence[str]] | None = None,
     diagnostics: MutableMapping[str, int] | None = None,
 ) -> tuple[A2Outcome, ...]:
-    """Retain each ISO week's earliest complete, ex-ante non-overlapping board.
+    """Retain each ISO week's ex-ante non-overlapping candidate board.
 
     A spacing failure rejects the week's candidate rather than promoting a
     later board.  The strict comparison is intentional: an ex-ante maximum
     resolution on the next board's entry date is still overlapping.
+
+    Two selection modes, chosen by whether ``board_symbols_by_date`` is
+    supplied:
+
+    * ``board_symbols_by_date`` given (A2_AMENDMENT_V1_1, ledger seq 27, and
+      the 2026-08-15 breach/weekly-cohort amendment Definition 2.1): the
+      week's ONLY candidate is the earliest session whose ENTRY-TIME board
+      (the supplied per-date symbol set, independent of whether any row
+      later resolved) reaches :data:`MIN_TERCILE_COHORT_SIZE`.  Once chosen,
+      candidacy never moves to a later session even if that board's rows
+      turn out to be a partial or empty resolution -- an unresolvable or
+      undersized realized cohort SKIPS the week outright (counted), it is
+      never replaced.  A realized cohort spanning more than one entry date
+      is also skipped and counted separately, distinct from "no board at
+      all".  This is the outcome-blind path: candidate selection here never
+      inspects ``grouped`` (the realized rows) except to fetch the one
+      pre-chosen day's cohort.
+    * ``board_symbols_by_date`` omitted (legacy contract, retained for
+      existing pure-boundary callers/tests): a day's realized cohort is its
+      own completeness evidence, exactly as before, with one added guard
+      (Finding F7b / independent review 2026-08-30): a cohort smaller than
+      :data:`MIN_TERCILE_COHORT_SIZE` can never split into a top/bottom
+      tercile and is therefore never "complete", even when no
+      ``expected_symbols`` was supplied.
     """
 
     rows = validate_outcomes(outcomes, lane=lane, arm=arm)
@@ -386,6 +416,8 @@ def non_overlapping_inference_rows(
     observed_dates = set(grouped)
     if decision_dates is not None:
         observed_dates.update(_as_iso(value, "decision_date") for value in decision_dates)
+    if board_symbols_by_date is not None:
+        observed_dates.update(_as_iso(value, "decision_date") for value in board_symbols_by_date)
     weeks: dict[tuple[int, int], list[str]] = {}
     for decision_day in sorted(observed_dates):
         iso = date.fromisoformat(decision_day).isocalendar()
@@ -397,6 +429,45 @@ def non_overlapping_inference_rows(
 
     accepted: list[A2Outcome] = []
     prior_max: date | None = None
+
+    def accept(candidate_day: str, cohort: tuple[A2Outcome, ...], week_dates: list[str]) -> None:
+        nonlocal prior_max
+        entry = date.fromisoformat(cohort[0].entry_date)
+        if prior_max is not None and not prior_max < entry:
+            count("weeks_skipped_by_spacing")
+            return
+        accepted.extend(cohort)
+        if candidate_day != week_dates[0]:
+            count("accepted_board_not_first_session_of_week")
+        prior_max = max(date.fromisoformat(row.maximum_resolution_date) for row in cohort)
+
+    if board_symbols_by_date is not None:
+        for week_dates in weeks.values():
+            candidate_day = None
+            for decision_day in week_dates:
+                board = tuple(board_symbols_by_date.get(decision_day, ()))
+                if expected is not None:
+                    board = tuple(symbol for symbol in board if symbol in set(expected))
+                if len(board) >= MIN_TERCILE_COHORT_SIZE:
+                    candidate_day = decision_day
+                    break
+            if candidate_day is None:
+                count("weeks_without_complete_board")
+                continue
+            cohort = tuple(grouped.get(candidate_day, ()))
+            if not cohort:
+                count("weeks_skipped_unresolvable_board")
+                continue
+            entries = {row.entry_date for row in cohort}
+            if len(entries) != 1:
+                count("weeks_skipped_split_entry_date")
+                continue
+            if len(cohort) < MIN_TERCILE_COHORT_SIZE:
+                count("weeks_skipped_unresolvable_board")
+                continue
+            accept(candidate_day, cohort, week_dates)
+        return tuple(accepted)
+
     for week_dates in weeks.values():
         candidates: list[tuple[str, tuple[A2Outcome, ...]]] = []
         for decision_day in week_dates:
@@ -406,6 +477,7 @@ def non_overlapping_inference_rows(
             complete = (
                 bool(cohort)
                 and len(entries) == 1
+                and len(cohort) >= MIN_TERCILE_COHORT_SIZE
                 and (
                     expected is None
                     or (len(symbols) == len(expected) and set(symbols) == set(expected))
@@ -417,14 +489,7 @@ def non_overlapping_inference_rows(
             count("weeks_without_complete_board")
             continue
         candidate_day, cohort = candidates[0]
-        entry = date.fromisoformat(cohort[0].entry_date)
-        if prior_max is not None and not prior_max < entry:
-            count("weeks_skipped_by_spacing")
-            continue
-        accepted.extend(cohort)
-        if candidate_day != week_dates[0]:
-            count("accepted_board_not_first_session_of_week")
-        prior_max = max(date.fromisoformat(row.maximum_resolution_date) for row in cohort)
+        accept(candidate_day, cohort, week_dates)
     return tuple(accepted)
 
 
@@ -719,6 +784,7 @@ __all__ = [
     "HOLM_ALPHA",
     "LANE_ARMS",
     "LANE_COMPONENTS",
+    "MIN_TERCILE_COHORT_SIZE",
     "PERMUTATION_COUNT",
     "non_overlapping_inference_rows",
     "staggered_descriptive_rows",

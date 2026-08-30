@@ -283,6 +283,123 @@ class ViewSeparationTests(unittest.TestCase):
         )
 
 
+class EntryTimeBoardTests(unittest.TestCase):
+    """A2_AMENDMENT_V1_1 (ledger seq 27) + the 2026-08-15 breach/weekly-cohort
+    amendment Definition 2.1: the week's candidate is chosen from the
+    ENTRY-TIME board (independent of whether rows later resolved); a
+    resolution gap on the chosen day SKIPS the week rather than promoting a
+    later, fuller day.  Independent adversarial review 2026-08-30, findings
+    F1/F2/F7b/F7c.
+    """
+
+    @staticmethod
+    def _rows(
+        decision: str,
+        entry: str,
+        resolution: str,
+        maximum_resolution: str,
+        symbols: tuple[str, ...],
+    ) -> tuple[A2Outcome, ...]:
+        return tuple(
+            _outcome(
+                symbol=symbol,
+                decision_date=decision,
+                entry_date=entry,
+                resolution_date=resolution,
+                maximum_resolution_date=maximum_resolution,
+            )
+            for symbol in symbols
+        )
+
+    def test_resolution_gap_on_the_chosen_day_skips_the_week_not_promotes_a_later_day(self):
+        # F2: day1's entry-time board is the full six names, but only two of
+        # them ever resolved (a post-entry data gap) -- below
+        # MIN_TERCILE_COHORT_SIZE.  day2, later in the SAME ISO week, has a
+        # fully resolved six-name board.  The week must be skipped outright:
+        # day2 may never be substituted for day1's candidacy.
+        rows = self._rows(
+            "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10", ("AAA", "BBB")
+        ) + self._rows(
+            "2025-01-08", "2025-01-09", "2025-01-10", "2025-01-13", ("AAA", "BBB", "CCC")
+        )
+        board_symbols_by_date = {
+            "2025-01-06": ("AAA", "BBB", "CCC"),
+            "2025-01-08": ("AAA", "BBB", "CCC"),
+        }
+        diagnostics: Counter[str] = Counter()
+        accepted = non_overlapping_inference_rows(
+            rows,
+            board_symbols_by_date=board_symbols_by_date,
+            decision_dates=("2025-01-06", "2025-01-08"),
+            diagnostics=diagnostics,
+        )
+        self.assertEqual(accepted, ())
+        self.assertEqual(diagnostics["weeks_skipped_unresolvable_board"], 1)
+        self.assertEqual(diagnostics["weeks_without_complete_board"], 0)
+
+    def test_partial_realized_cohort_is_used_not_rejected_for_being_short_of_the_full_board(self):
+        # F1: the entry-time board has six names, but only four resolved.
+        # Four is still >= MIN_TERCILE_COHORT_SIZE, so the partial cohort is
+        # used for inference (skip-not-reject only applies below the floor).
+        rows = self._rows(
+            "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10", ("AAA", "BBB", "CCC", "DDD")
+        )
+        board_symbols_by_date = {"2025-01-06": ("AAA", "BBB", "CCC", "DDD", "EEE", "FFF")}
+        diagnostics: Counter[str] = Counter()
+        accepted = non_overlapping_inference_rows(
+            rows,
+            board_symbols_by_date=board_symbols_by_date,
+            diagnostics=diagnostics,
+        )
+        self.assertEqual({row.symbol for row in accepted}, {"AAA", "BBB", "CCC", "DDD"})
+        self.assertEqual(diagnostics["weeks_without_complete_board"], 0)
+        self.assertEqual(diagnostics["weeks_skipped_unresolvable_board"], 0)
+
+    def test_split_entry_date_realized_cohort_is_counted_distinctly_and_skipped(self):
+        # F7c: two resolution sub-groups on the chosen day disagree on
+        # entry_date (e.g. some names' next session differed).  This is
+        # counted separately from "no board at all".
+        rows = self._rows(
+            "2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10", ("AAA", "BBB", "CCC")
+        ) + self._rows("2025-01-06", "2025-01-08", "2025-01-09", "2025-01-11", ("DDD",))
+        board_symbols_by_date = {"2025-01-06": ("AAA", "BBB", "CCC", "DDD")}
+        diagnostics: Counter[str] = Counter()
+        accepted = non_overlapping_inference_rows(
+            rows,
+            board_symbols_by_date=board_symbols_by_date,
+            diagnostics=diagnostics,
+        )
+        self.assertEqual(accepted, ())
+        self.assertEqual(diagnostics["weeks_skipped_split_entry_date"], 1)
+        self.assertEqual(diagnostics["weeks_without_complete_board"], 0)
+
+    def test_entry_time_board_below_the_tercile_floor_never_becomes_a_candidate(self):
+        # A two-name entry-time board can never form a top/bottom tercile
+        # split; the week has "no usable board", counted distinctly from an
+        # unresolvable/partial realized cohort.
+        rows = self._rows("2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10", ("AAA", "BBB"))
+        board_symbols_by_date = {"2025-01-06": ("AAA", "BBB")}
+        diagnostics: Counter[str] = Counter()
+        accepted = non_overlapping_inference_rows(
+            rows,
+            board_symbols_by_date=board_symbols_by_date,
+            diagnostics=diagnostics,
+        )
+        self.assertEqual(accepted, ())
+        self.assertEqual(diagnostics["weeks_without_complete_board"], 1)
+        self.assertEqual(diagnostics["weeks_skipped_unresolvable_board"], 0)
+
+    def test_legacy_path_without_a_board_also_enforces_the_tercile_floor(self):
+        # F7b: even the legacy (no board_symbols_by_date, no expected_symbols)
+        # contract must refuse a cohort too small to form a tercile split --
+        # the guard belongs in the splitting function, not only in callers.
+        rows = self._rows("2025-01-06", "2025-01-07", "2025-01-08", "2025-01-10", ("AAA", "BBB"))
+        diagnostics: Counter[str] = Counter()
+        accepted = non_overlapping_inference_rows(rows, diagnostics=diagnostics)
+        self.assertEqual(accepted, ())
+        self.assertEqual(diagnostics["weeks_without_complete_board"], 1)
+
+
 class SummaryTests(unittest.TestCase):
     def _fifteen(self) -> tuple[A2Outcome, ...]:
         rows = []
