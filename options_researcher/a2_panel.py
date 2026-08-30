@@ -32,12 +32,23 @@ class A2Diagnostics:
     # session.  This is a successful resolution path, not a skip, so it gets
     # its own counter (independent adversarial review 2026-08-30, F4).
     breach_on_expiry_settlements: int = 0
+    # C1 (round-2 independent adversarial review 2026-08-30, finding F-F):
+    # the breach-scan close-gap check used to increment a plain ``skips``
+    # counter once per (symbol, day, contract-selection) call, so the same
+    # underlying-close hole got recounted every time an overlapping scan
+    # window crossed it, and it lived in ``skips`` even though nothing is
+    # excluded by it.  A set of unique (symbol, session) pairs, surfaced on
+    # its own field like ``breach_on_expiry_settlements``, fixes both.
+    breach_scan_missing_close_sessions: set[tuple[str, str]] = field(default_factory=set)
 
     def skip(self, reason: str) -> None:
         self.skips[reason] += 1
 
     def note_breach_on_expiry_settlement(self) -> None:
         self.breach_on_expiry_settlements += 1
+
+    def note_breach_scan_missing_close_session(self, symbol: str, session: str) -> None:
+        self.breach_scan_missing_close_sessions.add((symbol, session))
 
 
 _XNYS_CALENDAR_CACHE: xcals.ExchangeCalendar | None = None
@@ -325,7 +336,7 @@ def _csp(
     except ValueError:
         expected_scan_sessions = set()
     for _missing_session in sorted(expected_scan_sessions - set(raw)):
-        diagnostics.skip("breach_scan_missing_underlying_close_session")
+        diagnostics.note_breach_scan_missing_close_session(symbol, _missing_session)
     close21 = next(
         (d for d in sessions if d > entry_day and (_day(expiry) - _day(d)).days <= 21), expiry
     )
@@ -333,8 +344,13 @@ def _csp(
         (day for day in sessions if entry_day <= day <= expiry and float(raw[day]) < strike),
         None,
     )
-    if breach is not None and breach == expiry:
-        diagnostics.note_breach_on_expiry_settlement()
+    # C4 (round-2 independent adversarial review 2026-08-30, finding F-I):
+    # this used to be counted here, before it was known whether the position
+    # survives all-arms-or-none below.  A breach-on-expiry note about a
+    # position that gets dropped entirely (any other arm failed to resolve)
+    # is not a real report-level settlement; the count is now taken from
+    # this local flag only once the position is confirmed to survive.
+    breach_settles_on_expiry = breach is not None and breach == expiry
     if breach is None or breach >= expiry:
         breach_exit = expiry
     else:
@@ -453,7 +469,11 @@ def _csp(
         ),
         resolve(expiry, "assignment_accepting", expiry),
     )
-    return tuple(row for row in rows if row is not None) if all(rows) else None
+    if not all(rows):
+        return None
+    if breach_settles_on_expiry:
+        diagnostics.note_breach_on_expiry_settlement()
+    return tuple(row for row in rows if row is not None)
 
 
 def _long(

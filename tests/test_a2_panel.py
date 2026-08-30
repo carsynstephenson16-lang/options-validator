@@ -279,14 +279,37 @@ class ResolutionTests(unittest.TestCase):
         # underlying close series inside the scan window used to resolve
         # silently as "unbreached" with no diagnostic.  This does not change
         # resolution behavior (still no substituted close), it only detects
-        # and counts the gap, surfaced like any other skip counter.
+        # and counts the gap.
+        # C1 (round-2 independent adversarial review 2026-08-30, finding
+        # F-F): this used to live as a plain ``skips`` counter (nothing is
+        # excluded by it, so it did not belong there) and was recounted on
+        # every overlapping scan window; it is now a de-duplicated set of
+        # (symbol, session) pairs on its own field, like
+        # ``breach_on_expiry_settlements``.
         diagnostics = A2Diagnostics()
         self._csp_rows(
             {"2025-01-31": 105.0, "2025-02-28": 104.0, "2025-03-21": 103.0},
             {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
             diagnostics,
         )
-        self.assertGreater(diagnostics.skips["breach_scan_missing_underlying_close_session"], 0)
+        self.assertNotIn("breach_scan_missing_underlying_close_session", diagnostics.skips)
+        self.assertGreater(len(diagnostics.breach_scan_missing_close_sessions), 0)
+        self.assertTrue(
+            all(symbol == SYMBOL for symbol, _session in diagnostics.breach_scan_missing_close_sessions)
+        )
+
+    def test_breach_scan_missing_close_sessions_are_deduplicated_across_calls(self):
+        # C1 continued: the same (symbol, session) gap crossed by two
+        # overlapping scans (e.g. two decisions whose windows both include
+        # it) must be counted once, not once per scan.
+        diagnostics = A2Diagnostics()
+        raw = {"2025-01-31": 105.0, "2025-02-28": 104.0, "2025-03-21": 103.0}
+        chains = {"2025-02-28": _chain([_row(expiration="2025-03-21")])}
+        self._csp_rows(raw, chains, diagnostics)
+        first_count = len(diagnostics.breach_scan_missing_close_sessions)
+        self.assertGreater(first_count, 0)
+        self._csp_rows(raw, chains, diagnostics)
+        self.assertEqual(len(diagnostics.breach_scan_missing_close_sessions), first_count)
 
     def test_breach_at_expiration_is_counted_as_a_terminal_exception_settlement(self):
         # F4: breach-on-expiration resolves by settlement (Definition 1.2's
@@ -307,6 +330,24 @@ class ResolutionTests(unittest.TestCase):
             {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
             diagnostics,
         )
+        self.assertEqual(diagnostics.breach_on_expiry_settlements, 0)
+
+    def test_breach_on_expiry_settlement_is_not_counted_when_all_arms_or_none_drops_it(self):
+        # C4 (round-2 independent adversarial review 2026-08-30, finding
+        # F-I): the counter used to increment as soon as the breach-on-expiry
+        # condition was seen, before it was known whether the position
+        # survives all-arms-or-none.  Here close_21_dte's resolution day
+        # (2025-02-28, mid-window) has no chain data at all, so the whole
+        # position is dropped -- but the breach still settles on expiry
+        # (2025-03-21 close 99.0 < strike 100.0).  The report-level counter
+        # must not count a settlement belonging to a dropped position.
+        diagnostics = A2Diagnostics()
+        rows = self._csp_rows(
+            {"2025-01-31": 105.0, "2025-02-28": 105.0, "2025-03-21": 99.0},
+            {},
+            diagnostics,
+        )
+        self.assertIsNone(rows)
         self.assertEqual(diagnostics.breach_on_expiry_settlements, 0)
 
     def test_csp_breach_missing_exit_is_counted_by_breach_path(self):
