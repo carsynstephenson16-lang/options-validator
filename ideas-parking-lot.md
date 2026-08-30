@@ -1258,3 +1258,10 @@ confidence).
   open design decision.
 - HAR/EWMA/GARCH (rank 18) and OI-change v2: unchanged — both remain
   gated on their own pre-registered studies before results exist.
+- Scheduled wiki refresh (parked 2026-08-26, owner-requested "automate it in
+  future" while ruling "do not open new workstreams"): a periodic LLM pass
+  that reconciles wiki/ current-status claims against README "Scope status" +
+  the ledger, in the spirit of the research-refresh LaunchAgent. Review when
+  the next manual refresh is needed (~monthly) — if the manual pass keeps
+  taking >30 min, promote; needs its own vault-update authority wording and a
+  fail-closed "propose diff, never auto-commit status claims" design.

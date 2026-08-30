@@ -247,22 +247,36 @@ paper-trading window.
 
 *Registry correction (2026-08-04, docs-truth repair):* the prose below predates
 several ledger registrations and is retained as history. The complete registry
-per `ledger/experiments.jsonl` is: **H5** (entry watch, alert-only), **H6**
+per `ledger/experiments.jsonl` is: **H5** (seq 5; entry trigger RETIRED and
+lane converted to Schwab-ramp OBSERVE mode per seq 29 `H5_AMENDMENT_V1`,
+owner-directed 2026-08-17 — no fires, no paper entries until an owner-typed
+new rule; observe mode takes effect at the seq-29 implementation floor), **H6**
 (seq 6; one open position, `INSUFFICIENT_SAMPLE`), **H7** (seq 7–10; forward
 window PAUSED per OD-3 — restart requires a new registration and namespace),
-**H8** (seq 11; zero positions), **H10a** (seq 15, window ends 2026-10-06,
-7-loss bar, zero positions), **H10b** (seq 16, window ends 2027-01-06, 7-loss
-bar, zero positions), **RQ1** (seq 17; SPENT — descriptive result recorded at
-seq 20, no verdict), **RQ2-v1** (seq 18; forward window opens 2026-09-01;
-badge modules not yet built), **A2-v1** (seq 19; not yet built). Status
+**H8** (seq 11; zero positions), **H10a** (seq 15; **CLOSED 2026-08-15,
+INSUFFICIENT_SAMPLE — STARVED**, owner-ratified; `H10A_RESULT` fact in
+`ledger/facts.log` per the H9 precedent; retest requires a new registration),
+**H10b** (seq 16, window ends 2027-01-06, 7-loss
+bar, zero positions; observation RESUMES on the Schwab 15:45 preclose lane
+per seq 28 `H10B_AMENDMENT_V1_1`, owner-confirmed D-1=F1 override — effect
+gated on the brief-17 implementation landing + no-backfill floor), **RQ1** (seq 17; SPENT — descriptive result recorded at
+seq 20, no verdict), **RQ2-v1** (seq 18; forward window opens **2026-08-17**
+per owner ruling 2026-08-15 in-session — the previously printed 2026-09-01
+was an LLM-proposed draft date never frozen in the ledger (see the 2026-08-10
+attribution correction in
+`reports/2026-08-09-attractiveness-experiment-authorization.md`); amendment
+pending append; badge modules not yet built), **A2-v1** (seq 19; not yet
+built). Status
 rulings and the data-lane situation as of 2026-08-04 live in
 `reports/2026-08-04-composite-signal-lane-decision.md`. The **composite
 signal lane** (display-only, non-verdict-bearing) is authorized per the
 2026-08-03 owner-directed amendment recorded in `.cursorrules`.
 *Registry update (2026-08-12, audit-repair session):* **RQ2-v1 is K=3** (B1,
 A1, V1 membership-only) per ledger seq 25 `RQ2_AMENDMENT_V1_1` (owner-ruled
-2026-08-10); V1's candidate statistic is not pinned — a further pre-result
-amendment must pin it before any V1 comparison. **H7** adds a prepared Schwab
+2026-08-10); V1's candidate statistic was pinned 2026-08-15 by ledger seq 26
+(`RQ2_AMENDMENT_V1_2`): median tenor-matched VRP over up to 24 completed
+monthly cycles (24-cycle cap is LLM-proposed 2026-08-15, not owner-typed), line-1 only, higher-toward-top; only the future BLENDED
+(line-1+line-2) variant still requires its own pre-result amendment. **H7** adds a prepared Schwab
 restart lane `h7-forward-schwab-v1`: PREPARED / NOT REGISTERED / NOT
 ACTIVATED — independent adversarial review resolved 2026-08-12 (PASS WITH
 FIXES; `reports/h7_forward_schwab/2026-08-12-adversarial-review-receipt.md`);
@@ -271,8 +285,12 @@ the Monday canary, the backup drill, and owner-typed OD-3 + starvation
 decisions. The four **attractiveness experiments** (EXP-BETA/TAIL/SPREAD/
 TBILL) are display-only, off by default, in the standalone
 `experiments_dashboard.py`; the frozen baseline ranking is untouched. The
-production Schwab OAuth refresh token is **expired** — see
-`reports/2026-08-12-schwab-auth-diagnosis.md` for the reauth procedure.
+production Schwab OAuth refresh token was re-authorized 2026-08-12 ~00:56 ET
+and captures verified working 08-12 through 08-14 (15/15). Refresh tokens
+expire a hard **7 days after creation** (Official-source; refreshing an
+access token does NOT reset the clock) — without a weekend re-auth the token
+dies ~2026-08-19 00:56 ET. Procedure:
+`reports/2026-08-12-schwab-auth-diagnosis.md` (+ its 2026-08-15 addendum).
 Current sequencing and open owner gates: `PROJECT_STATE.md` status refresh
 2026-08-12.
 

@@ -13,7 +13,7 @@ from unittest import mock
 
 import pandas as pd
 
-from data import provider_policy, recent_topup, thetadata_adapter
+from data import provider_policy, recent_topup, thetadata_adapter, underlying_closes
 from research import facts
 
 
@@ -362,12 +362,182 @@ class RefreshClosesTests(unittest.TestCase):
                 today="2026-07-29",
                 ledger_dir=ledger_dir,
                 fetch_fn=lambda symbol: calls.append(symbol) or f"{symbol}.parquet",
+                receipts_dir=Path(ledger_dir) / "closes_receipts",
             )
             fact = (Path(ledger_dir) / "facts.log").read_text()
         self.assertEqual(calls, ["MSFT", "AMZN"])
         self.assertEqual(result, {"MSFT": "MSFT.parquet", "AMZN": "AMZN.parquet"})
         self.assertIn("Yahoo closes refresh", fact)
         self.assertIn("MSFT/AMZN", fact)
+
+
+class RefreshClosesGuardedTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cache_dir = Path(self.tmp.name) / "underlying"
+        self.cache_dir.mkdir()
+        self.ledger_dir = Path(self.tmp.name) / "ledger"
+        # Brief 33: the guarded producer now writes a provenance receipt.
+        # Isolate it, or these tests would write into the repo's real
+        # reports/closes_receipts/ and collide with each other.
+        self.receipts_dir = Path(self.tmp.name) / "closes_receipts"
+        self.patch_cache = mock.patch.object(
+            underlying_closes, "CACHE_DIR", str(self.cache_dir)
+        )
+        self.patch_cache.start()
+        self.addCleanup(self.patch_cache.stop)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _store(self, symbol, rows):
+        underlying_closes.store_closes(
+            symbol, pd.DataFrame(rows, columns=["date", "close"])
+        )
+
+    def test_clean_refresh_advances_each_symbol_and_appends_one_fact(self):
+        self._store("MSFT", [("2026-07-28", 100.0)])
+        self._store("AMZN", [("2026-07-28", 200.0)])
+
+        def fetch(symbol):
+            close = 100.0 if symbol == "MSFT" else 200.0
+            self._store(symbol, [("2026-07-28", close), ("2026-07-29", close)])
+            return str(self.cache_dir / f"{symbol}.parquet")
+
+        result = recent_topup.refresh_closes_guarded(
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
+        )
+        self.assertEqual(result["max_dates"], {"AMZN": "2026-07-29", "MSFT": "2026-07-29"})
+        self.assertEqual(result["restored_symbols"], {})
+        self.assertEqual(result["fetch_errors"], {})
+        self.assertEqual(len(facts.read_facts(str(self.ledger_dir))), 1)
+
+    def test_retroactive_change_restores_one_symbol_and_other_symbol_advances(self):
+        self._store("MSFT", [("2026-07-28", 100.0)])
+        self._store("AMZN", [("2026-07-28", 200.0)])
+
+        def fetch(symbol):
+            if symbol == "MSFT":
+                self._store(symbol, [("2026-07-28", 101.0), ("2026-07-29", 102.0)])
+            else:
+                self._store(symbol, [("2026-07-28", 200.0), ("2026-07-29", 201.0)])
+
+        result = recent_topup.refresh_closes_guarded(
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
+        )
+        self.assertEqual(result["restored_symbols"], {"MSFT": "2026-07-28"})
+        self.assertEqual(result["max_dates"]["MSFT"], "2026-07-28")
+        self.assertEqual(result["max_dates"]["AMZN"], "2026-07-29")
+        restored = pd.read_parquet(self.cache_dir / "MSFT.parquet")
+        self.assertEqual(restored.to_dict("records"), [{"date": "2026-07-28", "close": 100.0}])
+        self.assertEqual(len(facts.read_facts(str(self.ledger_dir))), 1)
+
+    def test_truncated_history_is_restored_like_a_retroactive_change(self):
+        self._store("MSFT", [("2026-07-25", 99.0), ("2026-07-28", 100.0)])
+        self._store("AMZN", [("2026-07-28", 200.0)])
+
+        def fetch(symbol):
+            if symbol == "MSFT":
+                # Truncated response: overlap matches perfectly but an older
+                # date vanished (observed Yahoo degradation mode).
+                self._store(symbol, [("2026-07-28", 100.0), ("2026-07-29", 101.0)])
+            else:
+                self._store(symbol, [("2026-07-28", 200.0), ("2026-07-29", 201.0)])
+
+        result = recent_topup.refresh_closes_guarded(
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
+        )
+        self.assertEqual(result["restored_symbols"], {"MSFT": "2026-07-25"})
+        self.assertEqual(result["max_dates"]["MSFT"], "2026-07-28")
+        self.assertEqual(result["max_dates"]["AMZN"], "2026-07-29")
+        restored = pd.read_parquet(self.cache_dir / "MSFT.parquet")
+        self.assertEqual(
+            restored.to_dict("records"),
+            [
+                {"date": "2026-07-25", "close": 99.0},
+                {"date": "2026-07-28", "close": 100.0},
+            ],
+        )
+        self.assertEqual(len(facts.read_facts(str(self.ledger_dir))), 1)
+
+    def test_restore_failure_is_reported_under_its_own_key(self):
+        self._store("MSFT", [("2026-07-28", 100.0)])
+
+        def fetch(symbol):
+            # Write directly so the store_closes patch below only affects the
+            # production restore path, not this fake fetch.
+            pd.DataFrame(
+                [("2026-07-28", 101.0), ("2026-07-29", 102.0)],
+                columns=["date", "close"],
+            ).to_parquet(self.cache_dir / f"{symbol}.parquet", index=False)
+
+        def failing_store(symbol, frame):
+            raise OSError("disk full")
+
+        with mock.patch.object(underlying_closes, "store_closes", failing_store):
+            result = recent_topup.refresh_closes_guarded(
+                today="2026-07-30",
+                ledger_dir=str(self.ledger_dir),
+                fetch_fn=fetch,
+                receipts_dir=self.receipts_dir,
+            )
+        self.assertEqual(result["restored_symbols"], {})
+        self.assertIn("MSFT", result["restore_failed"])
+        self.assertIn("disk full", result["restore_failed"]["MSFT"])
+        self.assertEqual(result["max_dates"]["MSFT"], "2026-07-29")
+        fact_lines = facts.read_facts(str(self.ledger_dir))
+        self.assertEqual(len(fact_lines), 1)
+        self.assertIn("1 restore failures", str(fact_lines[0]))
+
+    def test_fetch_exception_is_recorded_and_other_symbols_continue(self):
+        self._store("MSFT", [("2026-07-28", 100.0)])
+        self._store("AMZN", [("2026-07-28", 200.0)])
+
+        def fetch(symbol):
+            if symbol == "MSFT":
+                raise RuntimeError("simulated fetch failure")
+            self._store(symbol, [("2026-07-28", 200.0), ("2026-07-29", 201.0)])
+
+        result = recent_topup.refresh_closes_guarded(
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
+        )
+        self.assertIn("simulated fetch failure", result["fetch_errors"]["MSFT"][0])
+        self.assertEqual(result["max_dates"]["AMZN"], "2026-07-29")
+        self.assertEqual(len(facts.read_facts(str(self.ledger_dir))), 1)
+
+    def test_pre_and_post_read_failures_are_recorded_per_symbol(self):
+        (self.cache_dir / "BAD.parquet").write_bytes(b"not parquet")
+        self._store("POST", [("2026-07-28", 300.0)])
+
+        def fetch(symbol):
+            if symbol == "POST":
+                pd.DataFrame({"wrong": [1]}).to_parquet(
+                    self.cache_dir / "POST.parquet", index=False
+                )
+                return
+            raise AssertionError("pre-read failure must skip fetch")
+
+        result = recent_topup.refresh_closes_guarded(
+            today="2026-07-30",
+            ledger_dir=str(self.ledger_dir),
+            fetch_fn=fetch,
+            receipts_dir=self.receipts_dir,
+        )
+        self.assertIn("pre-read", result["fetch_errors"]["BAD"][0])
+        self.assertIn("post-read", result["fetch_errors"]["POST"][0])
+        self.assertEqual(len(facts.read_facts(str(self.ledger_dir))), 1)
 
 
 class AuditChainTests(unittest.TestCase):

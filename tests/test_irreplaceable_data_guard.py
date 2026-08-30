@@ -3,6 +3,7 @@
 These run entirely against temporary fixtures -- never the real 5 GB cache --
 so they stay offline, fast, and green on a fresh clone with no cache present.
 """
+
 from __future__ import annotations
 
 import json
@@ -128,6 +129,67 @@ class VerifyTests(unittest.TestCase):
         }
         self.assertEqual(guard.verify(inventory), [])
 
+    def test_recorded_absent_population_is_detected_without_weakening_empty_skip(self):
+        """Presence without a floor alarms; a genuinely empty namespace does not."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            populated = root / "populated"
+            empty = root / "empty"
+            _write(populated, "one.parquet", b"abc")
+            empty.mkdir()
+            inventory = {
+                "namespaces": {
+                    "populated": {"present": False, "file_count": 0, "total_bytes": 0},
+                    "empty": {"present": False, "file_count": 0, "total_bytes": 0},
+                }
+            }
+
+            problems = guard.verify(inventory, root=str(root))
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("RECORDED ABSENT BUT POPULATED", problems[0])
+        self.assertIn("populated", problems[0])
+        self.assertNotIn("empty", problems[0])
+
+    def test_allow_absent_does_not_suppress_recorded_absent_population(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _write(root, "populated/one.parquet", b"abc")
+            inventory = {
+                "namespaces": {"populated": {"present": False, "file_count": 0, "total_bytes": 0}}
+            }
+
+            problems = guard.verify(inventory, allow_absent=True, root=str(root))
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("RECORDED ABSENT BUT POPULATED", problems[0])
+
+    def test_tracked_namespace_is_exempt_from_absent_and_floor_binding(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            namespace = "reports/schwab_chains"
+            _write(root, f"{namespace}/x", b"x")
+            recorded_absent = {
+                "namespaces": {namespace: {"present": False, "file_count": 0, "total_bytes": 0}}
+            }
+            positive_floor = {
+                "namespaces": {namespace: {"present": True, "file_count": 2, "total_bytes": 2}}
+            }
+
+            self.assertEqual(guard.verify(recorded_absent, root=str(root)), [])
+            self.assertEqual(guard.verify(positive_floor, root=str(root)), [])
+
+    def test_required_namespaces_report_missing_key_only_when_requested(self):
+        inventory = {"namespaces": {}}
+
+        problems = guard.verify(inventory, required_namespaces=["missing/ns"])
+
+        self.assertEqual(
+            problems,
+            ["missing/ns: NO INVENTORY KEY -- required namespace is not recorded at all."],
+        )
+        self.assertEqual(guard.verify(inventory, required_namespaces=None), [])
+
     def test_deep_verify_detects_silent_content_change(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "ns"
@@ -206,13 +268,23 @@ class RepoRootAnchoringTests(unittest.TestCase):
 
         git("init", "-q")
         _write(repo, "myns/a.parquet", b"aaa")
-        inventory = {"namespaces": {"myns": guard.scan(str(repo / "myns"))}}
+        namespaces = {
+            ns: {"present": False, "file_count": 0, "total_bytes": 0}
+            for ns in guard.DEFAULT_NAMESPACES
+        }
+        namespaces["myns"] = guard.scan(str(repo / "myns"))
+        inventory = {"namespaces": namespaces}
         inv = repo / "data" / "irreplaceable_data_inventory.json"
         inv.parent.mkdir(parents=True)
         inv.write_text(json.dumps(inventory))
         git("add", "data")
         git("commit", "-qm", "inventory")
         return repo
+
+    def _write_inventory(self, path: Path, inventory: dict) -> bytes:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
+        return path.read_bytes()
 
     def test_verify_from_linked_worktree_is_not_a_loss_report(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -276,6 +348,223 @@ class RepoRootAnchoringTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 2)
         self.assertIn("MISSING ENTIRELY", result.stderr)
         self.assertNotIn("LOCATION ERROR", result.stderr)
+
+    def test_cli_required_namespace_check_is_default_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            default_path = repo / guard.DEFAULT_INVENTORY
+
+            seeded = self._run(repo, "verify")
+            self.assertEqual(seeded.returncode, 0, msg=seeded.stderr)
+            self.assertIn("irreplaceable data: OK", seeded.stdout)
+
+            inventory = json.loads(default_path.read_text())
+            missing_namespace = guard.DEFAULT_NAMESPACES[0]
+            del inventory["namespaces"][missing_namespace]
+            default_path.write_text(json.dumps(inventory))
+            missing = self._run(repo, "verify")
+            self.assertEqual(missing.returncode, 1, msg=missing.stderr)
+            self.assertIn("NO INVENTORY KEY", missing.stderr)
+            self.assertIn(missing_namespace, missing.stderr)
+
+            bespoke_path = repo / "bespoke.json"
+            self._write_inventory(
+                bespoke_path,
+                {"namespaces": {"myns": guard.scan(str(repo / "myns"))}},
+            )
+            bespoke = self._run(repo, "verify", "--inventory", str(bespoke_path))
+            self.assertEqual(bespoke.returncode, 0, msg=bespoke.stderr)
+            self.assertNotIn("NO INVENTORY KEY", bespoke.stderr)
+
+    def test_plain_generate_pins_populated_tracked_namespace_absent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            _write(repo, "reports/schwab_chains/x", b"tracked")
+
+            result = self._run(repo, "generate")
+
+            inventory = json.loads((repo / guard.DEFAULT_INVENTORY).read_text())
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(
+            inventory["namespaces"]["reports/schwab_chains"],
+            {"present": False, "file_count": 0, "total_bytes": 0},
+        )
+
+    def test_generate_only_rescans_target_and_preserves_other_values(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            _write(repo, ".cache/schwab_chains/one.parquet", b"abc")
+            inventory_path = repo / "scoped.json"
+            inventory = {
+                "note": "keep-this-note-byte-for-byte",
+                "namespaces": {
+                    ".cache/chains": {
+                        "present": True,
+                        "file_count": 77,
+                        "total_bytes": 12345,
+                        "content_digest": "untouched-digest",
+                    },
+                    ".cache/schwab_chains": {
+                        "present": False,
+                        "file_count": 0,
+                        "total_bytes": 0,
+                    },
+                },
+            }
+            self._write_inventory(inventory_path, inventory)
+
+            result = self._run(
+                repo,
+                "generate",
+                "--deep",
+                "--only",
+                ".cache/schwab_chains",
+                "--inventory",
+                str(inventory_path),
+            )
+
+            updated = json.loads(inventory_path.read_text())
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(updated["note"], inventory["note"])
+        self.assertEqual(
+            updated["namespaces"][".cache/chains"],
+            inventory["namespaces"][".cache/chains"],
+        )
+        self.assertEqual(updated["namespaces"][".cache/schwab_chains"]["file_count"], 1)
+        self.assertEqual(updated["namespaces"][".cache/schwab_chains"]["total_bytes"], 3)
+        self.assertIn("content_digest", updated["namespaces"][".cache/schwab_chains"])
+
+    def test_generate_only_refuses_lower_floor_without_writing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            _write(repo, ".cache/schwab_chains/one.parquet", b"x")
+            inventory_path = repo / "scoped.json"
+            before = self._write_inventory(
+                inventory_path,
+                {
+                    "note": "unchanged",
+                    "namespaces": {
+                        ".cache/schwab_chains": {
+                            "present": True,
+                            "file_count": 2,
+                            "total_bytes": 4,
+                        }
+                    },
+                },
+            )
+
+            result = self._run(
+                repo,
+                "generate",
+                "--only",
+                ".cache/schwab_chains",
+                "--inventory",
+                str(inventory_path),
+            )
+            after = inventory_path.read_bytes()
+
+        self.assertEqual(result.returncode, 2, msg=result.stderr)
+        self.assertIn("LOWER", result.stderr)
+        self.assertEqual(after, before)
+
+    def test_generate_only_refuses_unknown_namespace_without_writing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            inventory_path = repo / "scoped.json"
+            before = self._write_inventory(inventory_path, {"note": "keep", "namespaces": {}})
+
+            result = self._run(
+                repo,
+                "generate",
+                "--only",
+                "unknown/ns",
+                "--inventory",
+                str(inventory_path),
+            )
+            after = inventory_path.read_bytes()
+
+        self.assertEqual(result.returncode, 2, msg=result.stderr)
+        self.assertIn("not in DEFAULT_NAMESPACES", result.stderr)
+        self.assertEqual(after, before)
+
+    def test_generate_only_honors_absolute_inventory_and_leaves_default_unchanged(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            default_path = repo / guard.DEFAULT_INVENTORY
+            default_before = default_path.read_bytes()
+            _write(repo, ".cache/schwab_chains/one.parquet", b"abc")
+            inventory_path = repo / "nested" / "scoped.json"
+            self._write_inventory(
+                inventory_path,
+                {
+                    "note": "scoped",
+                    "namespaces": {
+                        ".cache/schwab_chains": {
+                            "present": False,
+                            "file_count": 0,
+                            "total_bytes": 0,
+                        }
+                    },
+                },
+            )
+
+            result = self._run(
+                repo,
+                "generate",
+                "--only",
+                ".cache/schwab_chains",
+                "--inventory",
+                str(inventory_path),
+            )
+
+            updated = json.loads(inventory_path.read_text())
+            default_after = default_path.read_bytes()
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(updated["namespaces"][".cache/schwab_chains"]["file_count"], 1)
+        self.assertEqual(default_after, default_before)
+
+    def test_generate_only_creates_missing_default_namespace_key(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            _write(repo, ".cache/schwab_chains/one.parquet", b"abc")
+            inventory_path = repo / "scoped.json"
+            self._write_inventory(
+                inventory_path,
+                {"note": "keep", "namespaces": {".cache/chains": {"sentinel": "same"}}},
+            )
+
+            result = self._run(
+                repo,
+                "generate",
+                "--only",
+                ".cache/schwab_chains",
+                "--inventory",
+                str(inventory_path),
+            )
+
+            updated = json.loads(inventory_path.read_text())
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(updated["namespaces"][".cache/schwab_chains"]["file_count"], 1)
+        self.assertEqual(updated["namespaces"][".cache/chains"], {"sentinel": "same"})
+
+    def test_generate_only_requires_existing_inventory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = self._fixture_repo(Path(temp))
+            inventory_path = repo / "missing.json"
+
+            result = self._run(
+                repo,
+                "generate",
+                "--only",
+                ".cache/schwab_chains",
+                "--inventory",
+                str(inventory_path),
+            )
+            inventory_exists = inventory_path.exists()
+
+        self.assertEqual(result.returncode, 2, msg=result.stderr)
+        self.assertIn("inventory not found", result.stderr)
+        self.assertFalse(inventory_exists)
 
 
 if __name__ == "__main__":

@@ -37,6 +37,40 @@ class RitualStatusTests(unittest.TestCase):
         self.assertEqual(payload["run_at_utc"], "2026-07-27T12:00:00Z")
         self.assertEqual(payload["run_at_et"], "2026-07-27T08:00:00-04:00")
 
+    def test_ok_starved_status_is_valid_and_publishable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            ritual_dir = root / "reports" / "ritual"
+            ritual_dir.mkdir(parents=True)
+            (ritual_dir / f"capture_receipt_{AS_OF}.json").write_text(
+                '{"status":"MISSING"}\n'
+            )
+            with patch.object(
+                ritual_status, "_current_code_sha", return_value=CODE_SHA
+            ):
+                output = ritual_status.publish_status(
+                    root=root,
+                    as_of=AS_OF,
+                    run_date=RUN_DATE,
+                    status="OK_STARVED",
+                    log_path=".tmp/daily_ritual/run.log",
+                )
+            self.assertEqual(json.loads(output.read_text())["status"], "OK_STARVED")
+
+    def test_invalid_status_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "status must be"):
+            ritual_status.build_status(
+                as_of=AS_OF,
+                run_date=RUN_DATE,
+                status="INVALID",
+                code_sha=CODE_SHA,
+                capture_receipt_path=(
+                    "reports/ritual/capture_receipt_2026-07-24.json"
+                ),
+                capture_receipt_sha256="b" * 64,
+                log_path=".tmp/daily_ritual/run.log",
+            )
+
     def test_running_marker_invalidates_prior_ok_before_publication(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

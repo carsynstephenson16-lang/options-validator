@@ -18,7 +18,7 @@ including technicals).
 
 Every payoff number is computed AT EXPIRATION from intrinsic value only --
 there is deliberately no Black-Scholes / time-value model anywhere here.
-The Top-3 ordering weights (PICK_* in config.py) are presentation-layer
+The shortlist ordering weights (PICK_* in config.py) are presentation-layer
 display ordering only, never strategy gates.
 
 Within each symbol panel, strategy sections are also ordered from the
@@ -29,17 +29,49 @@ and position state unchanged.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import html as _html
+import json
 import math
 import os
-from collections.abc import Mapping
+import re
+import sys
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import config
+from options_researcher import display_rank
+
+if TYPE_CHECKING:
+    from options_researcher.hypothesis_evidence import SymbolEvidence
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
+RESEARCH_VIEWS_STATUS_PATH = Path(".tmp/dashboard/research-views-current.json")
+PICKS_SNAPSHOT_PATH = Path(".tmp/dashboard/picks_snapshot.json")
 
 _PMCC_NOTE = "just the premium; LEAPS value not counted"
 DISPLAY_ONLY_LABEL = "DISPLAY-ONLY — not in any registered hypothesis"
+
+
+@dataclass(frozen=True)
+class DashboardRenderResult:
+    """Pure render output plus the exact tracker membership used by the page."""
+
+    html: str
+    selection_snapshot: dict[str, object]
+    render_source_row_hashes: tuple[str, ...] = ()
+
+
+# Capture receipts are written only by the ops execution checkout (its
+# LaunchAgents pin WorkingDirectory there); a research/dev checkout that
+# reads its own reports/ renders a falsely stale board.  Sanctioned standing
+# path per CLAUDE.md "Worktree location rule".
+OPS_CHECKOUT_FALLBACK = Path.home() / "options-validator-ops"
 
 
 @contextmanager
@@ -49,16 +81,30 @@ def _input_root_cwd():
     Research deployments write their own reports and dashboard, but consume
     the runtime board from the clean ops checkout.  Keep the cwd switch narrow
     so every output path remains rooted in the deployment checkout.
+
+    When ATTRACTIVENESS_INPUT_ROOT is unset, default to the ops checkout if it
+    exists (owner-directed 2026-08-25: repo builds read ops inputs by default).
+    An explicit env value always wins; set it to "." to force the cwd.
     """
     configured = os.environ.get("ATTRACTIVENESS_INPUT_ROOT")
     if not configured:
-        yield Path.cwd()
-        return
-    input_root = Path(configured).expanduser().resolve()
-    if not input_root.is_dir():
-        raise FileNotFoundError(
-            f"ATTRACTIVENESS_INPUT_ROOT is not a directory: {input_root}"
-        )
+        fallback = OPS_CHECKOUT_FALLBACK
+        if fallback.is_dir() and fallback.resolve() != Path.cwd().resolve():
+            input_root = fallback.resolve()
+            print(
+                f"board inputs: defaulting to ops checkout {input_root} "
+                "(set ATTRACTIVENESS_INPUT_ROOT=. to read this checkout)",
+                file=sys.stderr,
+            )
+        else:
+            yield Path.cwd()
+            return
+    else:
+        input_root = Path(configured).expanduser().resolve()
+        if not input_root.is_dir():
+            raise FileNotFoundError(
+                f"ATTRACTIVENESS_INPUT_ROOT is not a directory: {input_root}"
+            )
     previous = Path.cwd()
     os.chdir(input_root)
     try:
@@ -183,8 +229,8 @@ def scenario_rows(card: dict, structure: str, *, close: float,
 
 _BBB_LABEL = "scenario framing from realized vol — not a forecast"
 
-_SELL_LANES = ("put", "cc", "pmcc")
-_BUY_LANES = ("leaps", "long_call")
+_SELL_LANES = display_rank.SELL_LANES
+_BUY_LANES = display_rank.BUY_LANES
 
 
 def bbb_rows(card: dict, structure: str, *, close: float,
@@ -390,7 +436,8 @@ def _qm_context_block_reason(
 
 
 def select_top_picks(
-    data: dict, n: int = 3, *, policy_veto: bool | None = None, include_csp_watch: bool = False
+    data: dict, n: int = config.PICK_TOP_N, *, policy_veto: bool | None = None,
+    include_csp_watch: bool = False
 ) -> list[dict]:
     """Transparent quantitative shortlist over EVERY non-skipped card across
     all symbols/lanes in an assemble() dict. Display ordering only (weights =
@@ -439,7 +486,8 @@ def select_top_picks(
 
 
 def select_qm_top_picks(
-    data: dict, qm_context: Mapping[str, object], n: int = 3, *, include_csp_watch: bool = False
+    data: dict, qm_context: Mapping[str, object], n: int = config.PICK_TOP_N, *,
+    include_csp_watch: bool = False
 ) -> list[dict]:
     """Return the exact mechanical picks for the lower descriptive QM panel.
 
@@ -579,25 +627,8 @@ def _display_score(card: dict, kind: str, tech: dict | None) -> int:
 
 
 def _display_quality_key(card: dict, kind: str, tech: dict | None) -> tuple:
-    """Lexicographic, lane-size-neutral quality key; better sorts first.
-
-    Levels: GREEN fraction (not the raw count — seller lanes carry 7
-    gradeable badges vs 3 on buyer lanes, so counts are not comparable
-    across lanes), then lane leadership, then technical confluence. No
-    weights: the levels are strictly ordered, never summed.
-    """
-    grades = card.get("grades") or {}
-    greens = sum(1 for value in grades.values() if value == "GREEN")
-    frac = greens / len(grades) if grades else 0.0
-    leader = 1 if card.get("rank_leader") else 0
-    tech_conf = 0
-    if tech:
-        if kind in _BUY_LANES and (tech.get("trend") == "up"
-                                   or tech.get("breakout_20d")):
-            tech_conf = 1
-        elif kind in _SELL_LANES and tech.get("ma_posture") != "below_all":
-            tech_conf = 1
-    return (-frac, -leader, -tech_conf)
+    """Compatibility wrapper around the shared frozen display-quality key."""
+    return display_rank.display_quality_key(card, kind, tech)
 
 
 def _display_policy_tier(card: dict) -> int:
@@ -679,55 +710,243 @@ def _rank_groups_for_display(groups: list[dict], *,
     return [group for _key, _original_index, group in ranked]
 
 
-def load_context(as_of: str, base_dir: str = "reports/attractiveness_context"
-                 ) -> tuple[dict | None, str | None]:
-    """Load the research-context JSON for a data as-of date.
+_DOMINANCE_GRADE_RANK = {"UNKNOWN": 0, "RED": 1, "AMBER": 2, "GREEN": 3}
+_DOMINANCE_AXES = {
+    "put": (("annualized_yield", 1), ("cushion", 1)),
+    "cc": (("annualized_yield", 1), ("upside", 1)),
+    "long_call": (("cost", -1), ("breakeven_move", -1)),
+    "leaps": (("cost", -1), ("breakeven_distance", -1)),
+}
 
-    Exact match <base_dir>/<as_of>.json first; else the newest dated file
-    <= as_of with a stale warning; else (None, None). Malformed/unreadable
-    JSON -> (None, warning). Never fabricates content."""
-    import glob
+
+def _dominance_axis_values(card: Mapping[str, object], lane_kind: str,
+                           close: float) -> tuple[float, ...] | None:
+    values: list[float] = []
+    for name, _direction in _DOMINANCE_AXES[lane_kind]:
+        if name == "breakeven_distance":
+            breakeven = _finite_sort_value(card.get("breakeven"))
+            if not math.isfinite(breakeven) or close <= 0:
+                return None
+            values.append(abs(breakeven - close) / close)
+        else:
+            value = _finite_sort_value(card.get(name))
+            if not math.isfinite(value):
+                return None
+            values.append(value)
+    return tuple(values)
+
+
+def _dominates(y: Mapping[str, object], x: Mapping[str, object],
+               lane_kind: str, close: float) -> bool:
+    y_values = _dominance_axis_values(y, lane_kind, close)
+    x_values = _dominance_axis_values(x, lane_kind, close)
+    if y_values is None or x_values is None:
+        return False
+    weak, strict = True, False
+    for (_name, direction), y_value, x_value in zip(
+            _DOMINANCE_AXES[lane_kind], y_values, x_values, strict=True):
+        if direction > 0:
+            weak = weak and y_value >= x_value
+            strict = strict or y_value > x_value
+        else:
+            weak = weak and y_value <= x_value
+            strict = strict or y_value < x_value
+    y_value, x_value = y.get("grades"), x.get("grades")
+    y_grades = y_value if isinstance(y_value, Mapping) else {}
+    x_grades = x_value if isinstance(x_value, Mapping) else {}
+    for key in sorted(set(y_grades) & set(x_grades)):
+        y_rank = _DOMINANCE_GRADE_RANK.get(str(y_grades[key]), 0)
+        x_rank = _DOMINANCE_GRADE_RANK.get(str(x_grades[key]), 0)
+        weak = weak and y_rank >= x_rank
+        strict = strict or y_rank > x_rank
+    return weak and strict
+
+
+def dominated_partition(
+    cards: list[dict], lane_kind: str, close: float, *,
+    protected_indexes: frozenset[int] = frozenset(),
+) -> tuple[list[dict], list[tuple[dict, dict]]]:
+    """Return shown cards and hidden-card/front-dominator pairs.
+
+    The deterministic Pareto front is computed first, so every hidden card is
+    directly dominated by a shown front member. PMCC is exempt because one
+    useful numeric axis cannot distinguish its structure trade-offs. Lanes
+    with two or fewer cards are also left unchanged (display-only rules
+    proposed 2026-08-25).
+    """
+    if lane_kind == "pmcc" or lane_kind not in _DOMINANCE_AXES or len(cards) <= 2:
+        return list(cards), []
+    front_indexes = [
+        index for index, card in enumerate(cards)
+        if not any(index != other_index
+                   and _dominates(other, card, lane_kind, close)
+                   for other_index, other in enumerate(cards))
+    ]
+    front_set = set(front_indexes)
+    shown: list[dict] = []
+    hidden: list[tuple[dict, dict]] = []
+    for index, card in enumerate(cards):
+        grades_value = card.get("grades")
+        grades = grades_value if isinstance(grades_value, Mapping) else {}
+        protected = (
+            index in protected_indexes or index in front_set
+            or "skipped" in card or card.get("rank_leader") is True
+            or grades.get("liquidity") == "RED"
+            or _display_policy_tier(card) == _DISPLAY_POLICY_TIER["DATA_BLOCKED"]
+        )
+        dominators = [front_index for front_index in front_indexes
+                      if _dominates(cards[front_index], card, lane_kind, close)]
+        if protected or not dominators:
+            shown.append(card)
+        else:
+            hidden.append((card, cards[min(dominators)]))
+    return shown, hidden
+
+
+def _panel_status(section: Mapping[str, object],
+                  stale_symbols: set[str]) -> tuple[list[str], bool]:
+    """Return ordered status labels and the fail-visible default-open state."""
+    groups_value = section.get("groups")
+    groups = groups_value if isinstance(groups_value, (list, tuple)) else ()
+    cards = [card for group in groups if isinstance(group, Mapping)
+             for card in group.get("cards", []) if isinstance(card, dict)]
+    labels: list[str] = []
+    if any(_display_policy_tier(card) == _DISPLAY_POLICY_TIER["DATA_BLOCKED"]
+           for card in cards):
+        labels.append("DATA_BLOCKED")
+    if section.get("features_stale") is True or section.get("symbol") in stale_symbols:
+        labels.append("STALE")
+    if any("skipped" in card for card in cards):
+        labels.append("SKIPPED")
+    if any(isinstance(card.get("grades"), Mapping)
+           and card["grades"].get("liquidity") == "RED" for card in cards):
+        labels.append("LIQUIDITY WARNING")
+    if not labels:
+        labels.append("CURRENT")
+    opened = any(label in labels for label in ("DATA_BLOCKED", "STALE", "SKIPPED"))
+    return labels, opened
+
+
+def load_context_evidence(
+    as_of: str, base_dir: str = "reports/attractiveness_context"
+) -> dict[str, object]:
+    """Read, hash, and parse one research-context byte snapshot."""
+    import hashlib
     import json
-    import re
-    from datetime import date
 
+    unavailable = {
+        "state": "unavailable", "context": None, "warning": None,
+        "source_path": None, "sha256": None,
+    }
+    if _valid_iso_date(as_of) is None:
+        return unavailable
+    root = Path(base_dir)
+    exact = root / f"{as_of}.json"
+    if exact.exists():
+        selected, selected_date = exact, as_of
+    else:
+        candidates = sorted(
+            (path, path.stem)
+            for path in root.glob("*.json")
+            if _valid_iso_date(path.stem) is not None and path.stem <= as_of
+        )
+        if not candidates:
+            return unavailable
+        selected, selected_date = candidates[-1]
+    unresolved = selected
     try:
-        date.fromisoformat(str(as_of))
-    except (TypeError, ValueError):
-        return None, None
+        context_root = root.resolve(strict=True)
+        selected = unresolved.resolve(strict=True)
+        selected.relative_to(context_root)
+    except ValueError:
+        return {
+            "state": "integrity_failed",
+            "context": None,
+            "warning": (
+                f"research context file {unresolved.name} escapes context root "
+                "— ignoring it"
+            ),
+            "source_path": str(unresolved.absolute()),
+            "sha256": None,
+        }
+    except (OSError, RuntimeError) as exc:
+        return {
+            "state": "integrity_failed",
+            "context": None,
+            "warning": (
+                f"research context file {unresolved.name} is unreadable "
+                f"({exc.__class__.__name__}) — ignoring it"
+            ),
+            "source_path": str(unresolved.absolute()),
+            "sha256": None,
+        }
+    try:
+        raw = selected.read_bytes()
+        context = json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return {
+            "state": "integrity_failed", "context": None,
+            "warning": (f"research context file {selected.name} is unreadable "
+                        f"({exc.__class__.__name__}) — ignoring it"),
+            "source_path": str(selected), "sha256": None,
+        }
+    digest = hashlib.sha256(raw).hexdigest()
+    if not isinstance(context, dict):
+        return {
+            "state": "integrity_failed", "context": None,
+            "warning": (f"research context file {selected.name} is not a JSON "
+                        "object — ignoring it"),
+            "source_path": str(selected), "sha256": digest,
+        }
+    warning = None
+    if selected_date != as_of:
+        warning = (
+            f"company-research annotations are from {selected_date} "
+            f"(stale vs data as-of {as_of}; QM status has its own "
+            "exact-date check)"
+        )
+    return {
+        "state": "loaded", "context": context, "warning": warning,
+        "source_path": str(selected), "sha256": digest,
+    }
 
-    def _read(path: str) -> tuple[dict | None, str | None]:
-        try:
-            with open(path) as f:
-                ctx = json.load(f)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
-            return None, (f"research context file {os.path.basename(path)} "
-                          f"is unreadable ({e.__class__.__name__}) — "
-                          "ignoring it")
-        if not isinstance(ctx, dict):
-            return None, (f"research context file {os.path.basename(path)} "
-                          "is not a JSON object — ignoring it")
-        return ctx, None
 
-    exact = os.path.join(base_dir, f"{as_of}.json")
-    if os.path.exists(exact):
-        return _read(exact)
+def _verify_context_evidence(evidence: Mapping[str, object]) -> dict[str, object]:
+    """Reject source drift without reparsing a different context snapshot."""
+    result = dict(evidence)
+    if result.get("state") != "loaded":
+        return result
+    import hashlib
 
-    dated = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
-    stems = sorted(
-        m.group(1)
-        for m in (dated.match(os.path.basename(p))
-                  for p in glob.glob(os.path.join(base_dir, "*.json")))
-        if m and m.group(1) <= as_of)
-    if not stems:
-        return None, None
-    newest = stems[-1]
-    ctx, warn = _read(os.path.join(base_dir, f"{newest}.json"))
-    if ctx is None:
-        return None, warn
-    return ctx, (f"company-research annotations are from {newest} "
-                 f"(stale vs data as-of {as_of}; QM status has its own "
-                 "exact-date check)")
+    source = result.get("source_path")
+    expected = result.get("sha256")
+    try:
+        raw = Path(str(source)).read_bytes()
+    except OSError:
+        raw = None
+    if (
+        raw is None
+        or not isinstance(expected, str)
+        or hashlib.sha256(raw).hexdigest() != expected
+    ):
+        result.update({
+            "state": "integrity_failed", "context": None,
+            "warning": "research context integrity failed (hash drift after load)",
+        })
+    return result
+
+
+def load_context(
+    as_of: str, base_dir: str = "reports/attractiveness_context"
+) -> tuple[dict | None, str | None]:
+    """Compatibility view over the evidence-bearing context loader."""
+    evidence = load_context_evidence(as_of, base_dir)
+    context = evidence.get("context")
+    warning = evidence.get("warning")
+    return (
+        context if isinstance(context, dict) else None,
+        warning if isinstance(warning, str) else None,
+    )
 
 
 def _headline(symbol: str, kind: str, card: dict) -> str:
@@ -1029,13 +1248,195 @@ def _page_chain_age_sessions(page_as_of: str, today: str | None) -> int | None:
     return trading_sessions_between(page_as_of, today)
 
 
+def _valid_iso_date(value: object) -> str | None:
+    """Return a strict ISO calendar date, never a display-friendly guess."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return value if parsed.isoformat() == value else None
+
+
+def _strict_utc_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+            r"\.[0-9]{6}Z", value) is None:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
+    except ValueError:
+        return None
+
+
+def load_research_views_status(
+        path: str | Path = RESEARCH_VIEWS_STATUS_PATH) -> dict[str, object]:
+    """Validate one current pointer and its immutable generation, fail closed."""
+    from options_researcher.research_views_publication import load_current, load_failure
+
+    supplied = Path(path)
+    dashboard = supplied if supplied.is_dir() else supplied.parent
+    current = load_current(dashboard)
+    failure = load_failure(dashboard)
+    current["failure_channel"] = failure
+    if failure.get("state") == "failed":
+        failure_value = failure.get("failure")
+        if isinstance(failure_value, Mapping):
+            current_time = _strict_utc_timestamp(current.get("published_at"))
+            completed = _strict_utc_timestamp(failure_value.get("completed_at"))
+            if (current.get("state") != "published"
+                    or (current_time is not None and completed is not None
+                        and completed > current_time)):
+                current["active_failure"] = failure_value
+    return current
+
+
+def _strict_regime_sidecar(status: Mapping[str, object],
+                           evaluation_date: str) -> dict[str, object] | None:
+    import json
+
+    artifacts = status.get("artifacts")
+    if status.get("state") != "published" or not isinstance(artifacts, Mapping):
+        return None
+    path_value = artifacts.get("wasserstein-regime.json")
+    if not isinstance(path_value, Path):
+        return None
+    try:
+        raw = path_value.read_bytes()
+        value = json.loads(raw)
+        canonical = (json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError):
+        return None
+    if raw != canonical or not isinstance(value, dict):
+        return None
+    if set(value) != {"schema", "as_of_written", "evaluation_date", "symbols"}:
+        return None
+    if value.get("schema") != "regime_report/v1" or _strict_utc_timestamp(
+            value.get("as_of_written")) is None:
+        return None
+    sidecar_date = _valid_iso_date(value.get("evaluation_date"))
+    board_date = _valid_iso_date(evaluation_date)
+    if sidecar_date is None or board_date is None or sidecar_date > board_date:
+        return None
+    symbols = value.get("symbols")
+    if not isinstance(symbols, dict) or set(symbols) != set(config.REGIME_SYMBOLS):
+        return None
+    for row in symbols.values():
+        if not isinstance(row, dict) or set(row) != {
+                "label", "high_dispersion", "max_asof", "skipped_reason"}:
+            return None
+        label, dispersion = row.get("label"), row.get("high_dispersion")
+        max_asof, reason = row.get("max_asof"), row.get("skipped_reason")
+        if max_asof is not None:
+            strict_max = _valid_iso_date(max_asof)
+            if strict_max is None or strict_max > sidecar_date or strict_max > board_date:
+                return None
+        successful = (isinstance(label, int) and not isinstance(label, bool)
+                      and isinstance(dispersion, bool) and reason is None
+                      and isinstance(max_asof, str))
+        skipped = (label is None and dispersion is None and isinstance(reason, str)
+                   and bool(reason) and (max_asof is None or isinstance(max_asof, str)))
+        if not successful and not skipped:
+            return None
+    return value
+
+
+def _regime_strip_html(status: Mapping[str, object] | None,
+                       evaluation_date: str) -> str:
+    from options_researcher.regime_constants import DISCLAIMER
+    from options_researcher.top3_snapshot import trading_sessions_between
+
+    status = status if isinstance(status, Mapping) else {}
+    sidecar = _strict_regime_sidecar(status, evaluation_date)
+    stale = sidecar is None
+    rows = []
+    if sidecar is not None:
+        symbols = sidecar["symbols"]
+        assert isinstance(symbols, dict)
+        max_dates = [row["max_asof"] for row in symbols.values()
+                     if isinstance(row, dict) and isinstance(row.get("max_asof"), str)]
+        if not max_dates or trading_sessions_between(max(max_dates), evaluation_date) > 5:
+            stale = True
+        for symbol in config.REGIME_SYMBOLS:
+            row = symbols[symbol]
+            if row["skipped_reason"] is None:
+                detail = (f"label {row['label']} · high dispersion "
+                          f"{'yes' if row['high_dispersion'] else 'no'} · "
+                          f"max as-of {row['max_asof']}")
+            else:
+                detail = (f"unavailable · max as-of {row['max_asof'] or 'unavailable'} · "
+                          f"{row['skipped_reason']}")
+            rows.append(f"<li><strong>{_esc(symbol)}</strong> · {_esc(detail)}</li>")
+    if not rows:
+        rows = [f"<li><strong>{_esc(symbol)}</strong> · unavailable</li>"
+                for symbol in config.REGIME_SYMBOLS]
+    warning = ('<div class="notice bad">regime view unpublished/stale — '
+               'see Experiments shelf</div>' if stale else "")
+    return ('<section class="panel regime-strip"><div class="eyebrow">'
+            f'REGIME (descriptive)</div>{warning}<ul>{"".join(rows)}</ul>'
+            f'<div class="label">{_esc(DISCLAIMER.replace("**", ""))}</div></section>')
+
+
+def _underlying_closes_store_freshness(
+    symbols: tuple[str, ...] | list[str],
+) -> dict[str, str]:
+    """Read the configured close-store maximum once during assembly.
+
+    This is deliberately distinct from each rendered section's bounded
+    ``closes_as_of`` value. Rendering receives this completed summary and
+    never opens the close store itself.
+    """
+    import pandas as pd
+
+    from data import underlying_closes
+
+    requested = sorted({symbol for symbol in symbols if isinstance(symbol, str)})
+    if not requested:
+        return {"state": "unavailable", "detail": "no configured symbols"}
+
+    cache_dir = Path(underlying_closes.CACHE_DIR)
+    maximums: list[str] = []
+    missing: list[str] = []
+    malformed: list[str] = []
+    for symbol in requested:
+        path = cache_dir / f"{symbol}.parquet"
+        if not path.is_file():
+            missing.append(symbol)
+            continue
+        try:
+            frame = pd.read_parquet(path)
+        except (OSError, TypeError, ValueError):
+            malformed.append(symbol)
+            continue
+        if list(frame.columns) != ["date", "close"] or frame.empty:
+            malformed.append(symbol)
+            continue
+        dates = [_valid_iso_date(value) for value in frame["date"].tolist()]
+        if any(value is None for value in dates):
+            malformed.append(symbol)
+            continue
+        maximums.append(max(value for value in dates if value is not None))
+
+    if missing or malformed:
+        details = []
+        if missing:
+            details.append("missing store files: " + ", ".join(missing))
+        if malformed:
+            details.append("malformed store files: " + ", ".join(malformed))
+        return {"state": "unavailable", "detail": "; ".join(details)}
+    return {"state": "available", "as_of": max(maximums)}
+
+
 def assemble(
     *,
     symbol_sections: list[dict] | None = None,
     rv21_by_symbol: dict[str, float] | None = None,
     blocked: list[dict] | None = None,
-    hypothesis_evidence_by_symbol: Mapping[str, object] | None = None,
+    hypothesis_evidence_by_symbol: Mapping[str, SymbolEvidence] | None = None,
     composite_signals: list[dict] | None = None,
+    underlying_closes_freshness: Mapping[str, str] | None = None,
     today: str | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
@@ -1130,6 +1531,14 @@ def assemble(
                        "cards": cards, "empty": grp.get("empty")}
             if "preview" in grp:
                 out_grp["preview"] = grp["preview"]
+            if "pick_tracker_coverage" in grp:
+                out_grp["pick_tracker_coverage"] = copy.deepcopy(
+                    grp["pick_tracker_coverage"]
+                )
+            if "pick_tracker_quotes" in grp:
+                out_grp["pick_tracker_quotes"] = copy.deepcopy(
+                    grp["pick_tracker_quotes"]
+                )
             out_groups.append(out_grp)
         out_sec = {"symbol": sym, "close": float(sec["close"]),
                    "iv_rank": float(sec["iv_rank"]),
@@ -1182,10 +1591,25 @@ def assemble(
                 if evidence is not None:
                     record["hypothesis_evidence"] = evidence
 
+    from options_researcher.hypothesis_evidence import (
+        summarize_hypothesis_evidence,
+    )
+
+    family_evidence = summarize_hypothesis_evidence(
+        hypothesis_evidence_by_symbol or {}
+    )
+
     if composite_signals is None and real_assembly:
         from options_researcher.composite_signals import build_board
 
         composite_signals = build_board()
+
+    if underlying_closes_freshness is None and real_assembly:
+        import config
+
+        underlying_closes_freshness = _underlying_closes_store_freshness(
+            config.ATTRACTIVENESS_UNIVERSE
+        )
 
     canonical_symbols = [
         sec for sec in out_symbols if not sec.get("display_only")
@@ -1211,6 +1635,10 @@ def assemble(
         "evaluation_date": today,
         "chain_age_sessions": _page_chain_age_sessions(page_as_of, today),
         "composite_signals": composite_signals or [],
+        "family_evidence": family_evidence,
+        "underlying_closes_freshness": dict(
+            underlying_closes_freshness or {
+                "state": "unavailable", "detail": "not assembled"}),
     }
     if schwab_state is not None:
         out["schwab_lane"] = schwab_state
@@ -1265,13 +1693,26 @@ def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
     csp_open_count = (int((positions["structure"] == "csp").sum())
                       if not positions.empty else 0)
     thesis_used = 0.0
-    held_leaps: dict[str, tuple[float, float]] = {}
+    held_leaps: dict[str, dict[str, object]] = {}
     if not positions.empty:
         t = positions[positions["bucket"] == "thesis"]
         thesis_used = float((t["entry_price"] * 100 * t["contracts"]).sum())
         for _, lp in positions[positions["structure"] == "leaps_call"].iterrows():
-            held_leaps.setdefault(str(lp["symbol"]),
-                                  (float(lp["strike"]), float(lp["entry_price"])))
+            identity = {
+                "id": str(lp["id"]),
+                "symbol": str(lp["symbol"]),
+                "right": str(lp["right"]),
+                "strike": float(lp["strike"]),
+                "expiration": str(lp["expiration"]),
+                "contracts": int(lp["contracts"]),
+                "entry_price": float(lp["entry_price"]),
+            }
+            identity["source_row_hash"] = hashlib.sha256(
+                json.dumps(
+                    identity, sort_keys=True, separators=(",", ":")
+                ).encode()
+            ).hexdigest()
+            held_leaps.setdefault(str(lp["symbol"]), identity)
     bucket_room = config.H4_THESIS_MAX_PREMIUM_TOTAL - thesis_used
 
     # One v3 evidence load for the whole page; a broken store degrades every
@@ -1498,6 +1939,18 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
     lot = holdings.loc[holdings["symbol"] == symbol]
     held_shares = int(lot.iloc[0]["shares"]) if len(lot) else 0
     if held_shares >= 100:
+        holding_identity = {
+            "symbol": symbol,
+            "shares": 100,
+            "declared_shares": held_shares,
+            "cost_basis": float(lot.iloc[0]["cost_basis"]),
+            "acquired": str(lot.iloc[0]["acquired"]),
+        }
+        holding_identity["source_row_hash"] = hashlib.sha256(
+            json.dumps(
+                holding_identity, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
         cc_cards = ladder_cards(
             cc_card_rows, symbol, chain, day,
             rank_key="annualized_yield",
@@ -1510,6 +1963,7 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                          symbol=symbol, day=day)
         groups.append({"kind": "cc",
                        "title": "SELL A COVERED CALL? (rent out your shares)",
+                       "pick_tracker_coverage": holding_identity,
                        "cards": cc_cards,
                        "empty": None})
     elif held_shares > 0:
@@ -1522,7 +1976,9 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
                                  "100-share lot; PMCC rows appear only after "
                                  "a real LEAPS is recorded.")})
     if symbol in held_leaps:
-        lk, lp = held_leaps[symbol]
+        leaps_identity = held_leaps[symbol]
+        lk = float(leaps_identity["strike"])
+        lp = float(leaps_identity["entry_price"])
         pmcc_cards = ladder_cards(
             pmcc_card_rows, symbol, chain, day,
             rank_key="annualized_yield", higher_is_better=True,
@@ -1535,6 +1991,7 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
         groups.append({"kind": "pmcc",
                        "title": "SELL A CALL AGAINST YOUR LEAPS? (PMCC)",
                        "leaps_strike": lk, "leaps_premium": lp,
+                       "pick_tracker_coverage": copy.deepcopy(leaps_identity),
                        "cards": pmcc_cards,
                        "empty": None if pmcc_cards else
                        (f"no SAFE strike this cycle: the rule needs a call "
@@ -1587,6 +2044,43 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
     if earnings_source == "v3_store" and v3_assertions is not None:
         apply_cycle_badges(groups, symbol, date_cls.fromisoformat(day),
                            v3_assertions, known_as_of=known_now)
+
+    expiration_column = (
+        "expiration" if "expiration" in chain.columns else "exp_date"
+    )
+    for group in groups:
+        lane = str(group.get("kind") or "")
+        right = "P" if lane == "put" else "C"
+        quotes: dict[str, dict[str, object]] = {}
+        for card in group.get("cards", []):
+            if "strike" not in card or "expiry" not in card:
+                continue
+            try:
+                selected = chain.loc[
+                    (chain[expiration_column].astype(str) == str(card["expiry"]))
+                    & (chain["strike"].astype(float) == float(card["strike"]))
+                    & (chain["right"].astype(str).str.upper().str[0] == right)
+                ]
+            except (KeyError, TypeError, ValueError):
+                selected = chain.iloc[0:0]
+            if len(selected) != 1:
+                continue
+            row = selected.iloc[0]
+            raw = {
+                "symbol": symbol,
+                "right": right,
+                "strike": float(card["strike"]),
+                "expiry": str(card["expiry"]),
+                "bid": float(row["bid"]),
+                "ask": float(row["ask"]),
+                "open_interest": int(row.get("open_interest", 0)),
+            }
+            raw["source_row_hash"] = hashlib.sha256(
+                json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            quotes[f"{card['expiry']}:{float(card['strike']):.2f}"] = raw
+        if quotes:
+            group["pick_tracker_quotes"] = quotes
 
     section = {"symbol": symbol, "as_of": day, "close": close,
                "iv_rank": iv_rank, "groups": groups,
@@ -1648,7 +2142,12 @@ def sections_json(sections: list[dict] | None = None) -> str:
             sections, _rv21, blocked, _schwab_state = _gather_all()
     _dates = {s["as_of"] for s in sections} if sections else set()
     as_of = next(iter(_dates)) if len(_dates) == 1 else None
-    return json.dumps({"as_of": as_of, "sections": sections,
+    public_sections = copy.deepcopy(sections)
+    for section in public_sections or []:
+        for group in section.get("groups", []):
+            group.pop("pick_tracker_coverage", None)
+            group.pop("pick_tracker_quotes", None)
+    return json.dumps({"as_of": as_of, "sections": public_sections,
                        "blocked": blocked},
                       indent=2, sort_keys=False)
 
@@ -2236,6 +2735,13 @@ _STYLE = """
   }
 """
 
+_EVENT_STYLE = """
+  /* event-chip-style: neutral, non-grading annotations only */
+  .event-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
+  .event-chip { background: #edf3f6; border: 1px solid #a9bdc8; border-radius: 999px;
+    color: #294b5c; font-size: .67rem; font-weight: 750; padding: 4px 7px; }
+"""
+
 
 def _esc(v) -> str:
     return _html.escape(str(v))
@@ -2252,6 +2758,86 @@ def _badges(grades: dict) -> str:
         pills.append(f'<span class="status-badge {cls}">'
                      f'{symbol} {_esc(k)} · {_esc(status)}</span>')
     return f'<div class="party-badges">{"".join(pills)}</div>'
+
+
+def event_chips(card: Mapping[str, object], symbol: str,
+                evaluation_date: str, calendar: object,
+                complex_map: Mapping[str, object]) -> list[dict[str, str]]:
+    """Return non-grading calendar/complex annotations for one card life window.
+
+    ``evaluation_date`` is intentionally an explicit board value: never use a
+    stale section as-of date to decide which events are alive.
+    """
+    from options_researcher.event_calendar import Event, provenance_markers
+
+    try:
+        start = date.fromisoformat(evaluation_date)
+        expiry = date.fromisoformat(str(card["expiry"]))
+    except (KeyError, TypeError, ValueError):
+        return []
+    if expiry < start:
+        return []
+    chips: list[dict[str, str]] = []
+    clusters = complex_map.get("clusters", {}) if isinstance(complex_map, Mapping) else {}
+    for event in calendar if isinstance(calendar, (list, tuple)) else ():
+        if not isinstance(event, Event) or not start <= event.date <= expiry:
+            continue
+        origin = event.event_id.split("-", 1)[0].upper()
+        marker = "cal"
+        if origin != symbol.upper():
+            for cluster in clusters.values() if isinstance(clusters, Mapping) else ():
+                if not isinstance(cluster, Mapping):
+                    continue
+                members = {str(value).upper() for value in cluster.get("members", [])}
+                propagators = {str(value).upper() for value in cluster.get("events_propagate_from", [])}
+                if symbol.upper() in members and origin in members and origin in propagators:
+                    marker = "complex"
+                    break
+        label = (f"{marker.upper()} · {event.kind.replace('_', ' ')} · {event.title} · "
+                 f"{event.date.isoformat()} · {event.time_et or 'time TBD'}")
+        for notice in provenance_markers(event, start):
+            label += f" · {notice}"
+        chips.append({"marker": marker, "text": label})
+    return chips
+
+
+def _event_chips_html(card: Mapping[str, object], symbol: str,
+                      evaluation_date: str, event_view: Mapping[str, object] | None) -> str:
+    if not event_view:
+        return ""
+    try:
+        calendar = event_view.get("calendar", [])
+        complex_raw = event_view.get("complex_map", {})
+        chips = event_chips(card, symbol, evaluation_date,
+                            calendar if isinstance(calendar, (list, tuple)) else [],
+                            complex_raw if isinstance(complex_raw, Mapping) else {})
+    except Exception as exc:
+        return f'<div class="notice bad">EVENT LAYER FAILED — {_esc(exc.__class__.__name__)}</div>'
+    return ('<div class="event-chips">' + ''.join(
+        f'<span class="event-chip">EVENT · {_esc(chip["text"])}</span>' for chip in chips
+    ) + '</div>') if chips else ""
+
+
+def _elapsed_events_html(evaluation_date: str,
+                         event_view: Mapping[str, object] | None) -> str:
+    """Show prior events only in a details block, never as active chips."""
+    from options_researcher.event_calendar import Event
+
+    if not event_view:
+        return ""
+    try:
+        evaluation = date.fromisoformat(evaluation_date)
+    except ValueError:
+        return ""
+    calendar = event_view.get("calendar", [])
+    elapsed = [event for event in (calendar if isinstance(calendar, (list, tuple)) else [])
+               if isinstance(event, Event) and event.date < evaluation]
+    if not elapsed:
+        return ""
+    rows = ''.join(f'<li>{_esc(event.date.isoformat())} · {_esc(event.title)}</li>'
+                   for event in elapsed)
+    return (f'<details class="event-elapsed"><summary>Elapsed events</summary>'
+            f'<ul>{rows}</ul></details>')
 
 
 def _hero_badges(grades: dict) -> str:
@@ -2414,13 +3000,21 @@ _POLICY_REASON_LABELS = {
 }
 
 
-def _card_html(card: dict, *, tech_note: str = "") -> str:
+def _card_html(card: dict, *, tech_note: str = "", symbol: str = "",
+               evaluation_date: str = "",
+               event_view: Mapping[str, object] | None = None) -> str:
     if "skipped" in card:
         return (f'<div class="panel"><div class="label">'
                 f'{_esc(card["skipped"])}</div></div>')
-    parts = ['<div class="panel candidate-card">',
+    snapshot = card.get("top3_snapshot")
+    candidate_id = (snapshot.get("candidate_id")
+                    if isinstance(snapshot, Mapping) else None)
+    identity_attr = (f' data-candidate-id="{_esc(candidate_id)}"'
+                     if isinstance(candidate_id, str) and candidate_id else "")
+    parts = [f'<div class="panel candidate-card"{identity_attr}>',
              f'<div class="party-name">{_esc(card["headline"])}</div>',
              _badges(card.get("grades", {}))]
+    parts.append(_event_chips_html(card, symbol, evaluation_date, event_view))
     if card.get("preview"):
         parts.append(f'<div class="notice watch">! '
                      f'{_esc(_PREVIEW_WARNING)}</div>')
@@ -2444,7 +3038,12 @@ def _card_html(card: dict, *, tech_note: str = "") -> str:
     return "".join(parts)
 
 
-def _group_html(grp: dict, *, rank: int, tech: dict | None = None) -> str:
+def _group_html(grp: dict, *, rank: int, tech: dict | None = None,
+                close: float | None = None,
+                protected_indexes: frozenset[int] = frozenset(),
+                collapse_enabled: bool = True, symbol: str = "",
+                evaluation_date: str = "",
+                event_view: Mapping[str, object] | None = None) -> str:
     count = len(grp["cards"])
     count_label = f"{count} contract" + ("" if count == 1 else "s")
     head = (f'<summary><span class="group-heading">'
@@ -2456,9 +3055,51 @@ def _group_html(grp: dict, *, rank: int, tech: dict | None = None) -> str:
         body = f'<div class="empty">{_esc(empty)}</div>'
     else:
         note = _card_tech_line(grp["kind"], tech)
-        cards = "".join(_card_html(c, tech_note=note) for c in grp["cards"])
-        body = f'<div class="card-grid">{cards}</div>'
+        if collapse_enabled and close is not None:
+            shown, hidden = dominated_partition(
+                grp["cards"], str(grp["kind"]), close,
+                protected_indexes=protected_indexes)
+        else:
+            shown, hidden = list(grp["cards"]), []
+        cards = "".join(_card_html(c, tech_note=note, symbol=symbol,
+                                    evaluation_date=evaluation_date,
+                                    event_view=event_view) for c in shown)
+        hidden_html = ""
+        if hidden:
+            hidden_cards = "".join(_card_html(card, tech_note=note, symbol=symbol,
+                                                evaluation_date=evaluation_date,
+                                                event_view=event_view)
+                                    for card, _dominator in hidden)
+            hidden_html = (
+                '<details class="dominated-candidates"><summary>'
+                f"{len(hidden)} candidates hidden — each is matched or beaten by a "
+                "shown card on every measure (expand to verify)</summary>"
+                f'<div class="card-grid">{hidden_cards}</div></details>')
+        body = f'<div class="card-grid">{cards}</div>{hidden_html}'
     return f'<details class="group-section">{head}{body}</details>'
+
+
+def _panel_best_headline(section: Mapping[str, object]) -> str:
+    """Best non-skipped headline under the existing display sort key."""
+    tech_value = section.get("technicals")
+    tech = tech_value if isinstance(tech_value, dict) else None
+    choices: list[tuple[tuple, int, int, str]] = []
+    groups_value = section.get("groups")
+    groups = groups_value if isinstance(groups_value, (list, tuple)) else ()
+    for group_index, group in enumerate(groups):
+        if not isinstance(group, Mapping):
+            continue
+        kind = str(group.get("kind", ""))
+        cards_value = group.get("cards")
+        cards = cards_value if isinstance(cards_value, (list, tuple)) else ()
+        for card_index, card in enumerate(cards):
+            if not isinstance(card, dict) or "skipped" in card:
+                continue
+            headline = card.get("headline")
+            if isinstance(headline, str) and headline:
+                choices.append((_group_candidate_sort_key(card, kind, tech),
+                                group_index, card_index, headline))
+    return min(choices)[3] if choices else "No current candidate"
 
 
 def _prov_tag(context: dict | None) -> str:
@@ -2468,9 +3109,9 @@ def _prov_tag(context: dict | None) -> str:
     return f'<span class="prov">{_esc(prov)}</span>'
 
 
-def _research_annotation_map(
+def _research_annotation_result(
         picks: list[dict], context: dict | None
-        ) -> tuple[dict[str, Mapping[str, object]], str | None]:
+        ) -> tuple[dict[str, Mapping[str, object]], str | None, bool]:
     """Validate advisory annotations against the deterministic hero IDs.
 
     The context JSON may explain a current candidate, but it cannot add one or
@@ -2493,13 +3134,13 @@ def _research_annotation_map(
 
     raw = (context or {}).get("annotations")
     if raw is None:
-        return {}, None
+        return {}, None, True
     if not isinstance(raw, dict):
-        return {}, "research annotations are not an object — ignoring them"
+        return {}, "research annotations are not an object — ignoring them", False
     keys = [p["card"].get("top3_snapshot", {}).get("candidate_id")
             for p in picks]
     if any(not isinstance(key, str) for key in keys):
-        return {}, "candidate identities are invalid — research annotations ignored"
+        return {}, "candidate identities are invalid — research annotations ignored", False
     current_keys = frozenset(keys)
     current_annotations = {key: value for key, value in raw.items()
                            if key in current_keys}
@@ -2507,14 +3148,22 @@ def _research_annotation_map(
     try:
         normalized = normalize_research_annotations(keys, current_annotations)
     except AnnotationValidationError as error:
-        return {}, f"research annotations invalid ({error.code}) — ignoring them"
+        return {}, f"research annotations invalid ({error.code}) — ignoring them", False
     notice = None
     if dropped:
         notice = (f"{len(dropped)} research annotation(s) do not match any "
                   f"card on today's board and were not rendered "
                   f"({', '.join(dropped)}) — the research context is stale "
                   "relative to the current picks, or a key is mistyped")
-    return dict(normalized), notice
+    return dict(normalized), notice, True
+
+
+def _research_annotation_map(
+        picks: list[dict], context: dict | None
+        ) -> tuple[dict[str, Mapping[str, object]], str | None]:
+    """Compatibility wrapper retaining the existing two-value contract."""
+    normalized, warning, _integrity_ok = _research_annotation_result(picks, context)
+    return normalized, warning
 
 
 def _research_html(annotation: Mapping[str, object] | None, *,
@@ -2553,6 +3202,312 @@ def _research_html(annotation: Mapping[str, object] | None, *,
     parts.append('<div class="label">Advisory context only; it does not '
                  'change membership or rank.</div></details>')
     return "".join(parts)
+
+
+def _freshness_state(as_of: object, evaluation_date: object) -> tuple[str, str]:
+    """Classify a source date with the one configured chain-age policy."""
+    import config
+
+    valid_as_of = _valid_iso_date(as_of)
+    valid_evaluation = _valid_iso_date(evaluation_date)
+    if valid_as_of is None:
+        return "BLOCKED", "date UNKNOWN"
+    if valid_evaluation is None:
+        return "BLOCKED", f"as of {valid_as_of}; age UNKNOWN"
+    age = _page_chain_age_sessions(valid_as_of, valid_evaluation)
+    if age is None:
+        return "BLOCKED", f"as of {valid_as_of}; age UNKNOWN"
+    if age >= config.CHAIN_STALE_BLOCK_SESSIONS:
+        return "BLOCKED", f"as of {valid_as_of}; {age} sessions old"
+    if age >= config.CHAIN_STALE_WARN_SESSIONS:
+        return "WARN", f"as of {valid_as_of}; {age} session old"
+    return "OK", f"as of {valid_as_of}; {age} sessions old"
+
+
+def _source_freshness_chip(
+    label: str, sections: list[Mapping[str, object]], *,
+    source: str, evaluation_date: object,
+) -> str:
+    present = [section for section in sections if section.get("chain_source") == source]
+    dates = [_valid_iso_date(section.get("as_of")) for section in present]
+    valid_dates = [value for value in dates if value is not None]
+    selected_date = min(valid_dates) if len(valid_dates) == len(present) and valid_dates else None
+    state, detail = _freshness_state(selected_date, evaluation_date)
+    import config
+
+    available = {str(section.get("symbol")) for section in present}
+    board_available = {str(section.get("symbol")) for section in sections}
+    unavailable = [
+        symbol for symbol in config.ATTRACTIVENESS_UNIVERSE
+        if symbol not in board_available
+    ]
+    unavailable_text = (
+        f"; unavailable: {', '.join(unavailable)}" if unavailable else ""
+    )
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>{_esc(label)}</strong> '
+        f"{_esc(detail)} · {len(available)}/{len(config.ATTRACTIVENESS_UNIVERSE)} names"
+        f"{_esc(unavailable_text)} · {state}</span>"
+    )
+
+
+def _research_freshness_chip(
+    context: Mapping[str, object] | None, evaluation_date: object
+) -> str:
+    if not isinstance(context, Mapping):
+        return '<span class="meta-chip freshness-chip blocked"><strong>Research</strong> research: none · BLOCKED</span>'
+    as_of = _valid_iso_date(context.get("as_of"))
+    researched_on = context.get("researched_on")
+    if as_of is None:
+        state, detail = "BLOCKED", "none"
+    elif as_of == _valid_iso_date(evaluation_date):
+        state, detail = "OK", "exact"
+    else:
+        age = _page_chain_age_sessions(as_of, _valid_iso_date(evaluation_date))
+        state = "WARN" if age is not None else "BLOCKED"
+        detail = f"stale by {age} sessions" if age is not None else "stale; age unknown"
+    return (
+        '<span class="meta-chip freshness-chip ' + state.lower() + '"><strong>Research</strong> '
+        + _esc(f"as of {as_of or 'unavailable'}; researched on {researched_on or 'unavailable'}; {detail}; {state}")
+        + '</span>'
+    )
+
+
+def _research_context_evidence_chip(
+    data: Mapping[str, object],
+    context: Mapping[str, object] | None,
+    evidence: Mapping[str, object],
+    *,
+    annotation_integrity: bool,
+) -> str:
+    """Classify only the research bytes injected into this board build."""
+    board_as_of = _valid_iso_date(data.get("data_as_of"))
+    context_as_of = _valid_iso_date(context.get("as_of")) if context else None
+    evidence_state = evidence.get("state")
+    if evidence_state == "unavailable":
+        state, context_as_of = "UNAVAILABLE", None
+    elif evidence_state != "loaded":
+        state, context_as_of = "INTEGRITY_FAILED", None
+    elif (
+        not isinstance(context, Mapping)
+        or evidence.get("context") != context
+        or not annotation_integrity
+        or board_as_of is None
+        or context_as_of is None
+        or context_as_of > board_as_of
+    ):
+        state = "INTEGRITY_FAILED"
+        context_as_of = None if context_as_of is None or context_as_of > (board_as_of or "") else context_as_of
+    elif context_as_of == board_as_of:
+        state = "EXACT"
+    else:
+        state = "STALE"
+    css = "ok" if state == "EXACT" else "warn" if state == "STALE" else "blocked"
+    return (
+        f'<span class="meta-chip freshness-chip {css}"><strong>Research</strong> '
+        f"Research context {state} — context as of "
+        f"{_esc(context_as_of or 'unavailable')}; board as of "
+        f"{_esc(board_as_of or 'unavailable')}.</span>"
+    )
+
+
+def _qm_freshness_chip(qm_context: Mapping[str, object] | None) -> str:
+    context = qm_context if isinstance(qm_context, Mapping) else {}
+    study = context.get("study")
+    study = study if isinstance(study, Mapping) else {}
+    study_date = _valid_iso_date(context.get("study_date") or study.get("data_vintage"))
+    daily_date = _valid_iso_date(context.get("as_of"))
+    state = "OK" if study_date and daily_date else "BLOCKED"
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>QM</strong> '
+        f"frozen study vintage { _esc(study_date or 'unavailable') }; exact daily computation "
+        f"{ _esc(daily_date or 'unavailable') }; {state}</span>"
+    )
+
+
+def _composite_freshness_chip(cards: object) -> str:
+    valid_dates = [
+        _valid_iso_date(card.get("max_asof"))
+        for card in (cards if isinstance(cards, (list, tuple)) else ())
+        if isinstance(card, Mapping)
+    ]
+    maximum = max(value for value in valid_dates if value is not None) if any(valid_dates) else None
+    state = "OK" if maximum else "BLOCKED"
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>Composite</strong> '
+        f"max as-of {_esc(maximum or 'unavailable')} · {state}</span>"
+    )
+
+
+def _underlying_closes_freshness_chip(
+    freshness: object, evaluation_date: object,
+) -> str:
+    """Render the assembly-time close-store summary without reopening it."""
+    summary = freshness if isinstance(freshness, Mapping) else {}
+    as_of = _valid_iso_date(summary.get("as_of"))
+    if summary.get("state") != "available" or as_of is None:
+        detail = summary.get("detail")
+        detail = str(detail) if isinstance(detail, str) and detail else "unavailable"
+        return (
+            '<span class="meta-chip freshness-chip blocked"><strong>Underlying closes</strong> '
+            f"unavailable: {_esc(detail)} · BLOCKED</span>"
+        )
+    state, detail = _freshness_state(as_of, evaluation_date)
+    return (
+        f'<span class="meta-chip freshness-chip {state.lower()}"><strong>Underlying closes</strong> '
+        f"max session {_esc(as_of)}; {_esc(detail)} · {state}</span>"
+    )
+
+
+def _experiments_views_freshness_chip(
+    research_views_status: Mapping[str, object] | None,
+) -> str:
+    """Render the already-parsed research-views publication state."""
+    status = research_views_status if isinstance(research_views_status, Mapping) else {}
+    if status.get("state") == "published":
+        timestamp = status.get("published_at")
+        if isinstance(timestamp, str):
+            return (
+                '<span class="meta-chip freshness-chip ok"><strong>Experiments views</strong> '
+                f"published {_esc(timestamp)}; experiments: OK; wasserstein: OK · OK</span>"
+            )
+    state = status.get("state")
+    if state == "absent":
+        label = "not published"
+    elif state == "integrity_failed":
+        label = "unpublished/integrity failed"
+    else:
+        label = "unavailable (status malformed)"
+    return (
+        '<span class="meta-chip freshness-chip blocked"><strong>Experiments views</strong> '
+        f"{label} · BLOCKED</span>"
+    )
+
+
+def _freshness_html(
+    data: Mapping[str, object], context: Mapping[str, object] | None,
+    qm_context: Mapping[str, object] | None,
+    research_views_status: Mapping[str, object] | None,
+    context_evidence: Mapping[str, object] | None = None,
+    *,
+    annotation_integrity: bool = True,
+) -> str:
+    """One injected-data-only summary strip; no cache scan belongs in render."""
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE, THETADATA_CHAIN_SOURCE
+
+    raw_sections = data.get("symbols")
+    raw_sections = raw_sections if isinstance(raw_sections, (list, tuple)) else ()
+    sections = [section for section in raw_sections if isinstance(section, Mapping)]
+    chips = []
+    if any(section.get("chain_source") == THETADATA_CHAIN_SOURCE for section in sections):
+        chips.append(_source_freshness_chip(
+            "Frozen EOD (.cache/chains)", sections, source=THETADATA_CHAIN_SOURCE,
+            evaluation_date=data.get("evaluation_date"),
+        ))
+    if any(section.get("chain_source") == CHAIN_SOURCE for section in sections):
+        chips.append(_source_freshness_chip(
+            "Verified Schwab 15:45 pre-close (.cache/schwab_chains)", sections,
+            source=CHAIN_SOURCE, evaluation_date=data.get("evaluation_date"),
+        ))
+    chips.append(_underlying_closes_freshness_chip(
+        data.get("underlying_closes_freshness"), data.get("evaluation_date")
+    ))
+    if context_evidence is None:
+        chips.append(_research_freshness_chip(context, data.get("evaluation_date")))
+    else:
+        chips.append(_research_context_evidence_chip(
+            data, context, context_evidence,
+            annotation_integrity=annotation_integrity,
+        ))
+    chips.append(_qm_freshness_chip(qm_context))
+    chips.append(_composite_freshness_chip(data.get("composite_signals")))
+    chips.append(_experiments_views_freshness_chip(research_views_status))
+    return (
+        '<section class="panel freshness-strip"><div class="eyebrow">DATA FRESHNESS</div>'
+        '<p class="header-sub">These source timestamps describe available inputs; they do not predict, select, or authorize a trade.</p>'
+        f'<div class="meta-row freshness-row">{"".join(chips)}</div></section>'
+    )
+
+
+def _research_desk_html(
+    data: Mapping[str, object], context: Mapping[str, object] | None,
+    context_warning: str | None, annotation_notice: str | None,
+) -> str:
+    """Show research coverage separately from advisory per-symbol accordions."""
+    import config
+
+    context = context if isinstance(context, Mapping) else {}
+    packets = context.get("symbols")
+    packets = packets if isinstance(packets, Mapping) else {}
+    context_as_of = _valid_iso_date(context.get("as_of"))
+    board_as_of = _valid_iso_date(data.get("data_as_of"))
+    if context_as_of is None:
+        status = "none"
+    elif context_as_of == board_as_of:
+        status = "exact"
+    else:
+        age = _page_chain_age_sessions(context_as_of, board_as_of)
+        status = f"stale by {age} sessions" if age is not None else "stale; date unavailable"
+    rows = "".join(
+        '<div class="research-coverage-row"><strong>' + _esc(symbol) + '</strong> · '
+        + ("covered packet" if isinstance(packets.get(symbol), Mapping) else "no mapping-valued packet")
+        + '</div>'
+        for symbol in config.ATTRACTIVENESS_UNIVERSE
+    )
+    notices = "".join(
+        f'<div class="notice watch">! {_esc(notice)}</div>'
+        for notice in (context_warning, annotation_notice) if notice
+    )
+    return (
+        '<section class="panel research-desk"><div class="eyebrow">RESEARCH DESK</div>'
+        '<h2>Research context and coverage</h2>'
+        '<p class="header-sub">Research supplies context only; it cannot change the fixed shortlist, a grade, or a trade.</p>'
+        f'<div class="label">as of {_esc(context_as_of or "unavailable")} · researched on '
+        f'{_esc(str(context.get("researched_on") or "unavailable"))} · {_esc(status)} · '
+        f'{_prov_tag(dict(context))}</div>{notices}<div class="research-coverage">{rows}</div></section>'
+    )
+
+
+def _experiments_shelf_html(status: Mapping[str, object] | None) -> str:
+    """Passive local-view links only: never import or run an experiment builder."""
+    status_map = status if isinstance(status, Mapping) else {}
+    state = status_map.get("state", "absent")
+    prefix = ""
+    if state == "published":
+        generation_id = str(status_map.get("generation_id", ""))
+        line = f"published {_esc(str(status_map.get('published_at', 'unavailable')))}"
+        prefix = f"research-views-generations/{generation_id}/"
+    elif state == "absent":
+        line = "not published"
+    else:
+        line = f"status unavailable ({_esc(str(state))})"
+    active_failure = status_map.get("active_failure")
+    failure_channel = status_map.get("failure_channel")
+    if isinstance(active_failure, Mapping):
+        failure_html = ('<div class="notice bad">latest research-view refresh FAILED · '
+                        f"experiments exit {_esc(active_failure.get('experiments_exit'))} · "
+                        f"wasserstein exit {_esc(active_failure.get('wasserstein_exit'))}</div>")
+    elif (isinstance(failure_channel, Mapping)
+          and failure_channel.get("state") == "integrity_failed"):
+        failure_html = ('<div class="notice bad">research-view failure channel '
+                        'integrity failed</div>')
+    else:
+        failure_html = ""
+    copy_warning = status_map.get("copy_warning")
+    if isinstance(copy_warning, str) and copy_warning:
+        failure_html += f'<div class="notice bad">{_esc(copy_warning)}</div>'
+    cards = "".join(
+        f'<div class="market-card"><h3>{_esc(name)}</h3><p>Display-only research view.</p></div>'
+        for name in ("beta-to-QQQ", "tail shape", "spread stability", "T-bill carry", "short-interest context")
+    )
+    return (
+        '<section class="panel experiments-shelf"><div class="eyebrow">EXPERIMENTS SHELF</div>'
+        '<h2>Passive research views</h2><p class="header-sub">These links are display-only and cannot change registered bets, rankings, or trades.</p>'
+        f'<div class="label">{line}</div>{failure_html}<p>'
+        f'<a href="{prefix}experiments.html">Open experiments</a> · '
+        f'<a href="{prefix}wasserstein-regime.txt">Open Wasserstein regime view</a></p>'
+        f'<div class="market-grid">{cards}</div></section>'
+    )
 
 
 def _qm_card_context_html(pick: dict, symbol_context: Mapping[str, object] | None) -> str:
@@ -2673,6 +3628,8 @@ def _hero_pick_html(
     data_as_of: str,
     slot: int,
     symbol_qm_context: Mapping[str, object] | None = None,
+    evaluation_date: str = "",
+    event_view: Mapping[str, object] | None = None,
 ) -> str:
     """Render one deterministic hero pick plus optional lower-panel QM evidence."""
     card = pick["card"]
@@ -2695,6 +3652,7 @@ def _hero_pick_html(
         f"{_esc(status)}</span></div>"
         f'<div class="party-name">{_esc(card["headline"])}</div>'
         + _hero_badges(card.get("grades", {}))
+        + _event_chips_html(card, str(pick.get("symbol", "")), evaluation_date, event_view)
         + preview_warn
         + _risk_line(card)
         + _bbb_table(card.get("bbb", []))
@@ -2814,7 +3772,11 @@ def _blocked_qm_slot_html(
 
 
 def _original_hero_html(
-    data: dict, context: dict | None, qm_context: Mapping[str, object] | None
+    data: dict, context: dict | None, qm_context: Mapping[str, object] | None,
+    event_view: Mapping[str, object] | None = None,
+    *,
+    py_picks: list[dict] | None = None,
+    qualified_picks: list[dict] | None = None,
 ) -> str:
     """Render the unchanged mechanical Top-3 plus advisory research.
 
@@ -2822,10 +3784,12 @@ def _original_hero_html(
     source.  The only hero candidates come from ``select_top_picks`` over the
     assembled, point-in-time policy snapshots.
     """
-    py_picks = select_top_picks(data, include_csp_watch=True)
-    qualified_picks = select_top_picks(data)
+    if py_picks is None:
+        py_picks = select_top_picks(data, include_csp_watch=True)
+    if qualified_picks is None:
+        qualified_picks = select_top_picks(data)
     data_as_of = str(data.get("data_as_of") or "?")
-    annotations, annotation_warning = _research_annotation_map(py_picks, context)
+    annotations, _annotation_warning = _research_annotation_map(py_picks, context)
     notes = []
     legacy_picks = (context or {}).get("top_picks") or (context or {}).get(
         "legacy_top_picks_unusable"
@@ -2836,8 +3800,6 @@ def _original_hero_html(
             "ignored: only deterministic, policy-qualified cards "
             "may appear here.</div>"
         )
-    if annotation_warning:
-        notes.append(f'<div class="notice watch">! {_esc(annotation_warning)}</div>')
     if qualified_picks and len(qualified_picks) < len(py_picks):
         notes.append(
             f'<div class="notice watch">! {len(qualified_picks)} card(s) are fully '
@@ -2855,22 +3817,25 @@ def _original_hero_html(
                 annotation,
                 data_as_of=data_as_of,
                 slot=slot,
+                evaluation_date=str(data.get("evaluation_date") or data_as_of),
+                event_view=event_view,
             )
         )
-    for slot in range(len(py_picks) + 1, 4):
+    for slot in range(len(py_picks) + 1, config.PICK_TOP_N + 1):
         cards.append(_empty_hero_slot_html(data, slot))
 
     qualified_count = len(qualified_picks)
     watch_count = max(0, len(py_picks) - qualified_count)
-    open_count = max(0, 3 - len(py_picks))
+    open_count = max(0, config.PICK_TOP_N - len(py_picks))
     qualified_cls = "good" if qualified_count else "unknown"
     return (
         '<section class="panel hero">'
         '<div class="section-header"><div>'
-        '<div class="eyebrow">Daily shortlist · TOP 3 PICKS TODAY</div>'
-        "<h2>ORIGINAL MECHANICAL TOP 3</h2>"
-        '<p class="header-sub">The existing membership and order are unchanged. '
-        "QM context appears only in the separate descriptive section below.</p></div>"
+        '<div class="eyebrow">Daily shortlist · TOP 5 PICKS TODAY</div>'
+        '<h2>Rule-based top 5 — best policy-and-liquidity fit today</h2>'
+        '<p class="header-sub">Chosen by fixed rules (green-check fraction, one pick per stock). '
+        'This is a fit ranking, not a prediction; whether it predicts anything is exactly what '
+        'the registered RQ2/A2 studies will measure.</p></div>'
         '<div class="hero-stats">'
         f'<div class="hero-stat {qualified_cls}"><strong>{qualified_count}</strong>'
         "<span>Eligible</span></div>"
@@ -2919,22 +3884,25 @@ def _qm_two_date_label_html(
     )
 
 
-def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, object] | None) -> str:
+def _qm_hero_html(
+    data: dict,
+    context: dict | None,
+    qm_context: Mapping[str, object] | None,
+) -> str:
     """Render lower QM context on mechanical slots, or three fail-closed slots."""
     data_as_of = str(data.get("data_as_of") or "?")
     block_reason = _qm_context_block_reason(data, qm_context)
     notes: list[str] = []
     if block_reason is not None:
         cards = [
-            _blocked_qm_slot_html(qm_context, slot, reason=block_reason) for slot in range(1, 4)
+            _blocked_qm_slot_html(qm_context, slot, reason=block_reason)
+            for slot in range(1, config.PICK_TOP_N + 1)
         ]
-        selected_count, open_count = 0, 3
+        selected_count, open_count = 0, config.PICK_TOP_N
     else:
         assert isinstance(qm_context, Mapping)
         picks = select_qm_top_picks(data, qm_context, include_csp_watch=True)
-        annotations, annotation_warning = _research_annotation_map(picks, context)
-        if annotation_warning:
-            notes.append(f'<div class="notice watch">! {_esc(annotation_warning)}</div>')
+        annotations, _annotation_warning = _research_annotation_map(picks, context)
         qm_symbols = qm_context.get("symbols")
         qm_symbols = qm_symbols if isinstance(qm_symbols, Mapping) else {}
         cards = []
@@ -2951,14 +3919,14 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
                     symbol_qm_context=qm_symbols.get(pick["symbol"]),
                 )
             )
-        for slot in range(len(cards) + 1, 4):
+        for slot in range(len(cards) + 1, config.PICK_TOP_N + 1):
             cards.append(_empty_hero_slot_html(data, slot))
-        selected_count, open_count = len(picks), max(0, 3 - len(picks))
+        selected_count, open_count = len(picks), max(0, config.PICK_TOP_N - len(picks))
     return (
         '<section class="panel qm-comparison">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div>'
-        "<h2>QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 3</h2>"
+        "<h2>QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5</h2>"
         '<p class="header-sub">A secondary research context shown after the mechanical '
         "shortlist. These are the same mechanical cards in the same mechanical order. "
         "QM does not select, rank, validate, or change the edge or verdict of any "
@@ -2972,10 +3940,232 @@ def _qm_hero_html(data: dict, context: dict | None, qm_context: Mapping[str, obj
     )
 
 
-def _hero_html(
-    data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None
+_QM_MOVEMENT_SIGNAL_STATUSES = frozenset(
+    {"BREAKOUT", "PARABOLIC WARNING", "BREAKOUT + PARABOLIC WARNING"}
+)
+_QM_MOVEMENT_BANNER = (
+    "UNVALIDATED SIGNAL -- descriptive screen; no forward evidence exists "
+    "until the SS5 study reports; not an entry recommendation; no book path."
+)
+_QM_MOVEMENT_EMPTY = (
+    "No movement fires today. Expected — these patterns fired ~46 times in nine years "
+    "across twelve names."
+)
+_QM_MOVEMENT_BLOCKED = (
+    "BLOCKED — movement state is unavailable this session; no claim about fires is made."
+)
+
+
+def _qm_movement_lane_html(
+    data: Mapping[str, object], qm_context: Mapping[str, object] | None
 ) -> str:
-    return _original_hero_html(data, context, qm_context) + _qm_hero_html(data, context, qm_context)
+    """Render read-only QM fires without attaching frozen-study evidence."""
+    raw_movement = qm_context.get("movement_symbols") if isinstance(qm_context, Mapping) else None
+    has_movement = isinstance(raw_movement, Mapping)
+    movement = raw_movement if isinstance(raw_movement, Mapping) else {}
+    items = [
+        (str(symbol), item) for symbol, item in movement.items() if isinstance(item, Mapping)
+    ]
+    evaluated = [(symbol, item) for symbol, item in items if item.get("status") == "CURRENT"]
+    unavailable = [(symbol, item) for symbol, item in items if item.get("status") != "CURRENT"]
+    fires = [
+        (symbol, item)
+        for symbol, item in evaluated
+        if item.get("signal_status") in _QM_MOVEMENT_SIGNAL_STATUSES
+    ]
+    unavailable_note = ""
+    if unavailable:
+        detail = ", ".join(
+            f"{symbol} ({item.get('status', 'UNKNOWN')})" for symbol, item in unavailable
+        )
+        unavailable_note = f'<p class="label">Not evaluated this session: {_esc(detail)}.</p>'
+    label_context: Mapping[str, object] | None = qm_context
+    if isinstance(qm_context, Mapping) and isinstance(qm_context.get("movement_as_of"), str):
+        label_context = {**qm_context, "as_of": qm_context["movement_as_of"], "not_covered": []}
+    if not has_movement or not evaluated:
+        reason = (
+            str(qm_context.get("reason", "")).strip()
+            if isinstance(qm_context, Mapping)
+            else ""
+        )
+        reason_html = f'<p class="label">Reason: {_esc(reason)}</p>' if reason else ""
+        body = (
+            f'<p class="label">{_esc(_QM_MOVEMENT_BLOCKED)}</p>{reason_html}{unavailable_note}'
+        )
+    elif not fires:
+        body = f'<p class="label">{_esc(_QM_MOVEMENT_EMPTY)}</p>{unavailable_note}'
+    else:
+        cards = []
+        for symbol, item in fires:
+            coverage = item.get("frozen_study_coverage")
+            coverage_html = (
+                '<div class="label">not covered by the frozen study</div>'
+                if coverage == "NOT_COVERED"
+                else ""
+            )
+            cards.append(
+                '<article class="movement-card">'
+                f"<h3>{_esc(symbol)}</h3>"
+                f'<div class="label">Current QM signal: {_esc(str(item["signal_status"]))}</div>'
+                f"{coverage_html}</article>"
+            )
+        body = f'<div class="card-grid">{"".join(cards)}</div>{unavailable_note}'
+    return (
+        '<section class="panel qm-movement">'
+        '<div class="section-header"><div>'
+        '<div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div>'
+        '<h2>QM MOVEMENT LANE</h2>'
+        '<p class="header-sub">Current-session mechanical fires from adjusted cached OHLCV, '
+        'shown in watch-universe order. This does not select, order, gate, or validate '
+        'a mechanical pick.</p>'
+        f'<div class="label">{_esc(_QM_MOVEMENT_BANNER)}</div>'
+        f"{_qm_two_date_label_html(data, label_context)}</div></div>{body}</section>"
+    )
+
+
+def _hero_html(
+    data: dict, context: dict | None, qm_context: Mapping[str, object] | None = None,
+    event_view: Mapping[str, object] | None = None,
+    *,
+    qualified_picks: list[dict] | None = None,
+    watch_picks: list[dict] | None = None,
+    context_selection: Mapping[str, object] | None = None,
+) -> str:
+    return (
+        _original_hero_html(
+            data,
+            context,
+            qm_context,
+            event_view,
+            py_picks=watch_picks,
+            qualified_picks=qualified_picks,
+        )
+        + _context_lane_html(
+            data,
+            event_view,
+            selection=context_selection,
+            frozen_picks=watch_picks,
+        )
+        + _qm_movement_lane_html(data, qm_context)
+        + _qm_hero_html(data, context, qm_context)
+    )
+
+
+_CONTEXT_LANE_DISCLAIMER = (
+    "Experimental re-ordering by market context. The rule-based list above is "
+    "the registered baseline. This lane is display-only and carries no verdict "
+    "or trade authority; once the pick tracker is live its picks will be tracked "
+    "descriptively against the baseline."
+)
+
+
+def _context_lane_selection(data: dict) -> dict[str, object]:
+    """Compute the context tracker arm once and retain a loud state."""
+    if not config.CONTEXT_LANE_ENABLED:
+        return {"state": "DISABLED", "rows": [], "error": None}
+    from options_researcher.context_lane import rank_context_lane
+
+    try:
+        rows = rank_context_lane(
+            _admissible_pick_pool(data, include_csp_watch=True),
+            data.get("composite_signals"),
+            board_as_of=str(data.get("data_as_of") or "unavailable"),
+            n=config.PICK_TOP_N,
+        )
+    except Exception as exc:  # explicitly fail-visible; never hide scorer failure
+        return {"state": "FAILED", "rows": [], "error": exc.__class__.__name__}
+    return {"state": "READY", "rows": rows, "error": None}
+
+
+def _context_lane_html(
+    data: dict,
+    event_view: Mapping[str, object] | None = None,
+    *,
+    selection: Mapping[str, object] | None = None,
+    frozen_picks: list[dict] | None = None,
+) -> str:
+    """Render the owner-gated second ranking lane, or nothing while disabled."""
+    selection = selection or _context_lane_selection(data)
+    state = selection.get("state")
+    if state == "DISABLED":
+        return ""
+    if state == "FAILED":
+        return (
+            '<section class="panel hero context-lane">'
+            '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
+            f'<div class="notice bad">CONTEXT LANE FAILED — {_esc(selection.get("error") or "UnknownError")}</div>'
+            f'<p class="header-sub">{_esc(_CONTEXT_LANE_DISCLAIMER)}</p></section>'
+        )
+    raw_rows = selection.get("rows")
+    rows = list(raw_rows) if isinstance(raw_rows, (list, tuple)) else []
+
+    cards = []
+    selected_by_id: dict[str, Mapping[str, object]] = {}
+    for slot, row in enumerate(rows, start=1):
+        candidate_id = str(row["candidate_id"])
+        selected_by_id[candidate_id] = row
+        pick = row["pick"]
+        card = pick["card"]
+        reason = str(row["context_reason"])
+        blocked = reason == "BLOCKED"
+        status_class = "bad" if blocked else "watch" if reason in {
+            "VETOED", "DIRECTION_MISMATCH"
+        } else "good"
+        aligned = row.get("aligned_angles")
+        aligned_text = (
+            "Aligned angles: " + ", ".join(str(name) for name in aligned)
+            if isinstance(aligned, (list, tuple)) and aligned
+            else f"Context reason: {reason}"
+        )
+        cards.append(
+            f'<div class="hero-card {status_class}" '
+            f'data-context-symbol="{_esc(str(row["symbol"]))}">'
+            f'<div class="slot-label"><span>Context pick {slot}</span>'
+            f'<span class="policy-status {status_class}">{_esc(reason)}</span></div>'
+            f'<div class="party-name">{_esc(str(card.get("headline", candidate_id)))}</div>'
+            f"{_event_chips_html(card, str(row['symbol']), str(data.get('evaluation_date') or data.get('data_as_of') or ''), event_view)}"
+            f'<div class="label">{_esc(aligned_text)} · context term '
+            f'{_esc(row["context_term"])} · context max as-of '
+            f'{_esc(row.get("context_max_asof") or "unavailable")} · board as-of '
+            f'{_esc(row["board_as_of"])}</div>'
+            f'<details><summary>Context score audit</summary><div class="label">'
+            f'{_esc(candidate_id)} · {_esc(row["score"])}</div></details></div>'
+        )
+    for slot in range(len(rows) + 1, config.PICK_TOP_N + 1):
+        cards.append(
+            '<div class="hero-card unknown empty-slot">'
+            f'<div class="slot-label"><span>Context pick {slot}</span>'
+            '<span class="policy-status unknown">? OPEN</span></div>'
+            '<h3>No qualifying contract</h3>'
+            '<div class="label">The full admissible pool did not supply another symbol.</div>'
+            '</div>'
+        )
+
+    diagnostics = []
+    for pick in (
+        frozen_picks
+        if frozen_picks is not None
+        else select_top_picks(data, include_csp_watch=True)
+    ):
+        symbol = str(pick["symbol"])
+        snapshot = pick["card"].get("top3_snapshot")
+        candidate_id = snapshot.get("candidate_id") if isinstance(snapshot, Mapping) else None
+        row = selected_by_id.get(candidate_id) if isinstance(candidate_id, str) else None
+        reason = str(row["context_reason"]) if row is not None else "DISPLACED"
+        diagnostics.append(
+            f'<span class="status-badge unknown" data-diagnostic-symbol="'
+            f'{_esc(symbol)}">{_esc(symbol)} — {_esc(reason)}</span>'
+        )
+    return (
+        '<section class="panel hero context-lane">'
+        '<div class="section-header"><div>'
+        '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
+        '<h2>Context-aware Top 5 — full admitted pool</h2>'
+        f'<p class="header-sub">{_esc(_CONTEXT_LANE_DISCLAIMER)}</p></div></div>'
+        f'<div class="hero-grid">{"".join(cards)}</div>'
+        '<div class="label">Frozen-shortlist comparison diagnostics</div>'
+        f'<div class="party-badges">{"".join(diagnostics)}</div></section>'
+    )
 
 
 def _quant_want_html(qm_context: Mapping[str, object] | None) -> str:
@@ -3077,9 +4267,14 @@ def _symbol_context_html(symbol: str, context: dict | None) -> str:
     return "".join(parts)
 
 
-def _pinned_html(data: dict) -> str:
+def _pinned_html(
+    data: dict,
+    event_view: Mapping[str, object] | None = None,
+    *,
+    records: list[dict] | None = None,
+) -> str:
     """Core-names strip: owner-pinned visibility, explicitly not ranked."""
-    pinned = pinned_picks(data)
+    pinned = records if records is not None else pinned_picks(data)
     if not pinned:
         return ""
     names = " / ".join(_esc(rec["symbol"]) for rec in pinned)
@@ -3108,13 +4303,16 @@ def _pinned_html(data: dict) -> str:
                   f'<div class="party-name">{_esc(card.get("headline", ""))}'
                   '</div>'
                   + _hero_badges(card.get("grades", {}))
+                  + _event_chips_html(card, str(symbol),
+                                      str(data.get("evaluation_date") or data.get("data_as_of") or ""),
+                                      event_view)
                   + _risk_line(card)
                   + _bbb_table(card.get("bbb", [])) + '</div>')
     return ('<section class="panel hero"><div class="section-header"><div>'
             '<div class="eyebrow">CORE NAMES</div>'
             f'<h2>{names} — ALWAYS SHOWN</h2>'
             '<p>owner-pinned visibility — not ranked; these cards do not '
-            'compete with or reorder the Top-3 shortlist.</p></div></div>'
+            'compete with or reorder the Top-5 shortlist.</p></div></div>'
             f'<div class="hero-grid">{cards}</div></section>')
 
 
@@ -3176,19 +4374,28 @@ def _composite_card_html(card: Mapping[str, object]) -> str:
 
 def _composite_html(data: dict) -> str:
     """Composite signal board panel: display-only, non-verdict-bearing
-    four-angle confluence cards (options_researcher.composite_signals).
-    Omitted honestly when nothing was assembled."""
-    cards = data.get("composite_signals") or []
-    if not cards:
-        return ""
+    four-angle confluence cards (options_researcher.composite_signals)."""
+    cards = [card for card in (data.get("composite_signals") or [])
+             if isinstance(card, Mapping)]
+    grade_a = [str(card.get("symbol")) for card in cards if card.get("grade") == "A"]
+    agreement = (
+        f"Highest agreement today: {', '.join(grade_a)}" if grade_a
+        else "Highest agreement today: none at grade A"
+    )
     grid = "".join(_composite_card_html(card) for card in cards)
+    if not grid:
+        grid = (
+            '<div class="empty">No composite cards are available for this board. '
+            'The lane is display-only and no signal or verdict is implied.</div>'
+        )
     return (
         '<section class="panel"><div class="section-header"><div>'
         '<div class="eyebrow">COMPOSITE SIGNAL LANE</div>'
         '<h2>Composite signal board — display-only</h2>'
         '<p>Four independent angles (trend, vol premium, regime, options-'
         'market internals) per name. Not verdict-bearing, not FIRE-capable; '
-        'writes nothing to ledger/ or positions.</p></div></div>'
+        'writes nothing to ledger/ or positions.</p>'
+        f'<div class="label">{_esc(agreement)}</div></div></div>'
         f'<div class="card-grid">{grid}</div></section>'
     )
 
@@ -3280,6 +4487,76 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
         '<summary>Hypothesis evidence</summary>'
         '<div class="evidence-grid">'
         f"{hypothesis_rows}</div>{intraday_html}</details>"
+    )
+
+
+def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
+    """Render already-attached family summaries without gathering evidence."""
+    raw_summaries = data.get("family_evidence")
+    summaries = (
+        raw_summaries if isinstance(raw_summaries, (list, tuple)) else ()
+    )
+    lines = []
+    for summary in summaries:
+        family = str(_evidence_attr(summary, "family", "?"))
+        ritual_state = str(_evidence_attr(summary, "ritual_state", "UNKNOWN"))
+        ritual_detail = str(_evidence_attr(summary, "ritual_detail", "NO RECEIPT"))
+        raw_counts = _evidence_attr(summary, "raw_state_counts", ())
+        raw_counts = raw_counts if isinstance(raw_counts, (list, tuple)) else ()
+        raw_html = "; ".join(
+            '<span class="status-badge'
+            + (
+                " bad"
+                if str(_evidence_attr(count, "state", "UNKNOWN"))
+                in {"UNKNOWN", "MISSING", "REFUSED", "NO RECEIPT", "NOT TRACKED"}
+                else " unknown"
+            )
+            + '">evidence '
+            + _esc(str(_evidence_attr(count, "state", "UNKNOWN")))
+            + ": "
+            + _esc(str(_evidence_attr(count, "count", 0)))
+            + "</span>"
+            for count in raw_counts
+        ) or '<span class="status-badge bad">evidence UNKNOWN: 0</span>'
+        evaluation = _evidence_attr(summary, "evaluation_session") or "UNKNOWN"
+        run_date = _evidence_attr(summary, "run_date") or "UNKNOWN"
+        raw_sources = _evidence_attr(summary, "sources", ())
+        raw_sources = raw_sources if isinstance(raw_sources, (list, tuple)) else ()
+        source_paths = [
+            str(_evidence_attr(source, "path", "?"))
+            for source in raw_sources
+            if _evidence_attr(source, "path")
+        ]
+        sources_text = (
+            f"; sources: {', '.join(source_paths)}" if source_paths else ""
+        )
+        window_end = _evidence_attr(summary, "registered_window_end")
+        window_metadata = _evidence_attr(summary, "registered_window_metadata")
+        window_text = (
+            f"; {window_metadata}: ends {window_end}"
+            if window_end and window_metadata else ""
+        )
+        conspicuous = (
+            " bad" if ritual_state in {"MISSING", "REFUSED", "UNKNOWN", "NOT TRACKED"}
+            else " unknown"
+        )
+        lines.append(
+            "<li><strong>"
+            f"{_esc(family)}</strong> — ritual <span class=\"status-badge{conspicuous}\">"
+            f"{_esc(ritual_state)}</span> ({_esc(ritual_detail)}); "
+            f"{raw_html}; evaluation {_esc(str(evaluation))}; "
+            f"run {_esc(str(run_date))}{_esc(sources_text)}{_esc(window_text)}</li>"
+        )
+    body = "".join(lines) or (
+        "<li><strong>UNKNOWN</strong> — NO RECEIPT summary attached; "
+        "tracker cannot claim current registered-bet evidence.</li>"
+    )
+    return (
+        '<section class="panel registered-bets-tracker"><div class="section-header"><div>'
+        '<div class="eyebrow">REGISTERED-BETS TRACKER</div>'
+        '<h2>Registered-bets tracker</h2>'
+        '<p>This is a read-only receipt summary and cannot activate, rank, or place a trade.</p>'
+        f"</div></div><ul>{body}</ul></section>"
     )
 
 
@@ -3426,29 +4703,336 @@ def _run_exit_code(
     return 1 if any(rec.get("unexpected") for rec in blocked) or qm_unexpected else 0
 
 
-def render(
+def build_event_view(data: Mapping[str, object], evaluation_date: str) -> Mapping[str, object] | None:
+    """Read immutable cached event inputs before pure ``render`` runs.
+
+    This pre-render boundary is display-only. Promotion requires a separate
+    owner decision, registration, and the 2026-07-24 feasibility gate.
+    """
+    from options_researcher import event_calendar, fomc, schwab_chain_view
+
+    failures: dict[str, str] = {}
+    if not event_calendar.CALENDAR_PATH.exists() and not event_calendar.COMPLEX_MAP_PATH.exists():
+        return None
+    try:
+        calendar = event_calendar.load_calendar()
+        if calendar:
+            calendar = event_calendar.calendar_with_fomc(calendar, fomc.load_fomc())
+        evaluation = date.fromisoformat(evaluation_date)
+        complex_map = event_calendar.load_complex_map(
+            events=[event for event in calendar if event.date >= evaluation])
+    except Exception as exc:
+        calendar, complex_map = [], {}
+        failures["__calendar__"] = exc.__class__.__name__
+    moves: dict[str, dict[str, str]] = {}
+    symbols = data.get("symbols")
+    for sec in symbols if isinstance(symbols, list) else []:
+        if not isinstance(sec, Mapping):
+            continue
+        symbol, session = str(sec.get("symbol", "")), str(sec.get("as_of", ""))
+        if sec.get("chain_source") != schwab_chain_view.CHAIN_SOURCE:
+            moves[symbol] = {"text": "UNAVAILABLE", "reason": "non-Schwab source"}
+            continue
+        try:
+            newest = schwab_chain_view.newest_chain(symbol)
+            if newest is None or newest[1] != session:
+                moves[symbol] = {"text": "UNAVAILABLE",
+                                 "reason": "matching verified chain unavailable"}
+                continue
+            spot_record = schwab_chain_view.load_preclose_spot(symbol, session)
+            spot = spot_record[0] if spot_record is not None else None
+            timestamp = spot_record[1] if spot_record is not None else ""
+            moves[symbol] = event_calendar.implied_move(
+                newest[0], session, spot, "schwab_preclose",
+                spot_timestamp=timestamp, receipt_session=session)
+        except Exception as exc:
+            failures[symbol] = exc.__class__.__name__
+    return event_calendar.EventView.create(calendar, complex_map, moves, failures)
+
+
+def _finite_number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _pick_position(
+    pick: Mapping[str, object],
+    coverage_context: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Detach the evaluated option leg and its fail-closed risk basis."""
+    lane = str(pick.get("lane") or "")
+    card = pick.get("card")
+    card = card if isinstance(card, Mapping) else {}
+    top3 = card.get("top3_snapshot")
+    top3 = top3 if isinstance(top3, Mapping) else {}
+    policy = top3.get("policy")
+    policy = policy if isinstance(policy, Mapping) else {}
+    coverage = copy.deepcopy(coverage_context) if coverage_context is not None else None
+    side = "sell" if lane in {"put", "cc", "pmcc"} else "buy"
+    right = "P" if lane == "put" else "C"
+    basis: dict[str, object]
+    if lane in {"long_call", "leaps"}:
+        basis = {"kind": "ENTRY_DEBIT_AT_FILL", "value": None}
+    elif lane == "put":
+        basis = {
+            "kind": "ASSIGNMENT_CAPITAL",
+            "derivation": "EVALUATED_STRIKE_X_100",
+            "value": _finite_number(policy.get("assignment_capital")),
+        }
+    elif lane == "cc":
+        per_share = (
+            _finite_number(coverage.get("cost_basis"))
+            if isinstance(coverage, Mapping)
+            else None
+        )
+        basis = {
+            "kind": "FROZEN_100_SHARE_COST_BASIS",
+            "value": per_share * 100.0 if per_share is not None else None,
+        }
+    elif lane == "pmcc":
+        entry_price = (
+            _finite_number(coverage.get("entry_price"))
+            if isinstance(coverage, Mapping)
+            else None
+        )
+        basis = {
+            "kind": "FROZEN_COVERING_LEAPS_ENTRY_DEBIT",
+            "value": entry_price * 100.0 if entry_price is not None else None,
+        }
+    else:
+        basis = {"kind": "UNSUPPORTED_LANE", "value": None}
+    return {
+        "schema": "pick_position/v1",
+        "evaluated_leg": {
+            "symbol": str(pick.get("symbol") or ""),
+            "right": right,
+            "strike": _finite_number(pick.get("strike")),
+            "expiry": str(pick.get("expiry") or ""),
+            "side": side,
+            "contracts": 1,
+        },
+        "coverage_context": coverage,
+        "risk_basis": basis,
+        "pnl_scope": "INCREMENTAL_OPTION_LEG_ONLY",
+    }
+
+
+def _snapshot_pick(
+    pick_or_row: Mapping[str, object],
+    coverage_context: Mapping[str, object] | None = None,
+    quote_context: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    pick_value = pick_or_row.get("pick")
+    pick = pick_value if isinstance(pick_value, Mapping) else pick_or_row
+    card = pick.get("card")
+    card = card if isinstance(card, Mapping) else {}
+    top3 = card.get("top3_snapshot")
+    top3 = top3 if isinstance(top3, Mapping) else {}
+    candidate_id = top3.get("candidate_id") or pick_or_row.get("candidate_id")
+    out: dict[str, object] = {
+        "candidate_id": str(candidate_id or ""),
+        "symbol": str(pick.get("symbol") or ""),
+        "lane": str(pick.get("lane") or ""),
+        "strike": _finite_number(pick.get("strike")),
+        "expiry": str(pick.get("expiry") or ""),
+        "dte": pick.get("dte"),
+        "raw_quote": {
+            key: copy.deepcopy(quote_context.get(key) if quote_context is not None else None)
+            for key in ("symbol", "right", "strike", "expiry", "bid", "ask", "open_interest")
+        },
+        "source_row_hash": (
+            quote_context.get("source_row_hash")
+            if quote_context is not None
+            else None
+        ),
+        "pick_position": _pick_position(pick, coverage_context),
+    }
+    if pick_value is not None:
+        out["context"] = {
+            key: copy.deepcopy(pick_or_row.get(key))
+            for key in (
+                "score",
+                "context_max_asof",
+                "board_as_of",
+                "context_term",
+                "context_reason",
+                "aligned_angles",
+            )
+        }
+    return json.loads(json.dumps(out, sort_keys=True, separators=(",", ":")))
+
+
+def _tracker_source_contexts(
+    data: Mapping[str, object],
+) -> tuple[dict[int, Mapping[str, object]], dict[int, Mapping[str, object]]]:
+    coverage_by_card: dict[int, Mapping[str, object]] = {}
+    quote_by_card: dict[int, Mapping[str, object]] = {}
+    raw_sections = data.get("symbols")
+    for section in raw_sections if isinstance(raw_sections, list) else []:
+        if not isinstance(section, Mapping):
+            continue
+        groups = section.get("groups")
+        for group in groups if isinstance(groups, list) else []:
+            if not isinstance(group, Mapping):
+                continue
+            coverage = group.get("pick_tracker_coverage")
+            cards = group.get("cards")
+            for card in cards if isinstance(cards, list) else []:
+                if isinstance(card, Mapping):
+                    if isinstance(coverage, Mapping):
+                        coverage_by_card[id(card)] = coverage
+                    quotes = group.get("pick_tracker_quotes")
+                    key = None
+                    if "expiry" in card and "strike" in card:
+                        try:
+                            key = f"{card['expiry']}:{float(card['strike']):.2f}"
+                        except (TypeError, ValueError):
+                            key = None
+                    if isinstance(quotes, Mapping) and key is not None:
+                        quote = quotes.get(key)
+                        if isinstance(quote, Mapping):
+                            quote_by_card[id(card)] = quote
+    return coverage_by_card, quote_by_card
+
+
+def _render_source_row_hashes(
+    qualified_picks: Sequence[Mapping[str, object]],
+    watch_picks: Sequence[Mapping[str, object]],
+    context_selection: Mapping[str, object],
+    quote_by_card: Mapping[int, Mapping[str, object]],
+) -> tuple[str, ...]:
+    context_rows = context_selection.get("rows")
+    context_rows = list(context_rows) if isinstance(context_rows, (list, tuple)) else []
+    hashes: set[str] = set()
+    for value in (*qualified_picks, *watch_picks, *context_rows):
+        pick_value = value.get("pick")
+        pick = pick_value if isinstance(pick_value, Mapping) else value
+        card = pick.get("card")
+        quote = quote_by_card.get(id(card))
+        source_hash = quote.get("source_row_hash") if isinstance(quote, Mapping) else None
+        if isinstance(source_hash, str) and source_hash:
+            hashes.add(source_hash)
+    return tuple(sorted(hashes))
+
+
+def _selection_snapshot(
+    data: Mapping[str, object],
+    qualified_picks: list[dict],
+    watch_picks: list[dict],
+    context_selection: Mapping[str, object],
+    *,
+    coverage_by_card: Mapping[int, Mapping[str, object]],
+    quote_by_card: Mapping[int, Mapping[str, object]],
+) -> dict[str, object]:
+
+    def snap(value: Mapping[str, object]) -> dict[str, object]:
+        pick_value = value.get("pick")
+        pick = pick_value if isinstance(pick_value, Mapping) else value
+        card = pick.get("card")
+        coverage = coverage_by_card.get(id(card))
+        quote = quote_by_card.get(id(card))
+        return _snapshot_pick(value, coverage, quote)
+
+    context_rows = context_selection.get("rows")
+    context_rows = list(context_rows) if isinstance(context_rows, (list, tuple)) else []
+    return {
+        "schema": "picks_snapshot/v1",
+        "evaluation_date": str(data.get("evaluation_date") or ""),
+        "data_as_of": str(data.get("data_as_of") or ""),
+        "frozen_baseline": {
+            "state": "READY",
+            "watch_included": False,
+            "candidates": [snap(pick) for pick in qualified_picks],
+        },
+        "frozen_baseline_watch_inclusive": {
+            "state": "READY",
+            "watch_included": True,
+            "candidates": [snap(pick) for pick in watch_picks],
+        },
+        "context_lane": {
+            "state": str(context_selection.get("state") or "FAILED"),
+            "error": context_selection.get("error"),
+            "candidates": [snap(row) for row in context_rows],
+        },
+    }
+
+
+def _pick_tracker_html(status: Mapping[str, object] | None) -> str:
+    status_map = status if isinstance(status, Mapping) else {}
+    tracker = status_map.get("pick_tracker")
+    if not isinstance(tracker, Mapping):
+        body = '<div class="notice watch">PICK TRACKER UNBUILT — no scoreboard JSON published.</div>'
+    else:
+        state = str(tracker.get("state") or "UNAVAILABLE")
+        as_of = str(tracker.get("as_of") or "unavailable")
+        body = f'<div class="label">{_esc(state)} · as of {_esc(as_of)}</div>'
+    return (
+        '<section class="panel pick-tracker"><div class="eyebrow">'
+        'PICK TRACKER (descriptive)</div><h2>Shortlist outcome scoreboard</h2>'
+        '<p class="header-sub">Descriptive only; no verdict, ranking, sizing, '
+        f'or trade authority.</p>{body}</section>'
+    )
+
+
+def _render_result(
     data: dict,
     *,
     context: dict | None = None,
     context_warning: str | None = None,
+    context_evidence: Mapping[str, object] | None = None,
     qm_context: Mapping[str, object] | None = None,
-) -> str:
+    research_views_status: Mapping[str, object] | None = None,
+    event_view: Mapping[str, object] | None = None,
+) -> DashboardRenderResult:
     """Render the assemble() dict (plus optional research context) into one
     self-contained HTML string. Pure string templating: no file I/O, no
     network, no external assets. Every value from `data` / `context` is
     html.escape()'d before embedding. Page order: compact metadata header ->
-    original Top-3 -> descriptive QM comparison -> composite signal board ->
-    quant/market background -> pinned names ->
+    freshness -> rule-based Top-5 -> movement lane -> descriptive QM comparison
+    -> composite -> research desk -> registered-bets tracker -> passive experiments
+    -> pinned -> quant/market ->
     per-symbol panels (card grid)."""
+    qualified_picks = select_top_picks(data)
+    watch_picks = select_top_picks(data, include_csp_watch=True)
+    context_selection = _context_lane_selection(data)
+    coverage_by_card, quote_by_card = _tracker_source_contexts(data)
+    render_source_row_hashes = _render_source_row_hashes(
+        qualified_picks,
+        watch_picks,
+        context_selection,
+        quote_by_card,
+    )
     qm_context = enrich_qm_context_with_candidates(data, qm_context)
+    picks_for_research = watch_picks
+    _annotations, annotation_notice, annotation_integrity = _research_annotation_result(
+        picks_for_research, context
+    )
+    protected_card_ids = {id(pick["card"]) for pick in watch_picks}
+    pinned_records = pinned_picks(data)
+    protected_card_ids.update(
+        id(record["pick"]["card"]) for record in pinned_records
+        if record.get("pick"))
+    stale_symbols = set(data.get("stale_symbols") or [])
     symbols_html = ""
     for sec in data["symbols"]:
         tech = sec.get("technicals")
         ranked_groups = _rank_groups_for_display(sec["groups"], tech=tech)
-        groups = "".join(
-            _group_html(group, rank=rank, tech=tech)
-            for rank, group in enumerate(ranked_groups, start=1)
-        )
+        section_stale = (sec.get("features_stale") is True
+                         or sec.get("symbol") in stale_symbols)
+        rendered_groups = []
+        evaluation_date = str(data.get("evaluation_date") or data.get("data_as_of") or "")
+        for rank, group in enumerate(ranked_groups, start=1):
+            protected_indexes = frozenset(
+                index for index, card in enumerate(group.get("cards", []))
+                if id(card) in protected_card_ids)
+            rendered_groups.append(_group_html(
+                group, rank=rank, tech=tech, close=float(sec["close"]),
+                protected_indexes=protected_indexes,
+                collapse_enabled=not section_stale, symbol=str(sec.get("symbol", "")),
+                evaluation_date=evaluation_date, event_view=event_view))
+        groups = "".join(rendered_groups)
         rank_note = (
             '<div class="strategy-rank-note">'
             "Strategy rank: 1 is the strongest current fit; "
@@ -3464,7 +5048,7 @@ def render(
                 f"{_esc(sec.get('features_as_of', '?'))}, older than the "
                 f"chain date ({_esc(sec.get('as_of', '?'))}) — IV-rank/VRP "
                 "badges are STALE and this symbol is excluded from the "
-                "Top-3 shortlist.</div>"
+                "Top-5 shortlist.</div>"
             )
         display_only_html = (
             f'<div><span class="status-badge unknown">'
@@ -3478,22 +5062,61 @@ def render(
             if sec.get("display_only")
             else ""
         )
+        status_labels, panel_open = _panel_status(sec, stale_symbols)
+        status_html = "".join(
+            f'<span class="status-badge unknown">{_esc(label)}</span>'
+            for label in status_labels)
+        open_attr = " open" if panel_open else ""
+        event_failure = ""
+        if isinstance(event_view, Mapping):
+            raw_failures = event_view.get("failures", {})
+            failure_map = ({str(key): str(value) for key, value in raw_failures.items()}
+                           if isinstance(raw_failures, Mapping) else {})
+            failure = failure_map.get(sec.get("symbol")) or failure_map.get("__calendar__")
+            if failure:
+                event_failure = (f'<div class="notice bad">EVENT LAYER FAILED — '
+                                 f'{_esc(failure)}</div>')
+        implied = ""
+        if isinstance(event_view, Mapping):
+            raw_moves = event_view.get("implied_moves", {})
+            moves = ({str(key): value for key, value in raw_moves.items()}
+                     if isinstance(raw_moves, Mapping) else {})
+            move = moves.get(str(sec.get("symbol", "")))
+            if isinstance(move, Mapping):
+                if move.get("text") == "UNAVAILABLE":
+                    implied = (f'<div class="notice watch">implied move UNAVAILABLE — '
+                               f'{_esc(move.get("reason", "unknown"))}</div>')
+                elif move.get("text"):
+                    implied = (f'<div class="label">implied move {_esc(move["text"])} · '
+                               f'{_esc(move.get("method", ""))} · chain session '
+                               f'{_esc(move.get("chain_session", ""))} · capture convention '
+                               f'{_esc(move.get("capture_convention", ""))} · expiry '
+                               f'{_esc(move.get("expiry", ""))} · strike '
+                               f'{_esc(move.get("strike", ""))} · spot source '
+                               f'{_esc(move.get("spot_source", ""))} · intraday receipt session '
+                               f'{_esc(move.get("intraday_receipt_session", ""))} · spot timestamp '
+                               f'{_esc(move.get("spot_timestamp", ""))}</div>')
         symbols_html += (
-            '<section class="panel symbol-panel">'
-            '<div class="symbol-header"><div>'
+            f'<details class="panel symbol-panel"{open_attr}>'
+            '<summary class="symbol-header"><div>'
             '<div class="eyebrow">Symbol review</div>'
-            f"<h2>{_esc(sec['symbol'])}</h2>{display_only_html}</div>"
+            f"<h2>{_esc(sec['symbol'])}</h2>{display_only_html}"
+            f'<div class="label">{_esc(_panel_best_headline(sec))}</div>'
+            f'<div class="panel-status">{status_html}</div></div>'
             '<div class="symbol-stats">'
             f'<div class="symbol-stat"><span>{_esc(_close_stat_label(sec))}'
             f"</span><strong>${sec['close']:,.2f}</strong></div>"
+            f'<div class="symbol-stat"><span>As of</span><strong>'
+            f'{_esc(sec.get("as_of", "?"))}</strong></div>'
             f'<div class="symbol-stat"><span>IV rank</span><strong>'
             f"{_esc(_iv_rank_text(sec))}</strong></div>"
-            f"{_atm_iv_stat_html(sec)}{display_date_stat}</div></div>"
-            f'<div class="symbol-body">{_section_source_html(sec)}'
+            f"{_atm_iv_stat_html(sec)}{display_date_stat}</div></summary>"
+            f'<div class="symbol-body">{event_failure}{implied}'
+            f'{_elapsed_events_html(evaluation_date, event_view)}{_section_source_html(sec)}'
             f"{_feature_unavailable_html(sec)}{stale_html}{tech_html}"
             f"{_symbol_context_html(sec['symbol'], context)}{rank_note}{groups}"
             f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
-            "</section>"
+            "</details>"
         )
     data_as_of = data.get("data_as_of") or "no cached data"
     display_data_as_of = data.get("display_data_as_of") or data_as_of
@@ -3513,11 +5136,23 @@ def render(
         f'<div class="notice watch">! {_esc(context_warning)}</div>' if context_warning else ""
     )
     age_html = _chain_age_html(data)
-    return (
+    hero_html = _hero_html(
+        data,
+        context,
+        qm_context,
+        event_view,
+        qualified_picks=qualified_picks,
+        watch_picks=watch_picks,
+        context_selection=context_selection,
+    )
+    pinned_html = _pinned_html(data, event_view, records=pinned_records)
+    event_css = (_EVENT_STYLE if 'class="event-chip"' in
+                 (symbols_html + hero_html + pinned_html) else "")
+    out_html = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>Options Attractiveness</title>"
-        f"<style>{_STYLE}</style></head><body>"
+        f"<style>{_STYLE}{event_css}</style></head><body>"
         '<header class="app-header"><div class="app-header-inner">'
         '<div><div class="eyebrow">Options research · Attractiveness</div>'
         "<h1>Which options look attractive today?</h1>"
@@ -3528,14 +5163,20 @@ def render(
         f"</strong> {_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header><main class="page-body">'
+        f"{_freshness_html(data, context, qm_context, research_views_status, context_evidence, annotation_integrity=annotation_integrity)}"
         f"{age_html}"
         f"{warn_html}"
         f"{_blocked_html(data.get('blocked') or [])}"
-        f"{_hero_html(data, context, qm_context)}"
+        f"{hero_html}"
         f"{_composite_html(data)}"
+        f"{_research_desk_html(data, context, context_warning, annotation_notice)}"
+        f"{_registered_bets_tracker_html(data)}"
+        f"{_regime_strip_html(research_views_status, str(data.get('evaluation_date') or data_as_of))}"
+        f"{_experiments_shelf_html(research_views_status)}"
+        f"{_pick_tracker_html(research_views_status)}"
+        f"{pinned_html}"
         f"{_quant_want_html(qm_context)}"
         f"{_market_html(context)}"
-        f"{_pinned_html(data)}"
         f"{symbols_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
         "not predictions. Income annualization uses 365 calendar days; "
@@ -3548,6 +5189,197 @@ def render(
         "not an error.</footer>"
         "</main></body></html>"
     )
+    return DashboardRenderResult(
+        html=out_html,
+        selection_snapshot=_selection_snapshot(
+            data,
+            qualified_picks,
+            watch_picks,
+            context_selection,
+            coverage_by_card=coverage_by_card,
+            quote_by_card=quote_by_card,
+        ),
+        render_source_row_hashes=render_source_row_hashes,
+    )
+
+
+def render(
+    data: dict,
+    *,
+    context: dict | None = None,
+    context_warning: str | None = None,
+    context_evidence: Mapping[str, object] | None = None,
+    qm_context: Mapping[str, object] | None = None,
+    research_views_status: Mapping[str, object] | None = None,
+    event_view: Mapping[str, object] | None = None,
+) -> str:
+    """Preserve the public pure-string render interface."""
+    return _render_result(
+        data,
+        context=context,
+        context_warning=context_warning,
+        context_evidence=context_evidence,
+        qm_context=qm_context,
+        research_views_status=research_views_status,
+        event_view=event_view,
+    ).html
+
+
+def _atomic_replace_bytes(path: Path, raw: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with tmp.open("wb") as handle:
+        handle.write(raw)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+    directory_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _write_dashboard_result(
+    result: DashboardRenderResult,
+    *,
+    html_path: Path = Path(OUTPUT_PATH),
+    snapshot_path: Path = PICKS_SNAPSHOT_PATH,
+    input_root: Path = Path("."),
+) -> dict[str, object]:
+    """Atomically publish HTML and its hash-bound, detached pick snapshot."""
+    from options_researcher.pick_tracker import _bind_source_rows_html, _source_rows_digest
+    from research.hashing import config_hash
+
+    html_bytes = result.html.encode()
+    html_sha256 = hashlib.sha256(html_bytes).hexdigest()
+    payload = copy.deepcopy(result.selection_snapshot)
+    data_as_of = str(payload.get("data_as_of") or "")
+    receipt_reference = Path("reports/schwab_chains") / data_as_of / "preclose.json"
+    receipt_path = input_root / receipt_reference
+    unavailable_reason = None
+    try:
+        receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+    except OSError:
+        receipt_sha256 = None
+        unavailable_reason = "CAPTURE_RECEIPT_UNAVAILABLE"
+    snapshot_arms = (
+        "frozen_baseline",
+        "frozen_baseline_watch_inclusive",
+        "context_lane",
+    )
+    if unavailable_reason is None:
+        for arm_name in snapshot_arms:
+            for candidate in _snapshot_candidates(payload.get(arm_name)):
+                quote = candidate.get("raw_quote")
+                source_hash = candidate.get("source_row_hash")
+                if (
+                    not isinstance(quote, Mapping)
+                    or _finite_number(quote.get("bid")) is None
+                    or _finite_number(quote.get("ask")) is None
+                    or not isinstance(source_hash, str)
+                    or not source_hash
+                ):
+                    unavailable_reason = "RAW_QUOTE_PROVENANCE_UNAVAILABLE"
+                    break
+            if unavailable_reason is not None:
+                break
+    if unavailable_reason is not None:
+        unavailable = {
+            "schema": "picks_snapshot/unavailable",
+            "state": "UNAVAILABLE",
+            "reason_code": unavailable_reason,
+            "evaluation_date": payload.get("evaluation_date"),
+            "data_as_of": data_as_of,
+            "html_sha256": html_sha256,
+        }
+        _atomic_replace_bytes(html_path, html_bytes)
+        _atomic_replace_bytes(
+            snapshot_path,
+            json.dumps(
+                unavailable,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode()
+            + b"\n",
+        )
+        return unavailable
+    source_hashes = sorted(
+        {
+            str(candidate.get("source_row_hash"))
+            for arm_name in snapshot_arms
+            for candidate in _snapshot_candidates(payload.get(arm_name))
+            if candidate.get("source_row_hash")
+        }
+    )
+    source_rows_sha256 = _source_rows_digest(source_hashes)
+    render_source_rows_sha256 = _source_rows_digest(result.render_source_row_hashes)
+    html_bytes = _bind_source_rows_html(html_bytes, render_source_rows_sha256)
+    html_sha256 = hashlib.sha256(html_bytes).hexdigest()
+    payload.update(
+        {
+            "html_sha256": html_sha256,
+            "capture_receipt_path": receipt_reference.as_posix(),
+            "capture_receipt_sha256": receipt_sha256,
+            "config_hash": config_hash(),
+            "source_row_hashes": source_hashes,
+            "source_rows_sha256": source_rows_sha256,
+        }
+    )
+    render_identity = {
+        "html_sha256": html_sha256,
+        "snapshot": payload,
+    }
+    payload["render_id"] = hashlib.sha256(
+        json.dumps(
+            render_identity,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+    ).hexdigest()
+    _atomic_replace_bytes(html_path, html_bytes)
+    _atomic_replace_bytes(
+        snapshot_path,
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+        + b"\n",
+    )
+    return payload
+
+
+def _snapshot_candidates(value: object) -> list[Mapping[str, object]]:
+    if not isinstance(value, Mapping):
+        return []
+    candidates = value.get("candidates")
+    if not isinstance(candidates, list):
+        return []
+    return [item for item in candidates if isinstance(item, Mapping)]
+
+
+def _load_pick_tracker_status(
+    root: Path = Path("reports/pick_tracker"),
+) -> dict[str, object] | None:
+    candidates = sorted(root.glob("*/scoreboard.json"))
+    candidates.extend(sorted((root / "dryrun").glob("*/scoreboard.json")))
+    if not candidates:
+        return None
+    path = max(candidates, key=lambda item: item.parent.name)
+    try:
+        from options_researcher.pick_tracker import TrackerError, _active_evaluation_artifact
+
+        path = _active_evaluation_artifact(path.parent, "scoreboard.json")
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError, TrackerError):
+        return {"state": "FAILED", "as_of": path.parent.name}
+    if not isinstance(payload, Mapping) or payload.get("schema") != "pick_tracker_scoreboard/v1":
+        return {"state": "FAILED", "as_of": path.parent.name}
+    return {"state": "PUBLISHED", "as_of": path.parent.name, "scoreboard": payload}
 
 
 def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
@@ -3555,24 +5387,49 @@ def _build_and_write(**assemble_kwargs) -> tuple[str, int]:
     is nonzero when any symbol failed unexpectedly (see _run_exit_code) so
     unattended runs never look clean over a programming failure."""
     from options_researcher.qm_dashboard import load_qm_context
+    from options_researcher.research_views_publication import (
+        PublicationError,
+        copy_publication,
+    )
 
-    with _input_root_cwd():
+    deployment_root = Path.cwd().resolve()
+    with _input_root_cwd() as input_root:
         data = assemble(**assemble_kwargs)
         qm_context = load_qm_context(data.get("data_as_of") or "")
-    context, warning = load_context(data.get("data_as_of") or "")
-    out_html = render(
+        context_evidence = load_context_evidence(data.get("data_as_of") or "")
+    copy_warning = None
+    try:
+        copy_publication(source_root=Path(input_root).resolve(),
+                         destination_root=deployment_root)
+    except (OSError, PublicationError) as exc:
+        copy_warning = f"research-view copy/integrity failure: {exc}"
+    context_evidence = _verify_context_evidence(context_evidence)
+    context_value = context_evidence.get("context")
+    context = context_value if isinstance(context_value, dict) else None
+    warning_value = context_evidence.get("warning")
+    warning = warning_value if isinstance(warning_value, str) else None
+    research_views_status = load_research_views_status()
+    if copy_warning:
+        research_views_status["copy_warning"] = copy_warning
+    pick_tracker_status = _load_pick_tracker_status()
+    if pick_tracker_status is not None:
+        research_views_status["pick_tracker"] = pick_tracker_status
+    event_view = build_event_view(data, str(data["evaluation_date"]))
+    result = _render_result(
         data,
         context=context,
         context_warning=warning,
+        context_evidence=(context_evidence if config.CONTEXT_LANE_ENABLED else None),
         qm_context=qm_context,
+        research_views_status=research_views_status,
+        event_view=event_view,
     )
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    # tmp + os.replace so a mid-write crash can never leave a truncated page
-    # over the last good one (same convention as h7_data_gate receipts).
-    tmp_path = f"{OUTPUT_PATH}.{os.getpid()}.tmp"
-    with open(tmp_path, "w") as f:
-        f.write(out_html)
-    os.replace(tmp_path, OUTPUT_PATH)
+    _write_dashboard_result(
+        result,
+        html_path=Path(OUTPUT_PATH),
+        snapshot_path=PICKS_SNAPSHOT_PATH,
+        input_root=Path(input_root).resolve(),
+    )
     abs_path = os.path.abspath(OUTPUT_PATH)
     print(f"wrote {abs_path}")
     blocked = data.get("blocked") or []

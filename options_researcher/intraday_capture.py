@@ -3,9 +3,10 @@
 
 DESCRIPTIVE / ALERT-DISPLAY ONLY. This module has ZERO verdict authority: it
 never imports options_researcher.entry_watch, never writes data/positions/
-or ledger/, and never renders the verdict vocabulary owned by entry_watch's
-trigger grading or the attractiveness dashboard's badges (mirrored by
-tests/test_intraday_capture.py's vocabulary test). It snapshots the canonical
+or ledger/, and never renders the RETIRED H5 trigger vocabulary (retired by
+ledger seq 29 clause 1) or the attractiveness dashboard's badges (both
+mirrored by tests/test_intraday_capture.py's vocabulary test, which pins the
+banned words themselves so they never appear even in prose). It snapshots the canonical
 15-name H7 scope from options_researcher.h7_scope.watch_universe several times
 per trading day; display-only attractiveness extras never trigger paid capture.
 It records spot (bid/mid/ask from the stock feed, or a put-call-parity
@@ -16,14 +17,16 @@ the only correct way to compute this offline, when the greeks endpoint is
 entitled), and a full nearest-monthly chain snapshot with per-contract
 passes_liquidity admission counts. It is entirely separate from live_quotes'
 LIVE PREVIEW lane (which
-feeds the H5 mission-control dashboard) and from entry_watch's trigger
-grading: this tool captures what the board looked like, it never grades one.
+feeds the H5 mission-control dashboard) and from entry_watch's H5
+observations: this tool captures what the board looked like, it never grades
+one.
 
 Storage isolation (non-negotiable): full chains go to
-.cache/intraday/{symbol}_{date}T{HHMM}.parquet -- a directory that
-entry_watch._gather's ".cache/chains/{symbol}_*.parquet" glob can never
-reach (different directory alone guarantees this; the "T{HHMM}" timestamp in
-the filename is defense in depth). See
+.cache/intraday/{symbol}_{date}T{HHMM}.parquet -- a directory no H5 lane
+reads. entry_watch's ".cache/chains" glob was DELETED with the trigger
+(ledger seq 29; the observer reads only verified Schwab captures), so this is
+now isolation from the ThetaData cache generally; the "T{HHMM}" timestamp in
+the filename is defense in depth. See
 tests/test_intraday_capture.py::StorageIsolationTests. Receipts are
 write-once JSON under reports/intraday_capture/{date}/{tag}.json
 (config.INTRADAY_RECEIPT_DIR), mirroring h10_watch's _write_receipt: an
@@ -671,8 +674,8 @@ def _capture_symbol(client, symbol: str, spot_row: dict | None,
 def chain_cache_path(symbol: str, ny_date: date, now_ny: datetime,
                      cache_dir: Path = CACHE_DIR) -> Path:
     """.cache/intraday/{symbol}_{YYYY-MM-DD}T{HHMM}.parquet -- a directory
-    and filename shape entry_watch._gather's
-    ".cache/chains/{symbol}_*.parquet" glob can never match (see
+    and filename shape the frozen ThetaData cache's
+    ".cache/chains/{symbol}_*.parquet" layout can never match (see
     tests/test_intraday_capture.py::StorageIsolationTests)."""
     stamp = now_ny.strftime("%H%M")
     return Path(cache_dir) / f"{symbol}_{ny_date.isoformat()}T{stamp}.parquet"

@@ -17,7 +17,9 @@ from zoneinfo import ZoneInfo
 
 import tools.research_context_assemble as research_context_assemble
 from options_researcher.attractiveness_research_v2 import (
+    CHAIN_STARVED_HYPOTHESES,
     PJM_CATALYST_ID,
+    RITUAL_HYPOTHESES,
     ResearchArtifactError,
     UpstreamBlocked,
     finalize_bundle,
@@ -203,6 +205,13 @@ def _write_packets(root: Path) -> Path:
 
 
 class RitualPreflightTest(unittest.TestCase):
+    def test_chain_starved_set_covers_only_registered_chain_lanes(self):
+        self.assertLessEqual(CHAIN_STARVED_HYPOTHESES, frozenset(RITUAL_HYPOTHESES))
+        self.assertEqual(
+            frozenset(RITUAL_HYPOTHESES) - CHAIN_STARVED_HYPOTHESES,
+            frozenset(("H5", "H10")),
+        )
+
     def test_exact_successful_session_is_bound(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -230,6 +239,52 @@ class RitualPreflightTest(unittest.TestCase):
             _write_json(receipt_path, receipt)
             _write_run_status(root)
             with self.assertRaisesRegex(UpstreamBlocked, "H6 status"):
+                load_successful_ritual(root, as_of=AS_OF, run_date=RUN_DATE)
+
+    def test_ok_starved_excuses_only_chain_hypotheses(self):
+        for hypothesis in ("H6", "H7", "H8"):
+            with self.subTest(hypothesis=hypothesis), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                _write_successful_ritual(root)
+                receipt_path = root / "reports/ritual" / f"capture_receipt_{AS_OF}.json"
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                receipt["hypotheses"][hypothesis]["status"] = "MISSING"
+                _write_json(receipt_path, receipt)
+                _write_run_status(root, status="OK_STARVED")
+                binding = load_successful_ritual(root, as_of=AS_OF, run_date=RUN_DATE)
+                self.assertEqual(set(binding.evidence_sha256), {"H5", "H10"})
+
+    def test_ok_starved_still_requires_live_hypotheses(self):
+        for hypothesis in ("H5", "H10"):
+            with self.subTest(hypothesis=hypothesis), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                _write_successful_ritual(root)
+                receipt_path = root / "reports/ritual" / f"capture_receipt_{AS_OF}.json"
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                receipt["hypotheses"][hypothesis]["status"] = "MISSING"
+                _write_json(receipt_path, receipt)
+                _write_run_status(root, status="OK_STARVED")
+                with self.assertRaisesRegex(UpstreamBlocked, f"{hypothesis} status"):
+                    load_successful_ritual(root, as_of=AS_OF, run_date=RUN_DATE)
+
+    def test_plain_ok_still_requires_chain_hypotheses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_successful_ritual(root)
+            receipt_path = root / "reports/ritual" / f"capture_receipt_{AS_OF}.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["hypotheses"]["H6"]["status"] = "MISSING"
+            _write_json(receipt_path, receipt)
+            _write_run_status(root, status="OK")
+            with self.assertRaisesRegex(UpstreamBlocked, "H6 status"):
+                load_successful_ritual(root, as_of=AS_OF, run_date=RUN_DATE)
+
+    def test_running_status_still_blocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_successful_ritual(root)
+            _write_run_status(root, status="RUNNING")
+            with self.assertRaisesRegex(UpstreamBlocked, "not OK"):
                 load_successful_ritual(root, as_of=AS_OF, run_date=RUN_DATE)
 
     def test_capture_receipt_sha_mismatch_blocks(self):
@@ -753,7 +808,7 @@ class ShellPreflightTest(unittest.TestCase):
             result, invoked, log_dir = self.run_script(
                 Path(directory),
                 ritual_status="BROKEN",
-                now_et="2026-07-27T07:40:00-04:00",
+                now_et="2026-07-27T10:00:00-04:00",
             )
             self.assertEqual(result.returncode, 3)
             self.assertFalse(invoked.exists())
@@ -766,7 +821,7 @@ class ShellPreflightTest(unittest.TestCase):
             result, invoked, log_dir = self.run_script(
                 Path(directory),
                 ritual_status="OK",
-                now_et="2026-07-25T07:40:00-04:00",
+                now_et="2026-07-25T10:00:00-04:00",
             )
             self.assertEqual(result.returncode, 4)
             self.assertFalse(invoked.exists())
@@ -784,15 +839,15 @@ class ShellPreflightTest(unittest.TestCase):
                     2026,
                     7,
                     27,
-                    7,
-                    39,
+                    9,
+                    59,
                     tzinfo=ZoneInfo("America/New_York"),
                 ),
             )
             result, invoked, log_dir = self.run_script(
                 temp,
                 ritual_status="OK",
-                now_et="2026-07-27T07:40:00-04:00",
+                now_et="2026-07-27T10:00:00-04:00",
             )
             self.assertEqual(result.returncode, 8)
             self.assertFalse(invoked.exists())
@@ -821,8 +876,8 @@ class ShellPreflightTest(unittest.TestCase):
                     2026,
                     7,
                     27,
-                    7,
-                    39,
+                    9,
+                    59,
                     tzinfo=ZoneInfo("America/New_York"),
                 ),
             )
@@ -842,7 +897,7 @@ class ShellPreflightTest(unittest.TestCase):
             )
             log_dir = temp / "logs"
             log_dir.mkdir()
-            receipt = log_dir / f"receipt_v2_{AS_OF}_premarket.json"
+            receipt = log_dir / f"receipt_v2_{AS_OF}_midmorning.json"
             receipt.write_text('{"status":"ok","corrupted":true}\n', encoding="utf-8")
 
             fake_uv = temp / "fake-uv"
@@ -900,7 +955,7 @@ if "--reconcile-published-attempt" in module_args:
         attempt_id=attempt_id,
         succeeded=True,
         published_success=True,
-        now_et=datetime.fromisoformat("2026-07-27T07:40:00-04:00"),
+        now_et=datetime.fromisoformat("2026-07-27T10:00:00-04:00"),
     )
     receipt_out = Path(module_args[module_args.index("--receipt-out") + 1])
     receipt_out.write_text(
@@ -928,7 +983,7 @@ raise SystemExit(0)
             result, invoked, _returned_log_dir = self.run_script(
                 temp,
                 ritual_status="OK",
-                now_et="2026-07-27T07:40:00-04:00",
+                now_et="2026-07-27T10:00:00-04:00",
                 uv_override=str(fake_uv),
                 extra_env={
                     "FAKE_SOURCE_ROOT": str(Path(__file__).resolve().parents[1]),

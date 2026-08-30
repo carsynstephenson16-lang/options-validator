@@ -1,0 +1,31 @@
+{
+  "as_of": "2026-08-18",
+  "hypotheses": {
+    "H10": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H5": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H6": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H7": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    },
+    "H8": {
+      "detail": "stale",
+      "evidence": null,
+      "status": "MISSING"
+    }
+  },
+  "run_date": "2026-08-19"
+}

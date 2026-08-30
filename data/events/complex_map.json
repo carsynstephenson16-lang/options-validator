@@ -1,0 +1,14 @@
+{
+  "as_of": "2026-08-25",
+  "metadata": {
+    "provenance": "LLM-proposed 2026-08-25",
+    "display_only": true,
+    "promotion": "Requires separate owner decision, registration, and the 2026-07-24 gate."
+  },
+  "clusters": {
+    "ai_infra": {
+      "members": ["CRWV", "TEM", "PLTR", "NOW", "SMCI", "NVDA", "AMD", "AVGO", "IREN", "USAR", "ET", "VST", "CEG", "MSFT", "AMZN", "NBIS", "AMAT", "CLSK"],
+      "events_propagate_from": ["NVDA", "AVGO", "IREN"]
+    }
+  }
+}

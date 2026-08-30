@@ -15,9 +15,10 @@ project state is loaded:
   closes    -> last ~60 closes per config.UNIVERSE symbol via
                data.underlying_closes.load_closes(sym, start, end,
                allow_oos=True) (display only -- never feeds a verdict)
-  triggers  -> {symbol: "WAIT"/"FIRE"} from entry_watch._gather() (display
-               only -- never feeds a verdict; tolerant of load failure,
-               falls back to {} so the dashboard still renders)
+  triggers  -> {symbol: "OBSERVE"/"DATA_GAP"} from entry_watch._gather()
+               (H5's entry trigger is RETIRED, ledger seq 29; these are
+               observations -- display only, never a verdict; tolerant of
+               load failure, falls back to {} so the dashboard still renders)
 
 render(data) is pure string templating over the dict assemble() returns. It
 does no file I/O; Task 3's CLI is responsible for writing the result to

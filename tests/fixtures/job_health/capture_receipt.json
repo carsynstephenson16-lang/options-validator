@@ -1,0 +1,11 @@
+{
+  "as_of": "2026-08-21",
+  "hypotheses": {
+    "H10": {"detail": "no signal", "evidence": "reports/h10/example.json", "status": "NO_SIGNAL"},
+    "H5": {"detail": "captured", "evidence": "reports/h5/example.txt", "status": "CAPTURED"},
+    "H6": {"detail": "no signal", "evidence": "reports/h6/example.json", "status": "NO_SIGNAL"},
+    "H7": {"detail": "captured", "evidence": "reports/h7/example.json", "status": "CAPTURED"},
+    "H8": {"detail": "no signal", "evidence": "reports/h8/example.json", "status": "NO_SIGNAL"}
+  },
+  "run_date": "2026-08-21"
+}

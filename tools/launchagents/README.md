@@ -1,5 +1,62 @@
 # Dashboard and intraday LaunchAgents
 
+## Daily ritual (09:09 ET, weekdays)
+
+`com.carsyn.options-validator.daily-ritual.plist` runs `tools/daily_ritual.sh`
+at **09:09 ET on weekdays** from the **ops** checkout. It is installed and
+loaded in production.
+
+Retimed 2026-08-26 (owner-directed, in-session) from its original 07:10 slot.
+This plist was untracked until that change — it lived only in
+`~/Library/LaunchAgents/` on one laptop, unlike every other job here — so the
+copy in this directory starts at 09:09 and has no 07:10 history.
+
+**The 09:09 slot sits after the daily automerge, and that is load-bearing.**
+`~/bin/repo-reconcile` auto-squash-merges green PRs around 08:15, which
+advances `origin/main` while the ops checkout stays put. The ritual's first
+gate refuses a misaligned checkout:
+
+```
+CRITICAL: main is not exactly aligned with origin/main -- refusing cache publisher authority
+```
+
+A refusal is not merely a skipped run — the ritual never reaches its Step 8
+evidence commit, so that day's capture receipts and `ledger/facts.log` appends
+are left uncommitted in ops and exist on one machine only. That is the same
+failure class as the 2026-08-20/24 Schwab receipt loss. At 07:10 the ritual
+ran *before* the automerge and was usually aligned by default; at 09:09 it
+runs *after*, so the ops pull has to actually happen:
+
+```bash
+git -C ~/options-validator-ops pull --ff-only
+```
+
+The installed copy at `~/Library/LaunchAgents/` is a byte-copy; editing the
+template in this directory does **not** change what launchd runs, and even
+editing the installed file does nothing until the job is reloaded — launchd
+caches the schedule at bootstrap time:
+
+```bash
+cp tools/launchagents/com.carsyn.options-validator.daily-ritual.plist \
+   ~/Library/LaunchAgents/
+launchctl bootout gui/$(id -u)/com.carsyn.options-validator.daily-ritual 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) \
+   ~/Library/LaunchAgents/com.carsyn.options-validator.daily-ritual.plist
+launchctl print gui/$(id -u)/com.carsyn.options-validator.daily-ritual \
+  | grep -E '"(Hour|Minute|Weekday)"'
+```
+
+That last line is the only honest verification: it prints what launchd holds,
+not what the file says. Expect five descriptors, Hour 9 / Minute 9,
+Weekdays 1–5.
+
+Note on who may run these: the alignment-check section below states that a
+Claude session cannot run `launchctl` because the classifier denies it. That
+was not true on 2026-08-26 — the session that performed this retime ran
+`bootout` + `bootstrap` + `print` successfully (both rc=0). Treat the claim as
+unverified rather than as a guarantee, and confirm with `launchctl print`
+either way.
+
 ## Ops alignment check (15:30 ET, detection only)
 
 `com.carsyn.options-validator.alignment-check.plist` runs
@@ -45,6 +102,135 @@ launchctl bootout gui/$UID/com.carsyn.options-validator.alignment-check
 
 A nonzero exit is the job doing its work, not a bug: it means the ops checkout
 needs the printed command before 15:45.
+
+## Job-health digest (16:30 ET, weekdays)
+
+`com.carsyn.options-validator.job-health-digest.plist` runs
+`tools/job_health_digest.sh` from the ops checkout at 16:30 ET on weekdays.
+The 16:30 time is an LLM-proposed operational constant; the owner may change
+it at install time, provided the job still runs on the same New York calendar
+date passed to `--as-of`.
+
+The Mac system timezone must remain `America/New_York` for 16:30 ET scheduling.
+The plist's `TZ` value controls the child process, not launchd's evaluation of
+`StartCalendarInterval`.
+
+The digest and wrapper log stay under the ops checkout's untracked `.tmp/`
+tree. A successful `ALL OK` run logs one ordinary status line. A successful
+digest whose headline reports problems, or a nonzero tool exit, logs a
+`CRITICAL:` line and attempts a guarded macOS notification. Installing this
+additional scheduled job is an **owner action**; agents build and test only.
+
+### Install
+
+Installation is an owner action only, after the PR is reviewed and landed.
+Before copying or loading the plist, the owner runs this preflight. **STOP on
+any mismatch**; do not install from a feature branch, a dirty tracked tree, a
+stale `main`, another checkout, or a checkout without the executable wrapper.
+Untracked `.tmp/` output is deliberately ignored by the cleanliness check.
+
+```bash
+OPS_ROOT=/Users/carsynstephenson/options-validator-ops
+ACTUAL_ROOT="$(git -C "$OPS_ROOT" rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "STOP: ops checkout is not a Git worktree" >&2; exit 1
+}
+[[ "$ACTUAL_ROOT" == "$OPS_ROOT" ]] || {
+  echo "STOP: unexpected ops checkout root: $ACTUAL_ROOT" >&2; exit 1
+}
+[[ "$(git -C "$OPS_ROOT" branch --show-current)" == "main" ]] || {
+  echo "STOP: ops checkout is not on main" >&2; exit 1
+}
+CHECKOUT_STATUS="$(
+  git -C "$OPS_ROOT" status --porcelain --untracked-files=all -- \
+    . ':(exclude).tmp'
+)" || {
+  echo "STOP: could not inspect ops checkout status" >&2; exit 1
+}
+[[ -z "$CHECKOUT_STATUS" ]] || {
+  printf 'STOP: ops checkout has changes outside .tmp:\n%s\n' \
+    "$CHECKOUT_STATUS" >&2
+  exit 1
+}
+GIT_TERMINAL_PROMPT=0 git -C "$OPS_ROOT" fetch -q origin main || {
+  echo "STOP: could not refresh origin/main" >&2; exit 1
+}
+LOCAL_HEAD="$(git -C "$OPS_ROOT" rev-parse HEAD)" || exit 1
+LANDED_HEAD="$(git -C "$OPS_ROOT" rev-parse origin/main)" || exit 1
+[[ "$LOCAL_HEAD" == "$LANDED_HEAD" ]] || {
+  echo "STOP: ops HEAD is not the current landed origin/main" >&2; exit 1
+}
+[[ -x "$OPS_ROOT/tools/job_health_digest.sh" ]] || {
+  echo "STOP: landed job-health wrapper is absent or not executable" >&2; exit 1
+}
+printf 'verified ops main: %s\n' "$LOCAL_HEAD"
+```
+
+Only after that block succeeds, the owner installs the landed template:
+
+```bash
+OPS_ROOT=/Users/carsynstephenson/options-validator-ops
+mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/job_health \
+  /Users/carsynstephenson/options-validator-ops/.tmp/job_health_digest
+cp "$OPS_ROOT/tools/launchagents/com.carsyn.options-validator.job-health-digest.plist" \
+  ~/Library/LaunchAgents/
+launchctl bootstrap gui/$UID \
+  ~/Library/LaunchAgents/com.carsyn.options-validator.job-health-digest.plist
+launchctl enable gui/$UID/com.carsyn.options-validator.job-health-digest
+```
+
+### Verify
+
+After landing and installation, the owner verifies the loaded job, then runs
+the wrapper explicitly once and inspects the exact newly written digest and
+log. **STOP** if the wrapper is nonzero, the report is absent/symlinked, its
+session differs from the current New York date, its headline is unrecognized,
+or no run log is found. `N PROBLEMS` confirms the plumbing ran but still
+requires the owner to investigate the reported job-health problems.
+
+```bash
+OPS_ROOT=/Users/carsynstephenson/options-validator-ops
+launchctl print gui/$UID/com.carsyn.options-validator.job-health-digest
+"$OPS_ROOT/tools/job_health_digest.sh"
+WRAPPER_RC=$?
+[[ "$WRAPPER_RC" -eq 0 ]] || {
+  echo "STOP: manual job-health wrapper run exited $WRAPPER_RC" >&2; exit 1
+}
+AS_OF="$(TZ=America/New_York date +%Y-%m-%d)"
+DIGEST="$OPS_ROOT/.tmp/job_health/digest_${AS_OF}.md"
+[[ -f "$DIGEST" && ! -L "$DIGEST" ]] || {
+  echo "STOP: expected current digest is absent or symlinked: $DIGEST" >&2; exit 1
+}
+[[ "$(sed -n '3p' "$DIGEST")" == "Session: ${AS_OF}" ]] || {
+  echo "STOP: digest session does not match $AS_OF" >&2; exit 1
+}
+HEADLINE="$(sed -n '1p' "$DIGEST")"
+if [[ "$HEADLINE" != "ALL OK" && ! "$HEADLINE" =~ '^[0-9]+ PROBLEMS$' ]]; then
+  echo "STOP: unrecognized digest headline: $HEADLINE" >&2
+  exit 1
+fi
+LATEST_LOG="$(
+  find "$OPS_ROOT/.tmp/job_health_digest" -maxdepth 1 -type f -name '*.log' \
+    -exec stat -f '%m %N' {} \; | sort -nr | sed -n '1s/^[0-9][0-9]* //p'
+)"
+[[ -n "$LATEST_LOG" && -f "$LATEST_LOG" ]] || {
+  echo "STOP: no job-health wrapper run log found" >&2; exit 1
+}
+printf 'digest headline: %s\nlog: %s\n' "$HEADLINE" "$LATEST_LOG"
+sed -n '1,160p' "$LATEST_LOG"
+```
+
+The wrapper uses an atomic `run.lock` directory to refuse overlap and removes
+it on normal exit and handled HUP/INT/TERM signals. Exit 75 means another run
+holds the lock. A SIGKILL or power loss can leave a stale lock; in that case,
+**STOP and verify no wrapper or digest process is still running before any
+owner-directed recovery. Never delete the lock merely to bypass a refusal.**
+
+### Uninstall
+
+```bash
+launchctl bootout gui/$UID/com.carsyn.options-validator.job-health-digest
+rm ~/Library/LaunchAgents/com.carsyn.options-validator.job-health-digest.plist
+```
 
 ## Live dashboard
 
@@ -171,9 +357,9 @@ rm ~/Library/LaunchAgents/com.carsyn.options-validator.intraday-capture.plist
   disposable) — the durable record is the receipt under
   `reports/intraday_capture/`, picked up by the daily ritual's evidence
   commit step.
-- This LaunchAgent and `tools/daily_ritual.sh`'s existing 07:10 LaunchAgent
-  are independent: intraday_capture.sh never commits or pushes anything
-  itself.
+- This LaunchAgent and `tools/daily_ritual.sh`'s 09:09 LaunchAgent (07:10
+  before 2026-08-26) are independent: intraday_capture.sh never commits or
+  pushes anything itself.
 
 ## Display-only research views
 
@@ -273,7 +459,7 @@ launchctl enable gui/$UID/com.carsyn.options-validator.research-views
 
 Print both managed jobs, prove the LaunchAgent server owns the localhost
 listener and its configured document root, then kick the refresh and require a
-fresh status file before checking all four served artifacts:
+fresh immutable-generation pointer before checking that exact generation:
 
 ```bash
 launchctl print gui/$UID/com.carsyn.options-validator.research-display-refresh
@@ -305,24 +491,28 @@ if [[ "$SERVER_COMMAND" != "$EXPECTED_SERVER_COMMAND" ]]; then
   echo "stop: managed server document root differs: $SERVER_COMMAND" >&2
   exit 1
 fi
-STATUS_PATH='/Users/carsynstephenson/options-validator-ops/.tmp/dashboard/research-views-status.txt'
+CURRENT_PATH='/Users/carsynstephenson/options-validator-ops/.tmp/dashboard/research-views-current.json'
 STATUS_STARTED_AT="$(date +%s)"
 launchctl kickstart -k gui/$UID/com.carsyn.options-validator.research-display-refresh
 for _ in {1..20}; do
-  if [[ -f "$STATUS_PATH" ]] && [[ "$(stat -f %m "$STATUS_PATH")" -ge "$STATUS_STARTED_AT" ]]; then
+  if [[ -f "$CURRENT_PATH" ]] && [[ "$(stat -f %m "$CURRENT_PATH")" -ge "$STATUS_STARTED_AT" ]]; then
     break
   fi
   sleep 1
 done
-if [[ ! -f "$STATUS_PATH" ]] || [[ "$(stat -f %m "$STATUS_PATH")" -lt "$STATUS_STARTED_AT" ]]; then
-  echo "stop: refresh did not publish a fresh status file" >&2
+if [[ ! -f "$CURRENT_PATH" ]] || [[ "$(stat -f %m "$CURRENT_PATH")" -lt "$STATUS_STARTED_AT" ]]; then
+  echo "stop: refresh did not publish a fresh current pointer" >&2
   exit 1
 fi
-sed -n '1,3p' "$STATUS_PATH"
+curl -fsS http://127.0.0.1:8766/research-views-current.json > /tmp/research-views-current.json
+GENERATION_ID="$(/Users/carsynstephenson/options-validator-ops/.venv/bin/python -c 'import json; print(json.load(open("/tmp/research-views-current.json"))["generation_id"])')"
+MANIFEST_PATH="research-views-generations/$GENERATION_ID/research-views-manifest.json"
+curl -fsS "http://127.0.0.1:8766/$MANIFEST_PATH"
 curl -fsS http://127.0.0.1:8766/attractiveness.html
-curl -fsS http://127.0.0.1:8766/experiments.html
-curl -fsS http://127.0.0.1:8766/wasserstein-regime.txt
-curl -fsS http://127.0.0.1:8766/research-views-status.txt
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/experiments.html"
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/wasserstein-regime.txt"
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/wasserstein-regime.json"
+curl -fsS "http://127.0.0.1:8766/research-views-generations/$GENERATION_ID/research-views-status.txt"
 ```
 
 ### Rollback

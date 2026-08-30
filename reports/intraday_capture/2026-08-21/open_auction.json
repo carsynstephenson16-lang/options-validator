@@ -1,0 +1,106 @@
+{
+  "captured_at_et": "2026-08-21T09:31:11.351557-04:00",
+  "captured_at_utc": "2026-08-21T13:31:11.351557+00:00",
+  "config_hash": "5d2be6389aa004789d6c8819815b58957aa8e2f50c6afe440a263ecbbad0cdbc",
+  "force": false,
+  "iv_rank_calibration": null,
+  "names": {
+    "AMD": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "AMD"
+    },
+    "AMZN": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "AMZN"
+    },
+    "AVGO": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "AVGO"
+    },
+    "CEG": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "CEG"
+    },
+    "CRWV": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "CRWV"
+    },
+    "ET": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "ET"
+    },
+    "IREN": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "IREN"
+    },
+    "MSFT": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "MSFT"
+    },
+    "NOW": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "NOW"
+    },
+    "NVDA": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "NVDA"
+    },
+    "PLTR": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "PLTR"
+    },
+    "SMCI": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "SMCI"
+    },
+    "TEM": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "TEM"
+    },
+    "USAR": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "USAR"
+    },
+    "VST": {
+      "note": "ConnectError: [Errno 8] nodename nor servname provided, or not known",
+      "status": "unavailable",
+      "symbol": "VST"
+    }
+  },
+  "probe_healed_this_run": false,
+  "probe_receipt_path": "reports/live_probe/2026-08-19.json",
+  "receipt_kind": "intraday_capture/v1",
+  "scheduled_et": "09:31",
+  "session_tag": "open_auction",
+  "universe": [
+    "CRWV",
+    "TEM",
+    "PLTR",
+    "NOW",
+    "SMCI",
+    "NVDA",
+    "AMD",
+    "AVGO",
+    "IREN",
+    "USAR",
+    "ET",
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN"
+  ]
+}

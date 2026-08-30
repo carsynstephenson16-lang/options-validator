@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
 from options_researcher.h7_scope import scope_identity
 from research.receipts import make_receipt, write_immutable_receipt
 from tools import h7_forward_backup as backup
+from tools.irreplaceable_data_guard import DEFAULT_NAMESPACES
 
 
 class BackupTests(unittest.TestCase):
@@ -23,6 +26,40 @@ class BackupTests(unittest.TestCase):
             Path("ledger/h7_forward_schwab"),
         }
         self.assertTrue(expected <= set(backup.BACKUP_PATHS))
+
+    def test_allow_list_covers_every_irreplaceable_namespace(self):
+        protected = {Path(namespace) for namespace in DEFAULT_NAMESPACES}
+
+        self.assertEqual(set(), protected - set(backup.BACKUP_PATHS))
+
+    def test_backup_prints_expected_payload_size_before_restic(self):
+        with tempfile.TemporaryDirectory() as temp:
+            # run_backup resolves its root, and on macOS the tempdir lives
+            # behind the /var -> /private/var symlink; resolve up front so the
+            # cwd assertion below compares like with like.
+            root = Path(temp).resolve()
+            chain = root / ".cache/chains/one.parquet"
+            chain.parent.mkdir(parents=True)
+            chain.write_bytes(b"chain")
+            output = io.StringIO()
+
+            def fake_restic(_args, *, cwd):
+                self.assertEqual(cwd, root)
+                self.assertEqual(
+                    output.getvalue(),
+                    "H7 BACKUP PREFLIGHT -- expected payload: 5 bytes (5 B)\n",
+                )
+                return mock.Mock(stdout='{"snapshot_id":"abc123"}\n')
+
+            with (
+                redirect_stdout(output),
+                mock.patch.object(backup, "_run_restic", side_effect=fake_restic),
+            ):
+                backup.run_backup(
+                    completed_session="2026-07-10",
+                    root=root,
+                    receipt_path=root / "backup.json",
+                )
 
     def test_backup_command_has_no_credentials_and_writes_receipt(self):
         with tempfile.TemporaryDirectory() as temp:

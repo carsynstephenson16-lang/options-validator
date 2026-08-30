@@ -40,7 +40,7 @@ class ResearchViewLaunchAgentTest(unittest.TestCase):
                 f"{key} must be below the research_views log directory",
             )
 
-    def test_refresh_template_runs_weekdays_at_0730_et(self):
+    def test_refresh_template_runs_weekdays_at_0950_et(self):
         path = LAUNCHAGENTS / "com.carsyn.options-validator.research-display-refresh.plist"
         payload = plistlib.loads(path.read_bytes())
 
@@ -58,7 +58,7 @@ class ResearchViewLaunchAgentTest(unittest.TestCase):
         self.assertEqual(payload["EnvironmentVariables"]["TZ"], "America/New_York")
         self.assertEqual(
             payload["StartCalendarInterval"],
-            [{"Weekday": weekday, "Hour": 7, "Minute": 30} for weekday in range(1, 6)],
+            [{"Weekday": weekday, "Hour": 9, "Minute": 50} for weekday in range(1, 6)],
         )
         for key in ("StandardOutPath", "StandardErrorPath"):
             self.assertTrue(

@@ -6,6 +6,12 @@
 
 **Checkout audited:** `/Users/carsynstephenson/options-validator`, branch `sfix`, HEAD `217a4c5e5e44303f98acb5e0f4f3913a6e208c59`.
 
+**Status refresh (2026-08-26 evening; audit close-out hand-off session, delegable drafting — no frozen number newly typed):** the owner directed this session to produce the Codex hand-offs that finish the 2026-08-22 lean-ops audit plan and the 2026-08-25 audit-verification arc. Single-source result: `reports/2026-08-26-audit-closeout-handoff-package.md` (scoreboard, paste-ready Codex dispatch prompts, ordered owner actions A1–A10, decision menu D1–D8); review evidence in `reports/2026-08-26-briefs-24-29-31-adversarial-review-receipts.md`. Headlines: brief 29 (DATA-01, Schwab cache guard binding) rewritten to rev 5 and **review-PASSED → READY FOR HAND-OFF** after three adversarial rounds (the BLOCKED-draft state from the failed rev-2 review is cleared per the owner package's own reopened-decision condition); brief 24 gained review-PASSED WP-C (SEC-02 strict remote-owner verifier for all four anti-stranding scripts, all-push-destinations rule) and WP-D (every reconciler-created PR starts draft, closing the live `AGENTS.md:98-104` violation — PR #70 was reconciler-created non-draft and automerged 2026-08-26 with no human in the loop); new brief 31 (SEC-01 trigger/permissions/auth-gate test pinning [WP-A, ready] + job-health-digest scheduling [WP-B, owner-gated]) review-PASSED; brief 30 WP-A re-queued for dispatch (was READY since 08-25, never handed off). Corrections of record landed: the deployed automerge loop lacks four guards the repo copy has (`--author`, `--base`, governed-path refusal, `--match-head-commit`) and the deployed post-commit auto-push has NEVER worked (`setsid` absent on macOS) — both strengthen the urgency of the still-unrun brief-24 WP-B redeploy (owner action A1); brief 20's PR #66 body wrongly claimed `record-invalidation` covers directory receipts (correction addendum in the brief); the brief-number registry gained row 30 and reconciled rows 28/29/31. Also: draft PR #94 tracks the daily-ritual plist retime (07:10→09:09); six non-draft worker PRs (#60/#61/#71/#87/#88/#89) need owner conversion to draft (session was permission-blocked; automerge is armed). Suite exit 0 on this docs-only batch before commit.
+
+**Status refresh (2026-08-25; PR #72–#77 reconciliation + research-plan ratification, delegable drafting — no frozen number newly typed):** `main` now leads at `0b9f4bb` (PR #77 merge). Merged 2026-08-24/25: #72 chain-consistency audit tool (brief 22; `data/chain_consistency.py` + `tools/chain_consistency_audit.py`, manual CLI, no production caller) with owner **disposition A** landed separately as PR #73 (`107c7b9`): SPREAD_BLOWOUT stays computed/receipted but is demoted from the worst-wins headline `status`; #74 fill-adversity context study (brief 23; quote-context only — the report itself states the 1% haircut **cannot** be calibrated against realized fills because no broker execution/package records exist anywhere in the repo); #76 ritual durability allow-list fix (`reports/schwab_chains` → data tier); #77 lands the **refreshed 2026-08-24 research-integration plan** (supersedes the `3f5dccf` original that `main` carried, which had recommended already-completed work) plus the **owner-ratified 2026-08-25 verification addendum** (`docs/plans/2026-08-25-research-integration-plan-verification-addendum.md`; four-auditor pass — 13/14 code-evidence claims confirmed at file/line, every §8 data-inventory figure reproduced exactly, scorecard arithmetic exact, safety posture sound), briefs 24–27 docs (brief 23 landed pre-#77 via `3f5dccf`), and the dashboard input-root fix (`720a20e`). Ratified corrected decisions (addendum §4, owner approval in chat 2026-08-25): fill-calibration (A2) and early-assignment (B) = **BLOCKED BY DATA**; G = **PARK** (trigger: a predictive consumer exists AND preregistered sample power); C = REJECT with a carried action item (the next registered experiment's review template must add complexity/data/maintenance-cost + removal-criteria fields); F = **RESEARCH ONLY observation review** with a falsifiable **default-REMOVE** acceptance criterion — operator/cadence per `docs/chain-consistency-observation-runbook.md` (manual runs, receipts to `reports/chain_consistency/`, ~30-session horizon vs 4 capture dates existing 2026-08-25; explicitly outside the frozen daily ritual). This is the current next authorized action **for this plan's lane**; no new implementation is authorized **from candidates A–I** — briefs 24–27, the BL-2 capture lane, and the H7 registration lane are separate lanes and unaffected by that stop. Branch state: `claude/codex-handoff-plan-2026-08-22` is merged into `main` through `915e303`; its two later commits (`7908919` rev-4 parameter audit of briefs 25/27 + owner D-2 ruling; `839ddb3` brief-26 status flip to HANDED OFF TO CODEX, owner-directed 2026-08-25) await their own PR — the owner D-1 ruling (`70e9f40`) and brief-26 rev-4 content are already on `main`. The `tests/test_h7_backup.py` macOS-only `/var`→`/private/var` path fix landed via PR #78 (`1e2ad19`, test-side only). Open infra (brief 24, unresolved): the deployed `~/bin/repo-reconcile` is a hand-modified variant missing the ownership + gitleaks gates in `main`'s tracked copy, and its Desktop digest publish has been silently TCC-failing ~11 days; fix branch `codex/repo-reconcile-publish` (`d08cadc`) remains unmerged. Machine note 2026-08-25: intermittent `fork: Resource temporarily unavailable` failures across sessions were traced to a Pioneer `FwUpdateManagerd` daemon leaking 797 zombie processes over ~10.8 days (per-uid cap 1333); killed and reaped same day — permanent fix (update/disable the Pioneer updater) is an open owner task.
+
+**Status refresh (2026-08-23; PR #63–#68 reconciliation, docs-only):** `main` now leads at `8a5d5c4` (PR #68 merge). PRs #63–#68 merged 2026-08-23: #63 H7 Schwab restart brief (docs); #64/#65 land the `attractive-exp-spread-stability`/`tbill-carry` lanes that §3.1/older lines list as deletion candidates — those two are no longer deletion candidates; #66 rewrites the H7 backup allow-list to derive from `tools/irreplaceable_data_guard.DEFAULT_NAMESPACES` (closing the chains_v2/future_tickers/intraday/underlying_ohlcv backup hole); #67 lands `tools/job_health_digest.py` v1 (receipt-backed job health; PR-68 review hardenings queued in brief 21 rev 2); #68 lands the watcher-flip commit + lean-ops handoff docs. Owner override 2026-08-23 flipped `exact_session_source_active=True` (`data/ritual_authority.py`); this flag gates only the future full H7-registration tier (`evaluate_full_ritual()`, still blocked on `h7_active=False`) — the H5/H10b lane runs on `schwab_chain_view.verified_sessions()` and has been live since 08-19 (ops receipts: `reports/h5/entry_watch_2026-08-19.txt and _2026-08-20.txt`, `h10b_observations.jsonl`). **V1's statistic has been pinned since ledger seq 26 (`RQ2_AMENDMENT_V1_2`, 2026-08-15)** — median tenor-matched VRP over up to 24 completed monthly cycles (24-cycle cap is LLM-proposed 2026-08-15, not owner-typed); older "not pinned" lines below are superseded. Owner rulings 2026-08-23: H7 = 3-month window + starvation pre-accept + dashboard visibility, any extension pre-declared at registration (owner still types the frozen numbers); BL-2 = AMAT/CLSK/NBIS via a separate non-H7 capture lane, frozen `h7-forward-15-v1` scope untouched (brief pending); BL-1 unruled. Branch cleanup 2026-08-23: worktrees+branches deleted for `codex/attractive-exp-{beta-qqq,spread-stability,tail-shape,tbill-carry}` plus duplicate ref `rescue/detached-fca78a0` (all tips on origin; guard OK before/after; `attractive-exp-hardening`/`-wiring` were KEPT); 22 unmerged branches remain (46 local total) — dispositions summarized in `reports/2026-08-22-owner-decision-package-finishing-ov.md` (the full 27-row table was not written to disk). Schwab token re-authorized 2026-08-23 (7-day hard expiry, next ~08-30). 2026-08-21 was a no-network day — no preclose capture; the gap is permanent. Lean-ops routing doc: `docs/superpowers/plans/2026-08-22-19-lean-ops-codex-handoff-plan.md` (kalshi and equity-research briefs live in their own repos).
+
 **Original audit boundary:** read-only except for this file. No provider call,
 package change, ledger/facts append, cache mutation, one-run mutation, live-book
 mutation, Git write, or branch switch occurred during the planning audit.
@@ -55,8 +61,9 @@ frozen number below is newly typed):** the 2026-08-11 three-day audit
 RESIDUALS) is the map for the 2026-08-05→08-11 window; this session resolved
 its residuals. Landed on this branch: the owner-ruled **RQ2 K=3 amendment
 (ledger seq 25, `RQ2_AMENDMENT_V1_1`)** — RQ2-v1 badges are K=3 (B1, A1, V1
-membership-only; V1's statistic is NOT pinned and the runner must refuse V1
-comparisons until a further pre-result amendment); the **August ops evidence**
+membership-only; V1's statistic was later pinned by ledger seq 26
+`RQ2_AMENDMENT_V1_2`, 2026-08-15 — see the 2026-08-23 status refresh above;
+only BLENDED V1 comparisons still refuse); the **August ops evidence**
 (Aug 5–7 intraday receipts + 2026-08-05 probe + 20 facts.log lines) folded
 back from `evidence/ops-august-2026-08-09` — the raw `.cache/intraday`
 parquet bytes for those dates exist only on the production disk and their
@@ -82,9 +89,18 @@ measured on ThetaData EOD; 95% CI [0.62, 8.74] expected entries vs the
 pre-acceptance). Remaining before any activation: B2, fresh feasibility,
 Monday 15/15 canary + manifest verify, backup/restore drill, owner OD-3 +
 starvation decision, guarded registration, owner-authorized flip — plus a
-working Schwab OAuth session: the production refresh token is
-**expired/revoked** (`invalid_grant`, failure window Aug 7 evening–Aug 10);
-reauth steps in `reports/2026-08-12-schwab-auth-diagnosis.md`. **Unmerged
+working Schwab OAuth session. *(Status correction 2026-08-15: the token was
+re-authorized 2026-08-12 ~00:56 ET; the intraday quote lane verified 15/15 on
+08-12→08-14 and the preclose chain lane on 08-14 (its first clean run since
+the alignment guard cleared) — the 2026-08-14 15:45 preclose canary SUCCEEDED. Refresh tokens
+hard-expire 7 days after creation — Official-source; refreshing an access
+token does NOT reset the clock; see the 2026-08-15 addendum to
+`reports/2026-08-12-schwab-auth-diagnosis.md` — so the current token dies
+~2026-08-19 00:56 ET unless re-authorized over the 08-15/16 weekend. NONE of
+the missing 08-10→08-13 PRECLOSE chain captures were Schwab failures: all
+four were the wrapper's own HEAD-vs-origin/main alignment guard refusing on a
+repo-side sync gap (it refuses before attempting auth), since cleared. The
+expired token broke only the intraday QUOTE lane, on 08-10/08-11.)* **Unmerged
 post-audit branches awaiting review/owner decision (not landed here):**
 `codex/h7-schwab-recovery` (Schwab registration CLI + feasibility identity
 binding + a new 2026-08-11 primary-earnings feasibility receipt — needs its
@@ -118,8 +134,11 @@ sole code blocker), `codex/h7-schwab-recovery` adversarial review (running
 2026-08-13, receipt to land separately), backup/restore drill with real
 canary bytes, then owner OD-3 + registration + authority flip.
 `codex/handoff` (2c8332a) pushed but unmerged — overlaps landed M1 fixes,
-reconcile-don't-blind-merge. Four stale `codex/attractive-exp-*` branches
-remain deletion candidates (owner-approved batch, guard first).
+reconcile-don't-blind-merge. *(2026-08-23 correction: the four
+`codex/attractive-exp-*` branches are resolved — `spread-stability` and
+`tbill-carry` merged via PR #64/#65; all four local worktrees+branches were
+deleted in the 2026-08-23 cleanup, tips preserved on origin; see the
+2026-08-23 status refresh above.)*
 
 ### 2026-08-14 addendum (supersedes stale lines above)
 
@@ -233,6 +252,8 @@ options-flow study remains DATA-GATED because no real trade/quote panel exists.
   `codex/cache-schema-v2` (`8fa0637`), `codex/causal-fill-convention`
   (`5165144`), dashboard freshness, two Luna lanes, evidence packet 8, and root
   cache hardening. Attachment itself is a preservation signal until classified.
+  *(2026-08-23: this worktree/branch inventory is superseded — current
+  22-branch-kept table in `reports/2026-08-22-owner-decision-package-finishing-ov.md`.)*
 
 ### 3.2 Current verification
 

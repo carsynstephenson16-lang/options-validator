@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 import config
 from options_researcher.h7_cohort import (
@@ -20,6 +23,73 @@ from options_researcher.hypothesis_evidence import (
 
 EVALUATION = "2026-07-24"
 RUN_DATE = "2026-07-27"
+H5_OBSERVE_STATE = "OBSERVING (trigger retired seq 29)"
+
+
+def _h5_observer_row(
+    symbol: str,
+    *,
+    session: str = EVALUATION,
+    state: str = "OBSERVED",
+    reason: str | None = None,
+) -> dict:
+    """One `entry_watch._gather()` row in its real shape."""
+    return {
+        "symbol": symbol,
+        "state": state,
+        "verdict": "OBSERVE" if state == "OBSERVED" else "DATA_GAP",
+        "close": 230.0,
+        "close_asof": session if state == "OBSERVED" else None,
+        "capture_available": state == "OBSERVED",
+        "capture_session": session if state == "OBSERVED" else None,
+        "atm_schwab_iv": 0.4321 if state == "OBSERVED" else None,
+        "atm_schwab_iv_state": "OK" if state == "OBSERVED" else "NOT_OBSERVED",
+        "finite_schwab_iv_observations": 3 if state == "OBSERVED" else None,
+        "finite_schwab_iv_observations_state": (
+            "COUNTED" if state == "OBSERVED" else "NOT_COUNTED"
+        ),
+        "iv_observations_required": 126,
+        "evaluation_session": session,
+        "max_asof_session": session if state == "OBSERVED" else None,
+        "reason": reason,
+    }
+
+
+def _h5_observer_text(rows: list[dict], *, session: str = EVALUATION) -> str:
+    """Byte-identical to what `entry_watch` writes: rendered by the emitter.
+
+    Hand-written H5 fixture prose is what let this consumer keep demanding the
+    RETIRED WAIT/FIRE vocabulary while every test stayed green.
+    """
+    from options_researcher.entry_watch import report_lines
+
+    return "\n".join(report_lines(session, rows)) + "\n"
+_FORBIDDEN_WATCHER_IMPORT_SUFFIXES = (
+    "entry_watch",
+    "h6_watch",
+    "h7_watch",
+    "h8_watch",
+    "h10_watch",
+)
+
+
+def _has_prohibited_watcher_import(source: str) -> bool:
+    """Reject direct, from-module, and package-alias watcher imports."""
+    tree = ast.parse(source)
+    candidates = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.module is not None:
+            candidates.add(node.module)
+        for alias in node.names:
+            candidates.add(f"{node.module}.{alias.name}" if node.module is not None else alias.name)
+    return any(name.endswith(_FORBIDDEN_WATCHER_IMPORT_SUFFIXES) for name in candidates)
 
 
 def _cohort(_base_dir: Path) -> RegisteredCohort:
@@ -58,10 +128,7 @@ def _ritual(*, as_of: str = EVALUATION, run_date: str = RUN_DATE) -> dict:
             "H7": {
                 "status": "REFUSED",
                 "detail": "preflight exit 1",
-                "evidence": (
-                    "reports/h7_receipts/h7-forward-15-v1/"
-                    f"preflight/{as_of}.txt"
-                ),
+                "evidence": (f"reports/h7_receipts/h7-forward-15-v1/preflight/{as_of}.txt"),
             },
             "H8": {
                 "status": "CAPTURED",
@@ -71,9 +138,7 @@ def _ritual(*, as_of: str = EVALUATION, run_date: str = RUN_DATE) -> dict:
             "H10": {
                 "status": "NO_SIGNAL",
                 "detail": "no signal",
-                "evidence": (
-                    f"reports/h10/receipts/h10_watch_{run_date}.json"
-                ),
+                "evidence": (f"reports/h10/receipts/h10_watch_{run_date}.json"),
             },
         },
     }
@@ -86,8 +151,8 @@ def _h6(
     reasons: tuple[str, ...] | None = None,
 ) -> dict:
     raw_reasons = (
-        tuple() if status == "ELIGIBLE" else ("<raw H6 reason>",)
-    ) if reasons is None else reasons
+        (tuple() if status == "ELIGIBLE" else ("<raw H6 reason>",)) if reasons is None else reasons
+    )
     return {
         "schema": "h6_exact_session_watch_receipt_v1",
         "snapshot": {
@@ -119,10 +184,10 @@ def _h8(
     reasons: tuple[str, ...] | None = None,
 ) -> dict:
     raw_reasons = (
-        ("blocked by registered gate",)
-        if status == "BLOCKED"
-        else tuple()
-    ) if reasons is None else reasons
+        (("blocked by registered gate",) if status == "BLOCKED" else tuple())
+        if reasons is None
+        else reasons
+    )
     return {
         "evaluation_session": EVALUATION,
         "mode": "FORWARD_PAPER_ONLY",
@@ -161,6 +226,24 @@ def _h10(
                 "reason": None,
                 "signals": {"H10a": True, "H10b": False},
                 "book_action_required": True,
+            }
+        ],
+    }
+
+
+def _resumed_h10(*, status: str, h10b_signal: bool) -> dict:
+    return {
+        "as_of": RUN_DATE,
+        "evaluation_session": EVALUATION,
+        "book_action_required": status == "FIRED",
+        "evaluations": [
+            {
+                "symbol": "PLTR",
+                "status": status,
+                "reason": None,
+                "signals": {"H10a": None, "H10b": h10b_signal},
+                "h10a_status": "ADJUDICATED",
+                "book_action_required": status == "FIRED",
             }
         ],
     }
@@ -238,11 +321,7 @@ def _intraday(
 def _row(evidence: dict[str, object], symbol: str, family: str) -> EvidenceRow:
     symbol_evidence = evidence[symbol]
     assert hasattr(symbol_evidence, "hypotheses")
-    return next(
-        row
-        for row in symbol_evidence.hypotheses
-        if row.family == family
-    )
+    return next(row for row in symbol_evidence.hypotheses if row.family == family)
 
 
 class HypothesisEvidenceTests(unittest.TestCase):
@@ -254,25 +333,12 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
     def _write_complete_fixture(self) -> None:
         _write_json(
-            self.root
-            / "reports"
-            / "ritual"
-            / f"capture_receipt_{EVALUATION}.json",
+            self.root / "reports" / "ritual" / f"capture_receipt_{EVALUATION}.json",
             _ritual(),
         )
-        h5 = (
-            self.root
-            / "reports"
-            / "h5"
-            / f"entry_watch_{EVALUATION}.txt"
-        )
+        h5 = self.root / "reports" / "h5" / f"entry_watch_{EVALUATION}.txt"
         h5.parent.mkdir(parents=True, exist_ok=True)
-        h5.write_text(
-            "H5 LEAPS ENTRY TRIGGER WATCH\n"
-            f"AMZN: WAIT  close $230 (as of {EVALUATION}) "
-            "-- waiting on: <trigger>\n",
-            encoding="utf-8",
-        )
+        h5.write_text(_h5_observer_text([_h5_observer_row("AMZN")]), encoding="utf-8")
         _write_json(
             self.root / "reports" / "h6_forward" / f"{EVALUATION}.json",
             _h6(status="BLOCKED"),
@@ -282,11 +348,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
             _h8(),
         )
         _write_json(
-            self.root
-            / "reports"
-            / "h10"
-            / "receipts"
-            / f"h10_watch_{RUN_DATE}.json",
+            self.root / "reports" / "h10" / "receipts" / f"h10_watch_{RUN_DATE}.json",
             _h10(),
         )
         _write_json(
@@ -308,12 +370,41 @@ class HypothesisEvidenceTests(unittest.TestCase):
             _h7_watcher(),
         )
         _write_json(
-            self.root
-            / "reports"
-            / "intraday_capture"
-            / EVALUATION
-            / "preclose.json",
+            self.root / "reports" / "intraday_capture" / EVALUATION / "preclose.json",
             _intraday(tuple(watch_universe())),
+        )
+
+    def test_h10b_no_signal_accepts_none_for_adjudicated_h10a(self):
+        self._write_complete_fixture()
+        _write_json(
+            self.root / "reports" / "h10" / "receipts" / f"h10_watch_{RUN_DATE}.json",
+            _resumed_h10(status="NO_SIGNAL", h10b_signal=False),
+        )
+
+        evidence = gather_hypothesis_evidence(("PLTR",), root=self.root, cohort_loader=_cohort)
+
+        h10b = _row(evidence, "PLTR", "H10b")
+        self.assertEqual(
+            [(state.label, state.state) for state in h10b.symbol_states],
+            [("watcher", "NO_SIGNAL"), ("signal", "false")],
+        )
+        h10a = _row(evidence, "PLTR", "H10a")
+        self.assertEqual(h10a.symbol_states[0].state, "ADJUDICATED")
+        self.assertNotIn("UNKNOWN", h10a.detail)
+
+    def test_h10b_fired_accepts_none_for_adjudicated_h10a(self):
+        self._write_complete_fixture()
+        _write_json(
+            self.root / "reports" / "h10" / "receipts" / f"h10_watch_{RUN_DATE}.json",
+            _resumed_h10(status="FIRED", h10b_signal=True),
+        )
+
+        evidence = gather_hypothesis_evidence(("PLTR",), root=self.root, cohort_loader=_cohort)
+
+        h10b = _row(evidence, "PLTR", "H10b")
+        self.assertEqual(
+            [(state.label, state.state) for state in h10b.symbol_states],
+            [("watcher", "FIRED"), ("signal", "true")],
         )
 
     def test_all_receipt_schemas_keep_ritual_and_raw_states_separate(self):
@@ -332,8 +423,11 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
         h5 = _row(evidence, "AMZN", "H5")
         self.assertEqual(h5.family_state, "NO_SIGNAL")
-        self.assertEqual(h5.symbol_states[0].state, "WAIT")
-        self.assertIn("<trigger>", h5.detail)
+        self.assertEqual(h5.symbol_states[0].state, H5_OBSERVE_STATE)
+        self.assertEqual(h5.symbol_states[0].label, "observe")
+        self.assertIn("entry trigger retired", h5.membership)
+        self.assertTrue(h5.descriptive_only)
+        self.assertIn("finite Schwab observations", h5.detail)
         self.assertEqual(h5.evaluation_session, EVALUATION)
         self.assertEqual(h5.run_date, RUN_DATE)
 
@@ -397,11 +491,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
             _h6(symbol="PLTR"),
         )
         _write_json(
-            self.root
-            / "reports"
-            / "intraday_capture"
-            / EVALUATION
-            / "preclose.json",
+            self.root / "reports" / "intraday_capture" / EVALUATION / "preclose.json",
             _intraday(("AMZN",)),
         )
 
@@ -425,9 +515,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
                 self.assertEqual(row.sources, ())
                 self.assertIsNone(row.evaluation_session)
                 self.assertIsNone(row.run_date)
-            self.assertEqual(
-                evidence[symbol].intraday.family_state, "NOT TRACKED"
-            )
+            self.assertEqual(evidence[symbol].intraday.family_state, "NOT TRACKED")
             self.assertEqual(evidence[symbol].intraday.sources, ())
 
     def test_malformed_newest_receipt_is_unknown_without_older_fallback(self):
@@ -441,9 +529,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
                 },
             },
         )
-        newest = (
-            self.root / "reports" / "h6_forward" / f"{EVALUATION}.json"
-        )
+        newest = self.root / "reports" / "h6_forward" / f"{EVALUATION}.json"
         newest.write_text("{not-json", encoding="utf-8")
 
         evidence = gather_hypothesis_evidence(
@@ -460,6 +546,16 @@ class HypothesisEvidenceTests(unittest.TestCase):
             f"reports/h6_forward/{EVALUATION}.json",
         )
         self.assertNotIn("2026-07-23", row.sources[0].path)
+        from options_researcher.hypothesis_evidence import (
+            summarize_hypothesis_evidence,
+        )
+
+        h6_summary = summarize_hypothesis_evidence(evidence)[1]
+        self.assertEqual(h6_summary.ritual_state, "UNKNOWN")
+        self.assertEqual(
+            [(count.state, count.count) for count in h6_summary.raw_state_counts],
+            [("UNKNOWN", 1)],
+        )
 
     def test_h7_refuses_cross_session_or_hash_mismatched_receipt_sets(self):
         self._write_complete_fixture()
@@ -472,12 +568,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
             / f"{EVALUATION}.json"
         )
         watcher_path = (
-            self.root
-            / "reports"
-            / "h7_receipts"
-            / self.scope_id
-            / "watcher"
-            / f"{EVALUATION}.json"
+            self.root / "reports" / "h7_receipts" / self.scope_id / "watcher" / f"{EVALUATION}.json"
         )
         watcher = json.loads(watcher_path.read_text(encoding="utf-8"))
         watcher["source_health_receipt_hash"] = "b" * 64
@@ -523,12 +614,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
     def test_invalid_real_schema_vocabularies_fail_closed(self):
         self._write_complete_fixture()
-        ritual_path = (
-            self.root
-            / "reports"
-            / "ritual"
-            / f"capture_receipt_{EVALUATION}.json"
-        )
+        ritual_path = self.root / "reports" / "ritual" / f"capture_receipt_{EVALUATION}.json"
         ritual = json.loads(ritual_path.read_text(encoding="utf-8"))
         for result in ritual["hypotheses"].values():
             result["status"] = "BOGUS"
@@ -545,11 +631,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         h10 = _h10()
         h10["evaluations"][0]["status"] = "BOGUS"
         _write_json(
-            self.root
-            / "reports"
-            / "h10"
-            / "receipts"
-            / f"h10_watch_{RUN_DATE}.json",
+            self.root / "reports" / "h10" / "receipts" / f"h10_watch_{RUN_DATE}.json",
             h10,
         )
         source = _h7_source()
@@ -577,11 +659,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         intraday = _intraday(tuple(watch_universe()))
         intraday["names"]["PLTR"]["status"] = "BOGUS"
         _write_json(
-            self.root
-            / "reports"
-            / "intraday_capture"
-            / EVALUATION
-            / "preclose.json",
+            self.root / "reports" / "intraday_capture" / EVALUATION / "preclose.json",
             intraday,
         )
 
@@ -601,9 +679,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
             with self.subTest(symbol=symbol, family=family):
                 row = _row(evidence, symbol, family)
                 self.assertEqual(row.family_state, "UNKNOWN")
-                self.assertTrue(
-                    all(state.state == "UNKNOWN" for state in row.symbol_states)
-                )
+                self.assertTrue(all(state.state == "UNKNOWN" for state in row.symbol_states))
         self.assertEqual(evidence["PLTR"].intraday.family_state, "UNKNOWN")
         self.assertEqual(
             evidence["PLTR"].intraday.symbol_states[0].state,
@@ -611,12 +687,8 @@ class HypothesisEvidenceTests(unittest.TestCase):
         )
 
     def test_h6_h8_status_reason_invariants_fail_closed(self):
-        h6_path = (
-            self.root / "reports" / "h6_forward" / f"{EVALUATION}.json"
-        )
-        h8_path = (
-            self.root / "reports" / "h8_forward" / f"{EVALUATION}.json"
-        )
+        h6_path = self.root / "reports" / "h6_forward" / f"{EVALUATION}.json"
+        h8_path = self.root / "reports" / "h8_forward" / f"{EVALUATION}.json"
         _write_json(
             h6_path,
             _h6(status="ELIGIBLE", reasons=("impossible reason",)),
@@ -637,27 +709,17 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
     def test_receipt_identity_and_safety_fields_fail_closed(self):
         self._write_complete_fixture()
-        h6_path = (
-            self.root / "reports" / "h6_forward" / f"{EVALUATION}.json"
-        )
+        h6_path = self.root / "reports" / "h6_forward" / f"{EVALUATION}.json"
         h6 = json.loads(h6_path.read_text(encoding="utf-8"))
         h6["snapshot"]["live_orders"] = True
         _write_json(h6_path, h6)
 
-        h8_path = (
-            self.root / "reports" / "h8_forward" / f"{EVALUATION}.json"
-        )
+        h8_path = self.root / "reports" / "h8_forward" / f"{EVALUATION}.json"
         h8 = json.loads(h8_path.read_text(encoding="utf-8"))
         h8["entries"][0]["evaluation_session"] = "2026-07-23"
         _write_json(h8_path, h8)
 
-        h10_path = (
-            self.root
-            / "reports"
-            / "h10"
-            / "receipts"
-            / f"h10_watch_{RUN_DATE}.json"
-        )
+        h10_path = self.root / "reports" / "h10" / "receipts" / f"h10_watch_{RUN_DATE}.json"
         h10 = json.loads(h10_path.read_text(encoding="utf-8"))
         h10["evaluations"][0]["book_action_required"] = False
         _write_json(h10_path, h10)
@@ -689,9 +751,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         ):
             with self.subTest(symbol=symbol, family=family):
                 row = _row(evidence, symbol, family)
-                self.assertTrue(
-                    all(state.state == "UNKNOWN" for state in row.symbol_states)
-                )
+                self.assertTrue(all(state.state == "UNKNOWN" for state in row.symbol_states))
 
         for invalid_top_level in (False, 1):
             h10 = _h10()
@@ -719,22 +779,14 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
     def test_h10_newest_run_date_uses_its_semantic_evaluation_session(self):
         _write_json(
-            self.root
-            / "reports"
-            / "h10"
-            / "receipts"
-            / "h10_watch_2026-07-24.json",
+            self.root / "reports" / "h10" / "receipts" / "h10_watch_2026-07-24.json",
             _h10(
                 evaluation_session="2026-07-23",
                 run_date="2026-07-24",
             ),
         )
         _write_json(
-            self.root
-            / "reports"
-            / "h10"
-            / "receipts"
-            / f"h10_watch_{RUN_DATE}.json",
+            self.root / "reports" / "h10" / "receipts" / f"h10_watch_{RUN_DATE}.json",
             _h10(),
         )
 
@@ -795,21 +847,13 @@ class HypothesisEvidenceTests(unittest.TestCase):
         friday = "2026-07-24"
         monday = "2026-07-27"
         _write_json(
-            self.root
-            / "reports"
-            / "ritual"
-            / f"capture_receipt_{friday}.json",
+            self.root / "reports" / "ritual" / f"capture_receipt_{friday}.json",
             _ritual(as_of=friday, run_date=monday),
         )
-        path = (
-            self.root
-            / "reports"
-            / "h5"
-            / f"entry_watch_{friday}.txt"
-        )
+        path = self.root / "reports" / "h5" / f"entry_watch_{friday}.txt"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            f"AMZN: WAIT close $230 (as of {friday})\n",
+            _h5_observer_text([_h5_observer_row("AMZN", session=friday)], session=friday),
             encoding="utf-8",
         )
 
@@ -850,20 +894,10 @@ class HypothesisEvidenceTests(unittest.TestCase):
 
     def test_newest_intraday_slot_is_semantic_and_malformed_stays_unknown(self):
         _write_json(
-            self.root
-            / "reports"
-            / "intraday_capture"
-            / EVALUATION
-            / "midday.json",
+            self.root / "reports" / "intraday_capture" / EVALUATION / "midday.json",
             _intraday(("AMZN",), tag="midday"),
         )
-        newest = (
-            self.root
-            / "reports"
-            / "intraday_capture"
-            / EVALUATION
-            / "preclose.json"
-        )
+        newest = self.root / "reports" / "intraday_capture" / EVALUATION / "preclose.json"
         newest.write_text("{bad-json", encoding="utf-8")
 
         evidence = gather_hypothesis_evidence(
@@ -881,13 +915,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         self.assertTrue(row.descriptive_only)
 
     def test_intraday_receipt_requires_exact_ordered_canonical_universe(self):
-        path = (
-            self.root
-            / "reports"
-            / "intraday_capture"
-            / EVALUATION
-            / "preclose.json"
-        )
+        path = self.root / "reports" / "intraday_capture" / EVALUATION / "preclose.json"
         receipt = _intraday(("AMZN",))
         receipt["universe"] = ["AMZN"]
         _write_json(path, receipt)
@@ -915,11 +943,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         receipt = _intraday(tuple(watch_universe()))
         receipt["names"]["AMZN"]["symbol"] = "PLTR"
         _write_json(
-            self.root
-            / "reports"
-            / "intraday_capture"
-            / EVALUATION
-            / "preclose.json",
+            self.root / "reports" / "intraday_capture" / EVALUATION / "preclose.json",
             receipt,
         )
 
@@ -986,12 +1010,7 @@ class HypothesisEvidenceTests(unittest.TestCase):
         )
 
     def test_h5_rejects_non_receipt_state_vocabulary_as_unknown(self):
-        path = (
-            self.root
-            / "reports"
-            / "h5"
-            / f"entry_watch_{EVALUATION}.txt"
-        )
+        path = self.root / "reports" / "h5" / f"entry_watch_{EVALUATION}.txt"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             f"AMZN: BLOCKED close $230 (as of {EVALUATION})\n",
@@ -1007,6 +1026,136 @@ class HypothesisEvidenceTests(unittest.TestCase):
         row = _row(evidence, "AMZN", "H5")
         self.assertEqual(row.symbol_states[0].state, "UNKNOWN")
         self.assertIn("omits tracked symbol", row.detail)
+
+    def test_h5_never_renders_the_retired_wait_or_fire_vocabulary(self):
+        """seq 29 clause 1: a WAIT/FIRE report is drift, surfaced as UNKNOWN."""
+        for retired in ("WAIT", "FIRE"):
+            with self.subTest(state=retired):
+                path = self.root / "reports" / "h5" / f"entry_watch_{EVALUATION}.txt"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    f"AMZN: {retired} close $230 (as of {EVALUATION})\n",
+                    encoding="utf-8",
+                )
+
+                evidence = gather_hypothesis_evidence(
+                    ("AMZN",),
+                    root=self.root,
+                    cohort_loader=_cohort,
+                )
+
+                row = _row(evidence, "AMZN", "H5")
+                self.assertEqual(row.symbol_states[0].state, "UNKNOWN")
+                self.assertIn("retired trigger vocabulary", row.detail)
+
+    def test_h5_data_gap_rows_render_as_a_data_gap_not_an_entry_state(self):
+        path = self.root / "reports" / "h5" / f"entry_watch_{EVALUATION}.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            _h5_observer_text(
+                [_h5_observer_row("AMZN", state="DATA_GAP", reason="capture missing")]
+            ),
+            encoding="utf-8",
+        )
+
+        evidence = gather_hypothesis_evidence(
+            ("AMZN",),
+            root=self.root,
+            cohort_loader=_cohort,
+        )
+
+        row = _row(evidence, "AMZN", "H5")
+        self.assertEqual(row.symbol_states[0].state, "DATA_GAP")
+        self.assertIn("capture missing", row.detail)
+
+    def test_family_summary_is_stable_and_keeps_only_agreed_dates(self):
+        """A tracker rollup must not turn row disagreement into a current date."""
+        from options_researcher.hypothesis_evidence import (
+            summarize_hypothesis_evidence,
+        )
+
+        self._write_complete_fixture()
+        evidence = gather_hypothesis_evidence(("AMZN",), root=self.root, cohort_loader=_cohort)
+        summaries = summarize_hypothesis_evidence(evidence)
+
+        self.assertEqual(
+            [summary.family for summary in summaries],
+            ["H5", "H6", "H7", "H8", "H10a", "H10b"],
+        )
+        h6 = summaries[1]
+        self.assertEqual(h6.ritual_state, "CAPTURED")
+        self.assertEqual(h6.evaluation_session, EVALUATION)
+        self.assertEqual(h6.run_date, RUN_DATE)
+        self.assertEqual(
+            [(count.state, count.count) for count in h6.raw_state_counts],
+            [("BLOCKED", 1), ("POST_REPORT", 1)],
+        )
+        self.assertEqual(summaries[4].registered_window_end, config.H10A_WINDOW_END)
+        self.assertEqual(summaries[4].registered_window_metadata, "registered-window metadata")
+
+        changed_h6 = replace(_row(evidence, "AMZN", "H6"), evaluation_session="2026-07-25")
+        changed_evidence = replace(
+            evidence["AMZN"],
+            hypotheses=tuple(
+                changed_h6 if row.family == "H6" else row for row in evidence["AMZN"].hypotheses
+            ),
+        )
+        disagreed = summarize_hypothesis_evidence(
+            {
+                "AMZN": evidence["AMZN"],
+                "SECOND": changed_evidence,
+            }
+        )
+        self.assertIsNone(disagreed[1].evaluation_session)
+
+    def test_gather_and_summary_never_write_or_import_watchers(self):
+        """Receipt aggregation stays read-only even when write APIs are hostile."""
+        import hashlib
+        import os
+
+        from options_researcher import hypothesis_evidence
+        from options_researcher.hypothesis_evidence import (
+            summarize_hypothesis_evidence,
+        )
+
+        self.assertFalse(
+            _has_prohibited_watcher_import(
+                Path(hypothesis_evidence.__file__).read_text(encoding="utf-8")
+            )
+        )
+
+        self._write_complete_fixture()
+        before = {
+            path.relative_to(self.root): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in self.root.rglob("*")
+            if path.is_file()
+        }
+        with (
+            mock.patch.object(Path, "write_text", side_effect=AssertionError("write")),
+            mock.patch.object(Path, "write_bytes", side_effect=AssertionError("write")),
+            mock.patch.object(Path, "unlink", side_effect=AssertionError("write")),
+            mock.patch.object(Path, "rename", side_effect=AssertionError("write")),
+            mock.patch.object(os, "replace", side_effect=AssertionError("write")),
+        ):
+            summarize_hypothesis_evidence(
+                gather_hypothesis_evidence(("AMZN",), root=self.root, cohort_loader=_cohort)
+            )
+        after = {
+            path.relative_to(self.root): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in self.root.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(after, before)
+
+    def test_watcher_import_guard_rejects_package_form(self):
+        """A package import alias must be treated as the watcher module it loads."""
+        for source in (
+            "import options_researcher.h6_watch\n",
+            "from options_researcher.h6_watch import run\n",
+            "from options_researcher import h6_watch\n",
+        ):
+            with self.subTest(source=source):
+                self.assertTrue(_has_prohibited_watcher_import(source))
 
 
 if __name__ == "__main__":

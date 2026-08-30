@@ -12,6 +12,36 @@ they are tested at implementation time and re-confirmed at registration time, ne
 silently frozen. The `[OWNER …]` markers in the brief bodies are left in place so
 the delegation is visible, not overwritten.
 
+> ## ⚠️ BINDING-VALUES CORRECTION (2026-08-15) — READ BEFORE IMPLEMENTING
+>
+> The ledger, not this document, is authoritative. Ledger seq 25
+> (`RQ2_AMENDMENT_V1_1`, 2026-08-10) states explicitly that seq 18's
+> owner-typed definitions "override the briefs doc's delegated-values table
+> wherever the two differ." An implementer reading only this file gets FOUR
+> values wrong:
+>
+> | Item | This doc says | LEDGER SAYS (binding) |
+> |---|---|---|
+> | B1 `ts_pctl` corner cut | ≥ 0.80 | **≥ 0.75** (seq 18, owner-typed) |
+> | B1 `vrp_pctl` corner cut | ≤ 0.20 | **≤ 0.25** (seq 18, owner-typed) |
+> | A1 `mom_1m` | ≥ +5% | **> 0** (seq 18, owner-typed) |
+> | A1 `rv21` percentile | ≥ 0.60 | **≥ 0.70** (seq 18, owner-typed) |
+>
+> Also superseded since this draft: **K = 3** (B1, A1, V1 membership-only —
+> seq 25; V1's scoring statistic is NOT pinned and the runner must refuse V1
+> comparisons until a further pre-result amendment pins it), and the
+> **"Start 2026-09-01" forward-window row below was never a ledger value** —
+> the owner set the window open to **2026-08-17** (owner ruling 2026-08-15
+> in-session; amendment pending append).
+>
+> **B1 firing rule — owner ruling 2026-08-15 (in-session, supersedes both the
+> seq-18 earnings gate and this doc's "(ii) event-gated flag" row, amendment
+> pending append):** B1 computes and may fire **daily on every name**; the
+> earnings-proximity context is recorded as a mandatory study column
+> (`earnings_tag`, exactly as specified in the brief body) but no longer
+> gates the flag. Owner wording: "i dont want that to fire if theres
+> confirmed earnings i want that fired daily and studied."
+
 **Standing constraints binding every brief below (from the owner-approved replan,
 `docs/superpowers/specs/2026-07-22-project-replan-design.md`):**
 1. **Ordering:** Phase 1 recorders (R1–R5) come first. These briefs are Phase-3 work

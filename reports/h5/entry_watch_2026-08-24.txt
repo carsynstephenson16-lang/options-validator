@@ -1,0 +1,3 @@
+H5 SCHWAB OBSERVER evaluation_session=2026-08-24 max_asof_session=2026-08-24 observational / non-verdict-bearing
+VST: DATA_GAP observational / non-verdict-bearing capture_available=True finite Schwab observations not counted -- refusing observer: close requires exactly one row for 2026-08-24
+AMZN: DATA_GAP observational / non-verdict-bearing capture_available=True finite Schwab observations not counted -- refusing observer: close requires exactly one row for 2026-08-24

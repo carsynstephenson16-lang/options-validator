@@ -1,0 +1,157 @@
+{
+  "captured_at_et": "2026-08-24T15:45:21.349607-04:00",
+  "captured_at_utc": "2026-08-24T19:45:21.349607+00:00",
+  "code_sha": "0ca2601ba3d8d206d49bb5f118fd0d2048554ea7",
+  "config_hash": "5d2be6389aa004789d6c8819815b58957aa8e2f50c6afe440a263ecbbad0cdbc",
+  "force": false,
+  "invocation_source": "launchd",
+  "manifest_hash": "1f247c381ed35f2fad37fa2e8c031d60fbc7159a29939ab93bff9a34564406c4",
+  "manifest_path": "reports/schwab_chains/2026-08-24/manifest.json",
+  "names": {
+    "AMD": {
+      "expiration_count": 23,
+      "path": ".cache/schwab_chains/AMD_2026-08-24.parquet",
+      "row_count": 6318,
+      "sha256": "25b654cedf8d09d4db00dbedf0bdb79f35d77ce0314293ca3acd7dd7810d53d4",
+      "size_bytes": 265628,
+      "status": "ok"
+    },
+    "AMZN": {
+      "expiration_count": 24,
+      "path": ".cache/schwab_chains/AMZN_2026-08-24.parquet",
+      "row_count": 2550,
+      "sha256": "2c48460a59b67920dcf4ca9a41ea4d1f107e2e7d32beeca38440fb1683695a9f",
+      "size_bytes": 117042,
+      "status": "ok"
+    },
+    "AVGO": {
+      "expiration_count": 23,
+      "path": ".cache/schwab_chains/AVGO_2026-08-24.parquet",
+      "row_count": 3364,
+      "sha256": "591796d528ec3439ad1923c0d1ea9e2f45fae725cfdcf624f6fac45f582a693c",
+      "size_bytes": 153971,
+      "status": "ok"
+    },
+    "CEG": {
+      "expiration_count": 18,
+      "path": ".cache/schwab_chains/CEG_2026-08-24.parquet",
+      "row_count": 1748,
+      "sha256": "80384f0c1f879f0af73ac042e9dc4e886dddc904d639e34b8af1dd10cf055ae4",
+      "size_bytes": 82961,
+      "status": "ok"
+    },
+    "CRWV": {
+      "expiration_count": 19,
+      "path": ".cache/schwab_chains/CRWV_2026-08-24.parquet",
+      "row_count": 2003,
+      "sha256": "38a01c56fc9e2f124bc5ea14b0d6670c715407179ee65ce92998f1912ae74402",
+      "size_bytes": 98248,
+      "status": "ok"
+    },
+    "ET": {
+      "expiration_count": 14,
+      "path": ".cache/schwab_chains/ET_2026-08-24.parquet",
+      "row_count": 646,
+      "sha256": "0c53808cfc8783998d416069768099e10226faa1e84e65eb6f7e4e18029abbcf",
+      "size_bytes": 35696,
+      "status": "ok"
+    },
+    "IREN": {
+      "expiration_count": 21,
+      "path": ".cache/schwab_chains/IREN_2026-08-24.parquet",
+      "row_count": 1480,
+      "sha256": "a2aa53c1935ac18989174dcf170c04b65a6ec37b697bc237e598f694cafb6d11",
+      "size_bytes": 71627,
+      "status": "ok"
+    },
+    "MSFT": {
+      "expiration_count": 22,
+      "path": ".cache/schwab_chains/MSFT_2026-08-24.parquet",
+      "row_count": 3790,
+      "sha256": "c88e657c58310bb4a4befcf27ce5808e6639fceee8556ab05789f3ddb5af1ffc",
+      "size_bytes": 167403,
+      "status": "ok"
+    },
+    "NOW": {
+      "expiration_count": 16,
+      "path": ".cache/schwab_chains/NOW_2026-08-24.parquet",
+      "row_count": 2098,
+      "sha256": "51a796f752fd02f81c08bfb0a32700dc7c90e7416733c09ee4ab594446a813a2",
+      "size_bytes": 97329,
+      "status": "ok"
+    },
+    "NVDA": {
+      "expiration_count": 21,
+      "path": ".cache/schwab_chains/NVDA_2026-08-24.parquet",
+      "row_count": 3534,
+      "sha256": "50a7f415c4e1f63ef3f200359e3a6c2d348b0192071480a8cd79d4dccb140f1c",
+      "size_bytes": 154551,
+      "status": "ok"
+    },
+    "PLTR": {
+      "expiration_count": 17,
+      "path": ".cache/schwab_chains/PLTR_2026-08-24.parquet",
+      "row_count": 2264,
+      "sha256": "ac2a8447db2c4f7508d04b14e2f1f5da1f81d91e88dc7eb9018b1a03e4eaab89",
+      "size_bytes": 105441,
+      "status": "ok"
+    },
+    "SMCI": {
+      "expiration_count": 17,
+      "path": ".cache/schwab_chains/SMCI_2026-08-24.parquet",
+      "row_count": 1570,
+      "sha256": "d2fea454e1db1f34b9f5dc7736d88ceb3e745cd106dc7e0d7c659adb3692353b",
+      "size_bytes": 73372,
+      "status": "ok"
+    },
+    "TEM": {
+      "expiration_count": 15,
+      "path": ".cache/schwab_chains/TEM_2026-08-24.parquet",
+      "row_count": 984,
+      "sha256": "073d0bcb9669ffececc0acfbe522611b8f3672d47031efef056d6b0ff74c781b",
+      "size_bytes": 54258,
+      "status": "ok"
+    },
+    "USAR": {
+      "expiration_count": 11,
+      "path": ".cache/schwab_chains/USAR_2026-08-24.parquet",
+      "row_count": 816,
+      "sha256": "1915cad426cb9f67a146bf25a27737951f62ab74b8e41b664ea5ebc8dbcb54d3",
+      "size_bytes": 44385,
+      "status": "ok"
+    },
+    "VST": {
+      "expiration_count": 18,
+      "path": ".cache/schwab_chains/VST_2026-08-24.parquet",
+      "row_count": 1480,
+      "sha256": "95637e2eeeface6ebee7b58eb7fcb5be7a7272c979bbf4ac3c703a214ac02d6f",
+      "size_bytes": 73246,
+      "status": "ok"
+    }
+  },
+  "overall_status": "ok",
+  "provider": "schwab",
+  "provider_version": "1.5.1",
+  "receipt_kind": "schwab_chain_capture/v1",
+  "scheduled_session_tag": "preclose",
+  "session": "2026-08-24",
+  "session_chain_convention": "preclose_snapshot_v1",
+  "timing_validation": "within 10min of the scheduled time",
+  "universe": [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST"
+  ]
+}

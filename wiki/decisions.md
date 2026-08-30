@@ -17,7 +17,8 @@ The 15-name watch universe is `H7_WATCHLIST` (11 names) plus
 `H7_EXCLUDED` (`config.py:377-385, 643-645`);
 `options_researcher/h7_scope.py:18-25` hard-raises unless the count is
 exactly 15. Separately, the **9-name entry cohort is frozen for the life of
-the live forward window**: `[AMD, AMZN, CEG, ET, MSFT, NOW, PLTR, TEM, VST]`,
+the H7 forward window** (PAUSED per OD-3 as of 2026-08-26 — see
+[[hypotheses]]): `[AMD, AMZN, CEG, ET, MSFT, NOW, PLTR, TEM, VST]`,
 set at Stage-8 activation (`ledger/h7_forward/events.jsonl` seq 0,
 `window_registration`, 2026-07-20); 6 names excluded reason
 `EARNINGS-UNKNOWN` (AVGO, CRWV, IREN, NVDA, SMCI, USAR — data-readiness
@@ -50,9 +51,10 @@ Top-3 rank.
 `docs/options-validator-readiness.md`: **READY WITH KNOWN LIMITATIONS** for
 the scheduled Monday 2026-07-27 07:10 ritual run, verified against `main`
 at commit 2864008 (1,996 tests green, ruff/pyright clean, CI green). Two
-owner-side dependencies: machine awake at 07:10, and the remote ThetaData
-service (MDDS) reachable — **no local terminal process required**
-(correction that session; see [[data-layer]]). Non-blocking P1 backlog:
+owner-side dependencies: machine awake at 07:10, and (historical — ThetaData
+retired ~2026-07-29, Schwab is the capture lane as of 2026-08-26; see
+[[data-layer]]) the remote ThetaData service reachable — **no local terminal
+process required** (correction that session). Non-blocking P1 backlog:
 mission-control banner date pin, a stale plist comment, and an earnings
 source refresh for 6 non-registered watchlist names. Companion docs:
 `docs/monday-runbook.md`, `docs/dashboard-architecture.md`.
