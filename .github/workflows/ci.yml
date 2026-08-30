@@ -102,3 +102,6 @@ jobs:
           test_intraday_capture
           test_qm_dashboard
           test_research_context_assemble
+          test_irreplaceable_data_guard
+          test_job_health_digest
+          test_schwab_chain_capture
