@@ -17,6 +17,7 @@ from options_researcher.a2_battery import LANE_COMPONENTS, A2Outcome
 from options_researcher.a2_panel import A2AuditResult, A2Diagnostics
 from options_researcher.a2_runner import (
     ENTRY_CONVENTION_FACT_PAYLOAD,
+    ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX,
     RETROACTIVE_UNIVERSE_DISCLOSURE,
     A2LocalInputs,
     A2RunnerError,
@@ -543,7 +544,8 @@ class RunnerContracts(unittest.TestCase):
             facts = base / "facts.log"
             facts.write_text(
                 "2026-08-15T00:00:00+00:00\tRQ2_A2_PIN_ADDENDUM_V1 source=reports/2026-07-23-pin-addendum-validation.md\n"
-                f"2026-08-15T00:00:00+00:00\t{ENTRY_CONVENTION_FACT_PAYLOAD}\n",
+                f"2026-08-15T00:00:00+00:00\t{ENTRY_CONVENTION_FACT_PAYLOAD}\n"
+                f"2026-08-30T00:00:00+00:00\t{ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX} 2026-08-30 fixture\n",
                 encoding="utf-8",
             )
             self.assertEqual(
@@ -558,6 +560,48 @@ class RunnerContracts(unittest.TestCase):
             )
             with self.assertRaises(A2RunnerError):
                 validate_governance(base)
+
+    def test_governance_fails_closed_without_owner_ratification_fact(self):
+        # F6, governance Finding 7 (LLM-proposed governance strengthening,
+        # owner veto open): the addendum fact alone was agent-authored
+        # without owner evidence.  A second, owner-authorized ratification
+        # fact is additionally required; it does not exist in the real
+        # ledger yet, so the historical run must stay fail-closed.  Uses a
+        # tmp-dir fixture ledger only -- never the real ledger/.
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "experiments.jsonl").write_text(
+                json.dumps(
+                    {
+                        "seq": 19,
+                        "record_hash": "684b59a2bf322a96ae375cd7b857706775eea2b971ffc456a4b09f40cb0383a2",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            facts = base / "facts.log"
+            facts.write_text(
+                "2026-08-15T00:00:00+00:00\tRQ2_A2_PIN_ADDENDUM_V1 source=reports/2026-07-23-pin-addendum-validation.md\n"
+                f"2026-08-15T00:00:00+00:00\t{ENTRY_CONVENTION_FACT_PAYLOAD}\n",
+                encoding="utf-8",
+            )
+            # Both prerequisite facts are present, but the ratification fact
+            # is not: governance must fail closed.
+            with self.assertRaisesRegex(A2RunnerError, "RATIFIED"):
+                validate_governance(base)
+            # Appending the owner-authorized ratification fact (fixture-only;
+            # never written to the real ledger by this or any other test)
+            # is the only thing that flips it to PASS.
+            with facts.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    f"2026-08-30T00:00:00+00:00\t{ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX} "
+                    "2026-08-30 fixture\n"
+                )
+            result = validate_governance(base)
+            self.assertEqual(
+                result["entry_convention_ratification_fact"], "A2_ENTRY_CONVENTION_RATIFIED_V1"
+            )
 
     def test_multi_arm_holm_family_is_applied_after_raw_values_exist(self):
         rows = []

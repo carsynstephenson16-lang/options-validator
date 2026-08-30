@@ -54,6 +54,18 @@ ENTRY_CONVENTION_FACT_PAYLOAD = (
     "source=reports/2026-08-15-a2-entry-convention-validation.md "
     "status=historical-entry-convention-complete research-only=no-verdict"
 )
+# LLM-proposed governance strengthening, owner veto open (independent
+# adversarial review 2026-08-30, governance Finding 7): the addendum fact
+# above was agent-authored without owner evidence.  This second fact is
+# ADDITIONALLY required -- it does not exist in ledger/facts.log yet and
+# MUST NOT be written by any agent -- so the historical run stays fail-closed
+# until an owner-authorized ratification fact is appended.  The addendum
+# fact remains required too; its content is still referenced by the
+# historical-entry-convention report.
+ENTRY_CONVENTION_RATIFICATION_FACT_TOKEN = "A2_ENTRY_CONVENTION_RATIFIED_V1"
+ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX = (
+    ENTRY_CONVENTION_RATIFICATION_FACT_TOKEN + " owner-approved"
+)
 UNSUPPORTED_FORWARD_FIELDS = (
     "forward_dates",
     "forward_adverse_gate_adjudication",
@@ -323,10 +335,18 @@ def validate_governance(
         raise A2RunnerError(f"A2 prerequisite fact {PIN_FACT_TOKEN} is missing")
     if ENTRY_CONVENTION_FACT_PAYLOAD not in payloads:
         raise A2RunnerError("owner-approved A2 entry-convention fact is missing")
+    if not any(
+        payload.startswith(ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX) for payload in payloads
+    ):
+        raise A2RunnerError(
+            "owner-authorized A2_ENTRY_CONVENTION_RATIFIED_V1 ratification fact is missing "
+            "(LLM-proposed governance strengthening, owner veto open)"
+        )
     return {
         "registration_seq": REGISTRATION_SEQ,
         "registration_hash": REGISTRATION_RECORD_HASH,
         "pin_fact": PIN_FACT_TOKEN,
+        "entry_convention_ratification_fact": ENTRY_CONVENTION_RATIFICATION_FACT_TOKEN,
         "entry_convention_fact": ENTRY_CONVENTION_FACT_TOKEN,
     }
 
@@ -1358,7 +1378,9 @@ __all__ = [
     "A2RunnerError",
     "CachePaths",
     "ENTRY_CONVENTION_FACT_TOKEN",
+    "ENTRY_CONVENTION_RATIFICATION_FACT_TOKEN",
     "OneRunError",
+    "RETROACTIVE_UNIVERSE_DISCLOSURE",
     "build_report",
     "main",
     "run_once",
