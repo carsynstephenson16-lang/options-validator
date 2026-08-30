@@ -254,6 +254,86 @@ class RunnerContracts(unittest.TestCase):
         with self.assertRaisesRegex(OneRunError, "retroactivity disclosure"):
             validate_report(tampered)
 
+    def test_validate_report_rejects_a_variant_missing_each_required_weekly_key(self):
+        # G3 (round-3 mutation-survivable-guard verification): C2 (finding
+        # F-G) and R1 (finding F-A) added four weekly/per-cohort diagnostics
+        # to the enforced ``weekly_keys`` set in ``validate_report`` --
+        # they were already computed by ``_variant_rows`` but, before this
+        # enforcement, a report missing any one of them was still accepted.
+        # Deleting the enforcement block (or dropping any single key back
+        # out of ``weekly_keys``) must make this test fail for that key.
+        required_keys = (
+            "weeks_skipped_unresolvable_board",
+            "weeks_skipped_split_entry_date",
+            "per_cohort_name_counts",
+            "weeks_skipped_score_identity",
+        )
+        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
+        report = build_report(
+            outcomes=rows,
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={"registration_seq": 19, "registration_hash": "a" * 64},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        for key in required_keys:
+            with self.subTest(key=key):
+                tampered = dict(report)
+                tampered_variants = [dict(variant) for variant in tampered["variants"]]
+                tampered_exclusions = dict(tampered_variants[0]["exclusions"])
+                self.assertIn(key, tampered_exclusions, f"fixture lost coverage of {key}")
+                tampered_exclusions.pop(key)
+                tampered_variants[0]["exclusions"] = tampered_exclusions
+                tampered["variants"] = tampered_variants
+                with self.assertRaisesRegex(OneRunError, "weekly cohort diagnostics"):
+                    validate_report(tampered)
+
+    def test_validate_report_rejects_a_non_mapping_accepted_cohort_sizes(self):
+        # G3: the isinstance(..., Mapping) guard on
+        # exclusions["accepted_cohort_sizes"] (a2_runner.py ~297) must
+        # actually reject a non-mapping value, not just be computed.
+        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
+        report = build_report(
+            outcomes=rows,
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={"registration_seq": 19, "registration_hash": "a" * 64},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        tampered = dict(report)
+        tampered_variants = [dict(variant) for variant in tampered["variants"]]
+        tampered_exclusions = dict(tampered_variants[0]["exclusions"])
+        tampered_exclusions["accepted_cohort_sizes"] = ["not", "a", "mapping"]
+        tampered_variants[0]["exclusions"] = tampered_exclusions
+        tampered["variants"] = tampered_variants
+        with self.assertRaisesRegex(OneRunError, "accepted-cohort board/resolved sizes"):
+            validate_report(tampered)
+
+    def test_validate_report_rejects_a_non_list_accepted_cohort_size_distribution(self):
+        # G3: the isinstance(..., list) guard on
+        # variant["accepted_cohort_size_distribution"] (a2_runner.py ~299)
+        # must actually reject a non-list value, not just be computed.
+        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
+        report = build_report(
+            outcomes=rows,
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={"registration_seq": 19, "registration_hash": "a" * 64},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        tampered = dict(report)
+        tampered_variants = [dict(variant) for variant in tampered["variants"]]
+        tampered_variants[0]["accepted_cohort_size_distribution"] = {"not": "a list"}
+        tampered["variants"] = tampered_variants
+        with self.assertRaisesRegex(OneRunError, "accepted-cohort size distribution"):
+            validate_report(tampered)
+
     def test_partial_board_cohort_is_used_for_inference_not_rejected(self):
         # F1 (independent adversarial review, 2026-08-30): the board is the
         # names of config.ATTRACTIVENESS_UNIVERSE with cached data (a score)
@@ -301,6 +381,43 @@ class RunnerContracts(unittest.TestCase):
             csp["exclusions"]["accepted_cohort_sizes"]["2025-01-02"],
             {"board_size": 15, "resolved_size": 14},
         )
+
+    def test_accepted_cohort_size_distribution_reflects_resolved_size_not_board_size(self):
+        # G2 (round-3 mutation-survivable-guard verification): R3 (finding
+        # F-C) placed ``accepted_cohort_size_distribution`` next to the
+        # headline spread specifically as the RESOLVED sizes of accepted
+        # cohorts (post entry-time partial-board resolution), not the raw
+        # entry-time board sizes. Same partial-board fixture as the test
+        # above (board_size 15, resolved_size 14): mutating
+        # ``int(entry["resolved_size"])`` to ``int(entry["board_size"])``
+        # would make this distribution read [15] instead of [14].
+        rows = tuple(
+            _outcome(symbol, score=float(index))
+            for index, symbol in enumerate(config.A2_UNIVERSE[:-1], start=1)
+        )
+        report = build_report(
+            outcomes=rows,
+            signals={
+                "2025-01-02": {
+                    symbol: float(index) for index, symbol in enumerate(config.A2_UNIVERSE, start=1)
+                }
+            },
+            audit=_audit(),
+            governance={"registration_seq": 19, "registration_hash": "a" * 64},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        csp = next(
+            item
+            for item in report["variants"]
+            if item["lane"] == "csp" and item["arm"] == "capture_50"
+        )
+        self.assertEqual(
+            csp["exclusions"]["accepted_cohort_sizes"]["2025-01-02"],
+            {"board_size": 15, "resolved_size": 14},
+        )
+        self.assertEqual(csp["accepted_cohort_size_distribution"], [14])
 
     def test_report_records_weekly_candidate_and_spacing_diagnostics(self):
         # F2 (independent adversarial review, 2026-08-30): candidate
@@ -540,6 +657,103 @@ class RunnerContracts(unittest.TestCase):
         dup = breach["duplication_against_close_21_dte"]
         self.assertEqual(dup["comparable_count"], 14)
         self.assertIsNotNone(dup["rate"])
+        self.assertEqual(dup["rate"], 1.0)
+
+    def test_breach_duplication_computed_over_accepted_rows_not_raw_descriptive_rows(self):
+        # G1 (round-3 mutation-survivable-guard verification): R2 (finding
+        # F-B) recomputes breach-duplication over the ACCEPTED (post
+        # weekly-cohort-selection) inference rows of both arms -- not the
+        # raw per-arm rows _variant_rows also returns for descriptive
+        # display. Mutating
+        # ``first_pass["close_21_dte"][0], first_pass["breach_hold_21_dte"][0]``
+        # from index 0 (inference) to index 1 (descriptive/raw) must fail
+        # this test. Two well-separated weeks are built so close_21_dte
+        # accepts BOTH weeks (matching scores) while breach_hold_21_dte's
+        # week-2 score diverges from the entry-time board and is skipped by
+        # the score-identity hard gate (F-A) -- so accepted != descriptive
+        # for the breach arm, and only week 1's rows are legitimately
+        # comparable.
+        universe = config.A2_UNIVERSE
+        board_w1 = {symbol: float(index) for index, symbol in enumerate(universe, start=1)}
+        board_w2 = {symbol: float(index) for index, symbol in enumerate(universe, start=1)}
+        rows = []
+        for index, symbol in enumerate(universe, start=1):
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="close_21_dte",
+                    decision="2025-01-02",
+                    entry="2025-01-03",
+                    resolution="2025-01-10",
+                    maximum_resolution="2025-01-10",
+                    score=float(index),
+                )
+            )
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="breach_hold_21_dte",
+                    decision="2025-01-02",
+                    entry="2025-01-03",
+                    resolution="2025-01-10",
+                    maximum_resolution="2025-01-10",
+                    score=float(index),
+                )
+            )
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="close_21_dte",
+                    decision="2025-01-16",
+                    entry="2025-01-17",
+                    resolution="2025-01-24",
+                    maximum_resolution="2025-01-24",
+                    score=float(index),
+                )
+            )
+            # Week 2's breach-arm score diverges from the entry-time board
+            # (board_w2 above) -- the score-identity gate skips this week
+            # for breach_hold_21_dte ONLY, so it lands in that arm's
+            # descriptive (raw) rows but never its accepted inference rows.
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="breach_hold_21_dte",
+                    decision="2025-01-16",
+                    entry="2025-01-17",
+                    resolution="2025-01-24",
+                    maximum_resolution="2025-01-24",
+                    score=999.0,
+                )
+            )
+        report = build_report(
+            outcomes=tuple(rows),
+            signals={"2025-01-02": board_w1, "2025-01-16": board_w2},
+            audit=_audit(),
+            governance={},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        variants = {(item["lane"], item["arm"]): item for item in report["variants"]}
+        close = variants[("csp", "close_21_dte")]
+        breach = variants[("csp", "breach_hold_21_dte")]
+        # Sanity: close accepted both weeks (30 rows); breach's week 2 was
+        # skipped by the score-identity gate, so it accepted only week 1
+        # (15 rows) even though its raw/descriptive rows still cover both
+        # weeks (30 rows) -- this is the accepted != descriptive split the
+        # mutation must be caught by.
+        self.assertEqual(close["inference_count"], 30)
+        self.assertEqual(breach["inference_count"], 15)
+        self.assertEqual(breach["descriptive_count"], 30)
+        self.assertEqual(breach["exclusions"]["weeks_skipped_score_identity"], 1)
+        dup = breach["duplication_against_close_21_dte"]
+        # comparable_count must come from the ACCEPTED rows of both arms:
+        # only week 1's 15 symbols are in both arms' inference sets. Using
+        # the raw/descriptive rows instead (the mutation) would count both
+        # weeks for both arms and report 30.
+        self.assertEqual(dup["comparable_count"], 15)
+        self.assertEqual(dup["identical_resolution_count"], 15)
         self.assertEqual(dup["rate"], 1.0)
 
     def test_verified_report_can_retry_append_without_loader(self):
