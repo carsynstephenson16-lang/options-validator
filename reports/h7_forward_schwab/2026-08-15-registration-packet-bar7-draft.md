@@ -33,13 +33,22 @@ zero edge" per `.cursorrules`.
 > re-verified by a command run on 2026-08-29; the command is named in the row's
 > Evidence cell, and the full log is §8a.
 
+> **Updated 2026-08-29 evening (owner-directed).** Row 5's open question — rerun
+> or waive the config drift — was answered by the owner: **re-measure**. The
+> rerun ran, every packet-cited figure re-measured identical, and **row 5 now
+> reads MET**. Row 6 (owner final go) is the only precondition still open.
+> Evidence: `reports/h7_forward_schwab/2026-08-29-variant-menu-rerun-current-config.md`,
+> PR #132. §8a's F8 note is superseded accordingly (and its "five constants"
+> drift count corrected to nine).
+
 Registration of the bar-7 window **cannot happen** until all six preconditions
-(rows 1–6) clear. **Four of six have cleared** as of the 2026-08-29 refresh —
-with two clearances that must not be read as clean passes: row 2 cleared with a
-provenance gap (no committed review receipt, §7a), and row 4 cleared by owner
-override rather than by the observed three-session streak. Rows 5 and 6 are
-open. Row 7 is an obligation, not a precondition, and is excluded from the
-count.
+(rows 1–6) clear. **Five of six have cleared** as of the 2026-08-29 evening
+update — with two clearances that must not be read as clean passes: row 2
+cleared with a provenance gap (no committed review receipt, §7a), and row 4
+cleared by owner override rather than by the observed three-session streak.
+Row 5 cleared on its own terms, by re-measurement rather than by waiver.
+**Row 6 — owner final go — is the only precondition still open.** Row 7 is an
+obligation, not a precondition, and is excluded from the count.
 
 | # | Precondition | Status found | Evidence |
 |---|---|---|---|
@@ -47,7 +56,7 @@ count.
 | 2 | **Independent adversarial review of disposition B, PASS or PASS WITH FIXES resolved** | **MET.** Review ran and was resolved: PASS WITH FIXES with 5 blockers (two novel mutation survivors; a detection-only bypass via `git branch -f`), all fixes applied in `60a999c`, **reviewer re-verified with its own repros and upgraded to PASS**. Mutation battery 9/9 plus reviewer-added M14–M16 red. Suite reported **2944 OK, exit 0**; ruff + pyright clean. **Caveat (see §7a):** unlike the 2026-08-12 and 2026-08-13 receipts, this review's record lives in the PR #46 description and commit message, **not** as a committed file under `reports/h7_forward_schwab/`. **Re-verified 2026-08-29:** `60a999c` is still an ancestor of `origin/main` (exit 0) and the PR #46 body still carries the review trail — but the receipt is **still missing**. A tracked-file search of `origin/main` over `docs/superpowers/reviews/`, `reports/**`, and every `*.md` mentioning "disposition B", restricted to 2026-08-15..2026-08-29, returns no disposition-B review receipt. §7a's recommendation remains open. | `gh pr view 46 --json body`, `git merge-base --is-ancestor 60a999c origin/main` (exit 0), `git ls-tree -r --name-only origin/main -- docs/superpowers/reviews/`, `git grep -il 'disposition b' origin/main -- '*.md'` |
 | 3 | **Drill re-run GREEN post-merge** | **MET (2026-08-20; verified 2026-08-29).** The structural blocker described on 2026-08-15 resolved exactly as predicted. A fresh backup was taken for a later completed session and restored: `reports/h7_receipts/backup/2026-08-19.json` (snapshot `0774b5c8…`, created `2026-08-20T14:16:34Z`) and its drill `reports/h7_receipts/backup_restore/2026-08-20.json` — `receipt_type "backup_restore"`, `completed_session "2026-08-19"`, `verified_at_utc "2026-08-20T14:18:21Z"`, `verification.manifest "OK"`, `verification.problems` empty (length 0), `verification.notes` 105 entries, `verification.ok true`, across 25 receipts / 7 data gates on scope `h7-forward-15-v1`. That matches this row's own 2026-08-15 prediction (`manifest OK`, `problems 0`, `notes 105`, `ok True`) field for field. Both receipts are on `origin/main`. This supersedes `reports/h7_forward_schwab/2026-08-14-backup-drill-failure-receipt.md`, whose red result was never disposition B failing. | `git show origin/main:reports/h7_receipts/backup_restore/2026-08-20.json`; `git show origin/main:reports/h7_receipts/backup/2026-08-19.json` |
 | 4 | **S1 — three consecutive verifying trading sessions** (§7 of `docs/superpowers/plans/2026-08-14-11-ritual-switch-on-rev2-spec.md`, ratified via owner decision D-4/menu item 3, sub-fork **3a**) | **CLEARED BY OWNER OVERRIDE — not by the observed streak (2026-08-23; verified 2026-08-29).** Three separate things happened; keeping them apart matters. **(i) 3a landed.** `invocation_source` is present on `origin/main` in `options_researcher/schwab_chain_capture.py`, `data/ritual_authority.py`, `tools/job_health_digest.py` and four test modules; introduced by `ef69c94` (2026-08-15 13:10 ET), merged via PR #50 (`9e3e304`, 2026-08-15). **(ii) Recomputed arithmetic (see §1).** 3a landed on a Saturday, which is not an XNYS session, so the three-session projection is unchanged from the 2026-08-15 estimate: Mon 2026-08-17 → Wed **2026-08-19**. **(iii) The streak itself never completed.** The first tracked preclose receipt carrying the field is `reports/schwab_chains/2026-08-19/preclose.json` (`invocation_source: "launchd"`), then 2026-08-20; **2026-08-21 has no tracked preclose receipt**, so the run stopped at 2 of 3. The owner then **overruled the streak bar in-session 2026-08-23**, recorded on main in `data/ritual_authority.py` beside `exact_session_source_active=True` (commit `2e7eb3e`): *"S1's 3-session streak bar is overruled … Evidence at flip time: clean launchd receipts 08-19 and 08-20 (streak 2 of 3); the 08-21 gap was a network outage, not a source defect."* **Not re-run for this refresh:** spec §7 condition 1 (executing `tools/schwab_chain_manifest.verify_session` across a span) and condition 5 (capturing `launchctl list` verbatim). This row is therefore cleared **by owner disposition**, not by the honesty bar being satisfied as written. **The override is now optional, though.** Four consecutive tracked preclose receipts carrying `invocation_source: "launchd"` exist for 2026-08-24 / 25 / 26 / 27, so conditions 1 and 5 could be satisfied on that span for the cost of one `verify_session` run plus one `launchctl list` capture — the owner can retire the override and clear this row on its own terms rather than rely on a waiver. | `git grep -l invocation_source origin/main -- '*.py'`; `git log -S invocation_source origin/main -- '*.py'`; `git show origin/main:data/ritual_authority.py`; `git ls-tree -r --name-only origin/main -- reports/schwab_chains/` |
-| 5 | **Fresh feasibility receipt at current config** (named as a remaining precondition by §4's registration-mechanics note; never tracked in this table before 2026-08-29) | **NOT MET.** Every variant receipt this packet cites was written at `baseline_config_hash 031e711a…`. `config_hash()` on `origin/main` @ `4790cba` is now **`b86b3188…`** — five unrelated constants moved (§8a, F8). The review that measured the drift verified that no H7 entry-stack or fill-realism constant changed, so this is not a silent redefinition of the strategy; but the receipts no longer reproduce against main's config by their own `write_receipt` check. **Whether a re-run at current config is required, or the drift is waived on the strength of that verification, is an owner call.** Nothing in this packet decides it. | `uv run python -c "from research.hashing import config_hash; print(config_hash())"` → `b86b3188…`; `V9_LANE_A_OR_COHORT9.json` `baseline_config_hash` → `031e711a…` |
+| 5 | **Fresh feasibility receipt at current config** (named as a remaining precondition by §4's registration-mechanics note; never tracked in this table before 2026-08-29) | **MET (2026-08-29 evening) — by re-measurement, not by waiver.** The owner's call on the open question below was to re-run rather than waive. The full menu (all 18 variants, both panels) plus the `V9_LANE_A_OR_COHORT9` follow-up combination were re-measured at `main` @ `86e8ba6`, `baseline_config_hash` **`b86b3188…`**, into a fresh receipt set at `reports/h7_forward_schwab/variant-receipts/rerun-2026-08-29-current-config/` (written via the menu tool's own `--outdir` flag; no existing receipt deleted, edited, moved or overwritten, and no immutability guard bypassed). **Every figure this packet cites re-measured identical:** V0 and V14 at 4.00 unconstrained / 3 occupancy-constrained; V9 at 104 with 10 (42-session) and 16 (21-session); V9 × cohort-9 at 80 unconstrained with 7 (42) and 11 (21); the per-symbol counts (PLTR 38 on the 9-name subset vs 37 on the 15-name panel, MSFT 12, NOW 28, VST 2); the baseline waterfall; and the whole deep arming census. All 38 receipts compared field by field gave **zero substantive differences** — only `code_sha`, `baseline_config_hash` and the derived `receipt_hash` moved, with every `variant_identity_hash` unchanged. Window and universe verified unchanged (2026-04-16 → 2026-07-27, 1,050 name-days; earnings input hashes identical; the chain cache has gained no session for any scope name since 2026-07-27). **§3's conclusion is unaffected: the 14-entry shortfall is confirmed, not narrowed.** *(One correction this rerun produced: the earlier "five constants" drift count was an undercount — it is nine, all display-lane / chain-consistency / lane-resume, none of them an H7 entry-stack or fill-realism constant. See §8a, F8.)* | Rerun PR **#132** (draft), branch `claude/variant-menu-rerun-2026-08-29`; report `reports/h7_forward_schwab/2026-08-29-variant-menu-rerun-current-config.md`; receipts `.../variant-receipts/rerun-2026-08-29-current-config/comparable_70_common/{V0_BASELINE,V14_REGISTERED_COHORT_9,V9_LANE_A_OR,V9_LANE_A_OR_COHORT9}.json`, each carrying `baseline_config_hash b86b3188…` and `code_sha 86e8ba6` |
 | 6 | **Owner final go** — registration through the guarded door, plus the still-blank OD-3 namespace line from `reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` ("`OD-3 2026-__-__: future H7 paper observations MUST USE NEW NAMESPACE h7-forward-schwab-v1`" — currently `[NOT TYPED / NOT AUTHORIZED]`), and (separately, see §4) explicit confirmation of which entry-rule variant is being frozen | **NOT MET (re-verified 2026-08-29).** Owner has typed the loss bar (7) and the drill disposition (B) in `reports/2026-08-14-owner-answers-decision-menu.md`. Of this row's three sub-items, **one is answered and two are not.** (a) **Entry-rule variant — ANSWERED 2026-08-15:** ruling 10 of `reports/2026-08-15-owner-rulings.md` records *"Start it, shortfall in writing"* — configuration **V0**, the current registered rule unchanged, loss bar 7, with the explicit starvation pre-acceptance. That selection is transcribed in §4 and is not re-asked anywhere in this packet. (b) **OD-3 namespace line — STILL BLANK:** on `origin/main`, `reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` still carries the un-typed template `OD-3 2026-__-__: …`. (c) **Final go — NOT GIVEN:** nothing has been registered through a guarded door, and §6 is unsigned. | `git show origin/main:reports/2026-08-15-owner-rulings.md` (ruling 10); `git show origin/main:reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` |
 | 7 | **Quote-age gate commitment recorded in registration text** (not a registration blocker — a forward obligation created BY registering) | **Not a gate on this registration.** A descriptive daily quote-age sidecar report is **implemented, adversarially reviewed (APPROVE + one fix round), and MERGED to `origin/main`**: brief 32 rev 4 landed as `options_researcher/schwab_quote_age_report.py` via PR #131 (merged 2026-08-29, main @ `86e8ba6`). The `"display_only": true` / `"verdict_eligible": false` pair, the absence of a threshold, and the no-GO/NO_GO-effect rule are emitted and test-enforced on main; the sidecar runs from the next chain capture. Owner ruled 2026-08-28 ("Report now, gate later"): the BLOCKING gate + owner-typed threshold are a binding requirement of the H7 Schwab registration **arc**, triggered by the registration event itself — explicitly NOT satisfied by merging PR #71's caller of `h7_schwab_data_gate.evaluate()` (brief 32 round-3 finding F2). The registration `reason` text must record this commitment and cite the evidence: worst SELECTABLE quote age 0.61–10.38 min across 7 timestamped sessions (10-min block ⇒ 1/7 NO_GO; 15/20-min ⇒ 0/7; n=7, Reviewer-measured 2026-08-28, not owner-typed). | `docs/superpowers/plans/2026-08-28-32-schwab-quote-age-gate-codex-brief.md` ("Recorded for the H7 registration arc"); `reports/2026-08-28-deferred-closeout-rulings.md` ruling 1 + correction addendum. **Both documents landed on `origin/main` via PR #124 (merged 2026-08-29, `316b54f`).** |
 
@@ -352,6 +361,10 @@ only after the remaining preconditions complete (S1 three unattended
 sessions Mon–Wed 08-17→08-19, fresh backup drill ≥ Mon 08-17, fresh
 feasibility receipt at current config, OD-3 namespace line), through the
 guarded door, with the owner's §6 sign-off — per steps 5–9 below.
+*(Status 2026-08-29 evening: of the four named here, three have cleared —
+S1 by owner override, the backup drill on 2026-08-20, and the fresh
+feasibility receipt by the 2026-08-29 rerun. The OD-3 namespace line is still
+blank. See §0 rows 3–6.)*
 
 ---
 
@@ -532,16 +545,47 @@ fact append, no provider call, no production mutation.
 | Variant ruling | `git show origin/main:reports/2026-08-15-owner-rulings.md` | ruling 10 — V0, "Start it, shortfall in writing" |
 | V9 × cohort-9 receipt | `git show origin/wt/brief09-variant-menu-0814:.../V9_LANE_A_OR_COHORT9.json` | `occupancy_constrained_entries {"21": 11, "42": 7}`, `expected_entries_per_window 80.0`, `entries_per_symbol.PLTR 38`, `code_sha ccd161f` |
 
-**Reproduction note (F8).** `config_hash()` on current `origin/main` is
-`b86b3188…`, which no longer matches the variant receipts' recorded
-`baseline_config_hash 031e711a…`. Five unrelated constants moved since the
-receipts were written; the review that found this verified that **no H7
-entry-stack or fill-realism constant changed**, and that
+**Reproduction note (F8) — SUPERSEDED 2026-08-29 evening; original text kept
+below for audit.** The rerun directed by the owner **succeeded**, so
+reproduction is no longer pinned to the receipts' recorded `code_sha`. It was
+done by writing a **fresh receipt set to a new dated directory** via the menu
+tool's own `--outdir` flag — never by an in-place overwrite, which
+`write_receipt` correctly refuses and which nobody should attempt. See §0
+row 5 and `reports/h7_forward_schwab/2026-08-29-variant-menu-rerun-current-config.md`
+(PR #132).
+
+Two corrections the rerun produced:
+
+1. **The drift is nine constants, not five.** `config_hash()` hashes *every*
+   uppercase name in `config.py`. Measured directly between the receipts' own
+   `code_sha 5a00a50` and `86e8ba6` (`config.py` is byte-identical at
+   `5a00a50` and `ccd161f`, which is why both receipt sets recorded
+   `031e711a…`): eight constants added — `CONSISTENCY_DELTA_JUMP_ABS`,
+   `CONSISTENCY_UNDERLYING_SMALL_MOVE`,
+   `CONSISTENCY_SPREAD_BLOWOUT_MIN_RATIO`, `CONSISTENCY_MAX_EXAMPLES`,
+   `CONTEXT_LANE_ENABLED`, `PICK_TOP_N`, `H5_RESUME_FLOOR_SESSION`,
+   `H10B_RESUME_FLOOR_SESSION` — plus `SHORT_CONTEXT_ENABLED` `False → True`.
+   The earlier count appears to have been taken against a different baseline.
+   **No conclusion moves:** all nine are display-lane, chain-consistency-shadow
+   or lane-resume constants, and none is an H7 entry-stack, arming, routing,
+   liquidity, fill-realism, earnings-gate or risk-sizing constant.
+2. **The byte-identity claim held empirically.** `h7_signals`, `h7_watch`,
+   `h7_board`, `h7_lanes`, `h7_cohort`, `h7_scope`, `h7_earnings`, the chain
+   reader, `underlying_closes`, `research/hashing.py` and
+   `tools/h7_entry_variant_menu.py` are byte-identical between `5a00a50` and
+   `86e8ba6`, and the rerun reproduced every figure exactly — the empirical
+   confirmation of what that inspection predicted.
+
+*Original wording (2026-08-29 afternoon, before the rerun):* "`config_hash()`
+on current `origin/main` is `b86b3188…`, which no longer matches the variant
+receipts' recorded `baseline_config_hash 031e711a…`. Five unrelated constants
+moved since the receipts were written; the review that found this verified
+that **no H7 entry-stack or fill-realism constant changed**, and that
 `h7_signals` / `h7_watch` / `h7_board` / `h7_lanes` / the chain reader and
 `research/hashing.py` are byte-identical to the merge-base. Consequence for
 anyone re-checking these numbers: **reproduction is pinned to each receipt's
 recorded `code_sha` (`5a00a50` for the 2026-08-14 menu, `ccd161f` for the
-2026-08-15 cohort-9 follow-up) — not "re-run it on main."** `write_receipt`
+2026-08-15 cohort-9 follow-up) — not 're-run it on main.'** `write_receipt`
 fail-closes with `FileExistsError` on drift, so an error there means config
 drift, not tampering. (Repo-verified 2026-08-29: hash computed from a checkout
-whose `config.py` and `research/hashing.py` are identical to `origin/main`.)
+whose `config.py` and `research/hashing.py` are identical to `origin/main`.)"
