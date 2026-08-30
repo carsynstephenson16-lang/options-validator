@@ -265,8 +265,14 @@ per owner ruling 2026-08-15 in-session — the previously printed 2026-09-01
 was an LLM-proposed draft date never frozen in the ledger (see the 2026-08-10
 attribution correction in
 `reports/2026-08-09-attractiveness-experiment-authorization.md`); amendment
-pending append; badge modules not yet built), **A2-v1** (seq 19; not yet
-built). Status
+pending append; badge modules not yet built), **A2-v1** (seq 19; amended by
+seq 27 board pin and seq 31 breach/weekly-cohort activation; battery BUILT
+2026-08-30 — adversarially reviewed rounds 1–3, close-out
+`reports/2026-08-30-a2-battery-closeout.md`; the one-shot historical pass has
+NEVER RUN and stays fail-closed, blocked on the IV unblock criterion, the
+Def-2.4 feasibility projection, and the owner-only
+`A2_ENTRY_CONVENTION_RATIFIED_V1` fact; "never run — data blocked" is its
+pre-declared legitimate terminal state). Status
 rulings and the data-lane situation as of 2026-08-04 live in
 `reports/2026-08-04-composite-signal-lane-decision.md`. The **composite
 signal lane** (display-only, non-verdict-bearing) is authorized per the
