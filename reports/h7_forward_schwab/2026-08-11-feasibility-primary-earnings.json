@@ -1,0 +1,83 @@
+{
+  "base_rate": 0.0038095238095238095,
+  "canonical_data_paths": {
+    "access": "read-only",
+    "chain_cache": "/Users/carsynstephenson/options-validator/.cache/chains",
+    "underlying_cache": "/Users/carsynstephenson/options-validator/.cache/underlying"
+  },
+  "code_sha": "97a3e5808b15013e66938345d6b7104b707dc022",
+  "config_hash": "80fe2bf649e16e9b18f7cb7a9ccc26b9b01bcb852fcb6998c7b14611934a4d49",
+  "error_count": 0,
+  "errors": [],
+  "expected_entries": 4.0,
+  "full_stack_passes": 4,
+  "input_binding": "receipt_hash binds the exact repaired input-file hashes, read-only canonical data paths, 70-session by 15-name census, 1050 symbol-days, and error_count",
+  "input_files": {
+    "gating_assertions": {
+      "path": "data/earnings/gating_v3.csv",
+      "sha256": "da2bf6abd3d7fd0ba10c5b78fcbcec47a5a802f9372578dce503d837967e63e7"
+    },
+    "primary_earnings_evidence": {
+      "path": "reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md",
+      "sha256": "50c6013180359520e7265118fe3370b48f9f73b88f39134ec1238827f35bd9be"
+    },
+    "raw_assertions": {
+      "path": "data/earnings/assertions_v2.csv",
+      "sha256": "124f1fa2b512f238dbf36ea07485f8839653fad3ade1b40fd276a5ba003846fb"
+    }
+  },
+  "lookback_end": "2026-07-27",
+  "lookback_sessions": 70,
+  "lookback_start": "2026-04-16",
+  "method": {
+    "allocation": "options_researcher.h7_board.resolve_board",
+    "data": "existing .cache/chains plus .cache/underlying only",
+    "error_policy": "unavailable symbol-day counts in denominator and cannot pass",
+    "portfolio_state_assumption": "each historical session starts with no open H7 positions and the full frozen monthly sleeve; same-session board caps apply",
+    "signal_and_execution": "options_researcher.h7_watch.assemble_name"
+  },
+  "passing_symbol_days": [
+    {
+      "session": "2026-05-18",
+      "symbol": "NOW"
+    },
+    {
+      "session": "2026-07-13",
+      "symbol": "NOW"
+    },
+    {
+      "session": "2026-07-16",
+      "symbol": "MSFT"
+    },
+    {
+      "session": "2026-07-16",
+      "symbol": "PLTR"
+    }
+  ],
+  "prior_feasibility_receipt_hash": "8b567a5eb6f1950fa32ee9ddfbd4a440e32a7e12ff7a617888e9cd67baff625c",
+  "provenance": "LLM/tool-computed",
+  "receipt_hash": "d0ffe1f900b8ffc132f757f9783d4581464aaf8b3538271fe2ae337ba1702d0c",
+  "receipt_kind": "h7_schwab_feasibility/v1",
+  "stack_version": "h7-frozen-entry-stack-plus-board/v1",
+  "symbol_days": 1050,
+  "tool_label": "cached-only read-only measurement; no verdict",
+  "universe": [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST"
+  ],
+  "universe_size": 15,
+  "window_sessions": 70
+}
