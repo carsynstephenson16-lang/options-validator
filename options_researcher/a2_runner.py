@@ -85,6 +85,26 @@ RETROACTIVE_UNIVERSE_DISCLOSURE = (
     "of what they became -- the H10 precedent for permanent outcome-informed "
     "disclosures applies directly)"
 )
+# R3 (round-2 independent adversarial review 2026-08-30, finding F-C):
+# accepted-cohort composition is not a fixed, board-driven quantity -- it
+# also depends on which positions happen to have post-entry resolution data
+# (a2_panel's all-arms-or-none symbol dropout), and which sessions have that
+# resolution data is itself a function of the same path-dependent history
+# being measured.  This is a permanent report-level disclosure, not a
+# per-run computed value.
+COMPOSITION_PATH_DEPENDENCE_DISCLOSURE = (
+    "accepted-cohort composition depends on post-entry resolution "
+    "availability (all-arms-or-none symbol dropout), which is itself "
+    "path-dependent"
+)
+# R3 continued: each accepted cohort/day is one observation of the headline
+# spread regardless of how many names resolved into it that day -- a
+# 5-name cohort and a 15-name cohort each count once, not proportionally to
+# size.
+COHORT_WEIGHTING_DISCLOSURE = (
+    "each accepted cohort (one ISO week's candidate day) contributes "
+    "equally to the headline spread regardless of its resolved size"
+)
 
 
 class A2RunnerError(RuntimeError):
@@ -232,6 +252,11 @@ def validate_report(report: Mapping[str, object]) -> None:
         raise OneRunError("A2 report status is not research-only")
     if report.get("retroactive_universe_disclosure") != RETROACTIVE_UNIVERSE_DISCLOSURE:
         raise OneRunError("A2 report is missing ledger seq 27's permanent retroactivity disclosure")
+    # R3 (round-2 independent adversarial review 2026-08-30, finding F-C).
+    if report.get("composition_path_dependence_disclosure") != COMPOSITION_PATH_DEPENDENCE_DISCLOSURE:
+        raise OneRunError(
+            "A2 report is missing the accepted-cohort composition path-dependence disclosure"
+        )
 
     def has_forbidden_key(value: object) -> bool:
         if isinstance(value, Mapping):
@@ -253,6 +278,13 @@ def validate_report(report: Mapping[str, object]) -> None:
         "accepted_board_not_first_session_of_week",
         "weeks_without_complete_board",
         "weeks_skipped_by_spacing",
+        # C2 (round-2 independent adversarial review 2026-08-30, finding
+        # F-G): these diagnostics were already computed but not enforced.
+        "weeks_skipped_unresolvable_board",
+        "weeks_skipped_split_entry_date",
+        "per_cohort_name_counts",
+        # R1 (finding F-A): the new hard-gate week-skip counter.
+        "weeks_skipped_score_identity",
     }
     breach_variant: Mapping[str, object] | None = None
     for variant in variants:
@@ -261,6 +293,13 @@ def validate_report(report: Mapping[str, object]) -> None:
         exclusions = variant.get("exclusions")
         if not isinstance(exclusions, Mapping) or not weekly_keys.issubset(exclusions):
             raise OneRunError("A2 report variant lacks weekly cohort diagnostics")
+        # R3 (finding F-C): per-variant shrinkage/weighting disclosures.
+        if not isinstance(exclusions.get("accepted_cohort_sizes"), Mapping):
+            raise OneRunError("A2 report variant lacks accepted-cohort board/resolved sizes")
+        if not isinstance(variant.get("accepted_cohort_size_distribution"), list):
+            raise OneRunError("A2 report variant lacks the accepted-cohort size distribution")
+        if variant.get("cohort_weighting_disclosure") != COHORT_WEIGHTING_DISCLOSURE:
+            raise OneRunError("A2 report variant lacks the cohort equal-weighting disclosure")
         if variant.get("lane") == "csp" and variant.get("arm") == "breach_hold_21_dte":
             breach_variant = variant
     if breach_variant is None or not isinstance(
@@ -335,11 +374,19 @@ def validate_governance(
         raise A2RunnerError(f"A2 prerequisite fact {PIN_FACT_TOKEN} is missing")
     if ENTRY_CONVENTION_FACT_PAYLOAD not in payloads:
         raise A2RunnerError("owner-approved A2 entry-convention fact is missing")
+    # R4 (round-2 independent adversarial review 2026-08-30, finding F-C):
+    # a bare prefix match let any payload starting with the ratification
+    # prefix satisfy this gate, with no requirement that it actually cite an
+    # owner-facing source document -- mirroring the PIN_FACT precedent
+    # above (byte-identical, not modified) by also requiring a
+    # ``source=reports/`` token in the ratification payload itself.
     if not any(
-        payload.startswith(ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX) for payload in payloads
+        payload.startswith(ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX) and "source=reports/" in payload
+        for payload in payloads
     ):
         raise A2RunnerError(
             "owner-authorized A2_ENTRY_CONVENTION_RATIFIED_V1 ratification fact is missing "
+            "or lacks a source=reports/ citation "
             "(LLM-proposed governance strengthening, owner veto open)"
         )
     return {
@@ -413,6 +460,16 @@ def _variant_rows(
     missing_by_date: dict[str, list[str]] = {}
     per_cohort_name_counts: dict[str, int] = {}
     split_entry_date_cohorts = 0
+    # R1 (round-2 independent adversarial review 2026-08-30, finding F-A):
+    # score_identity used to be computed only for the "incomplete_cohorts"
+    # advisory counter below and never fed back into candidate selection, so
+    # a recomputed score diverging from the entry-time board's frozen
+    # GREEN-fraction score could still enter inference.  This per-decision
+    # map is now also handed to non_overlapping_inference_rows so a
+    # divergent candidate day skips (and counts) its whole week instead --
+    # never silently dropping the single mismatched symbol, which would
+    # change cohort composition invisibly.
+    score_identity_by_date: dict[str, bool] = {}
     for decision, cohort in sorted(grouped.items()):
         observed = {row.symbol for row in cohort}
         expected = set(board_by_date.get(decision, ()))
@@ -431,6 +488,7 @@ def _variant_rows(
             for symbol in expected
             if symbol in observed
         )
+        score_identity_by_date[decision] = score_identity
         per_cohort_name_counts[decision] = len(cohort)
         if len(entries) > 1:
             split_entry_date_cohorts += 1
@@ -445,6 +503,7 @@ def _variant_rows(
         arm=arm,
         board_symbols_by_date=board_by_date,
         decision_dates=tuple(signals),
+        score_identity_by_date=score_identity_by_date,
         diagnostics=weekly_diagnostics,
     )
     for key in (
@@ -453,59 +512,62 @@ def _variant_rows(
         "weeks_skipped_by_spacing",
         "weeks_skipped_unresolvable_board",
         "weeks_skipped_split_entry_date",
+        "weeks_skipped_score_identity",
     ):
         weekly_diagnostics.setdefault(key, 0)
+    # R3 (round-2 independent adversarial review 2026-08-30, finding F-C):
+    # for every ACCEPTED (inference) cohort, disclose both the entry-time
+    # board size and the resolved size side by side, so shrinkage from
+    # post-entry resolution availability is legible rather than implicit in
+    # the raw counts.
+    accepted_cohort_sizes: dict[str, dict[str, int]] = {
+        decision: {
+            "board_size": len(board_by_date.get(decision, ())),
+            "resolved_size": per_cohort_name_counts.get(decision, 0),
+        }
+        for decision in sorted({row.decision_date for row in inference})
+    }
     return (
         inference,
         rows,
         {
             "incomplete_cohorts": incomplete,
             "missing_names": missing_by_date,
-            "original_bucket_identity_preserved": not incomplete and bool(grouped),
+            # C3 (round-2 independent adversarial review 2026-08-30, finding
+            # F-H): "original_bucket_identity_preserved" is retired.  Under
+            # the partial-board regime (F1) it was vacuously False on almost
+            # every real cohort -- the board is the daily-scored subset of
+            # config.ATTRACTIVENESS_UNIVERSE, so "missing" names are the
+            # norm, not the exception -- and carried no real signal.  It is
+            # deliberately removed from the report contract rather than
+            # re-scoped; "accepted_cohort_sizes" below is its replacement
+            # for shrinkage visibility.
             "per_cohort_name_counts": per_cohort_name_counts,
             "split_entry_date_realized_cohorts": split_entry_date_cohorts,
+            "accepted_cohort_sizes": accepted_cohort_sizes,
             **weekly_diagnostics,
         },
     )
 
 
 def _breach_duplication(
-    rows: Sequence[A2Outcome], signals: Mapping[str, Mapping[str, float]]
+    close_rows: Sequence[A2Outcome], breach_rows: Sequence[A2Outcome]
 ) -> dict[str, int | float | None]:
-    by_arm: dict[str, dict[tuple[str, str, str], A2Outcome]] = {
-        "close_21_dte": {},
-        "breach_hold_21_dte": {},
-    }
-    complete_decisions: dict[str, set[str]] = {
-        "close_21_dte": set(),
-        "breach_hold_21_dte": set(),
-    }
-    universe = set(config.ATTRACTIVENESS_UNIVERSE)
-    for arm in by_arm:
-        arm_rows = [row for row in rows if row.lane == "csp" and row.arm == arm]
-        decisions = {row.decision_date for row in arm_rows}
-        for decision in decisions:
-            cohort = [row for row in arm_rows if row.decision_date == decision]
-            expected = set(signals.get(decision, {})) & universe
-            if (
-                expected
-                and len(cohort) == len(expected)
-                and {row.symbol for row in cohort} == expected
-            ):
-                complete_decisions[arm].add(decision)
-                by_arm[arm].update(
-                    {(row.symbol, row.decision_date, row.entry_date): row for row in cohort}
-                )
-    comparable_keys = set(by_arm["close_21_dte"]) & set(by_arm["breach_hold_21_dte"])
-    comparable_keys = {
-        key
-        for key in comparable_keys
-        if key[1] in complete_decisions["close_21_dte"]
-        and key[1] in complete_decisions["breach_hold_21_dte"]
-    }
+    """Definition-1.3 duplication disclosure, over the rows inference uses.
+
+    R2 (round-2 independent adversarial review 2026-08-30, finding F-B): this
+    used to require exact-set equality against the FULL expected board before
+    counting a decision as comparable at all, so any partial board (the norm
+    under F1's partial-board-for-inference rule) made every comparable count
+    0 and the rate null.  It is recomputed here over the SAME rows inference
+    actually uses -- the accepted (post weekly-cohort-selection) cohorts for
+    each arm -- so a partial board still discloses a real duplication rate.
+    """
+    close_by_key = {(row.symbol, row.decision_date): row for row in close_rows}
+    breach_by_key = {(row.symbol, row.decision_date): row for row in breach_rows}
+    comparable_keys = set(close_by_key) & set(breach_by_key)
     identical = sum(
-        by_arm["close_21_dte"][key].resolution_date
-        == by_arm["breach_hold_21_dte"][key].resolution_date
+        close_by_key[key].resolution_date == breach_by_key[key].resolution_date
         for key in comparable_keys
     )
     comparable = len(comparable_keys)
@@ -531,6 +593,21 @@ def _summary_dict(
     }
     raw["cost_stress"] = _json_safe(raw.get("cost_stress", {}))
     raw["bid_ask_stress"] = _json_safe(raw.get("bid_ask_stress", {}))
+    # R3 (round-2 independent adversarial review 2026-08-30, finding F-C):
+    # the distribution of accepted-cohort resolved sizes, placed next to the
+    # headline "spread" field above, plus the disclosure that every cohort
+    # in that distribution counts equally toward it.
+    accepted_cohort_sizes = exclusions.get("accepted_cohort_sizes", {})
+    raw["accepted_cohort_size_distribution"] = (
+        sorted(
+            int(entry["resolved_size"])
+            for entry in accepted_cohort_sizes.values()
+            if isinstance(entry, Mapping)
+        )
+        if isinstance(accepted_cohort_sizes, Mapping)
+        else []
+    )
+    raw["cohort_weighting_disclosure"] = COHORT_WEIGHTING_DISCLOSURE
     return raw
 
 
@@ -549,7 +626,6 @@ def build_report(
     if audit.verdict == "BLOCK":
         raise A2RunnerError("A2 data audit BLOCK prevents report assembly")
     grade, receipt_hash = _validate_realism(realism_grade, realism_receipt)
-    breach_duplication = _breach_duplication(outcomes, signals)
     breach_skips = diagnostics.skips if diagnostics is not None else {}
     breach_path_skip_counts = {
         "breached": sum(
@@ -582,6 +658,19 @@ def build_report(
             for arm, item in first_pass.items()
             if item[3].raw_p_value is not None
         }
+        # R2 (round-2 independent adversarial review 2026-08-30, finding
+        # F-B): computed here, per lane, from the ACCEPTED inference rows of
+        # both arms -- the rows inference actually uses -- rather than from
+        # raw outcomes checked for full-board exact-set equality.
+        breach_duplication = (
+            _breach_duplication(
+                first_pass["close_21_dte"][0], first_pass["breach_hold_21_dte"][0]
+            )
+            if lane == "csp"
+            and "close_21_dte" in first_pass
+            and "breach_hold_21_dte" in first_pass
+            else None
+        )
         for arm in arms:
             inference, descriptive, exclusions, _summary = first_pass[arm]
             summary = summarize_lane(
@@ -633,6 +722,13 @@ def build_report(
         # a successful terminal-exception settlement (Definition 1.2), not a
         # skip; it gets its own report-level counter.
         provenance_payload["breach_on_expiry_settlements"] = diagnostics.breach_on_expiry_settlements
+        # C1 (round-2 independent adversarial review 2026-08-30, finding F-F):
+        # de-duplicated (symbol, session) underlying-close gaps found during
+        # the breach scan; nothing is excluded by this, so it lives off
+        # diagnostics.skips on its own report-level counter.
+        provenance_payload["breach_scan_missing_close_session_count"] = len(
+            diagnostics.breach_scan_missing_close_sessions
+        )
     report: dict[str, object] = {
         "schema": REPORT_SCHEMA,
         "hypothesis_id": HYPOTHESIS_ID,
@@ -647,6 +743,7 @@ def build_report(
         "governance": dict(governance),
         "unsupported_forward_fields": list(UNSUPPORTED_FORWARD_FIELDS),
         "retroactive_universe_disclosure": RETROACTIVE_UNIVERSE_DISCLOSURE,
+        "composition_path_dependence_disclosure": COMPOSITION_PATH_DEPENDENCE_DISCLOSURE,
         "results": {"lane_statuses": lane_statuses, "variants": variants},
     }
     report["report_sha256"] = _report_digest(report)
@@ -1257,6 +1354,9 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
         )
         diagnostics.skips.update(symbol_diagnostics.skips)
         diagnostics.selected_contracts.update(symbol_diagnostics.selected_contracts)
+        diagnostics.breach_scan_missing_close_sessions.update(
+            symbol_diagnostics.breach_scan_missing_close_sessions
+        )
         diagnostics.max_as_of = max(
             (value for value in (diagnostics.max_as_of, symbol_diagnostics.max_as_of) if value),
             default=None,
@@ -1377,6 +1477,8 @@ __all__ = [
     "A2LocalInputs",
     "A2RunnerError",
     "CachePaths",
+    "COHORT_WEIGHTING_DISCLOSURE",
+    "COMPOSITION_PATH_DEPENDENCE_DISCLOSURE",
     "ENTRY_CONVENTION_FACT_TOKEN",
     "ENTRY_CONVENTION_RATIFICATION_FACT_TOKEN",
     "OneRunError",

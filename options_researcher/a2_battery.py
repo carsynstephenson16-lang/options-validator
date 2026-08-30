@@ -366,6 +366,7 @@ def non_overlapping_inference_rows(
     expected_symbols: Sequence[str] | None = None,
     decision_dates: Sequence[str] | None = None,
     board_symbols_by_date: Mapping[str, Sequence[str]] | None = None,
+    score_identity_by_date: Mapping[str, bool] | None = None,
     diagnostics: MutableMapping[str, int] | None = None,
 ) -> tuple[A2Outcome, ...]:
     """Retain each ISO week's ex-ante non-overlapping candidate board.
@@ -389,7 +390,12 @@ def non_overlapping_inference_rows(
       is also skipped and counted separately, distinct from "no board at
       all".  This is the outcome-blind path: candidate selection here never
       inspects ``grouped`` (the realized rows) except to fetch the one
-      pre-chosen day's cohort.
+      pre-chosen day's cohort.  If ``score_identity_by_date`` is also
+      supplied and marks the chosen candidate day False (R1, round-2
+      independent adversarial review 2026-08-30, finding F-A: the realized
+      cohort's scores diverge from the entry-time board's frozen
+      GREEN-fraction scores), the week is skipped and counted the same
+      way -- candidacy still never moves to a later session.
     * ``board_symbols_by_date`` omitted (legacy contract, retained for
       existing pure-boundary callers/tests): a day's realized cohort is its
       own completeness evidence, exactly as before, with one added guard
@@ -464,6 +470,11 @@ def non_overlapping_inference_rows(
                 continue
             if len(cohort) < MIN_TERCILE_COHORT_SIZE:
                 count("weeks_skipped_unresolvable_board")
+                continue
+            if score_identity_by_date is not None and not score_identity_by_date.get(
+                candidate_day, True
+            ):
+                count("weeks_skipped_score_identity")
                 continue
             accept(candidate_day, cohort, week_dates)
         return tuple(accepted)

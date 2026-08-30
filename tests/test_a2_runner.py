@@ -16,6 +16,8 @@ import config
 from options_researcher.a2_battery import LANE_COMPONENTS, A2Outcome
 from options_researcher.a2_panel import A2AuditResult, A2Diagnostics
 from options_researcher.a2_runner import (
+    COHORT_WEIGHTING_DISCLOSURE,
+    COMPOSITION_PATH_DEPENDENCE_DISCLOSURE,
     ENTRY_CONVENTION_FACT_PAYLOAD,
     ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX,
     RETROACTIVE_UNIVERSE_DISCLOSURE,
@@ -177,7 +179,64 @@ class RunnerContracts(unittest.TestCase):
         )
         self.assertIn("2026-08 board applied retroactively", RETROACTIVE_UNIVERSE_DISCLOSURE)
         self.assertIn("outcome-informed", RETROACTIVE_UNIVERSE_DISCLOSURE)
+        # R3 (round-2 independent adversarial review 2026-08-30, finding
+        # F-C): the accepted-cohort composition path-dependence disclosure
+        # is a required top-level field, and every variant carries its
+        # cohort-size distribution and equal-weighting disclosure next to
+        # the headline spread.
+        self.assertEqual(
+            report["composition_path_dependence_disclosure"],
+            COMPOSITION_PATH_DEPENDENCE_DISCLOSURE,
+        )
+        for variant in report["variants"]:
+            self.assertIsInstance(variant["accepted_cohort_size_distribution"], list)
+            self.assertEqual(variant["cohort_weighting_disclosure"], COHORT_WEIGHTING_DISCLOSURE)
+            self.assertIn("accepted_cohort_sizes", variant["exclusions"])
+        csp_capture = next(
+            item
+            for item in report["variants"]
+            if item["lane"] == "csp" and item["arm"] == "capture_50"
+        )
+        self.assertEqual(
+            csp_capture["exclusions"]["accepted_cohort_sizes"]["2025-01-02"],
+            {"board_size": 15, "resolved_size": 15},
+        )
+        self.assertEqual(csp_capture["accepted_cohort_size_distribution"], [15])
         validate_report(report)
+
+    def test_validate_report_rejects_a_report_missing_the_composition_disclosure(self):
+        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
+        report = build_report(
+            outcomes=rows,
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={"registration_seq": 19, "registration_hash": "a" * 64},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        tampered = dict(report)
+        tampered.pop("composition_path_dependence_disclosure")
+        with self.assertRaisesRegex(OneRunError, "composition path-dependence"):
+            validate_report(tampered)
+
+    def test_validate_report_rejects_a_report_missing_cohort_weighting_disclosure(self):
+        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
+        report = build_report(
+            outcomes=rows,
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={"registration_seq": 19, "registration_hash": "a" * 64},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        tampered = dict(report)
+        tampered_variants = [dict(variant) for variant in tampered["variants"]]
+        tampered_variants[0].pop("cohort_weighting_disclosure")
+        tampered["variants"] = tampered_variants
+        with self.assertRaisesRegex(OneRunError, "equal-weighting disclosure"):
+            validate_report(tampered)
 
     def test_validate_report_rejects_a_report_missing_the_retroactivity_disclosure(self):
         rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
@@ -204,7 +263,14 @@ class RunnerContracts(unittest.TestCase):
         # breach/weekly-cohort amendment Definition 2.1. This replaces the
         # old all-or-none 15-name gate the review found at
         # a2_runner.py:359,374 (config.A2_UNIVERSE exact-set equality).
-        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE[:-1])
+        # Scores are set to match the signals board exactly (R1, round-2
+        # independent adversarial review 2026-08-30, finding F-A) so this
+        # fixture continues to isolate the missing-name (partial board)
+        # scenario from the separate score-identity hard gate.
+        rows = tuple(
+            _outcome(symbol, score=float(index))
+            for index, symbol in enumerate(config.A2_UNIVERSE[:-1], start=1)
+        )
         report = build_report(
             outcomes=rows,
             signals={
@@ -229,7 +295,12 @@ class RunnerContracts(unittest.TestCase):
         self.assertIn(config.A2_UNIVERSE[-1], csp["exclusions"]["missing_names"]["2025-01-02"])
         self.assertEqual(csp["exclusions"]["weeks_without_complete_board"], 0)
         self.assertEqual(csp["exclusions"]["weeks_skipped_unresolvable_board"], 0)
+        self.assertEqual(csp["exclusions"]["weeks_skipped_score_identity"], 0)
         self.assertEqual(csp["exclusions"]["per_cohort_name_counts"]["2025-01-02"], 14)
+        self.assertEqual(
+            csp["exclusions"]["accepted_cohort_sizes"]["2025-01-02"],
+            {"board_size": 15, "resolved_size": 14},
+        )
 
     def test_report_records_weekly_candidate_and_spacing_diagnostics(self):
         # F2 (independent adversarial review, 2026-08-30): candidate
@@ -335,6 +406,41 @@ class RunnerContracts(unittest.TestCase):
         self.assertEqual(capture["exclusions"]["weeks_skipped_unresolvable_board"], 1)
         self.assertEqual(capture["exclusions"]["weeks_without_complete_board"], 0)
 
+    def test_score_identity_divergence_skips_and_counts_the_week(self):
+        # R1 (round-2 independent adversarial review 2026-08-30, finding
+        # F-A): score_identity was downgraded to an advisory-only counter
+        # during the F1/F2 rework -- a mutation flipping it to always-True
+        # killed no test.  A row whose recomputed score diverges from the
+        # entry-time board's frozen GREEN-fraction score must not enter
+        # inference; the whole week is skipped and counted (never a silent
+        # single-symbol drop, which would change cohort composition
+        # invisibly).
+        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
+        signals = {
+            "2025-01-02": {
+                symbol: (99.0 if symbol == config.A2_UNIVERSE[0] else 1.0)
+                for symbol in config.A2_UNIVERSE
+            }
+        }
+        report = build_report(
+            outcomes=rows,
+            signals=signals,
+            audit=_audit(),
+            governance={},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        capture = next(
+            item
+            for item in report["variants"]
+            if item["lane"] == "csp" and item["arm"] == "capture_50"
+        )
+        self.assertEqual(capture["inference_count"], 0)
+        self.assertEqual(capture["exclusions"]["weeks_skipped_score_identity"], 1)
+        self.assertEqual(capture["exclusions"]["weeks_without_complete_board"], 0)
+        self.assertEqual(capture["exclusions"]["weeks_skipped_unresolvable_board"], 0)
+
     def test_report_discloses_breach_duplication_and_path_specific_skips(self):
         rows = []
         for index, symbol in enumerate(config.A2_UNIVERSE):
@@ -387,6 +493,54 @@ class RunnerContracts(unittest.TestCase):
         # F4: breach-on-expiration terminal-exception settlements are a
         # distinct, report-level counter, not folded into the skip counts.
         self.assertEqual(report["provenance"]["breach_on_expiry_settlements"], 2)
+
+    def test_breach_duplication_uses_accepted_partial_cohorts_not_full_board_equality(self):
+        # R2 (round-2 independent adversarial review 2026-08-30, finding
+        # F-B): _breach_duplication used to require exact-set equality
+        # against the FULL expected board before counting a decision as
+        # comparable, so a partial board (the norm under F1) drove
+        # comparable_count to 0 and the rate to null.  It is recomputed over
+        # the SAME rows inference actually uses -- here, breach_hold_21_dte
+        # is missing one of the fifteen names (a partial, but still
+        # inference-eligible, cohort per F1) while close_21_dte has the full
+        # board -- and the disclosure must stay non-null.
+        rows = []
+        for symbol in config.A2_UNIVERSE:
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="close_21_dte",
+                    resolution="2025-01-10",
+                    maximum_resolution="2025-01-10",
+                )
+            )
+        for symbol in config.A2_UNIVERSE[:-1]:
+            rows.append(
+                _outcome(
+                    symbol,
+                    arm="breach_hold_21_dte",
+                    resolution="2025-01-10",
+                    maximum_resolution="2025-01-17",
+                )
+            )
+        report = build_report(
+            outcomes=tuple(rows),
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        breach = next(
+            item
+            for item in report["variants"]
+            if item["lane"] == "csp" and item["arm"] == "breach_hold_21_dte"
+        )
+        dup = breach["duplication_against_close_21_dte"]
+        self.assertEqual(dup["comparable_count"], 14)
+        self.assertIsNotNone(dup["rate"])
+        self.assertEqual(dup["rate"], 1.0)
 
     def test_verified_report_can_retry_append_without_loader(self):
         rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
@@ -545,7 +699,8 @@ class RunnerContracts(unittest.TestCase):
             facts.write_text(
                 "2026-08-15T00:00:00+00:00\tRQ2_A2_PIN_ADDENDUM_V1 source=reports/2026-07-23-pin-addendum-validation.md\n"
                 f"2026-08-15T00:00:00+00:00\t{ENTRY_CONVENTION_FACT_PAYLOAD}\n"
-                f"2026-08-30T00:00:00+00:00\t{ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX} 2026-08-30 fixture\n",
+                f"2026-08-30T00:00:00+00:00\t{ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX} "
+                "2026-08-30 fixture source=reports/2026-08-15-a2-entry-convention-validation.md\n",
                 encoding="utf-8",
             )
             self.assertEqual(
@@ -590,13 +745,25 @@ class RunnerContracts(unittest.TestCase):
             # is not: governance must fail closed.
             with self.assertRaisesRegex(A2RunnerError, "RATIFIED"):
                 validate_governance(base)
-            # Appending the owner-authorized ratification fact (fixture-only;
-            # never written to the real ledger by this or any other test)
-            # is the only thing that flips it to PASS.
+            # R4 (round-2 independent adversarial review 2026-08-30, finding
+            # F-C): a ratification fact with the right prefix but no
+            # source=reports/ citation is not sufficient either -- mirrors
+            # the PIN_FACT precedent's source requirement.
             with facts.open("a", encoding="utf-8") as handle:
                 handle.write(
                     f"2026-08-30T00:00:00+00:00\t{ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX} "
-                    "2026-08-30 fixture\n"
+                    "2026-08-30 fixture, no source citation\n"
+                )
+            with self.assertRaisesRegex(A2RunnerError, "RATIFIED"):
+                validate_governance(base)
+            # Appending the owner-authorized ratification fact WITH its
+            # source citation (fixture-only; never written to the real
+            # ledger by this or any other test) is the only thing that flips
+            # it to PASS.
+            with facts.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    f"2026-08-30T00:00:00+00:00\t{ENTRY_CONVENTION_RATIFICATION_FACT_PREFIX} "
+                    "2026-08-30 fixture source=reports/2026-08-15-a2-entry-convention-validation.md\n"
                 )
             result = validate_governance(base)
             self.assertEqual(
@@ -1036,7 +1203,12 @@ class CachePathTests(unittest.TestCase):
                 inputs.outcomes or (), inputs.signals, "csp", "capture_50"
             )
         self.assertEqual({row.symbol for row in inference}, set(symbols))
-        self.assertTrue(exclusions["original_bucket_identity_preserved"])
+        # C3 (round-2 independent adversarial review 2026-08-30, finding
+        # F-H): "original_bucket_identity_preserved" is retired -- under the
+        # partial-board regime it was vacuously False on almost every real
+        # cohort and carried no signal.  It is deliberately absent from the
+        # report contract now, not merely unused.
+        self.assertNotIn("original_bucket_identity_preserved", exclusions)
 
     def test_merged_symbol_audits_preserve_all_checks_and_block_severity(self):
         first = A2AuditResult(
