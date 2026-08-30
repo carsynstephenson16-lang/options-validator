@@ -17,6 +17,7 @@ from options_researcher.a2_battery import LANE_COMPONENTS, A2Outcome
 from options_researcher.a2_panel import A2AuditResult, A2Diagnostics
 from options_researcher.a2_runner import (
     ENTRY_CONVENTION_FACT_PAYLOAD,
+    RETROACTIVE_UNIVERSE_DISCLOSURE,
     A2LocalInputs,
     A2RunnerError,
     CachePaths,
@@ -168,7 +169,30 @@ class RunnerContracts(unittest.TestCase):
         self.assertEqual(len(report["variants"]), 13)
         self.assertNotIn("forward_verdict", report)
         self.assertIn("RESEARCH-ONLY / NO VERDICT", report["status"])
+        # F5 (independent adversarial review, 2026-08-30): ledger seq 27's
+        # mandatory permanent retroactivity disclosure is a required field.
+        self.assertEqual(
+            report["retroactive_universe_disclosure"], RETROACTIVE_UNIVERSE_DISCLOSURE
+        )
+        self.assertIn("2026-08 board applied retroactively", RETROACTIVE_UNIVERSE_DISCLOSURE)
+        self.assertIn("outcome-informed", RETROACTIVE_UNIVERSE_DISCLOSURE)
         validate_report(report)
+
+    def test_validate_report_rejects_a_report_missing_the_retroactivity_disclosure(self):
+        rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)
+        report = build_report(
+            outcomes=rows,
+            signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
+            audit=_audit(),
+            governance={"registration_seq": 19, "registration_hash": "a" * 64},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        tampered = dict(report)
+        tampered.pop("retroactive_universe_disclosure")
+        with self.assertRaisesRegex(OneRunError, "retroactivity disclosure"):
+            validate_report(tampered)
 
     def test_partial_board_cohort_is_used_for_inference_not_rejected(self):
         # F1 (independent adversarial review, 2026-08-30): the board is the

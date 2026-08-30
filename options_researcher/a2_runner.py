@@ -60,6 +60,19 @@ UNSUPPORTED_FORWARD_FIELDS = (
     "pmcc_synthetic_position_convention",
     "forward_verdict",
 )
+# F5 (independent adversarial review, 2026-08-30): ledger seq 27
+# (A2_AMENDMENT_V1_1) mandates that "every historical output carries a
+# permanent disclosure that the universe is the 2026-08 board applied
+# retroactively and that name inclusion is outcome-informed (several names
+# joined the board because of what they became -- the H10 precedent for
+# permanent outcome-informed disclosures applies directly)."  Quoted
+# verbatim below; required on every report and enforced by validate_report.
+RETROACTIVE_UNIVERSE_DISCLOSURE = (
+    "the universe is the 2026-08 board applied retroactively and name "
+    "inclusion is outcome-informed (several names joined the board because "
+    "of what they became -- the H10 precedent for permanent outcome-informed "
+    "disclosures applies directly)"
+)
 
 
 class A2RunnerError(RuntimeError):
@@ -205,6 +218,8 @@ def validate_report(report: Mapping[str, object]) -> None:
         raise OneRunError("A2 report registration sequence is invalid")
     if report.get("status") != "RESEARCH-ONLY / NO VERDICT":
         raise OneRunError("A2 report status is not research-only")
+    if report.get("retroactive_universe_disclosure") != RETROACTIVE_UNIVERSE_DISCLOSURE:
+        raise OneRunError("A2 report is missing ledger seq 27's permanent retroactivity disclosure")
 
     def has_forbidden_key(value: object) -> bool:
         if isinstance(value, Mapping):
@@ -611,6 +626,7 @@ def build_report(
         "provenance": provenance_payload,
         "governance": dict(governance),
         "unsupported_forward_fields": list(UNSUPPORTED_FORWARD_FIELDS),
+        "retroactive_universe_disclosure": RETROACTIVE_UNIVERSE_DISCLOSURE,
         "results": {"lane_statuses": lane_statuses, "variants": variants},
     }
     report["report_sha256"] = _report_digest(report)
