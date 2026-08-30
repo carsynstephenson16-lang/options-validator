@@ -629,7 +629,7 @@ def build_historical_outcomes(
     diag, out = diagnostics or A2Diagnostics(), []
     for decision, board in sorted(signals.items()):
         for symbol, score in sorted(board.items()):
-            if symbol not in config.A2_UNIVERSE:
+            if symbol not in config.ATTRACTIVENESS_UNIVERSE:
                 diag.skip("outside_a2_universe")
                 continue
             raw, chain_days = raw_closes.get(symbol, {}), chains.get(symbol, {})

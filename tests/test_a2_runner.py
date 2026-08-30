@@ -170,7 +170,15 @@ class RunnerContracts(unittest.TestCase):
         self.assertIn("RESEARCH-ONLY / NO VERDICT", report["status"])
         validate_report(report)
 
-    def test_incomplete_fifteen_name_cohort_is_descriptive_only(self):
+    def test_partial_board_cohort_is_used_for_inference_not_rejected(self):
+        # F1 (independent adversarial review, 2026-08-30): the board is the
+        # names of config.ATTRACTIVENESS_UNIVERSE with cached data (a score)
+        # at the cohort's formation date; a partial board (here, 14 of the 15
+        # scored names actually resolved) is USED for inference -- skip, not
+        # reject -- per A2_AMENDMENT_V1_1 (ledger seq 27) and the 2026-08-15
+        # breach/weekly-cohort amendment Definition 2.1. This replaces the
+        # old all-or-none 15-name gate the review found at
+        # a2_runner.py:359,374 (config.A2_UNIVERSE exact-set equality).
         rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE[:-1])
         report = build_report(
             outcomes=rows,
@@ -190,23 +198,26 @@ class RunnerContracts(unittest.TestCase):
             for item in report["variants"]
             if item["lane"] == "csp" and item["arm"] == "capture_50"
         )
-        self.assertEqual(csp["inference_count"], 0)
+        self.assertEqual(csp["inference_count"], 14)
         self.assertEqual(csp["descriptive_count"], 14)
         self.assertEqual(csp["exclusions"]["incomplete_cohorts"], 1)
-        self.assertEqual(csp["exclusions"]["weeks_without_complete_board"], 1)
+        self.assertIn(config.A2_UNIVERSE[-1], csp["exclusions"]["missing_names"]["2025-01-02"])
+        self.assertEqual(csp["exclusions"]["weeks_without_complete_board"], 0)
+        self.assertEqual(csp["exclusions"]["weeks_skipped_unresolvable_board"], 0)
+        self.assertEqual(csp["exclusions"]["per_cohort_name_counts"]["2025-01-02"], 14)
 
     def test_report_records_weekly_candidate_and_spacing_diagnostics(self):
+        # F2 (independent adversarial review, 2026-08-30): candidate
+        # selection is entry-time-only.  2025-01-06's scored board is
+        # unusable at entry time (only one name), so it is never a
+        # candidate regardless of resolved rows; 2025-01-07 (same ISO week,
+        # full board, fully resolved) is chosen instead and counted as
+        # "not the first session of the week".  2025-01-20 has a scored but
+        # empty board that week -> weeks_without_complete_board.
+        # 2025-01-13's board is usable and resolves, but its entry_date ties
+        # the prior accepted cohort's ex-ante maximum resolution -> spacing
+        # skip.
         rows = (
-            *(
-                _outcome(
-                    symbol,
-                    decision="2025-01-06",
-                    entry="2025-01-07",
-                    resolution="2025-01-08",
-                    maximum_resolution="2025-01-10",
-                )
-                for symbol in config.A2_UNIVERSE[:-1]
-            ),
             *(
                 _outcome(
                     symbol,
@@ -242,14 +253,11 @@ class RunnerContracts(unittest.TestCase):
         report = build_report(
             outcomes=rows,
             signals={
-                day: signal_board
-                for day in (
-                    "2025-01-06",
-                    "2025-01-07",
-                    "2025-01-13",
-                    "2025-01-20",
-                    "2025-01-27",
-                )
+                "2025-01-06": {config.A2_UNIVERSE[0]: 1.0},
+                "2025-01-07": signal_board,
+                "2025-01-13": signal_board,
+                "2025-01-20": {},
+                "2025-01-27": signal_board,
             },
             audit=_audit(),
             governance={},
@@ -265,6 +273,42 @@ class RunnerContracts(unittest.TestCase):
         self.assertEqual(capture["exclusions"]["accepted_board_not_first_session_of_week"], 1)
         self.assertEqual(capture["exclusions"]["weeks_without_complete_board"], 1)
         self.assertEqual(capture["exclusions"]["weeks_skipped_by_spacing"], 1)
+        self.assertEqual(capture["exclusions"]["weeks_skipped_unresolvable_board"], 0)
+
+    def test_unresolvable_entry_time_board_skips_the_week_without_promoting_a_later_session(self):
+        # F2, runner-level regression: 2025-02-03's board is usable at entry
+        # time (full 15 names scored) but NO rows ever resolved that day (a
+        # post-entry data gap).  A later, fully-resolved session in the SAME
+        # ISO week must never be substituted -- the week is skipped and
+        # counted, not silently filled from a different day.
+        signal_board = {symbol: 1.0 for symbol in config.A2_UNIVERSE}
+        rows = tuple(
+            _outcome(
+                symbol,
+                decision="2025-02-04",
+                entry="2025-02-05",
+                resolution="2025-02-06",
+                maximum_resolution="2025-02-10",
+            )
+            for symbol in config.A2_UNIVERSE
+        )
+        report = build_report(
+            outcomes=rows,
+            signals={"2025-02-03": signal_board, "2025-02-04": signal_board},
+            audit=_audit(),
+            governance={},
+            provenance=dict(_REALISM),
+            realism_grade="fixture",
+            realism_receipt=_receipt(),
+        )
+        capture = next(
+            item
+            for item in report["variants"]
+            if item["lane"] == "csp" and item["arm"] == "capture_50"
+        )
+        self.assertEqual(capture["inference_count"], 0)
+        self.assertEqual(capture["exclusions"]["weeks_skipped_unresolvable_board"], 1)
+        self.assertEqual(capture["exclusions"]["weeks_without_complete_board"], 0)
 
     def test_report_discloses_breach_duplication_and_path_specific_skips(self):
         rows = []
@@ -804,7 +848,11 @@ class CachePathTests(unittest.TestCase):
             _causal_earnings(inputs, "AAA", "2025-01-02")
 
     def test_streaming_loader_releases_each_symbol_after_aggregation(self):
-        symbols = ("AAA", "BBB")
+        # Three symbols: a two-name board sits below MIN_TERCILE_COHORT_SIZE
+        # (F7b) and would never form an inference cohort, which would leave
+        # this streaming/release-order test unable to observe the weekly
+        # cohort at all.
+        symbols = ("AAA", "BBB", "CCC")
         frame = pd.DataFrame({"rv21": [0.2]}, index=["2025-01-02"])
         raw = {symbol: {"2025-01-02": 100.0} for symbol in symbols}
         seen_chain_owners: list[frozenset[str]] = []
@@ -812,7 +860,7 @@ class CachePathTests(unittest.TestCase):
         seen_audit_owners: list[frozenset[str]] = []
 
         def load_chains(_path, **kwargs):
-            owners = frozenset(kwargs.get("symbols", config.A2_UNIVERSE))
+            owners = frozenset(kwargs.get("symbols", config.ATTRACTIVENESS_UNIVERSE))
             seen_chain_owners.append(owners)
             return {symbol: {"2025-01-02": pd.DataFrame({"symbol": [symbol]})} for symbol in owners}
 
@@ -846,7 +894,7 @@ class CachePathTests(unittest.TestCase):
                 positions=f"{tmp}/positions",
                 fomc=f"{tmp}/fomc.csv",
             )
-            with patch.object(config, "A2_UNIVERSE", symbols):
+            with patch.object(config, "ATTRACTIVENESS_UNIVERSE", symbols):
                 with patch(
                     "options_researcher.a2_runner._load_feature_bundle",
                     return_value={symbol: frame for symbol in symbols},
@@ -892,17 +940,25 @@ class CachePathTests(unittest.TestCase):
                                                         ):
                                                             inputs = _load_local_inputs(paths)
 
-        self.assertEqual(seen_chain_owners, [frozenset({"AAA"}), frozenset({"BBB"})])
-        self.assertEqual(seen_outcome_owners, [frozenset({"AAA"}), frozenset({"BBB"})])
-        self.assertEqual(seen_audit_owners, [frozenset({"AAA"}), frozenset({"BBB"})])
+        self.assertEqual(
+            seen_chain_owners, [frozenset({"AAA"}), frozenset({"BBB"}), frozenset({"CCC"})]
+        )
+        self.assertEqual(
+            seen_outcome_owners, [frozenset({"AAA"}), frozenset({"BBB"}), frozenset({"CCC"})]
+        )
+        self.assertEqual(
+            seen_audit_owners, [frozenset({"AAA"}), frozenset({"BBB"}), frozenset({"CCC"})]
+        )
         self.assertEqual(inputs.chains, {})
-        self.assertEqual(inputs.signals, {"2025-01-02": {"AAA": 1.0, "BBB": 1.0}})
-        self.assertEqual({row.symbol for row in inputs.outcomes or ()}, {"AAA", "BBB"})
+        self.assertEqual(
+            inputs.signals, {"2025-01-02": {"AAA": 1.0, "BBB": 1.0, "CCC": 1.0}}
+        )
+        self.assertEqual({row.symbol for row in inputs.outcomes or ()}, {"AAA", "BBB", "CCC"})
         self.assertEqual(inputs.audit.verdict if inputs.audit else None, "PASS WITH WARNINGS")
         self.assertEqual(
-            inputs.audit.checks[1] if inputs.audit else (), ("AAA-check-1", "BBB-check-1")
+            inputs.audit.checks[1] if inputs.audit else (), ("AAA-check-1", "BBB-check-1", "CCC-check-1")
         )
-        with patch.object(config, "A2_UNIVERSE", symbols):
+        with patch.object(config, "ATTRACTIVENESS_UNIVERSE", symbols):
             inference, _descriptive, exclusions = _variant_rows(
                 inputs.outcomes or (), inputs.signals, "csp", "capture_50"
             )

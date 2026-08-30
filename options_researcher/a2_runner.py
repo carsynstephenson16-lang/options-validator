@@ -2,8 +2,11 @@
 
 The controller is deliberately a thin boundary around :mod:`a2_panel` and
 :mod:`a2_battery`.  It validates the registration before touching a loader,
-keeps incomplete fifteen-name boards out of inference, and writes one
-immutable report before an optional explicit ledger publication.
+selects each week's ONLY candidate board from entry-time (pre-resolution)
+availability on the current `config.ATTRACTIVENESS_UNIVERSE` board
+(A2_AMENDMENT_V1_1, ledger seq 27; the 2026-08-15 breach/weekly-cohort
+amendment), and writes one immutable report before an optional explicit
+ledger publication.
 """
 
 from __future__ import annotations
@@ -347,18 +350,40 @@ def _variant_rows(
     lane: str,
     arm: str,
 ) -> tuple[tuple[A2Outcome, ...], tuple[A2Outcome, ...], dict[str, object]]:
+    """Weekly-cohort board construction (A2_AMENDMENT_V1_1, ledger seq 27; the
+    2026-08-15 breach/weekly-cohort amendment Definition 2).
+
+    The board is the current `config.ATTRACTIVENESS_UNIVERSE` (18 names), NOT
+    the frozen 15-name `config.A2_UNIVERSE` (which stays defined only for
+    registration provenance -- `A2_REGISTRATION_SEQUENCE`,
+    `A2_CSP_FIXED_HORIZON_SESSIONS`, etc.).  Each cohort's expected board is
+    the names scored in ``signals`` that day (a proxy for "cached chain data
+    at that session's formation", since a score can only be computed from a
+    chain that day) intersected with the current universe.  A partial board
+    IS used for inference once resolved (skip-not-reject); candidate
+    selection itself is delegated to
+    :func:`non_overlapping_inference_rows`'s entry-time-only mode, which never
+    inspects realized outcome rows to choose a week's candidate day.
+    """
     rows = tuple(row for row in outcomes if row.lane == lane and row.arm == arm)
+    universe = set(config.ATTRACTIVENESS_UNIVERSE)
+    board_by_date: dict[str, tuple[str, ...]] = {
+        decision: tuple(symbol for symbol in board if symbol in universe)
+        for decision, board in signals.items()
+    }
     grouped: dict[str, list[A2Outcome]] = {}
     for row in rows:
         grouped.setdefault(row.decision_date, []).append(row)
-    complete: list[A2Outcome] = []
     incomplete = 0
     missing_by_date: dict[str, list[str]] = {}
+    per_cohort_name_counts: dict[str, int] = {}
+    split_entry_date_cohorts = 0
     for decision, cohort in sorted(grouped.items()):
         observed = {row.symbol for row in cohort}
-        expected = set(config.A2_UNIVERSE)
+        expected = set(board_by_date.get(decision, ()))
         missing = sorted(expected - observed)
         extra = sorted(observed - expected)
+        entries = {row.entry_date for row in cohort}
         scored = signals.get(decision, {})
         score_identity = all(
             symbol in scored
@@ -371,17 +396,19 @@ def _variant_rows(
             for symbol in expected
             if symbol in observed
         )
-        if observed == expected and len(cohort) == len(expected) and score_identity:
-            complete.extend(sorted(cohort, key=lambda row: row.symbol))
-        else:
+        per_cohort_name_counts[decision] = len(cohort)
+        if len(entries) > 1:
+            split_entry_date_cohorts += 1
+        if missing or extra or not score_identity:
             incomplete += 1
-            missing_by_date[decision] = missing + [f"extra:{symbol}" for symbol in extra]
+            if missing or extra:
+                missing_by_date[decision] = missing + [f"extra:{symbol}" for symbol in extra]
     weekly_diagnostics: dict[str, int] = {}
     inference = non_overlapping_inference_rows(
-        tuple(complete),
+        rows,
         lane=lane,
         arm=arm,
-        expected_symbols=config.A2_UNIVERSE,
+        board_symbols_by_date=board_by_date,
         decision_dates=tuple(signals),
         diagnostics=weekly_diagnostics,
     )
@@ -389,6 +416,8 @@ def _variant_rows(
         "accepted_board_not_first_session_of_week",
         "weeks_without_complete_board",
         "weeks_skipped_by_spacing",
+        "weeks_skipped_unresolvable_board",
+        "weeks_skipped_split_entry_date",
     ):
         weekly_diagnostics.setdefault(key, 0)
     return (
@@ -398,12 +427,16 @@ def _variant_rows(
             "incomplete_cohorts": incomplete,
             "missing_names": missing_by_date,
             "original_bucket_identity_preserved": not incomplete and bool(grouped),
+            "per_cohort_name_counts": per_cohort_name_counts,
+            "split_entry_date_realized_cohorts": split_entry_date_cohorts,
             **weekly_diagnostics,
         },
     )
 
 
-def _breach_duplication(rows: Sequence[A2Outcome]) -> dict[str, int | float | None]:
+def _breach_duplication(
+    rows: Sequence[A2Outcome], signals: Mapping[str, Mapping[str, float]]
+) -> dict[str, int | float | None]:
     by_arm: dict[str, dict[tuple[str, str, str], A2Outcome]] = {
         "close_21_dte": {},
         "breach_hold_21_dte": {},
@@ -412,13 +445,18 @@ def _breach_duplication(rows: Sequence[A2Outcome]) -> dict[str, int | float | No
         "close_21_dte": set(),
         "breach_hold_21_dte": set(),
     }
-    expected = set(config.A2_UNIVERSE)
+    universe = set(config.ATTRACTIVENESS_UNIVERSE)
     for arm in by_arm:
         arm_rows = [row for row in rows if row.lane == "csp" and row.arm == arm]
         decisions = {row.decision_date for row in arm_rows}
         for decision in decisions:
             cohort = [row for row in arm_rows if row.decision_date == decision]
-            if len(cohort) == len(expected) and {row.symbol for row in cohort} == expected:
+            expected = set(signals.get(decision, {})) & universe
+            if (
+                expected
+                and len(cohort) == len(expected)
+                and {row.symbol for row in cohort} == expected
+            ):
                 complete_decisions[arm].add(decision)
                 by_arm[arm].update(
                     {(row.symbol, row.decision_date, row.entry_date): row for row in cohort}
@@ -476,7 +514,7 @@ def build_report(
     if audit.verdict == "BLOCK":
         raise A2RunnerError("A2 data audit BLOCK prevents report assembly")
     grade, receipt_hash = _validate_realism(realism_grade, realism_receipt)
-    breach_duplication = _breach_duplication(outcomes)
+    breach_duplication = _breach_duplication(outcomes, signals)
     breach_skips = diagnostics.skips if diagnostics is not None else {}
     breach_path_skip_counts = {
         "breached": sum(
@@ -665,7 +703,7 @@ def run_once(
         chains=inputs.chains,
         raw_closes=inputs.raw_closes,
         selected_contracts=diagnostics.selected_contracts,
-        eligible_universe=set(config.A2_UNIVERSE),
+        eligible_universe=set(config.ATTRACTIVENESS_UNIVERSE),
     )
     if audit.verdict == "BLOCK":
         raise A2RunnerError("A2 data audit BLOCK prevents report writing")
@@ -774,7 +812,7 @@ def _load_chain_bundle(
 ) -> dict[str, dict[str, pd.DataFrame]]:
     output: dict[str, dict[str, pd.DataFrame]] = {}
     counts = file_counts if file_counts is not None else {}
-    requested = frozenset(symbols or config.A2_UNIVERSE)
+    requested = frozenset(symbols or config.ATTRACTIVENESS_UNIVERSE)
     for symbol in requested:
         counts.setdefault(symbol, 0)
     for item in _files(path, (".parquet",)):
@@ -861,7 +899,7 @@ def _load_feature_bundle(path: Path) -> dict[str, pd.DataFrame]:
 
 def _common_feature_start(features: Mapping[str, pd.DataFrame]) -> str:
     starts: dict[str, str] = {}
-    for symbol in config.A2_UNIVERSE:
+    for symbol in config.ATTRACTIVENESS_UNIVERSE:
         frame = features.get(symbol)
         if frame is None or frame.empty:
             raise A2RunnerError(f"A2 feature coverage is missing for {symbol}")
@@ -1041,7 +1079,7 @@ def _reconstruct_signals(inputs: A2LocalInputs) -> dict[str, dict[str, float]]:
         return {}
 
     signals: dict[str, dict[str, float]] = {}
-    for symbol in config.A2_UNIVERSE:
+    for symbol in config.ATTRACTIVENESS_UNIVERSE:
         features = inputs.features.get(symbol)
         for day, chain in sorted(inputs.chains.get(symbol, {}).items()):
             if day > config.BACKTEST_END or day not in inputs.raw_closes.get(symbol, {}):
@@ -1128,7 +1166,7 @@ def _load_local_inputs(paths: CachePaths) -> A2LocalInputs:
     chain_max_as_of: str | None = None
     feature_as_of: dict[str, str] = {}
 
-    for symbol in config.A2_UNIVERSE:
+    for symbol in config.ATTRACTIVENESS_UNIVERSE:
         symbol_chains = _load_chain_bundle(
             paths.chain,
             common_start=common_start,
