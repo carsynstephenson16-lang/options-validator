@@ -240,6 +240,42 @@ class ResolutionTests(unittest.TestCase):
         breach = next(row for row in rows or () if row.arm == "breach_hold_21_dte")
         self.assertEqual(breach.resolution_date, "2025-03-21")
 
+    def test_breach_scan_missing_underlying_close_sessions_are_counted(self):
+        # F3 (independent adversarial review, 2026-08-30): the breach scan
+        # only ever looks at sessions present in ``raw``; a hole in the
+        # underlying close series inside the scan window used to resolve
+        # silently as "unbreached" with no diagnostic.  This does not change
+        # resolution behavior (still no substituted close), it only detects
+        # and counts the gap, surfaced like any other skip counter.
+        diagnostics = A2Diagnostics()
+        self._csp_rows(
+            {"2025-01-31": 105.0, "2025-02-28": 104.0, "2025-03-21": 103.0},
+            {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+            diagnostics,
+        )
+        self.assertGreater(diagnostics.skips["breach_scan_missing_underlying_close_session"], 0)
+
+    def test_breach_at_expiration_is_counted_as_a_terminal_exception_settlement(self):
+        # F4: breach-on-expiration resolves by settlement (Definition 1.2's
+        # sole exemption from the t+1 rule) and must be counted separately
+        # from an ordinary breach-then-hold resolution.
+        diagnostics = A2Diagnostics()
+        self._csp_rows(
+            {"2025-01-31": 105.0, "2025-02-28": 105.0, "2025-03-21": 99.0},
+            {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+            diagnostics,
+        )
+        self.assertEqual(diagnostics.breach_on_expiry_settlements, 1)
+
+    def test_unbreached_path_does_not_count_a_terminal_exception_settlement(self):
+        diagnostics = A2Diagnostics()
+        self._csp_rows(
+            {"2025-01-31": 105.0, "2025-02-28": 104.0, "2025-03-21": 103.0},
+            {"2025-02-28": _chain([_row(expiration="2025-03-21")])},
+            diagnostics,
+        )
+        self.assertEqual(diagnostics.breach_on_expiry_settlements, 0)
+
     def test_csp_breach_missing_exit_is_counted_by_breach_path(self):
         diagnostics = A2Diagnostics()
         rows = self._csp_rows(

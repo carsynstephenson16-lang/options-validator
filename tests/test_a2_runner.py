@@ -336,6 +336,8 @@ class RunnerContracts(unittest.TestCase):
                 "breach_hold_21_dte_unbreached_missing_raw_close": 3,
             }
         )
+        diagnostics.note_breach_on_expiry_settlement()
+        diagnostics.note_breach_on_expiry_settlement()
         report = build_report(
             outcomes=tuple(rows),
             signals={"2025-01-02": {symbol: 1.0 for symbol in config.A2_UNIVERSE}},
@@ -357,6 +359,9 @@ class RunnerContracts(unittest.TestCase):
         )
         self.assertEqual(breach["breach_path_skip_counts"], {"breached": 2, "unbreached": 3})
         self.assertIn("all five CSP arms", breach["data_gap_propagation"])
+        # F4: breach-on-expiration terminal-exception settlements are a
+        # distinct, report-level counter, not folded into the skip counts.
+        self.assertEqual(report["provenance"]["breach_on_expiry_settlements"], 2)
 
     def test_verified_report_can_retry_append_without_loader(self):
         rows = tuple(_outcome(symbol) for symbol in config.A2_UNIVERSE)

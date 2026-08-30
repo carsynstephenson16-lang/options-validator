@@ -27,9 +27,27 @@ class A2Diagnostics:
     max_as_of: str | None = None
     pmcc_status: str = "no data"
     selected_contracts: set[tuple[str, str, str]] = field(default_factory=set)
+    # Definition 1.2's sole exemption from the t+1 rule: a breach discovered
+    # on the expiration session itself resolves by settlement on that same
+    # session.  This is a successful resolution path, not a skip, so it gets
+    # its own counter (independent adversarial review 2026-08-30, F4).
+    breach_on_expiry_settlements: int = 0
 
     def skip(self, reason: str) -> None:
         self.skips[reason] += 1
+
+    def note_breach_on_expiry_settlement(self) -> None:
+        self.breach_on_expiry_settlements += 1
+
+
+_XNYS_CALENDAR_CACHE: xcals.ExchangeCalendar | None = None
+
+
+def _xnys_calendar() -> xcals.ExchangeCalendar:
+    global _XNYS_CALENDAR_CACHE
+    if _XNYS_CALENDAR_CACHE is None:
+        _XNYS_CALENDAR_CACHE = xcals.get_calendar("XNYS")
+    return _XNYS_CALENDAR_CACHE
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,6 +312,22 @@ def _csp(
         float(contract.strike) * 100,
     )
     sessions, credit = sorted(raw), adverse_sell(contract.bid) * 100
+    # F3 (independent adversarial review, 2026-08-30): the breach scan below
+    # only ever sees sessions present in ``raw``.  A hole in the underlying
+    # close series inside [entry_day, expiry] would otherwise resolve as
+    # silently "unbreached" with no diagnostic.  This detects and counts the
+    # gap; it does not change resolution behavior (no close is substituted).
+    try:
+        expected_scan_sessions = {
+            stamp.date().isoformat()
+            for stamp in _xnys_calendar().sessions_in_range(
+                pd.Timestamp(entry_day), pd.Timestamp(expiry)
+            )
+        }
+    except ValueError:
+        expected_scan_sessions = set()
+    for _missing_session in sorted(expected_scan_sessions - set(raw)):
+        diagnostics.skip("breach_scan_missing_underlying_close_session")
     close21 = next(
         (d for d in sessions if d > entry_day and (_day(expiry) - _day(d)).days <= 21), expiry
     )
@@ -301,6 +335,8 @@ def _csp(
         (day for day in sessions if entry_day <= day <= expiry and float(raw[day]) < strike),
         None,
     )
+    if breach is not None and breach == expiry:
+        diagnostics.note_breach_on_expiry_settlement()
     if breach is None or breach >= expiry:
         breach_exit = expiry
     else:

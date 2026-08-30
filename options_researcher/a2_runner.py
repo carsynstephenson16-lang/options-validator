@@ -594,6 +594,10 @@ def build_report(
     if diagnostics is not None:
         provenance_payload["exclusion_counts"] = dict(diagnostics.skips)
         provenance_payload["pmcc_status"] = diagnostics.pmcc_status
+        # F4 (independent adversarial review, 2026-08-30): breach-on-expiry is
+        # a successful terminal-exception settlement (Definition 1.2), not a
+        # skip; it gets its own report-level counter.
+        provenance_payload["breach_on_expiry_settlements"] = diagnostics.breach_on_expiry_settlements
     report: dict[str, object] = {
         "schema": REPORT_SCHEMA,
         "hypothesis_id": HYPOTHESIS_ID,
