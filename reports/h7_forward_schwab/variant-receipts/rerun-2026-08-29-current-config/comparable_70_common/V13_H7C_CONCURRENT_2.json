@@ -1,0 +1,171 @@
+{
+  "base_rate": 0.0038095238095238095,
+  "base_rate_ci95_exact": {
+    "high": 0.00972493634026708,
+    "low": 0.0010389126298233475,
+    "method": "Clopper-Pearson"
+  },
+  "baseline_config_hash": "b86b31889f3cca0067ba2b680f5c1a7f3081700d3fa4e54a92de1c4dbb9d5519",
+  "baseline_stack_version": "h7-frozen-entry-stack-plus-board/v1",
+  "clears_bar_ci_lower_ge_bar": false,
+  "code_sha": "86e8ba693809c6f7f449e6f5c4e643e057c59c79",
+  "data_gap_count": 0,
+  "data_gap_rows": [],
+  "entries_per_lane": {
+    "a": 4
+  },
+  "entries_per_symbol": {
+    "AMD": 0,
+    "AMZN": 0,
+    "AVGO": 0,
+    "CEG": 0,
+    "CRWV": 0,
+    "ET": 0,
+    "IREN": 0,
+    "MSFT": 1,
+    "NOW": 2,
+    "NVDA": 0,
+    "PLTR": 1,
+    "SMCI": 0,
+    "TEM": 0,
+    "USAR": 0,
+    "VST": 0
+  },
+  "entry_symbol_day_rows": [
+    {
+      "lane": "a",
+      "session": "2026-05-18",
+      "symbol": "NOW"
+    },
+    {
+      "lane": "a",
+      "session": "2026-07-13",
+      "symbol": "NOW"
+    },
+    {
+      "lane": "a",
+      "session": "2026-07-16",
+      "symbol": "MSFT"
+    },
+    {
+      "lane": "a",
+      "session": "2026-07-16",
+      "symbol": "PLTR"
+    }
+  ],
+  "entry_symbol_days": 4,
+  "expected_entries_ci95_exact": {
+    "high": 10.211183157280434,
+    "low": 1.0908582613145148
+  },
+  "expected_entries_per_window": 4.0,
+  "feasibility_entry_bar": 20,
+  "input_files": {
+    "gating_assertions": {
+      "path": "data/earnings/gating_v3.csv",
+      "sha256": "da2bf6abd3d7fd0ba10c5b78fcbcec47a5a802f9372578dce503d837967e63e7"
+    },
+    "raw_assertions": {
+      "path": "data/earnings/assertions_v2.csv",
+      "sha256": "124f1fa2b512f238dbf36ea07485f8839653fad3ade1b40fd276a5ba003846fb"
+    }
+  },
+  "integrity_rule": "brief 09: frequency only. No P&L, win rate, premium capture or any outcome statistic is computed, stored or reported for any variant.",
+  "method": {
+    "allocation": "options_researcher.h7_board.resolve_board",
+    "causality": "each decision session uses closes sliced to [session-560d, session] and that session's exact cached chain; earnings knowledge is cut at session_close_utc(session)",
+    "data": "cached .cache/chains plus .cache/underlying only; no provider calls",
+    "error_policy": "unavailable symbol-day counts in the denominator and cannot enter",
+    "frozen_realism_constants": [
+      "COMMISSION_PER_CONTRACT",
+      "FILL_MODEL_ID",
+      "H7C_CLOSE_BEFORE_EARNINGS",
+      "H7_ADMIT_MAX_SPREAD_PCT",
+      "H7_EARNINGS_BAN_SESSIONS",
+      "H7_EARNINGS_POST_REPORT_GRACE_D",
+      "H7_MONTHLY_AT_RISK",
+      "H7_POST_REPORT_GRACE_DAYS",
+      "HALF_SPREAD_COST",
+      "MAX_SPREAD_PCT",
+      "MIN_OPEN_INTEREST",
+      "SLIPPAGE_HAIRCUT"
+    ],
+    "measurement_bias_disclosure": "B4: measured on ThetaData EOD chains; the forward window would run on Schwab 15:45 pre-close data. Every known simplification inflates counts (see the menu report for direction-by-simplification).",
+    "portfolio_state_assumption": "each historical session starts with no open H7 positions and the full frozen monthly sleeve; same-session board caps apply. This INFLATES counts relative to live operation, where an open position blocks its underlying for the whole holding period.",
+    "signal_and_execution": "options_researcher.h7_watch.assemble_name"
+  },
+  "occupancy_constrained_entries": {
+    "21": 4,
+    "42": 3
+  },
+  "occupancy_note": "entries surviving one-open-position-per-underlying for N sessions. The headline count assumes a flat book every session, which no live window can reproduce; these are the same entries replayed through the registered position cap. Schedule arithmetic only -- no price path, no outcome. Still an upper bound (the monthly sleeve is not netted).",
+  "panel_end": "2026-07-27",
+  "panel_id": "comparable_70_common",
+  "panel_sessions": 70,
+  "panel_start": "2026-04-16",
+  "point_estimate_ge_bar": false,
+  "provenance": "LLM/tool-computed",
+  "receipt_hash": "66680c912e1fe6b584aa28532a9ff958a11e2a5135ff5d512fe929d548a87473",
+  "receipt_kind": "h7_entry_variant_frequency/v1",
+  "rolling_window_entry_counts": {
+    "max": 4,
+    "median": 4.0,
+    "min": 4,
+    "windows": 1,
+    "zero_entry_window_fraction": 0.0
+  },
+  "sessions_per_symbol": {
+    "AMD": 70,
+    "AMZN": 70,
+    "AVGO": 70,
+    "CEG": 70,
+    "CRWV": 70,
+    "ET": 70,
+    "IREN": 70,
+    "MSFT": 70,
+    "NOW": 70,
+    "NVDA": 70,
+    "PLTR": 70,
+    "SMCI": 70,
+    "TEM": 70,
+    "USAR": 70,
+    "VST": 70
+  },
+  "symbol_days": 1050,
+  "tool_label": "cached-only read-only ENTRY-FREQUENCY measurement; no verdict, no outcome statistics of any kind",
+  "top_symbol_share": 0.5,
+  "universe": [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST"
+  ],
+  "universe_size": 15,
+  "variant": {
+    "axis": "evaluation_cadence",
+    "board_policy": "one_per_underlying",
+    "config_overrides": {
+      "H7C_MAX_CONCURRENT": 2
+    },
+    "lane_a_mode": "and",
+    "lane_b_edge_trigger": true,
+    "lane_b_mode": "and",
+    "rationale_drift": "low",
+    "rule_change": "Allow 2 concurrent short-premium positions basket-wide instead of 1.",
+    "universe_label": "official_scope_15",
+    "variant_id": "V13_H7C_CONCURRENT_2"
+  },
+  "variant_identity_hash": "0d7c595b5049fe6695e16956b3facbc8fe0a028ddb7819a2799d44ad5d8d23fc",
+  "window_sessions": 70
+}

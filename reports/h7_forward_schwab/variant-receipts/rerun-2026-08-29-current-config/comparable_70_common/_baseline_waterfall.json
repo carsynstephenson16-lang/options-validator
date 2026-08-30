@@ -1,0 +1,16 @@
+{
+  "lane_days_by_first_block": {
+    "arming_rule": 806,
+    "earnings_gate": 1098,
+    "entry_ok_pre_board": 4,
+    "iv_rv_route": 5,
+    "lane_excluded_by_design": 280,
+    "liquidity_admission": 957
+  },
+  "note": "first blocking condition per lane-day in the FROZEN state ladder order (open book, earnings, admission, arming/route, caps, structure). Because the ladder short-circuits, a lane-day attributed to an earlier gate might also have failed a later one: these are first-blocker counts, not independent attributions. Frequency diagnostic, no outcomes.",
+  "panel_id": "comparable_70_common",
+  "provenance": "LLM/tool-computed",
+  "receipt_hash": "2a9ea136090ee2fbe04ca3c18bfa2a692f2b7e708a78cbc963cded6db947102e",
+  "receipt_kind": "h7_entry_arming_waterfall/v1",
+  "variant_id": "V0_BASELINE"
+}

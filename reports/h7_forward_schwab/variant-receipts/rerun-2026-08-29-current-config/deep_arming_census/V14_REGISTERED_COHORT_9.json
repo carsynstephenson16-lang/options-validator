@@ -1,0 +1,88 @@
+{
+  "armed_lane_a": 51,
+  "armed_lane_b": 1097,
+  "armed_per_symbol": {
+    "AMD": 21,
+    "AMZN": 205,
+    "CEG": 16,
+    "ET": 373,
+    "MSFT": 302,
+    "NOW": 61,
+    "PLTR": 9,
+    "TEM": 6,
+    "VST": 155
+  },
+  "armed_rate": 0.07264443460102513,
+  "armed_rate_ci95_exact": {
+    "high": 0.07680199534372498,
+    "low": 0.06864501640892415,
+    "method": "Clopper-Pearson"
+  },
+  "armed_symbol_days": 1148,
+  "armed_symbol_days_per_window": 45.76599379864583,
+  "baseline_config_hash": "b86b31889f3cca0067ba2b680f5c1a7f3081700d3fa4e54a92de1c4dbb9d5519",
+  "code_sha": "86e8ba693809c6f7f449e6f5c4e643e057c59c79",
+  "data_gap_count": 0,
+  "earnings_assertion_coverage_floor": "2026-04-02",
+  "method": {
+    "arming": "options_researcher.h7_signals.lane_a_armed / lane_b_armed under the variant's overrides",
+    "causality": "closes sliced to [session-560d, session] inclusive",
+    "data": "cached .cache/underlying closes only; no chain read, no provider calls",
+    "panel_axis": "sessions with an exact cached chain file (tradable days)"
+  },
+  "panel_end": "2026-07-27",
+  "panel_id": "deep_arming_census",
+  "panel_sessions": 2152,
+  "panel_start": "2018-01-02",
+  "provenance": "LLM/tool-computed",
+  "receipt_hash": "4b12c9697959f7cd78e77af8db0123f5408ad83df3f84906793e1d1d4b3c0c5b",
+  "receipt_kind": "h7_entry_arming_frequency/v1",
+  "rolling_window_armed_counts": {
+    "max": 140,
+    "median": 30.0,
+    "min": 0,
+    "windows": 2083,
+    "zero_entry_window_fraction": 0.007681228996639462
+  },
+  "sessions_per_symbol": {
+    "AMD": 2152,
+    "AMZN": 2152,
+    "CEG": 1118,
+    "ET": 1949,
+    "MSFT": 2152,
+    "NOW": 2152,
+    "PLTR": 1457,
+    "TEM": 519,
+    "VST": 2152
+  },
+  "symbol_days": 15803,
+  "tool_label": "cached-only read-only ARMING-frequency census; no verdict, no outcome statistics of any kind",
+  "universe": [
+    "AMD",
+    "AMZN",
+    "CEG",
+    "ET",
+    "MSFT",
+    "NOW",
+    "PLTR",
+    "TEM",
+    "VST"
+  ],
+  "universe_size": 9,
+  "variant": {
+    "axis": "universe",
+    "board_policy": "one_per_underlying",
+    "config_overrides": {},
+    "lane_a_mode": "and",
+    "lane_b_edge_trigger": true,
+    "lane_b_mode": "and",
+    "rationale_drift": "none",
+    "rule_change": "Restrict entries to the 9 names frozen into the registered cohort (the other 6 were excluded for unknown earnings dates at registration).",
+    "universe_label": "registered_cohort_9",
+    "variant_id": "V14_REGISTERED_COHORT_9"
+  },
+  "variant_identity_hash": "13f9d4b7438a7c2da2eff0b9a83406c452dc3f5d104a68ba8e7c92ebcc42c024",
+  "what_this_is_not": "NOT an entry rate. Arming is the technical trigger only; the earnings gate, liquidity admission, IV/RV routing, executable structure and board allocation all still have to pass afterwards.",
+  "why_arming_only": "the frozen earnings gate fails closed to UNKNOWN when no assertion was knowable at the session; the earliest knowable assertion is 2026-04-02, so a longer FULL-STACK panel would measure earnings-data coverage rather than entry frequency",
+  "window_sessions": 70
+}
