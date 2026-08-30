@@ -320,9 +320,7 @@ def _csp(
     try:
         expected_scan_sessions = {
             stamp.date().isoformat()
-            for stamp in _xnys_calendar().sessions_in_range(
-                pd.Timestamp(entry_day), pd.Timestamp(expiry)
-            )
+            for stamp in _xnys_calendar().sessions_in_range(_day(entry_day), _day(expiry))
         }
     except ValueError:
         expected_scan_sessions = set()
