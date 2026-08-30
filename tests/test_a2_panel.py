@@ -207,11 +207,21 @@ class ResolutionTests(unittest.TestCase):
                 "2025-02-28",
             ),
             (
+                # F7d (independent adversarial review, 2026-08-30): the
+                # at-strike session is placed well BEFORE the 21-DTE
+                # boundary (35 days out, vs. 2025-02-28's exact 21).  A `<`
+                # vs `<=` mutation at this comparison would otherwise be
+                # invisible here: on the old fixture (at-strike inside the
+                # 21-DTE window already) both operators land on the same
+                # exit date by coincidence.  On this fixture a `<=` mutant
+                # detects an early "breach" at 2025-02-14 and would resolve
+                # at 2025-02-28 instead of expiration -- a different date
+                # from the correct, strict-inequality result asserted below.
                 "at strike is unbreached",
                 {
                     "2025-01-31": 105.0,
+                    "2025-02-14": 100.0,
                     "2025-02-28": 105.0,
-                    "2025-03-03": 100.0,
                     "2025-03-21": 101.0,
                 },
                 "2025-03-21",
@@ -239,6 +249,29 @@ class ResolutionTests(unittest.TestCase):
         self.assertIsNotNone(rows)
         breach = next(row for row in rows or () if row.arm == "breach_hold_21_dte")
         self.assertEqual(breach.resolution_date, "2025-03-21")
+
+    def test_assigned_stock_result_is_reported_for_any_arm_settling_itm_at_expiry(self):
+        # F7a (independent adversarial review, 2026-08-30): the assignment
+        # component previously populated only for arm == "assignment_accepting".
+        # An arm that degenerates to expiration settlement below strike is
+        # equally, factually assigned regardless of its name; pnl was already
+        # correct, only the component breakdown was wrong.  With only an
+        # entry and an expiry session, every arm's particular exit rule
+        # degenerates to expiration settlement.
+        rows = self._csp_rows({"2025-01-31": 105.0, "2025-03-21": 90.0}, {})
+        self.assertIsNotNone(rows)
+        by_arm = {row.arm: row for row in rows or ()}
+        expected = (90.0 - 100.0) * 100.0 / (100.0 * 100.0)
+        for arm in (
+            "capture_50",
+            "close_21_dte",
+            "fixed_10_sessions",
+            "breach_hold_21_dte",
+            "assignment_accepting",
+        ):
+            with self.subTest(arm=arm):
+                self.assertEqual(by_arm[arm].resolution_date, "2025-03-21")
+                self.assertAlmostEqual(by_arm[arm].components["assigned_stock_result"], expected)
 
     def test_breach_scan_missing_underlying_close_sessions_are_counted(self):
         # F3 (independent adversarial review, 2026-08-30): the breach scan

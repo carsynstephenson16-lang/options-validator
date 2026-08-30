@@ -351,11 +351,14 @@ def _csp(
     for candidate_day in sessions:
         if not entry_day < candidate_day < expiry:
             continue
-        candidate = _contract_row(chains.get(candidate_day), contract)
-        if candidate is None:
+        # F7e (independent adversarial review, 2026-08-30): named distinctly
+        # from the breach-exit ``candidate`` date above -- this one is the
+        # contract row (pd.Series), not a date.
+        candidate_contract = _contract_row(chains.get(candidate_day), contract)
+        if candidate_contract is None:
             continue
-        diagnostics.selected_contracts.add((symbol, candidate_day, _symbol(candidate)))
-        if adverse_buy(candidate.ask) * 100 <= credit / 2:
+        diagnostics.selected_contracts.add((symbol, candidate_day, _symbol(candidate_contract)))
+        if adverse_buy(candidate_contract.ask) * 100 <= credit / 2:
             capture = candidate_day
             break
 
@@ -402,10 +405,14 @@ def _csp(
         # Dollar loss per assigned 100-share lot, clamped at zero: favorable
         # marks cannot become a positive "adverse" component.
         max_adverse = min(0.0, min((mark - strike) * 100.0 for mark in marks)) if marks else 0.0
+        # F7a (independent adversarial review, 2026-08-30): assignment is a
+        # fact of expiration settlement below strike, not a fact of which
+        # named arm is being reported -- any arm whose particular exit rule
+        # happens to degenerate to expiration settlement is equally, factually
+        # assigned.  ``pnl`` was already correct for every arm; only this
+        # component breakdown was previously scoped to "assignment_accepting".
         assigned = (
-            (float(raw[expiry]) - strike) * 100.0
-            if arm == "assignment_accepting" and float(raw[expiry]) < strike
-            else 0.0
+            (float(raw[day]) - strike) * 100.0 if settlement and float(raw[day]) < strike else 0.0
         )
         components.update(
             option_pnl=pnl / denom,
