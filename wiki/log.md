@@ -124,3 +124,8 @@ still open.
 data-layer.md: the 7-day Schwab refresh-token claim now carries its
 mandatory claim labels (Official-source + Test-verified), per the Codex
 review of PR #90 and AGENTS.md claim discipline.
+
+
+## [2026-08-30] ingest | RAG health
+
+RAG health indexed 1072 sources and 35065 chunks; 0 source failures were reported.
