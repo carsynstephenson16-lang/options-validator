@@ -5,13 +5,16 @@ no fetch path: missing, malformed, stale, or not-yet-known inputs fail closed.
 Treasury CMT values are par yields; treating the interpolated par curve as a
 zero curve is an explicitly labeled approximation from the frozen design.
 """
+
 from __future__ import annotations
 
 import csv
+import hashlib
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
+from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -228,9 +231,7 @@ def _load_treasury_rows(path: Path) -> list[_TreasuryRow]:
                 raise ValueError(f"{context}: captured_at_utc precedes known_as_of_utc")
             units = raw["units"].strip()
             if units != config.BS_TREASURY_UNITS:
-                raise ValueError(
-                    f"{context}: units must be {config.BS_TREASURY_UNITS!r}"
-                )
+                raise ValueError(f"{context}: units must be {config.BS_TREASURY_UNITS!r}")
             key = (source_date, known, tenor_days)
             if key in seen:
                 raise ValueError(f"{context}: duplicate curve tenor/version")
@@ -250,6 +251,17 @@ def _load_treasury_rows(path: Path) -> list[_TreasuryRow]:
     return rows
 
 
+@lru_cache(maxsize=32)
+def _cached_treasury_rows(path: Path, content_sha256: str) -> tuple[_TreasuryRow, ...]:
+    """Reuse a curve only while its complete local content is unchanged."""
+    del content_sha256
+    return tuple(_load_treasury_rows(path))
+
+
+def _treasury_rows(path: Path) -> tuple[_TreasuryRow, ...]:
+    return _cached_treasury_rows(path, hashlib.sha256(path.read_bytes()).hexdigest())
+
+
 def risk_free_rate(
     observation_date: date,
     expiration_date: date,
@@ -264,7 +276,7 @@ def risk_free_rate(
     valuation_close = _valuation_close_utc(observation_date)
     eligible = [
         row
-        for row in _load_treasury_rows(Path(path))
+        for row in _treasury_rows(Path(path))
         if row.source_date <= observation_date <= row.valid_through
         and row.known_as_of_utc <= valuation_close
     ]
@@ -274,9 +286,7 @@ def risk_free_rate(
         )
     selected_version = max((row.source_date, row.known_as_of_utc) for row in eligible)
     selected = [
-        row
-        for row in eligible
-        if (row.source_date, row.known_as_of_utc) == selected_version
+        row for row in eligible if (row.source_date, row.known_as_of_utc) == selected_version
     ]
     metadata = {
         (
@@ -343,9 +353,7 @@ def _load_dividend_rows(path: Path) -> list[_DividendRow]:
                 context=context,
             )
             if expected < 0:
-                raise ValueError(
-                    f"{context}: expected_annual_cash_dividend must be non-negative"
-                )
+                raise ValueError(f"{context}: expected_annual_cash_dividend must be non-negative")
             known = _parse_timestamp(
                 raw["known_as_of_utc"], field="known_as_of_utc", context=context
             )
@@ -356,9 +364,7 @@ def _load_dividend_rows(path: Path) -> list[_DividendRow]:
                 raise ValueError(f"{context}: captured_at_utc precedes known_as_of_utc")
             units = raw["units"].strip()
             if units != config.BS_DIVIDEND_UNITS:
-                raise ValueError(
-                    f"{context}: units must be {config.BS_DIVIDEND_UNITS!r}"
-                )
+                raise ValueError(f"{context}: units must be {config.BS_DIVIDEND_UNITS!r}")
             key = (symbol, effective_date, known)
             if key in seen:
                 raise ValueError(f"{context}: duplicate dividend expectation/version")

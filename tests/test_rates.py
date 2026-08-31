@@ -1,11 +1,14 @@
 import csv
 import math
+import os
 import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import config
+import data.rates as rates_module
 from data.rates import (
     MissingDividendYieldError,
     dividend_yield,
@@ -112,9 +115,7 @@ class TestPointInTimeRates(unittest.TestCase):
             RATE_FIELDS,
             [rate_row(30, 0.04), rate_row(90, 0.05)],
         )
-        result = risk_free_rate(
-            date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path
-        )
+        result = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
         self.assertAlmostEqual(result.rate, math.log1p(0.045), places=12)
         self.assertAlmostEqual(result.par_yield, 0.045, places=12)
         self.assertTrue(result.par_curve_as_zero_approximation)
@@ -143,11 +144,32 @@ class TestPointInTimeRates(unittest.TestCase):
             ]
         )
         write_csv(self.rate_path, RATE_FIELDS, rows)
-        result = risk_free_rate(
-            date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path
-        )
+        result = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
         self.assertEqual(result.source_date, date(2026, 7, 16))
         self.assertAlmostEqual(result.par_yield, 0.045, places=12)
+
+    def test_reuses_unchanged_curve_rows_across_rate_lookups(self):
+        write_csv(self.rate_path, RATE_FIELDS, [rate_row(30, 0.04), rate_row(90, 0.05)])
+        with patch(
+            "data.rates._load_treasury_rows", wraps=rates_module._load_treasury_rows
+        ) as loader:
+            risk_free_rate(date(2026, 7, 17), date(2026, 8, 15), path=self.rate_path)
+            risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
+        self.assertEqual(loader.call_count, 1)
+
+    def test_reloads_when_same_size_curve_is_rewritten_with_restored_mtime(self):
+        write_csv(self.rate_path, RATE_FIELDS, [rate_row(30, 0.04), rate_row(90, 0.05)])
+        original_metadata = self.rate_path.stat()
+        first = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
+        write_csv(self.rate_path, RATE_FIELDS, [rate_row(30, 0.06), rate_row(90, 0.07)])
+        self.assertEqual(self.rate_path.stat().st_size, original_metadata.st_size)
+        os.utime(
+            self.rate_path,
+            ns=(original_metadata.st_atime_ns, original_metadata.st_mtime_ns),
+        )
+        second = risk_free_rate(date(2026, 7, 17), date(2026, 9, 15), path=self.rate_path)
+        self.assertAlmostEqual(first.par_yield, 0.045, places=12)
+        self.assertAlmostEqual(second.par_yield, 0.065, places=12)
 
     def test_missing_dividend_yield_raises_instead_of_defaulting_zero(self):
         write_csv(self.dividend_path, DIVIDEND_FIELDS, [dividend_row("MSFT", 3.32)])
@@ -161,18 +183,14 @@ class TestPointInTimeRates(unittest.TestCase):
 
     def test_sourced_zero_dividend_is_allowed(self):
         write_csv(self.dividend_path, DIVIDEND_FIELDS, [dividend_row("AMZN", 0.0)])
-        result = dividend_yield(
-            "AMZN", date(2026, 7, 17), 225.0, path=self.dividend_path
-        )
+        result = dividend_yield("AMZN", date(2026, 7, 17), 225.0, path=self.dividend_path)
         self.assertEqual(result.yield_rate, 0.0)
         self.assertEqual(result.expected_annual_cash_dividend, 0.0)
         self.assertTrue(result.provenance.source_url.startswith("https://"))
 
     def test_dividend_yield_uses_expected_cash_over_synchronized_spot(self):
         write_csv(self.dividend_path, DIVIDEND_FIELDS, [dividend_row("MSFT", 4.0)])
-        result = dividend_yield(
-            "MSFT", date(2026, 7, 17), 400.0, path=self.dividend_path
-        )
+        result = dividend_yield("MSFT", date(2026, 7, 17), 400.0, path=self.dividend_path)
         self.assertAlmostEqual(result.yield_rate, 0.01, places=12)
 
     def test_expired_dividend_record_fails_closed(self):
