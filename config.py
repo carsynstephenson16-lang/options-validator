@@ -719,8 +719,13 @@ H9_MAX_UNRESOLVED_GAP_FRACTION = 0.10   # disclosed gap-rate ceiling
 # on-disk file never diverge. The prereg gate binds the two (C5).
 H9_SPEC_PATH = "docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study.md"
 
-# A2-v1 outcome battery — registration sequence 19 and the owner-approved
-# entry-convention addendum (2026-08-15). Identities/horizons only, no gates.
+# A2-v1 outcome battery — registration sequence 19 and the entry-convention
+# addendum (the 2026-08-15 "owner-approved" claim was voided by
+# A2_ENTRY_CONVENTION_CORRECTION_V1; approval authority lives in the
+# owner-typed A2_ENTRY_CONVENTION_RATIFIED_V1 fact). Identities/horizons
+# only, no gates. A2_UNIVERSE is the seq-19 historical 15-name set, retained
+# as registration provenance — the ACTIVE board is seq 27's
+# ATTRACTIVENESS_UNIVERSE; nothing in the decision path reads A2_UNIVERSE.
 A2_REGISTRATION_ID = "A2-v1"
 A2_REGISTRATION_SEQUENCE = 19
 A2_UNIVERSE = tuple(H7_WATCHLIST + H7_CORE_LONG_ONLY)
