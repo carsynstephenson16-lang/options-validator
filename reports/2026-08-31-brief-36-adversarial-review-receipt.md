@@ -62,14 +62,42 @@ existed). Minors n1–n4 (OD-3 phrase check rubber-stampable;
 `test_h7_schwab_data_gate.py` missing from Scope-IN; owner-field naming
 convention; plan-WP ↔ brief-letter mapping for the rulings text).
 
-## Round 3 (2026-08-31, rev 3) — verdict recorded below after the round
+## Round 3 (2026-08-31, rev 3) — verdict FAIL (one blocker; nothing structural)
 
-Rev 3 applies N1–N6 and n1–n4: WP-F gains the scorer half
-(read-bar-from-registered-event, no config fallback) with
-`h7_forward_scoring.py`/`h7_real_scoring.py` in scope; new WP-I extends
-`tools/h7_schwab_feasibility.py` (cohort argument, `input_files` hashes, both
-expected-entries figures labeled); the ordering section pins the
-occupancy-constrained quantity and names the mismatch-⇒-owner-retypes path;
-WP-G keys off the guard's internal `scope_identity()`; WP-E.4 constrains the
-marker write (nested try/except, non-glob-matching name, capture-still-exits-0
-test); this receipt exists and is committed with the brief.
+Rev 3 closed N3, N5, N6, n1–n4 cleanly; its factual anchors verified true,
+including WP-F.2's backward-compatibility claim (seq-0 carries
+`frozen.scorer.min_losses_for_verdict = 10`). Remaining findings, all
+wrong-pointer / understated-scope:
+
+- **P1 (blocker)** — keying WP-G off `scope_identity()` cannot work: it is a
+  pure function of the symbol universe (`h7_scope.py:57-60`) with no
+  namespace/store concept, so both lanes resolve to one key and B5 reopens.
+  Correct key: `forward_base` (the store path, kwarg at
+  `h7_activation_guard.py:69`).
+- **P2 (major)** — `map_forward_verdict(board)` (`h7_forward_scoring.py:92`)
+  never sees the event; the bar must arrive as a required parameter threaded
+  by both production callers (`:124`, `h7_real_scoring.py:1600`); `:451` and
+  `:1809` are provenance stamps, not gates; `tests/test_h7_forward_scoring.py:428-444`
+  affected.
+- **P3 (major)** — the reusable occupancy function is
+  `occupancy_constrained_count` at `tools/h7_entry_variant_menu.py:354`
+  (invoked `:727-728`); the v9 file only reads a precomputed value.
+- **P4/P5/P6 (minor)** — quantity-name consistency in WP-B; sidecar naming
+  conventions live in `schwab_quote_age_report.py:122-135`; scoring/legacy
+  test files named by path in Scope-IN.
+
+Reviewer's closing assessment: a rev 4 applying P1–P6 is expected to pass on
+a targeted spot-check of those six points rather than a full fourth round;
+WP-D independently landable.
+
+## Round 4 (2026-08-31, rev 4) — targeted spot-check of P1–P6
+
+Rev 4 applies all six: WP-G keyed off `forward_base` with
+unrecognized-store refusal; WP-F.2 rewritten as the required-parameter
+threading with stamps handled separately and the test file in scope; WP-I.3
+cites `tools/h7_entry_variant_menu.py:354`; WP-B uses the
+occupancy-constrained name in both places; WP-E.4 cites
+`schwab_quote_age_report.py:122-135`; Scope-IN names the three test files by
+path. Spot-check verdict recorded below.
+
+- Spot-check verdict: (recorded after the round)

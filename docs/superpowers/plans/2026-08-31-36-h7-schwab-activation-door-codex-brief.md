@@ -113,8 +113,11 @@ update of either side.
   at `:266`/`:380` today, Repo-verified)
 - `tests/test_h7_schwab_window_registration.py`,
   `tests/test_h7_schwab_data_gate.py` (constructs Schwab owner dicts — breaks
-  under WP-F otherwise; rev-2 finding n2), and other existing test files the
-  WPs name.
+  under WP-F otherwise; rev-2 finding n2),
+  `tests/test_h7_forward_scoring.py` (bare-dict board cases at `:428-444`
+  gain the bar parameter; round-3 P2/P6), `tests/test_h7_real_scoring.py`,
+  `tests/test_h7_window_registration.py` (legacy WP-D half), and other
+  existing test files the WPs name.
 
 **OUT (executor over-reach stops here):**
 - NO ledger writes and NO execution of any registration — including
@@ -203,7 +206,8 @@ same occupancy-constrained figure exactly. Constraints:
 - `config.MIN_LOSSES_FOR_VERDICT` (`config.py:184`) and
   `H10_MIN_LOSSES_FOR_VERDICT` (`config.py:612`) must not appear in this gate.
 - Blank/missing pre-acceptance + failing bar REFUSES. A pre-acceptance whose
-  quoted number does not equal the receipt's computed `expected_entries`
+  quoted number does not equal the receipt's occupancy-constrained figure
+  (same quantity as the head of this WP — one name, one field; round-3 P4)
   REFUSES with both numbers in the error (this is the WP that surfaces the
   §4-quotes-3 reconciliation to the owner rather than papering over it).
 
@@ -225,18 +229,24 @@ engine reads config at scoring time:
    Field name: `SCHWAB_MIN_LOSSES_FOR_VERDICT` (SCREAMING_SNAKE, matching
    every existing entry in both `OWNER_FIELDS` tuples — rev-2 finding n3).
    This is the sanctioned `OWNER_FIELDS` change referenced in OUT.
-2. **Scorer side (rev-2 N1).** The verdict gate actually applied is
-   `if losses < config.MIN_LOSSES_FOR_VERDICT:` at
-   `options_researcher/h7_forward_scoring.py:102`, with the config value
-   re-stamped into scoring output at `h7_forward_scoring.py:451` and
-   `h7_real_scoring.py:1809` (Repo-verified). Change these sites to read the
-   bar from the REGISTERED EVENT's scorer block and REFUSE to score a window
-   whose event lacks the field (no config fallback — a fallback silently
-   reintroduces the contradiction). Backward compatibility: existing
-   registered events already carry `min_losses_for_verdict` in their scorer
-   blocks (stamped at build time), so read-from-event scores them under their
-   own recorded rule; Codex must verify this on the actual seq-0 event and
-   record the observed value in the implementation report.
+2. **Scorer side (rev-2 N1; scope corrected per round-3 P2).** The verdict
+   gate actually applied is `if losses < config.MIN_LOSSES_FOR_VERDICT:`
+   inside `map_forward_verdict(board)` (`h7_forward_scoring.py:92`, gate at
+   `:102`) — a function whose sole argument is a scoreboard and which never
+   sees the registered event. The change is therefore: `map_forward_verdict`
+   gains a REQUIRED bar parameter, threaded from the registered event's
+   scorer block by BOTH production callers (`h7_forward_scoring.py:124` and
+   `h7_real_scoring.py:1600` — Repo-verified), refusing to score when the
+   event lacks the field (no config fallback — a fallback silently
+   reintroduces the contradiction). Separately, the provenance STAMPS at
+   `h7_forward_scoring.py:451` and `h7_real_scoring.py:1809` (output-payload
+   records, not gates) must stamp the event's bar, not config's. The
+   parameterized board cases at `tests/test_h7_forward_scoring.py:428-444`
+   pass bare dicts and must be updated. Backward compatibility: the seq-0
+   event carries `frozen.scorer.min_losses_for_verdict = 10`
+   (reviewer-verified round 3), so read-from-event scores the legacy window
+   under its own recorded rule; Codex re-verifies and records the observed
+   value in the implementation report.
 
 Acceptance tests: red-green proving the built event carries the owner-typed
 value (7 in the fixture) and NOT `config.MIN_LOSSES_FOR_VERDICT`; absence
@@ -248,15 +258,17 @@ event with no recorded bar.
 
 `h7_activation_guard.py` checks the legacy ThetaData `OWNER_FIELDS` imported at
 `:16` and used at `:197` (Repo-verified) — the Schwab flow can never satisfy
-them. Implement a module-level FROZEN mapping keyed by scope id (legacy scope →
-the existing ThetaData tuple, Schwab scope → the Schwab tuple including
-WP-F's new field). The scope key comes from the guard's OWN internal
-derivation — `scope_identity()` already computed at
-`h7_activation_guard.py:130` and used at `:145`/`:187` (Repo-verified) —
-NEVER from a caller argument and never a caller-supplied field list (rev-2
-finding N4: a caller-named scope id reopens the narrowing hole one level up).
-Unknown scope REFUSES; scope-vs-store mismatch REFUSES. The legacy scope's
-behavior must be byte-for-byte unchanged.
+them. Implement a module-level FROZEN mapping keyed by the STORE PATH
+(`forward_base`, already a keyword argument to `activation_preconditions` at
+`h7_activation_guard.py:69` — Repo-verified): legacy store → the existing
+ThetaData tuple, Schwab store → the Schwab tuple including WP-F's new field.
+Do NOT key off `scope_identity()` — it is a pure function of the symbol
+universe (`h7_scope.py:57-60`) with no namespace/provider/store concept, so
+both lanes resolve to one key and the wrong-fields hole reopens (round-3
+finding P1). `scope_identity()` keeps its existing role in the scope checks
+unchanged. Never a caller-supplied field list and never a caller-named scope
+id (rev-2 N4). An unrecognized store REFUSES; scope-vs-store mismatch
+REFUSES. The legacy store's behavior must be byte-for-byte unchanged.
 
 Acceptance tests: red-green proving a caller cannot narrow the field set NOR
 name a scope (no such parameters exist — attempts are TypeErrors); Schwab
@@ -334,8 +346,10 @@ The gate belongs to the ENTRY/ARMING lane, not the registration path.
    `try/except` that can never raise; the marker's filename must NOT match
    the sidecar glob pattern (nothing of the form `*.quote_age*.json` — use a
    clearly distinct suffix such as `.quote_age_skip.txt`); and the pinned
-   sidecar naming conventions (`schwab_chain_capture.py:122-135`, asserted by
-   `tests/test_schwab_quote_age_report.py:366-367`) stay untouched.
+   sidecar naming conventions (`sidecar_filename` at
+   `schwab_quote_age_report.py:122-135` — file corrected per round-3 P5 —
+   asserted by `tests/test_schwab_quote_age_report.py:366-367`) stay
+   untouched.
    Acceptance includes a test proving capture still exits 0 when the marker
    write ITSELF fails.
 5. A bare call to `h7_schwab_data_gate.evaluate()`
@@ -364,10 +378,11 @@ Extend it to:
    Repo-verified on main via PR #137).
 3. Compute and record BOTH figures, explicitly labeled: the existing
    unconstrained `expected_entries` AND the occupancy-constrained figure —
-   reusing the occupancy logic already reviewed and landed with the
-   cohort-9 variant work (`tools/h7_entry_variant_menu_v9_cohort9.py`,
-   Repo-verified present on main; Codex must reuse, not re-derive, and cite
-   which function in the implementation report).
+   reusing `occupancy_constrained_count(...)` at
+   `tools/h7_entry_variant_menu.py:354` (invoked at `:727-728`;
+   Repo-verified round 3 — note `tools/h7_entry_variant_menu_v9_cohort9.py`
+   only READS a precomputed value at `:147` and contains no reusable logic).
+   Codex must reuse, not re-derive.
 4. Keep the tool offline (cached inputs only; no network, no provider calls).
 
 Acceptance tests: cohort argument respected and recorded; `input_files`
