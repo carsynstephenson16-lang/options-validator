@@ -98,6 +98,16 @@ def _require(mapping: dict, fields: tuple[str, ...], label: str) -> None:
             )
 
 
+def _validate_durability_evidence(evidence: dict) -> None:
+    value = evidence["darwin_durability_verified"]
+    if type(value) is not bool:
+        raise RegistrationInputError(
+            "evidence input 'darwin_durability_verified' must be a JSON boolean"
+        )
+    if value is not True:
+        raise RegistrationInputError("Darwin durability evidence is not verified")
+
+
 def _canonical_date(value: object, label: str) -> str:
     try:
         parsed = date.fromisoformat(str(value))
@@ -211,6 +221,7 @@ def build_window_registration_event(
     """Build, but never append, the Schwab namespace registration event."""
     _require(owner, OWNER_FIELDS, "owner")
     _require(evidence, EVIDENCE_FIELDS, "evidence")
+    _validate_durability_evidence(evidence)
     if evidence["data_gate_evidence_mode"] != h7_schwab_data_gate.EVIDENCE_MODE:
         raise RegistrationInputError(
             "data_gate_evidence_mode must equal "
@@ -388,7 +399,7 @@ def build_window_registration_event(
             "receipt": feasibility,
         },
         "universe": manifest,
-        "darwin_durability_verified": bool(evidence["darwin_durability_verified"]),
+        "darwin_durability_verified": evidence["darwin_durability_verified"],
         "pre_append_state": evidence["pre_append_state"],
     }
     return {

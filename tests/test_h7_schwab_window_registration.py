@@ -218,6 +218,21 @@ def evidence(**overrides) -> dict:
 
 
 class BuilderTests(unittest.TestCase):
+    def test_durability_evidence_requires_json_boolean_true(self):
+        for invalid in ("false", "true", 0, 1, None, False):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.build_window_registration_event(
+                        owner=owner_inputs(),
+                        evidence=evidence(darwin_durability_verified=invalid),
+                    )
+
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(),
+            evidence=evidence(darwin_durability_verified=True),
+        )
+        self.assertIs(event["payload"]["darwin_durability_verified"], True)
+
     def test_builds_new_namespace_with_unchanged_frozen_rules(self):
         event = registration.build_window_registration_event(
             owner=owner_inputs(), evidence=evidence()

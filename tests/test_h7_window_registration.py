@@ -107,6 +107,21 @@ def evidence(**over):
 
 
 class BuilderTests(unittest.TestCase):
+    def test_durability_evidence_requires_json_boolean_true(self):
+        for invalid in ("false", "true", 0, 1, None, False):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(wr.RegistrationInputError):
+                    wr.build_window_registration_event(
+                        owner=owner_inputs(),
+                        evidence=evidence(darwin_durability_verified=invalid),
+                    )
+
+        event = wr.build_window_registration_event(
+            owner=owner_inputs(),
+            evidence=evidence(darwin_durability_verified=True),
+        )
+        self.assertIs(event["payload"]["darwin_durability_verified"], True)
+
     def test_builds_complete_payload(self):
         event = wr.build_window_registration_event(
             owner=owner_inputs(), evidence=evidence())
