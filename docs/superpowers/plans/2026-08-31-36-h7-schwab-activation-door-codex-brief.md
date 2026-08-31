@@ -13,7 +13,9 @@ additions beyond the plan.
 **Author:** Claude orchestrating session (PR #71 unfreeze arc; plan:
 `docs/superpowers/plans/2026-08-30-pr71-unfreeze-pr115-closeout.md`)
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT — pending independent adversarial review before hand-off
+**Status:** READY FOR HAND-OFF — independent adversarial review passed
+2026-08-31 (4 rounds: FAIL/FAIL/FAIL/PASS WITH FIXES, all fixes applied;
+receipt: `reports/2026-08-31-brief-36-adversarial-review-receipt.md`)
 **Provenance:** Repo-verified against `origin/main` @ `1d83453` unless labeled
 otherwise.
 
@@ -116,7 +118,8 @@ update of either side.
   under WP-F otherwise; rev-2 finding n2),
   `tests/test_h7_forward_scoring.py` (bare-dict board cases at `:428-444`
   gain the bar parameter; round-3 P2/P6), `tests/test_h7_real_scoring.py`,
-  `tests/test_h7_window_registration.py` (legacy WP-D half), and other
+  `tests/test_h7_window_registration.py` (legacy WP-D half),
+  `tests/test_h7_schwab_feasibility.py` (WP-I; round-4 Q2), and other
   existing test files the WPs name.
 
 **OUT (executor over-reach stops here):**
@@ -272,8 +275,10 @@ REFUSES. The legacy store's behavior must be byte-for-byte unchanged.
 
 Acceptance tests: red-green proving a caller cannot narrow the field set NOR
 name a scope (no such parameters exist — attempts are TypeErrors); Schwab
-store ⇒ Schwab fields checked; unknown-scope refusal; scope-vs-store mismatch
-refusal; legacy tests untouched-green.
+store ⇒ Schwab fields checked; unrecognized-store refusal; scope-vs-store
+mismatch refusal (meaning: the receipt's `scope_identity()` disagreeing with
+the store being activated — round-4 Q1 vocabulary fix, there is no
+scope-keyed refusal path); legacy tests untouched-green.
 
 ### WP-C — Owner-confirmed activation CLI (rebuild)
 

@@ -100,4 +100,17 @@ occupancy-constrained name in both places; WP-E.4 cites
 `schwab_quote_age_report.py:122-135`; Scope-IN names the three test files by
 path. Spot-check verdict recorded below.
 
-- Spot-check verdict: (recorded after the round)
+- Spot-check verdict: **PASS WITH FIXES.** All six P-fixes independently
+  re-verified at exact anchors; no new defects; receipt transcription of all
+  three prior rounds confirmed faithful ("no round's verdict is softened, and
+  no finding is recorded as closed that I did not close"). Remaining items
+  Q1 (WP-G acceptance vocabulary: unrecognized-STORE refusal;
+  scope-vs-store mismatch defined as the receipt's `scope_identity()`
+  disagreeing with the store being activated), Q2
+  (`tests/test_h7_schwab_feasibility.py` added to Scope-IN by path), Q3
+  (this line) — all applied in the same commit as this entry; reviewer:
+  "neither can produce a defective implementation … neither warrants a fifth
+  review round." Standing conditions restated: WP-D independently landable;
+  the implementation PR requires its own independent adversarial review
+  before the owner considers merging; this brief authorizes no registration —
+  owner fields, receipt regeneration, and merge remain with the owner.
