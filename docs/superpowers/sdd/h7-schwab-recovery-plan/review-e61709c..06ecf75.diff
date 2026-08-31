@@ -1,0 +1,1043 @@
+# Review package: e61709c..06ecf75321b397d7e359a5bf72d681e4f4422456
+
+## Commits
+06ecf75 fix(h7): bind Schwab feasibility study identity
+47f4d78 fix(h7): enforce Schwab v1 feasibility stop
+
+## Files changed
+ docs/provider-transition.md                        |   2 +-
+ .../h7_schwab_window_registration.py               | 127 ++++++++++------
+ .../2026-08-09-owner-gate-packet.md                |  81 +++++-----
+ tests/test_h7_schwab_manual_activate.py            |  38 ++++-
+ tests/test_h7_schwab_window_registration.py        | 164 +++++++++++++++++++--
+ 5 files changed, 313 insertions(+), 99 deletions(-)
+
+## Diff
+diff --git a/docs/provider-transition.md b/docs/provider-transition.md
+index f6dfa86..2708006 100644
+--- a/docs/provider-transition.md
++++ b/docs/provider-transition.md
+@@ -45,21 +45,21 @@ decision closed the current path without activation).
+ | EOD quote refresh for watch/features (H6/H8 gating) | Daily top-up path | Through 2026-07-27 | Not a valid substitute for the historical cache (live-only, not written to `.cache/chains`) | STOPS growing; existing evaluators keep working on frozen data until their as-of dates pass the cache edge | Fail closed: watches must refuse as-of dates beyond cache coverage | adapter + rule file |
+ | Intraday quotes (live) | Was ThetaData terminal | n/a | **Yes** — snapshot quotes/chains, probe-verified 2026-07-29/30 | UNCHANGED (moves to Schwab) | Already landed on `sfix` (`54b0e76`) | `reports/live_probe/2026-07-29.json` |
+ | Greeks / 30-delta selection, historical-intraday | NOT entitled on Standard tier (probe 2026-07-24: PERMISSION_DENIED) | Not in cache (EOD snapshot only) | Live Greeks yes (`option_snapshot_greeks_all`); historical no | STOPS (was already blocked) | Park intraday-entry research; live display may show Schwab Greeks | report 12 §4 |
+ | 13:00 recorder (`INTRADAY_CAPTURE_TIMES` "midday", owner-typed 2026-07-24) | Was the quote source | Receipts under `reports/intraday_capture/` accumulate | Wired into `intraday_capture.py` per `54b0e76` | UNCHANGED via Schwab | Keep recording; display-only, zero entry authority | `config.py:731`; commit 54b0e76 |
+ | D+1 close backtest convention | Needs only the v1 EOD cache | Full | Not involved | UNCHANGED | Keep; research-ledger seq 21 registers D+1 close, fill-session `entry_date`, and the terminal conservative-mark exception | `ledger/experiments.jsonl` seq 21; `PROJECT_STATE.md` P0.5 |
+ | Live dashboard display | Was ThetaData | n/a | Yes (two-lane design; live lane on Schwab) | UNCHANGED | — | commit 54b0e76 |
+ | Live entry authority | None | None | **None — by design.** Adapter is allowlisted read-only; `SCHWAB_TRADING_ENABLED=false` enforced in code | UNCHANGED (still zero) | Never changes without a new registration | setup doc "Security" |
+ | H5 paper book marking | EOD marks | Cache + Yahoo closes | Live quotes could display marks, not record official ones | DEGRADED after cache edge | Fail closed past coverage | PROJECT_STATE data notes |
+ | H6 / H8 forward evaluators | EOD chain freshness | Through 2026-07-27 | No historical substitute | DEGRADED → STOPS as as-of passes cache edge | OD-2 declined the final top-up; fail closed beyond exact cached coverage | README H6 section |
+ | H7 forward window (registered 2026-07-20) | Daily source-health + gate inputs | Earnings assertions + cached chains | Live lane only | PAUSED — do not restart now; the old namespace remains registration-only | Any later restart needs a new registration and namespace under the eight-item contract | `ledger/h7_forward/events.jsonl` (1 event); `reports/h7_forward/2026-08-02-restart-decision.md` |
+-| H7 Schwab restart candidate (`h7-forward-schwab-v1`) | Exact-session preclose package under `.cache/schwab_chains/` | Frozen history remains measurement input only | Read-only full Schwab chain | PREPARED / NOT REGISTERED / NOT ACTIVATED | Owner-approved divergence: the ~15:45 ET preclose snapshot is the session's official chain (`preclose_snapshot_v1`), not the old ThetaData EOD mark; every session must carry a byte-bound receipt/manifest | `reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` |
++| H7 Schwab restart candidate (`h7-forward-schwab-v1`) | Exact-session preclose package under `.cache/schwab_chains/` | Frozen history remains measurement input only | Read-only full Schwab chain | **STOPPED_FEASIBILITY / NOT REGISTERED / NOT ACTIVATED** | Replayed receipt projects 4.0 entries, below the required 20. The read-only capture/canary machinery remains prepared, but cannot activate v1. Any v2 experiment requires separate versioning and preregistration | `reports/h7_forward_schwab/2026-08-11-feasibility-primary-earnings.json`; `reports/h7_forward_schwab/2026-08-11-v2-arming-bottleneck-design.md` |
+ | H9 | Spent | Receipt + census on disk | n/a | UNCHANGED — one allowed run already used; never refetched | — | `reports/h9/receipt.json` |
+ | Isolated v2 capture (18 symbols × 256 sessions) | Completed under a later bounded approval | 4,608 partitions; full audit passes with three exact-byte quarantines | Impossible to extend historically through Schwab | FROZEN / UNMERGED | Keep branch parked unless the owner explicitly authorizes integration | `reports/thetadata_v2/2026-08-02-od1-full-audit.md` on `codex/od1-v2-current` |
+ | Feature-artifact rebuilds from v2 | Would depend on integrating the audited v2 path | None authorized | None | PARKED | Do not rebuild H6/H7/H8 or claim strategy evidence from the isolated branch | H7 restart decision; isolated branch report |
+ | Reproducibility after cancel | — | Everything already cached replays offline | — | UNCHANGED for existing results | Tests and backtests are offline by rule | CLAUDE.md commands note |
+ | Provenance / citations | v1 discards provider provenance (report 09 C4) | v1 limitation is permanent for v1 files | Schwab captures carry entitlement context | DEGRADED (v1 stays provenance-poor forever) | v2-only for future gates if Phase B proceeds | report 09 |
+ 
+ **The one-sentence version:** the canonical historical world is frozen at the
+ 2026-07-27 cache edge; Schwab keeps the live display lane alive and nothing
+ else, while any feature needing new historical option data remains fail-closed
+ unless a separately authorized source and registration are supplied.
+diff --git a/options_researcher/h7_schwab_window_registration.py b/options_researcher/h7_schwab_window_registration.py
+index 19121cc..d15d892 100644
+--- a/options_researcher/h7_schwab_window_registration.py
++++ b/options_researcher/h7_schwab_window_registration.py
+@@ -1,20 +1,21 @@
+ """Registration builder for the read-only Schwab H7 restart namespace.
+ 
+ BUILD-ONLY; SYNTHETIC-ONLY through :func:`register_window`; INACTIVE. This
+ module does not expose a CLI and does not activate either authority switch.
+ """
+ 
+ from __future__ import annotations
+ 
+ import math
+ from datetime import date, datetime, timezone
++from os import PathLike
+ from pathlib import Path
+ 
+ import config
+ from data.cache_runner import session_close_utc
+ from options_researcher import h7_event_ledger as ledger
+ from options_researcher import h7_window_registration as old_registration
+ from options_researcher.h7_paper_lifecycle import ActivationBoundaryError
+ from options_researcher.h7_scope import scope_identity
+ from options_researcher.h7_scoring_identity import (
+     REGISTRATION_CONTRACT_FIELD,
+@@ -22,41 +23,51 @@ from options_researcher.h7_scoring_identity import (
+     STAGE456_PARAMETER_NAMES,
+     build_scoring_identity,
+ )
+ from research.hashing import (
+     canonical_json,
+     config_hash,
+     cost_model_hash,
+     sha256_file,
+     sha256_hex,
+ )
++from tools.h7_schwab_feasibility import (
++    RECEIPT_KIND as FEASIBILITY_RECEIPT_KIND,
++)
++from tools.h7_schwab_feasibility import STACK_VERSION as FEASIBILITY_STACK_VERSION
+ 
+ NAMESPACE = "h7-forward-schwab-v1"
+ SCHWAB_FORWARD_STORE = Path("ledger/h7_forward_schwab")
+ CACHE_NAMESPACE = ".cache/schwab_chains/"
+ SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
++FEASIBILITY_OWNER_DECISION_FIELD = "H7_SCHWAB_FEASIBILITY_DECISION"
++FEASIBILITY_LOOKBACK_START = "2026-04-16"
++FEASIBILITY_LOOKBACK_END = "2026-07-27"
++FEASIBILITY_SESSION_COUNT = 70
++FEASIBILITY_TOOL_LABEL = "cached-only read-only measurement; no verdict"
+ 
+ RegistrationInputError = old_registration.RegistrationInputError
+ WindowRuleError = old_registration.WindowRuleError
+ ActivationRefused = old_registration.ActivationRefused
+ GUARD_REPORT_MAX_AGE_S = old_registration.GUARD_REPORT_MAX_AGE_S
+ 
+ OWNER_FIELDS = (
+     "H7_STAGE8_EXPLICIT_AUTHORIZATION",
+     "WINDOW_START_DECISION_SESSION",
+     "WINDOW_DECISION_SESSION_COUNT",
+     "WINDOW_END_RULE_ACKNOWLEDGED",
+     "WINDOW_MINIMUM_THREE_CALENDAR_MONTHS_PER_LANE_ACKNOWLEDGED",
+     "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH",
+     "SCHWAB_CAPTURE_COMMITMENT_THROUGH",
+     "SCHWAB_CONFIRMATION_EVIDENCE",
+     "SESSION_CHAIN_CONVENTION",
++    FEASIBILITY_OWNER_DECISION_FIELD,
+ )
+ EVIDENCE_FIELDS = (
+     "review_evidence",
+     "activation_spec_sha256",
+     "code_commit",
+     "source_health_evidence_id",
+     "data_gate_evidence_id",
+     "source_health_receipt_hash",
+     "data_gate_receipt_hash",
+     "backup_restore_receipt_hash",
+@@ -67,38 +78,43 @@ EVIDENCE_FIELDS = (
+     "feasibility_receipt",
+     "feasibility_receipt_hash",
+     "darwin_durability_verified",
+     "pre_append_state",
+ )
+ FEASIBILITY_FIELDS = (
+     "receipt_kind",
+     "provenance",
+     "lookback_start",
+     "lookback_end",
++    "lookback_sessions",
+     "stack_version",
+     "code_sha",
++    "config_hash",
++    "tool_label",
++    "universe",
+     "universe_size",
+     "window_sessions",
+     "symbol_days",
+     "full_stack_passes",
+     "base_rate",
+     "expected_entries",
++    "error_count",
++    "errors",
+     "receipt_hash",
+ )
+ 
+ 
+ def _require(mapping: dict, fields: tuple[str, ...], label: str) -> None:
+     for field in fields:
+         if mapping.get(field) in (None, ""):
+             raise RegistrationInputError(
+-                f"{label} input {field!r} is missing/None/empty; no default "
+-                "may be inferred"
++                f"{label} input {field!r} is missing/None/empty; no default may be inferred"
+             )
+ 
+ 
+ def _canonical_date(value: object, label: str) -> str:
+     try:
+         parsed = date.fromisoformat(str(value))
+     except ValueError as exc:
+         raise RegistrationInputError(f"{label} must be YYYY-MM-DD") from exc
+     if parsed.isoformat() != str(value):
+         raise RegistrationInputError(f"{label} must be canonical YYYY-MM-DD")
+@@ -109,108 +125,142 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> None:
+     if not isinstance(receipt, dict):
+         raise RegistrationInputError("feasibility_receipt must be an object")
+     _require(receipt, FEASIBILITY_FIELDS, "feasibility receipt")
+     embedded_hash = receipt["receipt_hash"]
+     unhashed = {key: value for key, value in receipt.items() if key != "receipt_hash"}
+     computed = sha256_hex(canonical_json(unhashed))
+     if embedded_hash != computed or claimed_hash != computed:
+         raise RegistrationInputError(
+             "feasibility receipt hash mismatch; payload may have been tampered"
+         )
+-    if receipt["receipt_kind"] != "h7_schwab_feasibility/v1":
++    if receipt["receipt_kind"] != FEASIBILITY_RECEIPT_KIND:
+         raise RegistrationInputError("unexpected feasibility receipt kind")
+     if receipt["provenance"] != "LLM/tool-computed":
+         raise RegistrationInputError("feasibility provenance must be LLM/tool-computed")
++    if receipt["stack_version"] != FEASIBILITY_STACK_VERSION:
++        raise RegistrationInputError("unexpected feasibility stack version")
++    if receipt["tool_label"] != FEASIBILITY_TOOL_LABEL:
++        raise RegistrationInputError("unexpected feasibility tool identity")
++    if (
++        receipt["lookback_start"] != FEASIBILITY_LOOKBACK_START
++        or receipt["lookback_end"] != FEASIBILITY_LOOKBACK_END
++        or int(receipt["lookback_sessions"]) != FEASIBILITY_SESSION_COUNT
++        or int(receipt["window_sessions"]) != FEASIBILITY_SESSION_COUNT
++    ):
++        raise RegistrationInputError("feasibility receipt is not the canonical v1 study window")
++    if receipt["config_hash"] != config_hash():
++        raise RegistrationInputError("feasibility config_hash is not current")
++    if int(receipt["error_count"]) != 0 or receipt["errors"] != []:
++        raise RegistrationInputError("feasibility receipt contains measurement errors")
++    canonical_universe = list(scope_identity()["symbols"])
++    if receipt["universe"] != canonical_universe:
++        raise RegistrationInputError("feasibility universe is not the canonical ordered H7 scope")
+     symbol_days = int(receipt["symbol_days"])
+     passes = int(receipt["full_stack_passes"])
+     sessions = int(receipt["window_sessions"])
+     universe_size = int(receipt["universe_size"])
++    if universe_size != len(canonical_universe):
++        raise RegistrationInputError("feasibility universe_size is not the canonical H7 scope size")
++    if symbol_days != FEASIBILITY_SESSION_COUNT * len(canonical_universe):
++        raise RegistrationInputError("feasibility denominator is not the canonical v1 census")
+     if symbol_days <= 0 or not 0 <= passes <= symbol_days:
+         raise RegistrationInputError("invalid feasibility counts")
+     base_rate = passes / symbol_days
+     expected = base_rate * sessions * universe_size
+     if not math.isclose(float(receipt["base_rate"]), base_rate, rel_tol=1e-12):
+         raise RegistrationInputError("feasibility base_rate arithmetic mismatch")
+     if not math.isclose(float(receipt["expected_entries"]), expected, rel_tol=1e-12):
+         raise RegistrationInputError("feasibility expected_entries arithmetic mismatch")
++    minimum = 2 * config.MIN_LOSSES_FOR_VERDICT
++    if expected < minimum:
++        raise RegistrationInputError(
++            f"feasibility expected_entries {expected} is below required {minimum}"
++        )
++
++
++def qualifying_feasibility_owner_line(receipt_hash: str) -> str:
++    """Return the exact owner line required for a qualifying v1 receipt."""
++    return (
++        "REJECT OLD 3/1050 STARVATION-RISK PATH; BIND "
++        f"{NAMESPACE} TO QUALIFYING FEASIBILITY RECEIPT {receipt_hash}"
++    )
+ 
+ 
+ def build_window_registration_event(
+     *,
+     owner: dict,
+     evidence: dict,
+     universe_manifest: dict | None = None,
+ ) -> dict:
+     """Build, but never append, the Schwab namespace registration event."""
+     _require(owner, OWNER_FIELDS, "owner")
+     _require(evidence, EVIDENCE_FIELDS, "evidence")
+     if owner["SESSION_CHAIN_CONVENTION"] != SESSION_CHAIN_CONVENTION:
+         raise RegistrationInputError(
+             f"SESSION_CHAIN_CONVENTION must equal {SESSION_CHAIN_CONVENTION!r}"
+         )
+     if evidence["cache_namespace"] != CACHE_NAMESPACE:
+-        raise RegistrationInputError(
+-            f"cache_namespace must equal {CACHE_NAMESPACE!r}"
+-        )
++        raise RegistrationInputError(f"cache_namespace must equal {CACHE_NAMESPACE!r}")
+ 
+     start = _canonical_date(owner["WINDOW_START_DECISION_SESSION"], "window start")
+     count = int(owner["WINDOW_DECISION_SESSION_COUNT"])
+     end = old_registration.derive_window_end(start, count)
+     commitment = _canonical_date(
+         owner["SCHWAB_CAPTURE_COMMITMENT_THROUGH"],
+         "Schwab capture commitment",
+     )
+     if commitment < end:
+         raise WindowRuleError(
+-            f"Schwab capture commitment only through {commitment}, short of "
+-            f"window end {end}"
++            f"Schwab capture commitment only through {commitment}, short of window end {end}"
+         )
+     verified_through = _canonical_date(
+         owner["SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH"],
+         "Schwab capture lane verified through",
+     )
+     historical_session = _canonical_date(
+         evidence["last_historical_session"], "last historical session"
+     )
+     if verified_through != historical_session:
+         raise RegistrationInputError(
+-            "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH must equal the bound last "
+-            "historical session"
++            "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH must equal the bound last historical session"
+         )
+ 
+     feasibility = evidence["feasibility_receipt"]
+     _validate_feasibility(feasibility, evidence["feasibility_receipt_hash"])
++    required_owner_line = qualifying_feasibility_owner_line(evidence["feasibility_receipt_hash"])
++    if owner[FEASIBILITY_OWNER_DECISION_FIELD] != required_owner_line:
++        raise RegistrationInputError(
++            f"{FEASIBILITY_OWNER_DECISION_FIELD} must exactly bind the "
++            "qualifying v1 feasibility receipt"
++        )
+     if int(feasibility["window_sessions"]) != count:
+         raise RegistrationInputError(
+             "feasibility window_sessions disagrees with registration window"
+         )
+ 
+     manifest = (
+         old_registration.default_universe_manifest()
+         if universe_manifest is None
+         else universe_manifest
+     )
+     old_registration._validate_universe_manifest(manifest)
+     scope = scope_identity()
+-    if manifest.get("scope_id") != scope["scope_id"] or manifest.get(
+-        "scope_hash"
+-    ) != scope["scope_hash"]:
++    if (
++        manifest.get("scope_id") != scope["scope_id"]
++        or manifest.get("scope_hash") != scope["scope_hash"]
++    ):
+         raise RegistrationInputError("universe manifest is not bound to H7 scope")
+-    if int(feasibility["universe_size"]) != len(manifest["included"]):
+-        raise RegistrationInputError(
+-            "feasibility universe_size disagrees with registration cohort"
+-        )
++    if manifest.get("included") != feasibility["universe"]:
++        raise RegistrationInputError("feasibility universe disagrees with registration cohort")
+ 
+     registered_cost_hash = cost_model_hash()
+-    stage456_parameters = {
+-        name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES
+-    }
++    stage456_parameters = {name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES}
+     scorer = {
+         "module": "options_researcher.h7_forward_scoring",
+         "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
+         "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
+     }
+     scoring_identity = build_scoring_identity(
+         stage456_parameters=stage456_parameters,
+         scorer=scorer,
+         cost_model_hash_value=registered_cost_hash,
+     )
+@@ -223,32 +273,28 @@ def build_window_registration_event(
+         "provider": {
+             "identity": evidence["provider_identity"],
+             "access": "read_only",
+             "cache_namespace": CACHE_NAMESPACE,
+             "session_chain_convention": SESSION_CHAIN_CONVENTION,
+             "confirmation_evidence": owner["SCHWAB_CONFIRMATION_EVIDENCE"],
+             "capture_commitment_through": commitment,
+         },
+         "history": {
+             "last_session": historical_session,
+-            "manifest_receipt_hash": evidence[
+-                "last_historical_manifest_receipt_hash"
+-            ],
++            "manifest_receipt_hash": evidence["last_historical_manifest_receipt_hash"],
+         },
+         "window": {
+             "start_decision_session": start,
+             "decision_session_count": count,
+             "final_decision_session": end,
+             "end_rule": "inclusive count of XNYS decision sessions from start",
+-            "three_month_proof": (
+-                f"{end} >= three-calendar-month anniversary of {start}"
+-            ),
++            "three_month_proof": (f"{end} >= three-calendar-month anniversary of {start}"),
+         },
+         "cohort_rule": "decision_session in registered window (immutable key)",
+         "frozen": {
+             "config_hash": config_hash(),
+             "cost_model_hash": registered_cost_hash,
+             "stage456_parameters": stage456_parameters,
+             "scorer": scorer,
+             REGISTRATION_CONTRACT_FIELD: scoring_identity.contract,
+             REGISTRATION_HASH_FIELD: scoring_identity.identity_hash,
+             "verdict_mapping": {
+@@ -259,23 +305,21 @@ def build_window_registration_event(
+             "survived_disclaimer": (
+                 "SURVIVED is not live-trading approval, not a profitability "
+                 "claim, and not validation"
+             ),
+         },
+         "gates": {
+             "source_health_evidence_id": evidence["source_health_evidence_id"],
+             "data_gate_evidence_id": evidence["data_gate_evidence_id"],
+             "source_health_receipt_hash": evidence["source_health_receipt_hash"],
+             "data_gate_receipt_hash": evidence["data_gate_receipt_hash"],
+-            "backup_restore_receipt_hash": evidence[
+-                "backup_restore_receipt_hash"
+-            ],
++            "backup_restore_receipt_hash": evidence["backup_restore_receipt_hash"],
+             "scope_id": scope["scope_id"],
+             "scope_hash": scope["scope_hash"],
+         },
+         "feasibility": {
+             "receipt_hash": evidence["feasibility_receipt_hash"],
+             "receipt": feasibility,
+         },
+         "universe": manifest,
+         "darwin_durability_verified": bool(evidence["darwin_durability_verified"]),
+         "pre_append_state": evidence["pre_append_state"],
+@@ -286,79 +330,77 @@ def build_window_registration_event(
+         "event_type": "window_registration",
+         "occurred_at_utc": session_close_utc(start).isoformat(),
+         "evaluation_session": start,
+         "symbol": None,
+         "lane": None,
+         "causes": [],
+         "payload": payload,
+     }
+ 
+ 
+-def _synthetic_base(base_dir: object) -> Path:
++def _synthetic_base(base_dir: str | PathLike[str] | None) -> Path:
+     if base_dir is None:
+         raise ActivationBoundaryError("an explicit synthetic base_dir is required")
+     base = Path(base_dir)
+     resolved = base.resolve(strict=False)
+     real = SCHWAB_FORWARD_STORE.resolve()
+     if resolved == real or real in resolved.parents:
+         raise ActivationBoundaryError(
+             "the real Schwab H7 store is prohibited until owner registration"
+         )
+     return base
+ 
+ 
+ def register_window(
+     *,
+     owner: dict,
+     evidence: dict,
+-    base_dir: object,
++    base_dir: str | PathLike[str] | None,
+     universe_manifest: dict | None = None,
+     clock=None,
+ ) -> ledger.AppendResult:
+     """Append only to an explicit synthetic VALID-EMPTY store."""
+     base = _synthetic_base(base_dir)
+     event = build_window_registration_event(
+         owner=owner, evidence=evidence, universe_manifest=universe_manifest
+     )
+     return ledger.append_event(event, base_dir=base, clock=clock, expected_head=None)
+ 
+ 
+ def register_window_real(
+     *,
+     owner: dict,
+     evidence: dict,
+     guard_report,
+     spec_sha256: str,
+-    spec_path: object,
+-    base_dir: object,
++    spec_path: str | PathLike[str],
++    base_dir: str | PathLike[str],
+     code_state,
+     recheck_gates,
+     universe_manifest: dict | None = None,
+     clock=None,
+     now=None,
+     max_report_age_s: int = GUARD_REPORT_MAX_AGE_S,
+ ) -> ledger.AppendResult:
+     """Owner-gated door for the first event; callers must earn every check."""
+     _require(owner, OWNER_FIELDS, "owner")
+     _require(evidence, EVIDENCE_FIELDS, "evidence")
+ 
+     if not guard_report.ready:
+         failed = [check.name for check in guard_report.checks if not check.ok]
+         raise ActivationRefused(
+             f"guard report is not a full PASS (failed: {failed or 'no checks'})"
+         )
+     base = Path(base_dir)
+     bound = str(base.resolve(strict=False))
+     if guard_report.forward_base != bound:
+-        raise ActivationRefused(
+-            "guard report is bound to a different target store"
+-        )
++        raise ActivationRefused("guard report is bound to a different target store")
+     if not guard_report.code_commit or not guard_report.built_at_utc:
+         raise ActivationRefused("guard report carries no fresh code/build identity")
+ 
+     head_now, tree_clean = code_state()
+     if not tree_clean:
+         raise ActivationRefused("working tree is dirty at append time")
+     if head_now != guard_report.code_commit:
+         raise ActivationRefused("HEAD moved since the guard report")
+     if evidence["code_commit"] != head_now:
+         raise ActivationRefused("evidence code_commit disagrees with HEAD")
+@@ -385,27 +427,20 @@ def register_window_real(
+         raise ActivationRefused("guard report is stale or from the future")
+ 
+     gates = recheck_gates()
+     if gates.get("source_health_all_healthy") is not True:
+         raise ActivationRefused("source-health recheck is not all-healthy")
+     if gates.get("data_gate_go") is not True:
+         raise ActivationRefused("data-gate recheck is not GO")
+     for key in ("source_health_evidence_id", "data_gate_evidence_id"):
+         if gates.get(key) != evidence[key]:
+             raise ActivationRefused(f"append-time {key} disagrees with evidence")
+-    if (
+-        gates.get("backup_restore_receipt_hash")
+-        != evidence["backup_restore_receipt_hash"]
+-    ):
+-        raise ActivationRefused(
+-            "append-time backup_restore_receipt_hash disagrees with evidence"
+-        )
++    if gates.get("backup_restore_receipt_hash") != evidence["backup_restore_receipt_hash"]:
++        raise ActivationRefused("append-time backup_restore_receipt_hash disagrees with evidence")
+ 
+     verified = ledger.verify(base_dir=base)
+     if not (verified.valid and verified.empty):
+-        raise ActivationRefused(
+-            "target Schwab forward store is not VALID EMPTY at append time"
+-        )
++        raise ActivationRefused("target Schwab forward store is not VALID EMPTY at append time")
+     event = build_window_registration_event(
+         owner=owner, evidence=evidence, universe_manifest=universe_manifest
+     )
+     return ledger.append_event(event, base_dir=base, clock=clock, expected_head=None)
+diff --git a/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md b/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md
+index aaafc73..e0af169 100644
+--- a/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md
++++ b/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md
+@@ -1,79 +1,94 @@
+-# DRAFT — H7 Schwab owner gate packet
++# H7 Schwab owner gate packet — stopped at feasibility
+ 
+-**Status:** PREPARED / NOT REGISTERED / NOT ACTIVATED. This document is not
+-operative owner wording and grants no authority. Live trading remains disabled.
++**Status:** STOPPED_FEASIBILITY / NOT REGISTERED / NOT ACTIVATED. The owner
++selected redesign and rejected starvation-risk acceptance for
++`h7-forward-schwab-v1`. This document is not operative owner wording and grants
++no authority. Live trading remains disabled.
+ 
+ ## Readiness snapshot
+ 
+ | Contract item | Evidence | State |
+ |---|---|---|
+ | Provider and cache identity | Schwab read-only; `.cache/schwab_chains/`; `preclose_snapshot_v1` | machinery ready; live canary absent |
+ | Exact historical boundary | Manifest + capture receipts bind exact session and every Parquet byte | machinery ready; evidence from the next valid completed-session 15:45 ET canary is absent |
+ | Scope and source health | immutable 15-name H7 scope; gate requires exact receipt package | machinery ready; the next valid completed-session 15:45 ET canary receipt is absent |
+-| Measured feasibility | `2026-08-09-feasibility.json`, hash `8b567a5eb6f1950fa32ee9ddfbd4a440e32a7e12ff7a617888e9cd67baff625c` | complete; owner decision pending |
+-| Window identity | builder derives start/count/end and freezes unchanged strategy/cost/scoring identity | prepared; owner fields blank |
+-| New store | `ledger/h7_forward_schwab/` verifies VALID-EMPTY | ready for guarded first event only |
+-| Backup/restore | Restic allow-list includes new chain/report/ledger paths | blocked pending the next valid completed-session 15:45 ET canary |
+-| Independent adversarial review | prompt below | pending orchestrating Claude/Opus |
++| Measured feasibility | `2026-08-11-feasibility-primary-earnings.json`, embedded hash `d0ffe1f900b8ffc132f757f9783d4581464aaf8b3538271fe2ae337ba1702d0c`; 4/1,050 passes; 4.0 expected entries | **FAIL: 4.0 < 20; v1 stopped** |
++| Window identity | builder preserves unchanged strategy/cost/scoring identity and now mechanically refuses projected entries below 20 | v1 cannot qualify from this receipt |
++| New store | `ledger/h7_forward_schwab/` verifies VALID-EMPTY | remains untouched; no v1 registration permitted |
++| Backup/restore | Restic allow-list includes new chain/report/ledger paths | real canary and byte-exact restore remain evidence work only; they cannot activate v1 |
++| Independent adversarial review | prior review material remains non-authoritative | cannot override the failed feasibility gate |
+ 
+ ## OD-3 template — OWNER MUST TYPE THE OPERATIVE LINE
+ 
+ `OD-3 2026-__-__: future H7 paper observations MUST USE NEW NAMESPACE h7-forward-schwab-v1. The prior registration and event remain immutable. The chosen namespace must bind provider, cache manifest, final as-of boundary, scope identity, source-health receipt, and activation date before any new observation.`
+ 
+ Blank owner action: **[NOT TYPED / NOT AUTHORIZED]**
+ 
+-## Fresh starvation measurement — decision intentionally blank
++OD-3 remains untyped and inoperative because v1 did not qualify. It must not be
++typed to authorize this failed receipt.
+ 
+-The cached-only frozen entry stack passed **3 of 1,050 symbol-days** over 70
+-common sessions (2026-04-16 through 2026-07-27), a base rate of
+-`0.002857142857142857`. For a 70-session, 15-name window, the required formula
+-projects **3.0 expected entries**. The frozen scorer remains
+-`min_losses_for_verdict: 10`. The tool emitted no acceptance verdict.
++## Feasibility result — owner selected redesign
+ 
+-Owner must choose and type exactly one path after review:
++The independently replayed, cached-only frozen entry stack passed **4 of 1,050
++symbol-days** over the exact 15-name by 70-session denominator. Its base rate
++projects **4.0 expected entries** for the proposed 70-session, 15-name window.
++The feasibility floor is `2 * min_losses_for_verdict = 20`. Therefore
++`4.0 < 20`, and v1 registration is mechanically refused.
+ 
+-- **[OWNER TYPES REDESIGN DECISION HERE]**, or
+-- **[OWNER TYPES EXPLICIT STARVATION-RISK PRE-ACCEPTANCE CLAUSE HERE, quoting 3/1050, base rate 0.002857142857142857, expected entries 3.0, and the 10-loss bar].**
++The owner selected redesign and rejected the old starvation-risk acceptance
++path. No generic starvation-risk clause can reopen `h7-forward-schwab-v1`.
+ 
+-Current state: **[NO CHOICE TYPED]**.
++Had the repaired v1 receipt qualified, registration would additionally have
++required this exact second owner-line shape, bound to that qualifying receipt's
++hash:
++
++`REJECT OLD 3/1050 STARVATION-RISK PATH; BIND h7-forward-schwab-v1 TO QUALIFYING FEASIBILITY RECEIPT <receipt_hash>`
++
++This line cannot be bound to the nonqualifying
++`d0ffe1f900b8ffc132f757f9783d4581464aaf8b3538271fe2ae337ba1702d0c`
++receipt.
++
++This current v1 candidate remains stopped and cannot be registered or activated
++from this evidence. The owner-selected next research path is the separately
++versioned v2 redesign below; it requires its own preregistration before any
++experiment.
+ 
+ ## New numeric parameter provenance
+ 
+ | Value | Role | Provenance / authority | Frozen? |
+ |---|---|---|---|
+ | 15:45 ET | official preclose capture slot | owner-approved brief, 2026-08-09 | no activation performed |
+ | minimum 2 expirations per symbol | rejects an intraday-style single-expiry package | owner-approved brief, 2026-08-09 | capture validation only |
+-| 70 lookback sessions | fresh base-rate measurement horizon | LLM-asserted implementation choice, pending owner confirmation | no |
+-| 70 proposed window sessions | projection input matching the existing planned window | LLM/tool-computed scenario; owner must type final count | no |
+-| 3 / 1,050 and 3.0 expected entries | measured result | LLM/tool-computed from cached inputs; receipt-bound | observation, not parameter |
++| 70 lookback sessions | immutable replay denominator | receipt-bound measurement input | observation, not a new v1 parameter |
++| 70 proposed window sessions | projection input matching the existing planned window | receipt-bound scenario | no registration occurred |
++| 4 / 1,050 and 4.0 expected entries | independently replayed measured result | LLM/tool-computed from cached inputs; receipt-bound | observation, not parameter |
+ | 10 minimum losses | unchanged frozen H7 scorer rule | inherited from existing registration/config | unchanged |
+ 
+-## Prepared authority change — NOT APPLIED
++## Prepared authority change — FORBIDDEN FOR v1
+ 
+ The patch is stored at
+ `reports/h7_forward_schwab/2026-08-09-authority-flip.PREPARED.patch`. It changes
+ only `exact_session_source_active=True`, `h7_active=True`, and matching tests.
+-It must not be applied or committed until all of these occur in order:
+-
+-1. The next valid completed-session 15:45 ET canary is 15/15 and its manifest verifies.
+-2. Owner types OD-3 and the starvation decision.
+-3. Backup/restore drill succeeds byte-for-byte.
+-4. Independent adversarial review is resolved.
+-5. Owner registers `h7-forward-schwab-v1` through the guarded door.
+-6. Owner explicitly authorizes the authority-flip commit.
++It must not be applied or committed for `h7-forward-schwab-v1`. The failed
++feasibility receipt cannot be cured by a 15/15 canary, restore drill, owner
++wording, or review. The read-only capture lane remains operationally prepared;
++the next real 15:45 ET canary and byte-exact restore are still required evidence
++work, but neither can register or activate v1.
+ 
+ ## Adversarial review request for orchestrating Claude/Opus
+ 
+ > Review branch `feat/h7-forward-schwab-v1` adversarially: show me how this
+ > could be lying. Focus on look-ahead, hidden prior-day/intraday fallback,
+ > partial-universe acceptance, receipt/manifest/hash drift, Schwab field
+ > normalization, feasibility denominator and stack equivalence, guarded-door
+ > bypass, old-ledger mutation, backup omissions, and any path that activates
+ > H7 or trading before owner authorization. Do not merely confirm tests pass.
+ > Return blocking findings first with file/line evidence and an explicit
+ > merge/registration recommendation.
+ 
+-## Owner-only actions remaining
++## Design-only next path
+ 
+-OD-3 typing; starvation accept/redesign; registration through the guarded
+-door; authority-flip authorization/commit; any merge to main.
++See `reports/h7_forward_schwab/2026-08-11-v2-arming-bottleneck-design.md`.
++Any v2 work requires a separate namespace, entry-stack version, feasibility
++receipt, and preregistration before experiments. The design itself authorizes
++no experiment, registration, authority change, ops advance, or ritual run.
+diff --git a/tests/test_h7_schwab_manual_activate.py b/tests/test_h7_schwab_manual_activate.py
+index 033d57f..99c0e0b 100644
+--- a/tests/test_h7_schwab_manual_activate.py
++++ b/tests/test_h7_schwab_manual_activate.py
+@@ -18,71 +18,100 @@ from research.hashing import (
+     config_hash,
+     diagnostic_source_hash,
+     sha256_file,
+     sha256_hex,
+ )
+ from research.receipts import make_receipt
+ from tools import h7_schwab_manual_activate as cli
+ 
+ SESSION = "2026-08-10"
+ REQUESTED = "2026-08-11"
++CANONICAL_UNIVERSE = [
++    "AMD",
++    "AMZN",
++    "AVGO",
++    "CEG",
++    "CRWV",
++    "ET",
++    "IREN",
++    "MSFT",
++    "NOW",
++    "NVDA",
++    "PLTR",
++    "SMCI",
++    "TEM",
++    "USAR",
++    "VST",
++]
+ 
+ 
+ def _write_json(path: Path, value: dict) -> Path:
+     path.write_text(json.dumps(value), encoding="utf-8")
+     return path
+ 
+ 
+ def _feasibility() -> dict:
+     payload = {
+         "receipt_kind": "h7_schwab_feasibility/v1",
+         "provenance": "LLM/tool-computed",
+         "lookback_start": "2026-04-16",
+         "lookback_end": "2026-07-27",
+-        "stack_version": "h7-frozen-entry-stack/v1",
++        "lookback_sessions": 70,
++        "stack_version": "h7-frozen-entry-stack-plus-board/v1",
+         "code_sha": "a" * 40,
++        "config_hash": "80fe2bf649e16e9b18f7cb7a9ccc26b9b01bcb852fcb6998c7b14611934a4d49",
++        "error_count": 0,
++        "errors": [],
++        "tool_label": "cached-only read-only measurement; no verdict",
++        "universe": CANONICAL_UNIVERSE,
+         "universe_size": 15,
+         "window_sessions": 70,
+         "symbol_days": 1050,
+-        "full_stack_passes": 3,
+-        "base_rate": 3 / 1050,
+-        "expected_entries": 3.0,
++        "full_stack_passes": 20,
++        "base_rate": 20 / 1050,
++        "expected_entries": 20.0,
+     }
+     return {**payload, "receipt_hash": sha256_hex(canonical_json(payload))}
+ 
+ 
+ class SchwabManualActivateTests(unittest.TestCase):
+     def setUp(self):
+         self.temp = tempfile.TemporaryDirectory()
+         self.addCleanup(self.temp.cleanup)
+         self.root = Path(self.temp.name)
+         self.store = self.root / "ledger"
+         self.names = list(scope_identity()["symbols"])
+         self.head = "b" * 40
+ 
+         self.spec = self.root / "activation.md"
+         self.spec.write_text("reviewed Schwab activation fixture\n", encoding="utf-8")
+         self.spec_sha = sha256_file(self.spec)
++        feasibility = _feasibility()
+         self.owner_path = _write_json(
+             self.root / "owner.json",
+             {
+                 "H7_STAGE8_EXPLICIT_AUTHORIZATION": "owner-typed fixture",
+                 "WINDOW_START_DECISION_SESSION": "2026-08-11",
+                 "WINDOW_DECISION_SESSION_COUNT": 70,
+                 "WINDOW_END_RULE_ACKNOWLEDGED": "owner-typed fixture",
+                 "WINDOW_MINIMUM_THREE_CALENDAR_MONTHS_PER_LANE_ACKNOWLEDGED": (
+                     "owner-typed fixture"
+                 ),
+                 "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH": SESSION,
+                 "SCHWAB_CAPTURE_COMMITMENT_THROUGH": "2026-12-31",
+                 "SCHWAB_CONFIRMATION_EVIDENCE": "owner-typed fixture",
+                 "SESSION_CHAIN_CONVENTION": "preclose_snapshot_v1",
++                "H7_SCHWAB_FEASIBILITY_DECISION": (
++                    "REJECT OLD 3/1050 STARVATION-RISK PATH; BIND "
++                    "h7-forward-schwab-v1 TO QUALIFYING FEASIBILITY RECEIPT "
++                    f"{feasibility['receipt_hash']}"
++                ),
+             },
+         )
+         source = make_receipt(
+             "source_health",
+             {
+                 "evaluation_session": SESSION,
+                 "scope": scope_identity(),
+                 "healthy_count": 15,
+                 "unhealthy_count": 0,
+                 "unhealthy_symbols": [],
+@@ -153,21 +182,20 @@ class SchwabManualActivateTests(unittest.TestCase):
+                 "snapshot": "snapshot-abc",
+                 "snapshot_id": "snapshot-abc",
+                 "backup_receipt_hash": backup_receipt["receipt_hash"],
+                 "scope": scope_identity(),
+                 "restored_inventory": backup_receipt["input_files"],
+                 "verification": {"ok": True},
+             },
+         )
+         self.restore_path = _write_json(self.root / "restore.json", restore_receipt)
+ 
+-        feasibility = _feasibility()
+         self.evidence_path = _write_json(
+             self.root / "evidence.json",
+             {
+                 "review_evidence": "independent review PASS fixture",
+                 "activation_spec_sha256": self.spec_sha,
+                 "code_commit": self.head,
+                 "source_health_evidence_id": source["receipt_hash"],
+                 "data_gate_evidence_id": data_receipt["receipt_hash"],
+                 "source_health_receipt_hash": source["receipt_hash"],
+                 "data_gate_receipt_hash": data_receipt["receipt_hash"],
+diff --git a/tests/test_h7_schwab_window_registration.py b/tests/test_h7_schwab_window_registration.py
+index a601659..f1d3010 100644
+--- a/tests/test_h7_schwab_window_registration.py
++++ b/tests/test_h7_schwab_window_registration.py
+@@ -5,52 +5,83 @@ from __future__ import annotations
+ import tempfile
+ import unittest
+ from datetime import datetime
+ from pathlib import Path
+ 
+ from options_researcher import h7_activation_guard as activation_guard
+ from options_researcher import h7_event_ledger as ledger
+ from options_researcher import h7_schwab_window_registration as registration
+ from research.hashing import canonical_json, sha256_file, sha256_hex
+ 
++CANONICAL_UNIVERSE = [
++    "AMD",
++    "AMZN",
++    "AVGO",
++    "CEG",
++    "CRWV",
++    "ET",
++    "IREN",
++    "MSFT",
++    "NOW",
++    "NVDA",
++    "PLTR",
++    "SMCI",
++    "TEM",
++    "USAR",
++    "VST",
++]
++
+ 
+ def feasibility_receipt(**overrides) -> dict:
+     payload = {
+         "receipt_kind": "h7_schwab_feasibility/v1",
+         "provenance": "LLM/tool-computed",
+-        "lookback_start": "2026-05-08",
+-        "lookback_end": "2026-08-07",
+-        "stack_version": "h7-frozen-entry-stack/v1",
++        "lookback_start": "2026-04-16",
++        "lookback_end": "2026-07-27",
++        "lookback_sessions": 70,
++        "stack_version": "h7-frozen-entry-stack-plus-board/v1",
+         "code_sha": "b" * 40,
++        "config_hash": "80fe2bf649e16e9b18f7cb7a9ccc26b9b01bcb852fcb6998c7b14611934a4d49",
++        "error_count": 0,
++        "errors": [],
++        "tool_label": "cached-only read-only measurement; no verdict",
++        "universe": CANONICAL_UNIVERSE,
+         "universe_size": 15,
+         "window_sessions": 70,
+-        "symbol_days": 540,
+-        "full_stack_passes": 3,
+-        "base_rate": 3 / 540,
+-        "expected_entries": (3 / 540) * 70 * 15,
++        "symbol_days": 1050,
++        "full_stack_passes": 20,
++        "base_rate": 20 / 1050,
++        "expected_entries": 20.0,
+     }
+     payload.update(overrides)
+     payload["receipt_hash"] = sha256_hex(canonical_json(payload))
+     return payload
+ 
+ 
+-def owner_inputs(**overrides) -> dict:
++def owner_inputs(*, receipt_hash: str | None = None, **overrides) -> dict:
++    if receipt_hash is None:
++        receipt_hash = feasibility_receipt()["receipt_hash"]
+     values = {
+         "H7_STAGE8_EXPLICIT_AUTHORIZATION": "owner-typed placeholder",
+         "WINDOW_START_DECISION_SESSION": "2026-08-10",
+         "WINDOW_DECISION_SESSION_COUNT": 70,
+         "WINDOW_END_RULE_ACKNOWLEDGED": "owner-typed placeholder",
+         "WINDOW_MINIMUM_THREE_CALENDAR_MONTHS_PER_LANE_ACKNOWLEDGED": "owner-typed placeholder",
+         "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH": "2026-08-07",
+         "SCHWAB_CAPTURE_COMMITMENT_THROUGH": "2026-12-31",
+         "SCHWAB_CONFIRMATION_EVIDENCE": "owner-typed placeholder",
+         "SESSION_CHAIN_CONVENTION": "preclose_snapshot_v1",
++        "H7_SCHWAB_FEASIBILITY_DECISION": (
++            "REJECT OLD 3/1050 STARVATION-RISK PATH; BIND "
++            "h7-forward-schwab-v1 TO QUALIFYING FEASIBILITY RECEIPT "
++            f"{receipt_hash}"
++        ),
+     }
+     values.update(overrides)
+     return values
+ 
+ 
+ def evidence(**overrides) -> dict:
+     receipt = feasibility_receipt()
+     values = {
+         "review_evidence": "external adversarial review placeholder",
+         "activation_spec_sha256": "a" * 64,
+@@ -90,23 +121,21 @@ class BuilderTests(unittest.TestCase):
+         self.assertEqual(payload["history"]["last_session"], "2026-08-07")
+         self.assertEqual(
+             payload["feasibility"]["receipt"]["provenance"],
+             "LLM/tool-computed",
+         )
+ 
+     def test_missing_owner_field_refuses(self):
+         owner = owner_inputs()
+         del owner["SCHWAB_CONFIRMATION_EVIDENCE"]
+         with self.assertRaises(registration.RegistrationInputError):
+-            registration.build_window_registration_event(
+-                owner=owner, evidence=evidence()
+-            )
++            registration.build_window_registration_event(owner=owner, evidence=evidence())
+ 
+     def test_capture_commitment_short_of_window_end_refuses(self):
+         with self.assertRaises(registration.WindowRuleError):
+             registration.build_window_registration_event(
+                 owner=owner_inputs(SCHWAB_CAPTURE_COMMITMENT_THROUGH="2026-09-01"),
+                 evidence=evidence(),
+             )
+ 
+     def test_wrong_convention_refuses(self):
+         with self.assertRaises(registration.RegistrationInputError):
+@@ -120,20 +149,109 @@ class BuilderTests(unittest.TestCase):
+         receipt["full_stack_passes"] = 999
+         with self.assertRaises(registration.RegistrationInputError):
+             registration.build_window_registration_event(
+                 owner=owner_inputs(),
+                 evidence=evidence(
+                     feasibility_receipt=receipt,
+                     feasibility_receipt_hash=receipt["receipt_hash"],
+                 ),
+             )
+ 
++    def test_exactly_twenty_expected_entries_is_accepted(self):
++        receipt = feasibility_receipt()
++        event = registration.build_window_registration_event(
++            owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
++            evidence=evidence(
++                feasibility_receipt=receipt,
++                feasibility_receipt_hash=receipt["receipt_hash"],
++            ),
++        )
++
++        self.assertEqual(event["payload"]["feasibility"]["receipt"]["expected_entries"], 20.0)
++
++    def test_qualifying_receipt_requires_exact_hash_and_namespace_owner_line(self):
++        receipt = feasibility_receipt()
++        exact = owner_inputs(receipt_hash=receipt["receipt_hash"])
++        wrong_lines = {
++            "missing": None,
++            "stale hash": exact["H7_SCHWAB_FEASIBILITY_DECISION"].replace(
++                receipt["receipt_hash"], "0" * 64
++            ),
++            "wrong namespace": exact["H7_SCHWAB_FEASIBILITY_DECISION"].replace(
++                "h7-forward-schwab-v1", "h7-forward-schwab-v2"
++            ),
++        }
++        for label, decision in wrong_lines.items():
++            with self.subTest(label=label):
++                owner = owner_inputs(receipt_hash=receipt["receipt_hash"])
++                if decision is None:
++                    del owner["H7_SCHWAB_FEASIBILITY_DECISION"]
++                else:
++                    owner["H7_SCHWAB_FEASIBILITY_DECISION"] = decision
++                with self.assertRaises(registration.RegistrationInputError):
++                    registration.build_window_registration_event(
++                        owner=owner,
++                        evidence=evidence(
++                            feasibility_receipt=receipt,
++                            feasibility_receipt_hash=receipt["receipt_hash"],
++                        ),
++                    )
++
++    def test_shortened_denominator_cannot_manufacture_twenty_expected_entries(self):
++        receipt = feasibility_receipt(
++            symbol_days=210,
++            full_stack_passes=4,
++            base_rate=4 / 210,
++            expected_entries=20.0,
++        )
++        with self.assertRaises(registration.RegistrationInputError):
++            registration.build_window_registration_event(
++                owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
++                evidence=evidence(
++                    feasibility_receipt=receipt,
++                    feasibility_receipt_hash=receipt["receipt_hash"],
++                ),
++            )
++
++    def test_receipt_universe_must_equal_canonical_manifest_universe(self):
++        receipt = feasibility_receipt(universe=["FAKE1", "FAKE2"])
++        with self.assertRaises(registration.RegistrationInputError):
++            registration.build_window_registration_event(
++                owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
++                evidence=evidence(
++                    feasibility_receipt=receipt,
++                    feasibility_receipt_hash=receipt["receipt_hash"],
++                ),
++            )
++
++    def test_alternate_study_identity_refuses(self):
++        for label, overrides in (
++            ("stack", {"stack_version": "alternate-entry-stack/v1"}),
++            ("tool", {"tool_label": "different measurement tool"}),
++            ("lookback", {"lookback_sessions": 69}),
++            ("start", {"lookback_start": "2026-04-17"}),
++            ("end", {"lookback_end": "2026-07-28"}),
++            ("errors", {"error_count": 1}),
++            ("hidden errors", {"errors": [{"error": "fixture"}]}),
++            ("config", {"config_hash": "0" * 64}),
++        ):
++            with self.subTest(label=label):
++                receipt = feasibility_receipt(**overrides)
++                with self.assertRaises(registration.RegistrationInputError):
++                    registration.build_window_registration_event(
++                        owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
++                        evidence=evidence(
++                            feasibility_receipt=receipt,
++                            feasibility_receipt_hash=receipt["receipt_hash"],
++                        ),
++                    )
++
+     def test_measurement_code_sha_may_precede_registration_commit(self):
+         event = registration.build_window_registration_event(
+             owner=owner_inputs(), evidence=evidence(code_commit="c" * 40)
+         )
+         self.assertEqual(
+             event["payload"]["feasibility"]["receipt"]["code_sha"],
+             "b" * 40,
+         )
+ 
+ 
+@@ -145,24 +263,42 @@ class SyntheticAppendTests(unittest.TestCase):
+ 
+     def test_happy_path_registers_and_verifies_temp_store(self):
+         result = registration.register_window(
+             owner=owner_inputs(), evidence=evidence(), base_dir=self.store
+         )
+         self.assertEqual(result.seq, 0)
+         verified = ledger.verify(self.store)
+         self.assertTrue(verified.valid)
+         self.assertEqual(verified.count, 1)
+ 
++    def test_nonqualifying_hash_correct_receipts_refuse_before_append(self):
++        for passes in (3, 4):
++            with self.subTest(passes=passes):
++                receipt = feasibility_receipt(
++                    full_stack_passes=passes,
++                    base_rate=passes / 1050,
++                    expected_entries=float(passes),
++                )
++                store = Path(self.temp.name) / f"h7_forward_schwab_{passes}"
++                with self.assertRaises(registration.RegistrationInputError):
++                    registration.register_window(
++                        owner=owner_inputs(receipt_hash=receipt["receipt_hash"]),
++                        evidence=evidence(
++                            feasibility_receipt=receipt,
++                            feasibility_receipt_hash=receipt["receipt_hash"],
++                        ),
++                        base_dir=store,
++                    )
++                self.assertTrue(ledger.verify(store).empty)
++
+     def test_non_empty_target_refuses(self):
+-        registration.register_window(
+-            owner=owner_inputs(), evidence=evidence(), base_dir=self.store
+-        )
++        registration.register_window(owner=owner_inputs(), evidence=evidence(), base_dir=self.store)
+         with self.assertRaises(ledger.LedgerHeadConflictError):
+             registration.register_window(
+                 owner=owner_inputs(), evidence=evidence(), base_dir=self.store
+             )
+ 
+ 
+ class GuardedDoorTests(unittest.TestCase):
+     def setUp(self):
+         self.temp = tempfile.TemporaryDirectory()
+         self.addCleanup(self.temp.cleanup)
