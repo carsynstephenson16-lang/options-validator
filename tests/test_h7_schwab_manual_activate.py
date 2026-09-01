@@ -64,12 +64,8 @@ class SchwabManualActivateTests(unittest.TestCase):
 
         self.data = _verified_data_gate_receipt()
         write_immutable_receipt(self.data, self.data_path)
-        self.source_path = Path(
-            self.data["source_health_receipt_path"]
-        )
-        self.source = load_receipt(
-            self.source_path, expected_type="source_health"
-        )
+        self.source_path = Path(self.data["source_health_receipt_path"])
+        self.source = load_receipt(self.source_path, expected_type="source_health")
         self.backup = make_receipt(
             "backup_restore",
             {
@@ -79,16 +75,12 @@ class SchwabManualActivateTests(unittest.TestCase):
             },
         )
         write_immutable_receipt(self.backup, self.backup_path)
-        self.owner = owner_inputs(
-            H7_STAGE8_EXPLICIT_AUTHORIZATION=authorization_text()
-        )
+        self.owner = owner_inputs(H7_STAGE8_EXPLICIT_AUTHORIZATION=authorization_text())
         self.evidence = evidence(
             activation_spec_sha256=sha256_file(self.spec),
             code_commit=_head(),
         )
-        self.evidence_path.write_text(
-            json.dumps(self.evidence), encoding="utf-8"
-        )
+        self.evidence_path.write_text(json.dumps(self.evidence), encoding="utf-8")
 
     def test_authorization_requires_od3_and_row7_content(self):
         cli.validate_authorization_text(authorization_text())
@@ -98,18 +90,12 @@ class SchwabManualActivateTests(unittest.TestCase):
             cli.QUOTE_AGE_EVIDENCE_CITATION,
         ):
             with self.subTest(missing=missing):
-                with self.assertRaisesRegex(
-                    ValueError, "authorization text"
-                ):
-                    cli.validate_authorization_text(
-                        authorization_text().replace(missing, "")
-                    )
+                with self.assertRaisesRegex(ValueError, "authorization text"):
+                    cli.validate_authorization_text(authorization_text().replace(missing, ""))
 
     def test_cli_has_no_store_universe_or_trim_escape_hatch(self):
         actions = {
-            option: action
-            for action in cli._parser()._actions
-            for option in action.option_strings
+            option: action for action in cli._parser()._actions for option in action.option_strings
         }
         for forbidden in ("--store", "--universe", "--trim-unhealthy"):
             self.assertNotIn(forbidden, actions)
@@ -146,15 +132,11 @@ class SchwabManualActivateTests(unittest.TestCase):
         mapping = dict(guard.OWNER_FIELDS_BY_STORE)
         mapping[self.store.resolve()] = registration.OWNER_FIELDS
         with (
-            mock.patch.object(
-                guard, "OWNER_FIELDS_BY_STORE", mapping
-            ),
+            mock.patch.object(guard, "OWNER_FIELDS_BY_STORE", mapping),
             mock.patch.object(
                 guard,
                 "_working_tree_clean",
-                return_value=guard.Check(
-                    "working_tree_clean", True, "clean"
-                ),
+                return_value=guard.Check("working_tree_clean", True, "clean"),
             ),
         ):
             result = cli.activate(
@@ -174,13 +156,9 @@ class SchwabManualActivateTests(unittest.TestCase):
         events = ledger.read_events(self.store)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].event_type, "window_registration")
+        self.assertEqual(events[0].payload["namespace"], registration.NAMESPACE)
         self.assertEqual(
-            events[0].payload["namespace"], registration.NAMESPACE
-        )
-        self.assertEqual(
-            events[0].payload["owner_authorization"][
-                "H7_STAGE8_EXPLICIT_AUTHORIZATION"
-            ],
+            events[0].payload["owner_authorization"]["H7_STAGE8_EXPLICIT_AUTHORIZATION"],
             authorization_text(),
         )
 
@@ -190,9 +168,7 @@ class SchwabManualActivateTests(unittest.TestCase):
             "validate_durable_receipt",
             side_effect=ValueError("forced stale receipt"),
         ):
-            with self.assertRaisesRegex(
-                ValueError, "forced stale receipt"
-            ):
+            with self.assertRaisesRegex(ValueError, "forced stale receipt"):
                 cli.activate(
                     owner=self.owner,
                     evidence_path=self.evidence_path,

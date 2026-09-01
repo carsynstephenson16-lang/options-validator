@@ -41,13 +41,8 @@ def _invalid_result(
         "schema_version": SCHEMA_VERSION,
         "evaluation_session": session,
         "threshold_minutes": threshold,
-        "metric_path": (
-            "symbols.<symbol>.columns.timestamp.selectable."
-            "age_minutes.max"
-        ),
-        "sidecar_path": (
-            str(sidecar_path) if sidecar_path is not None else None
-        ),
+        "metric_path": ("symbols.<symbol>.columns.timestamp.selectable.age_minutes.max"),
+        "sidecar_path": (str(sidecar_path) if sidecar_path is not None else None),
         "sidecar_sha256": None,
         "universe": list(names),
         "go_count": 0,
@@ -85,13 +80,9 @@ def evaluate_schwab_quote_age(
 ) -> dict:
     """Evaluate one capture sidecar at the owner-typed quote-age threshold."""
     names = _included_names(included_symbols)
-    threshold = getattr(
-        config, "H7_SCHWAB_MAX_SELECTABLE_QUOTE_AGE_MINUTES", None
-    )
+    threshold = getattr(config, "H7_SCHWAB_MAX_SELECTABLE_QUOTE_AGE_MINUTES", None)
     session = (
-        data_gate_receipt.get("evaluation_session")
-        if isinstance(data_gate_receipt, dict)
-        else None
+        data_gate_receipt.get("evaluation_session") if isinstance(data_gate_receipt, dict) else None
     )
     if (
         isinstance(threshold, bool)
@@ -161,9 +152,7 @@ def evaluate_schwab_quote_age(
             error="included symbols do not share one capture receipt",
         )
     capture_path = next(iter(capture_paths))
-    sidecar_path = capture_path.with_name(
-        sidecar_filename(capture_path.name)
-    )
+    sidecar_path = capture_path.with_name(sidecar_filename(capture_path.name))
     try:
         report = json.loads(sidecar_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -201,9 +190,9 @@ def evaluate_schwab_quote_age(
     rows: dict[str, dict] = {}
     for symbol in names:
         try:
-            age = report["symbols"][symbol]["columns"]["timestamp"][
-                "selectable"
-            ]["age_minutes"]["max"]
+            age = report["symbols"][symbol]["columns"]["timestamp"]["selectable"]["age_minutes"][
+                "max"
+            ]
             if (
                 isinstance(age, bool)
                 or not isinstance(age, (int, float))
@@ -225,9 +214,7 @@ def evaluate_schwab_quote_age(
         rows[symbol] = {
             "symbol": symbol,
             "verdict": "NO_GO" if over else "GO",
-            "reason_codes": [
-                QUOTE_AGE_OVER_THRESHOLD if over else QUOTE_AGE_GO
-            ],
+            "reason_codes": [QUOTE_AGE_OVER_THRESHOLD if over else QUOTE_AGE_GO],
             "worst_selectable_quote_age_minutes": number,
             "error": None,
         }
@@ -237,18 +224,13 @@ def evaluate_schwab_quote_age(
         "schema_version": SCHEMA_VERSION,
         "evaluation_session": session,
         "threshold_minutes": threshold,
-        "metric_path": (
-            "symbols.<symbol>.columns.timestamp.selectable."
-            "age_minutes.max"
-        ),
+        "metric_path": ("symbols.<symbol>.columns.timestamp.selectable.age_minutes.max"),
         "sidecar_path": str(sidecar_path),
         "sidecar_sha256": sha256_file(sidecar_path),
         "universe": list(names),
         "go_count": go_count,
         "no_go_count": len(names) - go_count,
-        "whole_universe_verdict": (
-            "GO" if go_count == len(names) else "NO_GO"
-        ),
+        "whole_universe_verdict": ("GO" if go_count == len(names) else "NO_GO"),
         "symbols": rows,
         "error": None,
     }

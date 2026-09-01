@@ -84,8 +84,7 @@ def validate_authorization_text(value: object) -> str:
     ]
     if missing:
         raise ValueError(
-            "authorization text is missing exact OD-3 or quote-age "
-            f"commitment content: {missing!r}"
+            f"authorization text is missing exact OD-3 or quote-age commitment content: {missing!r}"
         )
     return value
 
@@ -99,17 +98,11 @@ def _validate_owner(owner: dict) -> None:
         if owner.get(field) in (None, "")
     ]
     if missing:
-        raise ValueError(
-            f"owner inputs must be typed at use time; blank: {missing}"
-        )
-    validate_authorization_text(
-        owner["H7_STAGE8_EXPLICIT_AUTHORIZATION"]
-    )
+        raise ValueError(f"owner inputs must be typed at use time; blank: {missing}")
+    validate_authorization_text(owner["H7_STAGE8_EXPLICIT_AUTHORIZATION"])
 
 
-def _validate_backup(
-    backup: dict, *, completed_session: str
-) -> None:
+def _validate_backup(backup: dict, *, completed_session: str) -> None:
     if verify_receipt(backup):
         raise ValueError("backup/restore receipt is tampered")
     if (
@@ -128,13 +121,9 @@ def _validate_receipt_chain(
     backup_restore_path: Path,
     completed_session: str,
 ) -> tuple[dict, dict, dict]:
-    source = load_receipt(
-        source_health_path, expected_type="source_health"
-    )
+    source = load_receipt(source_health_path, expected_type="source_health")
     data = load_receipt(data_gate_path, expected_type="data_gate")
-    backup = load_receipt(
-        backup_restore_path, expected_type="backup_restore"
-    )
+    backup = load_receipt(backup_restore_path, expected_type="backup_restore")
     expected_symbols = h7_data_gate.validate_durable_receipt(data)
     current_scope = scope_identity()
     if (
@@ -143,28 +132,19 @@ def _validate_receipt_chain(
         or data.get("evaluation_session") != completed_session
         or source.get("scope") != current_scope
         or source.get("evaluation_session") != completed_session
-        or source.get("receipt_hash")
-        != data.get("source_health_receipt_hash")
+        or source.get("receipt_hash") != data.get("source_health_receipt_hash")
     ):
-        raise ValueError(
-            "source-health/data-gate receipt chain is stale or mismatched"
-        )
+        raise ValueError("source-health/data-gate receipt chain is stale or mismatched")
     embedded_source = data.get("source_health_receipt_path")
-    if (
-        not isinstance(embedded_source, str)
-        or Path(embedded_source).resolve(strict=False)
-        != Path(source_health_path).resolve(strict=False)
-    ):
-        raise ValueError(
-            "data gate is linked to a different source-health receipt"
-        )
+    if not isinstance(embedded_source, str) or Path(embedded_source).resolve(strict=False) != Path(
+        source_health_path
+    ).resolve(strict=False):
+        raise ValueError("data gate is linked to a different source-health receipt")
     _validate_backup(backup, completed_session=completed_session)
     return source, data, backup
 
 
-def _assemble_evidence(
-    *, raw: dict, source: dict, data: dict
-) -> dict:
+def _assemble_evidence(*, raw: dict, source: dict, data: dict) -> dict:
     return {
         **raw,
         "source_health_evidence_id": source["receipt_hash"],
@@ -182,16 +162,14 @@ def _assemble_evidence(
 def _included_health(source: dict) -> bool:
     symbols = source.get("symbols")
     return isinstance(symbols, dict) and all(
-        symbols.get(symbol, {}).get("healthy") is True
-        for symbol in registration.REGISTERED_COHORT
+        symbols.get(symbol, {}).get("healthy") is True for symbol in registration.REGISTERED_COHORT
     )
 
 
 def _included_data_go(data: dict) -> bool:
     symbols = data.get("symbols")
     return isinstance(symbols, dict) and all(
-        symbols.get(symbol, {}).get("verdict") == "GO"
-        for symbol in registration.REGISTERED_COHORT
+        symbols.get(symbol, {}).get("verdict") == "GO" for symbol in registration.REGISTERED_COHORT
     )
 
 
@@ -211,13 +189,8 @@ def _make_recheck(
             backup_restore_path=backup_restore_path,
             completed_session=completed_session,
         )
-        if (
-            source.get("receipt_hash") != source_hash
-            or data.get("receipt_hash") != data_hash
-        ):
-            raise registration.ActivationRefused(
-                "receipt hash changed between assembly and append"
-            )
+        if source.get("receipt_hash") != source_hash or data.get("receipt_hash") != data_hash:
+            raise registration.ActivationRefused("receipt hash changed between assembly and append")
         return {
             "source_health_all_healthy": _included_health(source),
             "data_gate_go": _included_data_go(data),
@@ -253,29 +226,19 @@ def activate(
         backup_restore_path=Path(backup_restore_path),
         completed_session=completed_session,
     )
-    evidence = _assemble_evidence(
-        raw=raw_evidence, source=source, data=data
-    )
+    evidence = _assemble_evidence(raw=raw_evidence, source=source, data=data)
     spec_sha256 = sha256_file(Path(spec_path))
     if evidence.get("activation_spec_sha256") != spec_sha256:
-        raise ValueError(
-            "activation spec hash disagrees with reviewed evidence"
-        )
+        raise ValueError("activation spec hash disagrees with reviewed evidence")
 
     # Pre-delegation validation of WP-A/B/D/F and every builder refusal.
-    registration.build_window_registration_event(
-        owner=owner, evidence=evidence
-    )
+    registration.build_window_registration_event(owner=owner, evidence=evidence)
 
     current_scope = scope_identity()
     report = guard.activation_preconditions(
         forward_base=forward_base,
         source_health_by_symbol={
-            symbol: bool(
-                source.get("symbols", {})
-                .get(symbol, {})
-                .get("healthy", False)
-            )
+            symbol: bool(source.get("symbols", {}).get(symbol, {}).get("healthy", False))
             for symbol in current_scope["symbols"]
         },
         universe=tuple(current_scope["symbols"]),
@@ -309,42 +272,24 @@ def activate(
         max_report_age_s=max_report_age_s,
     )
     if result.seq != 0:
-        raise RuntimeError(
-            "activation wrote something other than the first event"
-        )
+        raise RuntimeError("activation wrote something other than the first event")
     return result
 
 
 def _owner_from_args(args: argparse.Namespace) -> dict:
     return {
-        "H7_STAGE8_EXPLICIT_AUTHORIZATION": (
-            args.h7_stage8_explicit_authorization
-        ),
-        "WINDOW_START_DECISION_SESSION": (
-            args.window_start_decision_session
-        ),
-        "WINDOW_DECISION_SESSION_COUNT": (
-            args.window_decision_session_count
-        ),
-        "WINDOW_END_RULE_ACKNOWLEDGED": (
-            args.window_end_rule_acknowledged
-        ),
+        "H7_STAGE8_EXPLICIT_AUTHORIZATION": (args.h7_stage8_explicit_authorization),
+        "WINDOW_START_DECISION_SESSION": (args.window_start_decision_session),
+        "WINDOW_DECISION_SESSION_COUNT": (args.window_decision_session_count),
+        "WINDOW_END_RULE_ACKNOWLEDGED": (args.window_end_rule_acknowledged),
         "WINDOW_MINIMUM_THREE_CALENDAR_MONTHS_PER_LANE_ACKNOWLEDGED": (
             args.window_minimum_three_calendar_months_per_lane_acknowledged
         ),
-        "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH": (
-            args.schwab_capture_lane_verified_through
-        ),
-        "SCHWAB_CAPTURE_COMMITMENT_THROUGH": (
-            args.schwab_capture_commitment_through
-        ),
-        "SCHWAB_CONFIRMATION_EVIDENCE": (
-            args.schwab_confirmation_evidence
-        ),
+        "SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH": (args.schwab_capture_lane_verified_through),
+        "SCHWAB_CAPTURE_COMMITMENT_THROUGH": (args.schwab_capture_commitment_through),
+        "SCHWAB_CONFIRMATION_EVIDENCE": (args.schwab_confirmation_evidence),
         "SESSION_CHAIN_CONVENTION": args.session_chain_convention,
-        "SCHWAB_MIN_LOSSES_FOR_VERDICT": (
-            args.schwab_min_losses_for_verdict
-        ),
+        "SCHWAB_MIN_LOSSES_FOR_VERDICT": (args.schwab_min_losses_for_verdict),
         STARVATION_FIELD: args.schwab_starvation_risk_preacceptance,
     }
 
@@ -352,42 +297,26 @@ def _owner_from_args(args: argparse.Namespace) -> dict:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence", type=Path, required=True)
-    parser.add_argument(
-        "--source-health-receipt", type=Path, required=True
-    )
+    parser.add_argument("--source-health-receipt", type=Path, required=True)
     parser.add_argument("--data-gate-receipt", type=Path, required=True)
-    parser.add_argument(
-        "--backup-restore-receipt", type=Path, required=True
-    )
+    parser.add_argument("--backup-restore-receipt", type=Path, required=True)
     parser.add_argument("--completed-session", required=True)
     parser.add_argument("--activation-spec", type=Path, required=True)
     parser.add_argument("--confirm", required=True)
-    parser.add_argument(
-        "--h7-stage8-explicit-authorization", required=True
-    )
+    parser.add_argument("--h7-stage8-explicit-authorization", required=True)
     parser.add_argument("--window-start-decision-session", required=True)
-    parser.add_argument(
-        "--window-decision-session-count", type=int, required=True
-    )
+    parser.add_argument("--window-decision-session-count", type=int, required=True)
     parser.add_argument("--window-end-rule-acknowledged", required=True)
     parser.add_argument(
         "--window-minimum-three-calendar-months-per-lane-acknowledged",
         required=True,
     )
-    parser.add_argument(
-        "--schwab-capture-lane-verified-through", required=True
-    )
-    parser.add_argument(
-        "--schwab-capture-commitment-through", required=True
-    )
+    parser.add_argument("--schwab-capture-lane-verified-through", required=True)
+    parser.add_argument("--schwab-capture-commitment-through", required=True)
     parser.add_argument("--schwab-confirmation-evidence", required=True)
     parser.add_argument("--session-chain-convention", required=True)
-    parser.add_argument(
-        "--schwab-min-losses-for-verdict", type=int, required=True
-    )
-    parser.add_argument(
-        "--schwab-starvation-risk-preacceptance", required=True
-    )
+    parser.add_argument("--schwab-min-losses-for-verdict", type=int, required=True)
+    parser.add_argument("--schwab-starvation-risk-preacceptance", required=True)
     return parser
 
 
@@ -405,10 +334,7 @@ def main(argv: list[str] | None = None) -> int:
             spec_path=args.activation_spec,
         )
     except Exception as exc:
-        print(
-            "H7 SCHWAB ACTIVATION BLOCKED -- "
-            f"{type(exc).__name__}: {exc}"
-        )
+        print(f"H7 SCHWAB ACTIVATION BLOCKED -- {type(exc).__name__}: {exc}")
         return 2
     print(
         "H7 SCHWAB ACTIVATED FIRST WINDOW REGISTRATION "

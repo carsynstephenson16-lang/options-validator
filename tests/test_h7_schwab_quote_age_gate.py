@@ -57,26 +57,14 @@ class SchwabQuoteAgeGateTests(unittest.TestCase):
             "symbols": {
                 symbol: {
                     "columns": {
-                        "timestamp": {
-                            "selectable": {
-                                "age_minutes": {
-                                    "max": quote_ages[symbol]
-                                }
-                            }
-                        },
-                        "trade_timestamp": {
-                            "selectable": {
-                                "age_minutes": {"max": trade_age}
-                            }
-                        },
+                        "timestamp": {"selectable": {"age_minutes": {"max": quote_ages[symbol]}}},
+                        "trade_timestamp": {"selectable": {"age_minutes": {"max": trade_age}}},
                     }
                 }
                 for symbol in SYMBOLS
             },
         }
-        self.sidecar_path.write_text(
-            json.dumps(report), encoding="utf-8"
-        )
+        self.sidecar_path.write_text(json.dumps(report), encoding="utf-8")
 
     def evaluate(self):
         return gate.evaluate_schwab_quote_age(
