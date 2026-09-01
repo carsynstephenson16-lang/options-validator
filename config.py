@@ -690,6 +690,12 @@ LIVE_CACHE_TTL_SECONDS = 25        # server-side payload cache TTL
 LIVE_QUOTE_MAX_AGE_SECONDS = 120   # older quote timestamp => UNAVAILABLE
 LIVE_PROBE_MAX_AGE_DAYS = 7        # recorded schema probe older => live lane off
 
+# Owner-typed 2026-08-31, ruling 3:
+# reports/2026-08-31-owner-rulings-h7-unfreeze.md. This gates the worst
+# selectable quote-timestamp age for the H7 Schwab post-registration arming
+# lane; exactly 60 minutes is allowed and anything older is blocked.
+H7_SCHWAB_MAX_SELECTABLE_QUOTE_AGE_MINUTES = 60
+
 # ---------------------------------------------------------------------------
 # H9 -- post-earnings conditional HISTORICAL WRITTEN STUDY (spec
 # docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md,

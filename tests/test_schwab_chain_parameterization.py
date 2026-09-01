@@ -419,17 +419,30 @@ class SchwabChainParameterizationTests(unittest.TestCase):
     # success path -- the assertion that lane A wrote a sidecar is what would
     # fail, so the breakage is loud rather than silent.
 
-    def _run_capture_lane(self, *, break_report: bool):
+    def _run_capture_lane(
+        self, *, break_report: bool, break_marker: bool = False
+    ):
         stdout = io.StringIO()
-        with self._isolated_capture():
-            patches = contextlib.nullcontext()
+        with self._isolated_capture(), contextlib.ExitStack() as stack:
             if break_report:
-                patches = mock.patch.object(
-                    capture,
-                    "write_quote_age_report",
-                    side_effect=RuntimeError("forced sidecar failure"),
+                stack.enter_context(
+                    mock.patch.object(
+                        capture,
+                        "write_quote_age_report",
+                        side_effect=RuntimeError(
+                            "forced sidecar failure"
+                        ),
+                    )
                 )
-            with patches, contextlib.redirect_stdout(stdout):
+            if break_marker:
+                stack.enter_context(
+                    mock.patch.object(
+                        capture,
+                        "_write_quote_age_skip_marker",
+                        side_effect=OSError("forced marker failure"),
+                    )
+                )
+            with contextlib.redirect_stdout(stdout):
                 exit_code, receipt = capture.capture(
                     client=FakeClient(),
                     now_ny=PRECLOSE,
@@ -439,6 +452,9 @@ class SchwabChainParameterizationTests(unittest.TestCase):
                     force=False,
                 )
             sidecar = Path("reports/2026-08-10/preclose.quote_age.json")
+            marker = Path(
+                "reports/2026-08-10/preclose.quote_age_skip.txt"
+            )
             return {
                 "exit_code": exit_code,
                 "receipt": receipt,
@@ -452,6 +468,7 @@ class SchwabChainParameterizationTests(unittest.TestCase):
                     Path("reports/2026-08-10/preclose.json"),
                 ),
                 "sidecar_text": sidecar.read_text() if sidecar.is_file() else None,
+                "marker_text": marker.read_text() if marker.is_file() else None,
                 "stdout": stdout.getvalue(),
             }
 
@@ -475,6 +492,8 @@ class SchwabChainParameterizationTests(unittest.TestCase):
         self.assertIs(written["verdict_eligible"], False)
         self.assertEqual(written["session"], "2026-08-10")
         self.assertIsNone(broken["sidecar_text"])
+        self.assertIsNotNone(broken["marker_text"])
+        self.assertIn("forced sidecar failure", broken["marker_text"])
         self.assertIn(quote_age.SKIP_NOTE_PREFIX, broken["stdout"])
         self.assertIn("forced sidecar failure", broken["stdout"])
         self.assertNotIn(quote_age.SKIP_NOTE_PREFIX, working["stdout"])
@@ -485,6 +504,19 @@ class SchwabChainParameterizationTests(unittest.TestCase):
             self.assertNotIn(f"schwab_chain_capture {label}:", broken["stdout"])
         for lane in (working, broken):
             self.assertIn("schwab_chain_capture complete: 1/1", lane["stdout"])
+
+    def test_quote_age_marker_failure_is_also_fail_soft(self):
+        broken = self._run_capture_lane(
+            break_report=True, break_marker=True
+        )
+
+        self.assertEqual(broken["exit_code"], 0)
+        self.assertIsNone(broken["sidecar_text"])
+        self.assertIsNone(broken["marker_text"])
+        self.assertIn("forced sidecar failure", broken["stdout"])
+        self.assertIn(
+            "schwab_chain_capture complete: 1/1", broken["stdout"]
+        )
 
     def test_verify_session_output_is_unchanged_by_the_sidecar(self):
         """No-coupling regression: verify_session's return is byte-identical

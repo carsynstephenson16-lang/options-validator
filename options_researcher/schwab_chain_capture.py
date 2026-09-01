@@ -51,6 +51,7 @@ NY_TZ = "America/New_York"
 CHAIN_DIR = Path(".cache/schwab_chains")
 REPORTS_DIR = Path("reports/schwab_chains")
 FACTS_DIR = Path("ledger")
+QUOTE_AGE_SKIP_MARKER_SUFFIX = ".quote_age_skip.txt"
 H7_CHAIN_COLUMNS = [
     "expiration",
     "strike",
@@ -89,6 +90,20 @@ ADAPTER_COLUMNS = [
     "timestamp",
     "trade_timestamp",
 ]
+
+
+def _write_quote_age_skip_marker(
+    *,
+    session_reports: Path,
+    receipt_filename: str,
+    detail: str,
+) -> Path:
+    """Write a non-sidecar marker; callers must keep this strictly fail-soft."""
+    marker = Path(session_reports) / (
+        f"{Path(receipt_filename).stem}{QUOTE_AGE_SKIP_MARKER_SUFFIX}"
+    )
+    atomic_text_write(f"{detail}\n", marker)
+    return marker
 
 
 # --- rev-2.1 item 3a: unattended-vs-manual capture provenance --------------
@@ -375,7 +390,21 @@ def capture(
                 manifest_hash=manifest_hash,
             )
         except Exception as exc:
-            print(f"{QUOTE_AGE_SKIP_NOTE_PREFIX} {type(exc).__name__}: {exc}")
+            detail = (
+                f"{QUOTE_AGE_SKIP_NOTE_PREFIX} "
+                f"{type(exc).__name__}: {exc}"
+            )
+            print(detail)
+            try:
+                _write_quote_age_skip_marker(
+                    session_reports=session_reports,
+                    receipt_filename=receipt_filename,
+                    detail=detail,
+                )
+            except Exception:
+                # Visibility must never acquire authority over the already
+                # durable capture package or its successful exit code.
+                pass
         print(f"schwab_chain_capture complete: {len(names)}/{len(names)} {receipt_path}")
         return 0, receipt
     failed = [symbol for symbol, record in records.items() if record["status"] != "ok"]
