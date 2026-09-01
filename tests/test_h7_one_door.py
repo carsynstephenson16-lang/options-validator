@@ -263,13 +263,17 @@ class StructuralOneDoorTests(unittest.TestCase):
         self.assertIn("_require_review_passes(session)", scoring_source)
 
     def test_cli_never_appends_directly(self):
-        cli_src = Path("tools/h7_manual_activate.py").read_text()
-        # The CLI must contain NO append_event call: it routes through the one
-        # door. (This is the primary revert guard -- see the (d) test below.)
-        self.assertFalse(_has_append_call(cli_src),
-                         "h7_manual_activate must not call append_event")
-        # ...and it must call the one door.
-        self.assertIn("register_window_real", cli_src)
+        for path in (
+            Path("tools/h7_manual_activate.py"),
+            Path("tools/h7_schwab_manual_activate.py"),
+        ):
+            with self.subTest(path=path):
+                cli_src = path.read_text()
+                self.assertFalse(
+                    _has_append_call(cli_src),
+                    f"{path.name} must not call append_event",
+                )
+                self.assertIn("register_window_real", cli_src)
 
     def test_no_module_appends_to_the_real_store(self):
         # No scanned module may append_event to ANY real store, whether
@@ -415,6 +419,13 @@ class ActivationOneDoorTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.store = self.root / "forward"
+        mapping = dict(ag.OWNER_FIELDS_BY_STORE)
+        mapping[self.store.resolve()] = wr.OWNER_FIELDS
+        mapping_patch = mock.patch.object(
+            ag, "OWNER_FIELDS_BY_STORE", mapping
+        )
+        mapping_patch.start()
+        self.addCleanup(mapping_patch.stop)
 
         self.spec = self.root / "activation-spec.md"
         self.spec.write_text("stage-8 activation spec fixture\n")
