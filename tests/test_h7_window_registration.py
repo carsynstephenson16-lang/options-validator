@@ -33,12 +33,29 @@ def _minimal_registration_event():
         "symbol": None,
         "lane": None,
         "causes": [],
-        "payload": {"placeholder_for_task2": True},
+        "payload": {
+            "window": {
+                "start_decision_session": "2026-07-10",
+                "final_decision_session": "2026-07-11",
+            },
+            "frozen": {
+                "stage456_parameters": {
+                    "MIN_LOSSES_FOR_VERDICT": (
+                        config.MIN_LOSSES_FOR_VERDICT
+                    )
+                },
+                "scorer": {
+                    "min_losses_for_verdict": (
+                        config.MIN_LOSSES_FOR_VERDICT
+                    )
+                },
+            },
+        },
     }
 
 
 class ReplaySkipTests(unittest.TestCase):
-    def test_book_and_scoring_ignore_window_registration(self):
+    def test_book_ignores_registration_and_scoring_reads_frozen_bar(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         base = Path(tmp.name) / "synthetic-forward"
@@ -70,6 +87,10 @@ class ReplaySkipTests(unittest.TestCase):
         self.assertIsNone(scored["overall"]["mean_underlying_return"])
         self.assertEqual(scored["overall"]["verdict"], "INCONCLUSIVE")
         self.assertEqual(scored["overall"]["reason"], "insufficient_losses")
+        self.assertEqual(
+            scored["frozen"]["min_losses_for_verdict"],
+            config.MIN_LOSSES_FOR_VERDICT,
+        )
         for lane in config.H7_LANE_PRIORITY:
             self.assertIn(lane, scored["lanes"])
             self.assertIsNone(scored["lanes"][lane]["mean_underlying_return"])
