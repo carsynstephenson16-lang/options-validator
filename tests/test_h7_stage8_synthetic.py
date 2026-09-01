@@ -3,6 +3,7 @@ appends as the first event -> replays skip it -> real store untouched."""
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from options_researcher import h7_activation_guard as ag
 from options_researcher import h7_event_ledger as el
@@ -53,6 +54,11 @@ class Stage8SyntheticRehearsal(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         base = Path(tmp.name) / "synthetic-forward"
+        mapping = dict(ag.OWNER_FIELDS_BY_STORE)
+        mapping[base.resolve()] = wr.OWNER_FIELDS
+        mapping_patch = patch.object(ag, "OWNER_FIELDS_BY_STORE", mapping)
+        mapping_patch.start()
+        self.addCleanup(mapping_patch.stop)
         universe = ("MSFT", "AMZN", "VST")
         health = {s: True for s in universe}
         gate = {"whole_universe_verdict": "GO", "go_count": 3,

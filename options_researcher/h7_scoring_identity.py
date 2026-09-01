@@ -199,16 +199,24 @@ def registered_scoring_identity(
 
 
 def runtime_scoring_identity(
-    *, cost_model_hash_value: str | None = None
+    *,
+    cost_model_hash_value: str | None = None,
+    min_losses_for_verdict: int | None = None,
 ) -> H7ScoringIdentity:
     """Derive the live computation identity without global config provenance."""
     stage = {
         name: getattr(config, name)
         for name in STAGE456_PARAMETER_NAMES
     }
+    if min_losses_for_verdict is not None:
+        stage["MIN_LOSSES_FOR_VERDICT"] = _positive_int(
+            min_losses_for_verdict,
+            "runtime min_losses_for_verdict",
+            allow_zero=True,
+        )
     scorer = {
         "module": FROZEN_SCORER_MODULE,
-        "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
+        "min_losses_for_verdict": stage["MIN_LOSSES_FOR_VERDICT"],
         "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
     }
     return build_scoring_identity(

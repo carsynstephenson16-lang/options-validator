@@ -440,10 +440,12 @@ def build_window_registration_event(
     stage456_parameters = {
         name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES
     }
+    loss_bar = owner["SCHWAB_MIN_LOSSES_FOR_VERDICT"]
+    stage456_parameters["MIN_LOSSES_FOR_VERDICT"] = loss_bar
     scorer = {
         "module": "options_researcher.h7_forward_scoring",
         "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
-        "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
+        "min_losses_for_verdict": loss_bar,
     }
     scoring_identity = build_scoring_identity(
         stage456_parameters=stage456_parameters,
@@ -511,7 +513,7 @@ def build_window_registration_event(
             "occupancy_constrained_expected_entries": feasibility[
                 "occupancy_constrained_expected_entries"
             ],
-            "loss_bar": owner["SCHWAB_MIN_LOSSES_FOR_VERDICT"],
+            "loss_bar": loss_bar,
             "starvation_preacceptance": starvation_preacceptance,
         },
         "universe": manifest,

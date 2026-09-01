@@ -42,6 +42,21 @@ class ScoringCase(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.base = Path(tmp.name) / "synthetic-forward"
+        self.append(
+            "wr:test",
+            "window_registration",
+            "2026-07-06",
+            payload={
+                "window": {
+                    "start_decision_session": "2026-07-06",
+                    "final_decision_session": "2026-07-31",
+                },
+                "frozen": {
+                    "stage456_parameters": {"MIN_LOSSES_FOR_VERDICT": 7},
+                    "scorer": {"min_losses_for_verdict": 7},
+                },
+            },
+        )
 
     def append(self, *args, **kwargs):
         return ledger.append_event(
@@ -289,14 +304,14 @@ class TestEconomicsAndBenchmarks(ScoringCase):
     def test_inclusive_decision_bounds_and_deterministic_order(self):
         self.trade("outside", symbol="SMCI", decision="2026-07-03",
                    opened="2026-07-06", trigger="2026-07-07", closed="2026-07-08")
-        self.trade("end", symbol="PLTR", decision="2026-07-10",
-                   opened="2026-07-13", trigger="2026-07-14", closed="2026-07-15")
+        self.trade("end", symbol="PLTR", decision="2026-07-31",
+                   opened="2026-08-03", trigger="2026-08-04", closed="2026-08-05")
         self.trade("start", symbol="NVDA", decision="2026-07-06")
         first = score_forward_window(
-            base_dir=self.base, window_start="2026-07-06", window_end="2026-07-10"
+            base_dir=self.base, window_start="2026-07-06", window_end="2026-07-31"
         )
         second = score_forward_window(
-            base_dir=self.base, window_start="2026-07-06", window_end="2026-07-10"
+            base_dir=self.base, window_start="2026-07-06", window_end="2026-07-31"
         )
         self.assertEqual(first, second)
         self.assertEqual(
@@ -439,10 +454,22 @@ class TestVerdicts(ScoringCase):
         ]
         for board, expected in cases:
             with self.subTest(expected=expected):
-                self.assertEqual(map_forward_verdict(board), expected)
+                self.assertEqual(map_forward_verdict(board, 10), expected)
         self.assertEqual(
-            {map_forward_verdict(board)[0] for board, _ in cases},
+            {map_forward_verdict(board, 10)[0] for board, _ in cases},
             {"SURVIVED", "REJECTED", "INCONCLUSIVE"},
+        )
+
+    def test_registered_loss_bar_controls_verdict_boundary(self):
+        board = {
+            "n_losses": 7,
+            "verdict": "x",
+            "expectancy_CI90": [-2, -1],
+        }
+        self.assertEqual(map_forward_verdict(board, 7), ("REJECTED", "ci_below_zero"))
+        self.assertEqual(
+            map_forward_verdict(board, 10),
+            ("INCONCLUSIVE", "insufficient_losses"),
         )
 
     def test_overall_and_all_lanes_are_always_present(self):
@@ -459,6 +486,18 @@ class TestVerdicts(ScoringCase):
 
 
 class TestGuardsAndPurity(ScoringCase):
+    def test_missing_window_registration_refuses(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        with self.assertRaisesRegex(
+            ScoringValidationError, "window_registration"
+        ):
+            score_forward_window(
+                base_dir=Path(tmp.name) / "unregistered",
+                window_start="2026-07-06",
+                window_end="2026-07-31",
+            )
+
     def test_scoring_is_read_only(self):
         self.trade("one")
         before = (self.base.joinpath("events.jsonl").read_bytes(),

@@ -260,7 +260,11 @@ class BuilderTests(unittest.TestCase):
             payload["provider"]["session_chain_convention"],
             "preclose_snapshot_v1",
         )
-        self.assertEqual(payload["frozen"]["scorer"]["min_losses_for_verdict"], 10)
+        self.assertEqual(payload["frozen"]["scorer"]["min_losses_for_verdict"], 7)
+        self.assertEqual(
+            payload["frozen"]["stage456_parameters"]["MIN_LOSSES_FOR_VERDICT"],
+            7,
+        )
         self.assertEqual(payload["history"]["last_session"], "2026-08-07")
         self.assertEqual(
             payload["feasibility"]["receipt"]["provenance"],
@@ -274,6 +278,24 @@ class BuilderTests(unittest.TestCase):
             registration.build_window_registration_event(
                 owner=owner, evidence=evidence()
             )
+
+    def test_loss_bar_requires_owner_typed_positive_integer(self):
+        missing = owner_inputs()
+        del missing["SCHWAB_MIN_LOSSES_FOR_VERDICT"]
+        with self.assertRaises(registration.RegistrationInputError):
+            registration.build_window_registration_event(
+                owner=missing, evidence=evidence()
+            )
+
+        for invalid in (True, 0, 7.0, "7"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.build_window_registration_event(
+                        owner=owner_inputs(
+                            SCHWAB_MIN_LOSSES_FOR_VERDICT=invalid
+                        ),
+                        evidence=evidence(),
+                    )
 
     def test_capture_commitment_short_of_window_end_refuses(self):
         with self.assertRaises(registration.WindowRuleError):

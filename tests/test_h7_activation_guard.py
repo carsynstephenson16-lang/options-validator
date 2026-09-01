@@ -2,8 +2,12 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from options_researcher import h7_activation_guard as ag
+from options_researcher.h7_window_registration import (
+    OWNER_FIELDS as LEGACY_OWNER_FIELDS,
+)
 
 
 def go_gate(universe):
@@ -16,6 +20,40 @@ class GuardTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.base = Path(self.tmp.name) / "synthetic-forward"
         self.addCleanup(self.tmp.cleanup)
+        mapping = dict(ag.OWNER_FIELDS_BY_STORE)
+        mapping[self.base.resolve()] = LEGACY_OWNER_FIELDS
+        mapping_patch = patch.object(ag, "OWNER_FIELDS_BY_STORE", mapping)
+        mapping_patch.start()
+        self.addCleanup(mapping_patch.stop)
+
+    def test_unrecognized_store_refuses(self):
+        with self.assertRaisesRegex(
+            ag.ActivationBoundaryError, "unrecognized forward store"
+        ):
+            ag.activation_preconditions(
+                forward_base=self.base.parent / "unknown",
+                source_health_by_symbol={"MSFT": True},
+                universe=("MSFT",),
+                data_gate_result=go_gate(("MSFT",)),
+                owner_inputs={},
+            )
+
+    def test_schwab_store_selects_schwab_owner_fields(self):
+        from options_researcher.h7_schwab_window_registration import (
+            SCHWAB_FORWARD_STORE,
+        )
+
+        report = ag.activation_preconditions(
+            forward_base=ag.REPO_ROOT / SCHWAB_FORWARD_STORE,
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=go_gate(("MSFT",)),
+            owner_inputs={},
+            allow_real_readonly=True,
+        )
+        reason = report.by_name["owner_inputs_complete"].reason
+        self.assertIn("SCHWAB_MIN_LOSSES_FOR_VERDICT", reason)
+        self.assertIn("SCHWAB_CONFIRMATION_EVIDENCE", reason)
 
     def test_all_preconditions_reported(self):
         report = ag.activation_preconditions(

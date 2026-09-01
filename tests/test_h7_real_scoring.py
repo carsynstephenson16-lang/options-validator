@@ -628,6 +628,8 @@ class TestRealScoringAuthority(RealScoringCase):
 
     def test_every_runtime_frozen_parameter_drift_is_refused(self):
         for name in scoring_identity.STAGE456_PARAMETER_NAMES:
+            if name == "MIN_LOSSES_FOR_VERDICT":
+                continue
             with self.subTest(name=name):
                 session = self.open()
                 current = getattr(config, name)
@@ -644,6 +646,18 @@ class TestRealScoringAuthority(RealScoringCase):
                     self.assertRaises(real_scoring.RealScoringRefused),
                 ):
                     real_scoring.preview_real_score(session, now=AFTER_FINAL)
+
+    def test_registered_loss_bar_ignores_mutable_config_default(self):
+        session = self.open()
+        with patch.object(
+            config,
+            "MIN_LOSSES_FOR_VERDICT",
+            config.MIN_LOSSES_FOR_VERDICT + 1,
+        ):
+            preview = real_scoring.preview_real_score(
+                session, now=AFTER_FINAL
+            )
+        self.assertEqual(preview["status"], "RESULT_WITHHELD")
 
     def test_cost_model_hash_drift_is_refused(self):
         session = self.open()
@@ -892,10 +906,15 @@ class TestRealScoringPublication(RealScoringCase):
         session = self.open()
         original_append = ledger.append_event
 
+        def conflict_on_real_append(event, *, base_dir, **kwargs):
+            if Path(base_dir).resolve() == session.base_dir.resolve():
+                raise ledger.LedgerHeadConflictError("fixture conflict")
+            return original_append(event, base_dir=base_dir, **kwargs)
+
         with patch.object(
             ledger,
             "append_event",
-            side_effect=ledger.LedgerHeadConflictError("fixture conflict"),
+            side_effect=conflict_on_real_append,
         ):
             with self.assertRaisesRegex(
                 real_scoring.RealScoringRefused, "artifact is an orphan"

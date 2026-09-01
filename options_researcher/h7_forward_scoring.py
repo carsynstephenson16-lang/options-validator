@@ -89,8 +89,18 @@ def _nonnegative(value, field: str) -> float:
     return number
 
 
-def map_forward_verdict(board: dict) -> tuple[str, str]:
+def map_forward_verdict(
+    board: dict, min_losses_for_verdict: int
+) -> tuple[str, str]:
     """Map the dependence-aware scoreboard to the frozen three-word result."""
+    if (
+        isinstance(min_losses_for_verdict, bool)
+        or not isinstance(min_losses_for_verdict, int)
+        or min_losses_for_verdict < 0
+    ):
+        raise ScoringValidationError(
+            "min_losses_for_verdict must be a non-negative integer"
+        )
     if not isinstance(board, dict):
         raise ScoringValidationError("scoreboard must be an object")
     losses = board.get("n_losses")
@@ -99,7 +109,7 @@ def map_forward_verdict(board: dict) -> tuple[str, str]:
     raw_verdict = board.get("verdict")
     if not isinstance(raw_verdict, str):
         raise ScoringValidationError("scoreboard verdict is invalid")
-    if losses < config.MIN_LOSSES_FOR_VERDICT:
+    if losses < min_losses_for_verdict:
         return "INCONCLUSIVE", "insufficient_losses"
     if raw_verdict.startswith("INSUFFICIENT SAMPLE"):
         return "INCONCLUSIVE", "insufficient_cohorts"
@@ -117,11 +127,13 @@ def map_forward_verdict(board: dict) -> tuple[str, str]:
     return "INCONCLUSIVE", "no_edge"
 
 
-def _score_group(trades: list[dict], label: str) -> dict:
+def _score_group(
+    trades: list[dict], label: str, min_losses_for_verdict: int
+) -> dict:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         raw = scoreboard(trades, label=label)
-    verdict, reason = map_forward_verdict(raw)
+    verdict, reason = map_forward_verdict(raw, min_losses_for_verdict)
     safe = json_safe(raw)
     return {
         "verdict": verdict,
@@ -372,6 +384,40 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
     if start > end:
         raise ScoringValidationError("window_start must not follow window_end")
     events = ledger.read_events(base)
+    registrations = [
+        event for event in events if event.event_type == "window_registration"
+    ]
+    if len(registrations) != 1:
+        raise ScoringValidationError(
+            "scoring requires exactly one window_registration event"
+        )
+    registration = registrations[0]
+    try:
+        registered_window = registration.payload["window"]
+        frozen = registration.payload["frozen"]
+        stage_bar = frozen["stage456_parameters"]["MIN_LOSSES_FOR_VERDICT"]
+        scorer_bar = frozen["scorer"]["min_losses_for_verdict"]
+    except (KeyError, TypeError) as exc:
+        raise ScoringValidationError(
+            "window registration loss bar is malformed"
+        ) from exc
+    if (
+        registered_window.get("start_decision_session") != start
+        or registered_window.get("final_decision_session") != end
+    ):
+        raise ScoringValidationError(
+            "requested scoring window disagrees with window_registration"
+        )
+    if (
+        isinstance(stage_bar, bool)
+        or not isinstance(stage_bar, int)
+        or stage_bar < 0
+        or scorer_bar != stage_bar
+    ):
+        raise ScoringValidationError(
+            "window registration loss bar is malformed or inconsistent"
+        )
+    min_losses_for_verdict = stage_bar
     as_of = max([end, *(event.evaluation_session for event in events)])
     snapshot = derive_book(base_dir=base, evaluation_session=as_of)
     unresolved = [
@@ -430,11 +476,14 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
         )
     )
 
-    overall = _score_group(trades, "H7 forward paper overall")
+    overall = _score_group(
+        trades, "H7 forward paper overall", min_losses_for_verdict
+    )
     lanes = {
         lane: _score_group(
             [trade for trade in trades if trade["lane"] == lane],
             f"H7{lane} forward paper",
+            min_losses_for_verdict,
         )
         for lane in config.H7_LANE_PRIORITY
     }
@@ -448,7 +497,7 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
         "overall": overall,
         "lanes": lanes,
         "frozen": {
-            "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
+            "min_losses_for_verdict": min_losses_for_verdict,
             "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
             "forward_contracts": config.H7_FORWARD_CONTRACTS,
             "verdicts": list(VERDICTS),

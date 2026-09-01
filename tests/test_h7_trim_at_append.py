@@ -77,6 +77,13 @@ class TrimActivationTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.store = self.root / "forward"
+        mapping = dict(ag.OWNER_FIELDS_BY_STORE)
+        mapping[self.store.resolve()] = wr.OWNER_FIELDS
+        mapping_patch = mock.patch.object(
+            ag, "OWNER_FIELDS_BY_STORE", mapping
+        )
+        mapping_patch.start()
+        self.addCleanup(mapping_patch.stop)
 
         self.spec = self.root / "activation-spec.md"
         self.spec.write_text("stage-8 activation spec fixture\n")
@@ -332,6 +339,13 @@ class TrimGuardUnitTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.store = Path(self.tmp.name) / "forward"
+        mapping = dict(ag.OWNER_FIELDS_BY_STORE)
+        mapping[self.store.resolve()] = wr.OWNER_FIELDS
+        mapping_patch = mock.patch.object(
+            ag, "OWNER_FIELDS_BY_STORE", mapping
+        )
+        mapping_patch.start()
+        self.addCleanup(mapping_patch.stop)
 
     def _health_map(self, unhealthy):
         return {s: s not in unhealthy for s in self.full}

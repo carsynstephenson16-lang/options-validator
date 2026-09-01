@@ -10,12 +10,34 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from types import MappingProxyType
 
 from options_researcher import h7_event_ledger as ledger
+from options_researcher.h7_paper_lifecycle import (
+    REAL_FORWARD_STORE,
+    ActivationBoundaryError,
+)
+from options_researcher.h7_schwab_window_registration import (
+    OWNER_FIELDS as SCHWAB_OWNER_FIELDS,
+)
+from options_researcher.h7_schwab_window_registration import (
+    SCHWAB_FORWARD_STORE,
+)
 from options_researcher.h7_scope import scope_identity
-from options_researcher.h7_window_registration import OWNER_FIELDS
+from options_researcher.h7_window_registration import (
+    OWNER_FIELDS as LEGACY_OWNER_FIELDS,
+)
 from research.hashing import config_hash, diagnostic_source_hash
 from research.receipts import verify_receipt
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+OWNER_FIELDS_BY_STORE = MappingProxyType(
+    {
+        REAL_FORWARD_STORE.resolve(): LEGACY_OWNER_FIELDS,
+        (REPO_ROOT / SCHWAB_FORWARD_STORE).resolve(): SCHWAB_OWNER_FIELDS,
+    }
+)
+REAL_FORWARD_STORES = frozenset(OWNER_FIELDS_BY_STORE)
 
 
 @dataclass(frozen=True)
@@ -88,10 +110,13 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
     ``fresh_backup_restore``) still verify the receipts cover the FULL official
     scope -- that is the anti-cherry-pick guarantee: trimming only SELECTS from
     pre-computed full-scope evidence, it never narrows the evidence itself."""
-    from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE, ActivationBoundaryError
     base = Path(forward_base).resolve()
-    real = Path(REAL_FORWARD_STORE).resolve()
-    if not allow_real_readonly and (base == real or real in base.parents):
+    owner_fields = OWNER_FIELDS_BY_STORE.get(base)
+    if owner_fields is None:
+        raise ActivationBoundaryError(
+            f"unrecognized forward store: {base}"
+        )
+    if not allow_real_readonly and base in REAL_FORWARD_STORES:
         raise ActivationBoundaryError("guard fixtures must use synthetic stores")
 
     report = GuardReport(forward_base=str(base), code_commit=_git_head(),
@@ -194,7 +219,11 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
             "fresh verified restore evidence" if backup_ok
             else "missing/stale/unverified backup restore evidence"))
 
-    blank = [f for f in OWNER_FIELDS if owner_inputs.get(f) in (None, "")]
+    blank = [
+        field
+        for field in owner_fields
+        if owner_inputs.get(field) in (None, "")
+    ]
     report.checks.append(Check(
         "owner_inputs_complete", not blank,
         "complete" if not blank else f"blank: {blank}"))

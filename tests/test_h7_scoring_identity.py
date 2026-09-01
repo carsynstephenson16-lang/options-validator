@@ -55,6 +55,20 @@ class H7ScoringIdentityTests(unittest.TestCase):
             registered.contract, identity.SCORING_IDENTITY_CONTRACT
         )
 
+    def test_runtime_identity_accepts_registered_loss_bar_override(self):
+        frozen = _legacy_frozen()
+        stage = frozen["stage456_parameters"]
+        scorer = frozen["scorer"]
+        assert isinstance(stage, dict)
+        assert isinstance(scorer, dict)
+        stage["MIN_LOSSES_FOR_VERDICT"] = 7
+        scorer["min_losses_for_verdict"] = 7
+
+        self.assertEqual(
+            identity.registered_scoring_identity(frozen),
+            identity.runtime_scoring_identity(min_losses_for_verdict=7),
+        )
+
     def test_canonical_json_normalizes_registered_lists_and_runtime_tuples(self):
         frozen = _legacy_frozen()
         stage = frozen["stage456_parameters"]

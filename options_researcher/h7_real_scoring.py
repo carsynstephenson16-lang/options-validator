@@ -96,6 +96,7 @@ class RealScoringSession:
     scoring_identity_contract: str
     scoring_identity_hash: str
     scoring_identity_surface: str
+    min_losses_for_verdict: int
     registered_config_hash: str
     artifact_path: Path
     facts_path: Path
@@ -210,10 +211,12 @@ def _registered_identity(registration: ledger.StoredEvent) -> dict:
         raise RealScoringRefused("registered cohort both includes and excludes a name")
     try:
         registered_scoring = registered_scoring_identity(frozen)
+        min_losses_for_verdict = frozen["scorer"]["min_losses_for_verdict"]
         runtime_scoring = runtime_scoring_identity(
-            cost_model_hash_value=cost_model_hash()
+            cost_model_hash_value=cost_model_hash(),
+            min_losses_for_verdict=min_losses_for_verdict,
         )
-    except ScoringIdentityError as exc:
+    except (KeyError, TypeError, ScoringIdentityError) as exc:
         raise _refuse("window registration scoring identity is malformed", exc) from exc
     if registered_scoring != runtime_scoring:
         raise RealScoringRefused(
@@ -231,6 +234,7 @@ def _registered_identity(registration: ledger.StoredEvent) -> dict:
         "included": tuple(included),
         "excluded": tuple(excluded_pairs),
         "scoring_identity": registered_scoring,
+        "min_losses_for_verdict": min_losses_for_verdict,
         "registered_config_hash": registered_config_hash,
     }
 
@@ -262,6 +266,7 @@ def open_real_scoring_session(
         scoring_identity_contract=scoring_identity.contract,
         scoring_identity_hash=scoring_identity.identity_hash,
         scoring_identity_surface=scoring_identity.canonical_surface,
+        min_losses_for_verdict=identity["min_losses_for_verdict"],
         registered_config_hash=identity["registered_config_hash"],
         artifact_path=Path(artifact_root) / str(scope["scope_id"]) / f"{end}.json",
         facts_path=Path(facts_path),
@@ -295,6 +300,8 @@ def _revalidate(session: RealScoringSession) -> list[ledger.StoredEvent]:
         != session.scoring_identity_hash
         or identity["scoring_identity"].canonical_surface
         != session.scoring_identity_surface
+        or identity["min_losses_for_verdict"]
+        != session.min_losses_for_verdict
         or identity["registered_config_hash"] != session.registered_config_hash
         or base_spec_sha256 != session.base_spec_sha256
         or amendment_spec_sha256 != session.amendment_spec_sha256
@@ -1175,6 +1182,11 @@ def _frozen_market_result(
     with tempfile.TemporaryDirectory(prefix="h7-market-score-") as raw:
         base = f"{raw}/ledger"
         write_clock = lambda: datetime(2100, 1, 1, tzinfo=timezone.utc)
+        ledger.append_event(
+            _copy_event(events[0], []),
+            base_dir=base,
+            clock=write_clock,
+        )
         for opening, closing in market:
             intent_id = opening.payload.get("entry_intent_id")
             exit_intent_id = closing.payload.get("exit_intent_id")
@@ -1593,11 +1605,15 @@ def _settlement_trade(
     }
 
 
-def _union_group(trades: list[dict], label: str) -> dict:
+def _union_group(
+    trades: list[dict], label: str, min_losses_for_verdict: int
+) -> dict:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         raw = scoreboard(trades, label=label)
-    verdict, reason = frozen_scoring.map_forward_verdict(raw)
+    verdict, reason = frozen_scoring.map_forward_verdict(
+        raw, min_losses_for_verdict
+    )
     observed_returns = [
         float(trade["underlying_return"])
         for trade in trades
@@ -1640,11 +1656,16 @@ def _score_result(
             trade["position_id"],
         )
     )
-    overall = _union_group(trades, "H7 forward paper overall")
+    overall = _union_group(
+        trades,
+        "H7 forward paper overall",
+        session.min_losses_for_verdict,
+    )
     lanes = {
         lane: _union_group(
             [trade for trade in trades if trade["lane"] == lane],
             f"H7{lane} forward paper",
+            session.min_losses_for_verdict,
         )
         for lane in config.H7_LANE_PRIORITY
     }
@@ -1806,7 +1827,7 @@ def _receipt_payload(
             "scoring_identity_contract": session.scoring_identity_contract,
             "scoring_identity_hash": session.scoring_identity_hash,
             "cost_model_hash": cost_model_hash(),
-            "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
+            "min_losses_for_verdict": session.min_losses_for_verdict,
             "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
             "forward_contracts": config.H7_FORWARD_CONTRACTS,
         },
