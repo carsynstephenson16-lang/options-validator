@@ -7,6 +7,7 @@ module does not expose a CLI and does not activate either authority switch.
 from __future__ import annotations
 
 import math
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -35,6 +36,13 @@ NAMESPACE = "h7-forward-schwab-v1"
 SCHWAB_FORWARD_STORE = Path("ledger/h7_forward_schwab")
 CACHE_NAMESPACE = ".cache/schwab_chains/"
 SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+REGISTERED_COHORT = (
+    "AMD", "AMZN", "CEG", "ET", "MSFT", "NOW", "PLTR", "TEM", "VST",
+)
+FEASIBILITY_STACK_VERSION = "h7-frozen-entry-stack-plus-board/v1"
+FEASIBILITY_TOOL_LABEL = "cached-only read-only measurement; no verdict"
+STARVATION_PREACCEPTANCE_FIELD = "SCHWAB_STARVATION_RISK_PREACCEPTANCE"
 
 RegistrationInputError = old_registration.RegistrationInputError
 WindowRuleError = old_registration.WindowRuleError
@@ -51,6 +59,7 @@ OWNER_FIELDS = (
     "SCHWAB_CAPTURE_COMMITMENT_THROUGH",
     "SCHWAB_CONFIRMATION_EVIDENCE",
     "SESSION_CHAIN_CONVENTION",
+    "SCHWAB_MIN_LOSSES_FOR_VERDICT",
 )
 EVIDENCE_FIELDS = (
     "review_evidence",
@@ -77,14 +86,19 @@ FEASIBILITY_FIELDS = (
     "lookback_start",
     "lookback_end",
     "stack_version",
+    "tool_label",
     "code_sha",
     "config_hash",
+    "universe",
     "universe_size",
     "window_sessions",
     "symbol_days",
     "full_stack_passes",
     "base_rate",
     "expected_entries",
+    "occupancy_constrained_expected_entries",
+    "input_files",
+    "error_count",
     "receipt_hash",
 )
 
@@ -118,7 +132,7 @@ def _canonical_date(value: object, label: str) -> str:
     return parsed.isoformat()
 
 
-def _validate_feasibility(receipt: dict, claimed_hash: str) -> None:
+def _validate_feasibility(receipt: dict, claimed_hash: str) -> float:
     if not isinstance(receipt, dict):
         raise RegistrationInputError("feasibility_receipt must be an object")
     _require(receipt, FEASIBILITY_FIELDS, "feasibility receipt")
@@ -133,6 +147,47 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> None:
         raise RegistrationInputError("unexpected feasibility receipt kind")
     if receipt["provenance"] != "LLM/tool-computed":
         raise RegistrationInputError("feasibility provenance must be LLM/tool-computed")
+    if receipt["stack_version"] != FEASIBILITY_STACK_VERSION:
+        raise RegistrationInputError("feasibility stack identity is not registered")
+    if receipt["tool_label"] != FEASIBILITY_TOOL_LABEL:
+        raise RegistrationInputError("feasibility tool identity is not registered")
+    if receipt["config_hash"] != config_hash():
+        raise RegistrationInputError(
+            "feasibility receipt config_hash disagrees with registration-time config"
+        )
+    error_count = receipt["error_count"]
+    if type(error_count) is not int or error_count != 0:
+        raise RegistrationInputError("feasibility receipt contains measurement errors")
+    input_files = receipt["input_files"]
+    if not isinstance(input_files, dict) or not input_files:
+        raise RegistrationInputError("feasibility receipt has no bound input files")
+    for label, item in input_files.items():
+        if not isinstance(label, str) or not label or not isinstance(item, dict):
+            raise RegistrationInputError("feasibility input_files is malformed")
+        raw_path = item.get("path")
+        claimed_input_hash = item.get("sha256")
+        if not isinstance(raw_path, str) or not raw_path:
+            raise RegistrationInputError("feasibility input path is missing")
+        relative = Path(raw_path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise RegistrationInputError(
+                "feasibility input path must be repo-relative"
+            )
+        path = (REPO_ROOT / relative).resolve()
+        try:
+            path.relative_to(REPO_ROOT)
+        except ValueError as exc:
+            raise RegistrationInputError(
+                "feasibility input path escapes the repository"
+            ) from exc
+        if not path.is_file():
+            raise RegistrationInputError(
+                f"feasibility input file is missing: {raw_path}"
+            )
+        if not isinstance(claimed_input_hash, str) or sha256_file(path) != claimed_input_hash:
+            raise RegistrationInputError(
+                f"feasibility input hash mismatch: {raw_path}"
+            )
     symbol_days = int(receipt["symbol_days"])
     passes = int(receipt["full_stack_passes"])
     sessions = int(receipt["window_sessions"])
@@ -145,6 +200,55 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> None:
         raise RegistrationInputError("feasibility base_rate arithmetic mismatch")
     if not math.isclose(float(receipt["expected_entries"]), expected, rel_tol=1e-12):
         raise RegistrationInputError("feasibility expected_entries arithmetic mismatch")
+    occupancy = receipt["occupancy_constrained_expected_entries"]
+    if isinstance(occupancy, bool) or not isinstance(occupancy, (int, float)):
+        raise RegistrationInputError(
+            "occupancy-constrained expected entries must be numeric"
+        )
+    occupancy = float(occupancy)
+    if not math.isfinite(occupancy) or occupancy < 0 or occupancy > expected:
+        raise RegistrationInputError(
+            "occupancy-constrained expected entries is invalid"
+        )
+    return occupancy
+
+
+def _validate_feasibility_gate(receipt: dict, owner: dict) -> str | None:
+    bar = owner["SCHWAB_MIN_LOSSES_FOR_VERDICT"]
+    if type(bar) is not int or bar <= 0:
+        raise RegistrationInputError(
+            "SCHWAB_MIN_LOSSES_FOR_VERDICT must be a positive owner-typed integer"
+        )
+    expected = float(receipt["occupancy_constrained_expected_entries"])
+    if expected >= 2 * bar:
+        return None
+    text = owner.get(STARVATION_PREACCEPTANCE_FIELD)
+    if not isinstance(text, str) or not text.strip():
+        raise RegistrationInputError(
+            "failing feasibility bar requires owner-typed starvation pre-acceptance"
+        )
+    number = format(expected, ".15g")
+    if re.search(rf"(?<![0-9.]){re.escape(number)}(?:\.0+)?(?![0-9.])", text) is None:
+        raise RegistrationInputError(
+            "starvation pre-acceptance must quote the occupancy-constrained "
+            f"expected entries exactly ({number})"
+        )
+    return text
+
+
+def _registered_cohort_manifest() -> dict:
+    scope = scope_identity()
+    excluded = sorted(set(scope["symbols"]) - set(REGISTERED_COHORT))
+    return {
+        "scope_id": scope["scope_id"],
+        "scope_hash": scope["scope_hash"],
+        "included": list(REGISTERED_COHORT),
+        "excluded": [
+            {"symbol": symbol, "reason": "EARNINGS-UNKNOWN"}
+            for symbol in excluded
+        ],
+        "trim_rule": old_registration.TRIM_RULE,
+    }
 
 
 def _validate_data_gate_receipt(
@@ -174,9 +278,11 @@ def _validate_data_gate_receipt(
         raise RegistrationInputError(
             "data-gate receipt session disagrees with registered history"
         )
+    official_scope = scope_identity()
+    official_symbols = official_scope["symbols"]
     if (
         receipt.get("whole_universe_verdict") != "GO"
-        or receipt.get("go_count") != len(universe_manifest["included"])
+        or receipt.get("go_count") != len(official_symbols)
         or receipt.get("no_go_count") != 0
     ):
         raise RegistrationInputError(
@@ -186,13 +292,13 @@ def _validate_data_gate_receipt(
         raise RegistrationInputError(
             "data-gate receipt config_hash disagrees with registration-time config"
         )
-    if receipt.get("universe") != universe_manifest["included"]:
+    if receipt.get("universe") != official_symbols:
         raise RegistrationInputError(
-            "data-gate receipt universe disagrees with registration cohort"
+            "data-gate receipt does not cover the full official scope"
         )
-    if verified_symbols != universe_manifest["included"]:
+    if verified_symbols != official_symbols:
         raise RegistrationInputError(
-            "verified data-gate symbols disagree with registration cohort"
+            "verified data-gate symbols disagree with the full official scope"
         )
     scope = receipt.get("scope")
     if not isinstance(scope, dict) or (
@@ -263,6 +369,7 @@ def build_window_registration_event(
 
     feasibility = evidence["feasibility_receipt"]
     _validate_feasibility(feasibility, evidence["feasibility_receipt_hash"])
+    starvation_preacceptance = _validate_feasibility_gate(feasibility, owner)
     # Adversarial review 2026-08-12 (finding B3): `d77f995` removed the only
     # binding between the feasibility receipt and the code/config that
     # produced it (a since-unsatisfiable exact-HEAD code_sha check). Bind the
@@ -283,11 +390,15 @@ def build_window_registration_event(
         )
 
     manifest = (
-        old_registration.default_universe_manifest()
+        _registered_cohort_manifest()
         if universe_manifest is None
         else universe_manifest
     )
     old_registration._validate_universe_manifest(manifest)
+    if manifest.get("included") != list(REGISTERED_COHORT):
+        raise RegistrationInputError(
+            "registration universe must equal the registered cohort-9"
+        )
     scope = scope_identity()
     if manifest.get("scope_id") != scope["scope_id"] or manifest.get(
         "scope_hash"
@@ -397,6 +508,11 @@ def build_window_registration_event(
         "feasibility": {
             "receipt_hash": evidence["feasibility_receipt_hash"],
             "receipt": feasibility,
+            "occupancy_constrained_expected_entries": feasibility[
+                "occupancy_constrained_expected_entries"
+            ],
+            "loss_bar": owner["SCHWAB_MIN_LOSSES_FOR_VERDICT"],
+            "starvation_preacceptance": starvation_preacceptance,
         },
         "universe": manifest,
         "darwin_durability_verified": evidence["darwin_durability_verified"],

@@ -29,6 +29,10 @@ class ArithmeticTests(unittest.TestCase):
         self.assertEqual(report["full_stack_passes"], 2)
         self.assertAlmostEqual(report["base_rate"], 2 / 6)
         self.assertAlmostEqual(report["expected_entries"], (2 / 6) * 70 * 2)
+        self.assertAlmostEqual(
+            report["occupancy_constrained_expected_entries"],
+            2 / 3 * 70,
+        )
         self.assertEqual(report["provenance"], "LLM/tool-computed")
         self.assertNotIn("pass", report)
         self.assertNotIn("decision", report)
@@ -46,6 +50,25 @@ class ArithmeticTests(unittest.TestCase):
         self.assertTrue(feasibility.verify_receipt(report))
         report["full_stack_passes"] = 1
         self.assertFalse(feasibility.verify_receipt(report))
+
+    def test_receipt_records_verifiable_input_files(self):
+        path = Path("pyproject.toml")
+        report = feasibility.summarize_counts(
+            sessions=["2026-08-03"],
+            symbols=["AAA"],
+            passing_symbol_days=set(),
+            window_sessions=1,
+            code_sha="a" * 40,
+            stack_version=feasibility.STACK_VERSION,
+            errors=[],
+            input_paths={"project": path},
+        )
+        self.assertEqual(report["input_files"]["project"]["path"], str(path))
+        self.assertEqual(len(report["input_files"]["project"]["sha256"]), 64)
+
+    def test_cli_requires_explicit_cohort(self):
+        with self.assertRaises(SystemExit):
+            feasibility.main(["--lookback-sessions", "1"])
 
 
 class NoNetworkSurfaceTests(unittest.TestCase):

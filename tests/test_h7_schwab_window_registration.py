@@ -27,6 +27,7 @@ from research.receipts import make_receipt, write_immutable_receipt
 from tools import schwab_chain_manifest
 
 _DEFAULT_UNIVERSE = old_registration.default_universe_manifest()["included"]
+_REGISTERED_COHORT = list(registration.REGISTERED_COHORT)
 _REAL_GATE_TMP: tempfile.TemporaryDirectory | None = None
 _REAL_GATE_RECEIPT: dict | None = None
 
@@ -146,16 +147,26 @@ def feasibility_receipt(**overrides) -> dict:
         "provenance": "LLM/tool-computed",
         "lookback_start": "2026-05-08",
         "lookback_end": "2026-08-07",
-        "stack_version": "h7-frozen-entry-stack/v1",
+        "stack_version": registration.FEASIBILITY_STACK_VERSION,
+        "tool_label": registration.FEASIBILITY_TOOL_LABEL,
         "code_sha": "b" * 40,
         "config_hash": config_hash(),
-        "universe": list(_DEFAULT_UNIVERSE),
-        "universe_size": 15,
+        "universe": list(_REGISTERED_COHORT),
+        "universe_size": len(_REGISTERED_COHORT),
         "window_sessions": 70,
         "symbol_days": 540,
         "full_stack_passes": 3,
         "base_rate": 3 / 540,
-        "expected_entries": (3 / 540) * 70 * 15,
+        "expected_entries": (3 / 540) * 70 * len(_REGISTERED_COHORT),
+        "occupancy_constrained_expected_entries": 3.0,
+        "input_files": {
+            "project": {
+                "path": "pyproject.toml",
+                "sha256": sha256_file(Path("pyproject.toml")),
+            }
+        },
+        "errors": [],
+        "error_count": 0,
     }
     payload.update(overrides)
     payload["receipt_hash"] = sha256_hex(canonical_json(payload))
@@ -173,6 +184,10 @@ def owner_inputs(**overrides) -> dict:
         "SCHWAB_CAPTURE_COMMITMENT_THROUGH": "2026-12-31",
         "SCHWAB_CONFIRMATION_EVIDENCE": "owner-typed placeholder",
         "SESSION_CHAIN_CONVENTION": "preclose_snapshot_v1",
+        "SCHWAB_MIN_LOSSES_FOR_VERDICT": 7,
+        "SCHWAB_STARVATION_RISK_PREACCEPTANCE": (
+            "Owner pre-accepts starvation at 3 occupancy-constrained entries."
+        ),
     }
     values.update(overrides)
     return values
@@ -352,7 +367,7 @@ class BuilderTests(unittest.TestCase):
             )
 
     def test_data_gate_receipt_universe_name_mismatch_refuses(self):
-        tampered = list(_DEFAULT_UNIVERSE)
+        tampered = list(_REGISTERED_COHORT)
         tampered[0] = "ZZZZ"
         receipt = data_gate_receipt(universe=tampered)
         with self.assertRaises(registration.RegistrationInputError):
@@ -402,6 +417,97 @@ class BuilderTests(unittest.TestCase):
                 ),
             )
 
+    def test_feasibility_input_hash_mismatch_refuses(self):
+        receipt = feasibility_receipt(
+            input_files={
+                "project": {"path": "pyproject.toml", "sha256": "0" * 64}
+            }
+        )
+        with self.assertRaisesRegex(
+            registration.RegistrationInputError, "input hash mismatch"
+        ):
+            registration.build_window_registration_event(
+                owner=owner_inputs(),
+                evidence=evidence(
+                    feasibility_receipt=receipt,
+                    feasibility_receipt_hash=receipt["receipt_hash"],
+                ),
+            )
+
+    def test_feasibility_missing_and_absolute_input_paths_refuse(self):
+        cases = (
+            {"missing": {"path": "missing-input.parquet", "sha256": "0" * 64}},
+            {
+                "absolute": {
+                    "path": str(Path("pyproject.toml").resolve()),
+                    "sha256": sha256_file(Path("pyproject.toml")),
+                }
+            },
+        )
+        for input_files in cases:
+            with self.subTest(input_files=input_files):
+                receipt = feasibility_receipt(input_files=input_files)
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.build_window_registration_event(
+                        owner=owner_inputs(),
+                        evidence=evidence(
+                            feasibility_receipt=receipt,
+                            feasibility_receipt_hash=receipt["receipt_hash"],
+                        ),
+                    )
+
+    def test_feasibility_errors_or_wrong_tool_identity_refuse(self):
+        for overrides in (
+            {"error_count": 1, "errors": [{"error": "fixture"}]},
+            {"tool_label": "wrong tool"},
+            {"stack_version": "wrong stack"},
+        ):
+            with self.subTest(overrides=overrides):
+                receipt = feasibility_receipt(**overrides)
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.build_window_registration_event(
+                        owner=owner_inputs(),
+                        evidence=evidence(
+                            feasibility_receipt=receipt,
+                            feasibility_receipt_hash=receipt["receipt_hash"],
+                        ),
+                    )
+
+    def test_owner_ruled_feasibility_gate(self):
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(
+                SCHWAB_MIN_LOSSES_FOR_VERDICT=1,
+                SCHWAB_STARVATION_RISK_PREACCEPTANCE="",
+            ),
+            evidence=evidence(),
+        )
+        self.assertEqual(
+            event["payload"]["feasibility"][
+                "occupancy_constrained_expected_entries"
+            ],
+            3.0,
+        )
+
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(
+                SCHWAB_STARVATION_RISK_PREACCEPTANCE=(
+                    "Owner pre-accepts starvation at 3 occupancy-constrained entries."
+                )
+            ),
+            evidence=evidence(),
+        )
+        self.assertIn("starvation_preacceptance", event["payload"]["feasibility"])
+
+        for text in ("", "Owner pre-accepts starvation at 4 entries."):
+            with self.subTest(text=text):
+                with self.assertRaises(registration.RegistrationInputError):
+                    registration.build_window_registration_event(
+                        owner=owner_inputs(
+                            SCHWAB_STARVATION_RISK_PREACCEPTANCE=text
+                        ),
+                        evidence=evidence(),
+                    )
+
     def test_measurement_code_sha_may_precede_registration_commit(self):
         event = registration.build_window_registration_event(
             owner=owner_inputs(), evidence=evidence(code_commit="c" * 40)
@@ -430,12 +536,12 @@ class BuilderTests(unittest.TestCase):
             )
 
     def test_feasibility_universe_name_mismatch_refuses(self):
-        # Same cardinality (15 names) as the registration cohort, but one
+        # Same cardinality (9 names) as the registration cohort, but one
         # name swapped -- the pre-B3-fix cardinality-only check would have
         # let this through silently.
-        tampered = list(_DEFAULT_UNIVERSE)
+        tampered = list(_REGISTERED_COHORT)
         tampered[0] = "ZZZZ"
-        self.assertEqual(len(tampered), len(_DEFAULT_UNIVERSE))
+        self.assertEqual(len(tampered), len(_REGISTERED_COHORT))
         receipt = feasibility_receipt(universe=tampered)
         with self.assertRaises(registration.RegistrationInputError):
             registration.build_window_registration_event(
@@ -452,7 +558,7 @@ class BuilderTests(unittest.TestCase):
         )
         receipt = event["payload"]["feasibility"]["receipt"]
         self.assertEqual(receipt["config_hash"], config_hash())
-        self.assertEqual(receipt["universe"], list(_DEFAULT_UNIVERSE))
+        self.assertEqual(receipt["universe"], list(_REGISTERED_COHORT))
 
 
 class SyntheticAppendTests(unittest.TestCase):

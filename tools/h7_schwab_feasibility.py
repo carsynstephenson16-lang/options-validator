@@ -20,15 +20,30 @@ import config  # noqa: E402
 from data.atomic_io import atomic_text_write  # noqa: E402
 from data.cache_runner import session_close_utc  # noqa: E402
 from data.underlying_closes import (  # noqa: E402
+    CACHE_DIR as UNDERLYING_CACHE_DIR,
+)
+from data.underlying_closes import (
     adjustment_factor,
     load_closes_adjusted,
 )
 from options_researcher.chains import load_range  # noqa: E402
 from options_researcher.h7_board import resolve_board  # noqa: E402
-from options_researcher.h7_earnings import load_assertions  # noqa: E402
-from options_researcher.h7_scope import watch_universe  # noqa: E402
+from options_researcher.h7_earnings import (  # noqa: E402
+    ASSERTIONS_PATH,
+    RAW_ASSERTIONS_PATH,
+    load_assertions,
+)
 from options_researcher.h7_watch import assemble_name  # noqa: E402
-from research.hashing import canonical_json, config_hash, sha256_hex  # noqa: E402
+from research.hashing import (  # noqa: E402
+    canonical_json,
+    config_hash,
+    sha256_file,
+    sha256_hex,
+)
+from tools.h7_entry_variant_menu import (  # noqa: E402
+    OCCUPANCY_LOCKOUT_SESSIONS,
+    occupancy_constrained_count,
+)
 
 RECEIPT_KIND = "h7_schwab_feasibility/v1"
 STACK_VERSION = "h7-frozen-entry-stack-plus-board/v1"
@@ -53,6 +68,8 @@ def summarize_counts(
     code_sha: str,
     stack_version: str,
     errors: list[dict],
+    input_paths: dict[str, Path] | None = None,
+    entry_rows: list[dict] | None = None,
 ) -> dict:
     """Apply the owner-approved arithmetic without interpreting the result."""
     if not sessions or not symbols or window_sessions <= 0:
@@ -64,6 +81,22 @@ def summarize_counts(
     passes = len(passing_symbol_days)
     base_rate = passes / symbol_days
     expected_entries = base_rate * window_sessions * len(symbols)
+    rows = (
+        [
+            {"session": session, "symbol": symbol, "lane": "unknown"}
+            for session, symbol in passing_symbol_days
+        ]
+        if entry_rows is None
+        else entry_rows
+    )
+    occupancy_count = occupancy_constrained_count(
+        rows, sessions, OCCUPANCY_LOCKOUT_SESSIONS[0]
+    )
+    occupancy_expected = occupancy_count * window_sessions / len(sessions)
+    input_files = {
+        label: {"path": str(path), "sha256": sha256_file(path)}
+        for label, path in sorted((input_paths or {}).items())
+    }
     receipt = {
         "receipt_kind": RECEIPT_KIND,
         "provenance": "LLM/tool-computed",
@@ -81,6 +114,9 @@ def summarize_counts(
         "full_stack_passes": passes,
         "base_rate": base_rate,
         "expected_entries": expected_entries,
+        "occupancy_constrained_expected_entries": occupancy_expected,
+        "occupancy_lockout_sessions": OCCUPANCY_LOCKOUT_SESSIONS[0],
+        "input_files": input_files,
         "passing_symbol_days": [
             {"session": session, "symbol": symbol}
             for session, symbol in sorted(passing_symbol_days)
@@ -142,6 +178,7 @@ def measure_cached_history(
 ) -> dict:
     assertions = load_assertions()
     passing: set[tuple[str, str]] = set()
+    passing_rows: list[dict] = []
     errors: list[dict] = []
     for session in sessions:
         today = date.fromisoformat(session)
@@ -199,6 +236,22 @@ def measure_cached_history(
             open_symbols=(),
         )
         passing.update((session, row["symbol"]) for row in accepted)
+        passing_rows.extend(
+            {"session": session, "symbol": row["symbol"], "lane": row["lane"]}
+            for row in accepted
+        )
+    input_paths: dict[str, Path] = {
+        "gating_assertions": ASSERTIONS_PATH,
+        "raw_assertions": RAW_ASSERTIONS_PATH,
+    }
+    for symbol in symbols:
+        input_paths[f"underlying:{symbol}"] = (
+            Path(UNDERLYING_CACHE_DIR) / f"{symbol}.parquet"
+        )
+        for session in sessions:
+            input_paths[f"chain:{symbol}:{session}"] = (
+                DEFAULT_CHAIN_DIR / f"{symbol}_{session}.parquet"
+            )
     return summarize_counts(
         sessions=sessions,
         symbols=symbols,
@@ -207,6 +260,8 @@ def measure_cached_history(
         code_sha=code_sha,
         stack_version=STACK_VERSION,
         errors=errors,
+        input_paths=input_paths,
+        entry_rows=passing_rows,
     )
 
 
@@ -226,12 +281,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lookback-sessions", type=int, default=70)
     parser.add_argument("--window-sessions", type=int, default=70)
     parser.add_argument(
+        "--symbols",
+        nargs="+",
+        required=True,
+        help="Explicit cohort symbols; no default universe is inferred.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("reports/h7_forward_schwab/2026-08-09-feasibility.json"),
     )
     args = parser.parse_args(argv)
-    symbols = sorted(watch_universe())
+    symbols = sorted(dict.fromkeys(symbol.upper() for symbol in args.symbols))
     sessions = common_cached_sessions(
         symbols, DEFAULT_CHAIN_DIR, args.lookback_sessions
     )
