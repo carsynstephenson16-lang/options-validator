@@ -10,13 +10,15 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-from datetime import datetime, timezone
+from collections.abc import Iterable, Mapping
+from datetime import datetime, time, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 from authlib.integrations.base_client.errors import OAuthError
 
+import config
 from data.atomic_io import (
     atomic_text_write,
     publish_staged_file,
@@ -26,7 +28,14 @@ from options_researcher import (
     INVOCATION_MARKER_AT_IMPORT as _INVOCATION_MARKER_AT_IMPORT,
 )
 from options_researcher.h7_scope import watch_universe
-from options_researcher.intraday_capture import validate_session_tag
+from options_researcher.intraday_capture import (
+    SESSION_TIMES as _DISPLAY_LANE_SESSION_TIMES,
+)
+from options_researcher.intraday_capture import (
+    _parse_hhmm,
+    nearest_session_tag,
+    validate_session_tag,
+)
 from options_researcher.live_quotes import in_regular_session
 from options_researcher.schwab_auth_failure import (
     expired_auth_line,
@@ -51,6 +60,97 @@ NY_TZ = "America/New_York"
 CHAIN_DIR = Path(".cache/schwab_chains")
 REPORTS_DIR = Path("reports/schwab_chains")
 FACTS_DIR = Path("ledger")
+
+# --- Durable intraday pulls (owner-directed 2026-09-02: 10:00 + 13:00 ET) ---
+#
+# Same module, same fetch, same immutable write discipline as the 15:45
+# pre-close capture -- but an ISOLATED namespace per slot. The pre-close lane
+# keys every parquet by symbol + date (`<SYMBOL>_<session>.parquet`), its
+# manifest/receipt live under `reports/schwab_chains/<session>/`, and every
+# write is hash-match-or-refuse / first-write-wins. A 10:00 write into that
+# namespace would therefore make the 15:45 capture REFUSE (different live
+# bytes, different timestamp) and lose the day's H7 evidence. So each
+# intraday tag gets its own chain dir + reports dir, its own receipt kind and
+# convention (so nothing can mistake it for `preclose_snapshot_v1` evidence),
+# and its own fact prefix (so the pre-close fact's dedupe prefix is untouched).
+# The pre-close identity -- CHAIN_DIR / REPORTS_DIR / "preclose.json" /
+# schwab_chain_capture/v1 / preclose_snapshot_v1 / SCHWAB_CHAIN_CAPTURE -- is
+# never passed through this path and stays byte-identical.
+CHAIN_DIR_INTRADAY = Path(".cache/schwab_chains_intraday")
+REPORTS_DIR_INTRADAY = Path("reports/schwab_chains_intraday")
+INTRADAY_RECEIPT_KIND = "schwab_chain_capture_intraday/v1"
+INTRADAY_CHAIN_CONVENTION = "intraday_snapshot_v1"
+INTRADAY_FACT_PREFIX = "SCHWAB_INTRADAY_CHAIN_CAPTURE"
+INTRADAY_SESSION_TIMES: dict[str, time] = {
+    tag: _parse_hhmm(hhmm) for tag, hhmm in config.SCHWAB_CHAIN_INTRADAY_TIMES.items()
+}
+PRECLOSE_TAG = "preclose"
+# Every slot the wrapper may self-select from the wall clock: the two durable
+# intraday tags plus the pre-close tag (whose time lives in the display lane's
+# table, where it always has). Tolerance is config.INTRADAY_CAPTURE_TOLERANCE_MINUTES.
+CAPTURE_SESSION_TIMES: dict[str, time] = {
+    **INTRADAY_SESSION_TIMES,
+    PRECLOSE_TAG: _DISPLAY_LANE_SESSION_TIMES[PRECLOSE_TAG],
+}
+CAPTURE_TAG_CHOICES = tuple(sorted(CAPTURE_SESSION_TIMES))
+
+
+def intraday_capture_kwargs(tag: str) -> dict:
+    """capture() keyword arguments that isolate one durable intraday slot.
+
+    Refuses ``preclose`` (that identity is the untouched default path) and any
+    tag outside config.SCHWAB_CHAIN_INTRADAY_TIMES.
+    """
+    if tag not in INTRADAY_SESSION_TIMES:
+        raise ValueError(
+            f"unknown durable intraday tag {tag!r}; choices: {sorted(INTRADAY_SESSION_TIMES)}"
+        )
+    return {
+        "chain_dir": CHAIN_DIR_INTRADAY / tag,
+        "reports_dir": REPORTS_DIR_INTRADAY / tag,
+        "session_tag": tag,
+        "receipt_filename": f"{tag}.json",
+        "fact_prefix": f"{INTRADAY_FACT_PREFIX} tag={tag}",
+        "receipt_kind": INTRADAY_RECEIPT_KIND,
+        "convention": INTRADAY_CHAIN_CONVENTION,
+        "schedule": INTRADAY_SESSION_TIMES,
+    }
+
+
+def nearest_capture_tag(
+    now_ny: datetime, *, tags: Iterable[str] | None = None
+) -> str | None:
+    """The durable-lane slot nearest the wall clock (within tolerance), else None.
+
+    ``tags`` restricts the candidate slots. tools/schwab_chain_intraday_capture.sh
+    passes ``("morning", "midday")`` so a launchd fire that arrives LATE (the
+    machine slept through 13:00 and woke at 15:40; or an operator kickstart
+    of the intraday job inside the pre-close window) can only ever resolve to
+    an intraday slot or to None -- never to ``preclose``, whose namespace is
+    first-write-wins and whose package is the day's H7 evidence. An unknown
+    tag in ``tags`` raises so a typo in a wrapper fails loudly at first fire.
+    """
+    if tags is None:
+        schedule = CAPTURE_SESSION_TIMES
+    else:
+        wanted = tuple(tags)
+        unknown = sorted(set(wanted) - set(CAPTURE_SESSION_TIMES))
+        if unknown or not wanted:
+            raise ValueError(
+                f"unknown capture tags {unknown}; choices: {CAPTURE_TAG_CHOICES}"
+            )
+        if PRECLOSE_TAG in wanted:
+            # A restricted caller is by definition an intraday job. The
+            # pre-close slot is only ever the bare default path; letting a
+            # future wrapper edit list it here would re-open the late-fire
+            # hole the restriction exists to close.
+            raise ValueError(
+                "a restricted slot list may not include 'preclose'; the pre-close "
+                "capture is the unrestricted default path"
+            )
+        schedule = {tag: CAPTURE_SESSION_TIMES[tag] for tag in wanted}
+    return nearest_session_tag(now_ny, schedule=schedule)
+
 H7_CHAIN_COLUMNS = [
     "expiration",
     "strike",
@@ -241,8 +341,14 @@ def capture(
     fact_prefix: str = "SCHWAB_CHAIN_CAPTURE",
     receipt_kind: str = "schwab_chain_capture/v1",
     convention: str = SESSION_CHAIN_CONVENTION,
+    schedule: Mapping[str, time] | None = None,
 ) -> tuple[int, dict | None]:
-    """Capture one official preclose package; 0 ok, 1 failed, 2 conflict."""
+    """Capture one official session package; 0 ok, 1 failed, 2 conflict.
+
+    ``schedule`` (2026-09-02) is the {tag: time} table ``session_tag`` is
+    validated against; None keeps the display lane's table, where the default
+    ``preclose`` identity lives. The durable intraday slots pass their own.
+    """
     if force:
         # A forced capture can never become gate evidence (verify_session
         # requires force=false), but it WOULD write the session's immutable
@@ -262,7 +368,9 @@ def capture(
             "the NY regular session"
         )
         return 1, None
-    timing_ok, timing_reason = validate_session_tag(session_tag, now_ny, force=force)
+    timing_ok, timing_reason = validate_session_tag(
+        session_tag, now_ny, force=force, schedule=schedule
+    )
     if not timing_ok:
         print(f"schwab_chain_capture refused: {timing_reason}")
         return 1, None
@@ -349,6 +457,7 @@ def capture(
             receipt_filename=receipt_filename,
             session_tag=session_tag,
             receipt_kind=receipt_kind,
+            schedule=schedule,
         )
         fact_dedupe_prefix = f"{fact_prefix} session={session} "
         append_fact(
@@ -383,18 +492,51 @@ def capture(
     return 1, receipt
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, now_ny: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Read-only full Schwab preclose chain capture; never trades."
+        description="Read-only full Schwab chain capture; never trades."
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="bypass only the preclose timing tolerance; regular session still required",
+        help="bypass only the session timing tolerance; regular session still required",
+    )
+    parser.add_argument(
+        "--session-tag",
+        choices=CAPTURE_TAG_CHOICES,
+        default=PRECLOSE_TAG,
+        help=(
+            "which durable slot this run is: 'preclose' (default; the untouched "
+            "15:45 H7 identity) or one of the isolated intraday slots"
+        ),
+    )
+    parser.add_argument(
+        "--print-nearest-tag",
+        action="store_true",
+        help="print the slot nearest the wall clock (or NONE) and exit 0; captures nothing",
+    )
+    parser.add_argument(
+        "--tags",
+        default=None,
+        help=(
+            "with --print-nearest-tag: comma-separated slots the caller is allowed "
+            "to run (a late launchd fire must resolve inside its own job's slots or NONE)"
+        ),
     )
     args = parser.parse_args(argv)
+    if args.print_nearest_tag:
+        if now_ny is None:
+            now_ny = datetime.now(ZoneInfo(NY_TZ))
+        tags = None
+        if args.tags is not None:
+            tags = tuple(part.strip() for part in args.tags.split(",") if part.strip())
+        print(nearest_capture_tag(now_ny, tags=tags) or "NONE")
+        return 0
+    # The pre-close identity is the bare default call -- no keyword reaches
+    # capture() for it, so its artifacts cannot drift from the registered bytes.
+    kwargs = {} if args.session_tag == PRECLOSE_TAG else intraday_capture_kwargs(args.session_tag)
     try:
-        exit_code, _ = capture(force=args.force)
+        exit_code, _ = capture(force=args.force, **kwargs)
     except OAuthError as exc:
         if not is_expired_refresh_token_error(exc):
             raise

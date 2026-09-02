@@ -155,6 +155,24 @@ ALLOWLIST: list[tuple[str, str, str]] = [
         "only echoed to the log for human context.",
     ),
     (
+        "tools/schwab_chain_intraday_capture.sh",
+        "TAG_RAW=",
+        "reason (a)+(b): mirrors tools/intraday_capture.sh's TAG_RAW entry -- "
+        "raw capture exists so TAG_RC=$? can reflect the python process's own "
+        "exit code; the real VALUE (TAG) is derived on the next line via an "
+        "anchored `grep -Eo '^(morning|midday|NONE)$' | tail -1`, and TAG_RAW "
+        "is dumped verbatim only under the unparseable-output refusal branch "
+        "for operator diagnosis.",
+    ),
+    (
+        "tools/schwab_chain_intraday_capture.sh",
+        "CAP_OUT=",
+        "reason (a)+(b): clone of tools/schwab_chain_capture.sh's CAP_OUT entry "
+        "(Brief 30 WP-D.1) -- RC=$? reflects the python process's own exit "
+        "code; the same four anchored `grep -q '^schwab_chain_capture ...'` "
+        "classifications parse it; otherwise echoed to the log / MSG only.",
+    ),
+    (
         "tools/schwab_chain_capture.sh",
         "CAP_OUT=",
         "reason (a)+(b): raw combined stdout+stderr capture exists so RC=$? "

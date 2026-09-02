@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Durable Schwab chain INTRADAY pulls at 10:00 and 13:00 ET on weekdays from
+  the ops checkout (owner-directed 2026-09-02, in-session: "a pull at 10am and
+  a pull at 1pm"; Brief 30 WP-D design, generalized to two slots). Runs its
+  OWN wrapper, tools/schwab_chain_intraday_capture.sh, which may only ever
+  resolve the "morning" / "midday" slots and writes to the ISOLATED namespace
+  .cache/schwab_chains_intraday/<tag>/ + reports/schwab_chains_intraday/<tag>/,
+  so these fires can never reach the pre-close lane's first-write-wins
+  artifacts even when launchd delivers a missed fire late. The pre-close plist
+  and wrapper are untouched. Install/verify/uninstall: "Schwab chain
+  intraday" in tools/launchagents/README.md; installation is OWNER-gated
+  and waits for the cache namespace's committed inventory floor (Brief 30
+  WP-D.3). Edits to this template do NOT propagate until the installed copy
+  at ~/Library/LaunchAgents/ is replaced.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.carsyn.options-validator.schwab-chain-intraday</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/carsynstephenson/options-validator-ops/tools/schwab_chain_intraday_capture.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/carsynstephenson/options-validator-ops</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TZ</key>
+    <string>America/New_York</string>
+    <!--
+      rev-2.1 item 3a (spec §7 condition 3; owner-ratified 2026-08-14). This
+      marker is the ONLY thing that lets a capture receipt claim
+      invocation_source="launchd". tools/schwab_chain_capture.sh must never
+      set it, or a hand-run capture would forge unattended provenance and the
+      S1 bar's condition 3 would be worthless. Reinstalling this plist is
+      required for the field to appear on a scheduled run:
+        cp tools/launchagents/com.carsyn.options-validator.schwab-chain-intraday.plist \
+           ~/Library/LaunchAgents/
+        launchctl bootout gui/$(id -u)/com.carsyn.options-validator.schwab-chain-intraday
+        launchctl bootstrap gui/$(id -u) \
+           ~/Library/LaunchAgents/com.carsyn.options-validator.schwab-chain-intraday.plist
+    -->
+    <key>OPTIONS_VALIDATOR_INVOCATION_SOURCE</key>
+    <string>launchd</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/schwab_chain_intraday/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/carsynstephenson/options-validator-ops/.tmp/schwab_chain_intraday/launchd.err.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

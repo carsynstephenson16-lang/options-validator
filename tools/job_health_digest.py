@@ -429,6 +429,47 @@ def _intraday_capture(root: Path, as_of: str, tag: str) -> HealthRow:
     )
 
 
+def _schwab_intraday(root: Path, as_of: str, tag: str) -> HealthRow:
+    """Durable intraday pull (10:00 / 13:00 ET, owner-directed 2026-09-02).
+
+    Receipt-only check: the package's own verify_session ran at capture time,
+    and the point of this row is "did the slot fire and complete", not a
+    second byte-level audit. The receipt must carry the isolated intraday
+    identity so a pre-close receipt copied into this path cannot pass.
+    """
+    job = f"Schwab intraday ({tag})"
+    relative = f"reports/schwab_chains_intraday/{tag}/{as_of}/{tag}.json"
+    path, path_error = _contained_path(root, relative)
+    if path_error is not None or path is None:
+        return HealthRow(job, HealthStatus.FAILED, path_error or "unsafe receipt path", relative)
+    if not path.is_file():
+        return _missing(job, relative)
+    payload, error = _read_object(path)
+    if error is not None or payload is None:
+        return HealthRow(job, HealthStatus.FAILED, error or "invalid receipt", relative)
+    expected_kind = "schwab_chain_capture_intraday/v1"
+    if payload.get("receipt_kind") != expected_kind:
+        return HealthRow(
+            job, HealthStatus.FAILED, f"receipt_kind mismatch: expected {expected_kind}", relative
+        )
+    if payload.get("scheduled_session_tag") != tag:
+        return HealthRow(
+            job, HealthStatus.FAILED, f"scheduled_session_tag mismatch: expected {tag}", relative
+        )
+    if payload.get("force") is not False:
+        return HealthRow(
+            job, HealthStatus.FAILED, "force must be false for a scheduled capture", relative
+        )
+    if payload.get("session") != as_of:
+        return HealthRow(job, HealthStatus.FAILED, f"session mismatch: expected {as_of}", relative)
+    value = payload.get("overall_status")
+    if value == "failed":
+        return HealthRow(job, HealthStatus.FAILED, "overall_status=failed", relative)
+    if value != "ok":
+        return HealthRow(job, HealthStatus.FAILED, f"unknown overall_status {value!r}", relative)
+    return HealthRow(job, HealthStatus.OK, "receipt complete", relative)
+
+
 def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
     relative = f"reports/schwab_chains/{as_of}/preclose.json"
     path, path_error = _contained_path(root, relative)
@@ -635,6 +676,15 @@ def _session_rows(status: HealthStatus, reason: str, as_of: str) -> list[HealthR
             )
             for tag in config.INTRADAY_CAPTURE_TIMES
         ],
+        *[
+            HealthRow(
+                f"Schwab intraday ({tag})",
+                status,
+                reason,
+                f"reports/schwab_chains_intraday/{tag}/{as_of}/{tag}.json",
+            )
+            for tag in config.SCHWAB_CHAIN_INTRADAY_TIMES
+        ],
         HealthRow(
             "Schwab preclose",
             status,
@@ -673,6 +723,7 @@ def collect_health(
         _ritual_overall(root, as_of),
         _ritual_hypotheses(root, as_of),
         *[_intraday_capture(root, as_of, tag) for tag in config.INTRADAY_CAPTURE_TIMES],
+        *[_schwab_intraday(root, as_of, tag) for tag in config.SCHWAB_CHAIN_INTRADAY_TIMES],
         _schwab_preclose(root, as_of),
         _alignment_check(root, as_of),
         _research_refresh(research_root, as_of, invocation_date),
