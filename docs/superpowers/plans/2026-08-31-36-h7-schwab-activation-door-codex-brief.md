@@ -17,11 +17,10 @@ review-driven additions beyond the plan.
 **Author:** Claude orchestrating session (PR #71 unfreeze arc; plan:
 `docs/superpowers/plans/2026-08-30-pr71-unfreeze-pr115-closeout.md`)
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** DRAFT — rev 6 pending independent review of the FINAL text
-(bot round-6 finding: rev 5's READY status rested on verification of the
-findings, not a review of the resulting diff; the status returns to READY
-only when a post-change review verdict on this exact revision is recorded in
-`reports/2026-08-31-brief-36-adversarial-review-receipt.md`)
+**Status:** READY FOR HAND-OFF — final-text review of rev 6 PASS WITH FIXES
+(round 7, all R-fixes applied as rev 7) + delta re-read of rev 7 PASS with 3
+cosmetic residuals D1–D3, applied in this revision; full trail in
+`reports/2026-08-31-brief-36-adversarial-review-receipt.md`
 **Provenance:** Repo-verified against `origin/main` @ `1d83453` unless labeled
 otherwise.
 
@@ -115,8 +114,8 @@ update of either side.
   owner-fields classification ONLY, per WP-G)
 - NEW `tools/h7_schwab_manual_activate.py` + NEW
   `tests/test_h7_schwab_manual_activate.py`
-- NEW quote-age gate function/module per WP-E + `config.py` threshold constant
-  with owner-typed provenance
+- NEW quote-age gate function/module per WP-E + `config.py` NON-BLOCKING
+  display constant (WP-E.1) with owner-typed provenance
 - `options_researcher/schwab_chain_capture.py` (WP-E.4's visibility fix ONLY —
   bounded to the sidecar skip path at `:368-378`)
 - `options_researcher/schwab_quote_age_report.py` (final-review R10, WP-E.2
@@ -516,8 +515,9 @@ report.
    what catches the stale-sidecar path (`write_quote_age_report:363-373`
    refuses a differing rewrite while `schwab_chain_capture.py:376-377`
    swallows the failure, leaving an OLD sidecar beside NEW bytes). Missing
-   chain data for the session ⇒ FAIL CLOSED (in blocking mode) with a visible
-   per-name/per-board verdict; silence is never a pass. Per amendment v1.4
+   chain data for the session ⇒ FAIL CLOSED in BOTH modes (Mode A: a visible
+   EVIDENCE_INVALID verdict with nothing banned; Mode B: additionally banned);
+   silence is never a pass. Per amendment v1.4
    precedent, an over-threshold name is entry-banned per-name (once wired —
    see the honesty note above; and only in blocking mode — see the owner-gate
    mechanism).
@@ -672,7 +672,7 @@ Done is defined by exit codes at the implementation head:
 ```
 uv run python -m unittest discover -s tests   # exit 0
 uv run ruff check .                            # exit 0
-uv run ruff format --check <Scope-IN files>    # exit 0 (round-6 C7, SCOPED per final-review R1: the repo at 1d83453 is not format-clean — 276 files would reformat — so a repo-wide gate would force an out-of-scope reformat)
+uv run ruff format --check <Scope-IN files>    # Python files only - exit 0 (round-6 C7, SCOPED per final-review R1: the repo at 1d83453 is not format-clean — 276 files would reformat — so a repo-wide gate would force an out-of-scope reformat)
 uv run pyright                                 # exit 0
 ```
 

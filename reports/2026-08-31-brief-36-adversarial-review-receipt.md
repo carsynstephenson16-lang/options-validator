@@ -214,4 +214,15 @@ WP bodies without re-reading neighbors, all applied as rev 7:
   already enforced at `:172-181`; `tests/test_h7_scoring_identity.py` named;
   builder-vs-CLI validation-layer ownership stated.
 
-- Delta re-read verdict on rev 7: (recorded below)
+- **Delta re-read verdict on rev 7 (@3e4c5b4): PASS — READY restored.** All
+  eleven R-fixes + four nits verified faithful against the reviewer's own
+  round-7 text; R6 and R10 verified by measurement (grep "scope-keyed" = 0;
+  the quote-age test file has no `_timestamps` reference). The R2
+  ordering-paragraph concern ruled MOOT by measurement: the display constant
+  moves `config_hash()` (all uppercase config names, `research/hashing.py:71-75`)
+  so the ordering section's invalidation claim is true and enforced
+  (`h7_schwab_window_registration.py:245-253`). Three cosmetic residuals
+  D1–D3 (missing-chain-data both-modes wording; Scope-IN "threshold" →
+  non-blocking display; format gate Python-files-only) applied with this
+  entry. Standing owner items unchanged: re-rule the 60-minute threshold
+  against ABSOLUTE ages; review + freeze the Schwab activation spec.
