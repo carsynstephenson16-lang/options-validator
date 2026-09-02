@@ -429,8 +429,17 @@ registration evidence and delegates to `register_window_real`
    REASONS are owner-typed fresh for the Schwab window and refused blank —
    they need NOT equal the legacy `EARNINGS-UNKNOWN` reasons, deliberately:
    the reason explains the Schwab-era exclusion, the SET preserves the
-   inherited cohort. A typo'd or substituted nine-name set then fails (a),
-   (b), or (d) instead of registering.** Do not wrap or monkeypatch the door's own
+   inherited cohort. The manifest's `trim_rule` string is owner-typed and
+   must name the ACTUAL basis — `inherited_seq0_cohort_2026-07-20` — not
+   seq-0's `source_health_ready_at_pinned_session` (false here: selection is
+   inheritance, not fresh source health) and not `none` (false with six
+   exclusions); nothing on main validates this string, so a misdescription
+   would freeze permanently (delta-review X2). Stated consequence
+   (delta-review X5, deliberate): pinning the set removes the Option-C trim
+   escape — if an inherited name is NO_GO at registration time, the operator
+   cannot exclude it; registration blocks until its data is ready. That is
+   the anti-cherry-pick guarantee, not a defect. A typo'd or substituted
+   nine-name set then fails (a), (b), or (d) instead of registering.** Do not wrap or monkeypatch the door's own
    refusals.
    **Activation spec (C10, Repo-verified):** `register_window_real:477-486`
    constrains only the HASH, never which file — and the only activation spec
@@ -447,7 +456,12 @@ registration evidence and delegates to `register_window_real`
    CLI compares the on-disk spec's hash to the owner-typed one and refuses
    mismatch. The CLI never self-derives the trusted value — a post-review
    edit at the pinned path then fails the comparison instead of silently
-   re-hashing. **Pinning
+   re-hashing. Test design (delta-review X3): the happy path computes the
+   on-disk hash AT TEST TIME (proving the comparison mechanism, never
+   pinning a digest that goes red when the owner legitimately edits at
+   freeze time); the mismatch path uses a deliberately-wrong constant. The
+   CLI normalizes case/whitespace on the owner-typed hash and refuses
+   non-64-hex input with a clear message. **Pinning
    (round-6 C4): a directory check is insufficient — the legacy ThetaData
    spec lives in the same directory and would still hash cleanly. The CLI
    pins the EXACT path `docs/superpowers/specs/2026-09-02-h7-schwab-activation-spec.md`
@@ -476,7 +490,11 @@ registration evidence and delegates to `register_window_real`
    commitment-covers-window-end and verified-through == historical
    (`h7_schwab_window_registration.py:228-252`), so an equal or earlier
    owner-typed start would register a "forward" window over already-observed
-   sessions; equal-date and past-date refusal tests required.
+   sessions; equal-date and past-date refusal tests required. Additionally
+   (delta-review X4): the start must be a MEMBER of `trading_days` —
+   `derive_window_end` silently begins the window on the next session when
+   handed a weekend/holiday, permanently recording a start that is not a
+   decision session; weekend/holiday refusal test required.
    **(manifest-hash binding, W8)** `evidence["last_historical_manifest_receipt_hash"]`
    must EQUAL the verified data-gate receipt's `schwab_manifest_hash` — the
    builder copies it into `payload.history` unchecked (`:344-352`), so a
@@ -620,7 +638,13 @@ Extend it to:
 2. Record `input_files`: every input file consumed, with repo-relative path
    and sha256 (the shape WP-A validates; the preserved
    `2026-08-11-feasibility-primary-earnings.json` shows the field layout —
-   Repo-verified on main via PR #137).
+   Repo-verified on main via PR #137 — cited for the per-entry SHAPE
+   (`{path, sha256}`) ONLY: its three-entry set would fail W5's closure by
+   design. The SET is W5's derivation (~642 entries at cohort-9 × 70
+   sessions: per-symbol-session chain files + underlying closes + earnings
+   CSVs). A directory-level or aggregate hash is NOT an acceptable
+   optimization — it reintroduces the `canonical_data_paths` defect rev-1
+   finding m1 rejected. Delta-review X1.)
 3. Compute and record BOTH figures, explicitly labeled: the existing
    unconstrained `expected_entries` AND the occupancy-constrained figure —
    reusing `occupancy_constrained_count(...)` at

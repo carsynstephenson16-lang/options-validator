@@ -226,3 +226,41 @@ WP bodies without re-reading neighbors, all applied as rev 7:
   non-blocking display; format gate Python-files-only) applied with this
   entry. Standing owner items unchanged: re-rule the 60-minute threshold
   against ABSOLUTE ages; review + freeze the Schwab activation spec.
+
+## Round 8 (2026-09-02, rev 8) — third Codex-bot wave + delta review PASS
+
+Third bot wave on rev 7 (@17cda5e): 7 findings (W2–W8), all attacking
+circularity/edge gaps in the rev-7 additions. The three code-behavior claims
+were verified inline before amending, then independently re-verified by the
+reviewer — all accurate: seq-0 of `ledger/h7_forward/events.jsonl` carries
+the inherited cohort (included AMD AMZN CEG ET MSFT NOW PLTR TEM VST,
+excluded AVGO CRWV IREN NVDA SMCI USAR, scope_id `h7-forward-15-v1`); the
+builder has no start-after-history check (`:228-252`); the historical
+manifest hash is copied into `payload.history` unchecked (`:344-352`).
+
+Applied as rev 8: W2 inherited-cohort pin against seq-0 (SET equality;
+reasons owner-typed fresh); W3 source-hash path tuple frozen as a validator
+constant; W4 owner-typed spec sha256 at use time (CLI never self-derives the
+trusted value); W5 derived input-set closure (exact set equality before
+per-file hashing); W6 timestamp hygiene (null/garbage/post-close ⇒
+EVIDENCE_INVALID; negative age always refuses); W7 strict
+start-after-history chronology; W8 historical-manifest-hash equality against
+the verified data-gate receipt.
+
+**Delta review verdict (@61f5ea8): PASS — READY stands.** All four probed
+conflict candidates clean; the load-bearing closure fact verified: seq-0's
+nine names == `V14_REGISTERED_COHORT_9.json`'s universe, so W2 and the
+receipt-equality check are mutually satisfiable. Five non-gating findings
+X1–X5 applied with this entry: X1 (08-11 receipt cited for entry SHAPE only;
+W5's set is ~642 entries; no aggregate-hash shortcut), X2 (owner-typed
+`trim_rule` = `inherited_seq0_cohort_2026-07-20` — both existing strings
+would be false), X3 (spec-hash happy-path test computes at test time; CLI
+normalizes + refuses non-64-hex), X4 (start must be a member of
+`trading_days`; weekend/holiday refusal), X5 (stated consequence: the pin
+removes the Option-C trim escape — a NO_GO inherited name blocks
+registration until ready; deliberate anti-cherry-pick).
+
+Arc totals across four waves: 27 external findings adjudicated (26 valid or
+partially valid, 0 invalid) + 11 final-text self-review defects + 5 delta
+findings. Standing owner items unchanged: re-rule the 60-minute threshold
+against ABSOLUTE ages; review, freeze, and HASH the Schwab activation spec.
