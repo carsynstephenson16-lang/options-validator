@@ -150,3 +150,68 @@ refuses specs outside `docs/superpowers/specs/`).
 Owner items created by this round: (1) re-confirm or retype the quote-age
 threshold against the ABSOLUTE age metric before the gate may block; (2)
 review and freeze the new Schwab activation spec before any real run.
+
+## Round 6 (2026-09-02, rev 6) — second Codex-bot wave, 11 findings applied
+
+The bot's second wave on rev 5 (@2dbac49) opened with a valid PROCESS
+finding: rev 5's READY status rested on verification of the first wave's
+findings, not a review of the resulting final text. Rev 6: status reset to
+DRAFT; all 11 findings applied — receipt-bound cohort typo guard (typed set ==
+WP-A-validated receipt universe + 9+6 partition of the 15 + non-empty
+exclusion reasons); exact activation-spec path pinned (directory check
+admitted the legacy spec); two-mode quote-age gate (blocking exists ONLY when
+a new owner-typed absolute-metric constant exists; `AWAITING_OWNER_THRESHOLD`
+otherwise); decision statistic recomputed from manifest-bound chain bytes
+(sidecar demoted to display — an edited sidecar keeps a valid manifest_hash);
+feasibility receipt source-hash over the computation surface; strict loss-bar
+validation; canonical `occupancy_constrained_expected_entries=<value>` token;
+`max_report_age_s` not exposed by the CLI; occupancy figure labeled
+`upper_bound: true` and barred from the `>= 2 × bar` branch (no
+portfolio-netting arithmetic authored); `ruff format --check` added to
+acceptance.
+
+## Round 7 (2026-09-02, rev 6 final-text review → rev 7) — PASS WITH FIXES
+
+Independent Opus review of the COMPLETE rev-6 text (@987d8bb) — the recorded
+post-change review round 6's process finding demanded. Verdict: **PASS WITH
+FIXES** — every rev-5/6 amendment verified faithfully applied, no reopened
+finding in the WP bodies; 11 consistency/satisfiability defects from editing
+WP bodies without re-reading neighbors, all applied as rev 7:
+
+- **R1 (blocker, measured):** repo-wide `ruff format --check .` exits 1 on
+  main TODAY (276 files would reformat) — the round-6 C7 gate was
+  unsatisfiable; scoped to the Scope-IN file list.
+- **R2 (blocker):** WP-E.1 still ordered the 60-min constant landed as a
+  blocking threshold while WP-E.2 required it not to exist — WP-E.1 now
+  lands it as an explicitly NON-BLOCKING display constant
+  (`..._DISPERSION_REFERENCE_MINUTES`); the blocking constant remains
+  owner-future.
+- **R3 (blocker):** WP-E's trailing acceptance block predated rev 6 and
+  contradicted it (missing-sidecar-fails-closed; unconditional ban tests) —
+  rewritten as mode-A/mode-B/both-modes lists.
+- **R4:** "arms from the first session that has a sidecar" → manifest-bound
+  chain data; sidecar neither required nor sufficient.
+- **R5:** loss-bar equality no longer "owner-frozen spec" prose extraction —
+  canonical `schwab_min_losses_for_verdict=7` token in the spec, provenance
+  stated honestly as TRANSCRIBED from ruling 2026-08-14 until owner freeze.
+- **R6:** stale "frozen scope-keyed mapping" wording purged from OUT and
+  Scope-IN (it re-sanctioned the monkeypatchable mapping WP-G forbids).
+- **R7:** WP-J now states the deliberate, precedent-bound relaxation of the
+  whole-universe-GO check (`:168-174`) for the trimmed path only, mirroring
+  `h7_activation_guard.py:120-127`, with excluded-name-NO_GO-still-registers
+  and included-name-NO_GO-refuses tests.
+- **R8:** WP-B's "bar-met path" test was unsatisfiable under WP-I(d) —
+  replaced with the upper-bound-refusal form.
+- **R9:** source-hash binding pinned to `research.hashing.source_hash(paths=...)`
+  with the path tuple recorded verbatim in the receipt;
+  `diagnostic_source_hash()` explicitly forbidden (near-HEAD-wide surface).
+- **R10:** `schwab_quote_age_report.py` joins Scope-IN for one bounded
+  change — promote private `_timestamps` (`:164`) to the public accessor the
+  module's own `:84-97` comment records as a work package of this arc.
+- **R11:** `tests/test_ritual_switch_on_hash_containment.py` joins Scope-IN
+  (its frozen config snapshot gains exactly the one sanctioned constant).
+- Nits: OUT's stale OD-3 phrase corrected; WP-C.1 typo-guard (a) noted as
+  already enforced at `:172-181`; `tests/test_h7_scoring_identity.py` named;
+  builder-vs-CLI validation-layer ownership stated.
+
+- Delta re-read verdict on rev 7: (recorded below)
