@@ -1,0 +1,106 @@
+{
+  "captured_at_et": "2026-09-01T11:00:11.336462-04:00",
+  "captured_at_utc": "2026-09-01T15:00:11.336462+00:00",
+  "config_hash": "00d7b3baf751856e61473180a80dd93b52249c25b952fbdf7eab0c057a2002a2",
+  "force": false,
+  "iv_rank_calibration": null,
+  "names": {
+    "AMD": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "AMD"
+    },
+    "AMZN": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "AMZN"
+    },
+    "AVGO": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "AVGO"
+    },
+    "CEG": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "CEG"
+    },
+    "CRWV": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "CRWV"
+    },
+    "ET": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "ET"
+    },
+    "IREN": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "IREN"
+    },
+    "MSFT": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "MSFT"
+    },
+    "NOW": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "NOW"
+    },
+    "NVDA": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "NVDA"
+    },
+    "PLTR": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "PLTR"
+    },
+    "SMCI": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "SMCI"
+    },
+    "TEM": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "TEM"
+    },
+    "USAR": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "USAR"
+    },
+    "VST": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "unavailable",
+      "symbol": "VST"
+    }
+  },
+  "probe_healed_this_run": false,
+  "probe_receipt_path": "reports/live_probe/2026-08-26.json",
+  "receipt_kind": "intraday_capture/v1",
+  "scheduled_et": "11:00",
+  "session_tag": "midmorning",
+  "universe": [
+    "CRWV",
+    "TEM",
+    "PLTR",
+    "NOW",
+    "SMCI",
+    "NVDA",
+    "AMD",
+    "AVGO",
+    "IREN",
+    "USAR",
+    "ET",
+    "VST",
+    "CEG",
+    "MSFT",
+    "AMZN"
+  ]
+}

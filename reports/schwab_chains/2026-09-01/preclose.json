@@ -1,0 +1,97 @@
+{
+  "captured_at_et": "2026-09-01T15:45:09.127759-04:00",
+  "captured_at_utc": "2026-09-01T19:45:09.127759+00:00",
+  "code_sha": "c128925f11815a5fcd1ecc2fb17515a33604a817",
+  "config_hash": "00d7b3baf751856e61473180a80dd93b52249c25b952fbdf7eab0c057a2002a2",
+  "force": false,
+  "invocation_source": "launchd",
+  "manifest_hash": null,
+  "manifest_path": null,
+  "names": {
+    "AMD": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "AMZN": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "AVGO": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "CEG": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "CRWV": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "ET": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "IREN": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "MSFT": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "NOW": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "NVDA": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "PLTR": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "SMCI": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "TEM": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "USAR": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    },
+    "VST": {
+      "note": "OAuthError: unsupported_token_type: 400 Bad Request: \"{\"error_description\":\"Refresh token is invalid, expired or revoked\",\"error\":\"invalid_grant\"}\"",
+      "status": "failed"
+    }
+  },
+  "overall_status": "failed",
+  "provider": "schwab",
+  "provider_version": "1.5.1",
+  "receipt_kind": "schwab_chain_capture/v1",
+  "scheduled_session_tag": "preclose",
+  "session": "2026-09-01",
+  "session_chain_convention": "preclose_snapshot_v1",
+  "timing_validation": "within 10min of the scheduled time",
+  "universe": [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST"
+  ]
+}
