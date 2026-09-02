@@ -98,8 +98,8 @@ promptly — an unmerged ledger-touching branch is the chain-fork failure mode.
 ### Suggested click order
 1. #145 (ledger — first, so nothing else appends ahead of it)
 2. #136, #142
-3. #146 (ops fixes; review PASS) and #147 (Brief 36 door) once #147's round-2 review is PASS
-   (both touch `config.py`).
+3. #146 (ops fixes; review PASS, ready). #147 (Brief 36 door) is NOT ready — draft, round-2 FAIL vs
+   the moved brief; see §3a.
 
 After the merges, sync production BEFORE 15:45 ET (the capture wrapper refuses to run if ops
 is behind origin/main):
@@ -148,9 +148,29 @@ test-bound to the variant menu's constant). F7 single identity definition + end-
 tool-receipt→validator test. F8 two bar==7-under-config-10 assertions. F9 documented, not
 reverted. F10 cohort + per-name exclusion reasons in `config.py` with seq-0/packet provenance.
 
-Opened as **draft PR #147**. A fresh round-2 adversarial review was dispatched; its verdict
-is recorded in the PR #147 thread and, if PASS, the PR is marked ready for your click (it
-touches `config.py`). If it is not PASS, the PR stays draft and the blockers are listed there.
+Opened as **draft PR #147**. The fresh round-2 review returned **FAIL** (4 blockers, 6 majors;
+receipt `reports/2026-09-02-brief-36-implementation-review-round2.md` on the branch) — and the
+reason matters more than the list: **the brief itself moved from rev 3 to rev 8 during this
+session** (01:29–02:08 ET, commits 2dbac49…d4fc1c4 on the PR #142 branch, made by a concurrent
+session applying the GitHub review-bot waves that fired when #142 was marked ready). Round 1 and
+the fix round were against rev 3; round 2 was against rev 7. Rev 7/8 forbid several things the
+fixed branch now does: a blocking 60-minute gate (rev 7 WP-E.1 says the 60 is display-only
+"Mode A" with an `AWAITING_OWNER_THRESHOLD` verdict until you re-rule and type an ABSOLUTE
+threshold); the `count × window / len(sessions)` occupancy scaling (must refuse lookback ≠
+window instead); the cohort as a `config.py` constant (must be owner-typed at use time, pinned
+to the seq-0 ledger set); no activation-spec file or CLI pin; whole-universe GO instead of
+per-included-name GO (WP-J). Round-1's F1 finding ("gate has no callers") was a mis-finding
+against rev 7, which explicitly ships the gate with no production caller.
+
+**Decision taken:** no third round tonight against a moving target. PR #147 stays DRAFT with
+both receipts committed and both PRs cross-linked. **Next:** one fix round against the FINAL
+brief revision (confirm #142's head first), explicitly reverting the F1 wiring in
+`options_researcher/h7_session.py`, then round-3 review, then your click.
+
+**Process lesson (recorded, not blamed):** two autonomous sessions worked the same lane in the
+same hour without a shared lock. The 08-31 note already warned about this. Suggested rule: a
+session that intends to revise a brief or implement it posts a one-line "claim" comment on the
+brief's PR first; the other session checks the PR thread before dispatching.
 
 **Consequence to carry forward (unchanged from the brief):** the new `config.py` constants
 move `config_hash()`, so every pre-merge feasibility / source-health / data-gate receipt is
@@ -201,9 +221,9 @@ All four are small, test-driven, and reviewed; none changes a frozen number or a
 
 ## 6. Plain-English status after tonight
 
-- **Done:** every stale PR adjudicated and closed with evidence; five PRs green and ready; H7
-  packet records your GO; A2 ratification queued; Brief 36 implementation reviewed and in fix
-  round; four operational blind spots fixed with tests; 20 dead local branches and one dead
+- **Done:** every stale PR adjudicated and closed with evidence; six PRs green and ready; H7
+  packet records your GO; A2 ratification queued; Brief 36 implementation pushed, reviewed twice
+  (draft PR #147, not mergeable yet); four operational blind spots fixed with tests (PR #146); 20 dead local branches and one dead
   worktree removed; everything that existed only on this laptop is now on GitHub.
 - **Open, yours:** Schwab re-auth (today), three governed-path clicks, ops sync before 15:45.
 - **Next:** land Brief 36 door → regenerate cohort-9 feasibility + source-health + data-gate
