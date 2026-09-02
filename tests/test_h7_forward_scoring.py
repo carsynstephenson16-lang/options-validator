@@ -22,8 +22,7 @@ def _clock():
     return lambda: datetime.fromisoformat("2026-08-01T00:00:00+00:00")
 
 
-def _event(event_id, event_type, session, *, symbol=None, lane=None,
-           causes=None, payload=None):
+def _event(event_id, event_type, session, *, symbol=None, lane=None, causes=None, payload=None):
     return {
         "schema_version": 1,
         "event_id": event_id,
@@ -59,9 +58,7 @@ class ScoringCase(unittest.TestCase):
         )
 
     def append(self, *args, **kwargs):
-        return ledger.append_event(
-            _event(*args, **kwargs), base_dir=self.base, clock=_clock()
-        )
+        return ledger.append_event(_event(*args, **kwargs), base_dir=self.base, clock=_clock())
 
     def trade(
         self,
@@ -99,37 +96,55 @@ class ScoringCase(unittest.TestCase):
             }
             opening_legs = [
                 {
-                    "name": "short", "expiration": expiration,
-                    "strike": 100.0, "right": "P", "side": "sell",
+                    "name": "short",
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": "P",
+                    "side": "sell",
                     "quantity": config.H7_FORWARD_CONTRACTS,
-                    "raw_bid": 4.0, "raw_ask": 4.1,
+                    "raw_bid": 4.0,
+                    "raw_ask": 4.1,
                     "open_interest": opening_open_interest,
-                    "raw_delta": -0.4, "fill_price": adverse_sell(4.0),
+                    "raw_delta": -0.4,
+                    "fill_price": adverse_sell(4.0),
                 },
                 {
-                    "name": "long", "expiration": expiration,
-                    "strike": 95.0, "right": "P", "side": "buy",
+                    "name": "long",
+                    "expiration": expiration,
+                    "strike": 95.0,
+                    "right": "P",
+                    "side": "buy",
                     "quantity": config.H7_FORWARD_CONTRACTS,
-                    "raw_bid": 0.92, "raw_ask": 1.0,
+                    "raw_bid": 0.92,
+                    "raw_ask": 1.0,
                     "open_interest": opening_open_interest,
-                    "raw_delta": -0.2, "fill_price": adverse_buy(1.0),
+                    "raw_delta": -0.2,
+                    "fill_price": adverse_buy(1.0),
                 },
             ]
             closing_legs = [
                 {
-                    **{key: opening_legs[0][key] for key in (
-                        "name", "expiration", "strike", "right", "quantity"
-                    )},
-                    "side": "buy", "raw_bid": 1.9, "raw_ask": 2.0,
-                    "open_interest": 100, "raw_delta": -0.3,
+                    **{
+                        key: opening_legs[0][key]
+                        for key in ("name", "expiration", "strike", "right", "quantity")
+                    },
+                    "side": "buy",
+                    "raw_bid": 1.9,
+                    "raw_ask": 2.0,
+                    "open_interest": 100,
+                    "raw_delta": -0.3,
                     "fill_price": adverse_buy(2.0),
                 },
                 {
-                    **{key: opening_legs[1][key] for key in (
-                        "name", "expiration", "strike", "right", "quantity"
-                    )},
-                    "side": "sell", "raw_bid": 0.55, "raw_ask": 0.6,
-                    "open_interest": 100, "raw_delta": -0.1,
+                    **{
+                        key: opening_legs[1][key]
+                        for key in ("name", "expiration", "strike", "right", "quantity")
+                    },
+                    "side": "sell",
+                    "raw_bid": 0.55,
+                    "raw_ask": 0.6,
+                    "open_interest": 100,
+                    "raw_delta": -0.1,
                     "fill_price": adverse_sell(0.55),
                 },
             ]
@@ -142,9 +157,8 @@ class ScoringCase(unittest.TestCase):
                 for leg in closing_legs
             )
             computed_at_risk = (
-                (5.0 + computed_entry) * 100 * config.H7_FORWARD_CONTRACTS
-                + 4 * config.COMMISSION_PER_CONTRACT
-            )
+                5.0 + computed_entry
+            ) * 100 * config.H7_FORWARD_CONTRACTS + 4 * config.COMMISSION_PER_CONTRACT
         else:
             action = {
                 "lane": lane,
@@ -152,21 +166,36 @@ class ScoringCase(unittest.TestCase):
                 "expiration": expiration,
                 "strike": 100.0,
             }
-            opening_legs = [{
-                "name": "long", "expiration": expiration, "strike": 100.0,
-                "right": "C", "side": "buy",
-                "quantity": config.H7_FORWARD_CONTRACTS,
-                "raw_bid": 4.8, "raw_ask": 4.9,
-                "open_interest": opening_open_interest,
-                "raw_delta": 0.5, "fill_price": adverse_buy(4.9),
-            }]
-            closing_legs = [{
-                "name": "long", "expiration": expiration, "strike": 100.0,
-                "right": "C", "side": "sell",
-                "quantity": config.H7_FORWARD_CONTRACTS,
-                "raw_bid": 6.1, "raw_ask": 6.2, "open_interest": 100,
-                "raw_delta": 0.6, "fill_price": adverse_sell(6.1),
-            }]
+            opening_legs = [
+                {
+                    "name": "long",
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": "C",
+                    "side": "buy",
+                    "quantity": config.H7_FORWARD_CONTRACTS,
+                    "raw_bid": 4.8,
+                    "raw_ask": 4.9,
+                    "open_interest": opening_open_interest,
+                    "raw_delta": 0.5,
+                    "fill_price": adverse_buy(4.9),
+                }
+            ]
+            closing_legs = [
+                {
+                    "name": "long",
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": "C",
+                    "side": "sell",
+                    "quantity": config.H7_FORWARD_CONTRACTS,
+                    "raw_bid": 6.1,
+                    "raw_ask": 6.2,
+                    "open_interest": 100,
+                    "raw_delta": 0.6,
+                    "fill_price": adverse_sell(6.1),
+                }
+            ]
             computed_entry = opening_legs[0]["fill_price"]
             computed_exit = closing_legs[0]["fill_price"]
             computed_at_risk = (
@@ -190,9 +219,7 @@ class ScoringCase(unittest.TestCase):
         leg_count = len(opening_legs)
         if entry_commission is None:
             entry_commission = (
-                leg_count
-                * config.H7_FORWARD_CONTRACTS
-                * config.COMMISSION_PER_CONTRACT
+                leg_count * config.H7_FORWARD_CONTRACTS * config.COMMISSION_PER_CONTRACT
             )
         if exit_commission is None:
             exit_commission = entry_commission
@@ -202,16 +229,21 @@ class ScoringCase(unittest.TestCase):
         opening = f"open:{key}"
         exit_intent = f"exit:{key}"
         self.append(
-            intent, "entry_intent", decision, symbol=symbol, lane=lane,
+            intent,
+            "entry_intent",
+            decision,
+            symbol=symbol,
+            lane=lane,
             payload={
                 "position_id": intent,
                 "planned_fill_session": opened,
                 "decision_at_risk": at_risk,
                 "action": action,
                 "legs": [
-                    {key: leg[key] for key in (
-                        "name", "expiration", "strike", "right", "side", "quantity"
-                    )}
+                    {
+                        key: leg[key]
+                        for key in ("name", "expiration", "strike", "right", "side", "quantity")
+                    }
                     for leg in opening_legs
                 ],
             },
@@ -223,7 +255,11 @@ class ScoringCase(unittest.TestCase):
             opening_legs[0]["strike"] = forge_opening_strike
             closing_legs[0]["strike"] = forge_opening_strike
         self.append(
-            opening, "paper_fill", opened, symbol=symbol, lane=lane,
+            opening,
+            "paper_fill",
+            opened,
+            symbol=symbol,
+            lane=lane,
             causes=[intent],
             payload={
                 "transition": "open",
@@ -246,7 +282,11 @@ class ScoringCase(unittest.TestCase):
         if not close:
             return
         self.append(
-            exit_intent, "exit_intent", trigger, symbol=symbol, lane=lane,
+            exit_intent,
+            "exit_intent",
+            trigger,
+            symbol=symbol,
+            lane=lane,
             causes=[opening],
             payload={
                 "position_id": intent,
@@ -257,7 +297,11 @@ class ScoringCase(unittest.TestCase):
             },
         )
         self.append(
-            f"close:{key}", "paper_fill", closed, symbol=symbol, lane=lane,
+            f"close:{key}",
+            "paper_fill",
+            closed,
+            symbol=symbol,
+            lane=lane,
             causes=[exit_intent],
             payload={
                 "transition": "close",
@@ -293,10 +337,15 @@ class TestEconomicsAndBenchmarks(ScoringCase):
     def test_debit_and_credit_pnl_after_all_costs(self):
         self.trade("debit")
         self.trade(
-            "credit", symbol="PLTR", lane="c",
-            decision="2026-07-13", opened="2026-07-14",
-            trigger="2026-07-15", closed="2026-07-16",
-            entry_underlying=50.0, exit_underlying=45.0,
+            "credit",
+            symbol="PLTR",
+            lane="c",
+            decision="2026-07-13",
+            opened="2026-07-14",
+            trigger="2026-07-15",
+            closed="2026-07-16",
+            entry_underlying=50.0,
+            exit_underlying=45.0,
         )
         result = score_forward_window(
             base_dir=self.base,
@@ -313,10 +362,22 @@ class TestEconomicsAndBenchmarks(ScoringCase):
         self.assertEqual(credit["underlying_move"], -5.0)
 
     def test_inclusive_decision_bounds_and_deterministic_order(self):
-        self.trade("outside", symbol="SMCI", decision="2026-07-03",
-                   opened="2026-07-06", trigger="2026-07-07", closed="2026-07-08")
-        self.trade("end", symbol="PLTR", decision="2026-07-31",
-                   opened="2026-08-03", trigger="2026-08-04", closed="2026-08-05")
+        self.trade(
+            "outside",
+            symbol="SMCI",
+            decision="2026-07-03",
+            opened="2026-07-06",
+            trigger="2026-07-07",
+            closed="2026-07-08",
+        )
+        self.trade(
+            "end",
+            symbol="PLTR",
+            decision="2026-07-31",
+            opened="2026-08-03",
+            trigger="2026-08-04",
+            closed="2026-08-05",
+        )
         self.trade("start", symbol="NVDA", decision="2026-07-06")
         first = score_forward_window(
             base_dir=self.base, window_start="2026-07-06", window_end="2026-07-31"
@@ -325,9 +386,7 @@ class TestEconomicsAndBenchmarks(ScoringCase):
             base_dir=self.base, window_start="2026-07-06", window_end="2026-07-31"
         )
         self.assertEqual(first, second)
-        self.assertEqual(
-            [trade["symbol"] for trade in first["trades"]], ["NVDA", "PLTR"]
-        )
+        self.assertEqual([trade["symbol"] for trade in first["trades"]], ["NVDA", "PLTR"])
 
     def test_included_open_position_refuses_incomplete_score(self):
         self.trade("open", close=False)
@@ -452,16 +511,26 @@ class TestEconomicsAndBenchmarks(ScoringCase):
 class TestVerdicts(ScoringCase):
     def test_exact_three_word_vocabulary_and_gate_mapping(self):
         cases = [
-            ({"n_losses": 9, "verdict": "INSUFFICIENT SAMPLE", "expectancy_CI90": [-1, 1]},
-             ("INCONCLUSIVE", "insufficient_losses")),
-            ({"n_losses": 10, "verdict": "INSUFFICIENT SAMPLE", "expectancy_CI90": [-1, 1]},
-             ("INCONCLUSIVE", "insufficient_cohorts")),
-            ({"n_losses": 10, "verdict": "x", "expectancy_CI90": [-2, -1]},
-             ("REJECTED", "ci_below_zero")),
-            ({"n_losses": 10, "verdict": "x", "expectancy_CI90": [1, 2]},
-             ("SURVIVED", "ci_above_zero")),
-            ({"n_losses": 10, "verdict": "x", "expectancy_CI90": [-1, 2]},
-             ("INCONCLUSIVE", "no_edge")),
+            (
+                {"n_losses": 9, "verdict": "INSUFFICIENT SAMPLE", "expectancy_CI90": [-1, 1]},
+                ("INCONCLUSIVE", "insufficient_losses"),
+            ),
+            (
+                {"n_losses": 10, "verdict": "INSUFFICIENT SAMPLE", "expectancy_CI90": [-1, 1]},
+                ("INCONCLUSIVE", "insufficient_cohorts"),
+            ),
+            (
+                {"n_losses": 10, "verdict": "x", "expectancy_CI90": [-2, -1]},
+                ("REJECTED", "ci_below_zero"),
+            ),
+            (
+                {"n_losses": 10, "verdict": "x", "expectancy_CI90": [1, 2]},
+                ("SURVIVED", "ci_above_zero"),
+            ),
+            (
+                {"n_losses": 10, "verdict": "x", "expectancy_CI90": [-1, 2]},
+                ("INCONCLUSIVE", "no_edge"),
+            ),
         ]
         for board, expected in cases:
             with self.subTest(expected=expected):
@@ -500,9 +569,7 @@ class TestGuardsAndPurity(ScoringCase):
     def test_missing_window_registration_refuses(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        with self.assertRaisesRegex(
-            ScoringValidationError, "window_registration"
-        ):
+        with self.assertRaisesRegex(ScoringValidationError, "window_registration"):
             score_forward_window(
                 base_dir=Path(tmp.name) / "unregistered",
                 window_start="2026-07-06",
@@ -511,16 +578,20 @@ class TestGuardsAndPurity(ScoringCase):
 
     def test_scoring_is_read_only(self):
         self.trade("one")
-        before = (self.base.joinpath("events.jsonl").read_bytes(),
-                  self.base.joinpath("HEAD").read_bytes())
+        before = (
+            self.base.joinpath("events.jsonl").read_bytes(),
+            self.base.joinpath("HEAD").read_bytes(),
+        )
         score_forward_window(
             base_dir=self.base,
             window_start="2026-07-06",
             window_end="2026-07-31",
         )
         self.assertEqual(
-            (self.base.joinpath("events.jsonl").read_bytes(),
-             self.base.joinpath("HEAD").read_bytes()),
+            (
+                self.base.joinpath("events.jsonl").read_bytes(),
+                self.base.joinpath("HEAD").read_bytes(),
+            ),
             before,
         )
 

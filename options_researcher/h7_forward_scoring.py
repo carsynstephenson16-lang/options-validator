@@ -89,18 +89,14 @@ def _nonnegative(value, field: str) -> float:
     return number
 
 
-def map_forward_verdict(
-    board: dict, min_losses_for_verdict: int
-) -> tuple[str, str]:
+def map_forward_verdict(board: dict, min_losses_for_verdict: int) -> tuple[str, str]:
     """Map the dependence-aware scoreboard to the frozen three-word result."""
     if (
         isinstance(min_losses_for_verdict, bool)
         or not isinstance(min_losses_for_verdict, int)
         or min_losses_for_verdict < 0
     ):
-        raise ScoringValidationError(
-            "min_losses_for_verdict must be a non-negative integer"
-        )
+        raise ScoringValidationError("min_losses_for_verdict must be a non-negative integer")
     if not isinstance(board, dict):
         raise ScoringValidationError("scoreboard must be an object")
     losses = board.get("n_losses")
@@ -127,9 +123,7 @@ def map_forward_verdict(
     return "INCONCLUSIVE", "no_edge"
 
 
-def _score_group(
-    trades: list[dict], label: str, min_losses_for_verdict: int
-) -> dict:
+def _score_group(trades: list[dict], label: str, min_losses_for_verdict: int) -> dict:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         raw = scoreboard(trades, label=label)
@@ -157,11 +151,7 @@ def _fill_price(leg: dict, label: str) -> float:
     if bid > ask:
         raise ScoringValidationError(f"{label} quote is crossed")
     open_interest = leg.get("open_interest")
-    if (
-        isinstance(open_interest, bool)
-        or not isinstance(open_interest, int)
-        or open_interest < 0
-    ):
+    if isinstance(open_interest, bool) or not isinstance(open_interest, int) or open_interest < 0:
         raise ScoringValidationError(f"{label} open interest is invalid")
     delta = _finite(leg.get("raw_delta"), f"{label} raw delta")
     if not -1 <= delta <= 1:
@@ -235,9 +225,7 @@ def _reconstruct_economics(opening, closing, structure: str) -> tuple[float, flo
         entry_net += entry_price if side == "buy" else -entry_price
         exit_net += exit_price if close_side == "sell" else -exit_price
 
-    recorded_entry = _finite(
-        opening.payload.get("net_debit_per_share"), "entry net debit"
-    )
+    recorded_entry = _finite(opening.payload.get("net_debit_per_share"), "entry net debit")
     recorded_exit = _finite(
         closing.payload.get("net_close_credit_per_share"), "exit net close credit"
     )
@@ -247,9 +235,7 @@ def _reconstruct_economics(opening, closing, structure: str) -> tuple[float, flo
         raise ScoringValidationError("exit net credit is inconsistent with fill legs")
 
     quantity = config.H7_FORWARD_CONTRACTS
-    round_trip_commission = (
-        len(expected) * 2 * config.COMMISSION_PER_CONTRACT * quantity
-    )
+    round_trip_commission = len(expected) * 2 * config.COMMISSION_PER_CONTRACT * quantity
     if structure == "long_call":
         if entry_net <= 0:
             raise ScoringValidationError("long-call debit must be positive")
@@ -308,30 +294,16 @@ def _trade_from_fills(opening, closing) -> dict:
     if closing.payload.get("structure") != structure:
         raise ScoringValidationError("closing fill changes structure")
     quantity = config.H7_FORWARD_CONTRACTS
-    entry_net, exit_net, at_risk = _reconstruct_economics(
-        opening, closing, structure
-    )
-    entry_commission = _nonnegative(
-        opening.payload.get("commission"), "entry commission"
-    )
-    exit_commission = _nonnegative(
-        closing.payload.get("commission"), "exit commission"
-    )
-    expected_commission = (
-        len(opening.payload["legs"])
-        * quantity
-        * config.COMMISSION_PER_CONTRACT
-    )
+    entry_net, exit_net, at_risk = _reconstruct_economics(opening, closing, structure)
+    entry_commission = _nonnegative(opening.payload.get("commission"), "entry commission")
+    exit_commission = _nonnegative(closing.payload.get("commission"), "exit commission")
+    expected_commission = len(opening.payload["legs"]) * quantity * config.COMMISSION_PER_CONTRACT
     if not math.isclose(entry_commission, expected_commission, abs_tol=1e-9):
         raise ScoringValidationError("entry commission does not match frozen cost")
     if not math.isclose(exit_commission, expected_commission, abs_tol=1e-9):
         raise ScoringValidationError("exit commission does not match frozen cost")
-    entry_underlying = _positive(
-        opening.payload.get("underlying_close"), "entry underlying close"
-    )
-    exit_underlying = _positive(
-        closing.payload.get("underlying_close"), "exit underlying close"
-    )
+    entry_underlying = _positive(opening.payload.get("underlying_close"), "entry underlying close")
+    exit_underlying = _positive(closing.payload.get("underlying_close"), "exit underlying close")
     for event, fill_session, label in (
         (opening, opened, "entry"),
         (closing, closed, "exit"),
@@ -340,17 +312,9 @@ def _trade_from_fills(opening, closing) -> dict:
             raise ScoringValidationError(
                 f"{label} underlying close is not bound to the fill session"
             )
-        if event.payload.get("underlying_close_identity") != event.payload.get(
-            "closes_identity"
-        ):
-            raise ScoringValidationError(
-                f"{label} underlying close has the wrong source identity"
-            )
-    pnl = (
-        (exit_net - entry_net) * 100 * quantity
-        - entry_commission
-        - exit_commission
-    )
+        if event.payload.get("underlying_close_identity") != event.payload.get("closes_identity"):
+            raise ScoringValidationError(f"{label} underlying close has the wrong source identity")
+    pnl = (exit_net - entry_net) * 100 * quantity - entry_commission - exit_commission
     if not math.isfinite(pnl):
         raise ScoringValidationError("reconstructed pnl is non-finite")
     return {
@@ -384,13 +348,9 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
     if start > end:
         raise ScoringValidationError("window_start must not follow window_end")
     events = ledger.read_events(base)
-    registrations = [
-        event for event in events if event.event_type == "window_registration"
-    ]
+    registrations = [event for event in events if event.event_type == "window_registration"]
     if len(registrations) != 1:
-        raise ScoringValidationError(
-            "scoring requires exactly one window_registration event"
-        )
+        raise ScoringValidationError("scoring requires exactly one window_registration event")
     registration = registrations[0]
     try:
         registered_window = registration.payload["window"]
@@ -398,25 +358,19 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
         stage_bar = frozen["stage456_parameters"]["MIN_LOSSES_FOR_VERDICT"]
         scorer_bar = frozen["scorer"]["min_losses_for_verdict"]
     except (KeyError, TypeError) as exc:
-        raise ScoringValidationError(
-            "window registration loss bar is malformed"
-        ) from exc
+        raise ScoringValidationError("window registration loss bar is malformed") from exc
     if (
         registered_window.get("start_decision_session") != start
         or registered_window.get("final_decision_session") != end
     ):
-        raise ScoringValidationError(
-            "requested scoring window disagrees with window_registration"
-        )
+        raise ScoringValidationError("requested scoring window disagrees with window_registration")
     if (
         isinstance(stage_bar, bool)
         or not isinstance(stage_bar, int)
         or stage_bar < 0
         or scorer_bar != stage_bar
     ):
-        raise ScoringValidationError(
-            "window registration loss bar is malformed or inconsistent"
-        )
+        raise ScoringValidationError("window registration loss bar is malformed or inconsistent")
     min_losses_for_verdict = stage_bar
     as_of = max([end, *(event.evaluation_session for event in events)])
     snapshot = derive_book(base_dir=base, evaluation_session=as_of)
@@ -427,15 +381,12 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
     ]
     if unresolved:
         identities = ", ".join(item.reservation_id for item in unresolved)
-        raise ScoringIncompleteError(
-            f"included decisions remain unresolved: {identities}"
-        )
+        raise ScoringIncompleteError(f"included decisions remain unresolved: {identities}")
     rows = {row.position_id: row for row in snapshot.rows}
     openings = [
         event
         for event in events
-        if event.event_type == "paper_fill"
-        and event.payload.get("transition") == "open"
+        if event.event_type == "paper_fill" and event.payload.get("transition") == "open"
     ]
     closes: dict[str, ledger.StoredEvent] = {}
     for event in events:
@@ -448,9 +399,7 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
 
     trades: list[dict] = []
     for opening in openings:
-        decision = _session(
-            opening.payload.get("decision_session"), "decision_session"
-        )
+        decision = _session(opening.payload.get("decision_session"), "decision_session")
         if not start <= decision <= end:
             continue
         position_id = opening.payload.get("position_id")
@@ -458,14 +407,10 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
             raise ScoringValidationError("opening fill has no position_id")
         row = rows.get(position_id)
         if row is None or row.closed is None:
-            raise ScoringIncompleteError(
-                f"included position {position_id!r} is not fully closed"
-            )
+            raise ScoringIncompleteError(f"included position {position_id!r} is not fully closed")
         closing = closes.get(position_id)
         if closing is None:
-            raise ScoringIncompleteError(
-                f"included position {position_id!r} has no closing fill"
-            )
+            raise ScoringIncompleteError(f"included position {position_id!r} has no closing fill")
         trades.append(_trade_from_fills(opening, closing))
     trades.sort(
         key=lambda trade: (
@@ -476,9 +421,7 @@ def score_forward_window(*, base_dir, window_start: str, window_end: str) -> dic
         )
     )
 
-    overall = _score_group(
-        trades, "H7 forward paper overall", min_losses_for_verdict
-    )
+    overall = _score_group(trades, "H7 forward paper overall", min_losses_for_verdict)
     lanes = {
         lane: _score_group(
             [trade for trade in trades if trade["lane"] == lane],

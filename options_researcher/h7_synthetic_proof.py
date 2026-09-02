@@ -290,16 +290,8 @@ def run_synthetic_proof(root) -> dict:
                 "final_decision_session": DECISION_SESSION,
             },
             "frozen": {
-                "stage456_parameters": {
-                    "MIN_LOSSES_FOR_VERDICT": (
-                        config.MIN_LOSSES_FOR_VERDICT
-                    )
-                },
-                "scorer": {
-                    "min_losses_for_verdict": (
-                        config.MIN_LOSSES_FOR_VERDICT
-                    )
-                },
+                "stage456_parameters": {"MIN_LOSSES_FOR_VERDICT": (config.MIN_LOSSES_FOR_VERDICT)},
+                "scorer": {"min_losses_for_verdict": (config.MIN_LOSSES_FOR_VERDICT)},
             },
         },
         recorded="2026-07-11T00:59:59+00:00",

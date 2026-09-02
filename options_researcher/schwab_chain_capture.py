@@ -390,10 +390,7 @@ def capture(
                 manifest_hash=manifest_hash,
             )
         except Exception as exc:
-            detail = (
-                f"{QUOTE_AGE_SKIP_NOTE_PREFIX} "
-                f"{type(exc).__name__}: {exc}"
-            )
+            detail = f"{QUOTE_AGE_SKIP_NOTE_PREFIX} {type(exc).__name__}: {exc}"
             print(detail)
             try:
                 _write_quote_age_skip_marker(

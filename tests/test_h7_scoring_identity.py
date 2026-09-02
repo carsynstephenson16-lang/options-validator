@@ -10,10 +10,7 @@ from research.hashing import config_hash, cost_model_hash
 
 
 def _stage_parameters() -> dict[str, object]:
-    return {
-        name: getattr(config, name)
-        for name in identity.STAGE456_PARAMETER_NAMES
-    }
+    return {name: getattr(config, name) for name in identity.STAGE456_PARAMETER_NAMES}
 
 
 def _scorer() -> dict[str, object]:
@@ -53,9 +50,7 @@ class H7ScoringIdentityTests(unittest.TestCase):
         )
 
         self.assertEqual(registered, runtime)
-        self.assertEqual(
-            registered.contract, identity.SCORING_IDENTITY_CONTRACT
-        )
+        self.assertEqual(registered.contract, identity.SCORING_IDENTITY_CONTRACT)
 
     def test_runtime_identity_accepts_registered_loss_bar_override(self):
         frozen = _legacy_frozen()
@@ -79,18 +74,14 @@ class H7ScoringIdentityTests(unittest.TestCase):
 
         self.assertEqual(
             identity.registered_scoring_identity(frozen),
-            identity.runtime_scoring_identity(
-                min_losses_for_verdict=config.MIN_LOSSES_FOR_VERDICT
-            ),
+            identity.runtime_scoring_identity(min_losses_for_verdict=config.MIN_LOSSES_FOR_VERDICT),
         )
 
     def test_runtime_identity_refuses_a_missing_registered_loss_bar(self):
         """Round-1 F3: no config fallback may reintroduce the wrong bar."""
         with self.assertRaises(TypeError):
             identity.runtime_scoring_identity()  # type: ignore[call-arg]
-        with self.assertRaisesRegex(
-            identity.ScoringIdentityError, "min_losses_for_verdict"
-        ):
+        with self.assertRaisesRegex(identity.ScoringIdentityError, "min_losses_for_verdict"):
             identity.runtime_scoring_identity(min_losses_for_verdict=None)
 
     def test_every_frozen_stage_parameter_changes_identity(self):
@@ -117,9 +108,7 @@ class H7ScoringIdentityTests(unittest.TestCase):
         frozen[identity.REGISTRATION_CONTRACT_FIELD] = expected.contract
         frozen[identity.REGISTRATION_HASH_FIELD] = expected.identity_hash
 
-        self.assertEqual(
-            identity.registered_scoring_identity(frozen), expected
-        )
+        self.assertEqual(identity.registered_scoring_identity(frozen), expected)
 
     def test_missing_stage_parameter_is_malformed(self):
         frozen = _legacy_frozen()

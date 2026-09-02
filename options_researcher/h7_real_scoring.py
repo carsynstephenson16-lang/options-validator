@@ -48,11 +48,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FACTS_PATH = REPO_ROOT / "ledger" / "facts.log"
 DEFAULT_ARTIFACT_ROOT = REPO_ROOT / "reports" / "h7_forward_scoring"
 BASE_SPEC_PATH = (
-    REPO_ROOT
-    / "docs"
-    / "superpowers"
-    / "specs"
-    / "2026-07-22-h7-real-exit-scoring-SPEC.md"
+    REPO_ROOT / "docs" / "superpowers" / "specs" / "2026-07-22-h7-real-exit-scoring-SPEC.md"
 )
 AMENDMENT_SPEC_PATH = (
     REPO_ROOT
@@ -63,9 +59,7 @@ AMENDMENT_SPEC_PATH = (
 )
 # Compatibility name for callers that need the currently active delta document.
 SPEC_PATH = AMENDMENT_SPEC_PATH
-PINNED_BASE_SPEC_SHA256 = (
-    "c66d0e395ecc3ae77d5c554bd978e87fa305080cb61423015da513dd29065a75"
-)
+PINNED_BASE_SPEC_SHA256 = "c66d0e395ecc3ae77d5c554bd978e87fa305080cb61423015da513dd29065a75"
 AMENDMENT_FACT_TAG = "H7_EXIT_SCORING_SPEC_AMENDMENT_V1_3"
 AMENDMENT_PROVENANCE = "owner-delegated standing 2026-07-25"
 REVIEW_PASS_TAG = "H7_REAL_EXIT_SCORING_INDEPENDENT_REVIEW_PASS"
@@ -122,11 +116,7 @@ def _refuse(detail: str, exc: Exception | None = None) -> RealScoringRefused:
 
 def _utc_now(now: datetime | None) -> datetime:
     stamp = datetime.now(timezone.utc) if now is None else now
-    if (
-        not isinstance(stamp, datetime)
-        or stamp.tzinfo is None
-        or stamp.utcoffset() != timedelta(0)
-    ):
+    if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() != timedelta(0):
         raise RealScoringRefused("now must be a UTC datetime")
     return stamp
 
@@ -144,9 +134,7 @@ def _config_provenance_hash(value: object, label: str) -> str:
 def _verified_spec_chain() -> tuple[str, str]:
     base_hash = sha256_file(BASE_SPEC_PATH)
     if base_hash != PINNED_BASE_SPEC_SHA256:
-        raise RealScoringRefused(
-            "base scoring SPEC changed from its amendment-pinned SHA-256"
-        )
+        raise RealScoringRefused("base scoring SPEC changed from its amendment-pinned SHA-256")
     return base_hash, sha256_file(AMENDMENT_SPEC_PATH)
 
 
@@ -181,11 +169,7 @@ def _registered_identity(registration: ledger.StoredEvent) -> dict:
         end_date = date.fromisoformat(end)
     except (TypeError, ValueError) as exc:
         raise _refuse("registered scoring window is malformed", exc) from exc
-    if (
-        start_date.isoformat() != start
-        or end_date.isoformat() != end
-        or start_date > end_date
-    ):
+    if start_date.isoformat() != start or end_date.isoformat() != end or start_date > end_date:
         raise RealScoringRefused("registered scoring window is not canonical")
     scope = scope_identity()
     if (
@@ -294,14 +278,10 @@ def _revalidate(session: RealScoringSession) -> list[ledger.StoredEvent]:
         or identity["window_end"] != session.window_end
         or identity["included"] != session.included
         or identity["excluded"] != session.excluded
-        or identity["scoring_identity"].contract
-        != session.scoring_identity_contract
-        or identity["scoring_identity"].identity_hash
-        != session.scoring_identity_hash
-        or identity["scoring_identity"].canonical_surface
-        != session.scoring_identity_surface
-        or identity["min_losses_for_verdict"]
-        != session.min_losses_for_verdict
+        or identity["scoring_identity"].contract != session.scoring_identity_contract
+        or identity["scoring_identity"].identity_hash != session.scoring_identity_hash
+        or identity["scoring_identity"].canonical_surface != session.scoring_identity_surface
+        or identity["min_losses_for_verdict"] != session.min_losses_for_verdict
         or identity["registered_config_hash"] != session.registered_config_hash
         or base_spec_sha256 != session.base_spec_sha256
         or amendment_spec_sha256 != session.amendment_spec_sha256
@@ -319,9 +299,7 @@ def _decision(event: ledger.StoredEvent) -> str:
     except ValueError as exc:
         raise _refuse(f"event {event.event_id} decision session is invalid", exc) from exc
     if parsed.isoformat() != value:
-        raise RealScoringRefused(
-            f"event {event.event_id} decision session is not canonical"
-        )
+        raise RealScoringRefused(f"event {event.event_id} decision session is not canonical")
     return value
 
 
@@ -408,28 +386,22 @@ def _validate_global_gate(
         or source.causes
         or set(source.payload) != expected_source_keys
         or source.payload.get("scope") != scope
-        or source.payload.get("receipt_hash")
-        != gate.payload.get("source_health_receipt_hash")
-        or source.payload.get("receipt_path")
-        != gate.payload.get("source_health_receipt_path")
+        or source.payload.get("receipt_hash") != gate.payload.get("source_health_receipt_hash")
+        or source.payload.get("receipt_path") != gate.payload.get("source_health_receipt_path")
     ):
         raise RealScoringRefused(
             f"data gate {gate.event_id} is not canonical receipt-bound evidence"
         )
     cutoff = session_close_utc(evaluation_session)
     _require_recorded_at_or_after(gate, cutoff, detail=f"data gate {gate.event_id}")
-    _require_recorded_at_or_after(
-        source, cutoff, detail=f"source health {source.event_id}"
-    )
+    _require_recorded_at_or_after(source, cutoff, detail=f"source health {source.event_id}")
     healthy_symbols = source.payload.get("healthy_symbols")
     if (
         not isinstance(healthy_symbols, list)
         or len(set(healthy_symbols)) != len(healthy_symbols)
         or any(symbol not in scope["symbols"] for symbol in healthy_symbols)
     ):
-        raise RealScoringRefused(
-            f"source health {source.event_id} has an invalid scope payload"
-        )
+        raise RealScoringRefused(f"source health {source.event_id} has an invalid scope payload")
     try:
         gate_receipt = load_receipt(
             Path(str(gate.payload["receipt_path"])), expected_type="data_gate"
@@ -447,10 +419,8 @@ def _validate_global_gate(
         or gate_receipt.get("whole_universe_verdict") != verdict
         or gate_receipt.get("go_count") != go_count
         or gate_receipt.get("no_go_count") != no_go_count
-        or gate_receipt.get("source_health_receipt_hash")
-        != source.payload.get("receipt_hash")
-        or gate_receipt.get("source_health_receipt_path")
-        != source.payload.get("receipt_path")
+        or gate_receipt.get("source_health_receipt_hash") != source.payload.get("receipt_hash")
+        or gate_receipt.get("source_health_receipt_path") != source.payload.get("receipt_path")
         or source_receipt.get("receipt_hash") != source.payload.get("receipt_hash")
         or source_receipt.get("evaluation_session") != evaluation_session
         or source_receipt.get("scope") != scope
@@ -462,9 +432,7 @@ def _validate_global_gate(
             for symbol in healthy_symbols
         )
     ):
-        raise RealScoringRefused(
-            f"data gate {gate.event_id} disagrees with its immutable receipts"
-        )
+        raise RealScoringRefused(f"data gate {gate.event_id} disagrees with its immutable receipts")
     if require_go is True and verdict != "GO":
         raise RealScoringRefused(f"data gate {gate.event_id} is not GO")
     if require_go is False and verdict == "GO":
@@ -498,10 +466,8 @@ def _validate_symbol_source(
         or gate_state not in {"CLEAR", "BANNED", "UNKNOWN"}
         or not isinstance(healthy, bool)
         or global_source is None
-        or source.payload.get("receipt_hash")
-        != global_source.payload.get("receipt_hash")
-        or source.payload.get("receipt_path")
-        != global_source.payload.get("receipt_path")
+        or source.payload.get("receipt_hash") != global_source.payload.get("receipt_hash")
+        or source.payload.get("receipt_path") != global_source.payload.get("receipt_path")
     ):
         raise RealScoringRefused(
             f"source health {source.event_id} is not canonical receipt-bound evidence"
@@ -597,8 +563,7 @@ def _validate_skip_terminal(
     cutoff = session_close_utc(planned_fill).isoformat()
     cutoff_dt = session_close_utc(planned_fill)
     if (
-        skip.event_id
-        != f"s4.skip:{planned_fill}:{reason}:{intent.event_id}"
+        skip.event_id != f"s4.skip:{planned_fill}:{reason}:{intent.event_id}"
         or skip.event_type != "skip"
         or skip.symbol != intent.symbol
         or skip.lane != intent.lane
@@ -610,9 +575,7 @@ def _validate_skip_terminal(
 
     base_keys = {"entry_intent_id", "reason"}
     if reason == "approval_late":
-        recorded = _require_recorded_at_or_after(
-            skip, cutoff_dt, detail=f"skip {skip.event_id}"
-        )
+        recorded = _require_recorded_at_or_after(skip, cutoff_dt, detail=f"skip {skip.event_id}")
         if (
             skip.causes != [intent.event_id]
             or set(skip.payload) != base_keys | {"approval_cutoff_utc"}
@@ -716,9 +679,7 @@ def _completed_pairs(
 ) -> list[tuple[ledger.StoredEvent, ledger.StoredEvent]]:
     by_id = {event.event_id: event for event in events}
     intents_by_id = {
-        event.event_id: event
-        for event in events
-        if event.event_type == "entry_intent"
+        event.event_id: event for event in events if event.event_type == "entry_intent"
     }
     openings_by_intent: dict[str, list[ledger.StoredEvent]] = {}
     skips_by_intent: dict[str, list[ledger.StoredEvent]] = {}
@@ -748,8 +709,7 @@ def _completed_pairs(
         for opening in openings:
             if (
                 intent.event_id not in opening.causes
-                or opening.payload.get("position_id")
-                != intent.payload.get("position_id")
+                or opening.payload.get("position_id") != intent.payload.get("position_id")
                 or opening.symbol != intent.symbol
                 or opening.lane != intent.lane
                 or _decision(opening) != _decision(intent)
@@ -763,17 +723,12 @@ def _completed_pairs(
                 raise RealScoringRefused(
                     f"opening fill {opening.event_id} cites missing evidence"
                 ) from exc
-            approvals = [
-                event for event in cause_events if event.event_type == "owner_approval"
-            ]
-            gates = [
-                event for event in cause_events if event.event_type == "data_gate"
-            ]
+            approvals = [event for event in cause_events if event.event_type == "owner_approval"]
+            gates = [event for event in cause_events if event.event_type == "data_gate"]
             sources = [
                 event
                 for event in cause_events
-                if event.event_type == "source_health"
-                and event.symbol == opening.symbol
+                if event.event_type == "source_health" and event.symbol == opening.symbol
             ]
             if len(approvals) != 1 or len(gates) != 1 or len(sources) != 1:
                 raise RealScoringRefused(
@@ -938,9 +893,7 @@ def _operational_evidence_causes(
         ) from exc
     gates = [item for item in cause_events if item.event_type == "data_gate"]
     if len(gates) != 1:
-        raise RealScoringRefused(
-            f"event {event.event_id} lacks one data-gate cause"
-        )
+        raise RealScoringRefused(f"event {event.event_id} lacks one data-gate cause")
     gate = gates[0]
     _validate_global_gate(
         by_id,
@@ -956,9 +909,7 @@ def _operational_evidence_causes(
     ]
     if earnings_dependent:
         if len(sources) != 1:
-            raise RealScoringRefused(
-                f"event {event.event_id} lacks symbol source health"
-            )
+            raise RealScoringRefused(f"event {event.event_id} lacks symbol source health")
         source = sources[0]
         receipt_state = _validate_symbol_source(
             by_id,
@@ -990,8 +941,7 @@ def _operational_evidence_causes(
                     timing_valid = False
             if (
                 event.payload.get("earnings_gate") != receipt_state.get("gate")
-                or event.payload.get("next_report")
-                != next_report
+                or event.payload.get("next_report") != next_report
                 or primary not in reasons
                 or (primary == "earnings_unknown" and receipt_state.get("gate") != "UNKNOWN")
                 or not timing_valid
@@ -1001,9 +951,7 @@ def _operational_evidence_causes(
                 )
         expected.append(source.event_id)
     elif sources:
-        raise RealScoringRefused(
-            f"event {event.event_id} has unnecessary symbol source health"
-        )
+        raise RealScoringRefused(f"event {event.event_id} has unnecessary symbol source health")
     return expected
 
 
@@ -1019,11 +967,9 @@ def _validate_market_lineage(
     close_decision = closing.payload.get("decision_session")
     if (
         not isinstance(trigger_decision, str)
-        or exit_intent.payload.get("source_evaluation_session")
-        != exit_intent.evaluation_session
+        or exit_intent.payload.get("source_evaluation_session") != exit_intent.evaluation_session
         or not isinstance(close_decision, str)
-        or closing.payload.get("source_evaluation_session")
-        != closing.evaluation_session
+        or closing.payload.get("source_evaluation_session") != closing.evaluation_session
         or closing.payload.get("fill_session") != closing.evaluation_session
     ):
         raise RealScoringRefused("market close loses decision/source session lineage")
@@ -1036,9 +982,7 @@ def _validate_market_lineage(
         trigger_source = watcher_evaluation_session(
             date.fromisoformat(trigger_decision)
         ).isoformat()
-        close_source = watcher_evaluation_session(
-            date.fromisoformat(close_decision)
-        ).isoformat()
+        close_source = watcher_evaluation_session(date.fromisoformat(close_decision)).isoformat()
     except ValueError as exc:
         raise _refuse("market close decision/source mapping is invalid", exc) from exc
     if (
@@ -1068,9 +1012,7 @@ def _validate_market_lineage(
         gap_decision = gap.payload.get("decision_session")
         gap_source = gap.payload.get("source_evaluation_session")
         expected_gate_id = f"h7:data_gate:{gap.evaluation_session}"
-        expected_source_id = (
-            f"h7:source_health:{gap.evaluation_session}:{opening.symbol}"
-        )
+        expected_source_id = f"h7:source_health:{gap.evaluation_session}:{opening.symbol}"
         expected_causes = [exit_id, expected_gate_id]
         if earnings_dependent:
             expected_causes.append(expected_source_id)
@@ -1087,9 +1029,7 @@ def _validate_market_lineage(
         if earnings_dependent:
             source = by_id.get(expected_source_id)
             if source is None:
-                raise RealScoringRefused(
-                    "market exit retry gap lacks symbol source health"
-                )
+                raise RealScoringRefused("market exit retry gap lacks symbol source health")
             _validate_symbol_source(
                 by_id,
                 source,
@@ -1104,8 +1044,7 @@ def _validate_market_lineage(
         except ValueError as exc:
             raise _refuse("market exit retry decision session is invalid", exc) from exc
         if (
-            gap.event_id
-            != f"s4.data_gap:{gap.evaluation_session}:exit_fill:{exit_id}"
+            gap.event_id != f"s4.data_gap:{gap.evaluation_session}:exit_fill:{exit_id}"
             or gap.symbol != opening.symbol
             or gap.lane != opening.lane
             or gap.evaluation_session != gap_source
@@ -1123,8 +1062,7 @@ def _validate_market_lineage(
                 "decision_session",
                 "source_evaluation_session",
             }
-            or gap.payload.get("position_id")
-            != opening.payload.get("position_id")
+            or gap.payload.get("position_id") != opening.payload.get("position_id")
             or gap.payload.get("phase") != "exit_fill"
             or not _nonempty_text(gap.payload.get("reason"))
             or not _nonempty_text(gap.payload.get("chain_identity"))
@@ -1142,10 +1080,8 @@ def _validate_market_lineage(
         or closing.symbol != opening.symbol
         or closing.lane != opening.lane
         or closing.payload.get("structure") != opening.payload.get("structure")
-        or closing.payload.get("primary_reason")
-        != exit_intent.payload.get("primary_reason")
-        or closing.payload.get("trigger_reasons")
-        != exit_intent.payload.get("trigger_reasons")
+        or closing.payload.get("primary_reason") != exit_intent.payload.get("primary_reason")
+        or closing.payload.get("trigger_reasons") != exit_intent.payload.get("trigger_reasons")
     ):
         raise RealScoringRefused("market close changes opening lineage")
 
@@ -1177,19 +1113,13 @@ def _frozen_market_result(
     # Round-1 finding F4: never assume events[0] is the registration. The temp
     # ledger's seq 0 carries the frozen loss bar the scorer reads, so picking
     # the wrong event would score under the wrong rule instead of failing.
-    registrations = [
-        event for event in events if event.event_type == "window_registration"
-    ]
+    registrations = [event for event in events if event.event_type == "window_registration"]
     if len(registrations) != 1:
         raise RealScoringRefused(
             "frozen market-close scoring requires exactly one "
             f"window_registration event, found {len(registrations)}"
         )
-    market = [
-        pair
-        for pair in pairs
-        if pair[1].payload.get("settlement_method") is None
-    ]
+    market = [pair for pair in pairs if pair[1].payload.get("settlement_method") is None]
     with tempfile.TemporaryDirectory(prefix="h7-market-score-") as raw:
         base = f"{raw}/ledger"
         write_clock = lambda: datetime(2100, 1, 1, tzinfo=timezone.utc)
@@ -1202,11 +1132,7 @@ def _frozen_market_result(
             intent_id = opening.payload.get("entry_intent_id")
             exit_intent_id = closing.payload.get("exit_intent_id")
             intent = by_id.get(intent_id) if isinstance(intent_id, str) else None
-            exit_intent = (
-                by_id.get(exit_intent_id)
-                if isinstance(exit_intent_id, str)
-                else None
-            )
+            exit_intent = by_id.get(exit_intent_id) if isinstance(exit_intent_id, str) else None
             if intent is None or intent.event_type != "entry_intent":
                 raise RealScoringRefused("market opening has no entry-intent lineage")
             if exit_intent is None or exit_intent.event_type != "exit_intent":
@@ -1222,9 +1148,7 @@ def _frozen_market_result(
             # requires its planned-fill value to be the stored source date.
             # Real due/retry timing was checked above on the operational dates;
             # this narrow adapter changes no quote, fill, or scored date.
-            injected_exit_payload["planned_fill_session"] = (
-                closing.evaluation_session
-            )
+            injected_exit_payload["planned_fill_session"] = closing.evaluation_session
             for logical in (
                 _copy_event(intent, []),
                 _copy_event(opening, [intent.event_id]),
@@ -1307,29 +1231,23 @@ def _validate_settlement_lineage(
         or closing.payload.get("trigger_reasons") != ["expiration_settlement"]
         or closing.payload.get("trigger_session") != closing.evaluation_session
         or closing.payload.get("fill_session") != closing.evaluation_session
-        or closing.payload.get("source_evaluation_session")
-        != closing.evaluation_session
+        or closing.payload.get("source_evaluation_session") != closing.evaluation_session
     ):
         raise RealScoringRefused("settlement close loses terminal session lineage")
     close_decision = closing.payload.get("decision_session")
     if not isinstance(close_decision, str):
         raise RealScoringRefused("settlement close has no operational decision session")
     try:
-        mapped = watcher_evaluation_session(
-            date.fromisoformat(close_decision)
-        ).isoformat()
+        mapped = watcher_evaluation_session(date.fromisoformat(close_decision)).isoformat()
     except ValueError as exc:
         raise _refuse("settlement decision session is invalid", exc) from exc
     if mapped != closing.evaluation_session:
-        raise RealScoringRefused(
-            "settlement close decision/source mapping is inconsistent"
-        )
+        raise RealScoringRefused("settlement close decision/source mapping is inconsistent")
     closes_identity = closing.payload.get("closes_identity")
     if (
         not isinstance(closes_identity, str)
         or not closes_identity
-        or closing.payload.get("underlying_close_session")
-        != closing.evaluation_session
+        or closing.payload.get("underlying_close_session") != closing.evaluation_session
         or closing.payload.get("underlying_close_identity") != closes_identity
     ):
         raise RealScoringRefused("settlement close is not receipt-bound")
@@ -1337,10 +1255,8 @@ def _validate_settlement_lineage(
     if (
         not isinstance(opening_closes_identity, str)
         or not opening_closes_identity
-        or opening.payload.get("underlying_close_session")
-        != opening.evaluation_session
-        or opening.payload.get("underlying_close_identity")
-        != opening_closes_identity
+        or opening.payload.get("underlying_close_session") != opening.evaluation_session
+        or opening.payload.get("underlying_close_identity") != opening_closes_identity
     ):
         raise RealScoringRefused("settlement opening close is not receipt-bound")
 
@@ -1350,10 +1266,7 @@ def _validate_settlement_lineage(
         for cause in closing.causes
         if cause in by_id and by_id[cause].event_type == "data_gate"
     ]
-    if (
-        len(gate_causes) != 1
-        or gate_causes[0].evaluation_session != closing.evaluation_session
-    ):
+    if len(gate_causes) != 1 or gate_causes[0].evaluation_session != closing.evaluation_session:
         raise RealScoringRefused("settlement close has no same-session data gate")
     _validate_global_gate(
         by_id,
@@ -1365,17 +1278,14 @@ def _validate_settlement_lineage(
     exit_intent_id = closing.payload.get("exit_intent_id")
     earnings_dependent = False
     if exit_intent_id is not None:
-        exit_intent = (
-            by_id.get(exit_intent_id) if isinstance(exit_intent_id, str) else None
-        )
+        exit_intent = by_id.get(exit_intent_id) if isinstance(exit_intent_id, str) else None
         if (
             exit_intent is None
             or exit_intent.event_type != "exit_intent"
             or exit_intent.symbol != opening.symbol
             or exit_intent.lane != opening.lane
             or exit_intent.payload.get("opening_fill_id") != opening.event_id
-            or exit_intent.payload.get("position_id")
-            != opening.payload.get("position_id")
+            or exit_intent.payload.get("position_id") != opening.payload.get("position_id")
         ):
             raise RealScoringRefused("settlement exit-intent lineage is invalid")
         earnings_dependent = _validate_exit_reason_payload(exit_intent)
@@ -1413,9 +1323,7 @@ def _validate_settlement_lineage(
         )
         expected_causes.append(source_causes[0].event_id)
     elif source_causes:
-        raise RealScoringRefused(
-            "non-earnings settlement has unnecessary symbol source health"
-        )
+        raise RealScoringRefused("non-earnings settlement has unnecessary symbol source health")
     if closing.causes != expected_causes:
         raise RealScoringRefused("settlement close causal lineage is invalid")
 
@@ -1496,9 +1404,7 @@ def _settlement_trade(
     ):
         raise RealScoringRefused("settlement opening at-risk is inconsistent")
     entry_commission = opening.payload.get("commission")
-    expected_entry_commission = (
-        len(expected) * quantity * config.COMMISSION_PER_CONTRACT
-    )
+    expected_entry_commission = len(expected) * quantity * config.COMMISSION_PER_CONTRACT
     if not isinstance(entry_commission, (int, float)) or not math.isclose(
         float(entry_commission), expected_entry_commission, abs_tol=1e-9
     ):
@@ -1558,9 +1464,7 @@ def _settlement_trade(
             leg.get("intrinsic_per_share") != intrinsic
             or leg.get("in_the_money") is not itm
             or not isinstance(leg.get("settlement_cash_per_share"), (int, float))
-            or not math.isclose(
-                float(leg["settlement_cash_per_share"]), cash, abs_tol=1e-9
-            )
+            or not math.isclose(float(leg["settlement_cash_per_share"]), cash, abs_tol=1e-9)
         ):
             raise RealScoringRefused("settlement leg value is not canonical")
         exit_net += cash
@@ -1579,11 +1483,7 @@ def _settlement_trade(
     entry_underlying = opening.payload.get("underlying_close")
     if not isinstance(entry_underlying, (int, float)) or float(entry_underlying) <= 0:
         raise RealScoringRefused("settlement opening underlying close is invalid")
-    pnl = (
-        (exit_net - entry_net) * 100 * quantity
-        - float(entry_commission)
-        - float(exit_commission)
-    )
+    pnl = (exit_net - entry_net) * 100 * quantity - float(entry_commission) - float(exit_commission)
     return {
         "position_id": opening.payload["position_id"],
         "entry_event_id": opening.event_id,
@@ -1603,28 +1503,20 @@ def _settlement_trade(
         "underlying_entry_close": float(entry_underlying),
         "underlying_exit_close": underlying_value,
         "underlying_move": (
-            underlying_value - float(entry_underlying)
-            if underlying_value is not None
-            else None
+            underlying_value - float(entry_underlying) if underlying_value is not None else None
         ),
         "underlying_return": (
-            underlying_value / float(entry_underlying) - 1
-            if underlying_value is not None
-            else None
+            underlying_value / float(entry_underlying) - 1 if underlying_value is not None else None
         ),
         "settlement_method": method,
     }
 
 
-def _union_group(
-    trades: list[dict], label: str, min_losses_for_verdict: int
-) -> dict:
+def _union_group(trades: list[dict], label: str, min_losses_for_verdict: int) -> dict:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         raw = scoreboard(trades, label=label)
-    verdict, reason = frozen_scoring.map_forward_verdict(
-        raw, min_losses_for_verdict
-    )
+    verdict, reason = frozen_scoring.map_forward_verdict(raw, min_losses_for_verdict)
     observed_returns = [
         float(trade["underlying_return"])
         for trade in trades
@@ -1635,9 +1527,7 @@ def _union_group(
         "reason": reason,
         "scoreboard": json_safe(raw),
         "mean_underlying_return": (
-            sum(observed_returns) / len(observed_returns)
-            if observed_returns
-            else None
+            sum(observed_returns) / len(observed_returns) if observed_returns else None
         ),
         "note": (
             "SURVIVED is not approval, validation, live authorization, or a "
@@ -1703,9 +1593,7 @@ def _score_result(
     return result, causes
 
 
-def preview_real_score(
-    session: RealScoringSession, *, now: datetime | None = None
-) -> dict:
+def preview_real_score(session: RealScoringSession, *, now: datetime | None = None) -> dict:
     """Check finalization readiness without computing or disclosing a result."""
     events = _revalidate(session)
     stamp = _utc_now(now)
@@ -1761,30 +1649,19 @@ def _require_review_passes(session: RealScoringSession) -> None:
         matches = [
             line
             for line in lines
-            if (
-                (fact := line.split("\t", 1)[-1]) == tag
-                or fact.startswith(f"{tag} ")
-            )
+            if ((fact := line.split("\t", 1)[-1]) == tag or fact.startswith(f"{tag} "))
         ]
         if not matches or any(token not in matches[-1] for token in tokens):
-            raise RealScoringRefused(
-                f"finalization requires current {tag} fact with {tokens!r}"
-            )
+            raise RealScoringRefused(f"finalization requires current {tag} fact with {tokens!r}")
         if tag == AMENDMENT_FACT_TAG and not matches[-1].endswith(
             f"provenance={AMENDMENT_PROVENANCE}"
         ):
-            raise RealScoringRefused(
-                "finalization requires the exact amendment provenance"
-            )
+            raise RealScoringRefused("finalization requires the exact amendment provenance")
 
 
-def _runtime_config_provenance(
-    session: RealScoringSession, existing_receipt: dict | None
-) -> str:
+def _runtime_config_provenance(session: RealScoringSession, existing_receipt: dict | None) -> str:
     if existing_receipt is None:
-        return _config_provenance_hash(
-            config_hash(), "runtime config hash provenance"
-        )
+        return _config_provenance_hash(config_hash(), "runtime config hash provenance")
     provenance = existing_receipt.get("config_provenance")
     expected_keys = {
         "authority",
@@ -1796,17 +1673,13 @@ def _runtime_config_provenance(
         or set(provenance) != expected_keys
         or provenance.get("authority") is not False
     ):
-        raise RealScoringRefused(
-            "existing score config provenance is malformed or authoritative"
-        )
+        raise RealScoringRefused("existing score config provenance is malformed or authoritative")
     registered = _config_provenance_hash(
         provenance.get("registered_config_hash"),
         "existing registered config provenance",
     )
     if registered != session.registered_config_hash:
-        raise RealScoringRefused(
-            "existing score config provenance changed its registered hash"
-        )
+        raise RealScoringRefused("existing score config provenance changed its registered hash")
     return _config_provenance_hash(
         provenance.get("runtime_config_hash"),
         "existing runtime config provenance",
@@ -1850,8 +1723,7 @@ def _receipt_payload(
         "cohort": {
             "included": list(session.included),
             "excluded": [
-                {"symbol": symbol, "reason": reason}
-                for symbol, reason in session.excluded
+                {"symbol": symbol, "reason": reason} for symbol, reason in session.excluded
             ],
         },
         "finalized_at_utc": finalized_at,
@@ -1861,9 +1733,7 @@ def _receipt_payload(
             "contract": session.scoring_identity_contract,
             "base_spec_path": str(BASE_SPEC_PATH.relative_to(REPO_ROOT)),
             "base_spec_sha256": session.base_spec_sha256,
-            "amendment_spec_path": str(
-                AMENDMENT_SPEC_PATH.relative_to(REPO_ROOT)
-            ),
+            "amendment_spec_path": str(AMENDMENT_SPEC_PATH.relative_to(REPO_ROOT)),
             "amendment_spec_sha256": session.amendment_spec_sha256,
         },
         "result": result,
@@ -1906,17 +1776,13 @@ def finalize_real_score(
         )
     score_events = [event for event in events if event.event_type == "window_score"]
     event_id = f"h7:window_score:{session.scope_id}:{session.window_end}"
-    if len(score_events) > 1 or (
-        score_events and score_events[0].event_id != event_id
-    ):
+    if len(score_events) > 1 or (score_events and score_events[0].event_id != event_id):
         raise RealScoringRefused("forward ledger already has a different window score")
     existing_event = score_events[0] if score_events else None
     existing_receipt: dict | None = None
     if session.artifact_path.exists():
         try:
-            existing_receipt = load_receipt(
-                session.artifact_path, expected_type="window_score"
-            )
+            existing_receipt = load_receipt(session.artifact_path, expected_type="window_score")
         except (OSError, ValueError, KeyError) as exc:
             raise _refuse("existing score artifact is invalid", exc) from exc
     runtime_config_hash = _runtime_config_provenance(session, existing_receipt)
@@ -1953,9 +1819,7 @@ def finalize_real_score(
             runtime_config_hash=runtime_config_hash,
         ),
     )
-    if existing_receipt is not None and canonical_json(existing_receipt) != canonical_json(
-        receipt
-    ):
+    if existing_receipt is not None and canonical_json(existing_receipt) != canonical_json(receipt):
         raise RealScoringRefused("existing score artifact conflicts with recomputation")
     try:
         artifact_hash = write_immutable_receipt(receipt, session.artifact_path)
@@ -1977,8 +1841,7 @@ def finalize_real_score(
             "trade_count": result["n_trades"],
             "overall_verdict": result["overall"]["verdict"],
             "lane_verdicts": {
-                lane: result["lanes"][lane]["verdict"]
-                for lane in config.H7_LANE_PRIORITY
+                lane: result["lanes"][lane]["verdict"] for lane in config.H7_LANE_PRIORITY
             },
         },
     }
@@ -2034,9 +1897,7 @@ def main(argv: list[str] | None = None) -> int:
             except RealScoringIncomplete as exc:
                 print(f"H7 SCORE NOT FINAL -- {exc}")
                 return 0
-            print(
-                "H7 SCORE NOT FINAL -- RESULT WITHHELD PENDING REVIEW AND OWNER PASS"
-            )
+            print("H7 SCORE NOT FINAL -- RESULT WITHHELD PENDING REVIEW AND OWNER PASS")
             return 0
         result = finalize_real_score(session, owner=args.owner)
         replay = "appended" if result.appended else "replayed"

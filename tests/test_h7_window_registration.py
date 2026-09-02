@@ -1,4 +1,5 @@
 """window_registration event type + builder (Stage 8, BUILD-ONLY/INACTIVE)."""
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,9 +18,18 @@ class EventTypeTests(unittest.TestCase):
         self.assertIn("window_registration", el.EVENT_TYPES)
 
     def test_existing_types_unchanged(self):
-        for t in ("source_health", "data_gate", "board_resolution", "lane_displaced",
-                  "entry_intent", "exit_intent", "owner_approval", "paper_fill",
-                  "skip", "data_gap"):
+        for t in (
+            "source_health",
+            "data_gate",
+            "board_resolution",
+            "lane_displaced",
+            "entry_intent",
+            "exit_intent",
+            "owner_approval",
+            "paper_fill",
+            "skip",
+            "data_gap",
+        ):
             self.assertIn(t, el.EVENT_TYPES)
 
 
@@ -39,16 +49,8 @@ def _minimal_registration_event():
                 "final_decision_session": "2026-07-11",
             },
             "frozen": {
-                "stage456_parameters": {
-                    "MIN_LOSSES_FOR_VERDICT": (
-                        config.MIN_LOSSES_FOR_VERDICT
-                    )
-                },
-                "scorer": {
-                    "min_losses_for_verdict": (
-                        config.MIN_LOSSES_FOR_VERDICT
-                    )
-                },
+                "stage456_parameters": {"MIN_LOSSES_FOR_VERDICT": (config.MIN_LOSSES_FOR_VERDICT)},
+                "scorer": {"min_losses_for_verdict": (config.MIN_LOSSES_FOR_VERDICT)},
             },
         },
     }
@@ -59,8 +61,7 @@ class ReplaySkipTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         base = Path(tmp.name) / "synthetic-forward"
-        result = el.append_event(_minimal_registration_event(), base_dir=base,
-                                  expected_head=None)
+        result = el.append_event(_minimal_registration_event(), base_dir=base, expected_head=None)
 
         # --- book: a ledger containing only a window_registration event
         # replays to a fully empty book (the event carries no position/
@@ -79,9 +80,9 @@ class ReplaySkipTests(unittest.TestCase):
         # --- scoring: no paper_fill events means zero trades in-window,
         # and the frozen loss-gate verdict machinery must not crash on an
         # empty sample -- it reports INCONCLUSIVE/insufficient_losses.
-        scored = scoring.score_forward_window(base_dir=base,
-                                               window_start="2026-07-10",
-                                               window_end="2026-07-11")
+        scored = scoring.score_forward_window(
+            base_dir=base, window_start="2026-07-10", window_end="2026-07-11"
+        )
         self.assertEqual(scored["n_trades"], 0)
         self.assertEqual(scored["trades"], [])
         self.assertIsNone(scored["overall"]["mean_underlying_return"])
@@ -144,8 +145,7 @@ class BuilderTests(unittest.TestCase):
         self.assertIs(event["payload"]["darwin_durability_verified"], True)
 
     def test_builds_complete_payload(self):
-        event = wr.build_window_registration_event(
-            owner=owner_inputs(), evidence=evidence())
+        event = wr.build_window_registration_event(owner=owner_inputs(), evidence=evidence())
         self.assertEqual(event["event_type"], "window_registration")
         self.assertEqual(event["causes"], [])
         p = event["payload"]
@@ -155,9 +155,7 @@ class BuilderTests(unittest.TestCase):
         # H7_MAX_HOLD_BUFFER_D is part of the frozen Stage-4/5/6 surface for
         # payload legibility (config_hash already covers integrity).
         self.assertIn("H7_MAX_HOLD_BUFFER_D", p["frozen"]["stage456_parameters"])
-        registered_identity = scoring_identity.registered_scoring_identity(
-            p["frozen"]
-        )
+        registered_identity = scoring_identity.registered_scoring_identity(p["frozen"])
         self.assertEqual(
             p["frozen"]["scoring_identity_contract"],
             scoring_identity.SCORING_IDENTITY_CONTRACT,
@@ -166,12 +164,16 @@ class BuilderTests(unittest.TestCase):
             p["frozen"]["scoring_identity_hash"],
             registered_identity.identity_hash,
         )
-        self.assertEqual(p["frozen"]["verdict_mapping"],
-                         {"SURVIVED": "ci_above_zero", "REJECTED": "ci_below_zero",
-                          "INCONCLUSIVE": "insufficient_or_no_edge"})
+        self.assertEqual(
+            p["frozen"]["verdict_mapping"],
+            {
+                "SURVIVED": "ci_above_zero",
+                "REJECTED": "ci_below_zero",
+                "INCONCLUSIVE": "insufficient_or_no_edge",
+            },
+        )
         self.assertIn("not live-trading approval", p["frozen"]["survived_disclaimer"])
-        self.assertEqual(p["cohort_rule"],
-                         "decision_session in registered window (immutable key)")
+        self.assertEqual(p["cohort_rule"], "decision_session in registered window (immutable key)")
 
     def test_missing_owner_input_refuses(self):
         bad = owner_inputs()
@@ -183,20 +185,21 @@ class BuilderTests(unittest.TestCase):
         with self.assertRaises(wr.RegistrationInputError):
             wr.build_window_registration_event(
                 owner=owner_inputs(THETADATA_DAILY_EOD_COVERAGE_CONFIRMED_THROUGH=None),
-                evidence=evidence())
+                evidence=evidence(),
+            )
 
     def test_three_month_rule_enforced(self):
         with self.assertRaises(wr.WindowRuleError):
             wr.build_window_registration_event(
-                owner=owner_inputs(WINDOW_DECISION_SESSION_COUNT=20),
-                evidence=evidence())
+                owner=owner_inputs(WINDOW_DECISION_SESSION_COUNT=20), evidence=evidence()
+            )
 
     def test_coverage_must_reach_window_end(self):
         with self.assertRaises(wr.WindowRuleError):
             wr.build_window_registration_event(
-                owner=owner_inputs(
-                    THETADATA_DAILY_EOD_COVERAGE_CONFIRMED_THROUGH="2026-09-01"),
-                evidence=evidence())
+                owner=owner_inputs(THETADATA_DAILY_EOD_COVERAGE_CONFIRMED_THROUGH="2026-09-01"),
+                evidence=evidence(),
+            )
 
 
 class AppendTests(unittest.TestCase):
@@ -204,8 +207,7 @@ class AppendTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         base = Path(tmp.name) / "synthetic-forward"
-        res = wr.register_window(owner=owner_inputs(), evidence=evidence(),
-                                 base_dir=base)
+        res = wr.register_window(owner=owner_inputs(), evidence=evidence(), base_dir=base)
         self.assertEqual(res.seq, 0)  # ledger seq is 0-indexed (first event)
         self.assertTrue(res.appended)
 
@@ -213,17 +215,17 @@ class AppendTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         base = Path(tmp.name) / "synthetic-forward"
-        el.append_event(_minimal_registration_event(), base_dir=base,
-                        expected_head=None)
+        el.append_event(_minimal_registration_event(), base_dir=base, expected_head=None)
         with self.assertRaises(el.LedgerHeadConflictError):
-            wr.register_window(owner=owner_inputs(), evidence=evidence(),
-                               base_dir=base)
+            wr.register_window(owner=owner_inputs(), evidence=evidence(), base_dir=base)
 
     def test_refuses_real_store(self):
         from options_researcher.h7_paper_lifecycle import (
             REAL_FORWARD_STORE,
             ActivationBoundaryError,
         )
+
         with self.assertRaises(ActivationBoundaryError):
-            wr.register_window(owner=owner_inputs(), evidence=evidence(),
-                               base_dir=REAL_FORWARD_STORE)
+            wr.register_window(
+                owner=owner_inputs(), evidence=evidence(), base_dir=REAL_FORWARD_STORE
+            )
