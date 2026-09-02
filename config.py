@@ -706,6 +706,31 @@ H7_SCHWAB_MAX_SELECTABLE_QUOTE_AGE_MINUTES = 60
 # the measurement tool, and a test binds the two values so they cannot drift.
 H7_SCHWAB_REGISTERED_OCCUPANCY_LOCKOUT_SESSIONS = 42
 
+# The Schwab restart registers the SAME entry cohort the legacy forward window
+# already registered -- inherited evidence, not a new selection. Provenance:
+# ledger/h7_forward/events.jsonl seq 0, payload.universe.included, quoted as
+# "Inherited-registered" in
+# reports/h7_forward_schwab/2026-08-15-registration-packet-bar7-draft.md
+# ("Cohort | 9 names: AMD, AMZN, CEG, ET, MSFT, NOW, PLTR, TEM, VST").
+H7_SCHWAB_REGISTERED_COHORT = (
+    "AMD", "AMZN", "CEG", "ET", "MSFT", "NOW", "PLTR", "TEM", "VST",
+)
+
+# Why each remaining official-scope name is excluded, transcribed per name from
+# the SAME inherited seq-0 event's payload.universe.excluded (all six read
+# EARNINGS-UNKNOWN there, and the packet quotes them identically). Kept as a
+# per-name map rather than one blanket string so a future exclusion cannot
+# inherit a reason that was never recorded for it: the registration builder
+# refuses to exclude a name that is absent here (round-1 finding F10).
+H7_SCHWAB_REGISTERED_COHORT_EXCLUSION_REASONS = {
+    "AVGO": "EARNINGS-UNKNOWN",
+    "CRWV": "EARNINGS-UNKNOWN",
+    "IREN": "EARNINGS-UNKNOWN",
+    "NVDA": "EARNINGS-UNKNOWN",
+    "SMCI": "EARNINGS-UNKNOWN",
+    "USAR": "EARNINGS-UNKNOWN",
+}
+
 # ---------------------------------------------------------------------------
 # H9 -- post-earnings conditional HISTORICAL WRITTEN STUDY (spec
 # docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md,

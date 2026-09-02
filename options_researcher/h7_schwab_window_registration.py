@@ -37,9 +37,10 @@ SCHWAB_FORWARD_STORE = Path("ledger/h7_forward_schwab")
 CACHE_NAMESPACE = ".cache/schwab_chains/"
 SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REGISTERED_COHORT = (
-    "AMD", "AMZN", "CEG", "ET", "MSFT", "NOW", "PLTR", "TEM", "VST",
-)
+# Inherited from the legacy seq-0 registration; the names and each excluded
+# name's recorded reason live in config.py with their packet provenance
+# (round-1 finding F10). This alias keeps the module's existing call sites.
+REGISTERED_COHORT = config.H7_SCHWAB_REGISTERED_COHORT
 # Single source of truth for the feasibility receipt's identity labels. The
 # measurement tool (tools/h7_schwab_feasibility.py) imports these rather than
 # repeating the literals, so the producer and this validator cannot drift
@@ -285,12 +286,20 @@ def _validate_feasibility_gate(receipt: dict, owner: dict) -> str | None:
 def _registered_cohort_manifest() -> dict:
     scope = scope_identity()
     excluded = sorted(set(scope["symbols"]) - set(REGISTERED_COHORT))
+    reasons = config.H7_SCHWAB_REGISTERED_COHORT_EXCLUSION_REASONS
+    unrecorded = [symbol for symbol in excluded if not reasons.get(symbol)]
+    if unrecorded:
+        raise RegistrationInputError(
+            "no registered exclusion reason for "
+            f"{unrecorded}; a name cannot be excluded under a reason that was "
+            "never recorded for it"
+        )
     return {
         "scope_id": scope["scope_id"],
         "scope_hash": scope["scope_hash"],
         "included": list(REGISTERED_COHORT),
         "excluded": [
-            {"symbol": symbol, "reason": "EARNINGS-UNKNOWN"}
+            {"symbol": symbol, "reason": reasons[symbol]}
             for symbol in excluded
         ],
         "trim_rule": old_registration.TRIM_RULE,

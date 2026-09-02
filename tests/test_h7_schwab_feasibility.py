@@ -116,7 +116,7 @@ class ToolReceiptPassesTheRegistrationValidatorTests(unittest.TestCase):
 
     def _receipt(self, **overrides):
         sessions = [f"2026-08-{day:02d}" for day in range(3, 3 + 70)]
-        symbols = list(registration.REGISTERED_COHORT)
+        symbols = list(config.H7_SCHWAB_REGISTERED_COHORT)
         passing = {(sessions[0], symbols[0]), (sessions[35], symbols[1])}
         report = feasibility.summarize_counts(
             sessions=sessions,

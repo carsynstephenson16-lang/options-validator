@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import date, datetime
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -537,6 +538,37 @@ class BuilderTests(unittest.TestCase):
                         ),
                         evidence=evidence(),
                     )
+
+    def test_cohort_and_exclusion_reasons_come_from_config(self):
+        """Round-1 F10: no hardcoded cohort or blanket exclusion reason."""
+        event = registration.build_window_registration_event(
+            owner=owner_inputs(), evidence=evidence()
+        )
+        manifest = event["payload"]["universe"]
+        self.assertEqual(
+            manifest["included"], list(config.H7_SCHWAB_REGISTERED_COHORT)
+        )
+        for row in manifest["excluded"]:
+            self.assertEqual(
+                row["reason"],
+                config.H7_SCHWAB_REGISTERED_COHORT_EXCLUSION_REASONS[
+                    row["symbol"]
+                ],
+            )
+
+    def test_an_unrecorded_exclusion_reason_refuses(self):
+        # Patched directly on the manifest builder: patching config changes
+        # config_hash(), which the receipt checks are (correctly) bound to.
+        trimmed = dict(config.H7_SCHWAB_REGISTERED_COHORT_EXCLUSION_REASONS)
+        dropped = sorted(trimmed)[0]
+        del trimmed[dropped]
+        with mock.patch.object(
+            config, "H7_SCHWAB_REGISTERED_COHORT_EXCLUSION_REASONS", trimmed
+        ):
+            with self.assertRaisesRegex(
+                registration.RegistrationInputError, dropped
+            ):
+                registration._registered_cohort_manifest()
 
     def test_preacceptance_mismatch_names_both_numbers(self):
         """Round-1 F5: WP-B requires the receipt figure AND the owner's."""
