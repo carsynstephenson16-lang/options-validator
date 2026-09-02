@@ -100,9 +100,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
             "names": names,
             "manifest_hash": built["manifest_hash"],
         }
-        self.receipt_path.write_text(
-            json.dumps(receipt, indent=2, sort_keys=True) + "\n"
-        )
+        self.receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
 
     def _evaluate(self):
         return gate.evaluate(
@@ -120,10 +118,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
             {
                 "evaluation_session": SESSION,
                 "scope": scope_identity(),
-                "symbols": {
-                    symbol: {"healthy": True, "gate": "CLEAR"}
-                    for symbol in SYMBOLS
-                },
+                "symbols": {symbol: {"healthy": True, "gate": "CLEAR"} for symbol in SYMBOLS},
             },
         )
 
@@ -160,15 +155,11 @@ class H7SchwabDataGateTests(unittest.TestCase):
 
         stored_manifest = json.loads(self.manifest_path.read_text())
         self.assertEqual(receipt["evidence_mode"], gate.EVIDENCE_MODE)
-        self.assertEqual(
-            receipt["schwab_manifest_hash"], stored_manifest["manifest_hash"]
-        )
-        self.assertEqual(
-            receipt["schwab_capture_receipt_hash"], sha256_file(self.receipt_path)
-        )
+        self.assertEqual(receipt["schwab_manifest_hash"], stored_manifest["manifest_hash"])
+        self.assertEqual(receipt["schwab_capture_receipt_hash"], sha256_file(self.receipt_path))
 
     def test_verified_receipt_passes_registration_builder_end_to_end(self):
-        from test_h7_schwab_window_registration import evidence, owner_inputs
+        from test_h7_schwab_window_registration import evidence, owner_inputs, owner_manifest
 
         from options_researcher import h7_schwab_window_registration as registration
 
@@ -182,20 +173,21 @@ class H7SchwabDataGateTests(unittest.TestCase):
             source_health_receipt_path=source_health_path,
         )
         event = registration.build_window_registration_event(
-            owner=owner_inputs(SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH=SESSION),
+            owner=owner_inputs(
+                SCHWAB_CAPTURE_LANE_VERIFIED_THROUGH=SESSION,
+                WINDOW_START_DECISION_SESSION="2026-08-11",
+            ),
             evidence=evidence(
                 data_gate_evidence_mode=receipt["evidence_mode"],
                 data_gate_receipt=receipt,
                 data_gate_receipt_hash=receipt["receipt_hash"],
-                source_health_receipt_hash=receipt[
-                    "source_health_receipt_hash"
-                ],
-                source_health_evidence_id=receipt[
-                    "source_health_receipt_hash"
-                ],
+                source_health_receipt_hash=receipt["source_health_receipt_hash"],
+                source_health_evidence_id=receipt["source_health_receipt_hash"],
                 data_gate_evidence_id=receipt["receipt_hash"],
                 last_historical_session=SESSION,
+                last_historical_manifest_receipt_hash=receipt["schwab_manifest_hash"],
             ),
+            universe_manifest=owner_manifest(),
         )
 
         self.assertEqual(
@@ -230,9 +222,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
         forged = make_receipt("data_gate", payload)
 
         self.assertEqual([], verify_receipt(forged))
-        with self.assertRaisesRegex(
-            ValueError, "input binding failed scope closure"
-        ):
+        with self.assertRaisesRegex(ValueError, "input binding failed scope closure"):
             h7_data_gate.validate_durable_receipt(forged)
 
     def test_thetadata_shaped_binding_cannot_wear_schwab_mode(self):
@@ -266,9 +256,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
         result = self._evaluate()
         stored_manifest = json.loads(self.manifest_path.read_text())
         stored_manifest["files"][SYMBOLS[0]]["row_count"] += 1
-        self.manifest_path.write_text(
-            json.dumps(stored_manifest, indent=2, sort_keys=True) + "\n"
-        )
+        self.manifest_path.write_text(json.dumps(stored_manifest, indent=2, sort_keys=True) + "\n")
 
         with self.assertRaisesRegex(ValueError, "verified Schwab"):
             h7_data_gate.build_receipt(
@@ -289,9 +277,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
     def test_stale_receipt_refuses(self):
         receipt = json.loads(self.receipt_path.read_text())
         receipt["session"] = "2026-08-07"
-        self.receipt_path.write_text(
-            json.dumps(receipt, indent=2, sort_keys=True) + "\n"
-        )
+        self.receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
 
         with self.assertLogs(gate.__name__, level="ERROR"):
             result = self._evaluate()
@@ -301,9 +287,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
     def test_partial_receipt_refuses(self):
         receipt = json.loads(self.receipt_path.read_text())
         receipt["universe"] = [TARGET]
-        self.receipt_path.write_text(
-            json.dumps(receipt, indent=2, sort_keys=True) + "\n"
-        )
+        self.receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
 
         with self.assertLogs(gate.__name__, level="ERROR"):
             result = self._evaluate()
@@ -333,9 +317,7 @@ class H7SchwabDataGateTests(unittest.TestCase):
         with self.assertLogs(gate.__name__, level="ERROR") as captured:
             result = self._evaluate()
 
-        self._assert_package_no_go(
-            result, error_contains=f"hash mismatch for {TARGET}"
-        )
+        self._assert_package_no_go(result, error_contains=f"hash mismatch for {TARGET}")
         self.assertIn("Schwab package verification failed", captured.output[0])
         self.assertIn(f"hash mismatch for {TARGET}", captured.output[0])
         self.assertIn("Traceback", captured.output[0])

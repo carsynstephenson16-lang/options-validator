@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -44,6 +45,8 @@ QUOTE_AGE_EVIDENCE_CITATION = (
     "2026-08-28, not owner-typed)."
 )
 STARVATION_FIELD = registration.STARVATION_PREACCEPTANCE_FIELD
+SCHWAB_ACTIVATION_SPEC_PATH = registration.SCHWAB_ACTIVATION_SPEC_PATH
+_OWNER_TYPED_SHA256 = re.compile(r"[0-9a-fA-F]{64}\Z")
 
 
 def _json_object(path: Path) -> dict:
@@ -99,7 +102,7 @@ def _validate_owner(owner: dict) -> None:
     ]
     if missing:
         raise ValueError(f"owner inputs must be typed at use time; blank: {missing}")
-    validate_authorization_text(owner["H7_STAGE8_EXPLICIT_AUTHORIZATION"])
+    validate_authorization_text(owner[STARVATION_FIELD])
 
 
 def _validate_backup(backup: dict, *, completed_session: str) -> None:
@@ -159,18 +162,51 @@ def _assemble_evidence(*, raw: dict, source: dict, data: dict) -> dict:
     }
 
 
-def _included_health(source: dict) -> bool:
+def _included_health(source: dict, included: list[str]) -> bool:
     symbols = source.get("symbols")
     return isinstance(symbols, dict) and all(
-        symbols.get(symbol, {}).get("healthy") is True for symbol in registration.REGISTERED_COHORT
+        symbols.get(symbol, {}).get("healthy") is True for symbol in included
     )
 
 
-def _included_data_go(data: dict) -> bool:
+def _included_data_go(data: dict, included: list[str]) -> bool:
     symbols = data.get("symbols")
     return isinstance(symbols, dict) and all(
-        symbols.get(symbol, {}).get("verdict") == "GO" for symbol in registration.REGISTERED_COHORT
+        symbols.get(symbol, {}).get("verdict") == "GO" for symbol in included
     )
+
+
+def _validated_owner_spec_sha256(spec_path: Path, owner_typed_sha256: object) -> str:
+    path = Path(spec_path)
+    if path.resolve(strict=False) != SCHWAB_ACTIVATION_SPEC_PATH.resolve(strict=False):
+        raise ValueError("activation spec path is not the pinned Schwab spec")
+    if not isinstance(owner_typed_sha256, str):
+        raise ValueError("owner-typed activation spec sha must be a 64-hex string")
+    normalized = owner_typed_sha256.strip().lower()
+    if _OWNER_TYPED_SHA256.fullmatch(normalized) is None:
+        raise ValueError("owner-typed activation spec sha must be a 64-hex string")
+    if not path.is_file():
+        raise ValueError("pinned Schwab activation spec is missing")
+    if sha256_file(path) != normalized:
+        raise ValueError("pinned Schwab activation spec does not match owner-typed sha")
+    return normalized
+
+
+def _manifest_from_owner_args(args: argparse.Namespace) -> dict:
+    excluded = []
+    for value in args.excluded_reason:
+        if value.count("=") != 1:
+            raise ValueError("--excluded-reason must use SYMBOL=owner-typed reason")
+        symbol, reason = value.split("=", 1)
+        excluded.append({"symbol": symbol, "reason": reason})
+    scope = scope_identity()
+    return {
+        "scope_id": scope["scope_id"],
+        "scope_hash": scope["scope_hash"],
+        "included": list(args.included_symbols),
+        "excluded": excluded,
+        "trim_rule": args.trim_rule,
+    }
 
 
 def _make_recheck(
@@ -181,6 +217,7 @@ def _make_recheck(
     completed_session: str,
     source_hash: str,
     data_hash: str,
+    included: list[str],
 ) -> Callable[[], dict]:
     def recheck() -> dict:
         source, data, _ = _validate_receipt_chain(
@@ -192,8 +229,8 @@ def _make_recheck(
         if source.get("receipt_hash") != source_hash or data.get("receipt_hash") != data_hash:
             raise registration.ActivationRefused("receipt hash changed between assembly and append")
         return {
-            "source_health_all_healthy": _included_health(source),
-            "data_gate_go": _included_data_go(data),
+            "source_health_all_healthy": _included_health(source, included),
+            "data_gate_go": _included_data_go(data, included),
             "source_health_evidence_id": source_hash,
             "data_gate_evidence_id": data_hash,
         }
@@ -211,14 +248,16 @@ def activate(
     completed_session: str,
     confirmation: str,
     spec_path: Path,
+    owner_typed_spec_sha256: str,
+    universe_manifest: dict,
     forward_base: Path = DEFAULT_FORWARD_STORE,
     code_state: Callable[[], tuple[str, bool]] = _code_state,
-    max_report_age_s: int = registration.GUARD_REPORT_MAX_AGE_S,
 ):
     """Revalidate every input and delegate exactly once to the real door."""
     if confirmation != CONFIRMATION:
         raise ValueError(f"type exactly {CONFIRMATION!r} to activate")
     _validate_owner(owner)
+    spec_sha256 = _validated_owner_spec_sha256(spec_path, owner_typed_spec_sha256)
     raw_evidence = _json_object(evidence_path)
     source, data, backup = _validate_receipt_chain(
         source_health_path=Path(source_health_path),
@@ -227,12 +266,16 @@ def activate(
         completed_session=completed_session,
     )
     evidence = _assemble_evidence(raw=raw_evidence, source=source, data=data)
-    spec_sha256 = sha256_file(Path(spec_path))
-    if evidence.get("activation_spec_sha256") != spec_sha256:
-        raise ValueError("activation spec hash disagrees with reviewed evidence")
+    # The trusted freeze comes from the owner-typed CLI value, never mutable
+    # evidence JSON. The builder/door retain it in the immutable event.
+    evidence["activation_spec_sha256"] = spec_sha256
 
-    # Pre-delegation validation of WP-A/B/D/F and every builder refusal.
-    registration.build_window_registration_event(owner=owner, evidence=evidence)
+    # Pre-delegation validation of WP-A/B/D/F/J and every builder refusal.
+    registration.build_window_registration_event(
+        owner=owner,
+        evidence=evidence,
+        universe_manifest=universe_manifest,
+    )
 
     current_scope = scope_identity()
     report = guard.activation_preconditions(
@@ -250,7 +293,7 @@ def activate(
         data_gate_receipt=data,
         backup_restore_receipt=backup,
         completed_session=completed_session,
-        included=registration.REGISTERED_COHORT,
+        included=tuple(universe_manifest["included"]),
     )
     recheck_gates = _make_recheck(
         source_health_path=Path(source_health_path),
@@ -259,6 +302,7 @@ def activate(
         completed_session=completed_session,
         source_hash=source["receipt_hash"],
         data_hash=data["receipt_hash"],
+        included=universe_manifest["included"],
     )
     result = registration.register_window_real(
         owner=owner,
@@ -269,7 +313,7 @@ def activate(
         base_dir=forward_base,
         code_state=code_state,
         recheck_gates=recheck_gates,
-        max_report_age_s=max_report_age_s,
+        universe_manifest=universe_manifest,
     )
     if result.seq != 0:
         raise RuntimeError("activation wrote something other than the first event")
@@ -302,6 +346,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--backup-restore-receipt", type=Path, required=True)
     parser.add_argument("--completed-session", required=True)
     parser.add_argument("--activation-spec", type=Path, required=True)
+    parser.add_argument("--owner-typed-spec-sha256", required=True)
+    parser.add_argument("--included-symbols", nargs="+", required=True)
+    parser.add_argument(
+        "--excluded-reason",
+        action="append",
+        required=True,
+        help="Repeat as SYMBOL=owner-typed reason; no default reasons are inferred.",
+    )
+    parser.add_argument("--trim-rule", required=True)
     parser.add_argument("--confirm", required=True)
     parser.add_argument("--h7-stage8-explicit-authorization", required=True)
     parser.add_argument("--window-start-decision-session", required=True)
@@ -332,6 +385,8 @@ def main(argv: list[str] | None = None) -> int:
             completed_session=args.completed_session,
             confirmation=args.confirm,
             spec_path=args.activation_spec,
+            owner_typed_spec_sha256=args.owner_typed_spec_sha256,
+            universe_manifest=_manifest_from_owner_args(args),
         )
     except Exception as exc:
         print(f"H7 SCHWAB ACTIVATION BLOCKED -- {type(exc).__name__}: {exc}")

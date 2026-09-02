@@ -1,4 +1,5 @@
 """Stage-8 activation guard — every precondition, typed reasons, no side effects."""
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,8 +18,7 @@ from options_researcher.h7_window_registration import (
 
 
 def go_gate(universe, *, evidence_mode: str | None = None):
-    gate = {"whole_universe_verdict": "GO", "go_count": len(universe),
-            "universe": list(universe)}
+    gate = {"whole_universe_verdict": "GO", "go_count": len(universe), "universe": list(universe)}
     if evidence_mode is not None:
         gate["evidence_mode"] = evidence_mode
     return gate
@@ -43,7 +43,22 @@ class GuardTests(unittest.TestCase):
         self.assertFalse(check.ok)
         self.assertEqual(check.reason, f"blank: {list(LEGACY_OWNER_FIELDS)}")
 
-    def test_synthetic_store_with_schwab_evidence_resolves_schwab_fields(self):
+    def test_terminal_path_segment_is_the_only_owner_field_classifier(self):
+        schwab = Path(self.tmp.name) / "h7_forward_schwab"
+        self.assertEqual(ag.resolve_owner_fields(schwab), SCHWAB_OWNER_FIELDS)
+        self.assertEqual(ag.resolve_owner_fields(self.base), LEGACY_OWNER_FIELDS)
+
+        report = ag.activation_preconditions(
+            forward_base=schwab,
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=go_gate(("MSFT",)),
+            owner_inputs={},
+        )
+        check = report.by_name["owner_inputs_complete"]
+        self.assertEqual(check.reason, f"blank: {list(SCHWAB_OWNER_FIELDS)}")
+
+    def test_schwab_evidence_cannot_override_another_store_terminal_segment(self):
         report = ag.activation_preconditions(
             forward_base=self.base,
             source_health_by_symbol={"MSFT": True},
@@ -51,12 +66,17 @@ class GuardTests(unittest.TestCase):
             data_gate_result=go_gate(("MSFT",), evidence_mode=SCHWAB_EVIDENCE),
             owner_inputs={},
         )
-        check = report.by_name["owner_inputs_complete"]
-        self.assertEqual(check.reason, f"blank: {list(SCHWAB_OWNER_FIELDS)}")
+        self.assertEqual(
+            report.by_name["owner_inputs_complete"].reason,
+            f"blank: {list(LEGACY_OWNER_FIELDS)}",
+        )
 
     def test_owner_field_set_cannot_be_supplied_or_named_by_a_caller(self):
-        for forbidden in ({"owner_fields": ()}, {"scope_id": "h7-forward-schwab-v1"},
-                          {"namespace": "h7-forward-schwab-v1"}):
+        for forbidden in (
+            {"owner_fields": ()},
+            {"scope_id": "h7-forward-schwab-v1"},
+            {"namespace": "h7-forward-schwab-v1"},
+        ):
             with self.assertRaises(TypeError):
                 ag.activation_preconditions(
                     forward_base=self.base,
@@ -80,33 +100,33 @@ class GuardTests(unittest.TestCase):
         self.assertIn("SCHWAB_MIN_LOSSES_FOR_VERDICT", reason)
         self.assertIn("SCHWAB_CONFIRMATION_EVIDENCE", reason)
 
-    def test_schwab_evidence_cannot_activate_the_legacy_real_store(self):
+    def test_real_store_owner_field_selection_ignores_evidence_mode(self):
         from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE
 
-        with self.assertRaisesRegex(
-            ag.ActivationBoundaryError, "legacy"
-        ):
-            ag.activation_preconditions(
-                forward_base=REAL_FORWARD_STORE,
-                source_health_by_symbol={"MSFT": True},
-                universe=("MSFT",),
-                data_gate_result=go_gate(("MSFT",), evidence_mode=SCHWAB_EVIDENCE),
-                owner_inputs={},
-                allow_real_readonly=True,
-            )
-
-    def test_legacy_evidence_cannot_activate_the_schwab_real_store(self):
-        with self.assertRaisesRegex(
-            ag.ActivationBoundaryError, "Schwab data-gate evidence"
-        ):
-            ag.activation_preconditions(
-                forward_base=ag.REPO_ROOT / SCHWAB_FORWARD_STORE,
-                source_health_by_symbol={"MSFT": True},
-                universe=("MSFT",),
-                data_gate_result=go_gate(("MSFT",)),
-                owner_inputs={},
-                allow_real_readonly=True,
-            )
+        legacy = ag.activation_preconditions(
+            forward_base=REAL_FORWARD_STORE,
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=go_gate(("MSFT",), evidence_mode=SCHWAB_EVIDENCE),
+            owner_inputs={},
+            allow_real_readonly=True,
+        )
+        schwab = ag.activation_preconditions(
+            forward_base=ag.REPO_ROOT / SCHWAB_FORWARD_STORE,
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=go_gate(("MSFT",)),
+            owner_inputs={},
+            allow_real_readonly=True,
+        )
+        self.assertEqual(
+            legacy.by_name["owner_inputs_complete"].reason,
+            f"blank: {list(LEGACY_OWNER_FIELDS)}",
+        )
+        self.assertEqual(
+            schwab.by_name["owner_inputs_complete"].reason,
+            f"blank: {list(SCHWAB_OWNER_FIELDS)}",
+        )
 
     def test_a_subpath_of_either_real_store_is_still_boundary_guarded(self):
         from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE
@@ -115,9 +135,7 @@ class GuardTests(unittest.TestCase):
             (Path(REAL_FORWARD_STORE) / "nested", None),
             (ag.REPO_ROOT / SCHWAB_FORWARD_STORE / "nested", SCHWAB_EVIDENCE),
         ):
-            with self.assertRaisesRegex(
-                ag.ActivationBoundaryError, "synthetic stores"
-            ):
+            with self.assertRaisesRegex(ag.ActivationBoundaryError, "synthetic stores"):
                 ag.activation_preconditions(
                     forward_base=store,
                     source_health_by_symbol={"MSFT": True},
@@ -135,15 +153,25 @@ class GuardTests(unittest.TestCase):
             owner_inputs={},
         )
         names = {c.name for c in report.checks}
-        self.assertEqual(names, {"ledger_valid_empty", "source_health_whole_universe",
-                                 "data_gate_go", "owner_inputs_complete",
-                                 "working_tree_clean"})
+        self.assertEqual(
+            names,
+            {
+                "ledger_valid_empty",
+                "source_health_whole_universe",
+                "data_gate_go",
+                "owner_inputs_complete",
+                "working_tree_clean",
+            },
+        )
 
     def test_blank_owner_inputs_block(self):
         report = ag.activation_preconditions(
             forward_base=self.base,
-            source_health_by_symbol={"MSFT": True}, universe=("MSFT",),
-            data_gate_result=go_gate(("MSFT",)), owner_inputs={})
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=go_gate(("MSFT",)),
+            owner_inputs={},
+        )
         check = report.by_name["owner_inputs_complete"]
         self.assertFalse(check.ok)
         self.assertIn("WINDOW_START_DECISION_SESSION", check.reason)
@@ -154,7 +182,9 @@ class GuardTests(unittest.TestCase):
             forward_base=self.base,
             source_health_by_symbol={"MSFT": True, "CRWV": False},
             universe=("MSFT", "CRWV"),
-            data_gate_result=go_gate(("MSFT", "CRWV")), owner_inputs={})
+            data_gate_result=go_gate(("MSFT", "CRWV")),
+            owner_inputs={},
+        )
         check = report.by_name["source_health_whole_universe"]
         self.assertFalse(check.ok)
         self.assertIn("CRWV", check.reason)
@@ -164,38 +194,61 @@ class GuardTests(unittest.TestCase):
             forward_base=self.base,
             source_health_by_symbol={"A": True, "B": True, "C": True},
             universe=("A", "B", "C"),
-            data_gate_result=go_gate(("A", "B", "C")), owner_inputs={})
+            data_gate_result=go_gate(("A", "B", "C")),
+            owner_inputs={},
+        )
         self.assertTrue(report.by_name["source_health_whole_universe"].ok)
 
     def test_no_go_gate_blocks(self):
         gate = {"whole_universe_verdict": "NO_GO", "go_count": 0, "universe": ["MSFT"]}
         report = ag.activation_preconditions(
             forward_base=self.base,
-            source_health_by_symbol={"MSFT": True}, universe=("MSFT",),
-            data_gate_result=gate, owner_inputs={})
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=gate,
+            owner_inputs={},
+        )
         self.assertFalse(report.by_name["data_gate_go"].ok)
 
     def test_non_empty_ledger_blocks(self):
         from data.cache_runner import session_close_utc
         from options_researcher import h7_event_ledger as el
-        el.append_event({
-            "schema_version": 1, "event_id": "x:1", "event_type": "skip",
-            "occurred_at_utc": session_close_utc("2026-07-10").isoformat(),
-            "evaluation_session": "2026-07-10", "symbol": None, "lane": None,
-            "causes": [], "payload": {}}, base_dir=self.base, expected_head=None)
+
+        el.append_event(
+            {
+                "schema_version": 1,
+                "event_id": "x:1",
+                "event_type": "skip",
+                "occurred_at_utc": session_close_utc("2026-07-10").isoformat(),
+                "evaluation_session": "2026-07-10",
+                "symbol": None,
+                "lane": None,
+                "causes": [],
+                "payload": {},
+            },
+            base_dir=self.base,
+            expected_head=None,
+        )
         report = ag.activation_preconditions(
             forward_base=self.base,
-            source_health_by_symbol={"MSFT": True}, universe=("MSFT",),
-            data_gate_result=go_gate(("MSFT",)), owner_inputs={})
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=go_gate(("MSFT",)),
+            owner_inputs={},
+        )
         self.assertFalse(report.by_name["ledger_valid_empty"].ok)
 
     def test_real_store_readonly_snapshot_allowed(self):
         from options_researcher.h7_paper_lifecycle import REAL_FORWARD_STORE
+
         report = ag.activation_preconditions(
             forward_base=REAL_FORWARD_STORE,
-            source_health_by_symbol={"MSFT": True}, universe=("MSFT",),
-            data_gate_result=go_gate(("MSFT",)), owner_inputs={},
-            allow_real_readonly=True)
+            source_health_by_symbol={"MSFT": True},
+            universe=("MSFT",),
+            data_gate_result=go_gate(("MSFT",)),
+            owner_inputs={},
+            allow_real_readonly=True,
+        )
         # Phase-aware: post-activation (2026-07-20) the real store is correctly
         # non-empty, so the ledger_valid_empty precondition now reports not-ok — that
         # is the guard working (it would refuse a second activation). The invariant
@@ -209,8 +262,12 @@ class GuardTests(unittest.TestCase):
             REAL_FORWARD_STORE,
             ActivationBoundaryError,
         )
+
         with self.assertRaises(ActivationBoundaryError):
             ag.activation_preconditions(
                 forward_base=REAL_FORWARD_STORE,
-                source_health_by_symbol={"MSFT": True}, universe=("MSFT",),
-                data_gate_result=go_gate(("MSFT",)), owner_inputs={})
+                source_health_by_symbol={"MSFT": True},
+                universe=("MSFT",),
+                data_gate_result=go_gate(("MSFT",)),
+                owner_inputs={},
+            )

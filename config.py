@@ -691,45 +691,10 @@ LIVE_QUOTE_MAX_AGE_SECONDS = 120   # older quote timestamp => UNAVAILABLE
 LIVE_PROBE_MAX_AGE_DAYS = 7        # recorded schema probe older => live lane off
 
 # Owner-typed 2026-08-31, ruling 3:
-# reports/2026-08-31-owner-rulings-h7-unfreeze.md. This gates the worst
-# selectable quote-timestamp age for the H7 Schwab post-registration arming
-# lane; exactly 60 minutes is allowed and anything older is blocked.
-H7_SCHWAB_MAX_SELECTABLE_QUOTE_AGE_MINUTES = 60
-
-# Round-1 review finding F6. NOT owner-typed: this is the schedule-derived
-# long-lane holding length already documented at
-# tools/h7_entry_variant_menu.py OCCUPANCY_LOCKOUT_SESSIONS[0] (enter at the
-# monthly expiration nearest 90 DTE, time-exit at H7_CLOSE_AT_DTE=30, i.e.
-# ~60 calendar days ~= 42 trading sessions; no price path and no outcome is
-# consulted). It is mirrored here so the registration validator can re-derive
-# a feasibility receipt's occupancy-constrained projection without importing
-# the measurement tool, and a test binds the two values so they cannot drift.
-H7_SCHWAB_REGISTERED_OCCUPANCY_LOCKOUT_SESSIONS = 42
-
-# The Schwab restart registers the SAME entry cohort the legacy forward window
-# already registered -- inherited evidence, not a new selection. Provenance:
-# ledger/h7_forward/events.jsonl seq 0, payload.universe.included, quoted as
-# "Inherited-registered" in
-# reports/h7_forward_schwab/2026-08-15-registration-packet-bar7-draft.md
-# ("Cohort | 9 names: AMD, AMZN, CEG, ET, MSFT, NOW, PLTR, TEM, VST").
-H7_SCHWAB_REGISTERED_COHORT = (
-    "AMD", "AMZN", "CEG", "ET", "MSFT", "NOW", "PLTR", "TEM", "VST",
-)
-
-# Why each remaining official-scope name is excluded, transcribed per name from
-# the SAME inherited seq-0 event's payload.universe.excluded (all six read
-# EARNINGS-UNKNOWN there, and the packet quotes them identically). Kept as a
-# per-name map rather than one blanket string so a future exclusion cannot
-# inherit a reason that was never recorded for it: the registration builder
-# refuses to exclude a name that is absent here (round-1 finding F10).
-H7_SCHWAB_REGISTERED_COHORT_EXCLUSION_REASONS = {
-    "AVGO": "EARNINGS-UNKNOWN",
-    "CRWV": "EARNINGS-UNKNOWN",
-    "IREN": "EARNINGS-UNKNOWN",
-    "NVDA": "EARNINGS-UNKNOWN",
-    "SMCI": "EARNINGS-UNKNOWN",
-    "USAR": "EARNINGS-UNKNOWN",
-}
+# reports/2026-08-31-owner-rulings-h7-unfreeze.md. The ruling measured the
+# WITHIN-PACKAGE timestamp-dispersion metric, not absolute quote staleness, so
+# this reference is display-only and MUST NOT gate entry or arming behavior.
+H7_SCHWAB_QUOTE_AGE_DISPERSION_REFERENCE_MINUTES = 60
 
 # ---------------------------------------------------------------------------
 # H9 -- post-earnings conditional HISTORICAL WRITTEN STUDY (spec

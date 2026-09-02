@@ -31,13 +31,6 @@ from options_researcher.h7_paper_lifecycle import (
     RealStoreSession,
     TransitionResult,
 )
-from options_researcher.h7_schwab_data_gate import (
-    EVIDENCE_MODE as SCHWAB_EVIDENCE_MODE,
-)
-from options_researcher.h7_schwab_quote_age_gate import (
-    QUOTE_AGE_EVIDENCE_INVALID,
-    evaluate_schwab_quote_age,
-)
 from options_researcher.h7_scope import scope_identity, watch_universe
 from options_researcher.h7_watch import evaluation_session, validate_data_gate_receipt
 from research.hashing import canonical_json
@@ -135,54 +128,6 @@ def _require_receipt_run_date(receipt: dict, expected: str, label: str) -> None:
         )
 
 
-def _schwab_quote_age_board(gate: dict, entry_names: list[str]) -> dict | None:
-    """Evaluate the Schwab arming lane's quote-age gate, or ``None`` off-lane.
-
-    Brief 36 WP-E: the owner-typed threshold
-    (``config.H7_SCHWAB_MAX_SELECTABLE_QUOTE_AGE_MINUTES``) is a BLOCKING
-    arming gate, not a report. It applies to Schwab-evidence data-gate
-    receipts only: the legacy ThetaData lane is byte-for-byte unaffected and
-    is never asked for a sidecar that its captures do not produce. A missing,
-    unreadable, or mismatched sidecar fails the whole Schwab board closed;
-    an over-threshold name is banned per-name (amendment v1.4 precedent).
-    """
-    if gate.get("evidence_mode") != SCHWAB_EVIDENCE_MODE:
-        return None
-    try:
-        board = evaluate_schwab_quote_age(
-            data_gate_receipt=gate, included_symbols=entry_names
-        )
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise _refuse(
-            f"Schwab arming lane refused [{QUOTE_AGE_EVIDENCE_INVALID}]", exc
-        ) from exc
-    if board.get("error") is not None:
-        raise SessionRefused(
-            f"Schwab arming lane refused [{QUOTE_AGE_EVIDENCE_INVALID}]: "
-            f"{board['error']}"
-        )
-    return board
-
-
-def _require_quote_age_clear(board: dict | None, symbol: str) -> None:
-    """Per-name entry ban for a stale Schwab quote population."""
-    if board is None:
-        return
-    row = board.get("symbols", {}).get(symbol)
-    if not isinstance(row, dict) or row.get("verdict") != "GO":
-        codes = row.get("reason_codes") if isinstance(row, dict) else None
-        worst = (
-            row.get("worst_selectable_quote_age_minutes")
-            if isinstance(row, dict)
-            else None
-        )
-        raise SessionRefused(
-            f"{symbol} is entry-banned by the Schwab quote-age gate "
-            f"(reason_codes={codes}, worst_selectable_quote_age_minutes={worst}, "
-            f"threshold_minutes={board.get('threshold_minutes')})"
-        )
-
-
 def open_real_session(
     *,
     data_gate_receipt_path: Path,
@@ -253,7 +198,6 @@ def open_real_session(
         raise SessionRefused(
             f"source-health receipt has unhealthy registered entry names: {unhealthy}"
         )
-    quote_age = _schwab_quote_age_board(gate, entry_names)
 
     if symbol is not None:
         if not isinstance(symbol, str) or not symbol or symbol != symbol.upper():
@@ -265,7 +209,6 @@ def open_real_session(
             raise SessionRefused(
                 f"{symbol} is entry-banned by source health (gate={state.get('gate')!r})"
             )
-        _require_quote_age_clear(quote_age, symbol)
 
     return lifecycle._issue_real_store_session(
         RealStoreSession(

@@ -13,6 +13,7 @@ from test_h7_schwab_window_registration import (
     _verified_data_gate_receipt,
     evidence,
     owner_inputs,
+    owner_manifest,
 )
 
 from options_researcher import h7_activation_guard as guard
@@ -47,17 +48,21 @@ def authorization_text() -> str:
     )
 
 
+def starvation_preacceptance_text() -> str:
+    return (
+        "Owner pre-accepts starvation for this upper-bound estimate. "
+        f"{authorization_text()} occupancy_constrained_expected_entries=3"
+    )
+
+
 class SchwabManualActivateTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.store = self.root / "h7-forward-schwab"
-        self.spec = self.root / "activation-spec.md"
-        self.spec.write_text(
-            "owner-reviewed Schwab activation fixture\n",
-            encoding="utf-8",
-        )
+        self.store = self.root / "h7_forward_schwab"
+        self.spec = registration.SCHWAB_ACTIVATION_SPEC_PATH
+        self.owner_spec_sha256 = sha256_file(self.spec)
         self.data_path = self.root / "data-gate.json"
         self.backup_path = self.root / "backup-restore.json"
         self.evidence_path = self.root / "evidence.json"
@@ -75,12 +80,30 @@ class SchwabManualActivateTests(unittest.TestCase):
             },
         )
         write_immutable_receipt(self.backup, self.backup_path)
-        self.owner = owner_inputs(H7_STAGE8_EXPLICIT_AUTHORIZATION=authorization_text())
-        self.evidence = evidence(
-            activation_spec_sha256=sha256_file(self.spec),
-            code_commit=_head(),
+        self.owner = owner_inputs(
+            H7_STAGE8_EXPLICIT_AUTHORIZATION="owner authorizes this invocation",
+            SCHWAB_STARVATION_RISK_PREACCEPTANCE=starvation_preacceptance_text(),
         )
+        self.evidence = evidence(code_commit=_head())
         self.evidence_path.write_text(json.dumps(self.evidence), encoding="utf-8")
+
+    def test_pinned_spec_requires_normalized_owner_typed_hash(self):
+        self.assertEqual(
+            cli._validated_owner_spec_sha256(self.spec, f"  {self.owner_spec_sha256.upper()}  "),
+            self.owner_spec_sha256,
+        )
+        legacy = (
+            registration.REPO_ROOT
+            / "docs/superpowers/specs/2026-07-19-h7-stage8-activation-spec.md"
+        )
+        with self.assertRaisesRegex(ValueError, "pinned Schwab spec"):
+            cli._validated_owner_spec_sha256(legacy, self.owner_spec_sha256)
+        with self.assertRaisesRegex(ValueError, "64-hex"):
+            cli._validated_owner_spec_sha256(self.spec, "not-a-sha")
+
+    def test_cli_cannot_widen_the_door_report_age_guardrail(self):
+        source = Path(cli.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("max_report_age_s", source)
 
     def test_authorization_requires_od3_and_row7_content(self):
         cli.validate_authorization_text(authorization_text())
@@ -92,6 +115,14 @@ class SchwabManualActivateTests(unittest.TestCase):
             with self.subTest(missing=missing):
                 with self.assertRaisesRegex(ValueError, "authorization text"):
                     cli.validate_authorization_text(authorization_text().replace(missing, ""))
+
+    def test_cli_requires_od3_prose_in_persisted_starvation_field(self):
+        owner = dict(self.owner)
+        owner["SCHWAB_STARVATION_RISK_PREACCEPTANCE"] = (
+            "Owner prose occupancy_constrained_expected_entries=3"
+        )
+        with self.assertRaisesRegex(ValueError, "authorization text"):
+            cli._validate_owner(owner)
 
     def test_cli_has_no_store_universe_or_trim_escape_hatch(self):
         actions = {
@@ -111,6 +142,10 @@ class SchwabManualActivateTests(unittest.TestCase):
             "--session-chain-convention",
             "--schwab-min-losses-for-verdict",
             "--schwab-starvation-risk-preacceptance",
+            "--owner-typed-spec-sha256",
+            "--included-symbols",
+            "--excluded-reason",
+            "--trim-rule",
         ):
             self.assertTrue(actions[required].required)
 
@@ -125,6 +160,8 @@ class SchwabManualActivateTests(unittest.TestCase):
                 completed_session=self.data["evaluation_session"],
                 confirmation="wrong",
                 spec_path=self.spec,
+                owner_typed_spec_sha256=self.owner_spec_sha256,
+                universe_manifest=owner_manifest(),
                 forward_base=self.store,
             )
 
@@ -147,6 +184,8 @@ class SchwabManualActivateTests(unittest.TestCase):
                 completed_session=self.data["evaluation_session"],
                 confirmation=cli.CONFIRMATION,
                 spec_path=self.spec,
+                owner_typed_spec_sha256=self.owner_spec_sha256,
+                universe_manifest=owner_manifest(),
                 forward_base=self.store,
                 code_state=lambda: (_head(), True),
             )
@@ -157,8 +196,8 @@ class SchwabManualActivateTests(unittest.TestCase):
         self.assertEqual(events[0].event_type, "window_registration")
         self.assertEqual(events[0].payload["namespace"], registration.NAMESPACE)
         self.assertEqual(
-            events[0].payload["owner_authorization"]["H7_STAGE8_EXPLICIT_AUTHORIZATION"],
-            authorization_text(),
+            events[0].payload["owner_authorization"]["SCHWAB_STARVATION_RISK_PREACCEPTANCE"],
+            starvation_preacceptance_text(),
         )
 
     def test_durable_data_gate_is_revalidated_before_door(self):
@@ -177,6 +216,8 @@ class SchwabManualActivateTests(unittest.TestCase):
                     completed_session=self.data["evaluation_session"],
                     confirmation=cli.CONFIRMATION,
                     spec_path=self.spec,
+                    owner_typed_spec_sha256=self.owner_spec_sha256,
+                    universe_manifest=owner_manifest(),
                     forward_base=self.store,
                 )
         self.assertTrue(ledger.verify(self.store).empty)
