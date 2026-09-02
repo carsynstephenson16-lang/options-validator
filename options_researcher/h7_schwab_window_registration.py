@@ -229,9 +229,16 @@ def _validate_feasibility_gate(receipt: dict, owner: dict) -> str | None:
         )
     number = format(expected, ".15g")
     if re.search(rf"(?<![0-9.]){re.escape(number)}(?:\.0+)?(?![0-9.])", text) is None:
+        # WP-B exists to surface this reconciliation to the OWNER, so the
+        # refusal names both quantities: what the qualifying receipt measured
+        # and what the owner's pre-acceptance actually quotes. Round-1 finding
+        # F5: printing only the receipt's number left the owner guessing which
+        # figure in their own sentence disagreed.
+        quoted = re.findall(r"(?<![0-9.])[0-9]+(?:\.[0-9]+)?(?![0-9.])", text)
         raise RegistrationInputError(
             "starvation pre-acceptance must quote the occupancy-constrained "
-            f"expected entries exactly ({number})"
+            f"expected entries exactly: receipt figure {number}, "
+            f"pre-acceptance quotes {quoted or 'no number'}"
         )
     return text
 

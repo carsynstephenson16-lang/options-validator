@@ -530,6 +530,21 @@ class BuilderTests(unittest.TestCase):
                         evidence=evidence(),
                     )
 
+    def test_preacceptance_mismatch_names_both_numbers(self):
+        """Round-1 F5: WP-B requires the receipt figure AND the owner's."""
+        with self.assertRaises(registration.RegistrationInputError) as caught:
+            registration.build_window_registration_event(
+                owner=owner_inputs(
+                    SCHWAB_STARVATION_RISK_PREACCEPTANCE=(
+                        "Owner pre-accepts starvation at 4 entries."
+                    )
+                ),
+                evidence=evidence(),
+            )
+        message = str(caught.exception)
+        self.assertIn("3", message)  # the receipt's occupancy-constrained figure
+        self.assertIn("4", message)  # the number the owner's text quotes
+
     def test_measurement_code_sha_may_precede_registration_commit(self):
         event = registration.build_window_registration_event(
             owner=owner_inputs(), evidence=evidence(code_commit="c" * 40)
