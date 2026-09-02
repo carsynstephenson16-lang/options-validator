@@ -1174,6 +1174,17 @@ def _frozen_market_result(
     pairs: list[tuple[ledger.StoredEvent, ledger.StoredEvent]],
 ) -> dict:
     by_id = {event.event_id: event for event in events}
+    # Round-1 finding F4: never assume events[0] is the registration. The temp
+    # ledger's seq 0 carries the frozen loss bar the scorer reads, so picking
+    # the wrong event would score under the wrong rule instead of failing.
+    registrations = [
+        event for event in events if event.event_type == "window_registration"
+    ]
+    if len(registrations) != 1:
+        raise RealScoringRefused(
+            "frozen market-close scoring requires exactly one "
+            f"window_registration event, found {len(registrations)}"
+        )
     market = [
         pair
         for pair in pairs
@@ -1183,7 +1194,7 @@ def _frozen_market_result(
         base = f"{raw}/ledger"
         write_clock = lambda: datetime(2100, 1, 1, tzinfo=timezone.utc)
         ledger.append_event(
-            _copy_event(events[0], []),
+            _copy_event(registrations[0], []),
             base_dir=base,
             clock=write_clock,
         )

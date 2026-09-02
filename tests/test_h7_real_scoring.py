@@ -506,6 +506,23 @@ class RealScoringCase(unittest.TestCase):
 
 
 class TestRealScoringAuthority(RealScoringCase):
+    def test_frozen_market_scoring_selects_the_registration_explicitly(self):
+        """Round-1 F4: events[0] was assumed to be the window_registration."""
+        not_a_registration = replace(self.registration, event_type="entry_intent")
+        for events in (
+            [not_a_registration],
+            [self.registration, replace(self.registration, seq=1)],
+        ):
+            with self.subTest(count=len(events)):
+                with self.assertRaisesRegex(
+                    real_scoring.RealScoringRefused, "window_registration"
+                ):
+                    real_scoring._frozen_market_result(
+                        session=None,  # type: ignore[arg-type]
+                        events=events,
+                        pairs=[],
+                    )
+
     def test_forged_capability_is_refused(self):
         forged = replace(self.open(), _authority_token=object())
 
