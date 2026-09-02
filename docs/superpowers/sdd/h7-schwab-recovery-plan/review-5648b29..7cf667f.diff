@@ -1,0 +1,452 @@
+# Review package: 5648b29..7cf667f
+
+## Commits
+7cf667f fix(h7): pin append-time backup evidence
+97d1646 docs(h7): record task 2 implementation evidence
+
+## Files changed
+ .../sdd/h7-schwab-recovery-plan/task-2-report.md   | 132 +++++++++++++++++++++
+ .../h7_schwab_window_registration.py               |   7 ++
+ .../2026-08-09-owner-gate-packet.md                |   2 +-
+ tests/test_h7_schwab_manual_activate.py            |  47 +++++++-
+ tests/test_h7_schwab_window_registration.py        |   1 +
+ tools/h7_schwab_manual_activate.py                 |  17 ++-
+ 6 files changed, 201 insertions(+), 5 deletions(-)
+
+## Diff
+diff --git a/.superpowers/sdd/h7-schwab-recovery-plan/task-2-report.md b/.superpowers/sdd/h7-schwab-recovery-plan/task-2-report.md
+new file mode 100644
+index 0000000..d800b36
+--- /dev/null
++++ b/.superpowers/sdd/h7-schwab-recovery-plan/task-2-report.md
+@@ -0,0 +1,132 @@
++# Task 2 report — narrow H7 Schwab completion interfaces
++
++## Status
++
++COMPLETE for the scoped implementation. The real registration path was not
++run. No authority switch, operations checkout, OAuth state, market data,
++cache, or ledger content was changed.
++
++Implementation commit: `5648b29` (`feat(h7): add receipt-bound Schwab completion interfaces`).
++
++## Files changed
++
++- `tools/h7_forward_backup.py`
++  - `restore-check` now requires an immutable `backup` receipt.
++  - The exact `snapshot_id` is derived from the receipt; `latest` is refused.
++  - A caller-supplied snapshot must match the receipt.
++  - The restored allow-listed tree is re-inventoried with `backup_inventory()`
++    and must equal the receipt's `input_files` exactly.
++  - The restore receipt binds the exact snapshot, backup receipt hash, and
++    restored inventory.
++- `tools/h7_schwab_manual_activate.py`
++  - Added an owner-confirmed, full-15-only operator CLI.
++  - Revalidates immutable source-health, Schwab data-gate, backup, and restore
++    receipts; reruns the exact preclose package and append-time gates; checks
++    reviewed evidence hashes; and delegates to the existing Schwab
++    `register_window_real` door.
++  - Exposes no trim or custom-universe option and contains no direct append.
++- `options_researcher/h7_activation_guard.py`
++  - Added a provider-specific `owner_fields` seam while preserving the legacy
++    default, allowing the shared fresh guard to validate Schwab owner fields.
++- `options_researcher/h7_schwab_window_registration.py`
++  - Requires and freezes the backup-restore receipt hash in the registration
++    event's gate evidence.
++- `reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md`
++  - Replaced stale Monday-bound wording with the next valid completed-session
++    15:45 ET canary wording.
++- `tests/test_h7_backup.py`
++  - Added exact inventory, wrong snapshot/type/session, missing file, extra
++    file, changed size, and same-size changed-hash coverage.
++- `tests/test_h7_schwab_manual_activate.py`
++  - Added full-15 happy-path composition and partial-scope, stale-session,
++    dirty-tree, and moved-HEAD refusals against a temporary ledger.
++- `tests/test_h7_one_door.py`
++  - Added static direct-append protection for the Schwab CLI.
++- `tests/test_h7_schwab_window_registration.py`
++  - Extended the evidence fixture for the required restore receipt hash.
++
++## TDD evidence
++
++### Restore receipt binding cycle
++
++RED command:
++
++`MPLCONFIGDIR=/private/tmp/h7-schwab-recovery-mpl PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p 'test_h7_backup.py' -v`
++
++Observed RED: exit 1; six expected errors reported
++`TypeError: run_restore_check() got an unexpected keyword argument 'backup_receipt_path'`.
++
++GREEN command: same command after the minimal implementation.
++
++Observed GREEN: 7 tests passed.
++
++### Schwab operator composition cycle
++
++RED command:
++
++`MPLCONFIGDIR=/private/tmp/h7-schwab-recovery-mpl PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p 'test_h7_schwab_manual_activate.py' -v`
++
++Observed RED: exit 1 with the expected missing-module import for
++`tools.h7_schwab_manual_activate`.
++
++GREEN command: same command after implementation.
++
++Observed GREEN: 4 tests passed.
++
++## Focused validation
++
++- `test_h7_backup.py`: 7 passed.
++- `test_h7_schwab_manual_activate.py`: 4 passed.
++- `test_h7_schwab_window_registration.py`: 10 passed.
++- `test_h7_one_door.py`: 8 passed.
++- `test_h7_activation_guard.py`: 8 passed.
++- `test_h7_trim_at_append.py`: 15 passed, preserving legacy guard behavior.
++- `test_h7_schwab_data_gate.py`: 7 passed.
++- Ruff check over every changed Python file: passed.
++- Ruff format check over the two new Python files: passed.
++- Pyright over the new CLI, backup tool, guard seam, and focused tests:
++  0 errors, 0 warnings.
++- `git diff --check`: passed before the implementation commit and again after.
++- CLI help smoke via
++  `.venv/bin/python -m tools.h7_schwab_manual_activate --help`: exit 0; only
++  fixed evidence inputs are exposed, with no trim/custom-universe option.
++
++The parent agent explicitly reserved broader full-repository validation and
++independent review; no full-suite run is claimed here.
++
++## Self-review
++
++- Append-only boundary: the new CLI has no `append_event` call. The existing
++  AST scan still finds only each namespace's guarded `register_window_real`
++  constructor, and the synthetic CLI test reaches sequence zero only through
++  that door.
++- Owner authority: the confirmation token, exact owner fields, reviewed spec
++  hash, and evidence hashes are required. No owner wording is inferred and no
++  authority boolean is changed.
++- Scope closure: both source-health and Schwab data-gate receipts must match
++  the exact official 15-name identity; the CLI exposes no subset parameter.
++- Evidence freshness: completed session, source link, full recomputed Schwab
++  result, exact manifest identity, receipt hashes, current clean/matching HEAD,
++  guard age, VALID-EMPTY store, and append-time reruns are all fail-closed.
++- Backup closure: wrong receipt type/session/snapshot, missing/extra paths,
++  size drift, and hash drift all refuse before a restore receipt is written.
++- Compatibility: the shared guard's legacy owner-field behavior remains the
++  default and its existing activation/trim tests passed.
++- Scope audit: no files under operations, OAuth, market-data caches, either H7
++  ledger, or authority configuration were edited.
++
++## Concerns and unsupported assumptions
++
++- No real Restic repository or real canary package was exercised; the tests
++  use controlled filesystem restores and the existing offline Schwab package
++  evaluator. Task 4 must supply the real completed-session evidence.
++- No real registration was attempted. The production store remains outside
++  this task's mutation scope and registration remains owner-gated.
++- Focused tests emitted the repository's existing unclosed-event-loop
++  `ResourceWarning` in some modules; all affected test processes exited 0.
++- Full-repository tests and independent adversarial review remain for the
++  parent task, as explicitly directed.
++
++## Final decision
++
++READY FOR PARENT REVIEW. NOT REGISTERED and NOT ACTIVATED.
+diff --git a/options_researcher/h7_schwab_window_registration.py b/options_researcher/h7_schwab_window_registration.py
+index e5c22e8..19121cc 100644
+--- a/options_researcher/h7_schwab_window_registration.py
++++ b/options_researcher/h7_schwab_window_registration.py
+@@ -385,20 +385,27 @@ def register_window_real(
+         raise ActivationRefused("guard report is stale or from the future")
+ 
+     gates = recheck_gates()
+     if gates.get("source_health_all_healthy") is not True:
+         raise ActivationRefused("source-health recheck is not all-healthy")
+     if gates.get("data_gate_go") is not True:
+         raise ActivationRefused("data-gate recheck is not GO")
+     for key in ("source_health_evidence_id", "data_gate_evidence_id"):
+         if gates.get(key) != evidence[key]:
+             raise ActivationRefused(f"append-time {key} disagrees with evidence")
++    if (
++        gates.get("backup_restore_receipt_hash")
++        != evidence["backup_restore_receipt_hash"]
++    ):
++        raise ActivationRefused(
++            "append-time backup_restore_receipt_hash disagrees with evidence"
++        )
+ 
+     verified = ledger.verify(base_dir=base)
+     if not (verified.valid and verified.empty):
+         raise ActivationRefused(
+             "target Schwab forward store is not VALID EMPTY at append time"
+         )
+     event = build_window_registration_event(
+         owner=owner, evidence=evidence, universe_manifest=universe_manifest
+     )
+     return ledger.append_event(event, base_dir=base, clock=clock, expected_head=None)
+diff --git a/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md b/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md
+index 024362e..aaafc73 100644
+--- a/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md
++++ b/reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md
+@@ -6,21 +6,21 @@ operative owner wording and grants no authority. Live trading remains disabled.
+ ## Readiness snapshot
+ 
+ | Contract item | Evidence | State |
+ |---|---|---|
+ | Provider and cache identity | Schwab read-only; `.cache/schwab_chains/`; `preclose_snapshot_v1` | machinery ready; live canary absent |
+ | Exact historical boundary | Manifest + capture receipts bind exact session and every Parquet byte | machinery ready; evidence from the next valid completed-session 15:45 ET canary is absent |
+ | Scope and source health | immutable 15-name H7 scope; gate requires exact receipt package | machinery ready; the next valid completed-session 15:45 ET canary receipt is absent |
+ | Measured feasibility | `2026-08-09-feasibility.json`, hash `8b567a5eb6f1950fa32ee9ddfbd4a440e32a7e12ff7a617888e9cd67baff625c` | complete; owner decision pending |
+ | Window identity | builder derives start/count/end and freezes unchanged strategy/cost/scoring identity | prepared; owner fields blank |
+ | New store | `ledger/h7_forward_schwab/` verifies VALID-EMPTY | ready for guarded first event only |
+-| Backup/restore | Restic allow-list includes new chain/report/ledger paths | `BLOCKED_PENDING_MONDAY_CANARY` |
++| Backup/restore | Restic allow-list includes new chain/report/ledger paths | blocked pending the next valid completed-session 15:45 ET canary |
+ | Independent adversarial review | prompt below | pending orchestrating Claude/Opus |
+ 
+ ## OD-3 template — OWNER MUST TYPE THE OPERATIVE LINE
+ 
+ `OD-3 2026-__-__: future H7 paper observations MUST USE NEW NAMESPACE h7-forward-schwab-v1. The prior registration and event remain immutable. The chosen namespace must bind provider, cache manifest, final as-of boundary, scope identity, source-health receipt, and activation date before any new observation.`
+ 
+ Blank owner action: **[NOT TYPED / NOT AUTHORIZED]**
+ 
+ ## Fresh starvation measurement — decision intentionally blank
+ 
+diff --git a/tests/test_h7_schwab_manual_activate.py b/tests/test_h7_schwab_manual_activate.py
+index ac353bf..033d57f 100644
+--- a/tests/test_h7_schwab_manual_activate.py
++++ b/tests/test_h7_schwab_manual_activate.py
+@@ -176,22 +176,22 @@ class SchwabManualActivateTests(unittest.TestCase):
+                 "last_historical_manifest_receipt_hash": "f" * 64,
+                 "provider_identity": "schwab-read-only/v1",
+                 "cache_namespace": ".cache/schwab_chains/",
+                 "feasibility_receipt": feasibility,
+                 "feasibility_receipt_hash": feasibility["receipt_hash"],
+                 "darwin_durability_verified": True,
+                 "pre_append_state": "VALID EMPTY",
+             },
+         )
+ 
+-    def _activate(self, *, code_state=None):
+-        evaluator = lambda *args, **kwargs: dict(self.data_result)
++    def _activate(self, *, code_state=None, data_gate_evaluator=None):
++        evaluator = data_gate_evaluator or (lambda *args, **kwargs: dict(self.data_result))
+         source_evaluator = lambda **kwargs: {"activation_ready": True}
+         with (
+             mock.patch.object(
+                 activation_guard,
+                 "_working_tree_clean",
+                 return_value=activation_guard.Check("working_tree_clean", True, "clean"),
+             ),
+             mock.patch.object(activation_guard, "_git_head", return_value=self.head),
+         ):
+             return cli.activate(
+@@ -261,13 +261,56 @@ class SchwabManualActivateTests(unittest.TestCase):
+     def test_dirty_or_moved_head_refuses(self):
+         for label, code_state in (
+             ("dirty", lambda: (self.head, False)),
+             ("moved", lambda: ("c" * 40, True)),
+         ):
+             with self.subTest(label=label):
+                 with self.assertRaises(registration.ActivationRefused):
+                     self._activate(code_state=code_state)
+                 self.assertTrue(ledger.verify(self.store).empty)
+ 
++    def test_append_time_valid_backup_pair_substitution_refuses(self):
++        calls = 0
++
++        def evaluator(*args, **kwargs):
++            nonlocal calls
++            calls += 1
++            if calls == 2:
++                backup = make_receipt(
++                    "backup",
++                    {
++                        "completed_session": SESSION,
++                        "snapshot_id": "snapshot-substituted",
++                        "scope": scope_identity(),
++                        "input_files": {
++                            "ledger/h7_forward_schwab": {
++                                "kind": "directory",
++                                "files": {},
++                            }
++                        },
++                    },
++                )
++                _write_json(self.backup_path, backup)
++                restore = make_receipt(
++                    "backup_restore",
++                    {
++                        "completed_session": SESSION,
++                        "verified_at_utc": datetime.now(timezone.utc).isoformat(),
++                        "snapshot": "snapshot-substituted",
++                        "snapshot_id": "snapshot-substituted",
++                        "backup_receipt_hash": backup["receipt_hash"],
++                        "scope": scope_identity(),
++                        "restored_inventory": backup["input_files"],
++                        "verification": {"ok": True},
++                    },
++                )
++                _write_json(self.restore_path, restore)
++            return dict(self.data_result)
++
++        with self.assertRaises(registration.ActivationRefused):
++            self._activate(data_gate_evaluator=evaluator)
++        self.assertEqual(calls, 2)
++        self.assertTrue(ledger.verify(self.store).empty)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tests/test_h7_schwab_window_registration.py b/tests/test_h7_schwab_window_registration.py
+index 083daad..a601659 100644
+--- a/tests/test_h7_schwab_window_registration.py
++++ b/tests/test_h7_schwab_window_registration.py
+@@ -189,20 +189,21 @@ class GuardedDoorTests(unittest.TestCase):
+             guard_report=self.report,
+             spec_sha256=self.spec_sha,
+             spec_path=self.spec,
+             base_dir=self.store,
+             code_state=lambda: (self.head, True),
+             recheck_gates=lambda: {
+                 "source_health_all_healthy": True,
+                 "data_gate_go": True,
+                 "source_health_evidence_id": "sh:2026-08-07",
+                 "data_gate_evidence_id": "dg:2026-08-07",
++                "backup_restore_receipt_hash": "f" * 64,
+             },
+             now=datetime.fromisoformat("2026-08-09T20:30:00+00:00"),
+         )
+ 
+     def test_guarded_door_appends_only_as_first_event(self):
+         result = self.call()
+         self.assertEqual(result.seq, 0)
+         self.assertEqual(ledger.verify(self.store).count, 1)
+ 
+     def test_guarded_door_refuses_non_empty_target(self):
+diff --git a/tools/h7_schwab_manual_activate.py b/tools/h7_schwab_manual_activate.py
+index fd81268..dbeda3a 100644
+--- a/tools/h7_schwab_manual_activate.py
++++ b/tools/h7_schwab_manual_activate.py
+@@ -204,64 +204,75 @@ def _require_evidence_value(evidence: dict, field: str, actual: str) -> None:
+ def _make_recheck(
+     *,
+     source_path: Path,
+     data_gate_path: Path,
+     backup_path: Path,
+     backup_restore_path: Path,
+     completed_session: str,
+     names: list[str],
+     source_hash: str,
+     data_gate_hash: str,
++    backup_hash: str,
++    backup_restore_hash: str,
+     data_gate_evaluator,
+     source_health_evaluator,
+     source_assertion_loader,
+ ):
+     def recheck() -> dict:
+         source = _exact_source_receipt(
+             source_path, completed_session=completed_session, names=names
+         )
+         data_receipt, fresh, _ = _exact_data_gate_receipt(
+             data_gate_path,
+             completed_session=completed_session,
+             names=names,
+             evaluator=data_gate_evaluator,
+         )
+-        _exact_backup_chain(
++        backup, backup_restore = _exact_backup_chain(
+             backup_path=backup_path,
+             backup_restore_path=backup_restore_path,
+             completed_session=completed_session,
+         )
+         if source["receipt_hash"] != source_hash:
+             raise registration.ActivationRefused(
+                 "source-health receipt changed between assembly and append"
+             )
+         if data_receipt["receipt_hash"] != data_gate_hash:
+             raise registration.ActivationRefused(
+                 "data-gate receipt changed between assembly and append"
+             )
++        if backup["receipt_hash"] != backup_hash:
++            raise registration.ActivationRefused(
++                "backup receipt changed between assembly and append"
++            )
++        if backup_restore["receipt_hash"] != backup_restore_hash:
++            raise registration.ActivationRefused(
++                "backup-restore receipt changed between assembly and append"
++            )
+         on = date.fromisoformat(completed_session)
+         health = source_health_evaluator(
+             requested_on=on,
+             on=on,
+             known_as_of=session_close_utc(completed_session),
+             assertions=source_assertion_loader(),
+             names=names,
+         )
+         return {
+             "source_health_all_healthy": health.get("activation_ready") is True,
+             "data_gate_go": (
+                 fresh.get("evaluation_session") == completed_session
+                 and fresh.get("whole_universe_verdict") == "GO"
+                 and fresh.get("universe") == names
+             ),
+             "source_health_evidence_id": source_hash,
+             "data_gate_evidence_id": data_gate_hash,
++            "backup_restore_receipt_hash": backup_restore_hash,
+         }
+ 
+     return recheck
+ 
+ 
+ def activate(
+     *,
+     owner_path: Path,
+     evidence_path: Path,
+     source_health_path: Path,
+@@ -289,21 +300,21 @@ def activate(
+         source_health_path, completed_session=completed_session, names=names
+     )
+     data_receipt, _, manifest_hash = _exact_data_gate_receipt(
+         data_gate_path,
+         completed_session=completed_session,
+         names=names,
+         evaluator=data_gate_evaluator,
+     )
+     if data_receipt.get("source_health_receipt_hash") != source["receipt_hash"]:
+         raise ValueError("Schwab data gate is not linked to source-health evidence")
+-    _, backup_restore = _exact_backup_chain(
++    backup, backup_restore = _exact_backup_chain(
+         backup_path=backup_path,
+         backup_restore_path=backup_restore_path,
+         completed_session=completed_session,
+     )
+ 
+     spec_sha = sha256_file(Path(spec_path))
+     for field, actual in (
+         ("activation_spec_sha256", spec_sha),
+         ("source_health_evidence_id", source["receipt_hash"]),
+         ("source_health_receipt_hash", source["receipt_hash"]),
+@@ -331,20 +342,22 @@ def activate(
+     )
+     recheck = _make_recheck(
+         source_path=Path(source_health_path),
+         data_gate_path=Path(data_gate_path),
+         backup_path=Path(backup_path),
+         backup_restore_path=Path(backup_restore_path),
+         completed_session=completed_session,
+         names=names,
+         source_hash=source["receipt_hash"],
+         data_gate_hash=data_receipt["receipt_hash"],
++        backup_hash=backup["receipt_hash"],
++        backup_restore_hash=backup_restore["receipt_hash"],
+         data_gate_evaluator=data_gate_evaluator,
+         source_health_evaluator=source_health_evaluator,
+         source_assertion_loader=source_assertion_loader,
+     )
+     result = registration.register_window_real(
+         owner=owner,
+         evidence=evidence,
+         guard_report=report,
+         spec_sha256=spec_sha,
+         spec_path=Path(spec_path),

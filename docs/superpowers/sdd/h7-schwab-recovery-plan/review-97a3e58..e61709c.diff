@@ -1,0 +1,228 @@
+# Review package: 97a3e5808b15013e66938345d6b7104b707dc022..e61709c
+
+## Commits
+e61709c docs(h7): repair causal earnings feasibility
+
+## Files changed
+ data/earnings/assertions_v2.csv                    | 15 ++++
+ data/earnings/gating_v3.csv                        | 15 ++++
+ .../2026-08-11-feasibility-primary-earnings.json   | 83 ++++++++++++++++++++++
+ .../2026-08-11-primary-earnings-evidence.md        | 27 +++++++
+ .../2026-08-11-v2-arming-bottleneck-design.md      | 26 +++++++
+ 5 files changed, 166 insertions(+)
+
+## Diff
+diff --git a/data/earnings/assertions_v2.csv b/data/earnings/assertions_v2.csv
+index 25a66e8..753fdb5 100644
+--- a/data/earnings/assertions_v2.csv
++++ b/data/earnings/assertions_v2.csv
+@@ -271,10 +271,25 @@ A0269,AVGO,AVGO-FY26Q3,FY26Q3,assertion,estimated,2026-09-03,,unknown,aggregator
+ A0270,TEM,TEM-2026Q2,2026Q2,assertion,confirmed,2026-07-30,,amc,company_pr,https://investors.tempus.com/news-releases/news-release-details/tempus-report-second-quarter-2026-financial-results-july-30,2026-07-09T23:59:59+00:00,2026-07-12T14:46:48.577501+00:00,,"direct Tempus Investor Relations release, dated July 9, 2026, with no retained intraday publication timestamp; end-of-day UTC is therefore used as a conservative-late causal bound; corrects A0265/G0011 whose known_as_of asserted an exact 09:00 ET wire time with the timezone label inferred, not on-page; facts (Q2 ended 2026-06-30, report Thu 2026-07-30, call 4:30pm ET) corroborated by the Business Wire distribution copy retained as A0265; IR page is bot-inaccessible (fetch timeout) -- URL owner-supplied 2026-07-12"
+ A0271,USAR,USAR-2026Q2,2026Q2,assertion,estimated,2026-08-10,,amc,aggregator,https://www.marketbeat.com/stocks/NASDAQ/USAR/earnings/,2026-07-15T14:00:00+00:00,2026-07-15T15:06:35.717644+00:00,,"aggregator estimate; MarketBeat next report Mon 2026-08-10 AMC (Q2 2026, period end 2026-06-30); NO official USAR advisory on SEC as of check (latest 8-Ks thru 2026-06-18 carry no earnings advisory; ~2wk-ahead advisory expected late July); a second aggregator showed 2026-08-17 (disclosed divergence); SEC cadence corroborates ~Aug (Q1 2026 reported 2026-05-13, item 2.02, acc 0001970622-26-000034); known_as_of = retrieval time (disclosed limitation)"
+ A0272,USAR,USAR-2026Q2,2026Q2,assertion,estimated,2026-08-10,,amc,aggregator,https://www.marketbeat.com/stocks/NASDAQ/USAR/earnings/,2026-07-15T15:54:00+00:00,2026-07-15T15:54:21.363308+00:00,,"provenance correction row citing the SAME MarketBeat evidence as A0271 (next report Mon 2026-08-10 AMC, Q2 2026, period end 2026-06-30; second aggregator showed 2026-08-17, disclosed divergence); appended so a superseding gating row can record owner ratification: the A0271->G0017 promotion (commit 9a8b92a) carried an empty owner-approval note; owner ratified that promotion 2026-07-15 via chat directive after the change review flagged the gap; known_as_of = ratification time (conservative-late)"
+ A0273,CRWV,CRWV-2026Q2,2026Q2,assertion,estimated,2026-08-18,,amc,aggregator,https://www.tipranks.com/stocks/crwv/earnings,2026-07-15T18:57:35+00:00,2026-07-15T18:58:03.419920+00:00,,"CoreWeave (calendar FY, Dec 31 FYE) next report = Q2 2026 (quarter ended 2026-06-30). Aggregator consensus Aug 18 2026 AMC (TipRanks marks confirmed; MarketBeat/Investing.com concur); NO CoreWeave company advisory located on IR/SEC as of retrieval (Q1 date was pre-announced ~3wk ahead on 2026-04-17, so a Q2 advisory expected ~late July). Cadence corroborated: Q1 2026 reported 2026-05-07 (SEC 8-K, CNBC). known_as_of=retrieval time (disclosed limitation); owner-approved 2026-07-15 chat directive."
+ A0274,IREN,IREN-FY26Q4,FY26Q4,assertion,estimated,2026-08-27,,amc,aggregator,https://www.marketbeat.com/stocks/NASDAQ/IREN/earnings/,2026-07-15T18:57:35+00:00,2026-07-15T18:58:53.354147+00:00,,"IREN Ltd runs a JUNE-30 FISCAL YEAR: next report = fiscal Q4 FY2026 (quarter/year ended 2026-06-30), NOT calendar Q2 (aggregators mislabel it). Aggregators DIVERGE on date: MarketBeat ~2026-08-27 AMC vs TipRanks 2026-09-16 (disclosed divergence); EARLIER 08-27 registered as the conservative estimate (fail-closed earnings ban starts earlier; if 08-27 passes with no report the gate self-flips to EARNINGS-UNKNOWN and stays entry-banned). NO company advisory yet (fiscal year just closed 06-30). Cadence corroborated by SEC 8-Ks: Q2 FY26 (~Feb) + Q3 FY26 (~May) filed; Q4/annual reports late Aug-Sep. known_as_of=retrieval time; owner-approved 2026-07-15 chat directive."
+ A0275,PLTR,PLTR-2026Q2,2026Q2,assertion,confirmed,2026-08-03,,amc,company_pr,https://www.businesswire.com/news/home/20260713475194/en/Palantir-Announces-Date-of-Second-Quarter-2026-Earnings-Release-and-Webcast,2026-07-13T20:05:00+00:00,2026-07-16T03:11:35.964876+00:00,,"Company PR via Business Wire: Q2 (ended 6/30/26) results released Monday 2026-08-03 following the close of US markets, webcast 5pm ET. known_as_of = PR publication 2026-07-13 4:05pm ET. Verified this session via stocktitan.net mirror (businesswire.com fetch timed out); mirror carries the BUSINESS WIRE byline and full PR text. Supersedes-in-substance the 2026-07-12 aggregator estimate A0266 (same event, same date, now company-confirmed)."
+ A0276,AMZN,AMZN-2026Q2,2026Q2,assertion,confirmed,2026-07-30,,amc,company_pr,https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report,2026-07-17T00:00:00+00:00,2026-07-18T01:58:13.341293+00:00,,"Amazon corporate news page: 'Amazon will hold a conference call to discuss its Q2 2026 financial results on July 30 at 2:00 p.m. PT/5:00 p.m. ET.' Page shows NO publication timestamp; known_as_of = retrieval time 2026-07-17 (disclosed limitation, conservative vs actual announcement). Upgrades AMZN 2026Q2 from aggregator-estimated (A0006/G0006) to company-confirmed."
+ A0277,ET,ET-2026Q2,2026Q2,assertion,confirmed,2026-08-04,,bmo,company_pr,https://ir.energytransfer.com/news-releases/news-release-details/energy-transfer-announces-second-quarter-2026-earnings-release,2026-06-30T23:59:59+00:00,2026-07-19T02:07:23.391497+00:00,,"Energy Transfer PR: Q2 2026 earnings release Tuesday 2026-08-04 BEFORE market open; call 8:00 CT / 9:00 ET same day. Direct IR fetch timed out; content corroborated via BusinessWire wire copy (stocktitan mirror) + search summary of the same IR URL (PLTR G0021 precedent). known_as_of = wire dateline date 2026-06-30 (exact time not shown; end-of-day used, conservative). First earnings-provenance record for ET (added H7_AMENDMENT_V1_8)."
+ A0278,SMCI,SMCI-FY26Q4,FY26Q4,assertion,confirmed,2026-08-11,,amc,company_pr,https://ir.supermicro.com/news/news-details/2026/Supermicro-Provides-Fourth-Quarter-of-Fiscal-Year-2026-Preliminary-Business-Update/default.aspx,2026-07-21T23:59:59+00:00,2026-07-28T02:11:12.717482+00:00,,"Official Supermicro IR release dated 2026-07-21 schedules the Q4/FY26 earnings call for Tuesday 2026-08-11 at 5:00pm ET. The page exposes no intraday publication timestamp, so end-of-day UTC is used as a conservative causal bound. Corrects the earlier 2026-08-04 aggregator estimate A0268/G0014."
+ A0279,NVDA,NVDA-FY27Q2,FY27Q2,assertion,confirmed,2026-08-26,,amc,company_ir,https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx,2026-07-28T02:10:42+00:00,2026-07-28T02:11:13.059334+00:00,,"Official NVIDIA IR event page schedules FY27 Q2 results for 2026-08-26 at 2:00pm PT. The page exposes the event time but no publication timestamp, so known_as_of is the direct retrieval time; no earlier causal time is inferred. Upgrades A0267/G0013 from aggregator-estimated to company-confirmed without lookahead."
++A0280,AMD,AMD-2026Q1,2026Q1,assertion,confirmed,2026-05-05,,amc,company_pr,https://ir.amd.com/news-events/press-releases/detail/1282/amd-to-report-fiscal-first-quarter-2026-financial-results,2026-04-08T20:15:00+00:00,2026-08-11T04:54:18.204581+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 4bb4a56f6688f61cacd663e3e0f8ab3ffa5b8336a5e05486149c187a63ba0b4b; issuer page carries an exact publication timestamp.
++A0281,AMZN,AMZN-2026Q1,2026Q1,assertion,confirmed,2026-04-29,,amc,company_pr,https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-to-Webcast-First-Quarter-2026-Financial-Results-Conference-Call-57c6bd583/default.aspx,2026-04-16T13:30:00+00:00,2026-08-11T04:54:31.075128+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 3c452712d0114786dd6f7ea67fe1d2434a35dd9306856e1fb20fb844f73aee9e; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0282,AVGO,AVGO-FY26Q2,FY26Q2,assertion,confirmed,2026-06-03,,amc,company_pr,https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc-announce-second-quarter-fiscal-year-2026-financial,2026-05-05T13:30:00+00:00,2026-08-11T04:55:46.050653+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 2a268d07a26e6bbc24bdb7b8ce2e5f4f0ace9b8d5528907a43a0c404acd5b4a2; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0283,CEG,CEG-2026Q1,2026Q1,assertion,confirmed,2026-05-11,,bmo,company_ir,https://investors.constellationenergy.com/static-files/3cb022eb-3ef7-47e5-ad00-c5e7b3ddcc51,2026-04-10T13:30:00+00:00,2026-08-11T04:55:47.699143+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 b2ea3e65c13fd1da97f9c7dd9e94042058ba4b538173b09a73e11d5c1b87da90; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0284,CRWV,CRWV-2026Q1,2026Q1,assertion,confirmed,2026-05-07,,amc,company_pr,https://investors.coreweave.com/news/news-details/2026/CoreWeave-Announces-Date-of-First-Quarter-2026-Financial-Results-and-Conference-Call/default.aspx,2026-04-20T13:30:00+00:00,2026-08-11T04:55:50.791938+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 0219b11c4b4d748c60ea5a89df2ca70ea4450d2cd04a648ffeef2b4123fc41c8; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0285,ET,ET-2026Q1,2026Q1,assertion,confirmed,2026-05-05,,bmo,company_pr,https://ir.energytransfer.com/news-releases/news-release-details/energy-transfer-announces-first-quarter-2026-earnings-release,2026-04-07T15:30:00+00:00,2026-08-11T04:56:12.032502+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 4ae4c542175ac7239bace4030abbf7cbcb5ffa4e30b32aa179818f954a5986dd; issuer page carries an exact publication timestamp.
++A0286,IREN,IREN-FY26Q3,FY26Q3,assertion,confirmed,2026-05-07,,amc,company_ir,https://iren.gcs-web.com/static-files/0db9660d-af2d-433b-b0bc-65117f17c1d0,2026-04-24T13:30:00+00:00,2026-08-11T04:56:13.774057+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 1a071e7a52ae8358a57163457f59e7ba47d66f508d8fe00bf76e8b9aeb587f46; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0287,MSFT,MSFT-FY26Q3,FY26Q3,assertion,confirmed,2026-04-29,,amc,company_pr,https://news.microsoft.com/source/2026/04/08/microsoft-announces-quarterly-earnings-release-date-67/,2026-04-09T13:30:00+00:00,2026-08-11T04:56:15.695340+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 8040945a5d156a1081d82b9f503da133e765edca7d1f82b0f6038d4e4c2df317; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0288,NOW,NOW-2026Q1,2026Q1,assertion,confirmed,2026-04-22,,amc,company_pr,https://investor.servicenow.com/news/news-details/2026/ServiceNow-to-Announce-First-Quarter-2026-Financial-Results-on-April-22/default.aspx,2026-04-02T13:30:00+00:00,2026-08-11T04:57:07.055621+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 7fa3235dd02aff92b0b8f321fe5aff6a0a5b49430a6e8e0a1a126ad0f5d90157; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0289,NVDA,NVDA-FY27Q1,FY27Q1,assertion,confirmed,2026-05-20,,amc,company_pr,https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Sets-Conference-Call-for-First-Quarter-Financial-Results/default.aspx,2026-04-30T13:30:00+00:00,2026-08-11T04:57:08.926877+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 300488a598622798b6b202b76abc358403ade2a3fd077d7dd10093a312b8bbbf; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0290,PLTR,PLTR-2026Q1,2026Q1,assertion,confirmed,2026-05-04,,amc,company_pr,https://investors.palantir.com/news-details/2026/Palantir-Announces-Date-of-First-Quarter-2026-Earnings-Release-and-Webcast/,2026-04-14T13:30:00+00:00,2026-08-11T04:57:11.435949+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 546c60aeffc6e66fd1f5a9bec6bed4cf8f3fe65bc0f674b9e83397ed3b65f150; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0291,SMCI,SMCI-FY26Q3,FY26Q3,assertion,confirmed,2026-05-05,,amc,company_pr,https://ir.supermicro.com/news/news-details/2026/Supermicro-to-Report-Third-Quarter-Fiscal-2026-Financial-Results-on-May-5th-2026/default.aspx,2026-04-22T13:30:00+00:00,2026-08-11T04:57:34.559437+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 2ae2fdea81cc0b5d1d180c57afe3163f1c0a0ee5cf220ded503eec97638341b1; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0292,TEM,TEM-2026Q1,2026Q1,assertion,confirmed,2026-05-05,,amc,company_pr,https://investors.tempus.com/news-releases/news-release-details/tempus-report-first-quarter-2026-financial-results-may-5,2026-04-22T13:30:00+00:00,2026-08-11T04:57:36.180830+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 c9a06fac6fd26310027ecb3f229cf09b8f54af4546d28584b5ee45a2b8c8f0e9; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0293,USAR,USAR-2026Q1,2026Q1,assertion,confirmed,2026-05-13,,amc,company_pr,https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-announces-date-release-first-quarter-2026-results,2026-05-08T13:30:00+00:00,2026-08-11T04:57:38.127765+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 70decae4cd1bcea4a8f676700e0ff41de631964f57aaae4303ec85c58b1ab23b; date-only issuer announcement is conservatively known at the next XNYS session open.
++A0294,VST,VST-2026Q1,2026Q1,assertion,confirmed,2026-05-07,,bmo,company_pr,"https://investor.vistracorp.com/2026-04-01-Vistra-to-Report-First-Quarter-Results-on-May-7,-2026",2026-04-02T13:30:00+00:00,2026-08-11T04:57:39.779951+00:00,,reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 75a7eb33358ca69425a1010090824225e37717ec55a0668451c0468774b87111; date-only issuer announcement is conservatively known at the next XNYS session open.
+diff --git a/data/earnings/gating_v3.csv b/data/earnings/gating_v3.csv
+index dc57f76..e9ac74b 100644
+--- a/data/earnings/gating_v3.csv
++++ b/data/earnings/gating_v3.csv
+@@ -17,10 +17,25 @@ G0015,AVGO,AVGO-FY26Q3,FY26Q3,assertion,actual_quarterly_earnings,estimated,2026
+ G0016,TEM,TEM-2026Q2,2026Q2,assertion,actual_quarterly_earnings,confirmed,2026-07-30,,amc,company_pr,https://investors.tempus.com/news-releases/news-release-details/tempus-report-second-quarter-2026-financial-results-july-30,2026-07-09T23:59:59+00:00,2026-07-12T14:47:07.863058+00:00,G0011,A0270,owner-directed 2026-07-12 correction: supersedes G0011 (inferred-ET wire timestamp) with the direct Tempus IR release under an end-of-day-UTC conservative-late causal bound; A0265/G0011 retained as historical evidence
+ G0017,USAR,USAR-2026Q2,2026Q2,assertion,actual_quarterly_earnings,estimated,2026-08-10,,amc,aggregator,https://www.marketbeat.com/stocks/NASDAQ/USAR/earnings/,2026-07-15T14:00:00+00:00,2026-07-15T15:06:45.091229+00:00,,A0271,
+ G0018,USAR,USAR-2026Q2,2026Q2,assertion,actual_quarterly_earnings,estimated,2026-08-10,,amc,aggregator,https://www.marketbeat.com/stocks/NASDAQ/USAR/earnings/,2026-07-15T15:54:00+00:00,2026-07-15T15:54:21.748029+00:00,G0017,A0272,"owner-ratified 2026-07-15 via chat directive: supersedes G0017, whose owner-approval note was empty. The A0271->G0017 promotion was executed in a Claude session (commit 9a8b92a) without a recorded owner approval; the 2026-07-15 change review flagged the gap and the owner directed this superseding provenance row. Underlying assertion (MarketBeat estimate, 2026-08-10 amc, disclosed 08-17 divergence) unchanged; G0017/A0271 retained as historical evidence."
+ G0019,CRWV,CRWV-2026Q2,2026Q2,assertion,actual_quarterly_earnings,estimated,2026-08-18,,amc,aggregator,https://www.tipranks.com/stocks/crwv/earnings,2026-07-15T18:57:35+00:00,2026-07-15T18:59:20.830146+00:00,,A0273,owner-approved 2026-07-15 chat directive; CoreWeave Q2 2026 (period end 2026-06-30) aggregator-consensus estimate 2026-08-18 AMC; lifts CRWV entry ban.
+ G0020,IREN,IREN-FY26Q4,FY26Q4,assertion,actual_quarterly_earnings,estimated,2026-08-27,,amc,aggregator,https://www.marketbeat.com/stocks/NASDAQ/IREN/earnings/,2026-07-15T18:57:35+00:00,2026-07-15T18:59:23.959608+00:00,,A0274,"owner-approved 2026-07-15 chat directive; IREN fiscal Q4 FY2026 (period end 2026-06-30) aggregator estimate 2026-08-27 AMC, Sep-16 divergence disclosed; lifts IREN entry ban."
+ G0021,PLTR,PLTR-2026Q2,2026Q2,assertion,actual_quarterly_earnings,confirmed,2026-08-03,,amc,company_pr,https://www.businesswire.com/news/home/20260713475194/en/Palantir-Announces-Date-of-Second-Quarter-2026-Earnings-Release-and-Webcast,2026-07-13T20:05:00+00:00,2026-07-16T03:12:01.475389+00:00,G0012,A0275,"Company-confirmed schedule replaces the 2026-07-12 aggregator estimate G0012 (same event PLTR-2026Q2, same date/timing, provenance upgraded aggregator->company_pr; PR verified this session)"
+ G0022,AMZN,AMZN-2026Q2,2026Q2,assertion,actual_quarterly_earnings,confirmed,2026-07-30,,amc,company_pr,https://www.aboutamazon.com/news/company-news/amazon-earnings-q2-2026-report,2026-07-17T00:00:00+00:00,2026-07-18T03:57:08.275572+00:00,G0006,A0276,
+ G0023,ET,ET-2026Q2,2026Q2,assertion,actual_quarterly_earnings,confirmed,2026-08-04,,bmo,company_pr,https://ir.energytransfer.com/news-releases/news-release-details/energy-transfer-announces-second-quarter-2026-earnings-release,2026-06-30T23:59:59+00:00,2026-07-19T02:07:42.793444+00:00,,A0277,
+ G0024,SMCI,SMCI-FY26Q4,FY26Q4,assertion,actual_quarterly_earnings,confirmed,2026-08-11,,amc,company_pr,https://ir.supermicro.com/news/news-details/2026/Supermicro-Provides-Fourth-Quarter-of-Fiscal-Year-2026-Preliminary-Business-Update/default.aspx,2026-07-21T23:59:59+00:00,2026-07-28T02:11:32.542220+00:00,G0014,A0278,Owner-authorized 2026-07-27 primary-source correction: Supermicro official IR moves the FY26Q4 earnings call from the earlier 2026-08-04 aggregator estimate to confirmed 2026-08-11 AMC; A0268/G0014 remain immutable historical evidence.
+ G0025,NVDA,NVDA-FY27Q2,FY27Q2,assertion,actual_quarterly_earnings,confirmed,2026-08-26,,amc,company_ir,https://investor.nvidia.com/events-and-presentations/events-and-presentations/event-details/2026/NVIDIA-2nd-Quarter-FY27-Financial-Results/default.aspx,2026-07-28T02:10:42+00:00,2026-07-28T02:11:32.894042+00:00,G0013,A0279,Owner-authorized 2026-07-27 primary-source upgrade: NVIDIA official IR confirms FY27Q2 on 2026-08-26 AMC; known_as_of is the 2026-07-28 retrieval time because the event page exposes no publication timestamp; A0267/G0013 remain immutable historical evidence.
++G0026,AMD,AMD-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-05,,amc,company_pr,https://ir.amd.com/news-events/press-releases/detail/1282/amd-to-report-fiscal-first-quarter-2026-financial-results,2026-04-08T20:15:00+00:00,2026-08-11T04:54:19.016697+00:00,,A0280,Promoted from A0280; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 4bb4a56f6688f61cacd663e3e0f8ab3ffa5b8336a5e05486149c187a63ba0b4b; issuer page carries an exact publication timestamp.
++G0027,AMZN,AMZN-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-04-29,,amc,company_pr,https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-to-Webcast-First-Quarter-2026-Financial-Results-Conference-Call-57c6bd583/default.aspx,2026-04-16T13:30:00+00:00,2026-08-11T04:54:31.895301+00:00,,A0281,Promoted from A0281; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 3c452712d0114786dd6f7ea67fe1d2434a35dd9306856e1fb20fb844f73aee9e; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0028,AVGO,AVGO-FY26Q2,FY26Q2,assertion,actual_quarterly_earnings,confirmed,2026-06-03,,amc,company_pr,https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc-announce-second-quarter-fiscal-year-2026-financial,2026-05-05T13:30:00+00:00,2026-08-11T04:55:46.864470+00:00,,A0282,Promoted from A0282; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 2a268d07a26e6bbc24bdb7b8ce2e5f4f0ace9b8d5528907a43a0c404acd5b4a2; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0029,CEG,CEG-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-11,,bmo,company_ir,https://investors.constellationenergy.com/static-files/3cb022eb-3ef7-47e5-ad00-c5e7b3ddcc51,2026-04-10T13:30:00+00:00,2026-08-11T04:55:48.668657+00:00,,A0283,Promoted from A0283; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 b2ea3e65c13fd1da97f9c7dd9e94042058ba4b538173b09a73e11d5c1b87da90; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0030,CRWV,CRWV-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-07,,amc,company_pr,https://investors.coreweave.com/news/news-details/2026/CoreWeave-Announces-Date-of-First-Quarter-2026-Financial-Results-and-Conference-Call/default.aspx,2026-04-20T13:30:00+00:00,2026-08-11T04:55:51.635553+00:00,,A0284,Promoted from A0284; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 0219b11c4b4d748c60ea5a89df2ca70ea4450d2cd04a648ffeef2b4123fc41c8; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0031,ET,ET-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-05,,bmo,company_pr,https://ir.energytransfer.com/news-releases/news-release-details/energy-transfer-announces-first-quarter-2026-earnings-release,2026-04-07T15:30:00+00:00,2026-08-11T04:56:12.930121+00:00,,A0285,Promoted from A0285; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 4ae4c542175ac7239bace4030abbf7cbcb5ffa4e30b32aa179818f954a5986dd; issuer page carries an exact publication timestamp.
++G0032,IREN,IREN-FY26Q3,FY26Q3,assertion,actual_quarterly_earnings,confirmed,2026-05-07,,amc,company_ir,https://iren.gcs-web.com/static-files/0db9660d-af2d-433b-b0bc-65117f17c1d0,2026-04-24T13:30:00+00:00,2026-08-11T04:56:14.553076+00:00,,A0286,Promoted from A0286; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 1a071e7a52ae8358a57163457f59e7ba47d66f508d8fe00bf76e8b9aeb587f46; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0033,MSFT,MSFT-FY26Q3,FY26Q3,assertion,actual_quarterly_earnings,confirmed,2026-04-29,,amc,company_pr,https://news.microsoft.com/source/2026/04/08/microsoft-announces-quarterly-earnings-release-date-67/,2026-04-09T13:30:00+00:00,2026-08-11T04:56:16.539537+00:00,,A0287,Promoted from A0287; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 8040945a5d156a1081d82b9f503da133e765edca7d1f82b0f6038d4e4c2df317; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0034,NOW,NOW-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-04-22,,amc,company_pr,https://investor.servicenow.com/news/news-details/2026/ServiceNow-to-Announce-First-Quarter-2026-Financial-Results-on-April-22/default.aspx,2026-04-02T13:30:00+00:00,2026-08-11T04:57:07.976904+00:00,,A0288,Promoted from A0288; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 7fa3235dd02aff92b0b8f321fe5aff6a0a5b49430a6e8e0a1a126ad0f5d90157; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0035,NVDA,NVDA-FY27Q1,FY27Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-20,,amc,company_pr,https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Sets-Conference-Call-for-First-Quarter-Financial-Results/default.aspx,2026-04-30T13:30:00+00:00,2026-08-11T04:57:10.618312+00:00,,A0289,Promoted from A0289; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 300488a598622798b6b202b76abc358403ade2a3fd077d7dd10093a312b8bbbf; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0036,PLTR,PLTR-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-04,,amc,company_pr,https://investors.palantir.com/news-details/2026/Palantir-Announces-Date-of-First-Quarter-2026-Earnings-Release-and-Webcast/,2026-04-14T13:30:00+00:00,2026-08-11T04:57:12.277646+00:00,,A0290,Promoted from A0290; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 546c60aeffc6e66fd1f5a9bec6bed4cf8f3fe65bc0f674b9e83397ed3b65f150; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0037,SMCI,SMCI-FY26Q3,FY26Q3,assertion,actual_quarterly_earnings,confirmed,2026-05-05,,amc,company_pr,https://ir.supermicro.com/news/news-details/2026/Supermicro-to-Report-Third-Quarter-Fiscal-2026-Financial-Results-on-May-5th-2026/default.aspx,2026-04-22T13:30:00+00:00,2026-08-11T04:57:35.400572+00:00,,A0291,Promoted from A0291; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 2ae2fdea81cc0b5d1d180c57afe3163f1c0a0ee5cf220ded503eec97638341b1; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0038,TEM,TEM-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-05,,amc,company_pr,https://investors.tempus.com/news-releases/news-release-details/tempus-report-first-quarter-2026-financial-results-may-5,2026-04-22T13:30:00+00:00,2026-08-11T04:57:37.337000+00:00,,A0292,Promoted from A0292; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 c9a06fac6fd26310027ecb3f229cf09b8f54af4546d28584b5ee45a2b8c8f0e9; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0039,USAR,USAR-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-13,,amc,company_pr,https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-announces-date-release-first-quarter-2026-results,2026-05-08T13:30:00+00:00,2026-08-11T04:57:38.976553+00:00,,A0293,Promoted from A0293; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 70decae4cd1bcea4a8f676700e0ff41de631964f57aaae4303ec85c58b1ab23b; date-only issuer announcement is conservatively known at the next XNYS session open.
++G0040,VST,VST-2026Q1,2026Q1,assertion,actual_quarterly_earnings,confirmed,2026-05-07,,bmo,company_pr,"https://investor.vistracorp.com/2026-04-01-Vistra-to-Report-First-Quarter-Results-on-May-7,-2026",2026-04-02T13:30:00+00:00,2026-08-11T04:57:40.543956+00:00,,A0294,Promoted from A0294; reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md; local capture SHA-256 75a7eb33358ca69425a1010090824225e37717ec55a0668451c0468774b87111; date-only issuer announcement is conservatively known at the next XNYS session open.
+diff --git a/reports/h7_forward_schwab/2026-08-11-feasibility-primary-earnings.json b/reports/h7_forward_schwab/2026-08-11-feasibility-primary-earnings.json
+new file mode 100644
+index 0000000..f556300
+--- /dev/null
++++ b/reports/h7_forward_schwab/2026-08-11-feasibility-primary-earnings.json
+@@ -0,0 +1,83 @@
++{
++  "base_rate": 0.0038095238095238095,
++  "canonical_data_paths": {
++    "access": "read-only",
++    "chain_cache": "/Users/carsynstephenson/options-validator/.cache/chains",
++    "underlying_cache": "/Users/carsynstephenson/options-validator/.cache/underlying"
++  },
++  "code_sha": "97a3e5808b15013e66938345d6b7104b707dc022",
++  "config_hash": "80fe2bf649e16e9b18f7cb7a9ccc26b9b01bcb852fcb6998c7b14611934a4d49",
++  "error_count": 0,
++  "errors": [],
++  "expected_entries": 4.0,
++  "full_stack_passes": 4,
++  "input_binding": "receipt_hash binds the exact repaired input-file hashes, read-only canonical data paths, 70-session by 15-name census, 1050 symbol-days, and error_count",
++  "input_files": {
++    "gating_assertions": {
++      "path": "data/earnings/gating_v3.csv",
++      "sha256": "da2bf6abd3d7fd0ba10c5b78fcbcec47a5a802f9372578dce503d837967e63e7"
++    },
++    "primary_earnings_evidence": {
++      "path": "reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md",
++      "sha256": "50c6013180359520e7265118fe3370b48f9f73b88f39134ec1238827f35bd9be"
++    },
++    "raw_assertions": {
++      "path": "data/earnings/assertions_v2.csv",
++      "sha256": "124f1fa2b512f238dbf36ea07485f8839653fad3ade1b40fd276a5ba003846fb"
++    }
++  },
++  "lookback_end": "2026-07-27",
++  "lookback_sessions": 70,
++  "lookback_start": "2026-04-16",
++  "method": {
++    "allocation": "options_researcher.h7_board.resolve_board",
++    "data": "existing .cache/chains plus .cache/underlying only",
++    "error_policy": "unavailable symbol-day counts in denominator and cannot pass",
++    "portfolio_state_assumption": "each historical session starts with no open H7 positions and the full frozen monthly sleeve; same-session board caps apply",
++    "signal_and_execution": "options_researcher.h7_watch.assemble_name"
++  },
++  "passing_symbol_days": [
++    {
++      "session": "2026-05-18",
++      "symbol": "NOW"
++    },
++    {
++      "session": "2026-07-13",
++      "symbol": "NOW"
++    },
++    {
++      "session": "2026-07-16",
++      "symbol": "MSFT"
++    },
++    {
++      "session": "2026-07-16",
++      "symbol": "PLTR"
++    }
++  ],
++  "prior_feasibility_receipt_hash": "8b567a5eb6f1950fa32ee9ddfbd4a440e32a7e12ff7a617888e9cd67baff625c",
++  "provenance": "LLM/tool-computed",
++  "receipt_hash": "d0ffe1f900b8ffc132f757f9783d4581464aaf8b3538271fe2ae337ba1702d0c",
++  "receipt_kind": "h7_schwab_feasibility/v1",
++  "stack_version": "h7-frozen-entry-stack-plus-board/v1",
++  "symbol_days": 1050,
++  "tool_label": "cached-only read-only measurement; no verdict",
++  "universe": [
++    "AMD",
++    "AMZN",
++    "AVGO",
++    "CEG",
++    "CRWV",
++    "ET",
++    "IREN",
++    "MSFT",
++    "NOW",
++    "NVDA",
++    "PLTR",
++    "SMCI",
++    "TEM",
++    "USAR",
++    "VST"
++  ],
++  "universe_size": 15,
++  "window_sessions": 70
++}
+diff --git a/reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md b/reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md
+new file mode 100644
+index 0000000..1303b31
+--- /dev/null
++++ b/reports/h7_forward_schwab/2026-08-11-primary-earnings-evidence.md
+@@ -0,0 +1,27 @@
++# H7 Schwab primary earnings evidence packet
++
++Status: immutable input review for the fixed-window feasibility rerun; no registration, authority, or trading verdict.
++
++S&P Global Events was used only as a discovery index. No S&P Global Events or Capital IQ content, identifier, timestamp, or licensed dataset is gating evidence or is committed here. Every append decision below is supported by an issuer-controlled release or SEC filing captured separately during review. The original local captures were retrieved at `2026-08-11T04:31:50Z`; the later CEG, NVDA, and SMCI schedule-source upgrades carry their exact later retrieval times in the table. Every SHA-256 value was verified before use.
++
++For issuer pages that expose only a publication date, `known_as_of_utc` is conservatively assigned to the next XNYS regular-session open. This prevents a date-only announcement from becoming visible to an earlier historical decision than the evidence can defend. SEC occurrence rows use the EDGAR acceptance timestamp. Missing or ambiguous primary timing remains `UNKNOWN`; it is not backfilled from an aggregator.
++
++| Symbol | Fiscal identity | Assertion and session timing | Exact primary URL | Publisher date/time | Retrieval time | Local capture SHA-256 | Conservative `known_as_of_utc` | Decision |
++|---|---|---|---|---|---|---|---|---|
++| AMD | `AMD-2026Q1` / `2026Q1` | confirmed `2026-05-05`, AMC | https://ir.amd.com/news-events/press-releases/detail/1282/amd-to-report-fiscal-first-quarter-2026-financial-results | 2026-04-08 4:15 p.m. EDT | `2026-08-11T04:31:50Z` | `4bb4a56f6688f61cacd663e3e0f8ab3ffa5b8336a5e05486149c187a63ba0b4b` | `2026-04-08T20:15:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| AMZN | `AMZN-2026Q1` / `2026Q1` | confirmed `2026-04-29`, AMC | https://ir.aboutamazon.com/news-release/news-release-details/2026/Amazon-com-to-Webcast-First-Quarter-2026-Financial-Results-Conference-Call-57c6bd583/default.aspx | 2026-04-15, date only | `2026-08-11T04:31:50Z` | `3c452712d0114786dd6f7ea67fe1d2434a35dd9306856e1fb20fb844f73aee9e` | `2026-04-16T13:30:00+00:00` | Append and promote complementary schedule evidence; the later occurred row remains authoritative after release. |
++| AVGO | `AVGO-FY26Q2` / `FY26Q2` | confirmed `2026-06-03`, AMC | https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc-announce-second-quarter-fiscal-year-2026-financial | 2026-05-04, date only | `2026-08-11T04:31:50Z` | `2a268d07a26e6bbc24bdb7b8ce2e5f4f0ace9b8d5528907a43a0c404acd5b4a2` | `2026-05-05T13:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| CEG | `CEG-2026Q1` / `2026Q1` | confirmed `2026-05-11`, BMO | https://investors.constellationenergy.com/static-files/3cb022eb-3ef7-47e5-ad00-c5e7b3ddcc51 | 2026-04-09, date only | `2026-08-11T04:54:46Z` | `b2ea3e65c13fd1da97f9c7dd9e94042058ba4b538173b09a73e11d5c1b87da90` | `2026-04-10T13:30:00+00:00` | Append and promote the issuer schedule; existing SEC occurrence `A0004` / `G0004` remains later authoritative evidence and is not mutated or superseded. |
++| CRWV | `CRWV-2026Q1` / `2026Q1` | confirmed `2026-05-07`, AMC | https://investors.coreweave.com/news/news-details/2026/CoreWeave-Announces-Date-of-First-Quarter-2026-Financial-Results-and-Conference-Call/default.aspx | 2026-04-17, date only | `2026-08-11T04:31:50Z` | `0219b11c4b4d748c60ea5a89df2ca70ea4450d2cd04a648ffeef2b4123fc41c8` | `2026-04-20T13:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| ET | `ET-2026Q1` / `2026Q1` | confirmed `2026-05-05`, BMO | https://ir.energytransfer.com/news-releases/news-release-details/energy-transfer-announces-first-quarter-2026-earnings-release | 2026-04-07 11:30 a.m. EDT | `2026-08-11T04:31:50Z` | `4ae4c542175ac7239bace4030abbf7cbcb5ffa4e30b32aa179818f954a5986dd` | `2026-04-07T15:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| IREN | `IREN-FY26Q3` / `FY26Q3` | confirmed `2026-05-07`, AMC | https://iren.gcs-web.com/static-files/0db9660d-af2d-433b-b0bc-65117f17c1d0 | 2026-04-23, date only (PDF body; later than the index label) | `2026-08-11T04:31:50Z` | `1a071e7a52ae8358a57163457f59e7ba47d66f508d8fe00bf76e8b9aeb587f46` | `2026-04-24T13:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| MSFT | `MSFT-FY26Q3` / `FY26Q3` | confirmed `2026-04-29`, AMC | https://news.microsoft.com/source/2026/04/08/microsoft-announces-quarterly-earnings-release-date-67/ | 2026-04-08, date only | `2026-08-11T04:31:50Z` | `8040945a5d156a1081d82b9f503da133e765edca7d1f82b0f6038d4e4c2df317` | `2026-04-09T13:30:00+00:00` | Append and promote complementary schedule evidence; the later occurred row remains authoritative after release. |
++| NOW | `NOW-2026Q1` / `2026Q1` | confirmed `2026-04-22`, AMC | https://investor.servicenow.com/news/news-details/2026/ServiceNow-to-Announce-First-Quarter-2026-Financial-Results-on-April-22/default.aspx | 2026-04-01, date only | `2026-08-11T04:31:50Z` | `7fa3235dd02aff92b0b8f321fe5aff6a0a5b49430a6e8e0a1a126ad0f5d90157` | `2026-04-02T13:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| NVDA | `NVDA-FY27Q1` / `FY27Q1` | confirmed `2026-05-20`, AMC | https://investor.nvidia.com/news/press-release-details/2026/NVIDIA-Sets-Conference-Call-for-First-Quarter-Financial-Results/default.aspx | 2026-04-29, date only | `2026-08-11T04:54:09Z` | `300488a598622798b6b202b76abc358403ade2a3fd077d7dd10093a312b8bbbf` | `2026-04-30T13:30:00+00:00` | Append and promote the issuer schedule; existing SEC occurrence `A0079` is later corroboration only and is not mutated or superseded. |
++| PLTR | `PLTR-2026Q1` / `2026Q1` | confirmed `2026-05-04`, AMC | https://investors.palantir.com/news-details/2026/Palantir-Announces-Date-of-First-Quarter-2026-Earnings-Release-and-Webcast/ | 2026-04-13, date only | `2026-08-11T04:31:50Z` | `546c60aeffc6e66fd1f5a9bec6bed4cf8f3fe65bc0f674b9e83397ed3b65f150` | `2026-04-14T13:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| SMCI | `SMCI-FY26Q3` / `FY26Q3` | confirmed `2026-05-05`, AMC | https://ir.supermicro.com/news/news-details/2026/Supermicro-to-Report-Third-Quarter-Fiscal-2026-Financial-Results-on-May-5th-2026/default.aspx | 2026-04-21, date only | `2026-08-11T04:54:10Z` | `2ae2fdea81cc0b5d1d180c57afe3163f1c0a0ee5cf220ded503eec97638341b1` | `2026-04-22T13:30:00+00:00` | Append and promote the issuer schedule; existing SEC occurrence `A0262` is later corroboration only and is not mutated or superseded. |
++| TEM | `TEM-2026Q1` / `2026Q1` | confirmed `2026-05-05`, AMC | https://investors.tempus.com/news-releases/news-release-details/tempus-report-first-quarter-2026-financial-results-may-5 | 2026-04-21, date only | `2026-08-11T04:31:50Z` | `c9a06fac6fd26310027ecb3f229cf09b8f54af4546d28584b5ee45a2b8c8f0e9` | `2026-04-22T13:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| USAR | `USAR-2026Q1` / `2026Q1` | confirmed `2026-05-13`, AMC | https://investors.usare.com/news-releases/news-release-details/usa-rare-earth-announces-date-release-first-quarter-2026-results | 2026-05-07, date only | `2026-08-11T04:31:50Z` | `70decae4cd1bcea4a8f676700e0ff41de631964f57aaae4303ec85c58b1ab23b` | `2026-05-08T13:30:00+00:00` | Append and promote; no prior row is mutated or superseded. |
++| VST | `VST-2026Q1` / `2026Q1` | confirmed `2026-05-07`, BMO | https://investor.vistracorp.com/2026-04-01-Vistra-to-Report-First-Quarter-Results-on-May-7,-2026 | 2026-04-01, date only | `2026-08-11T04:31:50Z` | `75a7eb33358ca69425a1010090824225e37717ec55a0668451c0468774b87111` | `2026-04-02T13:30:00+00:00` | Append and promote complementary schedule evidence; the later occurred row remains authoritative after release. |
++
++The append/promote decisions add causal evidence only. They do not change the canonical 15-name universe, frozen entry stack, strategy thresholds, costs, board allocator, scorer, H7 ledgers, or authority flags.
+diff --git a/reports/h7_forward_schwab/2026-08-11-v2-arming-bottleneck-design.md b/reports/h7_forward_schwab/2026-08-11-v2-arming-bottleneck-design.md
+new file mode 100644
+index 0000000..045053d
+--- /dev/null
++++ b/reports/h7_forward_schwab/2026-08-11-v2-arming-bottleneck-design.md
+@@ -0,0 +1,26 @@
++# H7 Schwab v2 arming-bottleneck design
++
++Status: design only; unregistered, inactive, not verdict-bearing, and not authorized for experiments or authority activation.
++
++## v1 decision
++
++The repaired primary-source earnings rerun produced 4 full-stack passes over the fixed 1,050 symbol-day census, for 4.0 projected entries over 70 sessions. Because `4.0 < 20`, `h7-forward-schwab-v1` registration and authority work is **STOPPED**. The v1 universe, strategy rules, thresholds, costs, scorer, earnings gate, liquidity gate, ledgers, and authority flags remain unchanged.
++
++Evidence: `reports/h7_forward_schwab/2026-08-11-feasibility-primary-earnings.json`.
++
++## Separately versioned v2 design
++
++Any future work must use a new `h7-forward-schwab-v2` identity and a separately frozen entry-stack version. It must not reinterpret or overwrite the v1 result.
++
++The first v2 step is a read-only arming waterfall over a predeclared cached-data window. For every symbol-day and lane, it would count the first blocking condition in the unchanged causal order and retain a non-overlapping census for:
++
++1. source/timing/data completeness;
++2. earnings gate;
++3. options liquidity gate;
++4. lane-specific technical arming rule;
++5. cost and max-loss feasibility;
++6. board allocation and portfolio caps.
++
++The earnings and options-liquidity gates are hard constraints and are not candidates for relaxation. The waterfall exists only to identify whether the remaining starvation is concentrated in entry logic, costs, or board allocation. Any proposed entry-logic change must then be written as a distinct v2 preregistration with its own frozen parameters, feasibility gate, rejection criterion, and multiple-testing count before a single v2 experiment is run.
++
++No v2 variants, counterfactuals, thresholds, backtests, or experiments were run for this design.

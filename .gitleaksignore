@@ -1,0 +1,5 @@
+# Pinned false positives (gitleaks fingerprints: commit:file:rule:line).
+# PIN_FACT_TOKEN = "RQ2_A2_PIN_ADDENDUM_V1" — a public ledger fact-type label
+# in a variable ending in _TOKEN; matched generic-api-key by name+entropy.
+# Not a credential (value is a tracked, documented ledger constant).
+58e5f42878564b06c0cfe4eda773a5fbd5485a92:options_researcher/a2_runner.py:generic-api-key:44

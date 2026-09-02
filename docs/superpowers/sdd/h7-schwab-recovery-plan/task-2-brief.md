@@ -1,0 +1,9 @@
+## Task 2: Implement the narrow completion interfaces
+
+In the isolated worktree, use strict test-first red/green cycles for these changes:
+
+- Replace every stale `Monday canary`/`Monday boundary` reference in `reports/h7_forward_schwab/2026-08-09-owner-gate-packet.md` with wording bound to `the next valid completed-session 15:45 ET canary`; prose does not need a test.
+- Strengthen `tools/h7_forward_backup.py restore-check` so it consumes an immutable backup receipt, derives the exact `snapshot_id` from that receipt, restores that snapshot, recomputes `backup_inventory()` over the restored tree, and requires exact equality with the receipt's `input_files`. Missing paths, unexpected paths, changed sizes, changed hashes, wrong receipt type, wrong completed session, and any caller-supplied snapshot mismatch must fail. The restore receipt must name the exact snapshot and backup receipt hash. Preserve compatibility only where it cannot weaken the receipt-bound activation path; do not trust `latest`.
+- Add a thin `tools/h7_schwab_manual_activate.py` operator CLI that assembles the existing owner/evidence/source-health/Schwab-data-gate/backup-review inputs and calls `options_researcher.h7_schwab_window_registration.register_window_real`. It must never call `ledger.append_event`, must require the exact official 15-name scope, must expose no trim or custom-universe option, and must re-earn receipt hashes, clean/matching HEAD, fresh guard, VALID-EMPTY store, exact preclose package, backup restore, and append-time gates. Reuse existing helpers where doing so preserves the Schwab-specific evidence contract; do not create a second append door.
+- Add focused tests for exact restored inventory, wrong snapshot/receipt/session, missing and extra files, full-15 enforcement, stale evidence, dirty or moved HEAD, and static one-door/direct-append protection.
+

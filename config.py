@@ -719,6 +719,17 @@ H9_MAX_UNRESOLVED_GAP_FRACTION = 0.10   # disclosed gap-rate ceiling
 # on-disk file never diverge. The prereg gate binds the two (C5).
 H9_SPEC_PATH = "docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study.md"
 
+# A2-v1 outcome battery — registration sequence 19 and the owner-approved
+# entry-convention addendum (2026-08-15). Identities/horizons only, no gates.
+A2_REGISTRATION_ID = "A2-v1"
+A2_REGISTRATION_SEQUENCE = 19
+A2_UNIVERSE = tuple(H7_WATCHLIST + H7_CORE_LONG_ONLY)
+A2_CSP_FIXED_HORIZON_SESSIONS = 10  # RQ2_A2_PIN_ADDENDUM_V1
+A2_LEAPS_HORIZONS = (21, 63, 126)
+A2_TACTICAL_HORIZONS = (5, 10, 20)
+A2_CSP_ARMS = ("capture_50", "close_21_dte", "fixed_10_sessions",
+               "breach_hold_21_dte", "assignment_accepting")
+
 # ---------------------------------------------------------------------------
 # CARD 3 -- "near-the-bottom long call" EXPLORATORY IN-SAMPLE HISTORICAL STUDY
 # (owner-frozen "freeze as is" 2026-07-18; ledger trial_intent
