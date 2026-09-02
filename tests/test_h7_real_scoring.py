@@ -1187,7 +1187,11 @@ class TestRealScoringPublication(RealScoringCase):
         )
         self.assertEqual(
             receipt["scorer"]["scoring_identity_hash"],
-            scoring_identity.runtime_scoring_identity().identity_hash,
+            scoring_identity.runtime_scoring_identity(
+                min_losses_for_verdict=self.registration.payload["frozen"][
+                    "scorer"
+                ]["min_losses_for_verdict"]
+            ).identity_hash,
         )
         self.assertEqual(
             receipt["config_provenance"]["registered_config_hash"],

@@ -48,7 +48,9 @@ def _different(value: object) -> object:
 class H7ScoringIdentityTests(unittest.TestCase):
     def test_legacy_registered_identity_matches_runtime(self):
         registered = identity.registered_scoring_identity(_legacy_frozen())
-        runtime = identity.runtime_scoring_identity()
+        runtime = identity.runtime_scoring_identity(
+            min_losses_for_verdict=config.MIN_LOSSES_FOR_VERDICT
+        )
 
         self.assertEqual(registered, runtime)
         self.assertEqual(
@@ -77,8 +79,19 @@ class H7ScoringIdentityTests(unittest.TestCase):
 
         self.assertEqual(
             identity.registered_scoring_identity(frozen),
-            identity.runtime_scoring_identity(),
+            identity.runtime_scoring_identity(
+                min_losses_for_verdict=config.MIN_LOSSES_FOR_VERDICT
+            ),
         )
+
+    def test_runtime_identity_refuses_a_missing_registered_loss_bar(self):
+        """Round-1 F3: no config fallback may reintroduce the wrong bar."""
+        with self.assertRaises(TypeError):
+            identity.runtime_scoring_identity()  # type: ignore[call-arg]
+        with self.assertRaisesRegex(
+            identity.ScoringIdentityError, "min_losses_for_verdict"
+        ):
+            identity.runtime_scoring_identity(min_losses_for_verdict=None)
 
     def test_every_frozen_stage_parameter_changes_identity(self):
         baseline = identity.registered_scoring_identity(_legacy_frozen())
