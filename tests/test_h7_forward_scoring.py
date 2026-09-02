@@ -279,6 +279,17 @@ class ScoringCase(unittest.TestCase):
 
 
 class TestEconomicsAndBenchmarks(ScoringCase):
+    def test_frozen_bar_is_the_registered_one_not_config(self):
+        """Round-1 F8: the receipt must publish the event's bar, not config's."""
+        self.assertNotEqual(config.MIN_LOSSES_FOR_VERDICT, 7)
+        self.trade("debit")
+        result = score_forward_window(
+            base_dir=self.base,
+            window_start="2026-07-06",
+            window_end="2026-07-31",
+        )
+        self.assertEqual(result["frozen"]["min_losses_for_verdict"], 7)
+
     def test_debit_and_credit_pnl_after_all_costs(self):
         self.trade("debit")
         self.trade(

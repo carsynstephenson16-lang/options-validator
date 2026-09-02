@@ -763,6 +763,19 @@ class TestRealScoringPublication(RealScoringCase):
             [self.registration.event_id, "open:AMD:a", "close:AMD:a"],
         )
 
+    def test_receipt_publishes_the_registered_bar_not_the_runtime_config(self):
+        """Round-1 F8: the real-scoring equivalent of the frozen-bar proof."""
+        registered = self.registration.payload["frozen"]["scorer"][
+            "min_losses_for_verdict"
+        ]
+        with patch.object(config, "MIN_LOSSES_FOR_VERDICT", registered + 3):
+            result = real_scoring.finalize_real_score(
+                self.open(), owner="carsyn", now=AFTER_FINAL
+            )
+            self.assertNotEqual(config.MIN_LOSSES_FOR_VERDICT, registered)
+        receipt = load_receipt(result.artifact_path, expected_type="window_score")
+        self.assertEqual(receipt["scorer"]["min_losses_for_verdict"], registered)
+
     def test_idempotent_replay_preserves_original_config_provenance(self):
         baseline_hash = config_hash()
         first = real_scoring.finalize_real_score(
