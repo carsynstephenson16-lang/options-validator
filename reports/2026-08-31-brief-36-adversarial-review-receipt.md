@@ -114,3 +114,39 @@ path. Spot-check verdict recorded below.
   the implementation PR requires its own independent adversarial review
   before the owner considers merging; this brief authorizes no registration —
   owner fields, receipt regeneration, and merge remain with the owner.
+
+## Round 5 (2026-09-02, rev 5) — PR #142 Codex-bot findings, Opus-verified
+
+After PR #142 was readied, the chatgpt-codex-connector bot posted 9 inline
+findings (C2–C10). Per claim discipline, each was independently verified by
+an Opus adversarial pass against `origin/main @ 1d83453` before any brief
+change: **8 VALID, 1 PARTIALLY VALID (C9 — the sidecar IS manifest-hash-bound;
+the real gap was that the gate never checked the binding), 0 INVALID.** Six
+findings were independently corroborated by the in-flight Codex
+implementation (branch `codex/brief-36-h7-activation-door`), which had to
+edit files outside Scope-IN (`h7_scoring_identity.py`, a
+`_validate_data_gate_receipt` rewrite), add an unsanctioned `OWNER_FIELDS`
+entry, monkeypatch a "frozen" mapping in five test files, and invent
+normalization arithmetic — its own round-1 review FAILED with blockers
+matching C3/C4.
+
+Applied in rev 5: C2 (absolute-age metric; gate reports both numbers and
+blocks on neither until the OWNER re-confirms the 60-min threshold against
+absolute ages — ruling 3's 0-of-7 evidence was measured on the dispersion
+metric); C3 (WP-G reclassified by terminal path segment, no
+unrecognized-store refusal, no patchable mapping); C4 (WP-E honestly labeled
+consumer-less; wiring is a named successor); C5 (WP-F.3:
+`h7_scoring_identity.py` in scope, required runtime-identity argument, no
+config fallback); C6 (second sanctioned owner field
+`SCHWAB_STARVATION_RISK_PREACCEPTANCE`, persisted verbatim); C7 (WP-I refuses
+lookback≠window, records `occupancy_lockout_sessions`=42, WP-A re-derives);
+C8 (WP-C.1 requires explicit cohort-9 `universe_manifest`; new WP-J
+reconciles the all-15 data-gate scope closure with a 9-name registration via
+the Option-C full-scope-evidence precedent, `h7_data_gate.py` untouched);
+C9 (gate verifies session + `manifest_hash` binding, fail-closed); C10 (new
+Schwab activation spec doc in scope, ships UNSIGNED for owner review; CLI
+refuses specs outside `docs/superpowers/specs/`).
+
+Owner items created by this round: (1) re-confirm or retype the quote-age
+threshold against the ABSOLUTE age metric before the gate may block; (2)
+review and freeze the new Schwab activation spec before any real run.

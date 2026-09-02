@@ -1,15 +1,17 @@
 # Brief 36 — H7 Schwab activation door, rebuilt on main
 
-**Date:** 2026-08-31 (rev 3 — rev 1 FAILED review with 5 blockers B1–B5, rev 2
-FAILED with 3 new blockers N1–N3 + majors N4–N6; all findings applied below;
-both rounds transcribed in
-`reports/2026-08-31-brief-36-adversarial-review-receipt.md`, committed with
-this brief)
+**Date:** 2026-08-31, rev 5 2026-09-02 (rev 1 FAILED review with blockers
+B1–B5; rev 2 FAILED with N1–N6; rev 3 FAILED with P1–P6; rev 4 PASS WITH
+FIXES; rev 5 applies the 9 PR #142 Codex-bot findings C2–C10 after independent
+Opus verification — 8 VALID, 1 PARTIALLY VALID, 0 INVALID — all rounds
+transcribed in `reports/2026-08-31-brief-36-adversarial-review-receipt.md`,
+committed with this brief. The in-flight Codex implementation predates rev 5;
+its fix round must re-align to this text.)
 
 **WP mapping for the owner's ruling text** (the 2026-08-31 rulings file cites
 the PLAN's numeric WPs): plan WP-1→brief WP-A · WP-2→WP-B · WP-3→WP-C ·
-WP-4→WP-D · WP-5→WP-E · WP-6→WP-H; brief WP-F/WP-G/WP-I are review-driven
-additions beyond the plan.
+WP-4→WP-D · WP-5→WP-E · WP-6→WP-H; brief WP-F/WP-G/WP-I/WP-J are
+review-driven additions beyond the plan.
 **Author:** Claude orchestrating session (PR #71 unfreeze arc; plan:
 `docs/superpowers/plans/2026-08-30-pr71-unfreeze-pr115-closeout.md`)
 **Executor:** Codex (GPT-5-class), high reasoning tier
@@ -101,6 +103,9 @@ update of either side.
 - `options_researcher/h7_forward_scoring.py` and
   `options_researcher/h7_real_scoring.py` (WP-F's read-bar-from-event change
   ONLY — see WP-F; rev-2 finding N1)
+- `options_researcher/h7_scoring_identity.py` (WP-F.3 ONLY; rev-5 C5)
+- NEW `docs/superpowers/specs/2026-09-02-h7-schwab-activation-spec.md`
+  (WP-C's activation contract, ships UNSIGNED for owner review; rev-5 C10)
 - `tools/h7_schwab_feasibility.py` (WP-I extension)
 - `options_researcher/h7_activation_guard.py` (scope-keyed owner-fields
   mapping ONLY, per WP-G)
@@ -231,7 +236,19 @@ engine reads config at scoring time:
    non-integer, written into the scorer block and the scoring-identity hash.
    Field name: `SCHWAB_MIN_LOSSES_FOR_VERDICT` (SCREAMING_SNAKE, matching
    every existing entry in both `OWNER_FIELDS` tuples — rev-2 finding n3).
-   This is the sanctioned `OWNER_FIELDS` change referenced in OUT.
+   **Second sanctioned field (C6, Repo-verified):** neither `OWNER_FIELDS`
+   nor `EVIDENCE_FIELDS` (`h7_schwab_window_registration.py:44-73`) carries a
+   reason or pre-acceptance entry, and the built payload (`:331-393`)
+   persists none — a feasibility gate that checks an unpersisted CLI string
+   is theater, because the ledger would record no trace of why the bar was
+   waived. Therefore the sanctioned `OWNER_FIELDS` additions are exactly TWO:
+   `SCHWAB_MIN_LOSSES_FOR_VERDICT` and
+   `SCHWAB_STARVATION_RISK_PREACCEPTANCE` (free text, owner-typed at use
+   time, refused blank, frozen verbatim into `owner_authorization`). WP-B's
+   equality check reads the quoted number out of THAT persisted field, not a
+   transient CLI argument. The OD-3 namespace line and row-7 quote-age
+   commitment remain prose inside this same field — they still add no schema
+   of their own.
 2. **Scorer side (rev-2 N1; scope corrected per round-3 P2).** The verdict
    gate actually applied is `if losses < config.MIN_LOSSES_FOR_VERDICT:`
    inside `map_forward_verdict(board)` (`h7_forward_scoring.py:92`, gate at
@@ -251,34 +268,69 @@ engine reads config at scoring time:
    under its own recorded rule; Codex re-verifies and records the observed
    value in the implementation report.
 
+3. **Identity surfaces (C5, Repo-verified — without this the bar-7 event can
+   neither build nor score):** `h7_scoring_identity.py` joins Scope-IN.
+   `STAGE456_PARAMETER_NAMES` contains `MIN_LOSSES_FOR_VERDICT`
+   (`h7_scoring_identity.py:58`), the builder fills stage values from config
+   (`h7_schwab_window_registration.py:318`), and `build_scoring_identity`
+   REFUSES a stage/scorer disagreement (`h7_scoring_identity.py:136-139`) —
+   so the owner-typed bar must be written into BOTH blocks. Then
+   `h7_real_scoring._registered_identity` (`:213-222`) compares the
+   registered identity against `runtime_scoring_identity()` (pure config) —
+   so `runtime_scoring_identity` gains a `min_losses_for_verdict` argument
+   that is REQUIRED on any registered-window scoring path, sourced from the
+   registered event, with NO config default on that path (a keyword
+   defaulting to config is exactly the fallback WP-F.2 forbids; the in-flight
+   implementation's silent config fallback was flagged by its own reviewer
+   and must not survive the fix round).
+
 Acceptance tests: red-green proving the built event carries the owner-typed
 value (7 in the fixture) and NOT `config.MIN_LOSSES_FOR_VERDICT`; absence
-refuses; non-integer refuses; red-green proving a 7-bar registered window is
-VERDICTED at 7 by the scorer while config still says 10; scorer refuses an
-event with no recorded bar.
+refuses; non-integer refuses; red-green proving a 7-bar Schwab event BUILDS
+(stage+scorer agree at 7) and is VERDICTED at 7 by the scorer while
+`config.MIN_LOSSES_FOR_VERDICT == 10`; omitting the runtime-identity argument
+on a registered-window scoring path raises rather than silently using 10;
+scorer refuses an event with no recorded bar; the legacy seq-0 event (bar 10
+recorded) still builds/scores identically.
 
 ### WP-G — Scope-keyed owner-fields in the activation guard (closes rev-1 B5)
 
 `h7_activation_guard.py` checks the legacy ThetaData `OWNER_FIELDS` imported at
 `:16` and used at `:197` (Repo-verified) — the Schwab flow can never satisfy
-them. Implement a module-level FROZEN mapping keyed by the STORE PATH
-(`forward_base`, already a keyword argument to `activation_preconditions` at
-`h7_activation_guard.py:69` — Repo-verified): legacy store → the existing
-ThetaData tuple, Schwab store → the Schwab tuple including WP-F's new field.
-Do NOT key off `scope_identity()` — it is a pure function of the symbol
-universe (`h7_scope.py:57-60`) with no namespace/provider/store concept, so
-both lanes resolve to one key and the wrong-fields hole reopens (round-3
-finding P1). `scope_identity()` keeps its existing role in the scope checks
-unchanged. Never a caller-supplied field list and never a caller-named scope
-id (rev-2 N4). An unrecognized store REFUSES; scope-vs-store mismatch
-REFUSES. The legacy store's behavior must be byte-for-byte unchanged.
+them. Classify by the store's TERMINAL PATH SEGMENT (`Path(forward_base).name`,
+where `forward_base` is already a keyword argument to
+`activation_preconditions` at `h7_activation_guard.py:69` — Repo-verified):
+segment `h7_forward_schwab` ⇒ the Schwab tuple (including WP-F's new fields);
+EVERY other segment ⇒ the legacy ThetaData tuple, i.e. today's exact
+behavior. Corrections baked in from review:
+
+- **No unrecognized-store refusal** (C3, Repo-verified): the required
+  temp-store tests are impossible under refuse-on-unrecognized — existing
+  legacy tests pass synthetic stores (`tests/test_h7_activation_guard.py:17`
+  `synthetic-forward`, `test_h7_stage8_synthetic.py:56`,
+  `test_h7_trim_at_append.py:224/:353`) whose segments match no real store.
+  Segment classification lets Schwab tests classify by constructing temp
+  stores named `.../h7_forward_schwab`
+  (`tests/test_h7_schwab_window_registration.py:472` already does) while
+  every legacy synthetic store keeps legacy behavior byte-for-byte.
+- **No monkeypatchable module-level mapping**: tests must achieve Schwab
+  fields ONLY by store naming, never by patching/substituting the classifier
+  or a mapping constant — a red-green test proves patching is not the
+  mechanism. (The in-flight implementation's `patch.object(...,
+  OWNER_FIELDS_BY_STORE, ...)` in five test files is the rejected
+  `owner_fields` parameter relocated; do not reproduce it. No
+  `allow_real_readonly` real-store escape hatch in unit tests either.)
+- Do NOT key off `scope_identity()` — it is a pure function of the symbol
+  universe (`h7_scope.py:57-60`) with no namespace/provider/store concept
+  (round-3 P1); it keeps its existing role in the scope checks unchanged.
+  Never a caller-supplied field list, never a caller-named scope id (rev-2
+  N4).
 
 Acceptance tests: red-green proving a caller cannot narrow the field set NOR
-name a scope (no such parameters exist — attempts are TypeErrors); Schwab
-store ⇒ Schwab fields checked; unrecognized-store refusal; scope-vs-store
-mismatch refusal (meaning: the receipt's `scope_identity()` disagreeing with
-the store being activated — round-4 Q1 vocabulary fix, there is no
-scope-keyed refusal path); legacy tests untouched-green.
+name a scope (no such parameters exist — attempts are TypeErrors); temp store
+named `h7_forward_schwab` ⇒ Schwab fields checked without any patching;
+scope-vs-store mismatch refusal (the receipt's `scope_identity()` disagreeing
+with the store being activated); legacy tests untouched-green.
 
 ### WP-C — Owner-confirmed activation CLI (rebuild)
 
@@ -288,11 +340,30 @@ registration evidence and delegates to `register_window_real`
 
 1. **Call the door as it actually is** (rev-1 M2; signature Repo-verified at
    `:436-450`): the CLI must construct and pass `guard_report` (from WP-G's
-   Schwab scope), `spec_sha256` + `spec_path` (the activation spec file whose
-   on-disk sha256 must match `evidence["activation_spec_sha256"]`, enforced at
-   `:477-486`), `base_dir`, `code_state` (the door refuses a dirty working
-   tree and a HEAD mismatch, `:469-475`), `recheck_gates`, and respect
-   `max_report_age_s`. Do not wrap or monkeypatch the door's own refusals.
+   Schwab classification), `spec_sha256` + `spec_path`, `base_dir`,
+   `code_state` (the door refuses a dirty working tree and a HEAD mismatch,
+   `:469-475`), `recheck_gates`, `max_report_age_s`, **and
+   `universe_manifest` (C8): the CLI MUST pass the registered cohort-9
+   manifest explicitly — the door's `None` default resolves to the all-15
+   `default_universe_manifest()` (`h7_schwab_window_registration.py:274-278`
+   → `h7_window_registration.py:121-132`, Repo-verified) and would silently
+   register the wrong universe. The cohort's 9 names and each excluded name's
+   reason code are owner-typed at use time, never a hardcoded module constant
+   (the in-flight implementation's invented `REGISTERED_COHORT` tuple must
+   not survive the fix round).** Do not wrap or monkeypatch the door's own
+   refusals.
+   **Activation spec (C10, Repo-verified):** `register_window_real:477-486`
+   constrains only the HASH, never which file — and the only activation spec
+   on main, `docs/superpowers/specs/2026-07-19-h7-stage8-activation-spec.md`,
+   pins the LEGACY ThetaData `OWNER_FIELDS` and the all-15 default manifest
+   (its §2), so it cannot honestly serve as this door's contract. A NEW
+   `docs/superpowers/specs/2026-09-02-h7-schwab-activation-spec.md` joins
+   Scope-IN: it states the Schwab `OWNER_FIELDS` (including WP-F's two
+   additions), the cohort-9 manifest rule, the owner-typed loss bar, the
+   quote-age arming obligation, and the ordering constraint. It ships
+   UNSIGNED — the OWNER reviews and freezes it before any real run. The CLI
+   refuses a `--activation-spec` path outside `docs/superpowers/specs/`, and
+   its tests pin the real spec file, not a temp fixture.
 2. **Owner types everything at use time**: the confirmation string, every
    Schwab owner field (incl. WP-F's loss bar), and the reason /
    pre-acceptance text. The CLI defaults NONE of them and refuses blanks.
@@ -304,8 +375,9 @@ registration evidence and delegates to `register_window_real`
    namespace string as recorded in the OD-3 prose (Codex reads
    `PROJECT_STATE.md:452-461` and pins the literal string in a test), and for
    row 7 both the commitment wording and the evidence citation the packet
-   requires. Refuse on either mismatch. It must NOT add fields to any schema
-   for them.
+   requires. Refuse on either mismatch. These two phrases add no schema of
+   their own — they live inside WP-F's persisted
+   `SCHWAB_STARVATION_RISK_PREACCEPTANCE` field (C6).
 4. **Pre-delegation revalidation**: source-health, data-gate, backup + restore
    receipts, WP-A, WP-B, WP-D. The quote-age gate (WP-E) is deliberately NOT
    in this list — packet row 7 verbatim: "Not a gate on this registration"; it
@@ -318,24 +390,51 @@ registration evidence and delegates to `register_window_real`
 6. Tests run only against temporary stores; the CLI hard-refuses the real
    store without the owner confirmation string.
 
-### WP-E — Quote-age blocking gate (closes F2; post-registration arming lane)
+### WP-E — Quote-age blocking gate (provides the blocking gate F2 requires; WIRING IS A NAMED SUCCESSOR; post-registration arming lane)
 
 The gate belongs to the ENTRY/ARMING lane, not the registration path.
+Honesty note (C4, Repo-verified @1d83453): there is NO Schwab arming consumer
+on main — `h7_session.py:137` and `h7_entry_preflight.py:46` open
+`REAL_FORWARD_STORE` (legacy) only, and `SCHWAB_FORWARD_STORE` has no consumer
+outside its own registration module. WP-E therefore ships a callable,
+fully-tested gate with no production caller, and this brief does not claim
+otherwise; wiring it into the Schwab arming path is a named successor work
+package that lands WITH that path, and until then no name is actually
+entry-banned by this gate. Codex records this explicitly in the implementation
+report.
 
 1. Add the threshold constant to `config.py` with a provenance comment citing
    ruling 3 of `reports/2026-08-31-owner-rulings-h7-unfreeze.md` (owner-typed
    2026-08-31: quotes older than 1 hour block). Strategy logic reads the
    constant; the number appears nowhere else.
-2. The gate consumes the worst selectable QUOTE age — the quote `timestamp`
-   population, NOT `trade_timestamp` (Inference from the ruling evidence's
-   magnitude, 0.61–10.38 min, vs. the multi-day worst trade ages the sidecar
-   docstring records; Codex must verify the column against
-   `options_researcher/schwab_quote_age_report.py`'s emitted schema and record
-   which column in the implementation report) — from the sidecar report for
-   the session being armed. Missing or unparseable sidecar ⇒ FAIL CLOSED for
-   that session with a visible per-name/per-board verdict; silence is never a
-   pass. Per amendment v1.4 precedent, an over-threshold name is entry-banned
-   per-name.
+2. **Metric correction (C2, Repo-verified):** the sidecar's `age_minutes` is
+   measured against the per-symbol MAXIMUM timestamp
+   (`schwab_quote_age_report.py:221-231`) — it is a WITHIN-PACKAGE DISPERSION
+   statistic, and the module's own docstring (`:24-30`) warns that a package
+   whose quotes are ALL late reads as fresh. A 60-minute bar on that number
+   passes a uniformly-2-hour-old package. The gate must therefore compute an
+   ABSOLUTE age — evaluation reference (session close UTC) minus the sidecar's
+   `columns.timestamp.selectable.min_utc` (`:201`; no sidecar schema change
+   needed) — using the quote `timestamp` population, NOT `trade_timestamp`.
+   **Owner gate on arming (C2):** ruling 3's "0 of 7 blocked" evidence was
+   measured on the DISPERSION metric, so the 60-minute constant is not yet
+   confirmed against absolute ages; the gate ships computing and visibly
+   reporting BOTH numbers and BLOCKS ON NEITHER until the owner re-confirms
+   (or retypes) the threshold against the absolute metric — that
+   re-confirmation is an owner decision recorded by ruling, not a code
+   default.
+   **Binding check (C9, kernel valid):** before reading any number the gate
+   verifies `sidecar["schema_version"]`, `sidecar["session"] == the session
+   being armed`, and `sidecar["manifest_hash"] == the session's data-gate
+   receipt `schwab_manifest_hash`` (supplied via
+   `h7_schwab_data_gate.validate_receipt_scope_closure:82-86`); any mismatch
+   is FAIL CLOSED with a distinct reason code. This closes the stale-sidecar
+   path: `write_quote_age_report:363-373` refuses a differing rewrite while
+   `schwab_chain_capture.py:376-377` swallows the failure, so a re-captured
+   session leaves the OLD sidecar beside NEW bytes. Missing or unparseable
+   sidecar ⇒ FAIL CLOSED with a visible per-name/per-board verdict; silence is
+   never a pass. Per amendment v1.4 precedent, an over-threshold name is
+   entry-banned per-name (once wired — see the honesty note above).
 3. Arming precondition, stated honestly: NO sidecar artifacts exist yet for
    any session (Repo-verified 2026-08-31 — zero `*.quote_age.json` under
    `reports/schwab_chains` in repo and ops; the producer landed 08-29 and ops
@@ -387,13 +486,50 @@ Extend it to:
    `tools/h7_entry_variant_menu.py:354` (invoked at `:727-728`;
    Repo-verified round 3 — note `tools/h7_entry_variant_menu_v9_cohort9.py`
    only READS a precomputed value at `:147` and contains no reusable logic).
-   Codex must reuse, not re-derive.
+   Codex must reuse, not re-derive. **Window commensurability (C7,
+   Repo-verified):** the function returns a RAW surviving-entry count over
+   the supplied panel — no normalization to `window_sessions` — and the
+   packet's pinned 3 is the 42-session-lockout entry of
+   `occupancy_constrained_entries` on `V14_REGISTERED_COHORT_9.json`, where
+   panel == window == 70. Therefore: (a) the extended CLI REFUSES
+   `--lookback-sessions != --window-sessions` rather than normalizing (no
+   LLM-authored conversion arithmetic — the pinned 3 is commensurate only
+   under equality; the in-flight implementation's invented
+   `count × window / len(sessions)` scaling must not survive the fix round);
+   (b) the receipt records `occupancy_lockout_sessions` = 42 with its
+   `OCCUPANCY_LOCKOUT_SESSIONS` provenance, plus the panel length; (c) WP-A
+   re-derives the occupancy figure from the receipt's own inputs exactly as
+   it re-derives `base_rate`/`expected_entries`, refusing if the recorded
+   lockout or panel length disagrees with the registration window.
 4. Keep the tool offline (cached inputs only; no network, no provider calls).
 
 Acceptance tests: cohort argument respected and recorded; `input_files`
 hashes verifiable by WP-A's validator against fixtures; both figures present
 and labeled; a receipt produced by the extended tool passes WP-A's happy path
 end-to-end.
+
+### WP-J — Cohort-9 / data-gate scope reconciliation (closes C8's structural half)
+
+Repo-verified structural conflict at `1d83453`: `h7_data_gate.
+_validate_result_scope_closure` (`:518-541`, called by `validate_durable_receipt:687`)
+forces every durable data-gate receipt to cover ALL 15 official names
+(`result["universe"] == list(scope_identity()["symbols"])`), while the Schwab
+door requires the receipt universe to EQUAL `manifest["included"]`
+(`h7_schwab_window_registration.py:179`, with `:170` and `:183` matching GO
+count and verified symbols to the same list). A 9-name registration is
+therefore impossible on main today. Reconciliation follows the legacy
+Option-C precedent documented at `h7_activation_guard.py:79-90` — FULL-SCOPE
+evidence, trim only SELECTS from it: change the three Schwab-side checks to
+compare the receipt against `scope_identity()["symbols"]` (all 15) and add a
+separate check that every name in `manifest["included"]` is among the
+receipt's per-symbol GO names. `options_researcher/h7_data_gate.py` stays
+UNCHANGED and out of scope (the in-flight implementation's rewrite of
+`_validate_data_gate_receipt` without this WP was flagged as scope creep;
+this WP is now its sanction and its exact boundary).
+
+Acceptance tests: red-green proving a cohort-9 manifest registers against an
+all-15 GO receipt; a manifest naming a non-GO name refuses; a receipt
+covering fewer than 15 names refuses.
 
 ### WP-H — Test alignment
 
