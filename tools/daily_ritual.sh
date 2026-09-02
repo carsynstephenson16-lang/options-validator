@@ -372,6 +372,18 @@ elif [ "$FULL_AUTHORITY_RC" -ne 0 ]; then
 fi
 # ---- end full-tier region B ----
 
+# Schwab refresh-token age advisory (2026-09-02). DELIBERATELY OUTSIDE the
+# Schwab preclose lane region below: it is not part of that lane's gated
+# structure and must not become its first executable statement. The Schwab
+# refresh token dies 7 days after CREATION and refreshing an access token
+# does not reset that clock, so the 15:45 capture used to fail with no
+# warning at all (2026-08-31, 2026-09-01). This prints ONE operator line and
+# nothing else: no capture, no crit, no effect on CRITICAL / CRIT_COUNT /
+# DATA_STARVED / RITUAL_TERMINAL_STATUS. The module's CLI always exits 0;
+# `|| true` is belt-and-braces so an advisory can never break the ritual.
+echo ">>> schwab token:"
+"$UV" run python -m options_researcher.schwab_token_age || true
+
 # ---- Schwab preclose lane (brief 17 WP-F) ----
 # H10b and the H5 observer run OUTSIDE the H7 data-gate fence, and ONLY they
 # do: ledger seq 28 clause 1 and seq 29 clause 2 record the owner-confirmed

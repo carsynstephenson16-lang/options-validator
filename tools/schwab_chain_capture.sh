@@ -104,6 +104,16 @@ if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
 fi
 # --- end alignment gate ---------------------------------------------------
 
+# Proactive refresh-token age line (2026-09-02). The Schwab refresh token
+# dies 7 days after CREATION and refreshing an access token does not reset
+# that clock, so on 2026-08-31 and 2026-09-01 this log recorded only a generic
+# failure. Printing the advisory BEFORE the capture means the 15:45 log names
+# the cause even when the capture then dies. Advisory only: the module never
+# touches the network, its CLI always exits 0, and `|| true` keeps it out of
+# this wrapper's exit path and out of the CRITICAL labeling below.
+echo "--- schwab token age (advisory) ---"
+"$UV" run python -m options_researcher.schwab_token_age || true
+
 # Provider selection is explicit. Trading remains fail-closed even if the
 # caller's environment says otherwise.
 #

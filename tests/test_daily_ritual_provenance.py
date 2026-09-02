@@ -48,6 +48,10 @@ RITUAL = Path(__file__).resolve().parents[1] / "tools" / "daily_ritual.sh"
 # ---- registry 1: `python -m <module>` invocation sites ----------------------
 DATA_TIER_MODULES = (
     "options_researcher.ritual_status",  # RUNNING marker and terminal status
+    # Display-only Schwab refresh-token age advisory (2026-09-02). It prints
+    # one operator line, never touches the network, always exits 0, and is
+    # invoked with `|| true` -- it can affect no status and gate nothing.
+    "options_researcher.schwab_token_age",
     "options_researcher.qm_dashboard",  # OHLCV refresh (data-tier island)
     "options_researcher.dashboard",
     "options_researcher.attractiveness_dashboard",
@@ -95,8 +99,8 @@ PYTHON_DASH_C_CLASSIFICATION = {
     365: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
     # Brief 17 WP-F: the Schwab lane's own read-only sites. The verified-view
     # read is the lane's fail-closed gate; it mutates nothing.
-    394: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
-    437: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
+    406: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
+    449: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
 }
 
 # ---- registry 3: every mutation verb site ----------------------------------
@@ -124,13 +128,13 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$LOGDIR"': (68,),  # data tier
     'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
-    "mkdir -p reports/h5": (416,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (570,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (573,),  # data tier
-    "git fetch": (583,),  # data tier
-    "git merge": (584,),  # data tier — mutates the working tree unattended
-    "git push": (585,),  # data tier
-    "restic backup": (602,),  # data tier
+    "mkdir -p reports/h5": (428,),  # Schwab preclose lane (brief 17 WP-F)
+    "git add": (582,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (585,),  # data tier
+    "git fetch": (595,),  # data tier
+    "git merge": (596,),  # data tier — mutates the working tree unattended
+    "git push": (597,),  # data tier
+    "restic backup": (614,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
