@@ -17,8 +17,10 @@ from data.cache_schema import V2_FULL_AUDIT_SCHEMA
 from options_researcher import h7_event_ledger as ledger
 from options_researcher import h7_forward_book as book
 from options_researcher import h7_paper_lifecycle as lifecycle
+from options_researcher import h7_schwab_data_gate as schwab_gate
 from options_researcher import h7_session as session_module
 from options_researcher import h7_window_registration as registration
+from options_researcher import schwab_quote_age_report as quote_age_report
 from options_researcher.h7_scope import scope_identity
 from options_researcher.h7_session import (
     SessionRefused,
@@ -184,6 +186,7 @@ class RealSessionCase(unittest.TestCase):
         symbols_override: dict | None = None,
         source_requested_run_date: str | None = None,
         gate_requested_run_date: str | None = None,
+        evidence_mode: str | None = None,
     ) -> Path:
         source_path, gate_path = self._paths(evaluation)
         default_requested = DECISION if evaluation == EVALUATION else FILL_REQUESTED
@@ -265,6 +268,7 @@ class RealSessionCase(unittest.TestCase):
         gate = make_receipt(
             "data_gate",
             {
+                **({"evidence_mode": evidence_mode} if evidence_mode else {}),
                 "evaluation_session": evaluation,
                 "requested_run_date": gate_requested,
                 "scope": self.scope,
@@ -671,6 +675,112 @@ class TestEntryOnlyRealPath(RealSessionCase):
                 chain_identity="sha256:exit-chain",
                 closes_identity="sha256:exit-closes",
             )
+
+
+class TestSchwabQuoteAgeArmingGate(RealSessionCase):
+    """Brief 36 WP-E, round-1 finding F1: the gate must ban names for real.
+
+    The quote-age gate is wired into the ONE arming door
+    (``open_real_session``) and applies only to Schwab-evidence data-gate
+    receipts; the legacy ThetaData lane never consults it.
+    """
+
+    CAPTURE_RECEIPT_NAME = "schwab_capture_receipt.json"
+
+    def _fixture_audit_validator(
+        self, cache_dir, chain_path, *, symbol, session, consumer_scope
+    ) -> dict:
+        binding = super()._fixture_audit_validator(
+            cache_dir,
+            chain_path,
+            symbol=symbol,
+            session=session,
+            consumer_scope=consumer_scope,
+        )
+        binding["receipt_path"] = str(
+            Path(chain_path).parent / "_meta" / self.CAPTURE_RECEIPT_NAME
+        )
+        return binding
+
+    def setUp(self):
+        super().setUp()
+        self.gate_path = self._write_receipts(
+            EVALUATION,
+            evidence_mode=schwab_gate.EVIDENCE_MODE,
+        )
+        capture = Path(
+            load_receipt(self.gate_path, expected_type="data_gate")["symbols"]["AMD"][
+                "chain"
+            ]["audit_receipt"]["receipt_path"]
+        )
+        capture.parent.mkdir(parents=True, exist_ok=True)
+        self.sidecar_path = capture.with_name(
+            quote_age_report.sidecar_filename(capture.name)
+        )
+
+    def _write_sidecar(self, ages: dict[str, float]) -> None:
+        self.sidecar_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": quote_age_report.SCHEMA_VERSION,
+                    "session": EVALUATION,
+                    "symbols_requested": list(INCLUDED),
+                    "symbols": {
+                        symbol: {
+                            "columns": {
+                                "timestamp": {
+                                    "selectable": {
+                                        "age_minutes": {
+                                            "max": ages.get(symbol, 1.0)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        for symbol in INCLUDED
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def test_fresh_quotes_arm_and_stale_name_is_entry_banned(self):
+        self._write_sidecar({"AMD": 61.0, "AMZN": 59.0})
+
+        self.assertEqual(
+            self.open(data_gate_receipt_path=self.gate_path).evaluation_session,
+            EVALUATION,
+        )
+        self.open(data_gate_receipt_path=self.gate_path, symbol="AMZN")
+        with self.assertRaises(SessionRefused) as caught:
+            self.open(data_gate_receipt_path=self.gate_path, symbol="AMD")
+        self.assertIn("QUOTE_AGE", str(caught.exception))
+
+    def test_missing_sidecar_refuses_the_whole_schwab_board(self):
+        with self.assertRaises(SessionRefused) as caught:
+            self.open(data_gate_receipt_path=self.gate_path)
+        self.assertIn("QUOTE_AGE", str(caught.exception))
+
+        with self.assertRaises(SessionRefused):
+            self.open(data_gate_receipt_path=self.gate_path, symbol="AMZN")
+
+    def test_unreadable_sidecar_refuses_the_whole_schwab_board(self):
+        self.sidecar_path.write_text("{not json", encoding="utf-8")
+
+        with self.assertRaises(SessionRefused) as caught:
+            self.open(data_gate_receipt_path=self.gate_path)
+        self.assertIn("QUOTE_AGE", str(caught.exception))
+
+    def test_legacy_thetadata_lane_never_consults_the_quote_age_gate(self):
+        self._write_receipts(EVALUATION)  # no evidence_mode: the ThetaData lane
+        with patch.object(
+            session_module,
+            "evaluate_schwab_quote_age",
+            side_effect=AssertionError("legacy lane must not call the gate"),
+        ) as never:
+            self.open()
+            self.open(symbol="AMD")
+        never.assert_not_called()
 
 
 if __name__ == "__main__":
