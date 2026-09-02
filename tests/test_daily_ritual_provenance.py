@@ -790,6 +790,64 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                 )
                 self.assertEqual(completed.stdout.strip(), expected, completed.stderr)
 
+    def test_final_exit_agrees_with_the_terminal_status_carve_out(self):
+        """The last line the operator reads must not contradict the receipt.
+
+        Before 2026-09-02 the terminal-status computation and the notification
+        title both had the OK_STARVED carve-out, but the FINAL echo/exit
+        checked raw `CRITICAL` alone -- so a chain-starved day published an
+        OK_STARVED receipt and a [DATA-STARVED] notification while printing
+        "RITUAL STATUS: BROKEN" and exiting 1. The LaunchAgent's exit code and
+        the operator's last log line both said broken on an expected day.
+        """
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        source = _source()
+        start = source.index('if [ "$CRITICAL" -eq 1 ]; then', source.index("/usr/bin/osascript"))
+        block = source[start:]
+
+        cases = (
+            # CRITICAL, DATA_STARVED, STARVED_CRIT, CRIT_COUNT, rc, text
+            (0, 0, 0, 0, 0, "RITUAL STATUS: OK"),
+            (0, 1, 1, 1, 0, "RITUAL STATUS: OK"),
+            (1, 1, 1, 1, 0, "RITUAL STATUS: OK_STARVED (chain-starved; see receipt)"),
+            (1, 1, 1, 2, 1, "RITUAL STATUS: BROKEN (see CRITICAL lines above)"),
+            (1, 1, 0, 1, 1, "RITUAL STATUS: BROKEN (see CRITICAL lines above)"),
+            (1, 0, 1, 1, 1, "RITUAL STATUS: BROKEN (see CRITICAL lines above)"),
+        )
+        for critical, starved, starved_crit, count, rc, text in cases:
+            with self.subTest(critical=critical, count=count):
+                script = "\n".join(
+                    [
+                        f"CRITICAL={critical}",
+                        f"DATA_STARVED={starved}",
+                        f"STARVED_CRIT={starved_crit}",
+                        f"CRIT_COUNT={count}",
+                        block,
+                    ]
+                )
+                completed = subprocess.run(
+                    [zsh, "-c", script], capture_output=True, text=True, timeout=30
+                )
+                self.assertEqual(completed.stdout.strip(), text, completed.stderr)
+                self.assertEqual(completed.returncode, rc)
+
+    def test_final_status_reuses_the_exact_carve_out_condition(self):
+        """Static twin of the behavioral test: the three deciders must all use
+        the SAME predicate, so a future edit to one is visibly a divergence."""
+        source = _source()
+        condition = (
+            'if [ "$DATA_STARVED" -eq 1 ] && [ "$STARVED_CRIT" -eq 1 ] '
+            '&& [ "$CRIT_COUNT" -eq 1 ]; then'
+        )
+        # terminal receipt status, notification title, final echo/exit
+        self.assertEqual(source.count(condition), 3)
+        final = source[source.index("/usr/bin/osascript") :]
+        self.assertIn(condition, final)
+        self.assertIn("RITUAL STATUS: OK_STARVED (chain-starved; see receipt)", final)
+        self.assertIn("RITUAL STATUS: BROKEN (see CRITICAL lines above)", final)
+
     def test_cache_edge_note_is_shell_only_and_fails_soft(self):
         source = _source()
         self.assertIn("canonical chain cache edge: ${CHAIN_EDGE:-none}", source)

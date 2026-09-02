@@ -636,7 +636,20 @@ if [ "$CRITICAL" -eq 1 ]; then
 fi
 /usr/bin/osascript -e "display notification \"$(printf '%b' "$SUMMARY" | head -c 220 | tr '"' "'")\" with title \"$TITLE\" subtitle \"session ${AS_OF} — log: .tmp/daily_ritual/${STAMP}.log\"" 2>/dev/null
 
+# The final line and the exit code must agree with the terminal status this
+# run already published and with the notification title it already sent. Until
+# 2026-09-02 this block tested raw $CRITICAL alone, so a chain-starved day
+# wrote an OK_STARVED receipt and sent a [DATA-STARVED] notification while
+# printing "RITUAL STATUS: BROKEN" and exiting 1 — the LaunchAgent's exit code
+# and the operator's last log line both cried wolf on an expected day. The
+# carve-out predicate below is character-for-character the one used at the
+# other two decision points (brief 11 §6.4): a PURE COUNTER comparison, so the
+# instant a second CRITICAL exists from any source, BROKEN wins.
 if [ "$CRITICAL" -eq 1 ]; then
+  if [ "$DATA_STARVED" -eq 1 ] && [ "$STARVED_CRIT" -eq 1 ] && [ "$CRIT_COUNT" -eq 1 ]; then
+    echo "RITUAL STATUS: OK_STARVED (chain-starved; see receipt)"
+    exit 0
+  fi
   echo "RITUAL STATUS: BROKEN (see CRITICAL lines above)"
   exit 1
 fi
