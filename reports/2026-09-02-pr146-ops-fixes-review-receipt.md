@@ -24,7 +24,7 @@
 ### Fix 3 — gitleaks (`.gitleaksignore`, `.gitleaks.toml`)
 - Test-verified (gitleaks 8.30.1): config parses; scan → exactly one pre-existing finding (`tools/thetadata_v2_backfill.py:71`); main's config on the same tree → two. One silenced, zero newly raised.
 - Test-verified: CI Secret Scan passed (12 s) on this PR at the pinned action `gitleaks/gitleaks-action@…  # v2.3.9` — the `[[allowlists]]` form parses in CI as shipped.
-- Repo-verified: fingerprint `6e08cf8…:options_researcher/a2_runner.py:generic-api-key:49` is real (line 49 = `PIN_FACT_TOKEN = "RQ2_A2_PIN_ADDENDUM_V1"`).
+- Repo-verified: fingerprint `6e08cf8…:options_researcher/a2_runner.py:generic-api-key:49` is real (line 49 is the `PIN_FACT_TOKEN` constant carrying the A2 pin-fact ledger label; the assignment is deliberately not reproduced here — quoting it verbatim in this receipt re-fired the same generic-api-key rule on the receipt file, which is the exact failure mode Fix 3 documents).
 - Inference (low): allowlist is `AND`-scoped to the file path + literal label + `regexTarget = "line"`; a secret pasted onto that same physical line would be hidden. Optional tightening `targetRules = ["generic-api-key"]` was NOT applied (support in the CI-default binary unverified offline).
 
 ### Fix 4 — ritual final status (`tools/daily_ritual.sh`)
