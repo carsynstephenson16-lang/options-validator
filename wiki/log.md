@@ -129,3 +129,8 @@ review of PR #90 and AGENTS.md claim discipline.
 ## [2026-08-30] ingest | RAG health
 
 RAG health indexed 1072 sources and 35065 chunks; 0 source failures were reported.
+
+
+## [2026-09-02] ingest | RAG health
+
+RAG health indexed 1129 sources and 35626 chunks; 0 source failures were reported.
