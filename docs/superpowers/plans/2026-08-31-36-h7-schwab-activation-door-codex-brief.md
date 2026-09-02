@@ -204,6 +204,12 @@ only (Repo-verified). Extend it to:
    at validation time recompute each file's sha256 and refuse with a distinct
    error on any mismatch or missing file. New receipts must record
    repo-relative paths; refuse absolute paths outside the repo root.
+   **Closure (wave-3 W5): hashing only what the receipt lists is circular —
+   an omitted consumed file escapes the binding. The validator DERIVES the
+   complete expected input set from the receipt's cohort + sessions (the
+   chain-cache files for each symbol-session, the underlying-closes inputs,
+   the earnings CSVs) and requires exact SET equality with `input_files`
+   (missing or extra entries refuse) before checking individual hashes.**
 2. Require `error_count == 0` and the stack/tool identity labels to match the
    registered scope. **Code-surface binding (round-6 C8, mechanism per
    final-review R9):** input hashes and config_hash do not bind the
@@ -214,9 +220,13 @@ only (Repo-verified). Extend it to:
    after ANY unrelated edit — resurrecting the exact-HEAD defect the repo
    already removed (`h7_schwab_window_registration.py:245-253`). The path
    tuple (the extended feasibility tool module plus the modules it imports
-   for the measurement) is recorded VERBATIM in the receipt so the surface is
-   auditable rather than implicit; the validator recomputes over the recorded
-   tuple with its own distinct refusal. `research/hashing.py` is not
+   for the measurement) is FROZEN as a module constant in the validator —
+   the canonical computation surface — and the receipt records it verbatim;
+   the validator requires the receipt's tuple to EQUAL the frozen constant
+   (missing, extra, or nonexistent paths refuse) BEFORE recomputing over it,
+   each with its own distinct refusal (wave-3 W3: a self-reported tuple is
+   circular — a receipt omitting a dependency would stay valid after that
+   dependency changes). `research/hashing.py` is not
    modified.
 3. Require the receipt's universe to BE the registered cohort-9 universe
    (packet §2). The historical 15-name receipts fail this by design — the
@@ -409,9 +419,18 @@ registration evidence and delegates to `register_window_real`
    free text; note this equality is ALREADY enforced on main at
    `h7_schwab_window_registration.py:172-181` — verify, do not duplicate),
    (b) included + excluded to partition `scope_identity()["symbols"]`
-   exactly (9 + 6 = 15, no overlap, no gaps), and (c) every exclusion reason
-   non-empty. A typo'd or substituted nine-name set then fails (a) or (b)
-   instead of registering.** Do not wrap or monkeypatch the door's own
+   exactly (9 + 6 = 15, no overlap, no gaps), (c) every exclusion reason
+   non-empty, and (d) **the inherited-cohort pin (wave-3 W2 — without it,
+   (a)-(c) are circular: any 9-of-15 choice can mint its own matching
+   receipt): the typed included AND excluded symbol SETS must EQUAL the
+   seq-0 universe manifest in `ledger/h7_forward/events.jsonl` (read-only;
+   Repo-verified: included = AMD AMZN CEG ET MSFT NOW PLTR TEM VST, excluded
+   = AVGO CRWV IREN NVDA SMCI USAR, scope_id `h7-forward-15-v1`). Exclusion
+   REASONS are owner-typed fresh for the Schwab window and refused blank —
+   they need NOT equal the legacy `EARNINGS-UNKNOWN` reasons, deliberately:
+   the reason explains the Schwab-era exclusion, the SET preserves the
+   inherited cohort. A typo'd or substituted nine-name set then fails (a),
+   (b), or (d) instead of registering.** Do not wrap or monkeypatch the door's own
    refusals.
    **Activation spec (C10, Repo-verified):** `register_window_real:477-486`
    constrains only the HASH, never which file — and the only activation spec
@@ -422,7 +441,13 @@ registration evidence and delegates to `register_window_real`
    Scope-IN: it states the Schwab `OWNER_FIELDS` (including WP-F's two
    additions), the cohort-9 manifest rule, the owner-typed loss bar, the
    quote-age arming obligation, and the ordering constraint. It ships
-   UNSIGNED — the OWNER reviews and freezes it before any real run. **Pinning
+   UNSIGNED — the OWNER reviews and freezes it before any real run, and the
+   FREEZE is a hash (wave-3 W4): at use time the owner TYPES the sha256 of
+   the spec revision they reviewed (alongside the confirmation string); the
+   CLI compares the on-disk spec's hash to the owner-typed one and refuses
+   mismatch. The CLI never self-derives the trusted value — a post-review
+   edit at the pinned path then fails the comparison instead of silently
+   re-hashing. **Pinning
    (round-6 C4): a directory check is insufficient — the legacy ThetaData
    spec lives in the same directory and would still hash cleanly. The CLI
    pins the EXACT path `docs/superpowers/specs/2026-09-02-h7-schwab-activation-spec.md`
@@ -444,7 +469,19 @@ registration evidence and delegates to `register_window_real`
    their own — they live inside WP-F's persisted
    `SCHWAB_STARVATION_RISK_PREACCEPTANCE` field (C6).
 4. **Pre-delegation revalidation**: source-health, data-gate, backup + restore
-   receipts, WP-A, WP-B, WP-D. The quote-age gate (WP-E) is deliberately NOT
+   receipts, WP-A, WP-B, WP-D — plus two checks the builder does not perform
+   (both Repo-verified absent on main, wave-3 W7/W8):
+   **(chronology, W7)** `WINDOW_START_DECISION_SESSION` must be STRICTLY
+   LATER than `last_historical_session` — the builder checks only
+   commitment-covers-window-end and verified-through == historical
+   (`h7_schwab_window_registration.py:228-252`), so an equal or earlier
+   owner-typed start would register a "forward" window over already-observed
+   sessions; equal-date and past-date refusal tests required.
+   **(manifest-hash binding, W8)** `evidence["last_historical_manifest_receipt_hash"]`
+   must EQUAL the verified data-gate receipt's `schwab_manifest_hash` — the
+   builder copies it into `payload.history` unchecked (`:344-352`), so a
+   stale or arbitrary hash would be permanently recorded while a different
+   package passes durable verification; mismatch refusal test required. The quote-age gate (WP-E) is deliberately NOT
    in this list — packet row 7 verbatim: "Not a gate on this registration"; it
    is a post-registration arming obligation (rev-1 B4).
 5. No direct append: `tests/test_h7_one_door.py` must cover the new CLI.
@@ -486,6 +523,13 @@ report.
    ABSOLUTE age — evaluation reference (session close UTC) minus the sidecar's
    `columns.timestamp.selectable.min_utc` (`:201`; no sidecar schema change
    needed) — using the quote `timestamp` population, NOT `trade_timestamp`.
+   **Timestamp hygiene (wave-3 W6): before any threshold comparison, a
+   null, unparseable, or post-reference (later than session close)
+   selectable timestamp anywhere in the population ⇒ EVIDENCE_INVALID, fail
+   closed — the existing package verifier does not validate row timestamps,
+   so an all-post-close package would otherwise produce a NEGATIVE age that
+   passes a maximum-age check. A negative computed age is always a refusal,
+   never a pass; tests cover null, garbage, and post-close rows.**
    **Owner gate on arming, explicit mechanism (C2 + round-6 C5):** ruling 3's
    "0 of 7 blocked" evidence was measured on the DISPERSION metric, so the
    60-minute constant is not yet confirmed against absolute ages. The
