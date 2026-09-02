@@ -1,12 +1,14 @@
 # Brief 36 — H7 Schwab activation door, rebuilt on main
 
-**Date:** 2026-08-31, rev 5 2026-09-02 (rev 1 FAILED review with blockers
+**Date:** 2026-08-31, rev 6 2026-09-02 (rev 1 FAILED review with blockers
 B1–B5; rev 2 FAILED with N1–N6; rev 3 FAILED with P1–P6; rev 4 PASS WITH
-FIXES; rev 5 applies the 9 PR #142 Codex-bot findings C2–C10 after independent
-Opus verification — 8 VALID, 1 PARTIALLY VALID, 0 INVALID — all rounds
-transcribed in `reports/2026-08-31-brief-36-adversarial-review-receipt.md`,
-committed with this brief. The in-flight Codex implementation predates rev 5;
-its fix round must re-align to this text.)
+FIXES; rev 5 applied the first bot wave C2–C10 after independent Opus
+verification — 8 VALID, 1 PARTIALLY VALID, 0 INVALID; rev 6 applies the
+second bot wave (11 findings incl. the process catch that rev 5's final text
+was never itself re-reviewed) — all rounds transcribed in
+`reports/2026-08-31-brief-36-adversarial-review-receipt.md`, committed with
+this brief. The in-flight Codex implementation predates rev 5/6; its fix
+round must re-align to this text.)
 
 **WP mapping for the owner's ruling text** (the 2026-08-31 rulings file cites
 the PLAN's numeric WPs): plan WP-1→brief WP-A · WP-2→WP-B · WP-3→WP-C ·
@@ -15,9 +17,11 @@ review-driven additions beyond the plan.
 **Author:** Claude orchestrating session (PR #71 unfreeze arc; plan:
 `docs/superpowers/plans/2026-08-30-pr71-unfreeze-pr115-closeout.md`)
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** READY FOR HAND-OFF — independent adversarial review passed
-2026-08-31 (4 rounds: FAIL/FAIL/FAIL/PASS WITH FIXES, all fixes applied;
-receipt: `reports/2026-08-31-brief-36-adversarial-review-receipt.md`)
+**Status:** DRAFT — rev 6 pending independent review of the FINAL text
+(bot round-6 finding: rev 5's READY status rested on verification of the
+findings, not a review of the resulting diff; the status returns to READY
+only when a post-change review verdict on this exact revision is recorded in
+`reports/2026-08-31-brief-36-adversarial-review-receipt.md`)
 **Provenance:** Repo-verified against `origin/main` @ `1d83453` unless labeled
 otherwise.
 
@@ -188,7 +192,14 @@ only (Repo-verified). Extend it to:
    error on any mismatch or missing file. New receipts must record
    repo-relative paths; refuse absolute paths outside the repo root.
 2. Require `error_count == 0` and the stack/tool identity labels to match the
-   registered scope.
+   registered scope. **Code-surface binding (round-6 C8):** input hashes and
+   config_hash do not bind the COMPUTATION — the feasibility algorithm can
+   change without either moving. The receipt must also record a source hash
+   over the exact computation surface (the extended feasibility tool module
+   plus the modules it imports for the measurement — reuse the repo's
+   existing source-hash machinery in `research/hashing.py`, not a new
+   scheme, and not an exact-HEAD check), and the validator recomputes and
+   compares it at validation time with its own distinct refusal.
 3. Require the receipt's universe to BE the registered cohort-9 universe
    (packet §2). The historical 15-name receipts fail this by design — the
    qualifying receipt is the fresh cohort-9 one from the ordering section.
@@ -232,8 +243,14 @@ engine reads config at scoring time:
    `"min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT` into the scorer
    block (`h7_schwab_window_registration.py:321-325`), which flows into
    `build_scoring_identity` (Repo-verified). Make it an owner-typed
-   registration input for the Schwab door: required, refused when absent or
-   non-integer, written into the scorer block and the scoring-identity hash.
+   registration input for the Schwab door: required, refused when absent,
+   and validated strictly (round-6 C9): `type(x) is int` (rejects `True`),
+   `x > 0`, AND equal to the bar the frozen Schwab activation spec records
+   (7, owner ruling 2026-08-14 — the spec is the owner-frozen carrier of the
+   number, so this equality check hardcodes no LLM number in code while
+   making a mistyped `0`/`1`/`70` refuse instead of freezing into both
+   identity surfaces). Written into the scorer block and the scoring-identity
+   hash.
    Field name: `SCHWAB_MIN_LOSSES_FOR_VERDICT` (SCREAMING_SNAKE, matching
    every existing entry in both `OWNER_FIELDS` tuples — rev-2 finding n3).
    **Second sanctioned field (C6, Repo-verified):** neither `OWNER_FIELDS`
@@ -246,7 +263,14 @@ engine reads config at scoring time:
    `SCHWAB_STARVATION_RISK_PREACCEPTANCE` (free text, owner-typed at use
    time, refused blank, frozen verbatim into `owner_authorization`). WP-B's
    equality check reads the quoted number out of THAT persisted field, not a
-   transient CLI argument. The OD-3 namespace line and row-7 quote-age
+   transient CLI argument — and NOT by fishing a bare number out of prose
+   (round-6 C10: the real pre-acceptance text contains dates, window sizes,
+   bars, and variant counts; prose extraction either rejects the real text or
+   matches the wrong number). The field must contain, alongside the owner's
+   prose, the canonical labeled token
+   `occupancy_constrained_expected_entries=<value>`; the validator parses
+   exactly that token (missing or duplicated token ⇒ refuse) and tests
+   include the full realistic owner text plus ambiguous-number cases. The OD-3 namespace line and row-7 quote-age
    commitment remain prose inside this same field — they still add no schema
    of their own.
 2. **Scorer side (rev-2 N1; scope corrected per round-3 P2).** The verdict
@@ -342,7 +366,10 @@ registration evidence and delegates to `register_window_real`
    `:436-450`): the CLI must construct and pass `guard_report` (from WP-G's
    Schwab classification), `spec_sha256` + `spec_path`, `base_dir`,
    `code_state` (the door refuses a dirty working tree and a HEAD mismatch,
-   `:469-475`), `recheck_gates`, `max_report_age_s`, **and
+   `:469-475`), `recheck_gates` — but NOT `max_report_age_s` (round-6 C11:
+   the CLI must not expose or pass it; the door's own guardrail default
+   applies, and a test proves no CLI path can widen the report-age window) —
+   **and
    `universe_manifest` (C8): the CLI MUST pass the registered cohort-9
    manifest explicitly — the door's `None` default resolves to the all-15
    `default_universe_manifest()` (`h7_schwab_window_registration.py:274-278`
@@ -350,7 +377,14 @@ registration evidence and delegates to `register_window_real`
    register the wrong universe. The cohort's 9 names and each excluded name's
    reason code are owner-typed at use time, never a hardcoded module constant
    (the in-flight implementation's invented `REGISTERED_COHORT` tuple must
-   not survive the fix round).** Do not wrap or monkeypatch the door's own
+   not survive the fix round). **Typo guard (round-6 C3): owner-typed does
+   not mean unverified — the builder must additionally require (a) the typed
+   included set to EQUAL the qualifying feasibility receipt's universe (the
+   receipt WP-A already hash-validates, so the cohort is receipt-bound, not
+   free text), (b) included + excluded to partition `scope_identity()["symbols"]`
+   exactly (9 + 6 = 15, no overlap, no gaps), and (c) every exclusion reason
+   non-empty. A typo'd or substituted nine-name set then fails (a) or (b)
+   instead of registering.** Do not wrap or monkeypatch the door's own
    refusals.
    **Activation spec (C10, Repo-verified):** `register_window_real:477-486`
    constrains only the HASH, never which file — and the only activation spec
@@ -361,9 +395,13 @@ registration evidence and delegates to `register_window_real`
    Scope-IN: it states the Schwab `OWNER_FIELDS` (including WP-F's two
    additions), the cohort-9 manifest rule, the owner-typed loss bar, the
    quote-age arming obligation, and the ordering constraint. It ships
-   UNSIGNED — the OWNER reviews and freezes it before any real run. The CLI
-   refuses a `--activation-spec` path outside `docs/superpowers/specs/`, and
-   its tests pin the real spec file, not a temp fixture.
+   UNSIGNED — the OWNER reviews and freezes it before any real run. **Pinning
+   (round-6 C4): a directory check is insufficient — the legacy ThetaData
+   spec lives in the same directory and would still hash cleanly. The CLI
+   pins the EXACT path `docs/superpowers/specs/2026-09-02-h7-schwab-activation-spec.md`
+   as a module constant and REFUSES any other `--activation-spec` value
+   (including the 2026-07-19 legacy spec, by an explicit test); tests pin the
+   real file, not a temp fixture.**
 2. **Owner types everything at use time**: the confirmation string, every
    Schwab owner field (incl. WP-F's loss bar), and the reason /
    pre-acceptance text. The CLI defaults NONE of them and refuses blanks.
@@ -416,25 +454,41 @@ report.
    ABSOLUTE age — evaluation reference (session close UTC) minus the sidecar's
    `columns.timestamp.selectable.min_utc` (`:201`; no sidecar schema change
    needed) — using the quote `timestamp` population, NOT `trade_timestamp`.
-   **Owner gate on arming (C2):** ruling 3's "0 of 7 blocked" evidence was
-   measured on the DISPERSION metric, so the 60-minute constant is not yet
-   confirmed against absolute ages; the gate ships computing and visibly
-   reporting BOTH numbers and BLOCKS ON NEITHER until the owner re-confirms
-   (or retypes) the threshold against the absolute metric — that
-   re-confirmation is an owner decision recorded by ruling, not a code
-   default.
-   **Binding check (C9, kernel valid):** before reading any number the gate
-   verifies `sidecar["schema_version"]`, `sidecar["session"] == the session
-   being armed`, and `sidecar["manifest_hash"] == the session's data-gate
-   receipt `schwab_manifest_hash`` (supplied via
-   `h7_schwab_data_gate.validate_receipt_scope_closure:82-86`); any mismatch
-   is FAIL CLOSED with a distinct reason code. This closes the stale-sidecar
-   path: `write_quote_age_report:363-373` refuses a differing rewrite while
-   `schwab_chain_capture.py:376-377` swallows the failure, so a re-captured
-   session leaves the OLD sidecar beside NEW bytes. Missing or unparseable
-   sidecar ⇒ FAIL CLOSED with a visible per-name/per-board verdict; silence is
-   never a pass. Per amendment v1.4 precedent, an over-threshold name is
-   entry-banned per-name (once wired — see the honesty note above).
+   **Owner gate on arming, explicit mechanism (C2 + round-6 C5):** ruling 3's
+   "0 of 7 blocked" evidence was measured on the DISPERSION metric, so the
+   60-minute constant is not yet confirmed against absolute ages. The
+   distinguishing state is the EXISTENCE of a dedicated config constant for
+   the ABSOLUTE metric (e.g. `H7_SCHWAB_QUOTE_AGE_ABSOLUTE_MAX_MINUTES`),
+   which DOES NOT EXIST until the owner re-rules and types it — no code
+   default, no reuse of the dispersion-era constant for blocking. Behavior is
+   two-mode and test-split accordingly: constant ABSENT ⇒ the gate computes
+   and visibly reports both numbers with an explicit
+   `AWAITING_OWNER_THRESHOLD` verdict and blocks nothing (acceptance tests:
+   report-only content, verdict label, nothing banned); constant PRESENT
+   (test fixture config) ⇒ over-threshold name entry-banned per-name,
+   under-threshold passes, fail-closed paths active (the banning acceptance
+   tests apply ONLY to this mode). An implementation is never asked to
+   satisfy both modes in one state.
+   **Decision statistic comes from the chain bytes, not the sidecar (C9 +
+   round-6 C6):** the manifest hash authenticates the parquet package, never
+   the sidecar's numbers — an edited sidecar keeps a correct
+   session/manifest_hash while lying about ages. Therefore the gate
+   RECOMPUTES its decision statistic (worst absolute selectable quote age)
+   directly from the manifest-bound chain files of the session being armed,
+   reusing `schwab_quote_age_report`'s selectable-population logic (reuse,
+   not re-derive). The sidecar is display/diagnostic only and NEVER an input
+   to the block/pass decision; the gate still cross-checks
+   `sidecar["schema_version"]`/`["session"]`/`["manifest_hash"]` when a
+   sidecar is present and reports (not blocks on) a recompute-vs-sidecar
+   disagreement with a distinct reason code — that disagreement signal is
+   what catches the stale-sidecar path (`write_quote_age_report:363-373`
+   refuses a differing rewrite while `schwab_chain_capture.py:376-377`
+   swallows the failure, leaving an OLD sidecar beside NEW bytes). Missing
+   chain data for the session ⇒ FAIL CLOSED (in blocking mode) with a visible
+   per-name/per-board verdict; silence is never a pass. Per amendment v1.4
+   precedent, an over-threshold name is entry-banned per-name (once wired —
+   see the honesty note above; and only in blocking mode — see the owner-gate
+   mechanism).
 3. Arming precondition, stated honestly: NO sidecar artifacts exist yet for
    any session (Repo-verified 2026-08-31 — zero `*.quote_age.json` under
    `reports/schwab_chains` in repo and ops; the producer landed 08-29 and ops
@@ -500,7 +554,17 @@ Extend it to:
    `OCCUPANCY_LOCKOUT_SESSIONS` provenance, plus the panel length; (c) WP-A
    re-derives the occupancy figure from the receipt's own inputs exactly as
    it re-derives `base_rate`/`expected_entries`, refusing if the recorded
-   lockout or panel length disagrees with the registration window.
+   lockout or panel length disagrees with the registration window; and (d)
+   **upper-bound honesty (round-6 C12):** the helper's own docstring says it
+   enforces only the per-underlying lockout and does NOT net the monthly
+   sleeve across overlapping positions, so its output OVERSTATES what the
+   registered capital cap would allow. The receipt records the figure with an
+   explicit `upper_bound: true` label, and WP-B's `>= 2 × bar` branch may NOT
+   be satisfied by an upper-bound figure — with this receipt only the
+   starvation pre-acceptance branch can authorize registration (the operative
+   branch anyway: 3 < 14). Do NOT author portfolio-netting arithmetic to
+   tighten the bound — that is unreviewed modeling; a tight figure, if ever
+   needed, is its own reviewed work package.
 4. Keep the tool offline (cached inputs only; no network, no provider calls).
 
 Acceptance tests: cohort argument respected and recorded; `input_files`
@@ -548,6 +612,7 @@ Done is defined by exit codes at the implementation head:
 ```
 uv run python -m unittest discover -s tests   # exit 0
 uv run ruff check .                            # exit 0
+uv run ruff format --check .                   # exit 0 (round-6 C7)
 uv run pyright                                 # exit 0
 ```
 
