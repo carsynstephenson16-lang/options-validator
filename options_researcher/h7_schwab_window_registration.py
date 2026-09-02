@@ -39,16 +39,27 @@ CACHE_NAMESPACE = ".cache/schwab_chains/"
 SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FEASIBILITY_DATA_ROOT = REPO_ROOT
+# config.py is independently content-bound by config_hash(). This explicit
+# cache-only execution closure binds every module that can alter feasibility
+# inputs, accepted rows, or the occupancy projection; acquisition-only paths
+# remain outside because this measurement never constructs a provider.
 FEASIBILITY_SOURCE_PATHS = (
     "tools/h7_schwab_feasibility.py",
     "tools/h7_entry_variant_menu.py",
     "options_researcher/h7_schwab_window_registration.py",
     "options_researcher/h7_watch.py",
+    "options_researcher/h7_signals.py",
     "options_researcher/h7_board.py",
     "options_researcher/h7_earnings.py",
     "options_researcher/chains.py",
+    "strategies/h7_lanes.py",
+    "strategies/base.py",
     "data/cache_runner.py",
     "data/underlying_closes.py",
+    "data/pandas_feed.py",
+    "data/thetadata_adapter.py",
+    "data/cache_schema.py",
+    "data/chain_policy.py",
 )
 INHERITED_TRIM_RULE = "inherited_seq0_cohort_2026-07-20"
 SCHWAB_ACTIVATION_SPEC_PATH = (

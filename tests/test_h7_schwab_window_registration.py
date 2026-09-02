@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -505,6 +506,60 @@ class BuilderTests(unittest.TestCase):
                     data_gate_receipt_hash=receipt["receipt_hash"],
                 ),
             )
+
+    def test_feasibility_source_contract_binds_decision_dependencies(self):
+        # config.py is independently content-bound by config_hash(); this tuple
+        # freezes every cache-only executable dependency that can alter the
+        # measured inputs, accepted rows, or occupancy projection.
+        expected = (
+            "tools/h7_schwab_feasibility.py",
+            "tools/h7_entry_variant_menu.py",
+            "options_researcher/h7_schwab_window_registration.py",
+            "options_researcher/h7_watch.py",
+            "options_researcher/h7_signals.py",
+            "options_researcher/h7_board.py",
+            "options_researcher/h7_earnings.py",
+            "options_researcher/chains.py",
+            "strategies/h7_lanes.py",
+            "strategies/base.py",
+            "data/cache_runner.py",
+            "data/underlying_closes.py",
+            "data/pandas_feed.py",
+            "data/thetadata_adapter.py",
+            "data/cache_schema.py",
+            "data/chain_policy.py",
+        )
+        self.assertEqual(registration.FEASIBILITY_SOURCE_PATHS, expected)
+
+    def test_feasibility_refuses_when_bound_signal_source_changes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for relative in registration.FEASIBILITY_SOURCE_PATHS:
+                source = registration.REPO_ROOT / relative
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(source.read_bytes())
+
+            with (
+                mock.patch.object(registration, "REPO_ROOT", root),
+                mock.patch.object(registration, "FEASIBILITY_DATA_ROOT", root),
+            ):
+                input_files = {}
+                for label, relative in registration._expected_feasibility_input_paths(
+                    _OWNER_TYPED_COHORT, _sessions()
+                ).items():
+                    path = root / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(f"fixture input: {label}\n", encoding="utf-8")
+                    input_files[label] = {"path": relative, "sha256": sha256_file(path)}
+                receipt = feasibility_receipt(input_files=input_files)
+
+                signal_source = root / "options_researcher/h7_signals.py"
+                signal_source.write_bytes(signal_source.read_bytes() + b"\n# mutation fixture\n")
+                with self.assertRaisesRegex(
+                    registration.RegistrationInputError, "source hash mismatch"
+                ):
+                    registration._validate_feasibility(receipt, receipt["receipt_hash"])
 
     def test_tampered_feasibility_payload_refuses(self):
         receipt = feasibility_receipt()
