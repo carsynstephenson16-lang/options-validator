@@ -26,12 +26,13 @@ from pathlib import Path
 from unittest import mock
 from zoneinfo import ZoneInfo
 
+import pandas as pd
+
 import config
 from options_researcher import h7_schwab_window_registration as h7_reg
 from options_researcher import intraday_capture as ic
 from options_researcher import schwab_chain_capture as capture
 from options_researcher import schwab_chain_view as chain_view
-from tests.test_schwab_chain_capture import FakeClient
 from tools import chain_consistency_audit
 from tools import irreplaceable_data_guard as guard
 from tools import job_health_digest as digest
@@ -54,6 +55,50 @@ ALIGNMENT_PLIST = (
 
 def at(hh: int, mm: int, day: str = "2026-09-02") -> datetime:
     return datetime.fromisoformat(f"{day}T{hh:02d}:{mm:02d}:00").replace(tzinfo=NY)
+
+
+def _full_frame() -> pd.DataFrame:
+    # Local copy of tests/test_schwab_chain_capture.py's fixture: CI runs
+    # `unittest discover -s tests` with no `tests` package on sys.path, so a
+    # cross-module `from tests.… import` fails there (PR #150 CI run
+    # 33643183119) even though it works from the repo root locally.
+    rows = []
+    for expiration in ("2026-08-21", "2026-09-18"):
+        for right, delta in (("C", 0.4), ("P", -0.4)):
+            rows.append(
+                {
+                    "expiration": expiration,
+                    "strike": 100.0,
+                    "right": right,
+                    "contract_symbol": f"AAA-{expiration}-{right}-100",
+                    "bid": 1.0,
+                    "ask": 1.2,
+                    "open_interest": 100,
+                    "implied_vol": 0.30,
+                    "delta": delta,
+                    "gamma": 0.02,
+                    "theta": -0.03,
+                    "vega": 0.10,
+                    "multiplier": 100.0,
+                    "non_standard": False,
+                    "mini": False,
+                    "timestamp": pd.Timestamp("2026-08-10T19:44:30Z"),
+                    "trade_timestamp": pd.Timestamp("2026-08-10T19:44:20Z"),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+class FakeClient:
+    provider_name = "schwab"
+    provider_version = "test"
+
+    def __init__(self):
+        self.calls = []
+
+    def option_full_chain(self, symbol):
+        self.calls.append(symbol)
+        return _full_frame()
 
 
 class ScheduleTableTests(unittest.TestCase):
