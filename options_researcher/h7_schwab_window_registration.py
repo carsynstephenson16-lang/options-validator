@@ -94,9 +94,12 @@ FEASIBILITY_FIELDS = (
     "window_sessions",
     "symbol_days",
     "full_stack_passes",
+    "lookback_sessions",
     "base_rate",
     "expected_entries",
     "occupancy_constrained_expected_entries",
+    "occupancy_constrained_count",
+    "occupancy_lockout_sessions",
     "input_files",
     "error_count",
     "receipt_hash",
@@ -209,6 +212,36 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> float:
     if not math.isfinite(occupancy) or occupancy < 0 or occupancy > expected:
         raise RegistrationInputError(
             "occupancy-constrained expected entries is invalid"
+        )
+    # Round-1 finding F6: the occupancy projection is the ONE number the
+    # owner's pre-acceptance is priced against, so the validator re-derives it
+    # from the receipt's own recorded inputs instead of trusting the tool's
+    # arithmetic (base_rate and expected_entries are already re-derived above).
+    lockout = receipt["occupancy_lockout_sessions"]
+    if (
+        type(lockout) is not int
+        or lockout != config.H7_SCHWAB_REGISTERED_OCCUPANCY_LOCKOUT_SESSIONS
+    ):
+        raise RegistrationInputError(
+            "feasibility receipt occupancy lockout is not the registered "
+            f"value ({config.H7_SCHWAB_REGISTERED_OCCUPANCY_LOCKOUT_SESSIONS})"
+        )
+    occupancy_count = receipt["occupancy_constrained_count"]
+    lookback = receipt["lookback_sessions"]
+    if (
+        type(occupancy_count) is not int
+        or type(lookback) is not int
+        or lookback <= 0
+        or not 0 <= occupancy_count <= passes
+    ):
+        raise RegistrationInputError("invalid occupancy-constrained counts")
+    if not math.isclose(
+        occupancy,
+        occupancy_count * sessions / lookback,
+        rel_tol=1e-12,
+    ):
+        raise RegistrationInputError(
+            "occupancy-constrained expected entries arithmetic mismatch"
         )
     return occupancy
 

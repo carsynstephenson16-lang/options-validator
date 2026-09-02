@@ -41,7 +41,6 @@ from research.hashing import (  # noqa: E402
     sha256_hex,
 )
 from tools.h7_entry_variant_menu import (  # noqa: E402
-    OCCUPANCY_LOCKOUT_SESSIONS,
     occupancy_constrained_count,
 )
 
@@ -89,9 +88,11 @@ def summarize_counts(
         if entry_rows is None
         else entry_rows
     )
-    occupancy_count = occupancy_constrained_count(
-        rows, sessions, OCCUPANCY_LOCKOUT_SESSIONS[0]
-    )
+    # The lockout is the registered schedule constant, not a bare tuple index
+    # (round-1 finding F6); config.py is its single source of truth and a test
+    # binds it to the menu's own derivation.
+    lockout_sessions = config.H7_SCHWAB_REGISTERED_OCCUPANCY_LOCKOUT_SESSIONS
+    occupancy_count = occupancy_constrained_count(rows, sessions, lockout_sessions)
     occupancy_expected = occupancy_count * window_sessions / len(sessions)
     input_files = {
         label: {"path": str(path), "sha256": sha256_file(path)}
@@ -115,7 +116,10 @@ def summarize_counts(
         "base_rate": base_rate,
         "expected_entries": expected_entries,
         "occupancy_constrained_expected_entries": occupancy_expected,
-        "occupancy_lockout_sessions": OCCUPANCY_LOCKOUT_SESSIONS[0],
+        # Recorded so a reader can re-derive the projection above from the
+        # receipt alone: count * window_sessions / lookback_sessions.
+        "occupancy_constrained_count": occupancy_count,
+        "occupancy_lockout_sessions": lockout_sessions,
         "input_files": input_files,
         "passing_symbol_days": [
             {"session": session, "symbol": symbol}

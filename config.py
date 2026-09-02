@@ -696,6 +696,16 @@ LIVE_PROBE_MAX_AGE_DAYS = 7        # recorded schema probe older => live lane of
 # lane; exactly 60 minutes is allowed and anything older is blocked.
 H7_SCHWAB_MAX_SELECTABLE_QUOTE_AGE_MINUTES = 60
 
+# Round-1 review finding F6. NOT owner-typed: this is the schedule-derived
+# long-lane holding length already documented at
+# tools/h7_entry_variant_menu.py OCCUPANCY_LOCKOUT_SESSIONS[0] (enter at the
+# monthly expiration nearest 90 DTE, time-exit at H7_CLOSE_AT_DTE=30, i.e.
+# ~60 calendar days ~= 42 trading sessions; no price path and no outcome is
+# consulted). It is mirrored here so the registration validator can re-derive
+# a feasibility receipt's occupancy-constrained projection without importing
+# the measurement tool, and a test binds the two values so they cannot drift.
+H7_SCHWAB_REGISTERED_OCCUPANCY_LOCKOUT_SESSIONS = 42
+
 # ---------------------------------------------------------------------------
 # H9 -- post-earnings conditional HISTORICAL WRITTEN STUDY (spec
 # docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study-DRAFT.md,

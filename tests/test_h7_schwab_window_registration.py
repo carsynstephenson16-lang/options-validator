@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import config
 from options_researcher import h7_activation_guard as activation_guard
 from options_researcher import (
     h7_data_gate,
@@ -154,11 +155,18 @@ def feasibility_receipt(**overrides) -> dict:
         "universe": list(_REGISTERED_COHORT),
         "universe_size": len(_REGISTERED_COHORT),
         "window_sessions": 70,
+        "lookback_sessions": 70,
         "symbol_days": 540,
         "full_stack_passes": 3,
         "base_rate": 3 / 540,
         "expected_entries": (3 / 540) * 70 * len(_REGISTERED_COHORT),
+        # 3 occupancy-surviving entries over a 70-session lookback projected
+        # onto a 70-session window: 3 * 70 / 70 == 3.0 (re-derived by WP-A).
         "occupancy_constrained_expected_entries": 3.0,
+        "occupancy_constrained_count": 3,
+        "occupancy_lockout_sessions": (
+            config.H7_SCHWAB_REGISTERED_OCCUPANCY_LOCKOUT_SESSIONS
+        ),
         "input_files": {
             "project": {
                 "path": "pyproject.toml",
