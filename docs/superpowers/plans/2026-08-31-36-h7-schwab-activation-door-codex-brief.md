@@ -18,9 +18,13 @@ review-driven additions beyond the plan.
 **Author:** Claude orchestrating session (PR #71 unfreeze arc; plan:
 `docs/superpowers/plans/2026-08-30-pr71-unfreeze-pr115-closeout.md`)
 **Executor:** Codex (GPT-5-class), high reasoning tier
-**Status:** READY FOR HAND-OFF — final-text review of rev 6 PASS WITH FIXES
-(round 7, all R-fixes applied as rev 7) + delta re-read of rev 7 PASS with 3
-cosmetic residuals D1–D3, applied in this revision; full trail in
+**Status:** READY FOR HAND-OFF — terminal verdict PASS on this exact text
+(commit `d4fc1c4`, review round 9): the reviewer verified the X1–X5
+transcriptions, confirmed the full delta since its prior read, and sanctioned
+exactly two follow-on edits (this Status line + the round-9 receipt entry) so
+the reviewed text and permitted post-review edits form a closed set. Any
+change to a WP body, Scope-IN/OUT, acceptance criterion, or code anchor
+requires a fresh review. Full 9-round trail in
 `reports/2026-08-31-brief-36-adversarial-review-receipt.md`
 **Provenance:** Repo-verified against `origin/main` @ `1d83453` unless labeled
 otherwise.

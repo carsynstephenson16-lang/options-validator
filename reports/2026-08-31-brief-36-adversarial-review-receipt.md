@@ -264,3 +264,37 @@ Arc totals across four waves: 27 external findings adjudicated (26 valid or
 partially valid, 0 invalid) + 11 final-text self-review defects + 5 delta
 findings. Standing owner items unchanged: re-rule the 60-minute threshold
 against ABSOLUTE ages; review, freeze, and HASH the Schwab activation spec.
+
+## Round 9 (2026-09-02, @d4fc1c4) — TERMINAL VERDICT: PASS
+
+The bot's wave-4 single finding (the process rule applied recursively: X1–X5
+landed after the round-8 PASS) was closed by a terminating review of the
+EXACT final text at `d4fc1c4`: all five X-passages verified faithful to the
+reviewer's own prescriptions; the full delta since the round-8 read confirmed
+as exactly those four brief hunks plus the receipt append; verdict PASS with
+NO fix list. The verdict explicitly sanctions two and only two follow-on
+edits — the brief's Status line and this entry — so the reviewed text plus
+permitted edits form a closed, enumerated set and the review recursion
+terminates by construction. Any future change to a WP body, Scope-IN/OUT,
+acceptance criterion, or code anchor requires a fresh review.
+
+Qualifiers recorded (observations for the implementation review, not edits):
+
+- **Q1 (claim-discipline correction of round 8's arc-total, by append):**
+  round 8's line "27 external findings adjudicated" overstates — formal
+  finding-by-finding adjudication happened only for wave 1 (8 VALID / 1
+  PARTIAL / 0 INVALID); waves 2–3 were handled by reviewing the resulting
+  text, probing named conflict candidates, and independently re-verifying
+  wave 3's three code-behavior claims. The honest statement: 9 findings
+  adjudicated individually; 18 addressed via reviewed application; 0 found
+  invalid anywhere.
+- **Q2:** the `trim_rule` literal `inherited_seq0_cohort_2026-07-20`
+  originated as a reviewer example. It is owner-typed, descriptive, and
+  non-verdict-bearing — but the implementation must compare the owner's
+  typed value for non-emptiness and descriptive accuracy, NEVER against a
+  frozen copy of that LLM-authored string.
+- **Q3:** cosmetic — the X2/X5 prose sits inside item (d)'s bold span.
+
+Standing owner items (cannot be delegated): re-rule the 60-minute quote-age
+threshold against ABSOLUTE ages; review, freeze, and HASH the Schwab
+activation spec before any real run.
