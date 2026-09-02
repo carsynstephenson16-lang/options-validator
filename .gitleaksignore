@@ -16,3 +16,7 @@
 # are kept so historical commits stay clean.
 58e5f42878564b06c0cfe4eda773a5fbd5485a92:options_researcher/a2_runner.py:generic-api-key:44
 6e08cf8061859454c7371560a1fdb92a8ef702d8:options_researcher/a2_runner.py:generic-api-key:49
+# 2026-09-02: the PR #146 review receipt quoted the a2_runner.py constant
+# verbatim in its first committed form (e584080); the wording was replaced in
+# 53b770a but the historical commit remains in the PR range and re-fires.
+e5840801ea7d66c2f1fffaa9270dfc4f49bc9fe9:reports/2026-09-02-pr146-ops-fixes-review-receipt.md:generic-api-key:27
