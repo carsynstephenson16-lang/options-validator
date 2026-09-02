@@ -10,12 +10,14 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from types import MappingProxyType
 
 from options_researcher import h7_event_ledger as ledger
 from options_researcher.h7_paper_lifecycle import (
     REAL_FORWARD_STORE,
     ActivationBoundaryError,
+)
+from options_researcher.h7_schwab_data_gate import (
+    EVIDENCE_MODE as SCHWAB_EVIDENCE_MODE,
 )
 from options_researcher.h7_schwab_window_registration import (
     OWNER_FIELDS as SCHWAB_OWNER_FIELDS,
@@ -31,13 +33,51 @@ from research.hashing import config_hash, diagnostic_source_hash
 from research.receipts import verify_receipt
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-OWNER_FIELDS_BY_STORE = MappingProxyType(
-    {
-        REAL_FORWARD_STORE.resolve(): LEGACY_OWNER_FIELDS,
-        (REPO_ROOT / SCHWAB_FORWARD_STORE).resolve(): SCHWAB_OWNER_FIELDS,
-    }
+LEGACY_REAL_FORWARD_STORE = REAL_FORWARD_STORE.resolve()
+SCHWAB_REAL_FORWARD_STORE = (REPO_ROOT / SCHWAB_FORWARD_STORE).resolve()
+REAL_FORWARD_STORES = frozenset(
+    {LEGACY_REAL_FORWARD_STORE, SCHWAB_REAL_FORWARD_STORE}
 )
-REAL_FORWARD_STORES = frozenset(OWNER_FIELDS_BY_STORE)
+
+
+def _within(base: Path, store: Path) -> bool:
+    """The pre-branch containment test, applied to both real stores."""
+    return base == store or store in base.parents
+
+
+def resolve_owner_fields(base: Path, data_gate_result: dict) -> tuple[str, ...]:
+    """Which owner-confirmation fields this activation must carry.
+
+    Round-1 finding F2: a store-keyed mapping refused every synthetic store and
+    became a monkeypatch point -- i.e. the rejected caller-supplied
+    ``owner_fields`` parameter in disguise. Resolution is now a PURE function
+    of the store path and the data-gate evidence the guard already reads. There
+    is no parameter, environment variable, or mapping a caller can hand in or
+    blank: the two field tuples are the registration modules' own frozen
+    constants.
+
+    The lane token is the data-gate receipt's ``evidence_mode``, produced by
+    ``h7_schwab_data_gate`` and independently re-required by the Schwab
+    builder (``_validate_data_gate_receipt``) and by the Schwab arming door.
+    Absent/legacy evidence resolves to the legacy ThetaData tuple -- exactly
+    the behavior on ``origin/main`` for every synthetic and real legacy store.
+    Either real store additionally REFUSES the other lane's evidence.
+    """
+    schwab_evidence = (
+        isinstance(data_gate_result, dict)
+        and data_gate_result.get("evidence_mode") == SCHWAB_EVIDENCE_MODE
+    )
+    if _within(base, SCHWAB_REAL_FORWARD_STORE) and not schwab_evidence:
+        raise ActivationBoundaryError(
+            "the real Schwab forward store requires Schwab data-gate evidence "
+            f"({SCHWAB_EVIDENCE_MODE})"
+        )
+    if _within(base, LEGACY_REAL_FORWARD_STORE) and schwab_evidence:
+        raise ActivationBoundaryError(
+            "Schwab data-gate evidence cannot activate the legacy ThetaData "
+            "forward store"
+        )
+    return SCHWAB_OWNER_FIELDS if schwab_evidence else LEGACY_OWNER_FIELDS
 
 
 @dataclass(frozen=True)
@@ -111,13 +151,11 @@ def activation_preconditions(*, forward_base, source_health_by_symbol: dict,
     scope -- that is the anti-cherry-pick guarantee: trimming only SELECTS from
     pre-computed full-scope evidence, it never narrows the evidence itself."""
     base = Path(forward_base).resolve()
-    owner_fields = OWNER_FIELDS_BY_STORE.get(base)
-    if owner_fields is None:
-        raise ActivationBoundaryError(
-            f"unrecognized forward store: {base}"
-        )
-    if not allow_real_readonly and base in REAL_FORWARD_STORES:
+    if not allow_real_readonly and any(
+        _within(base, store) for store in REAL_FORWARD_STORES
+    ):
         raise ActivationBoundaryError("guard fixtures must use synthetic stores")
+    owner_fields = resolve_owner_fields(base, data_gate_result)
 
     report = GuardReport(forward_base=str(base), code_commit=_git_head(),
                          built_at_utc=datetime.now(timezone.utc).isoformat())

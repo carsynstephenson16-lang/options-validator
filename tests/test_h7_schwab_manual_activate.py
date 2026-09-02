@@ -129,10 +129,9 @@ class SchwabManualActivateTests(unittest.TestCase):
             )
 
     def test_temp_store_activation_delegates_to_actual_one_door(self):
-        mapping = dict(guard.OWNER_FIELDS_BY_STORE)
-        mapping[self.store.resolve()] = registration.OWNER_FIELDS
+        # Round-1 F2: the Schwab owner fields are resolved from the receipt's
+        # own Schwab evidence mode; nothing about the guard is patched.
         with (
-            mock.patch.object(guard, "OWNER_FIELDS_BY_STORE", mapping),
             mock.patch.object(
                 guard,
                 "_working_tree_clean",
