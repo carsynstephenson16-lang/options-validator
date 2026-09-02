@@ -1,5 +1,18 @@
 # Pinned false positives (gitleaks fingerprints: commit:file:rule:line).
-# PIN_FACT_TOKEN = "RQ2_A2_PIN_ADDENDUM_V1" — a public ledger fact-type label
-# in a variable ending in _TOKEN; matched generic-api-key by name+entropy.
-# Not a credential (value is a tracked, documented ledger constant).
+#
+# The A2 pin-fact ledger label constant in options_researcher/a2_runner.py: a
+# public, tracked, documented ledger fact-type label held in a variable whose
+# name ends in _TOKEN, which the generic-api-key rule matches on name+entropy.
+# It is not a credential and grants no access.
+#
+# NOTE: this comment deliberately does NOT reproduce the literal value. The
+# previous wording quoted it, which made .gitleaksignore itself a
+# generic-api-key hit (fingerprint .gitleaksignore:generic-api-key:2) — an
+# ignore file that trips the scanner it configures.
+#
+# The line-numbered fingerprints below go stale every time the constant moves
+# (PR #138 / 6e08cf8 shifted it 44 -> 49 and re-fired the rule on main). The
+# durable fix is the path-scoped allowlist in .gitleaks.toml; these entries
+# are kept so historical commits stay clean.
 58e5f42878564b06c0cfe4eda773a5fbd5485a92:options_researcher/a2_runner.py:generic-api-key:44
+6e08cf8061859454c7371560a1fdb92a8ef702d8:options_researcher/a2_runner.py:generic-api-key:49
