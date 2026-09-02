@@ -1,14 +1,15 @@
 # Brief 36 — H7 Schwab activation door, rebuilt on main
 
-**Date:** 2026-08-31, rev 6 2026-09-02 (rev 1 FAILED review with blockers
+**Date:** 2026-08-31, rev 7 2026-09-02 (rev 1 FAILED review with blockers
 B1–B5; rev 2 FAILED with N1–N6; rev 3 FAILED with P1–P6; rev 4 PASS WITH
 FIXES; rev 5 applied the first bot wave C2–C10 after independent Opus
-verification — 8 VALID, 1 PARTIALLY VALID, 0 INVALID; rev 6 applies the
-second bot wave (11 findings incl. the process catch that rev 5's final text
-was never itself re-reviewed) — all rounds transcribed in
-`reports/2026-08-31-brief-36-adversarial-review-receipt.md`, committed with
-this brief. The in-flight Codex implementation predates rev 5/6; its fix
-round must re-align to this text.)
+verification — 8 VALID, 1 PARTIALLY VALID, 0 INVALID; rev 6 applied the
+second bot wave of 11 findings incl. the process catch that rev 5's final
+text was never itself re-reviewed; rev 7 applied the final-text review's
+R1–R11 + nits, delta re-read PASS, residuals D1–D3 folded in — all rounds
+transcribed in `reports/2026-08-31-brief-36-adversarial-review-receipt.md`,
+committed with this brief. The in-flight Codex implementation predates revs
+5–7; its fix round must re-align to this text.)
 
 **WP mapping for the owner's ruling text** (the 2026-08-31 rulings file cites
 the PLAN's numeric WPs): plan WP-1→brief WP-A · WP-2→WP-B · WP-3→WP-C ·
