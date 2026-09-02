@@ -51,6 +51,10 @@ DATA_TIER_MODULES = (
     # Display-only Schwab refresh-token age advisory (2026-09-02). It prints
     # one operator line, never touches the network, always exits 0, and is
     # invoked with `|| true` -- it can affect no status and gate nothing.
+    # Registered here as a data-tier module by tier, although its call site
+    # sits just BEFORE the Schwab preclose lane marker rather than inside the
+    # data-tier island (placing it inside broke the lane's first-statement
+    # invariant); only PYTHON_DASH_C_CLASSIFICATION is position-enforced.
     "options_researcher.schwab_token_age",
     "options_researcher.qm_dashboard",  # OHLCV refresh (data-tier island)
     "options_researcher.dashboard",

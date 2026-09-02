@@ -31,6 +31,11 @@ def is_expired_refresh_token_error(exc: BaseException) -> bool:
     """
     if not isinstance(exc, OAuthError):
         return False
+    # Review follow-up A (2026-09-02): an OAuthError whose ``.error`` code IS
+    # ``invalid_grant`` is an expiry even when its description is empty; keep
+    # that arm alongside the text match so neither shape is missed.
+    if getattr(exc, "error", None) == "invalid_grant":
+        return True
     text = f"{getattr(exc, 'description', '') or ''}\n{exc}".lower()
     if _INVALID_GRANT_PAYLOAD.search(text):
         return True

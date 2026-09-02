@@ -90,6 +90,11 @@ class ExpiredRefreshTokenClassificationTests(unittest.TestCase):
     def test_empty_description_is_not_classified(self):
         self.assertFalse(is_expired_refresh_token_error(OAuthError()))
 
+    def test_invalid_grant_error_code_with_empty_description_is_classified(self):
+        """Review follow-up A: the ``.error`` code alone is sufficient."""
+        exc = OAuthError(error="invalid_grant", description="")
+        self.assertTrue(is_expired_refresh_token_error(exc))
+
 
 class ExpiredAuthLineTests(unittest.TestCase):
     def test_line_names_the_capture_and_the_reauth_command(self):
