@@ -40,6 +40,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 REGISTERED_COHORT = (
     "AMD", "AMZN", "CEG", "ET", "MSFT", "NOW", "PLTR", "TEM", "VST",
 )
+# Single source of truth for the feasibility receipt's identity labels. The
+# measurement tool (tools/h7_schwab_feasibility.py) imports these rather than
+# repeating the literals, so the producer and this validator cannot drift
+# apart unnoticed (round-1 finding F7); a test asserts both sides bind to the
+# same objects.
+FEASIBILITY_RECEIPT_KIND = "h7_schwab_feasibility/v1"
 FEASIBILITY_STACK_VERSION = "h7-frozen-entry-stack-plus-board/v1"
 FEASIBILITY_TOOL_LABEL = "cached-only read-only measurement; no verdict"
 STARVATION_PREACCEPTANCE_FIELD = "SCHWAB_STARVATION_RISK_PREACCEPTANCE"
@@ -146,7 +152,7 @@ def _validate_feasibility(receipt: dict, claimed_hash: str) -> float:
         raise RegistrationInputError(
             "feasibility receipt hash mismatch; payload may have been tampered"
         )
-    if receipt["receipt_kind"] != "h7_schwab_feasibility/v1":
+    if receipt["receipt_kind"] != FEASIBILITY_RECEIPT_KIND:
         raise RegistrationInputError("unexpected feasibility receipt kind")
     if receipt["provenance"] != "LLM/tool-computed":
         raise RegistrationInputError("feasibility provenance must be LLM/tool-computed")

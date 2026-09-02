@@ -33,6 +33,11 @@ from options_researcher.h7_earnings import (  # noqa: E402
     RAW_ASSERTIONS_PATH,
     load_assertions,
 )
+from options_researcher.h7_schwab_window_registration import (  # noqa: E402
+    FEASIBILITY_RECEIPT_KIND,
+    FEASIBILITY_STACK_VERSION,
+    FEASIBILITY_TOOL_LABEL,
+)
 from options_researcher.h7_watch import assemble_name  # noqa: E402
 from research.hashing import (  # noqa: E402
     canonical_json,
@@ -44,8 +49,10 @@ from tools.h7_entry_variant_menu import (  # noqa: E402
     occupancy_constrained_count,
 )
 
-RECEIPT_KIND = "h7_schwab_feasibility/v1"
-STACK_VERSION = "h7-frozen-entry-stack-plus-board/v1"
+# Round-1 finding F7: one definition, owned by the validator that enforces it.
+RECEIPT_KIND = FEASIBILITY_RECEIPT_KIND
+STACK_VERSION = FEASIBILITY_STACK_VERSION
+TOOL_LABEL = FEASIBILITY_TOOL_LABEL
 DEFAULT_CHAIN_DIR = Path(".cache/chains")
 
 
@@ -101,7 +108,7 @@ def summarize_counts(
     receipt = {
         "receipt_kind": RECEIPT_KIND,
         "provenance": "LLM/tool-computed",
-        "tool_label": "cached-only read-only measurement; no verdict",
+        "tool_label": TOOL_LABEL,
         "lookback_start": sessions[0],
         "lookback_end": sessions[-1],
         "lookback_sessions": len(sessions),
