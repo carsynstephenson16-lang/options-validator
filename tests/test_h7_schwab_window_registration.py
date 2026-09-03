@@ -507,29 +507,63 @@ class BuilderTests(unittest.TestCase):
                 ),
             )
 
-    def test_feasibility_source_contract_binds_decision_dependencies(self):
-        # config.py is independently content-bound by config_hash(); this tuple
-        # freezes every cache-only executable dependency that can alter the
-        # measured inputs, accepted rows, or occupancy projection.
-        expected = (
-            "tools/h7_schwab_feasibility.py",
-            "tools/h7_entry_variant_menu.py",
-            "options_researcher/h7_schwab_window_registration.py",
-            "options_researcher/h7_watch.py",
-            "options_researcher/h7_signals.py",
-            "options_researcher/h7_board.py",
-            "options_researcher/h7_earnings.py",
-            "options_researcher/chains.py",
-            "strategies/h7_lanes.py",
-            "strategies/base.py",
-            "data/cache_runner.py",
-            "data/underlying_closes.py",
-            "data/pandas_feed.py",
-            "data/thetadata_adapter.py",
-            "data/cache_schema.py",
-            "data/chain_policy.py",
+    def test_feasibility_source_paths_equal_the_recomputed_import_closure(self):
+        # Round-3 B1: a hand-curated tuple compared against a hand-copied
+        # duplicate cannot detect an omitted dependency. The frozen constant
+        # must EQUAL the transitive first-party import closure of the
+        # measurement tool, recomputed here from the actual source files
+        # (config.py excluded: it is independently content-bound by
+        # config_hash()). Adding or removing an import anywhere in that
+        # closure fails this test until the constant is deliberately updated.
+        recomputed = registration.feasibility_source_closure(registration.REPO_ROOT)
+        self.assertEqual(registration.FEASIBILITY_SOURCE_PATHS, recomputed)
+        self.assertEqual(recomputed, tuple(sorted(set(recomputed))))
+        self.assertIn("tools/h7_schwab_feasibility.py", recomputed)
+        self.assertIn("tools/h7_entry_variant_menu.py", recomputed)
+        # Modules the round-3 review found reachable but omitted from the
+        # hand list: each must now be bound.
+        for path in (
+            "data/atomic_io.py",
+            "data/cache_provenance.py",
+            "data/provider_policy.py",
+            "research/facts.py",
+            "research/receipts.py",
+            "options_researcher/h7_scope.py",
+            "options_researcher/h7_cohort.py",
+            "options_researcher/h7_paper_lifecycle.py",
+            "options_researcher/h7_forward_book.py",
+            "strategies/h7_backtest.py",
+        ):
+            self.assertIn(path, recomputed, path)
+        self.assertNotIn("config.py", recomputed)
+        self.assertFalse(any(path.startswith("tests/") for path in recomputed))
+
+    def test_feasibility_source_closure_walker_follows_transitive_first_party_imports(self):
+        # The walker itself is exercised on a synthetic tree so the closure
+        # test above is not trusting an untested walker: a -> b -> c via
+        # `import`, `from pkg import module`, and `from pkg.module import
+        # name`; third-party and unresolvable imports are ignored; a module
+        # that is never imported stays out; config.py is excluded.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "tools").mkdir()
+            (root / "data").mkdir()
+            (root / "data" / "__init__.py").write_text("")
+            (root / "tools" / "entry.py").write_text(
+                "import json\nimport config\nfrom data import b\nfrom data.c import thing\n"
+            )
+            (root / "data" / "b.py").write_text("import pandas as pd\nfrom data.d import x\n")
+            (root / "data" / "c.py").write_text("thing = 1\n")
+            (root / "data" / "d.py").write_text("x = 1\n")
+            (root / "data" / "unused.py").write_text("y = 1\n")
+            (root / "config.py").write_text("Z = 1\n")
+
+            closure = registration.feasibility_source_closure(root, entry="tools/entry.py")
+
+        self.assertEqual(
+            closure,
+            ("data/__init__.py", "data/b.py", "data/c.py", "data/d.py", "tools/entry.py"),
         )
-        self.assertEqual(registration.FEASIBILITY_SOURCE_PATHS, expected)
 
     def test_feasibility_refuses_when_bound_signal_source_changes(self):
         with tempfile.TemporaryDirectory() as temp:

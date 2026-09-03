@@ -6,6 +6,7 @@ module does not expose a CLI and does not activate either authority switch.
 
 from __future__ import annotations
 
+import ast
 import math
 import re
 from datetime import date, datetime, timezone
@@ -39,27 +40,138 @@ CACHE_NAMESPACE = ".cache/schwab_chains/"
 SESSION_CHAIN_CONVENTION = "preclose_snapshot_v1"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FEASIBILITY_DATA_ROOT = REPO_ROOT
-# config.py is independently content-bound by config_hash(). This explicit
-# cache-only execution closure binds every module that can alter feasibility
-# inputs, accepted rows, or the occupancy projection; acquisition-only paths
-# remain outside because this measurement never constructs a provider.
+# config.py is independently content-bound by config_hash(). The frozen
+# computation surface below is the TRANSITIVE first-party import closure of
+# the measurement tool (round-3 B1, 2026-09-02: the earlier 16-entry hand
+# list omitted nine reachable modules and its guarding test compared the
+# tuple to a copy of itself). It is a literal so the receipt records and the
+# validator compares a fixed surface (brief W3), and it is pinned by a test
+# that RECOMPUTES the closure from the source files with
+# feasibility_source_closure() -- an added or removed import anywhere inside
+# the closure fails that test until this constant is deliberately updated.
+# Static reachability is an upper bound on what the measurement executes:
+# acquisition-only branches inside these modules never run (no provider is
+# constructed), but a module that can be imported can alter accepted rows,
+# so it is bound. Consequence (round-3 F6, disclosed): any edit inside this
+# surface -- including this validator -- invalidates a qualifying receipt
+# and forces re-measurement. That is the brief's chosen trade against the
+# exact-HEAD defect the repo already removed.
+FIRST_PARTY_PACKAGES = frozenset(
+    {"config", "data", "options_researcher", "research", "strategies", "tools"}
+)
+FEASIBILITY_SOURCE_ENTRY = "tools/h7_schwab_feasibility.py"
+FEASIBILITY_SOURCE_EXCLUDED = frozenset({"config.py"})
+
+
+def _module_to_path(root: Path, module: str) -> str | None:
+    parts = module.split(".")
+    if parts[0] not in FIRST_PARTY_PACKAGES:
+        return None
+    for candidate in (
+        root.joinpath(*parts).with_suffix(".py"),
+        root.joinpath(*parts, "__init__.py"),
+    ):
+        if candidate.is_file():
+            return candidate.relative_to(root).as_posix()
+    return None
+
+
+def _first_party_imports(root: Path, relative: str) -> set[str]:
+    tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                resolved = _module_to_path(root, alias.name)
+                if resolved:
+                    found.add(resolved)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            resolved = _module_to_path(root, node.module)
+            if resolved:
+                found.add(resolved)
+            for alias in node.names:
+                submodule = _module_to_path(root, f"{node.module}.{alias.name}")
+                if submodule:
+                    found.add(submodule)
+    return found
+
+
+def feasibility_source_closure(
+    root: Path,
+    *,
+    entry: str = FEASIBILITY_SOURCE_ENTRY,
+    excluded: frozenset[str] = FEASIBILITY_SOURCE_EXCLUDED,
+) -> tuple[str, ...]:
+    """Sorted transitive first-party import closure of ``entry`` under ``root``.
+
+    Static (``ast``) and deterministic: no module is imported or executed.
+    Relative imports (``level > 0``) are not used in this repo and are
+    ignored; third-party and unresolvable names are ignored; ``excluded``
+    paths (config.py, bound separately by config_hash()) are dropped from
+    the result but still walked.
+    """
+    root = Path(root)
+    seen: set[str] = set()
+    pending = [entry]
+    while pending:
+        relative = pending.pop()
+        if relative in seen:
+            continue
+        seen.add(relative)
+        pending.extend(_first_party_imports(root, relative) - seen)
+    return tuple(sorted(seen - set(excluded)))
+
+
 FEASIBILITY_SOURCE_PATHS = (
-    "tools/h7_schwab_feasibility.py",
-    "tools/h7_entry_variant_menu.py",
-    "options_researcher/h7_schwab_window_registration.py",
-    "options_researcher/h7_watch.py",
-    "options_researcher/h7_signals.py",
-    "options_researcher/h7_board.py",
-    "options_researcher/h7_earnings.py",
-    "options_researcher/chains.py",
-    "strategies/h7_lanes.py",
-    "strategies/base.py",
+    "data/__init__.py",
+    "data/atomic_io.py",
+    "data/cache_provenance.py",
     "data/cache_runner.py",
-    "data/underlying_closes.py",
-    "data/pandas_feed.py",
-    "data/thetadata_adapter.py",
     "data/cache_schema.py",
     "data/chain_policy.py",
+    "data/pandas_feed.py",
+    "data/provider_policy.py",
+    "data/rates.py",
+    "data/recent_topup.py",
+    "data/schwab_adapter.py",
+    "data/schwab_credentials.py",
+    "data/thetadata_adapter.py",
+    "data/underlying_closes.py",
+    "options_researcher/__init__.py",
+    "options_researcher/black_scholes.py",
+    "options_researcher/chains.py",
+    "options_researcher/earnings.py",
+    "options_researcher/features.py",
+    "options_researcher/h7_board.py",
+    "options_researcher/h7_cohort.py",
+    "options_researcher/h7_data_gate.py",
+    "options_researcher/h7_earnings.py",
+    "options_researcher/h7_event_ledger.py",
+    "options_researcher/h7_exit_session.py",
+    "options_researcher/h7_forward_book.py",
+    "options_researcher/h7_paper_lifecycle.py",
+    "options_researcher/h7_schwab_data_gate.py",
+    "options_researcher/h7_schwab_window_registration.py",
+    "options_researcher/h7_scope.py",
+    "options_researcher/h7_scoring_identity.py",
+    "options_researcher/h7_signals.py",
+    "options_researcher/h7_watch.py",
+    "options_researcher/h7_window_registration.py",
+    "options_researcher/intraday_capture.py",
+    "options_researcher/live_quotes.py",
+    "options_researcher/schwab_auth_failure.py",
+    "options_researcher/studies/long_call_carry.py",
+    "research/__init__.py",
+    "research/facts.py",
+    "research/hashing.py",
+    "research/receipts.py",
+    "strategies/__init__.py",
+    "strategies/base.py",
+    "strategies/h7_backtest.py",
+    "strategies/h7_lanes.py",
+    "tools/h7_entry_variant_menu.py",
+    "tools/h7_schwab_feasibility.py",
+    "tools/schwab_chain_manifest.py",
 )
 INHERITED_TRIM_RULE = "inherited_seq0_cohort_2026-07-20"
 SCHWAB_ACTIVATION_SPEC_PATH = (
