@@ -1429,6 +1429,106 @@ def _underlying_closes_store_freshness(
     return {"state": "available", "as_of": max(maximums)}
 
 
+_H6_POSITIONS_PATH = Path("data/positions/h6_positions.csv")
+_HOLDINGS_PATH = Path("data/positions/holdings.csv")
+_H6_RECEIPT_DIR = Path("reports/h6_forward")
+# H6 is the registered post-earnings tactical LONG CALL family (config.py
+# "H6 -- post-earnings tactical long calls"); the position CSV carries no
+# `right` column, so the right is named from the family, never guessed.
+_H6_RIGHT = "call"
+
+
+def _open_position_rows_from_csv(
+    path: Path, *, relative: Path, missing: list[str], reader
+) -> list[dict[str, str]]:
+    """Read one position CSV, or record it as unreadable. Never invents a row."""
+    import csv
+
+    try:
+        text = path.read_text()
+    except OSError:
+        missing.append(relative.as_posix())
+        return []
+    return [row for row in reader(list(csv.DictReader(text.splitlines())))]
+
+
+def load_open_positions(root: Path | None = None) -> dict[str, object]:
+    """Summarize the paper book's OPEN positions for the display board.
+
+    Reads only the files the registered-bets tracker's own evidence already
+    depends on (`data/positions/*.csv` for the book, `reports/h6_forward/` for
+    the newest H6 receipt date).  It computes no mark and no P&L: an absent
+    source is reported as absent, never as an empty book.
+    """
+    base = Path(root) if root is not None else Path.cwd()
+    missing: list[str] = []
+    rows: list[dict[str, str]] = []
+
+    def _h6(records: list[Mapping[str, str]]) -> list[dict[str, str]]:
+        out = []
+        for record in records:
+            if (record.get("exit_date") or "").strip():
+                continue  # closed leg: not open risk
+            identifier = str(record.get("id") or "?")
+            symbol = str(record.get("symbol") or "?")
+            strike = str(record.get("strike") or "?")
+            try:
+                strike = f"${float(strike):,.2f}"
+            except ValueError:
+                strike = f"${strike}"
+            out.append({
+                "book": "H6",
+                "identifier": identifier,
+                "text": (f"{identifier} {symbol} {strike} {_H6_RIGHT} · exp "
+                         f"{record.get('expiration') or '?'} · entered "
+                         f"{record.get('entry_date') or '?'}"),
+            })
+        return out
+
+    def _shares(records: list[Mapping[str, str]]) -> list[dict[str, str]]:
+        out = []
+        for record in records:
+            symbol = str(record.get("symbol") or "?")
+            shares = str(record.get("shares") or "?")
+            basis = str(record.get("cost_basis") or "")
+            try:
+                basis_text = f" · cost basis ${float(basis):,.2f}"
+            except ValueError:
+                basis_text = ""
+            acquired = str(record.get("acquired") or "")
+            acquired_text = f" · acquired {acquired}" if acquired else ""
+            out.append({
+                "book": "shares",
+                "identifier": symbol,
+                "text": f"{symbol} {shares} shares{basis_text}{acquired_text}",
+            })
+        return out
+
+    rows.extend(_open_position_rows_from_csv(
+        base / _H6_POSITIONS_PATH, relative=_H6_POSITIONS_PATH,
+        missing=missing, reader=_h6))
+    rows.extend(_open_position_rows_from_csv(
+        base / _HOLDINGS_PATH, relative=_HOLDINGS_PATH,
+        missing=missing, reader=_shares))
+
+    last_mark: str | None = None
+    try:
+        receipt_stems = [item.stem for item in (base / _H6_RECEIPT_DIR).glob("*.json")]
+    except OSError:
+        receipt_stems = []
+    dated = sorted(
+        stem for stem in receipt_stems if _valid_iso_date(stem) is not None
+    )
+    if dated:
+        last_mark = dated[-1]
+    return {
+        "rows": rows,
+        "missing_sources": missing,
+        "sources": [_H6_POSITIONS_PATH.as_posix(), _HOLDINGS_PATH.as_posix()],
+        "h6_last_mark": last_mark,
+    }
+
+
 def assemble(
     *,
     symbol_sections: list[dict] | None = None,
@@ -1437,6 +1537,7 @@ def assemble(
     hypothesis_evidence_by_symbol: Mapping[str, SymbolEvidence] | None = None,
     composite_signals: list[dict] | None = None,
     underlying_closes_freshness: Mapping[str, str] | None = None,
+    open_positions: Mapping[str, object] | None = None,
     today: str | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
@@ -1611,6 +1712,9 @@ def assemble(
             config.ATTRACTIVENESS_UNIVERSE
         )
 
+    if open_positions is None and real_assembly:
+        open_positions = load_open_positions()
+
     canonical_symbols = [
         sec for sec in out_symbols if not sec.get("display_only")
     ]
@@ -1640,6 +1744,8 @@ def assemble(
             underlying_closes_freshness or {
                 "state": "unavailable", "detail": "not assembled"}),
     }
+    if open_positions is not None:
+        out["open_positions"] = dict(open_positions)
     if schwab_state is not None:
         out["schwab_lane"] = schwab_state
     return out
@@ -2537,17 +2643,121 @@ _STYLE = """
     font-weight: 750;
     text-transform: uppercase;
   }
+  .sticky-nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line-strong);
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .nav-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0 auto;
+    max-width: 1480px;
+    padding: 8px 32px;
+  }
+  .nav-group {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .nav-label {
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .nav-inner a {
+    border-radius: 999px;
+    color: var(--brand);
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    text-decoration: none;
+  }
+  .nav-inner a:hover { background: var(--surface-soft); }
+  .nav-symbols a { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .symbol-anchor { scroll-margin-top: 64px; }
+  .composite-table {
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    width: 100%;
+  }
+  .composite-table th, .composite-table td {
+    border-bottom: 1px solid var(--line);
+    padding: 7px 10px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .composite-table thead th {
+    color: var(--muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .composite-table tbody th { font-weight: 800; }
+  .composite-reason td { padding-top: 0; }
+  .diagnostics-drawer { padding: 0; }
+  .drawer-summary {
+    cursor: pointer;
+    display: block;
+    padding: 18px 22px;
+  }
+  .drawer-title {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 750;
+    letter-spacing: -0.015em;
+    margin-bottom: 6px;
+  }
+  .drawer-body {
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 14px;
+    padding: 14px;
+  }
+  .open-positions {
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+  .open-positions-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+  }
+  .open-position {
+    border-bottom: 1px solid var(--line);
+    font-size: 0.84rem;
+    padding: 6px 0;
+  }
+  .open-position:last-child { border-bottom: 0; }
   .symbol-panel { padding: 0; overflow: hidden; }
   .symbol-header {
     align-items: center;
     border-bottom: 1px solid var(--line);
+    cursor: pointer;
     display: flex;
     gap: 18px;
     justify-content: space-between;
-    padding: 20px 22px;
+    padding: 14px 22px;
   }
-  .symbol-header h2 { font-size: 1.45rem; margin: 0; }
-  .symbol-stats { display: flex; gap: 10px; }
+  .symbol-summary-line {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.92rem;
+    gap: 8px;
+  }
+  .symbol-summary-line strong { font-size: 1.1rem; }
+  .summary-sep, .summary-source, .summary-grade { color: var(--muted); }
+  .symbol-body h2 { font-size: 1.45rem; margin: 0 0 8px; }
+  .symbol-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
   .symbol-stat {
     background: var(--surface-soft);
     border: 1px solid var(--line);
@@ -3100,6 +3310,49 @@ def _panel_best_headline(section: Mapping[str, object]) -> str:
                 choices.append((_group_candidate_sort_key(card, kind, tech),
                                 group_index, card_index, headline))
     return min(choices)[3] if choices else "No current candidate"
+
+
+def _panel_source_text(sec: Mapping[str, object]) -> str:
+    """Name the chain source and its session in one phrase, never a guess."""
+    from options_researcher.schwab_chain_view import CONVENTION_LABEL
+
+    as_of = str(sec.get("as_of", "?"))
+    if _is_fresh_section(sec):
+        return f"{CONVENTION_LABEL} {as_of}"
+    return f"frozen EOD {as_of}"
+
+
+def _panel_grade_text(sec: Mapping[str, object],
+                      status_labels: Sequence[str]) -> str:
+    """The best lane's GREEN fraction, or the reason this panel has none."""
+    if list(status_labels) != ["CURRENT"]:
+        return ", ".join(str(label) for label in status_labels)
+    tech_value = sec.get("technicals")
+    tech = tech_value if isinstance(tech_value, dict) else None
+    best: tuple[tuple, int, int, Mapping[str, object]] | None = None
+    groups_value = sec.get("groups")
+    groups = groups_value if isinstance(groups_value, (list, tuple)) else ()
+    for group_index, group in enumerate(groups):
+        if not isinstance(group, Mapping):
+            continue
+        kind = str(group.get("kind", ""))
+        cards_value = group.get("cards")
+        cards = cards_value if isinstance(cards_value, (list, tuple)) else ()
+        for card_index, card in enumerate(cards):
+            if not isinstance(card, dict) or "skipped" in card:
+                continue
+            key = (_group_candidate_sort_key(card, kind, tech),
+                   group_index, card_index, card)
+            if best is None or key[:3] < best[:3]:
+                best = key
+    if best is None:
+        return "no current candidate"
+    grades = best[3].get("grades")
+    grades = grades if isinstance(grades, Mapping) else {}
+    if not grades:
+        return "no grades"
+    greens = sum(1 for value in grades.values() if value == "GREEN")
+    return f"GREEN {greens}/{len(grades)}"
 
 
 def _prov_tag(context: dict | None) -> str:
@@ -3742,32 +3995,104 @@ def _top3_gap_reasons(data: dict) -> list[str]:
     return out[:3]
 
 
-def _empty_hero_slot_html(data: dict, slot: int) -> str:
+# Presentation-only threshold (LLM-asserted 2026-09-03, display layer only:
+# it gates nothing, sizes nothing, and never touches entry/exit logic).
+# Two or more open slots that carry BYTE-IDENTICAL reason text are one fact
+# printed N times, so they collapse into a single block that still names N.
+_OPEN_SLOT_CONSOLIDATION_MIN = 2
+
+
+@dataclass(frozen=True)
+class _OpenSlot:
+    """One unfilled shortlist slot plus the exact reason text that explains it.
+
+    ``body_html`` is the whole explanation, so two slots consolidate only when
+    every rendered byte of their reason matches -- a slot whose reason differs
+    keeps its own card.
+    """
+
+    slot: int
+    status_label: str
+    status_class: str
+    heading: str
+    body_html: str
+
+    @property
+    def reason_key(self) -> tuple[str, str, str, str]:
+        return (self.status_label, self.status_class, self.heading, self.body_html)
+
+
+def _open_slot_label(prefix: str, slots: Sequence[int]) -> str:
+    """`Pick 4` for one slot, `Picks 2-5` for a consolidated run."""
+    if len(slots) == 1:
+        return f"{prefix} {slots[0]}"
+    return f"{prefix}s {slots[0]}–{slots[-1]}"
+
+
+def _open_slot_group_html(
+    group: Sequence[_OpenSlot], *, prefix: str, total: int
+) -> str:
+    first = group[0]
+    slots = [item.slot for item in group]
+    consolidated = len(group) >= _OPEN_SLOT_CONSOLIDATION_MIN
+    heading = (
+        f"{len(group)} of {total} slots open — {first.heading}"
+        if consolidated
+        else first.heading
+    )
+    marker = f' data-open-slots="{len(group)}"' if consolidated else ""
+    return (
+        f'<div class="hero-card {first.status_class} empty-slot"{marker}>'
+        f'<div class="slot-label"><span>{_esc(_open_slot_label(prefix, slots))}</span>'
+        f'<span class="policy-status {first.status_class}">{first.status_label}'
+        "</span></div>"
+        f"<h3>{_esc(heading)}</h3>{first.body_html}</div>"
+    )
+
+
+def _open_slots_html(
+    open_slots: Sequence[_OpenSlot], *, prefix: str, total: int
+) -> str:
+    """Render open slots, collapsing runs whose reason text is identical."""
+    from itertools import groupby
+
+    return "".join(
+        _open_slot_group_html(list(group), prefix=prefix, total=total)
+        for _key, group in groupby(open_slots, key=lambda item: item.reason_key)
+    )
+
+
+def _empty_hero_slot(data: dict, slot: int) -> _OpenSlot:
     reasons = "".join(f"<li>{_esc(reason)}</li>"
                       for reason in _top3_gap_reasons(data))
-    return (
-        '<div class="hero-card unknown empty-slot">'
-        f'<div class="slot-label"><span>Pick {slot}</span>'
-        '<span class="policy-status unknown">? OPEN</span></div>'
-        '<h3>No qualifying contract</h3>'
-        '<div class="label">This is an intentional open slot, not missing UI.</div>'
-        f'<ul class="gate-list">{reasons}</ul></div>')
+    return _OpenSlot(
+        slot=slot,
+        status_label="? OPEN",
+        status_class="unknown",
+        heading="No qualifying contract",
+        body_html=(
+            '<div class="label">This is an intentional open slot, not missing UI.</div>'
+            f'<ul class="gate-list">{reasons}</ul>'
+        ),
+    )
 
 
-def _blocked_qm_slot_html(
+def _blocked_qm_slot(
     qm_context: Mapping[str, object] | None, slot: int, *, reason: str | None = None
-) -> str:
+) -> _OpenSlot:
     context_reason = (qm_context or {}).get("reason") if isinstance(qm_context, Mapping) else None
     reason = reason or (context_reason if isinstance(context_reason, str) else None)
-    return (
-        '<div class="hero-card bad empty-slot">'
-        f'<div class="slot-label"><span>Pick {slot}</span>'
-        '<span class="policy-status bad">× DATA BLOCKED</span></div>'
-        "<h3>QM context withheld</h3>"
-        '<div class="label">Stale or missing QM data leaves the mechanical '
-        "ranking unchanged and withholds this descriptive context.</div>"
-        f'<div class="notice watch">! {_esc(reason or "QM context unavailable")}'
-        "</div></div>"
+    return _OpenSlot(
+        slot=slot,
+        status_label="× DATA BLOCKED",
+        status_class="bad",
+        heading="QM context withheld",
+        body_html=(
+            '<div class="label">Stale or missing QM data leaves the mechanical '
+            "ranking unchanged and withholds this descriptive context.</div>"
+            f'<div class="notice watch">! {_esc(reason or "QM context unavailable")}'
+            "</div>"
+        ),
     )
 
 
@@ -3821,15 +4146,17 @@ def _original_hero_html(
                 event_view=event_view,
             )
         )
-    for slot in range(len(py_picks) + 1, config.PICK_TOP_N + 1):
-        cards.append(_empty_hero_slot_html(data, slot))
+    cards.append(_open_slots_html(
+        [_empty_hero_slot(data, slot)
+         for slot in range(len(py_picks) + 1, config.PICK_TOP_N + 1)],
+        prefix="Pick", total=config.PICK_TOP_N))
 
     qualified_count = len(qualified_picks)
     watch_count = max(0, len(py_picks) - qualified_count)
     open_count = max(0, config.PICK_TOP_N - len(py_picks))
     qualified_cls = "good" if qualified_count else "unknown"
     return (
-        '<section class="panel hero">'
+        '<section class="panel hero" id="rule-based-top-5">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">Daily shortlist · TOP 5 PICKS TODAY</div>'
         '<h2>Rule-based top 5 — best policy-and-liquidity fit today</h2>'
@@ -3894,10 +4221,10 @@ def _qm_hero_html(
     block_reason = _qm_context_block_reason(data, qm_context)
     notes: list[str] = []
     if block_reason is not None:
-        cards = [
-            _blocked_qm_slot_html(qm_context, slot, reason=block_reason)
-            for slot in range(1, config.PICK_TOP_N + 1)
-        ]
+        cards = [_open_slots_html(
+            [_blocked_qm_slot(qm_context, slot, reason=block_reason)
+             for slot in range(1, config.PICK_TOP_N + 1)],
+            prefix="Pick", total=config.PICK_TOP_N)]
         selected_count, open_count = 0, config.PICK_TOP_N
     else:
         assert isinstance(qm_context, Mapping)
@@ -3919,8 +4246,10 @@ def _qm_hero_html(
                     symbol_qm_context=qm_symbols.get(pick["symbol"]),
                 )
             )
-        for slot in range(len(cards) + 1, config.PICK_TOP_N + 1):
-            cards.append(_empty_hero_slot_html(data, slot))
+        cards.append(_open_slots_html(
+            [_empty_hero_slot(data, slot)
+             for slot in range(len(cards) + 1, config.PICK_TOP_N + 1)],
+            prefix="Pick", total=config.PICK_TOP_N))
         selected_count, open_count = len(picks), max(0, config.PICK_TOP_N - len(picks))
     return (
         '<section class="panel qm-comparison">'
@@ -4046,7 +4375,15 @@ def _hero_html(
             selection=context_selection,
             frozen_picks=watch_picks,
         )
-        + _qm_movement_lane_html(data, qm_context)
+    )
+
+
+def _qm_lanes_html(
+    data: dict, context: dict | None, qm_context: Mapping[str, object] | None
+) -> str:
+    """The two descriptive QM lanes, in their unchanged relative order."""
+    return (
+        _qm_movement_lane_html(data, qm_context)
         + _qm_hero_html(data, context, qm_context)
     )
 
@@ -4091,7 +4428,7 @@ def _context_lane_html(
         return ""
     if state == "FAILED":
         return (
-            '<section class="panel hero context-lane">'
+            '<section class="panel hero context-lane" id="context-aware-top-5">'
             '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
             f'<div class="notice bad">CONTEXT LANE FAILED — {_esc(selection.get("error") or "UnknownError")}</div>'
             f'<p class="header-sub">{_esc(_CONTEXT_LANE_DISCLAIMER)}</p></section>'
@@ -4131,15 +4468,19 @@ def _context_lane_html(
             f'<details><summary>Context score audit</summary><div class="label">'
             f'{_esc(candidate_id)} · {_esc(row["score"])}</div></details></div>'
         )
-    for slot in range(len(rows) + 1, config.PICK_TOP_N + 1):
-        cards.append(
-            '<div class="hero-card unknown empty-slot">'
-            f'<div class="slot-label"><span>Context pick {slot}</span>'
-            '<span class="policy-status unknown">? OPEN</span></div>'
-            '<h3>No qualifying contract</h3>'
-            '<div class="label">The full admissible pool did not supply another symbol.</div>'
-            '</div>'
-        )
+    cards.append(_open_slots_html(
+        [
+            _OpenSlot(
+                slot=slot,
+                status_label="? OPEN",
+                status_class="unknown",
+                heading="No qualifying contract",
+                body_html='<div class="label">The full admissible pool did not '
+                          "supply another symbol.</div>",
+            )
+            for slot in range(len(rows) + 1, config.PICK_TOP_N + 1)
+        ],
+        prefix="Context pick", total=config.PICK_TOP_N))
 
     diagnostics = []
     for pick in (
@@ -4157,7 +4498,7 @@ def _context_lane_html(
             f'{_esc(symbol)}">{_esc(symbol)} — {_esc(reason)}</span>'
         )
     return (
-        '<section class="panel hero context-lane">'
+        '<section class="panel hero context-lane" id="context-aware-top-5">'
         '<div class="section-header"><div>'
         '<div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div>'
         '<h2>Context-aware Top 5 — full admitted pool</h2>'
@@ -4308,7 +4649,8 @@ def _pinned_html(
                                       event_view)
                   + _risk_line(card)
                   + _bbb_table(card.get("bbb", [])) + '</div>')
-    return ('<section class="panel hero"><div class="section-header"><div>'
+    return ('<section class="panel hero" id="core-names">'
+            '<div class="section-header"><div>'
             '<div class="eyebrow">CORE NAMES</div>'
             f'<h2>{names} — ALWAYS SHOWN</h2>'
             '<p>owner-pinned visibility — not ranked; these cards do not '
@@ -4333,23 +4675,26 @@ def _as_mapping(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
 
 
-def _composite_card_html(card: Mapping[str, object]) -> str:
-    """One four-angle confluence card. DATA_BLOCKED angles render their
+_COMPOSITE_COLUMNS = ("Symbol", "Grade", "Trend", "Vol", "Regime",
+                      "Internals", "As of")
+
+
+def _composite_row_html(card: Mapping[str, object]) -> str:
+    """One four-angle confluence ROW. DATA_BLOCKED angles render their
     literal state (never hidden) plus, when present, the block reason."""
     grade = str(card.get("grade") or "C")
     trend = _as_mapping(card.get("trend"))
     vol_premium = _as_mapping(card.get("vol_premium"))
     regime = _as_mapping(card.get("regime"))
     internals = _as_mapping(card.get("internals"))
-    badges = (
-        _composite_badge("TREND", str(trend.get("state", "DATA_BLOCKED")),
-                         _COMPOSITE_TREND_CLASS)
-        + _composite_badge("VOL", str(vol_premium.get("state", "DATA_BLOCKED")),
-                           _COMPOSITE_VOL_CLASS)
-        + _composite_badge("REGIME", str(regime.get("state", "DATA_BLOCKED")),
-                           _COMPOSITE_REGIME_CLASS)
-        + _composite_badge("INTERNALS", str(internals.get("state", "DATA_BLOCKED")),
-                           _COMPOSITE_INTERNALS_CLASS)
+    cells = "".join(
+        f"<td>{_composite_badge(label, str(angle.get('state', 'DATA_BLOCKED')), classes)}</td>"
+        for label, angle, classes in (
+            ("TREND", trend, _COMPOSITE_TREND_CLASS),
+            ("VOL", vol_premium, _COMPOSITE_VOL_CLASS),
+            ("REGIME", regime, _COMPOSITE_REGIME_CLASS),
+            ("INTERNALS", internals, _COMPOSITE_INTERNALS_CLASS),
+        )
     )
     reasons = [
         f"{name}: {angle.get('reason')}"
@@ -4357,24 +4702,32 @@ def _composite_card_html(card: Mapping[str, object]) -> str:
                             ("regime", regime), ("internals", internals))
         if angle.get("data_blocked") and angle.get("reason")
     ]
-    reason_html = (f'<div class="label">{_esc("; ".join(reasons))}</div>'
-                  if reasons else "")
+    reason_html = (
+        '<tr class="composite-reason"><td colspan="7">'
+        f'<div class="label">{_esc("; ".join(reasons))}</div></td></tr>'
+        if reasons else ""
+    )
     as_of = card.get("max_asof") or card.get("asof") or "?"
     return (
-        '<div class="panel composite-card">'
-        '<div class="slot-label"><span>' + _esc(str(card.get("symbol", "?")))
-        + f'</span><span class="status-badge {_COMPOSITE_GRADE_CLASS.get(grade, "unknown")}">'
-        f'GRADE {_esc(grade)}</span></div>'
-        f'<div class="party-badges">{badges}</div>'
-        f'{reason_html}'
-        f'<div class="label">as of {_esc(str(as_of))}</div>'
-        '</div>'
+        '<tr class="composite-row">'
+        f'<th scope="row">{_esc(str(card.get("symbol", "?")))}</th>'
+        f'<td><span class="status-badge {_COMPOSITE_GRADE_CLASS.get(grade, "unknown")}">'
+        f'GRADE {_esc(grade)}</span></td>'
+        f'{cells}'
+        f'<td class="label">as of {_esc(str(as_of))}</td>'
+        "</tr>"
+        f"{reason_html}"
     )
 
 
 def _composite_html(data: dict) -> str:
     """Composite signal board panel: display-only, non-verdict-bearing
-    four-angle confluence cards (options_researcher.composite_signals)."""
+    four-angle confluence table (options_researcher.composite_signals).
+
+    One row per name replaces the eighteen-card grid: the same label strings,
+    read down a column instead of hunted across cards. No angle, state,
+    reason, or as-of date is dropped by the change.
+    """
     cards = [card for card in (data.get("composite_signals") or [])
              if isinstance(card, Mapping)]
     grade_a = [str(card.get("symbol")) for card in cards if card.get("grade") == "A"]
@@ -4382,21 +4735,26 @@ def _composite_html(data: dict) -> str:
         f"Highest agreement today: {', '.join(grade_a)}" if grade_a
         else "Highest agreement today: none at grade A"
     )
-    grid = "".join(_composite_card_html(card) for card in cards)
-    if not grid:
-        grid = (
+    rows = "".join(_composite_row_html(card) for card in cards)
+    if rows:
+        header = "".join(f"<th>{_esc(name)}</th>" for name in _COMPOSITE_COLUMNS)
+        body = ('<table class="composite-table"><thead><tr>'
+                f"{header}</tr></thead><tbody>{rows}</tbody></table>")
+    else:
+        body = (
             '<div class="empty">No composite cards are available for this board. '
             'The lane is display-only and no signal or verdict is implied.</div>'
         )
     return (
-        '<section class="panel"><div class="section-header"><div>'
+        '<section class="panel" id="composite-board">'
+        '<div class="section-header"><div>'
         '<div class="eyebrow">COMPOSITE SIGNAL LANE</div>'
         '<h2>Composite signal board — display-only</h2>'
         '<p>Four independent angles (trend, vol premium, regime, options-'
         'market internals) per name. Not verdict-bearing, not FIRE-capable; '
         'writes nothing to ledger/ or positions.</p>'
         f'<div class="label">{_esc(agreement)}</div></div></div>'
-        f'<div class="card-grid">{grid}</div></section>'
+        f'{body}</section>'
     )
 
 
@@ -4490,6 +4848,60 @@ def _hypothesis_panel_html(evidence: object | None) -> str:
     )
 
 
+def _last_mark_suffix(data: Mapping[str, object], last_mark: object) -> str:
+    """Age the newest H6 receipt against the board date, or say nothing.
+
+    This is an HONESTY FLAG, never a mark: it reports the date of the newest
+    receipt already on disk and how many sessions old it is relative to the
+    board's evaluation date. When the receipt is not older than the board, no
+    age is claimed at all.
+    """
+    mark = _valid_iso_date(last_mark)
+    if not mark:
+        return ""
+    board = (_valid_iso_date(data.get("evaluation_date"))
+             or _valid_iso_date(data.get("data_as_of")))
+    if not board or mark >= board:
+        return ""
+    sessions = _page_chain_age_sessions(mark, board)
+    age = f" ({sessions} sessions ago)" if isinstance(sessions, int) else ""
+    return f" · last mark {_esc(mark)}{_esc(age)}"
+
+
+def _open_positions_html(data: Mapping[str, object]) -> str:
+    """One line per OPEN paper position, read from the book, marked nowhere."""
+    positions = data.get("open_positions")
+    if not isinstance(positions, Mapping):
+        return ('<div class="notice watch">! Open-position sources were '
+                "not read for this render — no position line is claimed here. "
+                "See the receipt summary below.</div>")
+    raw_rows = positions.get("rows")
+    rows = raw_rows if isinstance(raw_rows, (list, tuple)) else ()
+    raw_missing = positions.get("missing_sources")
+    missing = [str(item) for item in raw_missing] if isinstance(
+        raw_missing, (list, tuple)) else []
+    suffix = _last_mark_suffix(data, positions.get("h6_last_mark"))
+    items = "".join(
+        f'<li class="open-position">{_esc(str(row.get("text", "?")))}'
+        f'{suffix if str(row.get("book")) == "H6" else ""}</li>'
+        for row in rows
+        if isinstance(row, Mapping)
+    )
+    missing_html = "".join(
+        f'<div class="notice watch">! Position source {_esc(source)} '
+        "could not be read — its positions are unknown, not zero.</div>"
+        for source in missing
+    )
+    if not items:
+        body = missing_html or (
+            '<div class="label">No open paper position in the read sources.</div>')
+    else:
+        body = f'<ul class="open-positions-list">{items}</ul>{missing_html}'
+    return ('<div class="open-positions"><div class="label">Open paper '
+            "positions — display-only; entry facts from the position book, no "
+            f"mark or P&amp;L is computed here.</div>{body}</div>")
+
+
 def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
     """Render already-attached family summaries without gathering evidence."""
     raw_summaries = data.get("family_evidence")
@@ -4552,11 +4964,12 @@ def _registered_bets_tracker_html(data: Mapping[str, object]) -> str:
         "tracker cannot claim current registered-bet evidence.</li>"
     )
     return (
-        '<section class="panel registered-bets-tracker"><div class="section-header"><div>'
-        '<div class="eyebrow">REGISTERED-BETS TRACKER</div>'
+        '<section class="panel registered-bets-tracker" id="positions-and-risk">'
+        '<div class="section-header"><div>'
+        '<div class="eyebrow">POSITIONS &amp; RISK · REGISTERED-BETS TRACKER</div>'
         '<h2>Registered-bets tracker</h2>'
         '<p>This is a read-only receipt summary and cannot activate, rank, or place a trade.</p>'
-        f"</div></div><ul>{body}</ul></section>"
+        f"</div></div>{_open_positions_html(data)}<ul>{body}</ul></section>"
     )
 
 
@@ -4969,11 +5382,74 @@ def _pick_tracker_html(status: Mapping[str, object] | None) -> str:
         as_of = str(tracker.get("as_of") or "unavailable")
         body = f'<div class="label">{_esc(state)} · as of {_esc(as_of)}</div>'
     return (
-        '<section class="panel pick-tracker"><div class="eyebrow">'
+        '<section class="panel pick-tracker" id="pick-tracker"><div class="eyebrow">'
         'PICK TRACKER (descriptive)</div><h2>Shortlist outcome scoreboard</h2>'
         '<p class="header-sub">Descriptive only; no verdict, ranking, sizing, '
         f'or trade authority.</p>{body}</section>'
     )
+
+
+# Nav labels are deliberately SHORTER than the headings they point at: a link
+# label that duplicated a heading string would make the first match on the page
+# the nav item rather than the section itself.
+_NAV_SECTIONS = (
+    ("positions-and-risk", "Positions"),
+    ("rule-based-top-5", "Shortlist"),
+    ("context-aware-top-5", "Context lane"),
+    ("composite-board", "Composite"),
+    ("pick-tracker", "Scoreboard"),
+    ("core-names", "Core names"),
+    ("diagnostics", "Diagnostics"),
+)
+
+
+def _sticky_nav_html(page_html: str, symbols: Sequence[str]) -> str:
+    """Anchor bar for the sections that actually rendered.
+
+    Fragment links plus CSS ``position: sticky`` only -- the board stays a
+    zero-JavaScript document, and a section that is absent this run is never
+    linked (a dead anchor would read as a missing section).
+    """
+    links = "".join(
+        f'<a href="#{anchor}">{_esc(label)}</a>'
+        for anchor, label in _NAV_SECTIONS
+        if f'id="{anchor}"' in page_html
+    )
+    symbol_links = "".join(
+        f'<a href="#symbol-{_esc(str(symbol))}">{_esc(str(symbol))}</a>'
+        for symbol in symbols
+    )
+    if not links and not symbol_links:
+        return ""
+    symbol_group = (
+        '<div class="nav-group nav-symbols">'
+        f'<span class="nav-label">Symbols</span>{symbol_links}</div>'
+        if symbol_links else ""
+    )
+    return ('<nav class="sticky-nav" aria-label="Board sections">'
+            '<div class="nav-inner">'
+            f'<div class="nav-group">{links}</div>{symbol_group}'
+            "</div></nav>")
+
+
+def _diagnostics_drawer_html(sections: Sequence[str]) -> str:
+    """One closed drawer holding the descriptive/provenance lanes.
+
+    Their text and relative order are unchanged; only their depth on the page
+    moves. Nothing inside is verdict-bearing, so nothing inside needs to be
+    open before the reader asks for it.
+    """
+    body = "".join(section for section in sections if section)
+    if not body:
+        return ""
+    return ('<details class="panel diagnostics-drawer" id="diagnostics">'
+            '<summary class="drawer-summary">'
+            '<span class="eyebrow">DIAGNOSTICS</span>'
+            '<span class="drawer-title">Diagnostics &amp; provenance</span>'
+            '<span class="label">Descriptive lanes, research coverage and '
+            'provenance. Display-only: nothing in this drawer ranks, gates, '
+            'or activates anything.</span></summary>'
+            f'<div class="drawer-body">{body}</div></details>')
 
 
 def _render_result(
@@ -5015,7 +5491,9 @@ def _render_result(
         id(record["pick"]["card"]) for record in pinned_records
         if record.get("pick"))
     stale_symbols = set(data.get("stale_symbols") or [])
+    pinned_symbols = {str(name) for name in config.PICK_PINNED_SYMBOLS}
     symbols_html = ""
+    symbol_names: list[str] = []
     for sec in data["symbols"]:
         tech = sec.get("technicals")
         ranked_groups = _rank_groups_for_display(sec["groups"], tech=tech)
@@ -5066,7 +5544,11 @@ def _render_result(
         status_html = "".join(
             f'<span class="status-badge unknown">{_esc(label)}</span>'
             for label in status_labels)
-        open_attr = " open" if panel_open else ""
+        # Collapsed by default so the board is a board, not a scroll. A
+        # fail-visible panel (DATA_BLOCKED / STALE / SKIPPED) still opens
+        # itself, and the owner-pinned names stay open by standing directive.
+        open_attr = (" open" if panel_open
+                     or str(sec.get("symbol", "")) in pinned_symbols else "")
         event_failure = ""
         if isinstance(event_view, Mapping):
             raw_failures = event_view.get("failures", {})
@@ -5096,13 +5578,24 @@ def _render_result(
                                f'{_esc(move.get("spot_source", ""))} · intraday receipt session '
                                f'{_esc(move.get("intraday_receipt_session", ""))} · spot timestamp '
                                f'{_esc(move.get("spot_timestamp", ""))}</div>')
+        symbol_name = str(sec["symbol"])
+        symbol_names.append(symbol_name)
         symbols_html += (
+            f'<div class="symbol-anchor" id="symbol-{_esc(symbol_name)}"></div>'
             f'<details class="panel symbol-panel"{open_attr}>'
-            '<summary class="symbol-header"><div>'
+            '<summary class="symbol-header">'
+            '<span class="symbol-summary-line">'
+            f"<strong>{_esc(symbol_name)}</strong>"
+            f'<span class="summary-sep">·</span>'
+            f'<span class="summary-source">{_esc(_panel_source_text(sec))}</span>'
+            f'<span class="summary-sep">·</span>'
+            f'<span class="summary-grade">'
+            f"{_esc(_panel_grade_text(sec, status_labels))}</span></span>"
+            f'<span class="panel-status">{status_html}</span></summary>'
+            f'<div class="symbol-body">'
             '<div class="eyebrow">Symbol review</div>'
-            f"<h2>{_esc(sec['symbol'])}</h2>{display_only_html}"
+            f"<h2>{_esc(symbol_name)}</h2>{display_only_html}"
             f'<div class="label">{_esc(_panel_best_headline(sec))}</div>'
-            f'<div class="panel-status">{status_html}</div></div>'
             '<div class="symbol-stats">'
             f'<div class="symbol-stat"><span>{_esc(_close_stat_label(sec))}'
             f"</span><strong>${sec['close']:,.2f}</strong></div>"
@@ -5110,11 +5603,11 @@ def _render_result(
             f'{_esc(sec.get("as_of", "?"))}</strong></div>'
             f'<div class="symbol-stat"><span>IV rank</span><strong>'
             f"{_esc(_iv_rank_text(sec))}</strong></div>"
-            f"{_atm_iv_stat_html(sec)}{display_date_stat}</div></summary>"
-            f'<div class="symbol-body">{event_failure}{implied}'
+            f"{_atm_iv_stat_html(sec)}{display_date_stat}</div>"
+            f'{event_failure}{implied}'
             f'{_elapsed_events_html(evaluation_date, event_view)}{_section_source_html(sec)}'
             f"{_feature_unavailable_html(sec)}{stale_html}{tech_html}"
-            f"{_symbol_context_html(sec['symbol'], context)}{rank_note}{groups}"
+            f"{_symbol_context_html(symbol_name, context)}{rank_note}{groups}"
             f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
             "</details>"
         )
@@ -5146,8 +5639,35 @@ def _render_result(
         context_selection=context_selection,
     )
     pinned_html = _pinned_html(data, event_view, records=pinned_records)
+    qm_lanes_html = _qm_lanes_html(data, context, qm_context)
     event_css = (_EVENT_STYLE if 'class="event-chip"' in
-                 (symbols_html + hero_html + pinned_html) else "")
+                 (symbols_html + hero_html + qm_lanes_html + pinned_html) else "")
+    # Page order (2026-09-03 layout): open risk first, then the two shortlist
+    # lanes and their scoreboard, then the pinned strip and per-symbol panels;
+    # the descriptive/provenance lanes keep their relative order inside one
+    # closed drawer at the bottom.
+    body_html = (
+        f"{_freshness_html(data, context, qm_context, research_views_status, context_evidence, annotation_integrity=annotation_integrity)}"
+        f"{age_html}"
+        f"{warn_html}"
+        f"{_blocked_html(data.get('blocked') or [])}"
+        f"{_registered_bets_tracker_html(data)}"
+        f"{hero_html}"
+        f"{_composite_html(data)}"
+        f"{_pick_tracker_html(research_views_status)}"
+        f"{pinned_html}"
+        f"{symbols_html}"
+        + _diagnostics_drawer_html([
+            qm_lanes_html,
+            _research_desk_html(data, context, context_warning, annotation_notice),
+            _regime_strip_html(
+                research_views_status,
+                str(data.get("evaluation_date") or data_as_of)),
+            _experiments_shelf_html(research_views_status),
+            _quant_want_html(qm_context),
+            _market_html(context),
+        ])
+    )
     out_html = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -5162,22 +5682,10 @@ def _render_result(
         f'<span class="meta-chip"><strong>{_esc(_as_of_chip_label(data))}'
         f"</strong> {_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
-        '</div></div></header><main class="page-body">'
-        f"{_freshness_html(data, context, qm_context, research_views_status, context_evidence, annotation_integrity=annotation_integrity)}"
-        f"{age_html}"
-        f"{warn_html}"
-        f"{_blocked_html(data.get('blocked') or [])}"
-        f"{hero_html}"
-        f"{_composite_html(data)}"
-        f"{_research_desk_html(data, context, context_warning, annotation_notice)}"
-        f"{_registered_bets_tracker_html(data)}"
-        f"{_regime_strip_html(research_views_status, str(data.get('evaluation_date') or data_as_of))}"
-        f"{_experiments_shelf_html(research_views_status)}"
-        f"{_pick_tracker_html(research_views_status)}"
-        f"{pinned_html}"
-        f"{_quant_want_html(qm_context)}"
-        f"{_market_html(context)}"
-        f"{symbols_html}"
+        '</div></div></header>'
+        f"{_sticky_nav_html(body_html, symbol_names)}"
+        '<main class="page-body">'
+        f"{body_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '
         "not predictions. Income annualization uses 365 calendar days; "
         "realized-volatility inputs use 252 trading sessions. Quotes move "

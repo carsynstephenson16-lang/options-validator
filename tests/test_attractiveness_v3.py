@@ -277,10 +277,13 @@ class RenderHonestyTests(unittest.TestCase):
 
     def test_partial_shortlist_keeps_configured_visible_slots_in_each_list(self):
         html = ad.render(self._data_one_fit_one_big())
-        self.assertEqual(html.count('<div class="hero-card '), 2 * config.PICK_TOP_N)
+        # 2026-09-03 layout: identical open slots consolidate, so each lane
+        # renders its filled cards plus ONE block naming the open remainder.
+        self.assertEqual(html.count('<div class="hero-card '), 3)
+        self.assertIn(f"of {config.PICK_TOP_N} slots open", html)
         self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", html)
         self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)
-        self.assertIn("Pick 5", html)
+        self.assertIn(f"Picks 2–{config.PICK_TOP_N}", html)
         self.assertIn("No qualifying contract", html)
         self.assertIn("not missing UI", html)
 
