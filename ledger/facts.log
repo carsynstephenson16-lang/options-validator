@@ -19550,3 +19550,4 @@
 2026-09-02T13:09:46.308659+00:00	DATA_PULL_OHLCV 2026-09-02: Yahoo OHLCV refresh CEG rows=1158 path=.cache/underlying_ohlcv/CEG.parquet
 2026-09-02T13:09:46.696780+00:00	DATA_PULL_OHLCV 2026-09-02: Yahoo OHLCV refresh MSFT rows=2429 path=.cache/underlying_ohlcv/MSFT.parquet
 2026-09-02T13:09:47.020786+00:00	DATA_PULL_OHLCV 2026-09-02: Yahoo OHLCV refresh AMZN rows=2429 path=.cache/underlying_ohlcv/AMZN.parquet
+2026-09-03T20:21:54.886994+00:00	A2_ENTRY_CONVENTION_RATIFIED_V1 owner-approved 2026-08-31 source=reports/2026-08-31-a2-entry-convention-ratification-receipt.md scope=historical-entry-conventions-as-corrected effect=none-operational run-remains-blocked=IV-unblock-criterion+feasibility-projection
