@@ -284,11 +284,18 @@ A1, V1 membership-only) per ledger seq 25 `RQ2_AMENDMENT_V1_1` (owner-ruled
 monthly cycles (24-cycle cap is LLM-proposed 2026-08-15, not owner-typed), line-1 only, higher-toward-top; only the future BLENDED
 (line-1+line-2) variant still requires its own pre-result amendment. **H7** adds a prepared Schwab
 restart lane `h7-forward-schwab-v1`: PREPARED / NOT REGISTERED / NOT
-ACTIVATED — independent adversarial review resolved 2026-08-12 (PASS WITH
-FIXES; `reports/h7_forward_schwab/2026-08-12-adversarial-review-receipt.md`);
-registration remains blocked on review fix B2, a fresh feasibility receipt,
-the Monday canary, the backup drill, and owner-typed OD-3 + starvation
-decisions. The four **attractiveness experiments** (EXP-BETA/TAIL/SPREAD/
+ACTIVATED — **all six registration preconditions cleared as of 2026-08-31**
+(packet `reports/h7_forward_schwab/2026-08-15-registration-packet-bar7-draft.md`
+§0: disposition B merged; independent review receipt committed; post-merge
+drill; 2026-08-14 canary 15/15; feasibility re-measured identical at current
+config 2026-08-29; owner final go = ruling 1 of
+`reports/2026-08-31-owner-rulings-h7-unfreeze.md`). What remains is execution,
+not decision: land the Brief 36 activation door (Codex implementation under
+adversarial review, `codex/brief-36-h7-activation-door`), regenerate the
+cohort-9 feasibility / source-health / data-gate receipts at the post-merge
+config, then the owner runs the activation CLI typing the loss bar (7), the
+OD-3 namespace line, and the starvation pre-acceptance. Quote-age blocking
+threshold is owner-typed at 60 minutes (ruling 3). The four **attractiveness experiments** (EXP-BETA/TAIL/SPREAD/
 TBILL) are display-only, off by default, in the standalone
 `experiments_dashboard.py`; the frozen baseline ranking is untouched. The
 production Schwab OAuth refresh token was re-authorized 2026-08-12 ~00:56 ET
