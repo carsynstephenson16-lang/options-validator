@@ -782,6 +782,25 @@ INTRADAY_CAPTURE_TOLERANCE_MINUTES = 10
 INTRADAY_CACHE_DIR = ".cache/intraday"              # disposable chain cache
 INTRADAY_RECEIPT_DIR = "reports/intraday_capture"   # durable per-capture receipts
 
+# Durable Schwab FULL-chain intraday pulls (owner-directed 2026-09-02,
+# in-session: "I want a pull at 10am and a pull at 1pm"). These are the
+# durable lane's extra slots -- the same options_researcher.schwab_chain_capture
+# module as the 15:45 pre-close capture, but written to an ISOLATED namespace
+# (.cache/schwab_chains_intraday/<tag>/ + reports/schwab_chains_intraday/<tag>/)
+# because the pre-close lane keys every artifact by symbol + date and is
+# first-write-wins: a second same-day write into its namespace would make the
+# 15:45 capture refuse and lose that day's H7 evidence. Deliberately a separate
+# table from INTRADAY_CAPTURE_TIMES (the display-only lane): that table's
+# consumers (job-health digest, intraday preview, hypothesis evidence)
+# enumerate it and would report a phantom missing display slot otherwise.
+# "preclose" is never a key here -- the 15:45 durable capture keeps its
+# untouched default identity. Tolerance is shared:
+# INTRADAY_CAPTURE_TOLERANCE_MINUTES.
+SCHWAB_CHAIN_INTRADAY_TIMES = {
+    "morning": "10:00",  # owner-typed 2026-09-02 (in-session)
+    "midday":  "13:00",  # owner-typed 2026-09-02 (in-session)
+}
+
 # ---------------------------------------------------------------------------
 # IV SOLVER CALIBRATION -- measures whether OUR options_researcher.
 # black_scholes.implied_vol (parity spot, Treasury CMT continuous rate,

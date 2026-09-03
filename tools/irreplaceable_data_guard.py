@@ -58,9 +58,11 @@ DEFAULT_NAMESPACES = [
     ".cache/future_tickers",
     ".cache/intraday",
     ".cache/schwab_chains",
+    ".cache/schwab_chains_intraday",
     ".cache/underlying",
     ".cache/underlying_ohlcv",
     "reports/schwab_chains",
+    "reports/schwab_chains_intraday",
 ]
 
 # Git-tracked ritual-grown namespaces: the backup allow-list derives from
@@ -69,7 +71,7 @@ DEFAULT_NAMESPACES = [
 # A branch-lagged checkout drops tracked files and would false-alarm,
 # halting the daily anti-stranding run (2026-08-25/26 review arc). Valid
 # only while the directory is 100% git-tracked.
-TRACKED_NAMESPACES = frozenset({"reports/schwab_chains"})
+TRACKED_NAMESPACES = frozenset({"reports/schwab_chains", "reports/schwab_chains_intraday"})
 
 
 def resolve_repo_root() -> str:

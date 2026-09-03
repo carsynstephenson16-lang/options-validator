@@ -109,6 +109,7 @@ import argparse
 import json
 import math
 import os
+from collections.abc import Mapping
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -170,21 +171,31 @@ def _minutes(t: time) -> int:
     return t.hour * 60 + t.minute
 
 
-def _scheduled_delta_minutes(tag: str, now_ny: datetime) -> int:
+# `schedule` (2026-09-02): every timing function below defaults to this
+# lane's SESSION_TIMES, but accepts an alternate {tag: time} table so the
+# durable Schwab chain lane can validate its own intraday slots
+# (config.SCHWAB_CHAIN_INTRADAY_TIMES) without adding phantom tags to the
+# display lane's table. None means "this lane's table" -- the default path is
+# byte-for-byte the pre-2026-09-02 behaviour.
+def _scheduled_delta_minutes(tag: str, now_ny: datetime, *,
+                             schedule: Mapping[str, time] | None = None) -> int:
     """Absolute minutes between now_ny's wall clock and `tag`'s scheduled
     time. Raises KeyError for an unknown tag -- callers that need a
     fail-soft answer use nearest_session_tag instead."""
-    return abs(_minutes(now_ny.time()) - _minutes(SESSION_TIMES[tag]))
+    table = SESSION_TIMES if schedule is None else schedule
+    return abs(_minutes(now_ny.time()) - _minutes(table[tag]))
 
 
-def nearest_session_tag(now_ny: datetime) -> str | None:
+def nearest_session_tag(now_ny: datetime, *,
+                        schedule: Mapping[str, time] | None = None) -> str | None:
     """The session_tag whose scheduled time is closest to now_ny's wall
     clock, if within config.INTRADAY_CAPTURE_TOLERANCE_MINUTES; else None.
     Used by tools/intraday_capture.sh to self-select a tag from the wall
     clock rather than hardcoding one per LaunchAgent invocation."""
+    table = SESSION_TIMES if schedule is None else schedule
     best_tag, best_delta = None, None
-    for tag in SESSION_TIMES:
-        delta = _scheduled_delta_minutes(tag, now_ny)
+    for tag in table:
+        delta = _scheduled_delta_minutes(tag, now_ny, schedule=table)
         if best_delta is None or delta < best_delta:
             best_tag, best_delta = tag, delta
     if best_delta is None or best_delta > config.INTRADAY_CAPTURE_TOLERANCE_MINUTES:
@@ -193,18 +204,20 @@ def nearest_session_tag(now_ny: datetime) -> str | None:
 
 
 def validate_session_tag(tag: str, now_ny: datetime, *,
-                         force: bool = False) -> tuple[bool, str]:
+                         force: bool = False,
+                         schedule: Mapping[str, time] | None = None) -> tuple[bool, str]:
     """(ok, reason). An unknown tag always refuses, even with --force. A
     known tag outside the tolerance window refuses unless force=True."""
-    if tag not in SESSION_TIMES:
+    table = SESSION_TIMES if schedule is None else schedule
+    if tag not in table:
         return False, (f"unknown session_tag {tag!r}; choices: "
-                       f"{sorted(SESSION_TIMES)}")
+                       f"{sorted(table)}")
     if force:
         return True, "forced (scheduled-time check bypassed)"
-    delta = _scheduled_delta_minutes(tag, now_ny)
+    delta = _scheduled_delta_minutes(tag, now_ny, schedule=table)
     tol = config.INTRADAY_CAPTURE_TOLERANCE_MINUTES
     if delta > tol:
-        scheduled = SESSION_TIMES[tag]
+        scheduled = table[tag]
         return False, (
             f"session_tag {tag!r} is scheduled for "
             f"{scheduled.isoformat(timespec='minutes')} ET +/-{tol}min; now "
