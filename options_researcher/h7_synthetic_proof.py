@@ -279,6 +279,24 @@ def run_synthetic_proof(root) -> dict:
     held_chain.rename(missing_chain)
     no_refusal_events = not event_store.exists()
 
+    _append(
+        event_store,
+        "wr:stage7-synthetic",
+        "window_registration",
+        DECISION_SESSION,
+        payload={
+            "window": {
+                "start_decision_session": DECISION_SESSION,
+                "final_decision_session": DECISION_SESSION,
+            },
+            "frozen": {
+                "stage456_parameters": {"MIN_LOSSES_FOR_VERDICT": (config.MIN_LOSSES_FOR_VERDICT)},
+                "scorer": {"min_losses_for_verdict": (config.MIN_LOSSES_FOR_VERDICT)},
+            },
+        },
+        recorded="2026-07-11T00:59:59+00:00",
+    )
+
     source_id = "s7:source:2026-07-10"
     gate_id = "s7:gate:2026-07-10"
     _append(

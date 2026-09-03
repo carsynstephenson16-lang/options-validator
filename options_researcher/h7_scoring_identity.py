@@ -130,17 +130,11 @@ def build_scoring_identity(
         "scorer min_losses_for_verdict",
         allow_zero=True,
     )
-    bootstrap_samples = _positive_int(
-        scorer.get("bootstrap_samples"), "scorer bootstrap_samples"
-    )
+    bootstrap_samples = _positive_int(scorer.get("bootstrap_samples"), "scorer bootstrap_samples")
     if stage456_parameters["MIN_LOSSES_FOR_VERDICT"] != min_losses:
-        raise ScoringIdentityError(
-            "stage/scorer MIN_LOSSES_FOR_VERDICT values disagree"
-        )
+        raise ScoringIdentityError("stage/scorer MIN_LOSSES_FOR_VERDICT values disagree")
     if stage456_parameters["BOOTSTRAP_SAMPLES"] != bootstrap_samples:
-        raise ScoringIdentityError(
-            "stage/scorer BOOTSTRAP_SAMPLES values disagree"
-        )
+        raise ScoringIdentityError("stage/scorer BOOTSTRAP_SAMPLES values disagree")
     if (
         not isinstance(cost_model_hash_value, str)
         or _SHA256_HEX.fullmatch(cost_model_hash_value) is None
@@ -150,8 +144,7 @@ def build_scoring_identity(
     surface = {
         "contract": SCORING_IDENTITY_CONTRACT,
         "stage456_parameters": {
-            name: stage456_parameters[name]
-            for name in STAGE456_PARAMETER_NAMES
+            name: stage456_parameters[name] for name in STAGE456_PARAMETER_NAMES
         },
         "scorer": {
             "module": module,
@@ -183,14 +176,10 @@ def registered_scoring_identity(
     has_contract = REGISTRATION_CONTRACT_FIELD in frozen
     has_hash = REGISTRATION_HASH_FIELD in frozen
     if has_contract != has_hash:
-        raise ScoringIdentityError(
-            "registered scoring identity contract/hash must appear together"
-        )
+        raise ScoringIdentityError("registered scoring identity contract/hash must appear together")
     if has_contract:
         if frozen.get(REGISTRATION_CONTRACT_FIELD) != derived.contract:
-            raise ScoringIdentityError(
-                "registered scoring identity contract is unsupported"
-            )
+            raise ScoringIdentityError("registered scoring identity contract is unsupported")
         if frozen.get(REGISTRATION_HASH_FIELD) != derived.identity_hash:
             raise ScoringIdentityError(
                 "registered scoring identity hash disagrees with frozen fields"
@@ -199,24 +188,39 @@ def registered_scoring_identity(
 
 
 def runtime_scoring_identity(
-    *, cost_model_hash_value: str | None = None
+    *,
+    min_losses_for_verdict: int | None,
+    cost_model_hash_value: str | None = None,
 ) -> H7ScoringIdentity:
-    """Derive the live computation identity without global config provenance."""
-    stage = {
-        name: getattr(config, name)
-        for name in STAGE456_PARAMETER_NAMES
-    }
+    """Derive the live computation identity without global config provenance.
+
+    ``min_losses_for_verdict`` is REQUIRED and comes from the registered
+    event's scorer block. Round-1 finding F3: an optional argument falling
+    back to ``config.MIN_LOSSES_FOR_VERDICT`` silently reintroduces exactly
+    the contradiction WP-F exists to close (a window registered at bar 7
+    scored against the global bar 10), so there is no fallback -- omitting the
+    argument is a TypeError and passing ``None`` is a typed refusal.
+    """
+    if min_losses_for_verdict is None:
+        raise ScoringIdentityError(
+            "runtime scoring identity requires the registered "
+            "min_losses_for_verdict; there is no config fallback"
+        )
+    stage = {name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES}
+    stage["MIN_LOSSES_FOR_VERDICT"] = _positive_int(
+        min_losses_for_verdict,
+        "runtime min_losses_for_verdict",
+        allow_zero=True,
+    )
     scorer = {
         "module": FROZEN_SCORER_MODULE,
-        "min_losses_for_verdict": config.MIN_LOSSES_FOR_VERDICT,
+        "min_losses_for_verdict": stage["MIN_LOSSES_FOR_VERDICT"],
         "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
     }
     return build_scoring_identity(
         stage456_parameters=stage,
         scorer=scorer,
         cost_model_hash_value=(
-            cost_model_hash()
-            if cost_model_hash_value is None
-            else cost_model_hash_value
+            cost_model_hash() if cost_model_hash_value is None else cost_model_hash_value
         ),
     )

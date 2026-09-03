@@ -96,10 +96,7 @@ class RealScoringCase(unittest.TestCase):
     def _write_review_passes(self):
         base_spec_hash = sha256_file(real_scoring.BASE_SPEC_PATH)
         amendment_spec_hash = sha256_file(real_scoring.AMENDMENT_SPEC_PATH)
-        chain = (
-            f"base_spec_sha256={base_spec_hash} "
-            f"amendment_spec_sha256={amendment_spec_hash}"
-        )
+        chain = f"base_spec_sha256={base_spec_hash} amendment_spec_sha256={amendment_spec_hash}"
         self.facts.write_text(
             "\n".join(
                 [
@@ -218,9 +215,7 @@ class RealScoringCase(unittest.TestCase):
         scope = scope_identity()
         source_path = self.root / "receipts" / f"source-{session}.json"
         source_receipt = load_receipt(source_path, expected_type="source_health")
-        if source_id not in {
-            event.event_id for event in ledger.read_events(self.base)
-        }:
+        if source_id not in {event.event_id for event in ledger.read_events(self.base)}:
             self.append(
                 _event(
                     source_id,
@@ -439,14 +434,10 @@ class RealScoringCase(unittest.TestCase):
             )
         )
 
-    def _append_settlement(
-        self, *, bound_close=True, opening_fill_id: str | None = None
-    ):
+    def _append_settlement(self, *, bound_close=True, opening_fill_id: str | None = None):
         expiration = "2026-08-21"
         decision = "2026-08-24"
-        position_id, open_id, action, opening_leg, _ = self._append_opening(
-            expiration=expiration
-        )
+        position_id, open_id, action, opening_leg, _ = self._append_opening(expiration=expiration)
         underlying = 120.0 if bound_close else None
         intrinsic = 20.0 if bound_close else None
         cash = 20.0 if bound_close else 0.0
@@ -487,17 +478,13 @@ class RealScoringCase(unittest.TestCase):
                         }
                     ],
                     "net_close_credit_per_share": cash,
-                    "commission": (
-                        config.COMMISSION_PER_CONTRACT if itm else 0.0
-                    ),
+                    "commission": (config.COMMISSION_PER_CONTRACT if itm else 0.0),
                     "closes_identity": "sha256:settlement-close",
                     "underlying_close": underlying,
                     "underlying_close_session": expiration,
                     "underlying_close_identity": "sha256:settlement-close",
                     "settlement_method": (
-                        "intrinsic_at_close"
-                        if bound_close
-                        else "conservative_full_loss"
+                        "intrinsic_at_close" if bound_close else "conservative_full_loss"
                     ),
                     "assignment_disclosure_required": True,
                 },
@@ -506,6 +493,21 @@ class RealScoringCase(unittest.TestCase):
 
 
 class TestRealScoringAuthority(RealScoringCase):
+    def test_frozen_market_scoring_selects_the_registration_explicitly(self):
+        """Round-1 F4: events[0] was assumed to be the window_registration."""
+        not_a_registration = replace(self.registration, event_type="entry_intent")
+        for events in (
+            [not_a_registration],
+            [self.registration, replace(self.registration, seq=1)],
+        ):
+            with self.subTest(count=len(events)):
+                with self.assertRaisesRegex(real_scoring.RealScoringRefused, "window_registration"):
+                    real_scoring._frozen_market_result(
+                        session=None,  # type: ignore[arg-type]
+                        events=events,
+                        pairs=[],
+                    )
+
     def test_forged_capability_is_refused(self):
         forged = replace(self.open(), _authority_token=object())
 
@@ -564,9 +566,7 @@ class TestRealScoringAuthority(RealScoringCase):
         with self.assertRaisesRegex(
             real_scoring.RealScoringRefused, real_scoring.AMENDMENT_FACT_TAG
         ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_amendment_fact_requires_exact_delegated_provenance(self):
         self.facts.write_text(
@@ -581,9 +581,7 @@ class TestRealScoringAuthority(RealScoringCase):
         with self.assertRaisesRegex(
             real_scoring.RealScoringRefused, real_scoring.AMENDMENT_FACT_TAG
         ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_session_revalidates_both_spec_hashes(self):
         session = self.open()
@@ -605,12 +603,8 @@ class TestRealScoringAuthority(RealScoringCase):
             return actual_sha256_file(Path(path))
 
         with (
-            patch.object(
-                real_scoring, "sha256_file", side_effect=changed_base
-            ),
-            self.assertRaisesRegex(
-                real_scoring.RealScoringRefused, "amendment-pinned"
-            ),
+            patch.object(real_scoring, "sha256_file", side_effect=changed_base),
+            self.assertRaisesRegex(real_scoring.RealScoringRefused, "amendment-pinned"),
         ):
             self.open()
 
@@ -620,14 +614,14 @@ class TestRealScoringAuthority(RealScoringCase):
 
         with patch.object(config, "LIVE_DASH_PORT", config.LIVE_DASH_PORT + 1):
             self.assertNotEqual(config_hash(), baseline_hash)
-            preview = real_scoring.preview_real_score(
-                session, now=AFTER_FINAL
-            )
+            preview = real_scoring.preview_real_score(session, now=AFTER_FINAL)
 
         self.assertEqual(preview["status"], "RESULT_WITHHELD")
 
     def test_every_runtime_frozen_parameter_drift_is_refused(self):
         for name in scoring_identity.STAGE456_PARAMETER_NAMES:
+            if name == "MIN_LOSSES_FOR_VERDICT":
+                continue
             with self.subTest(name=name):
                 session = self.open()
                 current = getattr(config, name)
@@ -644,6 +638,16 @@ class TestRealScoringAuthority(RealScoringCase):
                     self.assertRaises(real_scoring.RealScoringRefused),
                 ):
                     real_scoring.preview_real_score(session, now=AFTER_FINAL)
+
+    def test_registered_loss_bar_ignores_mutable_config_default(self):
+        session = self.open()
+        with patch.object(
+            config,
+            "MIN_LOSSES_FOR_VERDICT",
+            config.MIN_LOSSES_FOR_VERDICT + 1,
+        ):
+            preview = real_scoring.preview_real_score(session, now=AFTER_FINAL)
+        self.assertEqual(preview["status"], "RESULT_WITHHELD")
 
     def test_cost_model_hash_drift_is_refused(self):
         session = self.open()
@@ -691,9 +695,7 @@ class TestRealScoringAuthority(RealScoringCase):
             clock=_clock(),
         )
 
-        with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, "lowercase SHA-256"
-        ):
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "lowercase SHA-256"):
             real_scoring.open_real_scoring_session(
                 base_dir=bad,
                 facts_path=self.facts,
@@ -704,23 +706,19 @@ class TestRealScoringAuthority(RealScoringCase):
 class TestRealScoringPublication(RealScoringCase):
     def test_market_close_uses_frozen_scorer_and_finalizes_idempotently(self):
         self._append_market_close()
-        frozen_before = sha256_file(real_scoring.REPO_ROOT / "options_researcher" / "h7_forward_scoring.py")
+        frozen_before = sha256_file(
+            real_scoring.REPO_ROOT / "options_researcher" / "h7_forward_scoring.py"
+        )
         session = self.open()
 
-        first = real_scoring.finalize_real_score(
-            session, owner="carsyn", now=AFTER_FINAL
-        )
-        second = real_scoring.finalize_real_score(
-            session, owner="carsyn", now=AFTER_FINAL
-        )
+        first = real_scoring.finalize_real_score(session, owner="carsyn", now=AFTER_FINAL)
+        second = real_scoring.finalize_real_score(session, owner="carsyn", now=AFTER_FINAL)
 
         self.assertTrue(first.appended)
         self.assertFalse(second.appended)
         self.assertEqual(first.artifact_hash, second.artifact_hash)
         self.assertEqual(first.result["n_trades"], 1)
-        self.assertEqual(
-            first.result["frozen_scorer_market_only"]["n_trades"], 1
-        )
+        self.assertEqual(first.result["frozen_scorer_market_only"]["n_trades"], 1)
         self.assertEqual(
             sha256_file(real_scoring.REPO_ROOT / "options_researcher" / "h7_forward_scoring.py"),
             frozen_before,
@@ -732,30 +730,31 @@ class TestRealScoringPublication(RealScoringCase):
             [self.registration.event_id, "open:AMD:a", "close:AMD:a"],
         )
 
+    def test_receipt_publishes_the_registered_bar_not_the_runtime_config(self):
+        """Round-1 F8: the real-scoring equivalent of the frozen-bar proof."""
+        registered = self.registration.payload["frozen"]["scorer"]["min_losses_for_verdict"]
+        with patch.object(config, "MIN_LOSSES_FOR_VERDICT", registered + 3):
+            result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
+            self.assertNotEqual(config.MIN_LOSSES_FOR_VERDICT, registered)
+        receipt = load_receipt(result.artifact_path, expected_type="window_score")
+        self.assertEqual(receipt["scorer"]["min_losses_for_verdict"], registered)
+
     def test_idempotent_replay_preserves_original_config_provenance(self):
         baseline_hash = config_hash()
-        first = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        first = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         with patch.object(config, "LIVE_DASH_PORT", config.LIVE_DASH_PORT + 1):
             changed_hash = config_hash()
-            second = real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            second = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         receipt = load_receipt(first.artifact_path, expected_type="window_score")
         self.assertNotEqual(changed_hash, baseline_hash)
         self.assertFalse(second.appended)
         self.assertEqual(second.artifact_hash, first.artifact_hash)
-        self.assertEqual(
-            receipt["config_provenance"]["runtime_config_hash"], baseline_hash
-        )
+        self.assertEqual(receipt["config_provenance"]["runtime_config_hash"], baseline_hash)
 
     def test_replay_refuses_invalid_original_config_provenance(self):
-        result = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
         receipt = load_receipt(result.artifact_path, expected_type="window_score")
         payload = {
             key: value
@@ -769,17 +768,11 @@ class TestRealScoringPublication(RealScoringCase):
             encoding="utf-8",
         )
 
-        with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, "config provenance"
-        ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "config provenance"):
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_replay_refuses_noncanonical_original_runtime_provenance(self):
-        result = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
         receipt = load_receipt(result.artifact_path, expected_type="window_score")
         payload = {
             key: value
@@ -793,19 +786,13 @@ class TestRealScoringPublication(RealScoringCase):
             encoding="utf-8",
         )
 
-        with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, "lowercase SHA-256"
-        ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "lowercase SHA-256"):
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_market_close_after_canonical_retry_gap_is_scorable(self):
         self._append_market_close(with_retry_gap=True)
 
-        finalized = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        finalized = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         self.assertEqual(finalized.result["n_trades"], 1)
 
@@ -813,9 +800,7 @@ class TestRealScoringPublication(RealScoringCase):
         self._append_market_close(with_retry_gap=True, gap_symbol="MSFT")
 
         with self.assertRaisesRegex(real_scoring.RealScoringRefused, "retry gap"):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_earnings_reason_cannot_hide_behind_lower_priority_primary(self):
         self._append_market_close(
@@ -826,16 +811,12 @@ class TestRealScoringPublication(RealScoringCase):
         with self.assertRaisesRegex(
             real_scoring.RealScoringRefused, "noncanonical trigger reasons"
         ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_intrinsic_settlement_is_scored_without_fabricated_quotes(self):
         self._append_settlement(bound_close=True)
 
-        result = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         self.assertEqual(result.result["n_trades"], 1)
         self.assertEqual(result.result["settlement"]["position_count"], 1)
@@ -847,9 +828,7 @@ class TestRealScoringPublication(RealScoringCase):
     def test_market_score_preserves_offset_source_dates_after_due_check(self):
         self._append_market_close()
 
-        result = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         trade = result.result["trades"][0]
         self.assertEqual(trade["entry_date"], "2026-07-21")
@@ -859,19 +838,13 @@ class TestRealScoringPublication(RealScoringCase):
     def test_market_close_without_receipt_gate_cause_is_refused(self):
         self._append_market_close(omit_close_gate=True)
 
-        with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, "data-gate cause"
-        ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "data-gate cause"):
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_missing_close_conservative_settlement_remains_scorable(self):
         self._append_settlement(bound_close=False)
 
-        result = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         trade = result.result["trades"][0]
         self.assertEqual(trade["settlement_method"], "conservative_full_loss")
@@ -881,40 +854,32 @@ class TestRealScoringPublication(RealScoringCase):
     def test_settlement_with_wrong_opening_lineage_is_refused(self):
         self._append_settlement(opening_fill_id="wrong:opening")
 
-        with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, "opening lineage"
-        ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "opening lineage"):
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_orphan_artifact_recovers_only_at_same_input_head(self):
         session = self.open()
         original_append = ledger.append_event
 
+        def conflict_on_real_append(event, *, base_dir, **kwargs):
+            if Path(base_dir).resolve() == session.base_dir.resolve():
+                raise ledger.LedgerHeadConflictError("fixture conflict")
+            return original_append(event, base_dir=base_dir, **kwargs)
+
         with patch.object(
             ledger,
             "append_event",
-            side_effect=ledger.LedgerHeadConflictError("fixture conflict"),
+            side_effect=conflict_on_real_append,
         ):
-            with self.assertRaisesRegex(
-                real_scoring.RealScoringRefused, "artifact is an orphan"
-            ):
-                real_scoring.finalize_real_score(
-                    session, owner="carsyn", now=AFTER_FINAL
-                )
+            with self.assertRaisesRegex(real_scoring.RealScoringRefused, "artifact is an orphan"):
+                real_scoring.finalize_real_score(session, owner="carsyn", now=AFTER_FINAL)
         self.assertTrue(session.artifact_path.exists())
         self.assertFalse(
-            any(
-                event.event_type == "window_score"
-                for event in ledger.read_events(self.base)
-            )
+            any(event.event_type == "window_score" for event in ledger.read_events(self.base))
         )
 
         with patch.object(ledger, "append_event", wraps=original_append):
-            recovered = real_scoring.finalize_real_score(
-                session, owner="carsyn", now=AFTER_FINAL
-            )
+            recovered = real_scoring.finalize_real_score(session, owner="carsyn", now=AFTER_FINAL)
 
         self.assertTrue(recovered.appended)
 
@@ -936,16 +901,12 @@ class TestRealScoringPublication(RealScoringCase):
             )
         )
         with self.assertRaises(real_scoring.RealScoringIncomplete):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_duplicate_closing_fill_refuses(self):
         self._append_market_close()
         first = next(
-            event
-            for event in ledger.read_events(self.base)
-            if event.event_id == "close:AMD:a"
+            event for event in ledger.read_events(self.base) if event.event_id == "close:AMD:a"
         )
         self.append(
             _event(
@@ -960,19 +921,13 @@ class TestRealScoringPublication(RealScoringCase):
         )
 
         with self.assertRaises(real_scoring.RealScoringIncomplete):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_opening_cannot_change_intent_decision_lineage(self):
         self._append_opening(opening_decision="2026-11-02")
 
-        with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, "entry-intent lineage"
-        ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "entry-intent lineage"):
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_skip_cannot_terminalize_an_unrelated_intent(self):
         intent_id = "intent:AMD:skip"
@@ -1006,12 +961,8 @@ class TestRealScoringPublication(RealScoringCase):
             )
         )
 
-        with self.assertRaisesRegex(
-            real_scoring.RealScoringRefused, "entry-intent lineage"
-        ):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+        with self.assertRaisesRegex(real_scoring.RealScoringRefused, "entry-intent lineage"):
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_allowed_skip_reason_requires_canonical_fill_evidence(self):
         intent_id = "intent:AMD:forged-skip"
@@ -1047,9 +998,7 @@ class TestRealScoringPublication(RealScoringCase):
         )
 
         with self.assertRaisesRegex(real_scoring.RealScoringRefused, "evidence"):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_canonical_approval_missing_skip_is_a_valid_terminal(self):
         intent_id = "intent:AMD:valid-skip"
@@ -1086,9 +1035,7 @@ class TestRealScoringPublication(RealScoringCase):
             )
         )
 
-        result = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         self.assertEqual(result.result["n_trades"], 0)
 
@@ -1131,9 +1078,7 @@ class TestRealScoringPublication(RealScoringCase):
         )
 
         with self.assertRaisesRegex(real_scoring.RealScoringRefused, "cutoff"):
-            real_scoring.finalize_real_score(
-                self.open(), owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
     def test_conflicting_existing_artifact_is_never_overwritten(self):
         session = self.open()
@@ -1142,16 +1087,12 @@ class TestRealScoringPublication(RealScoringCase):
         before = session.artifact_path.read_bytes()
 
         with self.assertRaises(real_scoring.RealScoringRefused):
-            real_scoring.finalize_real_score(
-                session, owner="carsyn", now=AFTER_FINAL
-            )
+            real_scoring.finalize_real_score(session, owner="carsyn", now=AFTER_FINAL)
 
         self.assertEqual(session.artifact_path.read_bytes(), before)
 
     def test_receipt_contains_required_disclosures_and_identities(self):
-        result = real_scoring.finalize_real_score(
-            self.open(), owner="carsyn", now=AFTER_FINAL
-        )
+        result = real_scoring.finalize_real_score(self.open(), owner="carsyn", now=AFTER_FINAL)
 
         receipt = load_receipt(result.artifact_path, expected_type="window_score")
         self.assertEqual(receipt["input_ledger_head"], self.registration.record_hash)
@@ -1168,15 +1109,17 @@ class TestRealScoringPublication(RealScoringCase):
         )
         self.assertEqual(
             receipt["scorer"]["scoring_identity_hash"],
-            scoring_identity.runtime_scoring_identity().identity_hash,
+            scoring_identity.runtime_scoring_identity(
+                min_losses_for_verdict=self.registration.payload["frozen"]["scorer"][
+                    "min_losses_for_verdict"
+                ]
+            ).identity_hash,
         )
         self.assertEqual(
             receipt["config_provenance"]["registered_config_hash"],
             self.registration.payload["frozen"]["config_hash"],
         )
-        self.assertEqual(
-            receipt["config_provenance"]["runtime_config_hash"], config_hash()
-        )
+        self.assertEqual(receipt["config_provenance"]["runtime_config_hash"], config_hash())
         self.assertIs(receipt["config_provenance"]["authority"], False)
         self.assertEqual(
             receipt["spec_chain"]["base_spec_sha256"],

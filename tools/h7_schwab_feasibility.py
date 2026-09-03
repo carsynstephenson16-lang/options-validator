@@ -20,19 +20,44 @@ import config  # noqa: E402
 from data.atomic_io import atomic_text_write  # noqa: E402
 from data.cache_runner import session_close_utc  # noqa: E402
 from data.underlying_closes import (  # noqa: E402
+    CACHE_DIR as UNDERLYING_CACHE_DIR,
+)
+from data.underlying_closes import (
     adjustment_factor,
     load_closes_adjusted,
 )
 from options_researcher.chains import load_range  # noqa: E402
 from options_researcher.h7_board import resolve_board  # noqa: E402
-from options_researcher.h7_earnings import load_assertions  # noqa: E402
-from options_researcher.h7_scope import watch_universe  # noqa: E402
+from options_researcher.h7_earnings import (  # noqa: E402
+    ASSERTIONS_PATH,
+    RAW_ASSERTIONS_PATH,
+    load_assertions,
+)
+from options_researcher.h7_schwab_window_registration import (  # noqa: E402
+    FEASIBILITY_RECEIPT_KIND,
+    FEASIBILITY_SOURCE_PATHS,
+    FEASIBILITY_STACK_VERSION,
+    FEASIBILITY_TOOL_LABEL,
+)
 from options_researcher.h7_watch import assemble_name  # noqa: E402
-from research.hashing import canonical_json, config_hash, sha256_hex  # noqa: E402
+from research.hashing import (  # noqa: E402
+    canonical_json,
+    config_hash,
+    sha256_file,
+    sha256_hex,
+    source_hash,
+)
+from tools.h7_entry_variant_menu import (  # noqa: E402
+    OCCUPANCY_LOCKOUT_SESSIONS,
+    occupancy_constrained_count,
+)
 
-RECEIPT_KIND = "h7_schwab_feasibility/v1"
-STACK_VERSION = "h7-frozen-entry-stack-plus-board/v1"
+# Round-1 finding F7: one definition, owned by the validator that enforces it.
+RECEIPT_KIND = FEASIBILITY_RECEIPT_KIND
+STACK_VERSION = FEASIBILITY_STACK_VERSION
+TOOL_LABEL = FEASIBILITY_TOOL_LABEL
 DEFAULT_CHAIN_DIR = Path(".cache/chains")
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _receipt_hash(receipt: dict) -> str:
@@ -53,10 +78,17 @@ def summarize_counts(
     code_sha: str,
     stack_version: str,
     errors: list[dict],
+    input_paths: dict[str, Path] | None = None,
+    entry_rows: list[dict] | None = None,
 ) -> dict:
     """Apply the owner-approved arithmetic without interpreting the result."""
     if not sessions or not symbols or window_sessions <= 0:
         raise ValueError("sessions, symbols, and positive window_sessions are required")
+    if len(sessions) != window_sessions:
+        raise ValueError(
+            "lookback sessions must equal window_sessions; occupancy counts "
+            "are raw panel counts and cannot be scaled"
+        )
     possible = {(session, symbol) for session in sessions for symbol in symbols}
     if not passing_symbol_days <= possible:
         raise ValueError("passing_symbol_days contains a row outside the census")
@@ -64,13 +96,28 @@ def summarize_counts(
     passes = len(passing_symbol_days)
     base_rate = passes / symbol_days
     expected_entries = base_rate * window_sessions * len(symbols)
+    rows = (
+        [
+            {"session": session, "symbol": symbol, "lane": "unknown"}
+            for session, symbol in sorted(passing_symbol_days)
+        ]
+        if entry_rows is None
+        else entry_rows
+    )
+    lockout_sessions = OCCUPANCY_LOCKOUT_SESSIONS[0]
+    occupancy_count = occupancy_constrained_count(rows, sessions, lockout_sessions)
+    input_files = {
+        label: {"path": str(path), "sha256": sha256_file(path)}
+        for label, path in sorted((input_paths or {}).items())
+    }
     receipt = {
         "receipt_kind": RECEIPT_KIND,
         "provenance": "LLM/tool-computed",
-        "tool_label": "cached-only read-only measurement; no verdict",
+        "tool_label": TOOL_LABEL,
         "lookback_start": sessions[0],
         "lookback_end": sessions[-1],
         "lookback_sessions": len(sessions),
+        "sessions": sessions,
         "stack_version": stack_version,
         "code_sha": code_sha,
         "config_hash": config_hash(),
@@ -81,6 +128,14 @@ def summarize_counts(
         "full_stack_passes": passes,
         "base_rate": base_rate,
         "expected_entries": expected_entries,
+        "occupancy_constrained_expected_entries": occupancy_count,
+        "occupancy_constrained_count": occupancy_count,
+        "occupancy_input_rows": rows,
+        "occupancy_lockout_sessions": lockout_sessions,
+        "occupancy_upper_bound": True,
+        "input_files": input_files,
+        "source_paths": list(FEASIBILITY_SOURCE_PATHS),
+        "source_hash": source_hash(paths=FEASIBILITY_SOURCE_PATHS, root=REPO_ROOT),
         "passing_symbol_days": [
             {"session": session, "symbol": symbol}
             for session, symbol in sorted(passing_symbol_days)
@@ -95,6 +150,10 @@ def summarize_counts(
             "portfolio_state_assumption": (
                 "each historical session starts with no open H7 positions and "
                 "the full frozen monthly sleeve; same-session board caps apply"
+            ),
+            "occupancy_note": (
+                "upper bound: per-underlying lockout only; monthly sleeve is not "
+                "netted across overlapping positions"
             ),
         },
     }
@@ -127,9 +186,7 @@ def common_cached_sessions(
         common = dates if common is None else common & dates
     ordered = sorted(common or set())
     if len(ordered) < lookback_sessions:
-        raise RuntimeError(
-            f"only {len(ordered)} common cached sessions; need {lookback_sessions}"
-        )
+        raise RuntimeError(f"only {len(ordered)} common cached sessions; need {lookback_sessions}")
     return ordered[-lookback_sessions:]
 
 
@@ -142,6 +199,7 @@ def measure_cached_history(
 ) -> dict:
     assertions = load_assertions()
     passing: set[tuple[str, str]] = set()
+    passing_rows: list[dict] = []
     errors: list[dict] = []
     for session in sessions:
         today = date.fromisoformat(session)
@@ -149,14 +207,10 @@ def measure_cached_history(
         cards: list[tuple[str, dict]] = []
         for symbol in symbols:
             try:
-                closes = load_closes_adjusted(
-                    symbol, start, session, allow_oos=True
-                )
+                closes = load_closes_adjusted(symbol, start, session, allow_oos=True)
                 if closes.empty or str(closes.index[-1])[:10] != session:
                     raise RuntimeError("adjusted closes do not end on session")
-                chain = load_range(symbol, session, session, allow_oos=True).get(
-                    session
-                )
+                chain = load_range(symbol, session, session, allow_oos=True).get(session)
                 if chain is None:
                     raise RuntimeError("exact-session chain unavailable")
                 spot = float(closes.iloc[-1]) * adjustment_factor(symbol, session)
@@ -199,6 +253,19 @@ def measure_cached_history(
             open_symbols=(),
         )
         passing.update((session, row["symbol"]) for row in accepted)
+        passing_rows.extend(
+            {"session": session, "symbol": row["symbol"], "lane": row["lane"]} for row in accepted
+        )
+    input_paths: dict[str, Path] = {
+        "gating_assertions": ASSERTIONS_PATH,
+        "raw_assertions": RAW_ASSERTIONS_PATH,
+    }
+    for symbol in symbols:
+        input_paths[f"underlying:{symbol}"] = Path(UNDERLYING_CACHE_DIR) / f"{symbol}.parquet"
+        for session in sessions:
+            input_paths[f"chain:{symbol}:{session}"] = (
+                DEFAULT_CHAIN_DIR / f"{symbol}_{session}.parquet"
+            )
     return summarize_counts(
         sessions=sessions,
         symbols=symbols,
@@ -207,6 +274,8 @@ def measure_cached_history(
         code_sha=code_sha,
         stack_version=STACK_VERSION,
         errors=errors,
+        input_paths=input_paths,
+        entry_rows=passing_rows,
     )
 
 
@@ -226,15 +295,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lookback-sessions", type=int, default=70)
     parser.add_argument("--window-sessions", type=int, default=70)
     parser.add_argument(
+        "--symbols",
+        nargs="+",
+        required=True,
+        help="Explicit cohort symbols; no default universe is inferred.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("reports/h7_forward_schwab/2026-08-09-feasibility.json"),
     )
     args = parser.parse_args(argv)
-    symbols = sorted(watch_universe())
-    sessions = common_cached_sessions(
-        symbols, DEFAULT_CHAIN_DIR, args.lookback_sessions
-    )
+    if args.lookback_sessions != args.window_sessions:
+        parser.error(
+            "--lookback-sessions must equal --window-sessions; raw occupancy "
+            "counts cannot be normalized"
+        )
+    symbols = sorted(dict.fromkeys(symbol.upper() for symbol in args.symbols))
+    sessions = common_cached_sessions(symbols, DEFAULT_CHAIN_DIR, args.lookback_sessions)
     receipt = measure_cached_history(
         sessions=sessions,
         symbols=symbols,

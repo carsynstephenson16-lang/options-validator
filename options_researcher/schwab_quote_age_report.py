@@ -161,6 +161,18 @@ def selectable_mask(frame: pd.DataFrame) -> pd.Series:
     return (liquid & frame["delta"].abs().between(low, high)).astype(bool)
 
 
+def selectable_timestamp_population(frame: pd.DataFrame) -> pd.Series:
+    """Return the selectable population's quote timestamps as UTC values.
+
+    This is the report's public selection accessor for any future consumer
+    that needs the same quote-timestamp population. It deliberately returns
+    the original nulls: an authority consumer, unlike this descriptive report,
+    may need to refuse an incomplete timestamp population rather than drop it.
+    ``trade_timestamp`` is intentionally not consulted.
+    """
+    return cast(pd.Series, _timestamps(frame, "timestamp")[selectable_mask(frame)])
+
+
 def _timestamps(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         raise SchwabQuoteAgeReportError(f"chain frame missing timestamp column: {column}")

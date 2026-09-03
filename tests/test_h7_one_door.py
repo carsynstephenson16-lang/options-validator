@@ -43,6 +43,7 @@ Four proofs:
       alias-laundered ``append_event(..., base_dir=REAL_FORWARD_STORE, ...)``,
       flag it.
 """
+
 from __future__ import annotations
 
 import ast
@@ -65,8 +66,13 @@ from research.hashing import config_hash, diagnostic_source_hash, sha256_file
 from research.receipts import load_receipt, make_receipt
 from tools import h7_manual_activate as cli
 
-_SCAN_ROOTS = (Path("options_researcher"), Path("tools"), Path("research"),
-               Path("data"), Path("harness"))
+_SCAN_ROOTS = (
+    Path("options_researcher"),
+    Path("tools"),
+    Path("research"),
+    Path("data"),
+    Path("harness"),
+)
 _LEDGER_MODULE = "h7_event_ledger.py"  # defines append_event; not a caller
 
 # Every namespace's real store: identifier name -> its canonical relative
@@ -113,9 +119,11 @@ def _real_store_constructor_functions(source: str) -> list[str]:
     out = []
     for fn in ast.walk(ast.parse(source)):
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if (_calls_named(fn, "append_event")
-                    and _calls_named(fn, "Path")
-                    and not _calls_named(fn, "_synthetic_base")):
+            if (
+                _calls_named(fn, "append_event")
+                and _calls_named(fn, "Path")
+                and not _calls_named(fn, "_synthetic_base")
+            ):
                 out.append(fn.name)
     return out
 
@@ -127,15 +135,19 @@ def _is_real_store_ref(node: ast.AST, store_name: str) -> bool:
     that same store's canonical path (e.g. ``Path("ledger/h7_forward_schwab")``
     for SCHWAB_FORWARD_STORE), which reaches the real store without ever
     naming its constant. ``store_name`` must be a key of ``_REAL_STORES``."""
-    if ((isinstance(node, ast.Name) and node.id == store_name)
-            or (isinstance(node, ast.Attribute) and node.attr == store_name)):
+    if (isinstance(node, ast.Name) and node.id == store_name) or (
+        isinstance(node, ast.Attribute) and node.attr == store_name
+    ):
         return True
-    if (isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name) and node.func.id == "Path"
-            and len(node.args) == 1
-            and isinstance(node.args[0], ast.Constant)
-            and isinstance(node.args[0].value, str)
-            and node.args[0].value.rstrip("/") == _REAL_STORES[store_name]):
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "Path"
+        and len(node.args) == 1
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+        and node.args[0].value.rstrip("/") == _REAL_STORES[store_name]
+    ):
         return True
     return False
 
@@ -164,9 +176,12 @@ def _real_store_alias_names(fn: ast.AST, store_name: str) -> set[str]:
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     aliases.add(target.id)
-        if (isinstance(node, ast.AnnAssign) and node.value is not None
-                and _is_real_store_ref(node.value, store_name)
-                and isinstance(node.target, ast.Name)):
+        if (
+            isinstance(node, ast.AnnAssign)
+            and node.value is not None
+            and _is_real_store_ref(node.value, store_name)
+            and isinstance(node.target, ast.Name)
+        ):
             aliases.add(node.target.id)
     return aliases
 
@@ -188,11 +203,13 @@ def _appends_to_real_store(source: str, store_name: str) -> bool:
             continue
         aliases = _real_store_alias_names(fn, store_name)
         for sub in ast.walk(fn):
-            if not (isinstance(sub, ast.Call)
-                    and ((isinstance(sub.func, ast.Attribute)
-                          and sub.func.attr == "append_event")
-                         or (isinstance(sub.func, ast.Name)
-                             and sub.func.id == "append_event"))):
+            if not (
+                isinstance(sub, ast.Call)
+                and (
+                    (isinstance(sub.func, ast.Attribute) and sub.func.attr == "append_event")
+                    or (isinstance(sub.func, ast.Name) and sub.func.id == "append_event")
+                )
+            ):
                 continue
             candidates = list(sub.args)
             candidates += [kw.value for kw in sub.keywords if kw.arg == "base_dir"]
@@ -203,13 +220,11 @@ def _appends_to_real_store(source: str, store_name: str) -> bool:
                     return True
     # Module-level append at import time (no enclosing function) -- defensive.
     for sub in ast.walk(tree):
-        if (isinstance(sub, ast.Call)
-                and ((isinstance(sub.func, ast.Attribute)
-                      and sub.func.attr == "append_event")
-                     or (isinstance(sub.func, ast.Name)
-                         and sub.func.id == "append_event"))):
-            for val in list(sub.args) + [kw.value for kw in sub.keywords
-                                         if kw.arg == "base_dir"]:
+        if isinstance(sub, ast.Call) and (
+            (isinstance(sub.func, ast.Attribute) and sub.func.attr == "append_event")
+            or (isinstance(sub.func, ast.Name) and sub.func.id == "append_event")
+        ):
+            for val in list(sub.args) + [kw.value for kw in sub.keywords if kw.arg == "base_dir"]:
                 if _is_real_store_ref(val, store_name):
                     return True
     return False
@@ -233,18 +248,15 @@ class StructuralOneDoorTests(unittest.TestCase):
         # it is handed. It does not (and cannot statically) prove exactly one
         # runtime writer; post-registration typed writers inherit a validated
         # base and are covered by the separate guard proof below.
-        offenders = {name: _real_store_constructor_functions(src)
-                     for name, src in _module_sources().items()}
+        offenders = {
+            name: _real_store_constructor_functions(src) for name, src in _module_sources().items()
+        }
         with_constructor = {name: fns for name, fns in offenders.items() if fns}
         self.assertEqual(
             with_constructor,
             {
-                "options_researcher/h7_schwab_window_registration.py": [
-                    "register_window_real"
-                ],
-                "options_researcher/h7_window_registration.py": [
-                    "register_window_real"
-                ],
+                "options_researcher/h7_schwab_window_registration.py": ["register_window_real"],
+                "options_researcher/h7_window_registration.py": ["register_window_real"],
             },
             "only one register_window_real per namespace may construct an "
             "unguarded seq-0 append base",
@@ -263,13 +275,17 @@ class StructuralOneDoorTests(unittest.TestCase):
         self.assertIn("_require_review_passes(session)", scoring_source)
 
     def test_cli_never_appends_directly(self):
-        cli_src = Path("tools/h7_manual_activate.py").read_text()
-        # The CLI must contain NO append_event call: it routes through the one
-        # door. (This is the primary revert guard -- see the (d) test below.)
-        self.assertFalse(_has_append_call(cli_src),
-                         "h7_manual_activate must not call append_event")
-        # ...and it must call the one door.
-        self.assertIn("register_window_real", cli_src)
+        for path in (
+            Path("tools/h7_manual_activate.py"),
+            Path("tools/h7_schwab_manual_activate.py"),
+        ):
+            with self.subTest(path=path):
+                cli_src = path.read_text()
+                self.assertFalse(
+                    _has_append_call(cli_src),
+                    f"{path.name} must not call append_event",
+                )
+                self.assertIn("register_window_real", cli_src)
 
     def test_no_module_appends_to_the_real_store(self):
         # No scanned module may append_event to ANY real store, whether
@@ -283,8 +299,8 @@ class StructuralOneDoorTests(unittest.TestCase):
             for name, src in sources.items():
                 self.assertFalse(
                     _appends_to_real_store(src, store_name),
-                    f"{name} appends to {store_name} (direct, aliased, or "
-                    "Path-literal)")
+                    f"{name} appends to {store_name} (direct, aliased, or Path-literal)",
+                )
 
     def test_real_store_path_literals_track_the_constants(self):
         # Sanity, not tautology: the Path("ledger/...") literal used by the
@@ -293,8 +309,10 @@ class StructuralOneDoorTests(unittest.TestCase):
         # would silently desync the two and reopen the Path-literal evasion.
         self.assertEqual(SCHWAB_FORWARD_STORE, Path(_REAL_STORES["SCHWAB_FORWARD_STORE"]))
         self.assertTrue(
-            str(REAL_FORWARD_STORE).replace("\\", "/").endswith(
-                "/" + _REAL_STORES["REAL_FORWARD_STORE"]))
+            str(REAL_FORWARD_STORE)
+            .replace("\\", "/")
+            .endswith("/" + _REAL_STORES["REAL_FORWARD_STORE"])
+        )
 
     def test_revert_to_a_schwab_store_evasion_is_caught(self):
         # Adversarial review 2026-08-12 (finding B1): `_is_real_store_ref`
@@ -332,23 +350,21 @@ class StructuralOneDoorTests(unittest.TestCase):
             "from options_researcher import h7_event_ledger as ledger\n"
             "def quietly_register(event):\n"
             "    return ledger.append_event(\n"
-            "        event, base_dir=Path(\"ledger/h7_forward_schwab\"),\n"
+            '        event, base_dir=Path("ledger/h7_forward_schwab"),\n'
             "        expected_head=None)\n"
         )
-        for regressed in (module_scope_evasion, aliased_default_evasion,
-                          path_literal_evasion):
+        for regressed in (module_scope_evasion, aliased_default_evasion, path_literal_evasion):
             self.assertTrue(
                 _appends_to_real_store(regressed, "SCHWAB_FORWARD_STORE"),
-                f"scanner failed to catch a reconstructed evasion:\n{regressed}")
+                f"scanner failed to catch a reconstructed evasion:\n{regressed}",
+            )
 
         # Non-tautology control: the scan is genuinely per-namespace, not a
         # blanket "any append_event call is suspicious" trip -- the Schwab
         # evasions above must NOT be flagged when scanning for the *other*
         # (legacy) store, since they never name it.
-        for regressed in (module_scope_evasion, aliased_default_evasion,
-                          path_literal_evasion):
-            self.assertFalse(
-                _appends_to_real_store(regressed, "REAL_FORWARD_STORE"))
+        for regressed in (module_scope_evasion, aliased_default_evasion, path_literal_evasion):
+            self.assertFalse(_appends_to_real_store(regressed, "REAL_FORWARD_STORE"))
 
     def test_revert_to_a_direct_or_aliased_cli_append_is_caught(self):
         # (d) Revert-proof: reconstruct BOTH evasions and prove the SAME
@@ -403,8 +419,9 @@ def _owner_inputs() -> dict:
 
 
 def _git_head() -> str:
-    return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                          text=True, check=True).stdout.strip()
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 class ActivationOneDoorTests(unittest.TestCase):
@@ -430,83 +447,111 @@ class ActivationOneDoorTests(unittest.TestCase):
         self.data_gate = self._write_data_gate(self.data_gate_path, self.source)
         self._write_backup(self.backup_path)
         self.owner_path.write_text(json.dumps(_owner_inputs()))
-        self.evidence_path.write_text(json.dumps({
-            "review_evidence": "external review PASS 2026-07-19",
-            "activation_spec_sha256": self.spec_sha,
-            "code_commit": self.head,
-            "darwin_durability_verified": True,
-            "pre_append_state": "VALID EMPTY",
-        }))
+        self.evidence_path.write_text(
+            json.dumps(
+                {
+                    "review_evidence": "external review PASS 2026-07-19",
+                    "activation_spec_sha256": self.spec_sha,
+                    "code_commit": self.head,
+                    "darwin_durability_verified": True,
+                    "pre_append_state": "VALID EMPTY",
+                }
+            )
+        )
 
     # -- receipt builders (real make_receipt -> intact hashes) -------------- #
     def _write_source(self, path: Path) -> dict:
-        receipt = make_receipt("source_health", {
-            "evaluation_session": _COMPLETED_SESSION,
-            "requested_run_date": _REQUESTED_RUN_DATE,
-            "known_as_of_utc": "2026-07-10T20:00:00+00:00",
-            "scope": scope_identity(),
-            "healthy_count": len(self.names),
-            "unhealthy_count": 0,
-            "unhealthy_symbols": [],
-            "activation_ready": True,
-            "symbols": {s: {"symbol": s, "healthy": True} for s in self.names},
-            "input_files": {},
-            "config_hash": config_hash(),
-            "source_hash": diagnostic_source_hash(),
-        })
+        receipt = make_receipt(
+            "source_health",
+            {
+                "evaluation_session": _COMPLETED_SESSION,
+                "requested_run_date": _REQUESTED_RUN_DATE,
+                "known_as_of_utc": "2026-07-10T20:00:00+00:00",
+                "scope": scope_identity(),
+                "healthy_count": len(self.names),
+                "unhealthy_count": 0,
+                "unhealthy_symbols": [],
+                "activation_ready": True,
+                "symbols": {s: {"symbol": s, "healthy": True} for s in self.names},
+                "input_files": {},
+                "config_hash": config_hash(),
+                "source_hash": diagnostic_source_hash(),
+            },
+        )
         path.write_text(json.dumps(receipt))
         return receipt
 
     def _write_data_gate(self, path: Path, source: dict) -> dict:
-        receipt = make_receipt("data_gate", {
-            "evaluation_session": _COMPLETED_SESSION,
-            "requested_run_date": _REQUESTED_RUN_DATE,
-            "scope": scope_identity(),
-            "whole_universe_verdict": "GO",
-            "go_count": len(self.names),
-            "no_go_count": 0,
-            "symbols": {s: {} for s in self.names},
-            "input_files": {},
-            "source_health_receipt_hash": source["receipt_hash"],
-            "source_health_receipt_path": str(self.source_path),
-            "config_hash": config_hash(),
-            "source_hash": diagnostic_source_hash(),
-        })
+        receipt = make_receipt(
+            "data_gate",
+            {
+                "evaluation_session": _COMPLETED_SESSION,
+                "requested_run_date": _REQUESTED_RUN_DATE,
+                "scope": scope_identity(),
+                "whole_universe_verdict": "GO",
+                "go_count": len(self.names),
+                "no_go_count": 0,
+                "symbols": {s: {} for s in self.names},
+                "input_files": {},
+                "source_health_receipt_hash": source["receipt_hash"],
+                "source_health_receipt_path": str(self.source_path),
+                "config_hash": config_hash(),
+                "source_hash": diagnostic_source_hash(),
+            },
+        )
         path.write_text(json.dumps(receipt))
         return receipt
 
     def _write_backup(self, path: Path) -> dict:
-        receipt = make_receipt("backup_restore", {
-            "completed_session": _COMPLETED_SESSION,
-            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
-            "snapshot": "latest",
-            "scope": scope_identity(),
-            "verification": {"ok": True},
-        })
+        receipt = make_receipt(
+            "backup_restore",
+            {
+                "completed_session": _COMPLETED_SESSION,
+                "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+                "snapshot": "latest",
+                "scope": scope_identity(),
+                "verification": {"ok": True},
+            },
+        )
         path.write_text(json.dumps(receipt))
         return receipt
 
     # -- patches that stand in for the real world (caches, git tree) -------- #
     def _world_patches(self, stack: ExitStack) -> None:
-        stack.enter_context(mock.patch.object(
-            cli, "validate_data_gate_receipt",
-            side_effect=lambda path, **kw: load_receipt(
-                Path(path), expected_type="data_gate")))
-        stack.enter_context(mock.patch.object(
-            ag, "_working_tree_clean",
-            return_value=ag.Check("working_tree_clean", True, "clean")))
+        stack.enter_context(
+            mock.patch.object(
+                cli,
+                "validate_data_gate_receipt",
+                side_effect=lambda path, **kw: load_receipt(Path(path), expected_type="data_gate"),
+            )
+        )
+        stack.enter_context(
+            mock.patch.object(
+                ag,
+                "_working_tree_clean",
+                return_value=ag.Check("working_tree_clean", True, "clean"),
+            )
+        )
         # Append-time gate re-run: deterministic PASS (the real evaluators read
         # real caches; those paths are covered by their own tests).
-        stack.enter_context(mock.patch(
-            "options_researcher.h7_source_health.load_assertions",
-            return_value=[]))
-        stack.enter_context(mock.patch(
-            "options_researcher.h7_source_health.evaluate_health",
-            return_value={"activation_ready": True}))
-        stack.enter_context(mock.patch(
-            "options_researcher.h7_data_gate.evaluate",
-            return_value={"whole_universe_verdict": "GO",
-                          "evaluation_session": _COMPLETED_SESSION}))
+        stack.enter_context(
+            mock.patch("options_researcher.h7_source_health.load_assertions", return_value=[])
+        )
+        stack.enter_context(
+            mock.patch(
+                "options_researcher.h7_source_health.evaluate_health",
+                return_value={"activation_ready": True},
+            )
+        )
+        stack.enter_context(
+            mock.patch(
+                "options_researcher.h7_data_gate.evaluate",
+                return_value={
+                    "whole_universe_verdict": "GO",
+                    "evaluation_session": _COMPLETED_SESSION,
+                },
+            )
+        )
 
     def test_activation_lands_seq0_with_receipt_hashes_in_payload(self):
         real_before = el.verify(base_dir=REAL_FORWARD_STORE)
@@ -518,13 +563,17 @@ class ActivationOneDoorTests(unittest.TestCase):
         with ExitStack() as stack:
             self._world_patches(stack)
             result = cli.activate(
-                owner_path=self.owner_path, evidence_path=self.evidence_path,
+                owner_path=self.owner_path,
+                evidence_path=self.evidence_path,
                 source_health_path=self.source_path,
                 data_gate_path=self.data_gate_path,
                 backup_restore_path=self.backup_path,
                 completed_session=_COMPLETED_SESSION,
-                confirmation=cli.CONFIRMATION, spec_path=self.spec,
-                forward_base=self.store, code_state=lambda: (self.head, True))
+                confirmation=cli.CONFIRMATION,
+                spec_path=self.spec,
+                forward_base=self.store,
+                code_state=lambda: (self.head, True),
+            )
 
         self.assertEqual(result.seq, 0)
         v = el.verify(base_dir=self.store)
@@ -534,16 +583,15 @@ class ActivationOneDoorTests(unittest.TestCase):
         self.assertEqual(event.payload["activation_spec_sha256"], self.spec_sha)
         self.assertEqual(event.payload["code_commit"], self.head)
         gates = event.payload["gates"]
-        self.assertEqual(gates["source_health_evidence_id"],
-                         self.source["receipt_hash"])
-        self.assertEqual(gates["data_gate_evidence_id"],
-                         self.data_gate["receipt_hash"])
+        self.assertEqual(gates["source_health_evidence_id"], self.source["receipt_hash"])
+        self.assertEqual(gates["data_gate_evidence_id"], self.data_gate["receipt_hash"])
 
         # The real store is byte-identical before and after (never touched).
         real_after = el.verify(base_dir=REAL_FORWARD_STORE)
         self.assertEqual(
             (real_after.valid, real_after.empty, real_after.count),
-            (real_before.valid, real_before.empty, real_before.count))
+            (real_before.valid, real_before.empty, real_before.count),
+        )
 
     def test_recheck_receipt_hash_mismatch_refuses_and_writes_nothing(self):
         # (c) After the good source receipt is bound into the evidence, replace
@@ -552,25 +600,40 @@ class ActivationOneDoorTests(unittest.TestCase):
         # disagrees with the assembled evidence, and refuses through the one
         # door -- nothing is written.
         source_good = load_receipt(self.source_path, expected_type="source_health")
-        tampered = make_receipt("source_health", {
-            **{k: v for k, v in source_good.items() if k != "receipt_hash"},
-            "healthy_count": len(self.names) - 1,  # changes the content -> hash
-        })
+        tampered = make_receipt(
+            "source_health",
+            {
+                **{k: v for k, v in source_good.items() if k != "receipt_hash"},
+                "healthy_count": len(self.names) - 1,  # changes the content -> hash
+            },
+        )
         self.assertNotEqual(tampered["receipt_hash"], source_good["receipt_hash"])
         self.source_path.write_text(json.dumps(tampered))
 
         recheck = cli._make_recheck(
-            source=source_good, data_gate=self.data_gate,
-            source_path=self.source_path, data_gate_path=self.data_gate_path,
-            names=self.names, completed_session=_COMPLETED_SESSION)
+            source=source_good,
+            data_gate=self.data_gate,
+            source_path=self.source_path,
+            data_gate_path=self.data_gate_path,
+            names=self.names,
+            completed_session=_COMPLETED_SESSION,
+        )
 
         report = ag.GuardReport(
-            checks=[ag.Check(n, True, "ok") for n in (
-                "ledger_valid_empty", "source_health_whole_universe",
-                "data_gate_go", "owner_inputs_complete", "working_tree_clean")],
+            checks=[
+                ag.Check(n, True, "ok")
+                for n in (
+                    "ledger_valid_empty",
+                    "source_health_whole_universe",
+                    "data_gate_go",
+                    "owner_inputs_complete",
+                    "working_tree_clean",
+                )
+            ],
             forward_base=str(self.store.resolve()),
             code_commit=self.head,
-            built_at_utc=datetime.now(timezone.utc).isoformat())
+            built_at_utc=datetime.now(timezone.utc).isoformat(),
+        )
 
         evidence = {
             "review_evidence": "external review PASS 2026-07-19",
@@ -582,17 +645,26 @@ class ActivationOneDoorTests(unittest.TestCase):
             "pre_append_state": "VALID EMPTY",
         }
         with ExitStack() as stack:
-            stack.enter_context(mock.patch.object(
-                cli, "validate_data_gate_receipt",
-                side_effect=lambda path, **kw: load_receipt(
-                    Path(path), expected_type="data_gate")))
+            stack.enter_context(
+                mock.patch.object(
+                    cli,
+                    "validate_data_gate_receipt",
+                    side_effect=lambda path, **kw: load_receipt(
+                        Path(path), expected_type="data_gate"
+                    ),
+                )
+            )
             with self.assertRaises(wr.ActivationRefused):
                 wr.register_window_real(
-                    owner=_owner_inputs(), evidence=evidence,
-                    guard_report=report, spec_sha256=self.spec_sha,
-                    spec_path=self.spec, base_dir=self.store,
+                    owner=_owner_inputs(),
+                    evidence=evidence,
+                    guard_report=report,
+                    spec_sha256=self.spec_sha,
+                    spec_path=self.spec,
+                    base_dir=self.store,
                     code_state=lambda: (self.head, True),
-                    recheck_gates=recheck)
+                    recheck_gates=recheck,
+                )
         self.assertTrue(el.verify(base_dir=self.store).empty)
 
 

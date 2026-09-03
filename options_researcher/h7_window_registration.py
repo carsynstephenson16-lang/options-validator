@@ -5,6 +5,7 @@ a future owner-authorized Stage-8 opening arc (readiness packet §5 steps
 5-9) after external review -- never from this module's tests and never via
 any CLI (none exists here on purpose).
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -54,6 +55,8 @@ EVIDENCE_FIELDS = (
     "darwin_durability_verified",
     "pre_append_state",
 )
+
+
 class RegistrationInputError(ValueError):
     """An owner/evidence input is missing, None, empty, or malformed."""
 
@@ -68,7 +71,18 @@ def _require(mapping: dict, fields: tuple, label: str) -> None:
         if mapping.get(field) in (None, ""):
             raise RegistrationInputError(
                 f"{label} input {field!r} is missing/None/empty; no default "
-                "may be inferred for an owner-authorized pre-commitment value")
+                "may be inferred for an owner-authorized pre-commitment value"
+            )
+
+
+def _validate_durability_evidence(evidence: dict) -> None:
+    value = evidence["darwin_durability_verified"]
+    if type(value) is not bool:
+        raise RegistrationInputError(
+            "evidence input 'darwin_durability_verified' must be a JSON boolean"
+        )
+    if value is not True:
+        raise RegistrationInputError("Darwin durability evidence is not verified")
 
 
 def _add_months(d: date, months: int) -> date:
@@ -76,8 +90,7 @@ def _add_months(d: date, months: int) -> date:
     year = d.year + month_index // 12
     month = month_index % 12 + 1
     leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-    days_in_month = [31, 29 if leap else 28, 31, 30, 31, 30,
-                     31, 31, 30, 31, 30, 31]
+    days_in_month = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     return date(year, month, min(d.day, days_in_month[month - 1]))
 
 
@@ -90,7 +103,8 @@ def derive_window_end(start_iso: str, session_count: int) -> str:
     if len(horizon) < session_count:
         raise WindowRuleError(
             "the XNYS trading calendar cannot supply the requested "
-            f"{session_count} decision sessions from {start_iso}")
+            f"{session_count} decision sessions from {start_iso}"
+        )
     end_iso = horizon[-1]
     anniversary = _add_months(date.fromisoformat(start_iso), 3)
     if date.fromisoformat(end_iso) < anniversary:
@@ -98,7 +112,8 @@ def derive_window_end(start_iso: str, session_count: int) -> str:
             f"final decision session {end_iso} precedes the three-calendar-"
             f"month anniversary {anniversary.isoformat()} of start "
             f"{start_iso}; a shorter session count is invalid -- "
-            "the window must span at least three calendar months per lane")
+            "the window must span at least three calendar months per lane"
+        )
     return end_iso
 
 
@@ -142,16 +157,18 @@ def _validate_universe_manifest(manifest: dict) -> None:
     if not included:
         raise RegistrationInputError(
             "window universe is empty -- refusing to register a window with no "
-            "included names (trim left nothing data-ready)")
+            "included names (trim left nothing data-ready)"
+        )
     playable = {lane for s in included for lane in _lanes_for_symbol(s)}
     if not playable:
         raise RegistrationInputError(
-            "trimmed universe is structurally empty -- no included name can "
-            "play any H7 lane")
+            "trimmed universe is structurally empty -- no included name can play any H7 lane"
+        )
 
 
-def build_window_registration_event(*, owner: dict, evidence: dict,
-                                    universe_manifest: dict | None = None) -> dict:
+def build_window_registration_event(
+    *, owner: dict, evidence: dict, universe_manifest: dict | None = None
+) -> dict:
     """Build (never append) the Stage-8 window_registration event. Every
     owner/evidence input is validated present; the window arithmetic is
     re-derived (never trusted from owner ack strings) and checked against
@@ -165,8 +182,8 @@ def build_window_registration_event(*, owner: dict, evidence: dict,
     empty or structurally lane-empty universe is refused here."""
     _require(owner, OWNER_FIELDS, "owner")
     _require(evidence, EVIDENCE_FIELDS, "evidence")
-    manifest = (default_universe_manifest() if universe_manifest is None
-                else universe_manifest)
+    _validate_durability_evidence(evidence)
+    manifest = default_universe_manifest() if universe_manifest is None else universe_manifest
     _validate_universe_manifest(manifest)
 
     start = owner["WINDOW_START_DECISION_SESSION"]
@@ -178,13 +195,12 @@ def build_window_registration_event(*, owner: dict, evidence: dict,
         raise WindowRuleError(
             f"paid ThetaData daily EOD coverage confirmed only through "
             f"{coverage_through}, short of window end {end}; renew coverage "
-            "before registering")
+            "before registering"
+        )
 
     registered_config_hash = config_hash()
     registered_cost_model_hash = cost_model_hash()
-    stage456_parameters = {
-        name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES
-    }
+    stage456_parameters = {name: getattr(config, name) for name in STAGE456_PARAMETER_NAMES}
     scorer = {
         "module": "options_researcher.h7_forward_scoring",
         "bootstrap_samples": config.BOOTSTRAP_SAMPLES,
@@ -205,8 +221,7 @@ def build_window_registration_event(*, owner: dict, evidence: dict,
             "decision_session_count": count,
             "final_decision_session": end,
             "end_rule": "inclusive count of XNYS decision sessions from start",
-            "three_month_proof": (
-                f"{end} >= three-calendar-month anniversary of {start}"),
+            "three_month_proof": (f"{end} >= three-calendar-month anniversary of {start}"),
         },
         "cohort_rule": "decision_session in registered window (immutable key)",
         "frozen": {
@@ -223,24 +238,23 @@ def build_window_registration_event(*, owner: dict, evidence: dict,
             },
             "survived_disclaimer": (
                 "SURVIVED is not live-trading approval, not a profitability "
-                "claim, and not validation"),
+                "claim, and not validation"
+            ),
         },
         "gates": {
             "source_health_evidence_id": evidence["source_health_evidence_id"],
             "data_gate_evidence_id": evidence["data_gate_evidence_id"],
             "scope_id": evidence.get("scope_id"),
             "scope_hash": evidence.get("scope_hash"),
-            "source_health_receipt_hash": evidence.get(
-                "source_health_receipt_hash"),
+            "source_health_receipt_hash": evidence.get("source_health_receipt_hash"),
             "data_gate_receipt_hash": evidence.get("data_gate_receipt_hash"),
-            "backup_restore_receipt_hash": evidence.get(
-                "backup_restore_receipt_hash"),
+            "backup_restore_receipt_hash": evidence.get("backup_restore_receipt_hash"),
             "source_hash": evidence.get("source_hash"),
             "config_hash": evidence.get("config_hash", config_hash()),
         },
         "coverage_evidence": owner["THETADATA_CONFIRMATION_EVIDENCE"],
         "universe": manifest,
-        "darwin_durability_verified": bool(evidence["darwin_durability_verified"]),
+        "darwin_durability_verified": evidence["darwin_durability_verified"],
         "pre_append_state": evidence["pre_append_state"],
     }
     return {
@@ -269,9 +283,9 @@ def _synthetic_base(base_dir) -> Path:
     return base
 
 
-def register_window(*, owner: dict, evidence: dict, base_dir,
-                    universe_manifest: dict | None = None,
-                    clock=None) -> ledger.AppendResult:
+def register_window(
+    *, owner: dict, evidence: dict, base_dir, universe_manifest: dict | None = None, clock=None
+) -> ledger.AppendResult:
     """Append the window_registration event as the ledger's FIRST event.
     Synthetic stores only -- refuses the real forward store and refuses a
     ledger that already has a verified tip (``expected_head=None`` demands
@@ -280,9 +294,9 @@ def register_window(*, owner: dict, evidence: dict, base_dir,
     -- one seq semantic in this codebase, not two)."""
     base = _synthetic_base(base_dir)
     event = build_window_registration_event(
-        owner=owner, evidence=evidence, universe_manifest=universe_manifest)
-    return ledger.append_event(event, base_dir=base, clock=clock,
-                               expected_head=None)
+        owner=owner, evidence=evidence, universe_manifest=universe_manifest
+    )
+    return ledger.append_event(event, base_dir=base, clock=clock, expected_head=None)
 
 
 class ActivationRefused(RuntimeError):
@@ -298,12 +312,21 @@ _SHA256_HEX = 64
 GUARD_REPORT_MAX_AGE_S = 3600
 
 
-def register_window_real(*, owner: dict, evidence: dict, guard_report,
-                         spec_sha256: str, spec_path, base_dir, code_state,
-                         recheck_gates, universe_manifest: dict | None = None,
-                         clock=None, now=None,
-                         max_report_age_s: int = GUARD_REPORT_MAX_AGE_S,
-                         ) -> ledger.AppendResult:
+def register_window_real(
+    *,
+    owner: dict,
+    evidence: dict,
+    guard_report,
+    spec_sha256: str,
+    spec_path,
+    base_dir,
+    code_state,
+    recheck_gates,
+    universe_manifest: dict | None = None,
+    clock=None,
+    now=None,
+    max_report_age_s: int = GUARD_REPORT_MAX_AGE_S,
+) -> ledger.AppendResult:
     """The Stage-8 PRODUCTION append path (activation-spec 2026-07-18): the
     only code allowed to write the first real ``window_registration`` event.
 
@@ -346,7 +369,8 @@ def register_window_real(*, owner: dict, evidence: dict, guard_report,
         failed = [c.name for c in guard_report.checks if not c.ok]
         raise ActivationRefused(
             f"guard report is not a full PASS (failed: {failed or 'no checks'})"
-            " -- activation refused, nothing written")
+            " -- activation refused, nothing written"
+        )
 
     base = Path(base_dir)
     bound = str(base.resolve(strict=False))
@@ -354,48 +378,54 @@ def register_window_real(*, owner: dict, evidence: dict, guard_report,
         raise ActivationRefused(
             f"guard report is bound to {guard_report.forward_base!r}, not the "
             f"target store {bound!r} -- a PASS against another store "
-            "authorizes nothing here")
+            "authorizes nothing here"
+        )
 
     if not guard_report.code_commit or not guard_report.built_at_utc:
         raise ActivationRefused(
             "guard report carries no code/build identity -- treated as "
-            "non-fresh; rebuild the report at the pinned session")
+            "non-fresh; rebuild the report at the pinned session"
+        )
 
     head_now, tree_clean = code_state()
     if not tree_clean:
         raise ActivationRefused(
             "working tree is dirty at append time -- the identity the guard "
-            "verified is no longer the identity being registered")
+            "verified is no longer the identity being registered"
+        )
     if head_now != guard_report.code_commit:
         raise ActivationRefused(
             f"HEAD moved since the guard report ({guard_report.code_commit} "
-            f"-> {head_now}) -- re-run the guard at the current commit")
+            f"-> {head_now}) -- re-run the guard at the current commit"
+        )
     if evidence["code_commit"] != head_now:
         raise ActivationRefused(
             f"evidence code_commit {evidence['code_commit']} disagrees with "
             f"HEAD {head_now} -- the reviewed identity must be the appended "
-            "identity")
+            "identity"
+        )
 
     sha = str(spec_sha256)
-    if (len(sha) != _SHA256_HEX
-            or any(ch not in "0123456789abcdef" for ch in sha)):
-        raise ActivationRefused(
-            "activation spec sha must be 64 lowercase hex characters")
+    if len(sha) != _SHA256_HEX or any(ch not in "0123456789abcdef" for ch in sha):
+        raise ActivationRefused("activation spec sha must be 64 lowercase hex characters")
     if evidence["activation_spec_sha256"] != sha:
         raise ActivationRefused(
             "activation_spec_sha256 in the evidence does not match the spec "
             "sha handed to the append path -- the reviewed spec must be the "
-            "registered spec")
+            "registered spec"
+        )
     spec_file = Path(spec_path)
     if not spec_file.is_file():
         raise ActivationRefused(
             f"activation spec file {spec_file} does not exist -- nothing to "
-            "bind the registration to")
+            "bind the registration to"
+        )
     on_disk = sha256_file(spec_file)
     if on_disk != sha:
         raise ActivationRefused(
             f"on-disk activation spec hashes to {on_disk}, not the reviewed "
-            f"{sha} -- the file changed since review (spec drift)")
+            f"{sha} -- the file changed since review (spec drift)"
+        )
 
     if now is None:
         now = datetime.now(timezone.utc)
@@ -404,36 +434,40 @@ def register_window_real(*, owner: dict, evidence: dict, guard_report,
     except ValueError as exc:
         raise ActivationRefused(
             f"guard report built_at_utc {guard_report.built_at_utc!r} is not "
-            "a parseable timestamp -- treated as non-fresh") from exc
+            "a parseable timestamp -- treated as non-fresh"
+        ) from exc
     age = (now - built).total_seconds()
     if age < 0 or age > max_report_age_s:
         raise ActivationRefused(
             f"guard report is {age:.0f}s old (bound {max_report_age_s}s) or "
-            "from the future -- rebuild it at the pinned session")
+            "from the future -- rebuild it at the pinned session"
+        )
 
     gates = recheck_gates()
     if gates.get("source_health_all_healthy") is not True:
         raise ActivationRefused(
             "append-time source-health recheck did not report all-healthy -- "
-            "gate PASSes are re-earned at append, never inherited")
+            "gate PASSes are re-earned at append, never inherited"
+        )
     if gates.get("data_gate_go") is not True:
-        raise ActivationRefused(
-            "append-time data-gate recheck did not report whole-universe GO")
+        raise ActivationRefused("append-time data-gate recheck did not report whole-universe GO")
     for key in ("source_health_evidence_id", "data_gate_evidence_id"):
         if gates.get(key) != evidence[key]:
             raise ActivationRefused(
                 f"recheck {key} {gates.get(key)!r} disagrees with the "
                 f"evidence's {evidence[key]!r} -- the gate run being "
-                "registered must be the gate run that passed")
+                "registered must be the gate run that passed"
+            )
 
     v = ledger.verify(base_dir=base)
     if not (v.valid and v.empty):
         raise ActivationRefused(
             f"target forward store is not VALID EMPTY at append time "
             f"(valid={v.valid} empty={v.empty} count={v.count}) -- the "
-            "window_registration must be the chain's first event")
+            "window_registration must be the chain's first event"
+        )
 
     event = build_window_registration_event(
-        owner=owner, evidence=evidence, universe_manifest=universe_manifest)
-    return ledger.append_event(event, base_dir=base, clock=clock,
-                               expected_head=None)
+        owner=owner, evidence=evidence, universe_manifest=universe_manifest
+    )
+    return ledger.append_event(event, base_dir=base, clock=clock, expected_head=None)
