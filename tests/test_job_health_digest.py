@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+import config
 from options_researcher.h7_scope import watch_universe
 from research.hashing import canonical_json, sha256_file, sha256_hex
 from tools import schwab_chain_manifest
@@ -112,6 +113,19 @@ class JobHealthDigestTests(unittest.TestCase):
         timestamp = datetime.combine(invocation_date, time(12), tzinfo=NY_TZ).timestamp()
         os.utime(path, (timestamp, timestamp))
 
+    def _install_schwab_intraday(self, tag: str, overall_status: str = "ok") -> Path:
+        path = self.root / f"reports/schwab_chains_intraday/{tag}/{AS_OF}/{tag}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "receipt_kind": "schwab_chain_capture_intraday/v1",
+            "session": AS_OF,
+            "scheduled_session_tag": tag,
+            "force": False,
+            "overall_status": overall_status,
+        }
+        path.write_text(json.dumps(payload, indent=2) + "\n")
+        return path
+
     def _install_all_ok(self) -> None:
         self._copy("run_status.json", f"reports/ritual/run_status_{AS_OF}.json")
         self._copy(
@@ -121,6 +135,8 @@ class JobHealthDigestTests(unittest.TestCase):
         for tag in INTRADAY_FIXTURE_FIELDS:
             self._install_intraday_tag(tag)
         self._install_schwab_package()
+        for tag in config.SCHWAB_CHAIN_INTRADAY_TIMES:
+            self._install_schwab_intraday(tag)
         self._copy("alignment.log", f".tmp/alignment_check/{AS_OF}.log")
         self._copy(
             "research_refresh.json",
@@ -144,6 +160,8 @@ class JobHealthDigestTests(unittest.TestCase):
             "Intraday capture (midmorning)",
             "Intraday capture (midday)",
             "Intraday capture (preclose)",
+            "Schwab intraday (morning)",
+            "Schwab intraday (midday)",
             "Schwab preclose",
             "Alignment check",
             "Research refresh (midmorning)",
@@ -641,12 +659,14 @@ class JobHealthDigestTests(unittest.TestCase):
             "Intraday capture (midmorning)",
             "Intraday capture (midday)",
             "Intraday capture (preclose)",
+            "Schwab intraday (morning)",
+            "Schwab intraday (midday)",
             "Schwab preclose",
             "Research refresh (midmorning)",
         ):
             self.assertEqual(by_job[job].status, HealthStatus.MISSING, job)
         self.assertEqual(by_job["Alignment check"].status, HealthStatus.OK)
-        self.assertTrue(digest.startswith("9 PROBLEMS\n"), digest)
+        self.assertTrue(digest.startswith("11 PROBLEMS\n"), digest)
 
     def test_xnys_holiday_reports_no_session_without_problems(self):
         holiday = "2026-12-25"

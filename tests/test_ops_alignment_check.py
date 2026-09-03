@@ -136,7 +136,7 @@ class OpsAlignmentCheckTests(unittest.TestCase):
             )
 
     # --- plist -------------------------------------------------------------
-    def test_plist_runs_weekdays_at_1530_et_from_the_ops_checkout(self):
+    def test_plist_runs_weekdays_at_0945_1245_1530_et_from_the_ops_checkout(self):
         payload = plistlib.loads(PLIST.read_bytes())
         self.assertEqual(
             payload["Label"], "com.carsyn.options-validator.alignment-check"
@@ -156,29 +156,32 @@ class OpsAlignmentCheckTests(unittest.TestCase):
         self.assertEqual(
             payload["StartCalendarInterval"],
             [
-                {"Weekday": weekday, "Hour": 15, "Minute": 30}
+                {"Weekday": weekday, "Hour": hour, "Minute": minute}
                 for weekday in range(1, 6)
+                for hour, minute in ((9, 45), (12, 45), (15, 30))
             ],
         )
         self.assertFalse(payload["RunAtLoad"])
         self.assertNotIn("KeepAlive", payload)
 
-    def test_plist_runs_15_minutes_before_the_preclose_capture(self):
-        preclose = plistlib.loads(
-            (
-                ROOT
-                / "tools"
-                / "launchagents"
-                / "com.carsyn.options-validator.schwab-chain-preclose.plist"
-            ).read_bytes()
-        )
+    def test_plist_runs_15_minutes_before_every_durable_capture(self):
+        # D-6a's 15-minute lead applies to every durable Schwab pull: the
+        # 15:45 pre-close job and, since 2026-09-02, the 10:00 / 13:00
+        # intraday job (owner-directed).
         payload = plistlib.loads(PLIST.read_bytes())
-        check = payload["StartCalendarInterval"][0]
-        capture = preclose["StartCalendarInterval"][0]
-        self.assertEqual(
-            check["Hour"] * 60 + check["Minute"] + 15,
-            capture["Hour"] * 60 + capture["Minute"],
-        )
+        checks = {
+            (entry["Weekday"], entry["Hour"] * 60 + entry["Minute"])
+            for entry in payload["StartCalendarInterval"]
+        }
+        launchagents = ROOT / "tools" / "launchagents"
+        for name in (
+            "com.carsyn.options-validator.schwab-chain-preclose.plist",
+            "com.carsyn.options-validator.schwab-chain-intraday.plist",
+        ):
+            capture_plist = plistlib.loads((launchagents / name).read_bytes())
+            for entry in capture_plist["StartCalendarInterval"]:
+                capture_minute = entry["Hour"] * 60 + entry["Minute"]
+                self.assertIn((entry["Weekday"], capture_minute - 15), checks, (name, entry))
 
     def test_readme_documents_the_owner_run_bootstrap_command(self):
         readme = (ROOT / "tools" / "launchagents" / "README.md").read_text(
