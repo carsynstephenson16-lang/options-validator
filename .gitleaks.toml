@@ -9,7 +9,12 @@ description = "ThetaData API key"
 regex = '''td1_[A-Za-z0-9_=-]{20,}'''
 keywords = ["td1_"]
 
-[allowlist]
+# NOTE (2026-09-02): the two blocks below use the ARRAY form `[[allowlists]]`.
+# gitleaks refuses to load a config that mixes the deprecated singular
+# `[allowlist]` table with the array form, so adding the second entry required
+# converting the first. The first entry's meaning is unchanged: the same four
+# committed placeholder assignments, with the same default OR condition.
+[[allowlists]]
 description = "Allow committed placeholders only"
 regexes = [
   '''THETADATA_API_KEY=""''',
@@ -17,3 +22,21 @@ regexes = [
   '''THETADATA_USERNAME=""''',
   '''THETADATA_PASSWORD=""''',
 ]
+
+# Path-scoped, value-scoped allowlist for the A2 pin-fact ledger label constant
+# in options_researcher/a2_runner.py. The default generic-api-key rule matches
+# it on variable name (a _TOKEN suffix) plus entropy; the value is a public
+# ledger fact-type label, tracked in Git and documented, and grants no access
+# to anything. Without this, every edit that shifts the constant's line number
+# re-fires the rule on main and needs a fresh .gitleaksignore fingerprint --
+# it moved from line 44 to line 49 in 6e08cf8 (PR #138) and did exactly that.
+#
+# condition = "AND": the path AND the regex must both match, so this cannot
+# silence a genuine secret elsewhere in that file, nor this label in any other
+# file.
+[[allowlists]]
+description = "A2 pin-fact ledger label constant (public, not a credential)"
+condition = "AND"
+paths = ['''^options_researcher/a2_runner\.py$''']
+regexes = ['''RQ2_A2_PIN_ADDENDUM_V1''']
+regexTarget = "line"

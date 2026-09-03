@@ -952,3 +952,13 @@ SHORT_POSITIONING_ROOT = ".cache/short_positioning"
 SHORT_POSITIONING_MAX_AGE_RELEASES = 1
 # FINRA only. Every other provider stays LICENSE BLOCKED and unimplemented.
 SHORT_POSITIONING_PROVIDER_ORDER = ("finra",)
+
+# Schwab OAuth refresh-token lifetime, used ONLY by the display-only
+# options_researcher.schwab_token_age advisory. Not a strategy parameter and
+# not verdict-bearing.
+# Official-source (Schwab developer docs: refresh tokens expire 7 days after
+# creation; refreshing an access token does NOT reset this clock — see
+# reports/2026-08-12-schwab-auth-diagnosis.md 2026-08-15 addendum). Not
+# owner-typed; provider convention.
+SCHWAB_REFRESH_TOKEN_HARD_EXPIRY_DAYS = 7
+SCHWAB_TOKEN_WARN_HOURS = 36  # LLM-proposed 2026-09-02 operator convention, display-only

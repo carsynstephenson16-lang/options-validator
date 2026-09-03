@@ -315,6 +315,14 @@ FROZEN_CONFIG_UPPERCASE_NAMES = (
     "RQ1_NOTABLE_ABS_RHO",
     "RQ1_RV_ANNUALIZATION_SESSIONS",
     "SCHWAB_CHAIN_INTRADAY_TIMES",
+    # 2026-09-02: two display-only Schwab-token-age advisory constants. Both
+    # are provider/operator conventions for an ADVISORY line (no verdict, no
+    # gate, no entry, no sizing); neither is owner-typed and neither is read
+    # by any strategy, scorer or receipt. Listed here so the expansion is
+    # recorded and distinguished from unapproved drift, exactly as the A2_*
+    # entries above are.
+    "SCHWAB_REFRESH_TOKEN_HARD_EXPIRY_DAYS",
+    "SCHWAB_TOKEN_WARN_HOURS",
     "SHORT_CONTEXT_ENABLED",
     "SHORT_POSITIONING_MAX_AGE_RELEASES",
     "SHORT_POSITIONING_PROVIDER_ORDER",
