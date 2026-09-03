@@ -25,6 +25,11 @@
       "present": true,
       "total_bytes": 9700050
     },
+    ".cache/schwab_chains_intraday": {
+      "file_count": 0,
+      "present": false,
+      "total_bytes": 0
+    },
     ".cache/underlying": {
       "file_count": 25,
       "present": true,
@@ -36,6 +41,11 @@
       "total_bytes": 1511030
     },
     "reports/schwab_chains": {
+      "file_count": 0,
+      "present": false,
+      "total_bytes": 0
+    },
+    "reports/schwab_chains_intraday": {
       "file_count": 0,
       "present": false,
       "total_bytes": 0

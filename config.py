@@ -738,8 +738,13 @@ H9_MAX_UNRESOLVED_GAP_FRACTION = 0.10  # disclosed gap-rate ceiling
 # on-disk file never diverge. The prereg gate binds the two (C5).
 H9_SPEC_PATH = "docs/superpowers/specs/2026-07-16-h9-post-earnings-historical-study.md"
 
-# A2-v1 outcome battery — registration sequence 19 and the owner-approved
-# entry-convention addendum (2026-08-15). Identities/horizons only, no gates.
+# A2-v1 outcome battery — registration sequence 19 and the entry-convention
+# addendum (the 2026-08-15 "owner-approved" claim was voided by
+# A2_ENTRY_CONVENTION_CORRECTION_V1; approval authority lives in the
+# owner-typed A2_ENTRY_CONVENTION_RATIFIED_V1 fact). Identities/horizons
+# only, no gates. A2_UNIVERSE is the seq-19 historical 15-name set, retained
+# as registration provenance — the ACTIVE board is seq 27's
+# ATTRACTIVENESS_UNIVERSE; nothing in the decision path reads A2_UNIVERSE.
 A2_REGISTRATION_ID = "A2-v1"
 A2_REGISTRATION_SEQUENCE = 19
 A2_UNIVERSE = tuple(H7_WATCHLIST + H7_CORE_LONG_ONLY)
@@ -805,6 +810,25 @@ INTRADAY_CAPTURE_TIMES = {
 INTRADAY_CAPTURE_TOLERANCE_MINUTES = 10
 INTRADAY_CACHE_DIR = ".cache/intraday"  # disposable chain cache
 INTRADAY_RECEIPT_DIR = "reports/intraday_capture"  # durable per-capture receipts
+
+# Durable Schwab FULL-chain intraday pulls (owner-directed 2026-09-02,
+# in-session: "I want a pull at 10am and a pull at 1pm"). These are the
+# durable lane's extra slots -- the same options_researcher.schwab_chain_capture
+# module as the 15:45 pre-close capture, but written to an ISOLATED namespace
+# (.cache/schwab_chains_intraday/<tag>/ + reports/schwab_chains_intraday/<tag>/)
+# because the pre-close lane keys every artifact by symbol + date and is
+# first-write-wins: a second same-day write into its namespace would make the
+# 15:45 capture refuse and lose that day's H7 evidence. Deliberately a separate
+# table from INTRADAY_CAPTURE_TIMES (the display-only lane): that table's
+# consumers (job-health digest, intraday preview, hypothesis evidence)
+# enumerate it and would report a phantom missing display slot otherwise.
+# "preclose" is never a key here -- the 15:45 durable capture keeps its
+# untouched default identity. Tolerance is shared:
+# INTRADAY_CAPTURE_TOLERANCE_MINUTES.
+SCHWAB_CHAIN_INTRADAY_TIMES = {
+    "morning": "10:00",  # owner-typed 2026-09-02 (in-session)
+    "midday":  "13:00",  # owner-typed 2026-09-02 (in-session)
+}
 
 # ---------------------------------------------------------------------------
 # IV SOLVER CALIBRATION -- measures whether OUR options_researcher.
@@ -952,3 +976,13 @@ SHORT_POSITIONING_ROOT = ".cache/short_positioning"
 SHORT_POSITIONING_MAX_AGE_RELEASES = 1
 # FINRA only. Every other provider stays LICENSE BLOCKED and unimplemented.
 SHORT_POSITIONING_PROVIDER_ORDER = ("finra",)
+
+# Schwab OAuth refresh-token lifetime, used ONLY by the display-only
+# options_researcher.schwab_token_age advisory. Not a strategy parameter and
+# not verdict-bearing.
+# Official-source (Schwab developer docs: refresh tokens expire 7 days after
+# creation; refreshing an access token does NOT reset this clock — see
+# reports/2026-08-12-schwab-auth-diagnosis.md 2026-08-15 addendum). Not
+# owner-typed; provider convention.
+SCHWAB_REFRESH_TOKEN_HARD_EXPIRY_DAYS = 7
+SCHWAB_TOKEN_WARN_HOURS = 36  # LLM-proposed 2026-09-02 operator convention, display-only

@@ -372,6 +372,18 @@ elif [ "$FULL_AUTHORITY_RC" -ne 0 ]; then
 fi
 # ---- end full-tier region B ----
 
+# Schwab refresh-token age advisory (2026-09-02). DELIBERATELY OUTSIDE the
+# Schwab preclose lane region below: it is not part of that lane's gated
+# structure and must not become its first executable statement. The Schwab
+# refresh token dies 7 days after CREATION and refreshing an access token
+# does not reset that clock, so the 15:45 capture used to fail with no
+# warning at all (2026-08-31, 2026-09-01). This prints ONE operator line and
+# nothing else: no capture, no crit, no effect on CRITICAL / CRIT_COUNT /
+# DATA_STARVED / RITUAL_TERMINAL_STATUS. The module's CLI always exits 0;
+# `|| true` is belt-and-braces so an advisory can never break the ritual.
+echo ">>> schwab token:"
+"$UV" run python -m options_researcher.schwab_token_age || true
+
 # ---- Schwab preclose lane (brief 17 WP-F) ----
 # H10b and the H5 observer run OUTSIDE the H7 data-gate fence, and ONLY they
 # do: ledger seq 28 clause 1 and seq 29 clause 2 record the owner-confirmed
@@ -547,7 +559,7 @@ fi
 # rescue commits c9e74cc / 378230f / 13d48a9).
 # ---------------------------------------------------------------------------
 DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs
-                 reports/h5 reports/h10 reports/schwab_chains reports/pick_tracker reports/closes_receipts ledger/facts.log)
+                 reports/h5 reports/h10 reports/schwab_chains reports/schwab_chains_intraday reports/pick_tracker reports/closes_receipts ledger/facts.log)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
 EVIDENCE_COMMIT_MSG="data(ritual): daily ritual data-phase artifacts ${RUN_DATE}
 
@@ -624,7 +636,20 @@ if [ "$CRITICAL" -eq 1 ]; then
 fi
 /usr/bin/osascript -e "display notification \"$(printf '%b' "$SUMMARY" | head -c 220 | tr '"' "'")\" with title \"$TITLE\" subtitle \"session ${AS_OF} — log: .tmp/daily_ritual/${STAMP}.log\"" 2>/dev/null
 
+# The final line and the exit code must agree with the terminal status this
+# run already published and with the notification title it already sent. Until
+# 2026-09-02 this block tested raw $CRITICAL alone, so a chain-starved day
+# wrote an OK_STARVED receipt and sent a [DATA-STARVED] notification while
+# printing "RITUAL STATUS: BROKEN" and exiting 1 — the LaunchAgent's exit code
+# and the operator's last log line both cried wolf on an expected day. The
+# carve-out predicate below is character-for-character the one used at the
+# other two decision points (brief 11 §6.4): a PURE COUNTER comparison, so the
+# instant a second CRITICAL exists from any source, BROKEN wins.
 if [ "$CRITICAL" -eq 1 ]; then
+  if [ "$DATA_STARVED" -eq 1 ] && [ "$STARVED_CRIT" -eq 1 ] && [ "$CRIT_COUNT" -eq 1 ]; then
+    echo "RITUAL STATUS: OK_STARVED (chain-starved; see receipt)"
+    exit 0
+  fi
   echo "RITUAL STATUS: BROKEN (see CRITICAL lines above)"
   exit 1
 fi

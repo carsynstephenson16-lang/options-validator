@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from collections.abc import Mapping
+from datetime import date, datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -57,7 +58,13 @@ def _load_object(path: Path, label: str) -> dict:
     return value
 
 
-def _captured_at_session(value: object, session: str, session_tag: str) -> datetime:
+def _captured_at_session(
+    value: object,
+    session: str,
+    session_tag: str,
+    *,
+    schedule: Mapping[str, time] | None = None,
+) -> datetime:
     try:
         captured_at = datetime.fromisoformat(str(value))
     except (TypeError, ValueError) as exc:
@@ -69,7 +76,9 @@ def _captured_at_session(value: object, session: str, session_tag: str) -> datet
     captured_at_ny = captured_at.astimezone(NY_TZ)
     if captured_at_ny.date().isoformat() != session:
         raise SchwabChainManifestError("receipt captured_at_et session does not match")
-    timing_ok, timing_reason = validate_session_tag(session_tag, captured_at_ny)
+    timing_ok, timing_reason = validate_session_tag(
+        session_tag, captured_at_ny, schedule=schedule
+    )
     if not timing_ok:
         raise SchwabChainManifestError(
             f"receipt captured_at_et is outside {session_tag} tolerance: {timing_reason}"
@@ -159,8 +168,14 @@ def verify_session(
     receipt_filename: str = "preclose.json",
     session_tag: str = "preclose",
     receipt_kind: str = "schwab_chain_capture/v1",
+    schedule: Mapping[str, time] | None = None,
 ) -> dict:
-    """Verify exact session, universe, bytes, expirations, and receipt binding."""
+    """Verify exact session, universe, bytes, expirations, and receipt binding.
+
+    ``schedule`` (2026-09-02) names the {tag: time} table the receipt's
+    ``captured_at_et`` is checked against; None keeps the display lane's
+    table, which is where the default ``preclose`` identity lives.
+    """
     session = _session(session)
     symbols = _symbols(symbols)
     chain_dir = Path(chain_dir)
@@ -197,7 +212,9 @@ def verify_session(
         raise SchwabChainManifestError("receipt session does not match request")
     if receipt.get("scheduled_session_tag") != session_tag:
         raise SchwabChainManifestError("receipt scheduled session tag does not match")
-    _captured_at_session(receipt.get("captured_at_et"), session, session_tag)
+    _captured_at_session(
+        receipt.get("captured_at_et"), session, session_tag, schedule=schedule
+    )
     if receipt.get("force") is not False:
         raise SchwabChainManifestError("receipt force must be false; require force=false")
     if receipt.get("session_chain_convention") != convention:

@@ -48,6 +48,14 @@ RITUAL = Path(__file__).resolve().parents[1] / "tools" / "daily_ritual.sh"
 # ---- registry 1: `python -m <module>` invocation sites ----------------------
 DATA_TIER_MODULES = (
     "options_researcher.ritual_status",  # RUNNING marker and terminal status
+    # Display-only Schwab refresh-token age advisory (2026-09-02). It prints
+    # one operator line, never touches the network, always exits 0, and is
+    # invoked with `|| true` -- it can affect no status and gate nothing.
+    # Registered here as a data-tier module by tier, although its call site
+    # sits just BEFORE the Schwab preclose lane marker rather than inside the
+    # data-tier island (placing it inside broke the lane's first-statement
+    # invariant); only PYTHON_DASH_C_CLASSIFICATION is position-enforced.
+    "options_researcher.schwab_token_age",
     "options_researcher.qm_dashboard",  # OHLCV refresh (data-tier island)
     "options_researcher.dashboard",
     "options_researcher.attractiveness_dashboard",
@@ -95,8 +103,8 @@ PYTHON_DASH_C_CLASSIFICATION = {
     365: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
     # Brief 17 WP-F: the Schwab lane's own read-only sites. The verified-view
     # read is the lane's fail-closed gate; it mutates nothing.
-    394: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
-    437: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
+    406: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
+    449: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
 }
 
 # ---- registry 3: every mutation verb site ----------------------------------
@@ -124,13 +132,13 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$LOGDIR"': (68,),  # data tier
     'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
-    "mkdir -p reports/h5": (416,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (570,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (573,),  # data tier
-    "git fetch": (583,),  # data tier
-    "git merge": (584,),  # data tier — mutates the working tree unattended
-    "git push": (585,),  # data tier
-    "restic backup": (602,),  # data tier
+    "mkdir -p reports/h5": (428,),  # Schwab preclose lane (brief 17 WP-F)
+    "git add": (582,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (585,),  # data tier
+    "git fetch": (595,),  # data tier
+    "git merge": (596,),  # data tier — mutates the working tree unattended
+    "git push": (597,),  # data tier
+    "restic backup": (614,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -785,6 +793,64 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                     [zsh, "-c", script], capture_output=True, text=True, timeout=30
                 )
                 self.assertEqual(completed.stdout.strip(), expected, completed.stderr)
+
+    def test_final_exit_agrees_with_the_terminal_status_carve_out(self):
+        """The last line the operator reads must not contradict the receipt.
+
+        Before 2026-09-02 the terminal-status computation and the notification
+        title both had the OK_STARVED carve-out, but the FINAL echo/exit
+        checked raw `CRITICAL` alone -- so a chain-starved day published an
+        OK_STARVED receipt and a [DATA-STARVED] notification while printing
+        "RITUAL STATUS: BROKEN" and exiting 1. The LaunchAgent's exit code and
+        the operator's last log line both said broken on an expected day.
+        """
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        source = _source()
+        start = source.index('if [ "$CRITICAL" -eq 1 ]; then', source.index("/usr/bin/osascript"))
+        block = source[start:]
+
+        cases = (
+            # CRITICAL, DATA_STARVED, STARVED_CRIT, CRIT_COUNT, rc, text
+            (0, 0, 0, 0, 0, "RITUAL STATUS: OK"),
+            (0, 1, 1, 1, 0, "RITUAL STATUS: OK"),
+            (1, 1, 1, 1, 0, "RITUAL STATUS: OK_STARVED (chain-starved; see receipt)"),
+            (1, 1, 1, 2, 1, "RITUAL STATUS: BROKEN (see CRITICAL lines above)"),
+            (1, 1, 0, 1, 1, "RITUAL STATUS: BROKEN (see CRITICAL lines above)"),
+            (1, 0, 1, 1, 1, "RITUAL STATUS: BROKEN (see CRITICAL lines above)"),
+        )
+        for critical, starved, starved_crit, count, rc, text in cases:
+            with self.subTest(critical=critical, count=count):
+                script = "\n".join(
+                    [
+                        f"CRITICAL={critical}",
+                        f"DATA_STARVED={starved}",
+                        f"STARVED_CRIT={starved_crit}",
+                        f"CRIT_COUNT={count}",
+                        block,
+                    ]
+                )
+                completed = subprocess.run(
+                    [zsh, "-c", script], capture_output=True, text=True, timeout=30
+                )
+                self.assertEqual(completed.stdout.strip(), text, completed.stderr)
+                self.assertEqual(completed.returncode, rc)
+
+    def test_final_status_reuses_the_exact_carve_out_condition(self):
+        """Static twin of the behavioral test: the three deciders must all use
+        the SAME predicate, so a future edit to one is visibly a divergence."""
+        source = _source()
+        condition = (
+            'if [ "$DATA_STARVED" -eq 1 ] && [ "$STARVED_CRIT" -eq 1 ] '
+            '&& [ "$CRIT_COUNT" -eq 1 ]; then'
+        )
+        # terminal receipt status, notification title, final echo/exit
+        self.assertEqual(source.count(condition), 3)
+        final = source[source.index("/usr/bin/osascript") :]
+        self.assertIn(condition, final)
+        self.assertIn("RITUAL STATUS: OK_STARVED (chain-starved; see receipt)", final)
+        self.assertIn("RITUAL STATUS: BROKEN (see CRITICAL lines above)", final)
 
     def test_cache_edge_note_is_shell_only_and_fails_soft(self):
         source = _source()

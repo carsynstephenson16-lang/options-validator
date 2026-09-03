@@ -63,7 +63,8 @@ EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
                 reports/h7_receipts reports/h7_data_gate reports/h5
                 reports/h6_forward reports/h8_forward reports/h10
                 reports/ritual reports/intraday_capture reports/live_probe
-                reports/cache_runs reports/schwab_chains)
+                reports/cache_runs reports/schwab_chains
+                reports/schwab_chains_intraday)
 
 # Tree diff, not per-commit enumeration -- same reasoning the capture wrapper
 # documents: `git log --name-only` is blind to an evil merge's own resolution

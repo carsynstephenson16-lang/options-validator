@@ -57,13 +57,18 @@ was not true on 2026-08-26 — the session that performed this retime ran
 unverified rather than as a guarantee, and confirm with `launchctl print`
 either way.
 
-## Ops alignment check (15:30 ET, detection only)
+## Ops alignment check (09:45 / 12:45 / 15:30 ET, detection only)
 
 `com.carsyn.options-validator.alignment-check.plist` runs
-`tools/ops_alignment_check.sh` at **15:30 ET on weekdays** from the ops
-checkout — 15 minutes before the 15:45 Schwab preclose capture, whose own
+`tools/ops_alignment_check.sh` at **09:45, 12:45 and 15:30 ET on weekdays**
+from the ops checkout — 15 minutes before each durable Schwab chain capture
+(10:00 / 13:00 intraday since 2026-09-02, 15:45 pre-close), whose own
 alignment gate refuses to run on a divergent checkout. Owner ruling 4 of
-`reports/2026-08-14-owner-answers-decision-menu.md` (D-6a).
+`reports/2026-08-14-owner-answers-decision-menu.md` (D-6a) set the 15:30
+slot; the two earlier slots apply the same 15-minute lead to the intraday
+job (owner-directed 2026-09-02). The installed copy must be replaced
+(cp + bootout + bootstrap, as for the daily ritual above) for the new
+slots to fire.
 
 It **only looks**: it fetches `origin/main` (bounded, prompt-free) and compares
 HEAD. It predicts the capture's own gate instead of approximating it — that
@@ -306,6 +311,110 @@ launchctl bootout gui/$(id -u)/com.carsyn.options-validator.schwab-chain-preclos
 launchctl bootstrap gui/$(id -u) \
   ~/Library/LaunchAgents/com.carsyn.options-validator.schwab-chain-preclose.plist
 launchctl print gui/$(id -u)/com.carsyn.options-validator.schwab-chain-preclose | grep -A3 environment
+```
+
+## Schwab chain intraday (10:00 / 13:00 ET, durable capture)
+
+`com.carsyn.options-validator.schwab-chain-intraday.plist` runs its OWN
+wrapper, `tools/schwab_chain_intraday_capture.sh`, at **10:00 and 13:00 ET
+on weekdays** from the **ops** checkout. Owner-directed 2026-09-02
+(in-session: "I want a pull at 10am and a pull at 1pm"); the two times are
+owner-typed in `config.SCHWAB_CHAIN_INTRADAY_TIMES`. This is Brief 30's
+isolated-lane design (`docs/superpowers/plans/2026-08-25-30-midday-chain-refresh-codex-brief.md`,
+owner-authorized 2026-08-25 for the +15 calls/day), generalized from one
+13:00 slot to two slots and landed without Brief 30's WP-C dashboard overlay.
+
+Why it is not just two more entries in the pre-close plist: the pre-close
+lane keys every parquet by symbol + date, its manifest and receipt sit under
+`reports/schwab_chains/<session>/`, and every write is hash-match-or-refuse /
+first-write-wins. A 10:00 write into that namespace would make the 15:45
+capture REFUSE (different live bytes, different timestamp) and lose the day's
+H7 evidence. So the intraday wrapper asks the module which of its OWN slots
+the wall clock is nearest to (`--print-nearest-tag --tags morning,midday`:
+`morning` / `midday` / `NONE`) and passes `--session-tag`; the module then
+writes to the ISOLATED namespace
+`.cache/schwab_chains_intraday/<tag>/` + `reports/schwab_chains_intraday/<tag>/<session>/`
+with its own receipt kind (`schwab_chain_capture_intraday/v1`), convention
+(`intraday_snapshot_v1`) and facts-log prefix
+(`SCHWAB_INTRADAY_CHAIN_CAPTURE tag=<tag>`). The `--tags` restriction is
+load-bearing: launchd delivers a MISSED calendar fire on wake, so a 13:00
+fire arriving at 15:40 (or an operator `kickstart` of this job inside the
+pre-close window) resolves to `NONE` and refuses — it can never fall through
+to `preclose`. The pre-close wrapper, plist, and invocation are untouched
+(its only change is the evidence allow-list entry below).
+
+What the receipt guarantees: `scheduled_session_tag` names the slot and
+`captured_at_et` is the actual capture time; a late fire inside a slot's
+±10-minute tolerance (e.g. a missed 10:00 fire arriving at 12:55) resolves
+to the NEAREST slot — the receipt's own timestamp is the honest record, and
+the genuine 13:00 fire that follows then ends in a RECEIPT CONFLICT (loud,
+exit 2). Same-day retry is exactly as unsafe as for the pre-close lane, per
+slot; a missed slot is a permanent gap. Outside every slot's tolerance the
+wrapper refuses loudly (exit 1 + notification) — for a durable capture,
+"silently did nothing" is not benign.
+
+Nothing under the intraday namespace is H7 evidence, S1 activation evidence,
+or an input to the attractiveness board (which still reads the verified
+15:45 pre-close chains through `schwab_chain_view`); using it anywhere
+verdict-bearing needs its own registration. The plist sets the same
+`OPTIONS_VALIDATOR_INVOCATION_SOURCE=launchd` marker as the pre-close plist,
+so intraday receipts record unattended provenance too; they live in a
+different directory and carry a different receipt kind, so the S1 bar's
+pre-close count cannot see them. Standing cost, disclosed (Brief 30
+WP-D.4): the Schwab refresh token dies 7 days after creation, and every
+extra daily job multiplies the dead-token blast radius — expect three
+`SCHWAB REAUTH REQUIRED` notifications a day, not one, when it lapses.
+
+Adding `config.SCHWAB_CHAIN_INTRADAY_TIMES` rotates `config_hash()` (it
+hashes every uppercase config constant). Any H7 Schwab data-gate /
+feasibility receipt captured before this landed will disagree with the
+post-merge config hash and must be regenerated — the same regeneration the
+Brief 36 landing already requires.
+
+### Install (owner action, staged — Brief 30 WP-D.3)
+
+Installation waits for a **committed positive inventory floor** for
+`.cache/schwab_chains_intraday`. The inventory records that namespace as
+absent on purpose (no invented floor), so the sequence is:
+
+1. Land the code; sync ops (`git -C ~/options-validator-ops merge --ff-only origin/main`).
+2. Run ONE supervised capture at a real slot from the ops checkout, e.g.
+   at 12:50–13:10 ET:
+   `zsh ~/options-validator-ops/tools/schwab_chain_intraday_capture.sh`
+   (records `invocation_source="manual"`, as it should).
+3. `uv run python tools/irreplaceable_data_guard.py verify` must now FAIL
+   with `.cache/schwab_chains_intraday: RECORDED ABSENT BUT POPULATED` —
+   that is the guard working. Baseline it additively and commit:
+   `uv run python tools/irreplaceable_data_guard.py generate --only .cache/schwab_chains_intraday`
+   then `verify` → `irreplaceable data: OK`; commit `data/irreplaceable_data_inventory.json`.
+4. Only then install the plist (the preflight is the pre-close job's: ops on
+   `main`, `HEAD == origin/main`, wrapper present and executable):
+
+```bash
+mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/schwab_chain_intraday
+cp tools/launchagents/com.carsyn.options-validator.schwab-chain-intraday.plist \
+   ~/Library/LaunchAgents/
+launchctl bootout gui/$(id -u)/com.carsyn.options-validator.schwab-chain-intraday 2>/dev/null || true
+launchctl bootstrap gui/$(id -u) \
+   ~/Library/LaunchAgents/com.carsyn.options-validator.schwab-chain-intraday.plist
+launchctl print gui/$(id -u)/com.carsyn.options-validator.schwab-chain-intraday \
+  | grep -E '"(Hour|Minute|Weekday)"'
+```
+
+Expect ten descriptors: Hour 10 / Minute 0 and Hour 13 / Minute 0 for
+Weekdays 1–5. Also reinstall the alignment-check plist (its 09:45 / 12:45
+slots) with the same cp + bootout + bootstrap recipe. Each capture's
+receipts are committed by the daily ritual's next evidence commit
+(`reports/schwab_chains_intraday` is a DATA_TIER path) and tolerated by both
+alignment gates' evidence allow-lists; `.cache/schwab_chains_intraday` is a
+guarded, restic-backed irreplaceable namespace once its floor is committed.
+The job-health digest reports `Schwab intraday (morning)` / `(midday)` rows.
+
+Uninstall:
+
+```bash
+launchctl bootout gui/$(id -u)/com.carsyn.options-validator.schwab-chain-intraday
+rm ~/Library/LaunchAgents/com.carsyn.options-validator.schwab-chain-intraday.plist
 ```
 
 ## Before installing
