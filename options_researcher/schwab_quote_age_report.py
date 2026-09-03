@@ -177,7 +177,7 @@ def _timestamps(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         raise SchwabQuoteAgeReportError(f"chain frame missing timestamp column: {column}")
     try:
-        return pd.to_datetime(frame[column], utc=True, format="mixed")
+        return pd.to_datetime(frame[column], utc=True)
     except (TypeError, ValueError) as exc:
         raise SchwabQuoteAgeReportError(f"{column} is not a UTC timestamp column") from exc
 
