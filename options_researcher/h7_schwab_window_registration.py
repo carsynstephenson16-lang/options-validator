@@ -76,6 +76,22 @@ def _module_to_path(root: Path, module: str) -> str | None:
     return None
 
 
+def _ancestor_packages(root: Path, relative: str) -> set[str]:
+    """``__init__.py`` files Python executes on the way to importing ``relative``.
+
+    Round-4 N1: ``import a.b.c`` runs ``a/__init__.py`` and ``a/b/__init__.py``
+    whether or not anything names them, so they belong in the bound surface.
+    """
+    found: set[str] = set()
+    parent = Path(relative).parent
+    while parent != Path("."):
+        init = root / parent / "__init__.py"
+        if init.is_file():
+            found.add(init.relative_to(root).as_posix())
+        parent = parent.parent
+    return found
+
+
 def _first_party_imports(root: Path, relative: str) -> set[str]:
     tree = ast.parse((root / relative).read_text(encoding="utf-8"))
     found: set[str] = set()
@@ -108,7 +124,8 @@ def feasibility_source_closure(
     Relative imports (``level > 0``) are not used in this repo and are
     ignored; third-party and unresolvable names are ignored; ``excluded``
     paths (config.py, bound separately by config_hash()) are dropped from
-    the result but still walked.
+    the result but still walked. Ancestor package ``__init__.py`` files of
+    every bound module are bound too (they execute on import).
     """
     root = Path(root)
     seen: set[str] = set()
@@ -119,6 +136,7 @@ def feasibility_source_closure(
             continue
         seen.add(relative)
         pending.extend(_first_party_imports(root, relative) - seen)
+        pending.extend(_ancestor_packages(root, relative) - seen)
     return tuple(sorted(seen - set(excluded)))
 
 
@@ -160,6 +178,7 @@ FEASIBILITY_SOURCE_PATHS = (
     "options_researcher/intraday_capture.py",
     "options_researcher/live_quotes.py",
     "options_researcher/schwab_auth_failure.py",
+    "options_researcher/studies/__init__.py",
     "options_researcher/studies/long_call_carry.py",
     "research/__init__.py",
     "research/facts.py",

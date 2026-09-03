@@ -549,12 +549,20 @@ class BuilderTests(unittest.TestCase):
             (root / "tools").mkdir()
             (root / "data").mkdir()
             (root / "data" / "__init__.py").write_text("")
+            (root / "data" / "sub").mkdir()
+            (root / "data" / "sub" / "__init__.py").write_text("")
             (root / "tools" / "entry.py").write_text(
                 "import json\nimport config\nfrom data import b\nfrom data.c import thing\n"
+                "import data.e\n"
             )
             (root / "data" / "b.py").write_text("import pandas as pd\nfrom data.d import x\n")
             (root / "data" / "c.py").write_text("thing = 1\n")
             (root / "data" / "d.py").write_text("x = 1\n")
+            # Round-4 N1: importing data.sub.f also executes data/sub/__init__.py,
+            # so the ancestor package file must be bound even though nothing
+            # imports it by name.
+            (root / "data" / "e.py").write_text("from data.sub.f import w\n")
+            (root / "data" / "sub" / "f.py").write_text("w = 1\n")
             (root / "data" / "unused.py").write_text("y = 1\n")
             (root / "config.py").write_text("Z = 1\n")
 
@@ -562,8 +570,78 @@ class BuilderTests(unittest.TestCase):
 
         self.assertEqual(
             closure,
-            ("data/__init__.py", "data/b.py", "data/c.py", "data/d.py", "tools/entry.py"),
+            (
+                "data/__init__.py",
+                "data/b.py",
+                "data/c.py",
+                "data/d.py",
+                "data/e.py",
+                "data/sub/__init__.py",
+                "data/sub/f.py",
+                "tools/entry.py",
+            ),
         )
+
+    @staticmethod
+    def _copy_bound_surface(root: Path) -> None:
+        # Must run BEFORE REPO_ROOT is patched to the temp root.
+        for relative in registration.FEASIBILITY_SOURCE_PATHS:
+            source = registration.REPO_ROOT / relative
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read_bytes())
+
+    def _feasibility_receipt_over_copied_surface(self, root: Path):
+        input_files = {}
+        for label, relative in registration._expected_feasibility_input_paths(
+            _OWNER_TYPED_COHORT, _sessions()
+        ).items():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"fixture input: {label}\n", encoding="utf-8")
+            input_files[label] = {"path": relative, "sha256": sha256_file(path)}
+        return feasibility_receipt(input_files=input_files)
+
+    def test_feasibility_refuses_a_receipt_listing_a_different_source_surface(self):
+        # Round-4 N2: brief W3 requires the tuple-equality refusal to be
+        # distinct from the hash refusal -- a receipt that omits one bound
+        # dependency must refuse BEFORE any hashing.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._copy_bound_surface(root)
+            with (
+                mock.patch.object(registration, "REPO_ROOT", root),
+                mock.patch.object(registration, "FEASIBILITY_DATA_ROOT", root),
+            ):
+                receipt = self._feasibility_receipt_over_copied_surface(root)
+                receipt["source_paths"] = [
+                    path for path in receipt["source_paths"]
+                    if path != "options_researcher/h7_signals.py"
+                ]
+                # Re-seal so the tamper check cannot mask the refusal under test.
+                receipt.pop("receipt_hash")
+                receipt["receipt_hash"] = sha256_hex(canonical_json(receipt))
+                with self.assertRaisesRegex(
+                    registration.RegistrationInputError,
+                    "source_paths disagrees with the frozen computation surface",
+                ):
+                    registration._validate_feasibility(receipt, receipt["receipt_hash"])
+
+    def test_feasibility_refuses_when_a_bound_source_file_is_missing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._copy_bound_surface(root)
+            with (
+                mock.patch.object(registration, "REPO_ROOT", root),
+                mock.patch.object(registration, "FEASIBILITY_DATA_ROOT", root),
+            ):
+                receipt = self._feasibility_receipt_over_copied_surface(root)
+                (root / "options_researcher/h7_signals.py").unlink()
+                with self.assertRaisesRegex(
+                    registration.RegistrationInputError,
+                    "computation source path is missing",
+                ):
+                    registration._validate_feasibility(receipt, receipt["receipt_hash"])
 
     def test_feasibility_refuses_when_bound_signal_source_changes(self):
         with tempfile.TemporaryDirectory() as temp:
