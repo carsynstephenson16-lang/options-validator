@@ -559,7 +559,7 @@ fi
 # rescue commits c9e74cc / 378230f / 13d48a9).
 # ---------------------------------------------------------------------------
 DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs
-                 reports/h5 reports/h10 reports/schwab_chains reports/pick_tracker reports/closes_receipts ledger/facts.log)
+                 reports/h5 reports/h10 reports/schwab_chains reports/schwab_chains_intraday reports/pick_tracker reports/closes_receipts ledger/facts.log)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
 EVIDENCE_COMMIT_MSG="data(ritual): daily ritual data-phase artifacts ${RUN_DATE}
 

@@ -314,6 +314,7 @@ FROZEN_CONFIG_UPPERCASE_NAMES = (
     "RQ1_HORIZON_SESSIONS",
     "RQ1_NOTABLE_ABS_RHO",
     "RQ1_RV_ANNUALIZATION_SESSIONS",
+    "SCHWAB_CHAIN_INTRADAY_TIMES",
     # 2026-09-02: two display-only Schwab-token-age advisory constants. Both
     # are provider/operator conventions for an ADVISORY line (no verdict, no
     # gate, no entry, no sizing); neither is owner-typed and neither is read

@@ -58,9 +58,22 @@ part of routine refresh or repair verification.
 ## Preclose Schwab chain capture (audit M7)
 
 `tools/schwab_chain_capture.sh` runs `options_researcher.schwab_chain_capture`
-once, intended for 15:45 ET on weekdays via its own (currently uninstalled,
-`RunAtLoad=false`) LaunchAgent template. Read-only; never trades; independent
-of the display-only intraday capture lane.
+once, intended for 15:45 ET on weekdays via its own LaunchAgent (installed in
+production since 2026-08-15). Read-only; never trades; independent of the
+display-only intraday capture lane.
+
+*Since 2026-09-02 (owner-directed; Brief 30's isolated-lane design):* a
+SEPARATE wrapper, `tools/schwab_chain_intraday_capture.sh`, fires at 10:00
+and 13:00 ET via `com.carsyn.options-validator.schwab-chain-intraday.plist`.
+It self-selects only among its own `morning` / `midday` slots (a late fire
+inside the pre-close window resolves to NONE and refuses) and passes
+`--session-tag`; those slots write to the isolated
+`.cache/schwab_chains_intraday/<tag>/` + `reports/schwab_chains_intraday/<tag>/`
+namespace with their own receipt kind and convention, precisely so they can
+never collide with the first-write-wins pre-close artifacts described below.
+Everything in this section about the pre-close lane (namespace, retry
+constraint, H7 evidence status) is unchanged; the intraday packages are not
+H7 evidence. Details: `tools/launchagents/README.md` "Schwab chain intraday".
 
 **Same-day-retry constraint.** Each run refetches the WHOLE watch universe
 live in one pass -- there is no per-symbol resume. Both the per-symbol
