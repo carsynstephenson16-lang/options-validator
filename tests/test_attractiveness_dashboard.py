@@ -871,6 +871,8 @@ class SymbolPanelStatusTests(unittest.TestCase):
         self.assertEqual(ad._panel_status(section, set()), (["CURRENT"], False))
 
     def test_render_uses_details_and_fail_visible_open_attribute(self):
+        from unittest import mock
+
         section = _v2_section()
         section["symbol"] = "AMZN"
         data = ad.assemble(symbol_sections=[section],
@@ -879,10 +881,15 @@ class SymbolPanelStatusTests(unittest.TestCase):
         data["symbols"][0]["features_stale"] = False
         data["symbols"][0]["groups"][0]["cards"][0]["top3_snapshot"].update(
             {"rank_eligible": True, "selection_status": "ELIGIBLE"})
-        clean_html = ad.render(data)
-        self.assertIn('<details class="panel symbol-panel">', clean_html)
-        self.assertNotIn('<details class="panel symbol-panel" open>', clean_html)
-        data["symbols"][0]["features_stale"] = True
+        # 2026-09-03 layout: panels collapse by default, so a clean panel is
+        # closed unless the symbol is owner-pinned (AMZN is, hence the patch).
+        with mock.patch.object(config, "PICK_PINNED_SYMBOLS", []):
+            clean_html = ad.render(data)
+            self.assertIn('<details class="panel symbol-panel">', clean_html)
+            self.assertNotIn('<details class="panel symbol-panel" open>', clean_html)
+            data["symbols"][0]["features_stale"] = True
+            self.assertIn('<details class="panel symbol-panel" open>', ad.render(data))
+        data["symbols"][0]["features_stale"] = False
         self.assertIn('<details class="panel symbol-panel" open>', ad.render(data))
 
 
@@ -2044,7 +2051,11 @@ class V2RenderTests(unittest.TestCase):
         html = ad.render(data, qm_context=qm_context)
         self.assertIn("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", html)
         self.assertIn("Rule-based top 5", html)
-        self.assertEqual(html.count('class="hero-card '), 3 * config.PICK_TOP_N)
+        # 2026-09-03 layout: each lane renders its filled card plus ONE
+        # consolidated block for the identical open slots.
+        self.assertEqual(html.count('class="hero-card '), 3 * 2)
+        self.assertEqual(
+            html.count(f"{config.PICK_TOP_N - 1} of {config.PICK_TOP_N} slots open"), 3)
         self.assertGreaterEqual(html.count("Sell the AMZN $350 put"), 3)
         original_start = html.index("Rule-based top 5")
         qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
@@ -2099,7 +2110,9 @@ class V2RenderTests(unittest.TestCase):
         qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         original_start = html.index("Rule-based top 5")
         qm_section = html[qm_start:]
-        self.assertEqual(qm_section.count("DATA BLOCKED"), config.PICK_TOP_N)
+        # 2026-09-03 layout: one consolidated block still names all five slots.
+        self.assertEqual(qm_section.count("DATA BLOCKED"), 1)
+        self.assertIn(f"{config.PICK_TOP_N} of {config.PICK_TOP_N} slots open", qm_section)
         self.assertIn("Sell the MSFT $350 put", html[original_start:])
 
     def test_incomplete_current_qm_context_renders_configured_blocked_slots(self):
@@ -2107,7 +2120,10 @@ class V2RenderTests(unittest.TestCase):
         del context["symbols"]["MSFT"]
         html = ad.render(self._assembled(), qm_context=context)
         qm_start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
-        self.assertEqual(html[qm_start:].count("DATA BLOCKED"), config.PICK_TOP_N)
+        # 2026-09-03 layout: one consolidated block still names all five slots.
+        self.assertEqual(html[qm_start:].count("DATA BLOCKED"), 1)
+        self.assertIn(f"{config.PICK_TOP_N} of {config.PICK_TOP_N} slots open",
+                      html[qm_start:])
         self.assertIn("QM context missing or stale for: MSFT", html)
 
     def test_qm_section_reports_dropped_research_annotation(self):
@@ -2133,10 +2149,15 @@ class V2RenderTests(unittest.TestCase):
             html.index("Quant-want background"),
         )
         self.assertLess(html.index("Quant-want background"), html.index("Market context"))
-        self.assertLess(html.index("Market context"), html.index("Symbol review"))
+        # 2026-09-03 layout: the descriptive lanes moved into the bottom
+        # "Diagnostics & provenance" drawer, i.e. BELOW the per-symbol panels.
+        self.assertLess(html.index("Symbol review"),
+                        html.index("QM MOVEMENT LANE"))
         self.assertIn("DESCRIPTIVE ONLY — NOT A TRADE RANKING", html)
 
-    def test_composite_board_renders_between_qm_comparison_and_quant_background(self):
+    def test_composite_board_renders_between_shortlist_and_scoreboard(self):
+        # RENAMED 2026-09-03: the composite board stayed in the main flow while
+        # the QM lanes moved into the bottom diagnostics drawer.
         from options_researcher import composite_signals as cs
 
         blocked_card = cs._card_blocked(
@@ -2146,11 +2167,15 @@ class V2RenderTests(unittest.TestCase):
         data["composite_signals"] = [blocked_card]
         html = ad.render(data, context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
-            html.index("Composite signal board"),
+            html.index("Rule-based top 5"), html.index("Composite signal board")
         )
         self.assertLess(
-            html.index("Composite signal board"), html.index("Quant-want background")
+            html.index("Composite signal board"),
+            html.index("Shortlist outcome scoreboard"),
+        )
+        self.assertLess(
+            html.index("Composite signal board"),
+            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
         )
 
 
@@ -2225,14 +2250,18 @@ class ContextLaneRenderTests(unittest.TestCase):
             )
 
         pre_tracker_bytes = re.sub(
-            r'<section class="panel pick-tracker">.*?</section>',
+            r'<section class="panel pick-tracker"[^>]*>.*?</section>',
             "",
             html,
             flags=re.S,
         )
+        # Golden bytes re-pinned 2026-09-03 for the display-only layout
+        # redesign (slot consolidation, positions-first order, symbol summaries,
+        # composite table, diagnostics drawer, sticky nav). The property under
+        # test is unchanged: with the flag off the context lane leaves no trace.
         self.assertEqual(
             hashlib.sha256(pre_tracker_bytes.encode()).hexdigest(),
-            "f092f03e0c58a904a7126a03e6107494ee4740695e7c7e717eb965b9570c5af7",
+            "3407b7337b7b83bc0d075bb705fdd1915d3037f955f6fe99b30fd07a2e4a3f5e",
         )
         self.assertNotIn("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL", html)
 
@@ -3030,14 +3059,17 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn('href="research-views-generations/', html)
         self.assertIn("experiments: OK", html)
         self.assertIn("wasserstein: OK", html)
+        # 2026-09-03 layout order: risk first, shortlist, composite, then the
+        # per-symbol panels, then the diagnostics drawer (unchanged internally).
         for earlier, later in (
-            ("DATA FRESHNESS", "Rule-based top 5"),
-            ("Rule-based top 5", "QM MOVEMENT LANE"),
+            ("DATA FRESHNESS", "REGISTERED-BETS TRACKER"),
+            ("REGISTERED-BETS TRACKER", "Rule-based top 5"),
+            ("Rule-based top 5", "Composite signal board"),
+            ("Composite signal board", "Symbol review"),
+            ("Symbol review", "QM MOVEMENT LANE"),
             ("QM MOVEMENT LANE", "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
-            ("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", "Composite signal board"),
-            ("Composite signal board", "RESEARCH DESK"),
+            ("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5", "RESEARCH DESK"),
             ("RESEARCH DESK", "EXPERIMENTS SHELF"),
-            ("EXPERIMENTS SHELF", "Symbol review"),
         ):
             self.assertLess(html.index(earlier), html.index(later))
 
@@ -3154,8 +3186,11 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("read-only receipt summary", html)
         self.assertIn("cannot activate, rank, or place a trade", html)
         self.assertNotIn("<script>", html)
-        self.assertLess(html.index("RESEARCH DESK"), html.index("REGISTERED-BETS TRACKER"))
-        self.assertLess(html.index("REGISTERED-BETS TRACKER"), html.index("EXPERIMENTS SHELF"))
+        # 2026-09-03 layout: the tracker leads the page as POSITIONS & RISK.
+        self.assertLess(html.index("REGISTERED-BETS TRACKER"),
+                        html.index("Rule-based top 5"))
+        self.assertLess(html.index("REGISTERED-BETS TRACKER"),
+                        html.index("RESEARCH DESK"))
 
     def test_tracker_attachment_cannot_change_mechanical_selection_bytes(self):
         """A family rollup is presentation data, never a selection input."""
@@ -3209,18 +3244,20 @@ class LaneBoardPresentationTests(unittest.TestCase):
             qm_context={"status": "DATA_BLOCKED"},
             research_views_status={"state": "absent"},
         )
+        # 2026-09-03 layout order (see _render_result): the lanes stay distinct
+        # and named; only their depth on the page changed.
         headings = (
             "DATA FRESHNESS",
+            "REGISTERED-BETS TRACKER",
             "Rule-based top 5",
+            "Composite signal board",
+            "CORE NAMES",
+            "Symbol review",
             "QM MOVEMENT LANE",
             "QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5",
-            "Composite signal board",
             "RESEARCH DESK",
-            "REGISTERED-BETS TRACKER",
             "EXPERIMENTS SHELF",
-            "CORE NAMES",
             "Market context",
-            "Symbol review",
         )
         for earlier, later in zip(headings, headings[1:]):
             self.assertLess(html.index(earlier), html.index(later))
@@ -3297,9 +3334,10 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("display-only", composite)
         self.assertIn("Highest agreement today: none at grade A", composite)
         self.assertIn("No composite cards are available for this board.", composite)
+        # 2026-09-03 layout: composite sits above the panels, RESEARCH DESK and
+        # the QM lanes below them inside the diagnostics drawer.
         self.assertLess(
-            html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
-            html.index("Composite signal board"),
+            html.index("Rule-based top 5"), html.index("Composite signal board")
         )
         self.assertLess(html.index("Composite signal board"), html.index("RESEARCH DESK"))
 

@@ -109,7 +109,13 @@ class StudySidecarTests(unittest.TestCase):
             qm_section = html[
                 html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5") :
             ]
-            self.assertEqual(qm_section.count("DATA BLOCKED"), config.PICK_TOP_N)
+            # 2026-09-03 layout: byte-identical blocked slots collapse into one
+            # block that still names how many of the five are blocked.
+            self.assertEqual(qm_section.count("DATA BLOCKED"), 1)
+            self.assertIn(
+                f"{config.PICK_TOP_N} of {config.PICK_TOP_N} slots open",
+                qm_section,
+            )
 
     def test_load_rejects_ledger_fact_hash_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -308,8 +314,10 @@ class ContextBuildTests(unittest.TestCase):
         html = ad.render({"data_as_of": "2026-07-01", "symbols": []}, qm_context=context)
         start = html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5")
         self.assertEqual(context["status"], "DATA_BLOCKED")
-        self.assertEqual(
-            html[start:].count("QM context withheld"), config.PICK_TOP_N
+        # 2026-09-03 layout: one consolidated block still names all five slots.
+        self.assertEqual(html[start:].count("QM context withheld"), 1)
+        self.assertIn(
+            f"{config.PICK_TOP_N} of {config.PICK_TOP_N} slots open", html[start:]
         )
 
     def test_symbol_missing_from_frozen_sidecar_is_per_name_not_a_board_blocker(self):
