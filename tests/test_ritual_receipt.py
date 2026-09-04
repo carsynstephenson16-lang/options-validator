@@ -241,6 +241,38 @@ class H5ObserverEndToEndTests(unittest.TestCase):
         self.assertTrue(row.descriptive_only)
 
 
+    def test_capture_receipt_exists_before_tracker_html_uses_it(self):
+        from options_researcher import attractiveness_dashboard
+        from options_researcher.h7_cohort import CohortUnavailableError
+        from options_researcher.hypothesis_evidence import (
+            gather_hypothesis_evidence,
+            summarize_hypothesis_evidence,
+        )
+
+        def _no_cohort(_path):
+            raise CohortUnavailableError("no cohort in this fixture")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_complete_artifacts(root)
+            _run(root)
+
+            receipt_path = (
+                root / "reports" / "ritual" / f"capture_receipt_{AS_OF}.json"
+            )
+            self.assertTrue(receipt_path.is_file())
+
+            evidence = gather_hypothesis_evidence(
+                ("AMZN",), root=root, cohort_loader=_no_cohort
+            )
+            summaries = summarize_hypothesis_evidence(evidence)
+            tracker_html = attractiveness_dashboard._registered_bets_tracker_html(
+                {"family_evidence": summaries}
+            )
+
+            self.assertIn(f"capture_receipt_{AS_OF}.json", tracker_html)
+
+
 class RitualReceiptTests(unittest.TestCase):
     def test_all_present_writes_five_captured_or_no_signal_entries(self):
         with tempfile.TemporaryDirectory() as tmp:

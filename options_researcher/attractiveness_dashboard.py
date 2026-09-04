@@ -1054,13 +1054,24 @@ def _schwab_state_html(data: Mapping[str, object]) -> str:
     looks stale today": the page says the session and the verification error
     out loud. A checkout with no receipts at all says that too, so silence is
     never ambiguous between "no captures" and "captures hidden by a bug".
+
+    Retention (brief 37 WP-G): failures older than
+    ``config.CHAIN_STALE_BLOCK_SESSIONS`` sessions collapse into ONE named
+    ``notice info`` line that still prints their session dates; everything
+    newer, and every case where the age cannot be computed (missing or
+    unparseable evaluation session, helper exception, negative age), keeps
+    the full red notice.
     """
+    import config
     from options_researcher.schwab_chain_view import CHAINS_ABSENT, CONVENTION_LABEL
+    from options_researcher.top3_snapshot import trading_sessions_between
 
     state = data.get("schwab_lane")
     if not isinstance(state, Mapping):
         return ""
     parts: list[str] = []
+    collapsed_sessions: list[str] = []
+    evaluation_session = data.get("evaluation_date")
     failures = state.get("failures")
     failures = failures if isinstance(failures, (list, tuple)) else ()
     for failure in failures:
@@ -1078,12 +1089,31 @@ def _schwab_state_html(data: Mapping[str, object]) -> str:
                 "checkout (they live in the ops execution checkout). No "
                 "pre-close quotes are available here.</div>")
             continue
+        if isinstance(evaluation_session, str):
+            try:
+                age = trading_sessions_between(
+                    str(failure.get("session", "?")), evaluation_session)
+            except Exception:
+                age = None
+            if (isinstance(age, int)
+                    and age > config.CHAIN_STALE_BLOCK_SESSIONS):
+                collapsed_sessions.append(session)
+                continue
         parts.append(
             '<div class="notice bad"><strong>! Schwab capture session '
             f'{session} FAILED verification'
             f'</strong> — {_esc(str(failure.get("reason", "unknown")))}. '
             "Its chains were NOT used; names that depend on it fall back to "
             "the frozen cache with their own older date.</div>")
+    if collapsed_sessions:
+        count = len(collapsed_sessions)
+        noun = "session" if count == 1 else "sessions"
+        sessions = ", ".join(collapsed_sessions)
+        parts.append(
+            '<div class="notice info">'
+            f"{count} earlier capture {noun} failed verification "
+            f"({sessions}; older than {config.CHAIN_STALE_BLOCK_SESSIONS} "
+            "sessions); their chains were never used</div>")
     if not state.get("receipts_found"):
         parts.append(
             '<div class="notice info">No Schwab pre-close capture receipts '
@@ -1948,9 +1978,12 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
 
     if schwab_sourced:
         # D4b: per-session feature values, computed in memory from the fresh
-        # chain. rv21 and iv_minus_rv need underlying closes THROUGH the
-        # session; the closes store ends earlier and its refresh is owner-gated,
-        # so they are unavailable -- never interpolated across the hole.
+        # chain. rv21 and iv_minus_rv are NOT computed on the 15:45 capture
+        # lane: the closes store is refreshed through the session by the
+        # ritual, but computing them here would change the cushion and
+        # vol-premium badges, which are ranking inputs (brief 37 DR-5b, held
+        # for an owner ruling). They stay NaN -- never interpolated across a
+        # hole, never defaulted.
         if preclose_spot is None:
             # Unreachable from _gather_all (it refuses a fresh chain without a
             # verified spot); explicit so a future caller cannot pair a fresh
@@ -1969,8 +2002,26 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
         iv_rank_label = ("preview (capture-lane calibration)"
                          if iv_rank_preview is not None else None)
         atm_iv = _session_atm_iv(chain, day)
-        gap = (f"underlying closes end {closes_as_of}, before this "
-               f"{day} session")
+        from options_researcher.top3_snapshot import trading_sessions_between
+
+        if closes_as_of == day:
+            gap = (
+                "rv21 and iv_minus_rv are not computed on the 15:45 capture "
+                "lane (see brief 37 DR-5b) — closes are current through "
+                f"{day}")
+        else:
+            try:
+                sessions = trading_sessions_between(closes_as_of, day)
+            except Exception:
+                gap = (f"rv21 and iv_minus_rv are not computed on the 15:45 "
+                       "capture lane (see brief 37 DR-5b) — closes end "
+                       f"{closes_as_of}, before this {day} session")
+            else:
+                noun = "session" if sessions == 1 else "sessions"
+                gap = (f"rv21 and iv_minus_rv are not computed on the 15:45 "
+                       "capture lane (see brief 37 DR-5b) — closes end "
+                       f"{closes_as_of}, {sessions} {noun} before this "
+                       f"{day} session")
         feature_unavailable.append({"field": "rv21", "reason": gap})
         feature_unavailable.append({"field": "iv_minus_rv", "reason": gap})
         if iv_rank_preview is None:

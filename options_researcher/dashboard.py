@@ -24,6 +24,7 @@ render(data) is pure string templating over the dict assemble() returns. It
 does no file I/O; Task 3's CLI is responsible for writing the result to
 disk.
 """
+
 from __future__ import annotations
 
 import html as _html
@@ -32,6 +33,9 @@ import sys
 from datetime import datetime as _datetime
 from datetime import timezone
 from glob import glob
+from zoneinfo import ZoneInfo
+
+import pandas as pd
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "index.html")
 
@@ -44,36 +48,24 @@ OUTPUT_PATH = os.path.join(".tmp", "dashboard", "index.html")
 # not milestones worth a celebration tile. Flavor text is short, upbeat,
 # and beginner-friendly per the plan.
 ACHIEVEMENTS = {
-    "CEG_CACHE_COMPLETE": (
-        "Data Hoarder", "Cached every CEG chain since it started trading"),
-    "PIVOT_4NAME_SCOPE": (
-        "New Game+", "Re-scoped the whole project to the 4-name thesis"),
-    "UNDERLYING_CLOSES_YAHOO": (
-        "Free Data Achieved", "$0.0000 vs official closes -- for free"),
+    "CEG_CACHE_COMPLETE": ("Data Hoarder", "Cached every CEG chain since it started trading"),
+    "PIVOT_4NAME_SCOPE": ("New Game+", "Re-scoped the whole project to the 4-name thesis"),
+    "UNDERLYING_CLOSES_YAHOO": ("Free Data Achieved", "$0.0000 vs official closes -- for free"),
     "UNDERLYING_CLOSES_PARITY": (
-        "MacGyver Data", "Built a close price series out of your own option chains"),
-    "H4_PAPER_WINDOW_SEEDED": (
-        "Historical Seed", "Old paper rows were seeded, then later cleared"),
-    "H4_BUCKET_AMENDMENT": (
-        "Budget Amended", "Sizing room changed; not a live position"),
-    "H4_EVIDENCE_BACKTEST": (
-        "Field Report", "Ran historical evidence; not the current book"),
-    "H5_REGISTERED": (
-        "Scanner Online", "Sector Income Core registered as the candidate rubric"),
-    "H5_SCANNER_RESET": (
-        "Clean Slate", "Current state reset to scanner-first: no options open"),
-    "H1_REGISTERED": (
-        "First Blood", "First hypothesis registered end-to-end"),
-    "H1_SCOPE_DECISION": (
-        "Rules Locked In", "Froze the H1 scope before looking at any results"),
-    "WIDTH_SWEEP_COMPLETE": (
-        "Swept the Board", "Finished the full width sweep, no peeking"),
-    "SPIKE_OFFLINE_BACKTEST": (
-        "Engine Test", "Proved the offline backtest engine actually runs"),
-    "HARNESS_SMOKE": (
-        "Smoke Signal", "Smoke-tested the harness on real cached data"),
-    "OWNER_DECISION": (
-        "The Buck Stops Here", "Made the call on an OOS reveal, on the record"),
+        "MacGyver Data",
+        "Built a close price series out of your own option chains",
+    ),
+    "H4_PAPER_WINDOW_SEEDED": ("Historical Seed", "Old paper rows were seeded, then later cleared"),
+    "H4_BUCKET_AMENDMENT": ("Budget Amended", "Sizing room changed; not a live position"),
+    "H4_EVIDENCE_BACKTEST": ("Field Report", "Ran historical evidence; not the current book"),
+    "H5_REGISTERED": ("Scanner Online", "Sector Income Core registered as the candidate rubric"),
+    "H5_SCANNER_RESET": ("Clean Slate", "Current state reset to scanner-first: no options open"),
+    "H1_REGISTERED": ("First Blood", "First hypothesis registered end-to-end"),
+    "H1_SCOPE_DECISION": ("Rules Locked In", "Froze the H1 scope before looking at any results"),
+    "WIDTH_SWEEP_COMPLETE": ("Swept the Board", "Finished the full width sweep, no peeking"),
+    "SPIKE_OFFLINE_BACKTEST": ("Engine Test", "Proved the offline backtest engine actually runs"),
+    "HARNESS_SMOKE": ("Smoke Signal", "Smoke-tested the harness on real cached data"),
+    "OWNER_DECISION": ("The Buck Stops Here", "Made the call on an OOS reveal, on the record"),
     "STUDY_A": ("Study Hall: A", "Ran the IV-vs-realized study"),
     "STUDY_B": ("Study Hall: B", "Ran the earnings-move study"),
     "STUDY_C": ("Study Hall: C", "Ran the covered-call study"),
@@ -97,11 +89,13 @@ def _achievement_tag(line: str) -> str | None:
 
 def _default_book() -> dict:
     from options_researcher.portfolio import analyze
+
     return analyze()
 
 
 def _default_facts() -> list[str]:
     from research.facts import read_facts
+
     return read_facts()
 
 
@@ -109,19 +103,24 @@ def _default_reports() -> list[str]:
     return sorted(glob("reports/*.md"))
 
 
-def _default_closes() -> dict[str, list[float]]:
+def _ny_build_date(today: str | None = None) -> str:
+    """Return the injected or current New York build date as an ISO string."""
+    return today or _datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+
+def _default_closes(*, today: str | None = None) -> dict[str, list[float]]:
     import config
     from data.underlying_closes import load_closes
 
+    end = _ny_build_date(today)
     out: dict[str, list[float]] = {}
     for sym in config.UNIVERSE:
-        series = load_closes(sym, config.BACKTEST_START, config.BACKTEST_END,
-                             allow_oos=True)
+        series = load_closes(sym, config.BACKTEST_START, end, allow_oos=True)
         out[sym] = [float(v) for v in series.iloc[-60:]]
     return out
 
 
-def _default_data_as_of() -> str:
+def _default_data_as_of(*, today: str | None = None) -> str:
     """The page's honest "data as-of" date: the EARLIEST last-cached-close
     date across config.UNIVERSE (never today's wall clock). Taking the
     earliest, not the freshest, symbol's last date means a stale name can
@@ -132,11 +131,11 @@ def _default_data_as_of() -> str:
     import config
     from data.underlying_closes import load_closes
 
+    end = _ny_build_date(today)
     dates: list[str] = []
     for sym in config.UNIVERSE:
         try:
-            series = load_closes(sym, config.BACKTEST_START, config.BACKTEST_END,
-                                 allow_oos=True)
+            series = load_closes(sym, config.BACKTEST_START, end, allow_oos=True)
         except OSError:
             continue
         if len(series):
@@ -144,12 +143,18 @@ def _default_data_as_of() -> str:
     return min(dates) if dates else "unknown"
 
 
-def assemble(*, book: dict | None = None, facts: list[str] | None = None,
-            reports: list[str] | None = None,
-            closes: dict[str, list[float]] | None = None,
-            triggers: dict[str, str] | None = None,
-            data_as_of: str | None = None,
-            h7_window: dict | None = None) -> dict:
+def assemble(
+    *,
+    book: dict | None = None,
+    facts: list[str] | None = None,
+    reports: list[str] | None = None,
+    closes: dict[str, list[float]] | None = None,
+    triggers: dict[str, str] | None = None,
+    data_as_of: str | None = None,
+    h7_window: dict | None = None,
+    holdings: pd.DataFrame | None = None,
+    h7_authority: dict | None = None,
+) -> dict:
     """Gather book, achievements, reports, and sparkline data into one dict.
 
     Every argument defaults to loading the real project state; pass any of
@@ -169,12 +174,12 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
     if triggers is None:
         try:
             from options_researcher.entry_watch import _gather
+
             triggers = {r["symbol"]: r["verdict"] for r in _gather()}
         except (OSError, KeyError, ValueError, ImportError) as e:
             # Expected data-gap failures only; anything else must crash
             # loudly rather than render a silently-empty trigger panel.
-            print(f"WARN entry-watch unavailable, trigger panel empty: {e}",
-                  file=sys.stderr)
+            print(f"WARN entry-watch unavailable, trigger panel empty: {e}", file=sys.stderr)
             triggers = {}
     if h7_window is None:
         try:
@@ -188,13 +193,69 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
                 "ok": False,
                 "detail": f"window status unavailable: {exc}",
             }
+    if h7_authority is None:
+        from data.ritual_authority import (
+            CURRENT_AUTHORITY,
+            RitualAuthority,
+            evaluate_full_ritual,
+        )
 
-    achievements = []
+        readiness = evaluate_full_ritual(
+            RitualAuthority(
+                h7_active=CURRENT_AUTHORITY.h7_active,
+                exact_session_source_active=True,
+                ritual_data_phase_active=True,
+            )
+        )
+        h7_authority = {
+            "h7_active": CURRENT_AUTHORITY.h7_active,
+            "blockers": list(readiness.blockers),
+        }
+    if holdings is None:
+        try:
+            from options_researcher.portfolio import load_holdings
+
+            holdings = load_holdings()
+        except (OSError, TypeError, ValueError) as exc:
+            print(f"WARN holdings.csv unreadable: {exc}", file=sys.stderr)
+            holdings = None
+
+    party_roles = {
+        "MSFT": "Watch — LEAPS depth",
+        "AMZN": "Watch — income candidates",
+        "CEG": "Watch — power-side candidate",
+    }
+    if holdings is None:
+        party_roles["VST"] = "Held — shares UNKNOWN (holdings.csv unreadable)"
+    else:
+        vst_rows = holdings[holdings["symbol"] == "VST"]
+        if vst_rows.empty:
+            print("WARN no holdings.csv row for VST", file=sys.stderr)
+            party_roles["VST"] = "Held — shares UNKNOWN (no holdings.csv row for VST)"
+        else:
+            shares = int(vst_rows["shares"].sum())
+            mark_count = sum(mark.get("symbol") == "VST" for mark in book.get("marks", []))
+            if mark_count == 0:
+                mark_text = "no options"
+            else:
+                suffix = "mark" if mark_count == 1 else "marks"
+                mark_text = f"{mark_count} open option {suffix}"
+            party_roles["VST"] = f"Held — {shares} shares, {mark_text}"
+
+    achievements_by_tag = {}
     for line in facts:
         tag = _achievement_tag(line)
         if tag in ACHIEVEMENTS:
-            title, flavor = ACHIEVEMENTS[tag]
-            achievements.append({"key": tag, "title": title, "flavor": flavor})
+            if tag not in achievements_by_tag:
+                title, flavor = ACHIEVEMENTS[tag]
+                achievements_by_tag[tag] = {
+                    "key": tag,
+                    "title": title,
+                    "flavor": flavor,
+                    "count": 0,
+                }
+            achievements_by_tag[tag]["count"] += 1
+    achievements = list(achievements_by_tag.values())
 
     return {
         "book": book.get("marks", []),
@@ -206,6 +267,8 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
         "triggers": dict(triggers),
         "data_as_of": data_as_of,
         "h7_window": h7_window,
+        "h7_authority": h7_authority,
+        "party_roles": party_roles,
     }
 
 
@@ -217,15 +280,23 @@ def assemble(*, book: dict | None = None, facts: list[str] | None = None,
 # --------------------------------------------------------------------------
 
 _PARTY = [
-    # (symbol, accent color, role line)
-    ("MSFT", "#4da3ff", "Watch — LEAPS depth"),
-    ("AMZN", "#ff9900", "Watch — income candidates"),
-    ("VST", "#ffd23f", "Held — 38 shares, no options"),
-    ("CEG", "#7CFC9B", "Watch — power-side candidate"),
+    # (symbol, accent color)
+    ("MSFT", "#4da3ff"),
+    ("AMZN", "#ff9900"),
+    ("VST", "#ffd23f"),
+    ("CEG", "#7CFC9B"),
 ]
 
+_ROLE_UNAVAILABLE = "ROLE UNAVAILABLE (assemble() supplied no party_roles)"
+
 _QUEST_LOG_COMPLETED = [
-    "M1", "M2", "M3", "M4", "M5", "M6", "scanner dashboard",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6",
+    "scanner dashboard",
 ]
 _QUEST_LOG_ACTIVE = "Find an attractive candidate, then record it intentionally"
 _QUEST_LOG_LOCKED = "Forward paper window starts after first tracked option"
@@ -241,10 +312,10 @@ _GRAVEYARD = [
 # because real flags carry suffixes, e.g. "ROLL_DUE(dte<=90)",
 # "ASSIGNMENT_WATCH(|close-K|<=2%)", "EARNINGS_2026-08-01".
 _FLAG_STYLES = [
-    ("ROLL_DUE", "#caa53d"),          # amber
+    ("ROLL_DUE", "#caa53d"),  # amber
     ("ASSIGNMENT_WATCH", "#ff5470"),  # red
-    ("EARNINGS", "#a06cd5"),          # purple
-    ("QUOTE_MISSING", "#6b7280"),     # grey
+    ("EARNINGS", "#a06cd5"),  # purple
+    ("QUOTE_MISSING", "#6b7280"),  # grey
 ]
 
 
@@ -265,9 +336,7 @@ def _flag_pills(flags: list[str]) -> str:
     pills = []
     for flag in flags:
         color = _flag_style(flag)
-        pills.append(
-            f'<span class="pill" style="background:{color}">{_esc(flag)}</span>'
-        )
+        pills.append(f'<span class="pill" style="background:{color}">{_esc(flag)}</span>')
     return "".join(pills)
 
 
@@ -299,8 +368,14 @@ def _sparkline_svg(symbol: str, closes: list[float], color: str) -> str:
     )
 
 
-def _party_card(symbol: str, color: str, role: str, sparklines: dict,
-                marks: list[dict], trigger: str | None = None) -> str:
+def _party_card(
+    symbol: str,
+    color: str,
+    role: str,
+    sparklines: dict,
+    marks: list[dict],
+    trigger: str | None = None,
+) -> str:
     closes = sparklines.get(symbol, [])
     badges = []
     for m in marks:
@@ -310,15 +385,15 @@ def _party_card(symbol: str, color: str, role: str, sparklines: dict,
         badge_color = "#2fd27d" if pnl >= 0 else "#ff5470"
         sign = "+" if pnl >= 0 else ""
         badges.append(
-            f'<span class="pnl-badge" style="color:{badge_color}">'
-            f'{sign}{pnl:,.2f}</span>'
+            f'<span class="pnl-badge" style="color:{badge_color}">{sign}{pnl:,.2f}</span>'
         )
     badges_html = "".join(badges) if badges else '<span class="pnl-none">no open marks</span>'
     trigger_html = ""
     if trigger:
         t_color = "#ff5470" if trigger == "FIRE" else "#caa53d"
-        trigger_html = (f'<div class="party-trigger" style="color:{t_color}">'
-                        f'TRIGGER: {_esc(trigger)}</div>')
+        trigger_html = (
+            f'<div class="party-trigger" style="color:{t_color}">TRIGGER: {_esc(trigger)}</div>'
+        )
     return f"""
     <div class="party-card" style="border-color:{color}">
       <div class="party-name" style="color:{color}">{_esc(symbol)}</div>
@@ -362,11 +437,10 @@ def _bucket_banner(bucket_issues: list[str]) -> str:
 
 def _quest_log() -> str:
     completed = "".join(
-        f'<li class="quest-done">✓ <s>{_esc(q)}</s></li>'
-        for q in _QUEST_LOG_COMPLETED
+        f'<li class="quest-done">✓ <s>{_esc(q)}</s></li>' for q in _QUEST_LOG_COMPLETED
     )
     active = f'<li class="quest-active">{_esc(_QUEST_LOG_ACTIVE)}</li>'
-    locked = f'<li class="quest-locked">\U0001F512 {_esc(_QUEST_LOG_LOCKED)}</li>'
+    locked = f'<li class="quest-locked">\U0001f512 {_esc(_QUEST_LOG_LOCKED)}</li>'
     return f'<ol class="quest-log">{completed}{active}{locked}</ol>'
 
 
@@ -374,11 +448,14 @@ def _achievements_grid(achievements: list[dict]) -> str:
     if not achievements:
         tiles = '<div class="empty">No achievements unlocked yet.</div>'
     else:
-        tiles = "".join(f"""
+        tiles = "".join(
+            f"""
       <div class="ach-tile">
-        <div class="ach-title">{_esc(a.get("title", ""))}</div>
+        <div class="ach-title">{_esc(a.get("title", ""))}{f" ×{a.get('count')}" if a.get("count", 1) > 1 else ""}</div>
         <div class="ach-flavor">{_esc(a.get("flavor", ""))}</div>
-      </div>""" for a in achievements)
+      </div>"""
+            for a in achievements
+        )
     graveyard = "".join(f"<li>{_esc(kill)}</li>" for kill in _GRAVEYARD)
     return f"""
     <div class="ach-grid">{tiles}</div>
@@ -395,32 +472,49 @@ def _reports_list(reports: list[str]) -> str:
     return f"<ul>{items}</ul>"
 
 
-def _h7_window_panel(window: dict) -> str:
+def _h7_window_panel(window: dict, *, h7_authority: dict | None = None) -> str:
     """Render the read-only H7 operating summary as a standalone panel."""
     if not window.get("ok"):
         return (
             '<div style="border:1px solid #a33;padding:12px;margin:12px 0">'
-            f'<b>H7 FORWARD WINDOW</b> &mdash; UNAVAILABLE: '
-            f'{_esc(window.get("detail", "unknown error"))}</div>'
+            f"<b>H7 FORWARD WINDOW</b> &mdash; UNAVAILABLE: "
+            f"{_esc(window.get('detail', 'unknown error'))}</div>"
         )
-
+    if not isinstance(h7_authority, dict):
+        h7_authority = {}
+    if h7_authority.get("h7_active") is not True:
+        blockers = h7_authority.get("blockers", [])
+        blocker = (
+            blockers[0]
+            if isinstance(blockers, list) and len(blockers) == 1
+            else "H7 BLOCKER TEXT UNAVAILABLE (ritual_authority contract changed)"
+        )
+        return (
+            '<div style="border:1px solid #6ab;padding:12px;margin:12px 0">'
+            "<b>H7 FORWARD WINDOW — PAUSED (H7 authority not granted)</b><br>"
+            f"{_esc(blocker)}<br>"
+            "registered window (paused; scores nothing while paused): "
+            f"sessions: {_esc(window['sessions_elapsed'])}/{_esc(window['total_sessions'])} elapsed "
+            f"({_esc(window['sessions_remaining'])} left) &middot; "
+            f"entries taken: {_esc(window['entries_taken'])}<br>"
+            f"universe: {_esc(len(window['included']))} in / {_esc(len(window['excluded']))} out &middot; "
+            f"session {_esc(window['receipts']['evaluation_session'])} receipts: "
+            f"health {'OK' if window['receipts']['source_health_present'] else 'MISSING'}, "
+            f"gate {_esc(window['receipts']['data_gate_verdict'] or ('present' if window['receipts']['data_gate_present'] else 'MISSING'))}"
+            "</div>"
+        )
     receipts = window["receipts"]
     gate = receipts["data_gate_verdict"] or (
         "present" if receipts["data_gate_present"] else "MISSING"
     )
     return (
         '<div style="border:1px solid #6ab;padding:12px;margin:12px 0">'
-        f'<b>H7 FORWARD WINDOW</b> (live, scores once {_esc(window["end"])})<br>'
-        f'sessions: {_esc(window["sessions_elapsed"])}/'
-        f'{_esc(window["total_sessions"])} elapsed '
-        f'({_esc(window["sessions_remaining"])} left) &middot; '
-        f'entries taken: {_esc(window["entries_taken"])}<br>'
-        f'universe: {_esc(len(window["included"]))} in / '
-        f'{_esc(len(window["excluded"]))} out &middot; '
-        f'session {_esc(receipts["evaluation_session"])} receipts: '
-        f'health {"OK" if receipts["source_health_present"] else "MISSING"}, '
-        f'gate {_esc(gate)}'
-        '</div>'
+        f"<b>H7 FORWARD WINDOW</b> (live, scores once {_esc(window['end'])})<br>"
+        f"sessions: {_esc(window['sessions_elapsed'])}/{_esc(window['total_sessions'])} elapsed "
+        f"({_esc(window['sessions_remaining'])} left) &middot; entries taken: {_esc(window['entries_taken'])}<br>"
+        f"universe: {_esc(len(window['included']))} in / {_esc(len(window['excluded']))} out &middot; "
+        f"session {_esc(receipts['evaluation_session'])} receipts: "
+        f"health {'OK' if receipts['source_health_present'] else 'MISSING'}, gate {_esc(gate)}</div>"
     )
 
 
@@ -442,12 +536,23 @@ def render(data: dict) -> str:
         "h7_window",
         {"ok": False, "detail": "window status missing from dashboard data"},
     )
+    h7_authority = data.get("h7_authority")
+    # Presentation boundary: a data dict without party roles must say so on
+    # the card, never fall back to a role that could misstate a held position
+    # (the DR-1 defect by another route); same house pattern as h7_window.
+    party_roles = data.get("party_roles", {})
 
     as_of = _datetime.now(timezone.utc).date().isoformat()
     party_cards = "".join(
-        _party_card(symbol, color, role, sparklines, marks,
-                   trigger=triggers.get(symbol))
-        for symbol, color, role in _PARTY
+        _party_card(
+            symbol,
+            color,
+            party_roles.get(symbol, _ROLE_UNAVAILABLE),
+            sparklines,
+            marks,
+            trigger=triggers.get(symbol),
+        )
+        for symbol, color in _PARTY
     )
 
     return f"""<!doctype html>
@@ -634,7 +739,7 @@ def render(data: dict) -> str:
   <div class="header-sub">SCANNER MODE &mdash; as of {_esc(as_of)}</div>
 </div>
 
-{_h7_window_panel(h7_window)}
+{_h7_window_panel(h7_window, h7_authority=h7_authority)}
 
 <div class="panel">
   <h2>PARTY</h2>

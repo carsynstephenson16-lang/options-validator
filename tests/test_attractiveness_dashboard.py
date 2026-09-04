@@ -4,6 +4,7 @@ import math
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import config
 from options_researcher import attractiveness_dashboard as ad
@@ -3582,6 +3583,64 @@ class SchwabFreshnessPageDateTests(unittest.TestCase):
                       html)
         self.assertIn("hash mismatch for NVDA", html)
         self.assertIn("chains were NOT used", html)
+
+    def test_old_failure_collapses_but_fresh_failure_stays_red(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-08-28")],
+                           rv21_by_symbol={}, today="2026-09-08")
+        data["schwab_lane"] = {
+            "verified_sessions": [],
+            "failures": [
+                {"session": "2026-09-07", "reason": "fresh failure"},
+                {"session": "2026-09-01", "reason": "old failure"},
+            ],
+            "receipts_found": True,
+        }
+        html = ad.render(data)
+        self.assertIn("Schwab capture session 2026-09-07 FAILED verification", html)
+        self.assertIn("1 earlier capture session failed verification "
+                      "(2026-09-01; older than 3 sessions); their chains "
+                      "were never used", html)
+        self.assertNotIn("Schwab capture session 2026-09-01 FAILED verification", html)
+
+    def test_missing_evaluation_session_keeps_every_failure_red(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-08-28")],
+                           rv21_by_symbol={}, today="2026-09-08")
+        data["evaluation_date"] = None
+        data["schwab_lane"] = {"verified_sessions": [], "receipts_found": True,
+                               "failures": [
+                                   {"session": "2026-09-07", "reason": "fresh"},
+                                   {"session": "2026-09-01", "reason": "old"},
+                               ]}
+        html = ad.render(data)
+        self.assertIn("Schwab capture session 2026-09-07 FAILED verification", html)
+        self.assertIn("Schwab capture session 2026-09-01 FAILED verification", html)
+        self.assertNotIn("earlier capture session failed verification", html)
+
+    def test_future_dated_failure_stays_red(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-08-28")],
+                           rv21_by_symbol={}, today="2026-09-08")
+        data["schwab_lane"] = {"verified_sessions": [], "receipts_found": True,
+                               "failures": [
+                                   {"session": "2026-09-09", "reason": "future"},
+                               ]}
+        html = ad.render(data)
+        self.assertIn("Schwab capture session 2026-09-09 FAILED verification", html)
+        self.assertNotIn("earlier capture session failed verification", html)
+
+    def test_failure_age_helper_error_keeps_every_failure_red(self):
+        data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-08-28")],
+                           rv21_by_symbol={}, today="2026-09-08")
+        data["schwab_lane"] = {"verified_sessions": [], "receipts_found": True,
+                               "failures": [
+                                   {"session": "2026-09-01", "reason": "old"},
+                               ]}
+        with mock.patch(
+            "options_researcher.top3_snapshot.trading_sessions_between",
+            side_effect=ValueError("bad session"),
+        ):
+            html = ad._schwab_state_html(data)
+        self.assertIn("Schwab capture session 2026-09-01 FAILED verification", html)
+        self.assertNotIn("earlier capture session failed verification", html)
 
     def test_footer_says_the_two_dashboards_date_independently(self):
         # rev-2 D3: mission control is out of scope and keeps its own

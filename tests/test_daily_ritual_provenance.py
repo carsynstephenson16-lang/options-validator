@@ -230,15 +230,15 @@ class DailyRitualProvenanceTests(unittest.TestCase):
                 self.assertIsNotNone(match, verb)
                 self.assertLess(gate, match.start())
 
-    def test_pick_tracker_is_fail_soft_between_board_and_capture_receipt(self):
+    def test_pick_tracker_is_fail_soft_between_board_and_ritual_status(self):
         source = _source()
         dashboard = source.index("python -m options_researcher.attractiveness_dashboard")
         record = source.index("python -m options_researcher.pick_tracker record")
         evaluate = source.index("python -m options_researcher.pick_tracker evaluate")
         receipt = source.index("python -m options_researcher.ritual_receipt")
+        self.assertLess(receipt, dashboard)
         self.assertLess(dashboard, record)
         self.assertLess(record, evaluate)
-        self.assertLess(evaluate, receipt)
         record_line = next(
             line
             for line in source.splitlines()

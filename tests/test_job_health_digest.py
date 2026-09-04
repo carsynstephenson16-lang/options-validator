@@ -173,6 +173,66 @@ class JobHealthDigestTests(unittest.TestCase):
         )
         self.assertNotIn("Live dashboard", rows)
 
+    def test_schwab_cache_directory_symlink_is_accepted_and_visible(self):
+        self._install_all_ok()
+        cache_link = self.root / ".cache"
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        external_cache = external_dir / "cache"
+        cache_link.rename(external_cache)
+        cache_link.symlink_to(external_cache, target_is_directory=True)
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
+
+        self.assertEqual(row.status, HealthStatus.OK)
+        self.assertIn(str(external_cache.resolve() / "schwab_chains"), row.reason)
+
+    def test_schwab_chain_symlink_cannot_escape_resolved_cache_root(self):
+        self._install_all_ok()
+        chain = self.root / ".cache" / "schwab_chains" / f"CEG_{AS_OF}.parquet"
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        external = external_dir / chain.name
+        chain.replace(external)
+        chain.symlink_to(external)
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertIn("escapes root", row.reason)
+        self.assertEqual(row.path, f".cache/schwab_chains/CEG_{AS_OF}.parquet")
+
+    def test_dangling_schwab_cache_symlink_is_failed_as_non_directory(self):
+        self._install_all_ok()
+        cache_link = self.root / ".cache"
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        cache_link.rename(external_dir / "preserved-cache")
+        missing = external_dir / "missing-cache"
+        cache_link.symlink_to(missing, target_is_directory=True)
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertEqual(row.reason, f"cache root is not a directory: {missing.resolve()}")
+        self.assertEqual(row.path, ".cache/schwab_chains")
+
+    def test_schwab_cache_symlink_to_file_is_failed_as_non_directory(self):
+        self._install_all_ok()
+        cache_link = self.root / ".cache"
+        external_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, external_dir, True)
+        cache_link.rename(external_dir / "preserved-cache")
+        external_file = external_dir / "not-a-cache-directory"
+        external_file.write_text("not a directory")
+        cache_link.symlink_to(external_file)
+
+        row = self._by_job(collect_health(self.root, AS_OF))["Schwab preclose"]
+
+        self.assertEqual(row.status, HealthStatus.FAILED)
+        self.assertEqual(row.reason, f"cache root is not a directory: {external_file.resolve()}")
+        self.assertEqual(row.path, ".cache/schwab_chains")
+
     def test_ritual_hypotheses_requires_exact_registered_key_set(self):
         self._install_all_ok()
         path = self.root / f"reports/ritual/capture_receipt_{AS_OF}.json"
