@@ -1,17 +1,21 @@
 # Codex brief 37 — Dashboard presentation fixes from the 2026-09-04 review
 
-**Date:** 2026-09-04 (rev 4; revs 1–3 reviewed FAIL — receipts
-`reports/2026-09-04-brief-37-adversarial-review-round{1,2,3}.md`; every
-finding applied or dispositioned in those receipts)
+**Date:** 2026-09-04 (rev 5; revs 1–3 reviewed FAIL, rev 4 reviewed PASS WITH
+FIXES — receipts `reports/2026-09-04-brief-37-adversarial-review-round{1,2,3,4}.md`;
+every finding applied or dispositioned in those receipts; the 14 round-4
+wording fixes are applied in this revision)
 **Author:** Claude (orchestrating session; options-validator status + dashboard review, 2026-09-04)
 **Executor:** Codex (Sol, high reasoning — the executor tier used for brief 07; owner may substitute at dispatch)
-**Status:** DRAFT — pending independent adversarial review (round 4) before hand-off
+**Status:** READY FOR HAND-OFF — independent adversarial review passed (round 4,
+PASS WITH FIXES, `reports/2026-09-04-brief-37-adversarial-review-round4.md`;
+all 14 wording-only fixes applied here, no design change); dispatch, hand-off
+and landing order remain the owner's
 **Provenance:** file:line constraints below are Repo-verified against origin/main
 @039d76e unless a sentence carries its own label. "Test-verified" observations
 were taken read-only from the ops execution checkout's 2026-09-04 09:12 ET build
 (`~/options-validator-ops/.tmp/dashboard/{index,attractiveness}.html`) and its
 ritual log `.tmp/daily_ritual/2026-09-04_0909.log`; counts marked "measured"
-were re-counted by the round-2 and round-3 reviewers. Sentences labelled
+were re-counted by the round-2, round-3 and round-4 reviewers. Sentences labelled
 **Inference** are the author's reading of the code, not a file fact.
 
 ## Why this exists (plain language)
@@ -27,7 +31,7 @@ Every work package is presentation or plumbing. Three review rounds moved two
 items OUT of this brief: the realized-volatility half of DR-6 (inseparable from
 the badge decision — held with DR-5 for the owner) and the event-chip dedupe
 DR-8b (it would silently retire a parity contract brief 28 authored on purpose
-— held for the visual-redesign brief). What remains is seven fixes.
+— held for the visual-redesign brief). What remains is eight fixes.
 
 | ID | Page | What the page says today (Test-verified 2026-09-04) | Why it is wrong |
 |---|---|---|---|
@@ -94,7 +98,7 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
   `tests/test_event_awareness.py:311`
   (`test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list`,
   comment `:312` "Catches a consumer drifting from the single event-chip
-  join contract"; assertions `:441-449`; second exposure `:258`) pins that
+  join contract"; assertions `:441-450`; second exposure `:258`) pins that
   every surface shows the same per-card chips — an invariant brief 28
   authored on purpose. Removing repetition therefore means renegotiating
   that contract, which belongs in the visual-redesign brief, not here.
@@ -121,7 +125,9 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
   `data/underlying_closes.py` (`:157`) are INSIDE it and may only be
   imported, never modified. Do not add an import of any H7/activation module
   into the IN files (`h7_window_status` is already imported at
-  `dashboard.py:181`).
+  `dashboard.py:181`). The one exception is `data/ritual_authority.py`, which
+  WP-C requires and which is outside the closure (its import cannot change
+  the recomputed closure, `tests/test_h7_schwab_window_registration.py:518`).
 - No change to `options_researcher/attractiveness.py`,
   `options_researcher/display_rank.py`, any badge grade, the `grades` inputs
   of any card (`rv21` and `iv_minus_rv` stay NaN on Schwab-sourced cards
@@ -185,7 +191,8 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
    real project state and a test passes it explicitly); tests pass a frame
    rather than changing directory. Role text: `Held — {shares} shares` plus
    `, no options` when the book (`assemble()`'s `book["marks"]`) has no open
-   mark for that symbol, else `, {n} open option mark(s)`.
+   mark for that symbol, else `, {n} open option mark` / `, {n} open option
+   marks`, pluralized properly like `attractiveness_dashboard.py:1128`.
 3. Fail-visible, never the old constant, three cases: (a) loader failure —
    catch exactly `(OSError, TypeError, ValueError)`: the loader raises
    `FileNotFoundError` and `ValueError` explicitly (`portfolio.py:79-95`)
@@ -224,7 +231,10 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
    `:78-81` — confirmed by the round-3 reviewer). **Inference:** both
    functions are pure dataclass evaluation with no I/O; the module's only
    first-party import, `THETADATA_ACQUISITION_DISABLED` from
-   `data/provider_policy.py`, is a constant. `assemble()` attaches
+   `data/provider_policy.py`, is a constant. Add a keyword-only
+   `h7_authority: dict | None = None` parameter to `assemble()` following the
+   same house injection pattern as WP-B (`dashboard.py:155-157`); when it is
+   None, `assemble()` computes it from the call above and attaches
    `h7_authority = {"h7_active": …, "blockers": [...]}`; `render()` passes
    it to the panel.
 3. Panel behaviour: when `h7_active` is False, the heading is
@@ -240,8 +250,10 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
    UNAVAILABLE branch (`:400-405`) still wins.
 4. Tests, both directions plus the contract guard: inject
    `h7_active=False` with the blocker → PAUSED text and `entries taken: 0`
-   present, `live` absent; inject `h7_active=True` → `live` present; inject
-   `h7_active=False` with an empty blocker list, and separately with two
+   present, `live` absent; inject `h7_active=True` → the panel HTML is
+   byte-identical to today's output for the same `h7_window` dict (capture
+   the current string in the test; do not merely assert `live` is present);
+   inject `h7_active=False` with an empty blocker list, and separately with two
    blockers → the UNAVAILABLE-text sentinel in both. Update
    `tests/test_dashboard.py:38-77` to pass `h7_authority=` explicitly so
    neither existing test depends on the live `CURRENT_AUTHORITY` value
@@ -276,15 +288,20 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
    (`:1942`), so `closes_as_of > day` is impossible. When `closes_as_of ==
    day` the sentence is false.
 2. Compute NOTHING new. Replace the sentence with one that names the real
-   cause, is true in both states, and carries no expiry date:
+   cause, is true in both states, carries no expiry date, and contains no
+   `;` (the per-field rows are joined with `"; "` at `:5073`, and this reason
+   is appended twice, for `rv21` and `iv_minus_rv`, at `:1974-1975` — an
+   internal `;` would make the field boundaries unreadable). The input
+   series exists on this path (`adjusted_closes`, `:1943-1944`); only the
+   computation is absent, so the sentence must not claim the input is
+   missing:
    - when `closes_as_of == day`: `rv21 and iv_minus_rv are not computed on
-     the 15:45 capture lane (this lane has no realized-volatility input; see
-     brief 37 DR-5b); closes are current through {day}`;
+     the 15:45 capture lane (see brief 37 DR-5b) — closes are current
+     through {day}`;
    - when `closes_as_of < day`: `rv21 and iv_minus_rv are not computed on
-     the 15:45 capture lane (this lane has no realized-volatility input; see
-     brief 37 DR-5b); closes end {closes_as_of}, {n} session{s} before this
-     {day} session`, pluralized properly like `:1128` (`1 session` / `2
-     sessions`), with `n` from `trading_sessions_between(closes_as_of, day)`
+     the 15:45 capture lane (see brief 37 DR-5b) — closes end
+     {closes_as_of}, {n} session{s} before this {day} session`, pluralized
+     properly like `:1128` (`1 session` / `2 sessions`), with `n` from `trading_sessions_between(closes_as_of, day)`
      (`top3_snapshot.py:83-92`, `np.busday_count`, half-open; the helper the
      page already calls at `:1248`). Import it locally inside
      `_gather_symbol`, mirroring the local import at `:1938` — do not add it
@@ -324,8 +341,11 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
 3. **Net-zero line count is mandatory.**
    `tests/test_daily_ritual_provenance.py:131-142` pins the ABSOLUTE line
    numbers of every mutation verb (asserted at `:370`) and
-   `PYTHON_DASH_C_CLASSIFICATION` is line-number-keyed (`:390`); all of those
-   sites are after `:507`, so a pure relocation preserves them (the round-2
+   `PYTHON_DASH_C_CLASSIFICATION` is line-number-keyed (`:96-108`, equality
+   asserted at `:363`); none of those pinned line numbers falls between
+   `:481` and `:507` (mutation sites 68/345/366/428/582/585/595/596/597/614;
+   `-c` sites 120/121/199/290/314/317/365/406/449), so a pure relocation
+   preserves both sets (the round-2
    and round-3 reviewers executed the move in memory and confirmed both sets
    unchanged and `bash -n` clean). Do not add, remove, or reflow any line
    while relocating the block. Do not touch the pick tracker's isolation
@@ -356,7 +376,9 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
    page at `:5651`) compute each failure's age as
    `trading_sessions_between(failure_session, evaluation_session)`
    (`top3_snapshot.py:83-92`; the helper the page already calls at `:1248`;
-   `evaluation_date` is set at `:1739`). Predicate: `age >
+   `evaluation_date` is set at `:1739`; import the helper locally inside
+   `_schwab_state_html`, mirroring the local import at `:1058`). Predicate:
+   `age >
    config.CHAIN_STALE_BLOCK_SESSIONS` (`config.py:690`, = 3) collapses;
    everything else — including a negative count for a failure dated after
    the evaluation session — keeps the full red notice byte-for-byte
@@ -375,6 +397,10 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
    non-verifying capture "must never degrade quietly") from "forever" to
    "for `CHAIN_STALE_BLOCK_SESSIONS` sessions, then one named line" — say so
    in the PR body; no existing test forbids it (all three reviewers checked).
+   Also say that `trading_sessions_between` is `np.busday_count`, which
+   counts market holidays as sessions (`top3_snapshot.py:84-88`), so across a
+   holiday week a notice can collapse up to two real sessions earlier than
+   three.
 3. Tests (new): (a) failures at 1 and 5 sessions old → one red notice and
    one collapsed info line naming the old session; (b) missing evaluation
    session → both stay red; (c) a failure dated after the evaluation session
@@ -393,15 +419,21 @@ DR-8b (it would silently retire a parity contract brief 28 authored on purpose
    CLAUDE.md "Worktree location rule").
 2. Delete the `_contained_path(root, chain_dir_relative)` call and its
    FAILED row (`:525-532`). In their place compute `cache_root = (root /
-   ".cache").resolve()` and `chain_dir = cache_root / "schwab_chains"`. If
-   `cache_root` is not an existing directory (dangling symlink, or a symlink
+   ".cache").resolve()` and `chain_dir = cache_root / "schwab_chains"`. Wrap
+   the resolve in `try/except (OSError, RuntimeError)` exactly as
+   `_contained_path` does at `:93-95`, returning `HealthRow("Schwab
+   preclose", HealthStatus.FAILED, f"unsafe cache root:
+   {type(exc).__name__}", chain_dir_relative)` — the digest must never raise
+   out of `collect_health` (`:727`). If `cache_root` is not an existing
+   directory (dangling symlink, or a symlink
    to a file — both resolve without error and would otherwise surface later
    as the misleading `manifest verification failed: …` built at `:560`),
-   return `HealthRow("Schwab preclose", FAILED, f"cache root is not a
+   return `HealthRow("Schwab preclose", HealthStatus.FAILED, f"cache root is not a
    directory: {cache_root}", chain_dir_relative)` before the per-symbol
    loop. Inside the loop use `_contained_path(cache_root,
-   f"schwab_chains/{symbol}_{as_of}.parquet")`. `chain_dir` as computed
-   above is what continues to be passed to `verify_session(...)` at `:550`;
+   f"schwab_chains/{symbol}_{as_of}.parquet")`; keep `chain_relative` (`:534`)
+   unchanged as the FAILED row's `path` field — only the `_contained_path`
+   argument changes. `chain_dir` as computed above is what continues to be passed to `verify_session(...)` at `:550`;
    that call site is otherwise unchanged. The universe is already pinned
    against `_EXPECTED_SCHWAB_UNIVERSE` before the loop (`:508`), so no new
    traversal is introduced (**Inference**, reviewer-confirmed). Receipts and
