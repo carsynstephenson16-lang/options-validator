@@ -478,17 +478,6 @@ else
 fi
 # ---- end Schwab preclose lane ----
 
-# Dashboards rebuild regardless of gate state — they display cached truth
-# and carry their own honest data-as-of banner.
-"$UV" run python -m options_researcher.dashboard && note "dashboard: rebuilt" || note "dashboard: FAILED"
-"$UV" run python -m options_researcher.attractiveness_dashboard && note "attractiveness dashboard: rebuilt" || note "attractiveness dashboard: FAILED"
-if [ -n "$AS_OF" ]; then
-  "$UV" run python -m options_researcher.pick_tracker record --as-of "$AS_OF" && note "pick tracker recorder: appended" || note "pick tracker recorder: FAILED (isolated)"
-  PICK_TRACKER_EVAL_LOG="$LOGDIR/pick-tracker-evaluate-$AS_OF-$$.log"; if "$UV" run python -m options_researcher.pick_tracker evaluate --as-of "$AS_OF" >"$PICK_TRACKER_EVAL_LOG" 2>&1; then note "pick tracker evaluator: rebuilt"; elif grep -q 'IMMUTABLE_HISTORY_CONFLICT' "$PICK_TRACKER_EVAL_LOG"; then note "pick tracker evaluator: IMMUTABLE_HISTORY_CONFLICT — manual --supersede-reason required"; sed -n '1,200p' "$PICK_TRACKER_EVAL_LOG"; else note "pick tracker evaluator: FAILED (isolated)"; sed -n '1,200p' "$PICK_TRACKER_EVAL_LOG"; fi
-else
-  note "pick tracker: SKIPPED — evaluation session unavailable"
-fi
-
 # Per-hypothesis capture receipt. A missing/refused leg is CRITICAL, but this
 # runs fail-soft so Step 8 can still preserve every artifact that did exist.
 if [ -n "$AS_OF" ]; then
@@ -504,6 +493,17 @@ if [ -n "$AS_OF" ]; then
   fi
 else
   crit "capture receipt: REFUSED — evaluation session unavailable"
+fi
+
+# Dashboards rebuild regardless of gate state — they display cached truth
+# and carry their own honest data-as-of banner.
+"$UV" run python -m options_researcher.dashboard && note "dashboard: rebuilt" || note "dashboard: FAILED"
+"$UV" run python -m options_researcher.attractiveness_dashboard && note "attractiveness dashboard: rebuilt" || note "attractiveness dashboard: FAILED"
+if [ -n "$AS_OF" ]; then
+  "$UV" run python -m options_researcher.pick_tracker record --as-of "$AS_OF" && note "pick tracker recorder: appended" || note "pick tracker recorder: FAILED (isolated)"
+  PICK_TRACKER_EVAL_LOG="$LOGDIR/pick-tracker-evaluate-$AS_OF-$$.log"; if "$UV" run python -m options_researcher.pick_tracker evaluate --as-of "$AS_OF" >"$PICK_TRACKER_EVAL_LOG" 2>&1; then note "pick tracker evaluator: rebuilt"; elif grep -q 'IMMUTABLE_HISTORY_CONFLICT' "$PICK_TRACKER_EVAL_LOG"; then note "pick tracker evaluator: IMMUTABLE_HISTORY_CONFLICT — manual --supersede-reason required"; sed -n '1,200p' "$PICK_TRACKER_EVAL_LOG"; else note "pick tracker evaluator: FAILED (isolated)"; sed -n '1,200p' "$PICK_TRACKER_EVAL_LOG"; fi
+else
+  note "pick tracker: SKIPPED — evaluation session unavailable"
 fi
 
 # Publish the enclosing ritual's terminal state separately from the per-lane
