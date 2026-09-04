@@ -522,17 +522,28 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
             manifest_relative,
         )
     chain_dir_relative = ".cache/schwab_chains"
-    chain_dir, chain_dir_error = _contained_path(root, chain_dir_relative)
-    if chain_dir_error is not None or chain_dir is None:
+    try:
+        cache_root = (root / ".cache").resolve()
+    except (OSError, RuntimeError) as exc:
         return HealthRow(
             "Schwab preclose",
             HealthStatus.FAILED,
-            chain_dir_error or "unsafe chain directory",
+            f"unsafe cache root: {type(exc).__name__}",
             chain_dir_relative,
         )
+    if not cache_root.is_dir():
+        return HealthRow(
+            "Schwab preclose",
+            HealthStatus.FAILED,
+            f"cache root is not a directory: {cache_root}",
+            chain_dir_relative,
+        )
+    chain_dir = cache_root / "schwab_chains"
     for symbol in universe:
         chain_relative = f"{chain_dir_relative}/{symbol}_{as_of}.parquet"
-        _chain_path, chain_error = _contained_path(root, chain_relative)
+        _chain_path, chain_error = _contained_path(
+            cache_root, f"schwab_chains/{symbol}_{as_of}.parquet"
+        )
         if chain_error is not None:
             return HealthRow(
                 "Schwab preclose",
@@ -570,7 +581,8 @@ def _schwab_preclose(root: Path, as_of: str) -> HealthRow:
     return HealthRow(
         "Schwab preclose",
         HealthStatus.OK,
-        "overall_status=ok; force=false; invocation_source=launchd; manifest verified",
+        "overall_status=ok; force=false; invocation_source=launchd; manifest verified; "
+        f"chains: {chain_dir}",
         relative,
     )
 
