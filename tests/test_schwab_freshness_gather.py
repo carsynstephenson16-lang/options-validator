@@ -231,6 +231,49 @@ class GatherSymbolSourceTests(unittest.TestCase):
         for item in section["feature_unavailable"]:
             self.assertIn("2026-08-04", item["reason"])
 
+    def test_same_day_closes_name_the_uncomputed_capture_features(self):
+        section, _rv21, _calls = self._gather(
+            chain_frame=_display_chain(), chain_source=view.CHAIN_SOURCE,
+            preclose_spot=SPOT, iv_rank_preview=0.4960,
+            load_closes=lambda *_a, **_k: _closes(DAY),
+            load_closes_adjusted=lambda *_a, **_k: _closes(DAY))
+
+        reasons = [item["reason"] for item in section["feature_unavailable"]]
+        self.assertEqual(reasons, [
+            "rv21 and iv_minus_rv are not computed on the 15:45 capture "
+            "lane (see brief 37 DR-5b) — closes are current through " + DAY,
+            "rv21 and iv_minus_rv are not computed on the 15:45 capture "
+            "lane (see brief 37 DR-5b) — closes are current through " + DAY,
+        ])
+        html = ad.render(ad.assemble(symbol_sections=[section],
+                                     rv21_by_symbol={}, today=DAY))
+        self.assertNotIn(", before this ", html)
+
+    def test_stale_closes_name_the_eight_session_gap(self):
+        section, _rv21, _calls = self._gather(
+            chain_frame=_display_chain(), chain_source=view.CHAIN_SOURCE,
+            preclose_spot=SPOT, iv_rank_preview=0.4960)
+
+        reasons = [item["reason"] for item in section["feature_unavailable"]]
+        self.assertEqual(reasons[:2], [
+            "rv21 and iv_minus_rv are not computed on the 15:45 capture "
+            "lane (see brief 37 DR-5b) — closes end 2026-08-04, 8 sessions "
+            "before this 2026-08-14 session",
+        ] * 2)
+        self.assertTrue(all(";" not in reason for reason in reasons))
+
+    def test_gap_count_failure_keeps_both_dates_visible(self):
+        with mock.patch(
+            "options_researcher.top3_snapshot.trading_sessions_between",
+            side_effect=ValueError("bad session"),
+        ):
+            section, _rv21, _calls = self._gather(
+                chain_frame=_display_chain(), chain_source=view.CHAIN_SOURCE,
+                preclose_spot=SPOT, iv_rank_preview=0.4960)
+
+        self.assertIn("closes end 2026-08-04, before this 2026-08-14 session",
+                      section["feature_unavailable"][0]["reason"])
+
     def test_missing_iv_rank_preview_is_unavailable_not_zero(self):
         section, _rv21, _calls = self._gather(
             chain_frame=_display_chain(), chain_source=view.CHAIN_SOURCE,
