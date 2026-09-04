@@ -1054,6 +1054,13 @@ def _schwab_state_html(data: Mapping[str, object]) -> str:
     looks stale today": the page says the session and the verification error
     out loud. A checkout with no receipts at all says that too, so silence is
     never ambiguous between "no captures" and "captures hidden by a bug".
+
+    Retention (brief 37 WP-G): failures older than
+    ``config.CHAIN_STALE_BLOCK_SESSIONS`` sessions collapse into ONE named
+    ``notice info`` line that still prints their session dates; everything
+    newer, and every case where the age cannot be computed (missing or
+    unparseable evaluation session, helper exception, negative age), keeps
+    the full red notice.
     """
     import config
     from options_researcher.schwab_chain_view import CHAINS_ABSENT, CONVENTION_LABEL
@@ -1971,9 +1978,12 @@ def _gather_symbol(symbol, chain_path, day, *, holdings, held_leaps,
 
     if schwab_sourced:
         # D4b: per-session feature values, computed in memory from the fresh
-        # chain. rv21 and iv_minus_rv need underlying closes THROUGH the
-        # session; the closes store ends earlier and its refresh is owner-gated,
-        # so they are unavailable -- never interpolated across the hole.
+        # chain. rv21 and iv_minus_rv are NOT computed on the 15:45 capture
+        # lane: the closes store is refreshed through the session by the
+        # ritual, but computing them here would change the cushion and
+        # vol-premium badges, which are ranking inputs (brief 37 DR-5b, held
+        # for an owner ruling). They stay NaN -- never interpolated across a
+        # hole, never defaulted.
         if preclose_spot is None:
             # Unreachable from _gather_all (it refuses a fresh chain without a
             # verified spot); explicit so a future caller cannot pair a fresh

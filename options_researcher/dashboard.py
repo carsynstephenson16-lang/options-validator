@@ -287,6 +287,8 @@ _PARTY = [
     ("CEG", "#7CFC9B"),
 ]
 
+_ROLE_UNAVAILABLE = "ROLE UNAVAILABLE (assemble() supplied no party_roles)"
+
 _QUEST_LOG_COMPLETED = [
     "M1",
     "M2",
@@ -535,6 +537,9 @@ def render(data: dict) -> str:
         {"ok": False, "detail": "window status missing from dashboard data"},
     )
     h7_authority = data.get("h7_authority")
+    # Presentation boundary: a data dict without party roles must say so on
+    # the card, never fall back to a role that could misstate a held position
+    # (the DR-1 defect by another route); same house pattern as h7_window.
     party_roles = data.get("party_roles", {})
 
     as_of = _datetime.now(timezone.utc).date().isoformat()
@@ -542,7 +547,7 @@ def render(data: dict) -> str:
         _party_card(
             symbol,
             color,
-            party_roles.get(symbol, "Watch"),
+            party_roles.get(symbol, _ROLE_UNAVAILABLE),
             sparklines,
             marks,
             trigger=triggers.get(symbol),

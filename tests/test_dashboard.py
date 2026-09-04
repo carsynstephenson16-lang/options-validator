@@ -386,6 +386,14 @@ class Brief37DashboardRegressionTests(unittest.TestCase):
         )
         self.assertIn("Held — 39 shares, 2 open option marks", render(data))
 
+    def test_render_without_party_roles_says_so_instead_of_watch(self):
+        # A data dict that never went through assemble() carries no roles;
+        # the card must say the role is unavailable, not silently print
+        # "Watch" for a held position (DR-1 by another route).
+        html = render({"h7_window": _H7_WINDOW})
+        self.assertIn("ROLE UNAVAILABLE (assemble() supplied no party_roles)", html)
+        self.assertNotIn('party-role">Watch', html)
+
     def test_held_role_makes_holdings_failures_and_missing_row_visible(self):
         from options_researcher import portfolio
 
