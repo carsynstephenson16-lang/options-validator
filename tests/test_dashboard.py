@@ -438,6 +438,19 @@ class Brief37DashboardRegressionTests(unittest.TestCase):
             expected_live,
         )
 
+    def test_h7_panel_fails_closed_when_authority_is_absent_or_empty(self):
+        from options_researcher import dashboard
+
+        for authority in (None, {}):
+            with self.subTest(authority=authority):
+                panel = dashboard._h7_window_panel(_H7_WINDOW, h7_authority=authority)
+                self.assertIn("H7 FORWARD WINDOW — PAUSED", panel)
+                self.assertIn(
+                    "H7 BLOCKER TEXT UNAVAILABLE (ritual_authority contract changed)", panel
+                )
+                self.assertNotIn("live", panel)
+        self.assertNotIn("(live,", dashboard.render({"h7_window": _H7_WINDOW}))
+
     def test_h7_panel_fails_visible_when_paused_blocker_contract_changes(self):
         from options_researcher import dashboard
 

@@ -35,6 +35,8 @@ from datetime import timezone
 from glob import glob
 from zoneinfo import ZoneInfo
 
+import pandas as pd
+
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "index.html")
 
 # One entry per major fact tag seen in `ledger/facts.log` (see
@@ -150,7 +152,7 @@ def assemble(
     triggers: dict[str, str] | None = None,
     data_as_of: str | None = None,
     h7_window: dict | None = None,
-    holdings=None,
+    holdings: pd.DataFrame | None = None,
     h7_authority: dict | None = None,
 ) -> dict:
     """Gather book, achievements, reports, and sparkline data into one dict.
@@ -476,12 +478,13 @@ def _h7_window_panel(window: dict, *, h7_authority: dict | None = None) -> str:
             f"<b>H7 FORWARD WINDOW</b> &mdash; UNAVAILABLE: "
             f"{_esc(window.get('detail', 'unknown error'))}</div>"
         )
-    h7_authority = h7_authority or {"h7_active": True, "blockers": []}
-    if not h7_authority.get("h7_active"):
+    if not isinstance(h7_authority, dict):
+        h7_authority = {}
+    if h7_authority.get("h7_active") is not True:
         blockers = h7_authority.get("blockers", [])
         blocker = (
             blockers[0]
-            if len(blockers) == 1
+            if isinstance(blockers, list) and len(blockers) == 1
             else "H7 BLOCKER TEXT UNAVAILABLE (ritual_authority contract changed)"
         )
         return (
