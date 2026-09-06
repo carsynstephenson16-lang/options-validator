@@ -1,9 +1,9 @@
 # Codex brief 38 — Ritual evidence staging must survive an absent allow-list path
 
-**Date:** 2026-09-06 (rev 2; rev 1 reviewed FAIL — `reports/2026-09-06-brief-38-adversarial-review-round1.md`, all 19 findings applied)
+**Date:** 2026-09-06 (rev 3; rev 1 reviewed FAIL, rev 2 reviewed PASS WITH FIXES — receipts `reports/2026-09-06-brief-38-adversarial-review-round{1,2}.md`; all 19 + 14 findings applied; round-1 finding IDs are cited per step as R1-n, round-2 as R2-n)
 **Author:** Claude (orchestrating session; ledger-durability diagnosis, 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37; owner may substitute at dispatch)
-**Status:** DRAFT — pending independent adversarial review (round 2) before hand-off
+**Status:** READY FOR HAND-OFF — independent adversarial review passed (round 2, PASS WITH FIXES, all 14 wording fixes applied here; the loop design was verified by simulation under zsh); dispatch, landing and ops sync remain the owner's
 **Provenance:** file:line constraints are Repo-verified against origin/main
 @f83428d unless a sentence carries its own label. "Test-verified" facts were
 reproduced read-only in the ops execution checkout (`~/options-validator-ops`)
@@ -52,7 +52,7 @@ durability for every other path.
 
 ## Scope
 
-**IN:** `tools/daily_ritual.sh` Step 8 staging only (`:561-590`), and
+**IN:** `tools/daily_ritual.sh` Step 8 staging only (`:561-589`), and
 `tests/test_daily_ritual_provenance.py` (the mutation-verb registry it pins,
 plus the new hermetic tests).
 
@@ -65,9 +65,13 @@ plus the new hermetic tests).
   commit (`:583-589`), the push function (`:594-597`), the restic snapshot
   (`:614`), the `RITUAL_TERMINAL_STATUS` computation/publication (`:514-526`),
   or any `note`/`crit` string that exists today.
-- No change to `tools/schwab_chain_intraday_capture.sh` (`EVIDENCE_ALLOW`,
-  `:74-79`) — that is the intraday wrapper's alignment guard, not a staging
-  list, and is out of scope even though it names the same path.
+- No change to any `EVIDENCE_ALLOW` array. Three byte-identical 15-path copies
+  exist — `tools/ops_alignment_check.sh:62-67`, `tools/schwab_chain_capture.sh:65-70`,
+  `tools/schwab_chain_intraday_capture.sh:73-78` — and all three are alignment
+  guards, not staging lists. All three already omit `reports/pick_tracker` and
+  `reports/closes_receipts`, which Step 8 does stage (11 of the 36 files in
+  `f83428d` live there); that divergence is pre-existing, out of scope here,
+  and a separate follow-up (R2-3).
 - No ledger write, no plist/launchd change, no ops-checkout mutation, no
   change to `PYTHON_DASH_C_CLASSIFICATION` sites
   (`tests/test_daily_ritual_provenance.py:96-108`; all nine are before `:561`
@@ -78,7 +82,7 @@ plus the new hermetic tests).
 
 ### WP-A — Stage each allow-list path on its own; never discard the error
 
-1. Bracket the replaced region with the file's existing marker convention —
+1. (closes R1-9, R1-10) Bracket the replaced region with the file's existing marker convention —
    `# ---- evidence staging ----` before `DATA_TIER_PATHS=(` and
    `# ---- end evidence staging ----` after the commit branch's closing `fi`
    (`:589`) — exactly like the four regions at `:154/268`, `:270/324`,
@@ -86,13 +90,15 @@ plus the new hermetic tests).
    (`tests/test_daily_ritual_provenance.py:178-183`) can address it and the
    WP-B test never depends on line numbers. Marker lines are comments and are
    excluded from the registry by `_code_lines` (`:192-198`).
-2. Dedupe first: `typeset -U GIT_ADD_PATHS` immediately after the array is
-   final (`:574`). `ledger/facts.log` is in the array twice on full-authority
+2. Dedupe first (closes R1-8): add `typeset -U GIT_ADD_PATHS` as a new line
+   immediately after `:574`, inside the `FULL_AUTHORITY_RC` branch (the only
+   branch that can produce a duplicate). Test-verified (zsh 5.9): the `-U`
+   flag dedupes an array that already contains duplicates. `ledger/facts.log` is in the array twice on full-authority
    days (`:562` and `:571`+`:574`); without dedupe one absent file would emit
    two crits and add 2 to `CRIT_COUNT`, the pure-counter input to the
    `[DATA-STARVED]` carve-outs at `:631`/`:649`.
-3. Replace the single call at `:582` with a loop over `"${GIT_ADD_PATHS[@]}"`
-   that, for each path `$p`:
+3. (closes R1-1, R1-6, R1-11, R1-12, R1-17, R1-19) Replace the single call at
+   `:582` with a loop over `"${GIT_ADD_PATHS[@]}"` that, for each path `$p`:
    (a) if `$p` does not exist: if it is tracked in HEAD
    (`git cat-file -e "HEAD:$p" 2>/dev/null`), its absence means committed
    evidence was deleted → `crit "evidence: REQUIRED allow-list path absent: $p"`;
@@ -117,21 +123,28 @@ plus the new hermetic tests).
    — no allow-list path is ignored today (`git check-ignore -v` on all →
    none), so that would be a genuine BROKEN day, which is correct. `git add`
    on an existing empty directory exits 0 silently (no crit). The variable
-   name `_stage_err` has no collision (`grep -n '\b_stage_err\b'` → none).
+   names `_stage_err`, `rc` and the loop variable `p` have no collision
+   (`grep -nE '\b_stage_err\b|(^|[^A-Za-z_])rc=|\$rc\b|\$p\b'` → none; the
+   script has no other `for` loop).
    Newline collapsing matters because `note()` (`:74`) appends to
    `$SUMMARY`, which is rendered with `printf "%b"` (`:623`) and embedded in
    an AppleScript string literal (`:637`); a raw newline there is a swallowed
-   syntax error.
+   syntax error. Residual (**Inference**, R2-9): `%b` also expands backslash
+   escapes, and git quotes unusual path bytes C-style, so a filename
+   containing a newline would still reach the notification as an escape
+   sequence. Accepted as out of scope; do not add a second sanitiser without
+   saying so in the PR body.
 4. Why a loop and not "filter the array to existing paths, then one `git
    add`": per-path error attribution — the filtered form would drop the
    stderr check in 3(b) for the path that actually failed. Do not substitute
    it.
-5. What `crit` does here, stated honestly: `crit()` (`:85`) increments
+5. (closes R1-4) What `crit` does here, stated honestly: `crit()` (`:85`) increments
    `CRIT_COUNT` and sets `CRITICAL`, which flips the notification title
    (`:630-636`) and the final `RITUAL STATUS` line and exit code (`:648-654`)
    to BROKEN. It does NOT change `RITUAL_TERMINAL_STATUS`, which is computed
    at `:514-520` and already published at `:521-526` before Step 8 begins at
-   `:528` (ordering pinned by `tests/test_daily_ritual_provenance.py:588-591`)
+   `:529` (`# Step 8 — DURABILITY`, the anchor the tests use; ordering pinned
+   by `tests/test_daily_ritual_provenance.py:589-591`)
    — the same asymmetry the existing push-failure crit at `:604` carries. A
    staging failure therefore produces a BROKEN notification and exit 1 while
    the run-status receipt keeps that day's `OK`/`OK_STARVED`; that is the
@@ -139,7 +152,7 @@ plus the new hermetic tests).
    an `OK_STARVED` day stays `[DATA-STARVED]`.
 6. Keep `:583-589` (the `git diff --cached --quiet` branch and the commit)
    byte-identical; the loop only changes what reaches the index.
-7. **Exactly one textual `git add` site must remain.** The provenance test's
+7. (closes R1-3-adjacent registry contract) **Exactly one textual `git add` site must remain.** The provenance test's
    mutation-verb registry (`tests/test_daily_ritual_provenance.py:131-142`,
    `"git add": (582,)` at `:136`) is asserted by exact line set at `:370` and
    closed over every verb family at `:374-376` (`ANY_MUTATION_VERB_RE`); a
@@ -153,17 +166,20 @@ plus the new hermetic tests).
    (`597`) and `restic backup` (`614`) to their new line numbers. The registry
    is a deliberate contract, so the PR body must quote the before/after
    numbers and the reason. (**Inference:** the reviewer's simulation landed
-   them at 592 / 598 / 608 / 609 / 610 / 627; the executor measures the real
-   values — do not copy these.)
+   them at 592 / 598 / 608 / 609 / 610 / 627; a second independent simulation
+   with a different brace style landed 592 / 601 / 612 / 613 / 614 / 631 —
+   the spread is the point: measure, do not copy.)
 9. Remove the `2>/dev/null` from the staging call. Stderr from `git add` is
    the evidence this bug hid; it now lands in the `crit` text, the log, and
    the summary.
 
 ### WP-B — Hermetic proof that one absent path cannot disable staging
 
-1. Add tests to `tests/test_daily_ritual_provenance.py` that extract the
-   `evidence staging` region with `_region()` (`:178-183`), define stub
-   `note`/`crit` functions that append to a log file, define the variables
+1. (closes R1-3, R1-9) Add tests to `tests/test_daily_ritual_provenance.py`
+   that extract the `evidence staging` region with `_region()` (`:178-183`),
+   define stub `note`/`crit` functions that append to a log file — the stub
+   `crit` must write `CRITICAL: $1`, mirroring `tools/daily_ritual.sh:85`,
+   because cases 2–4 assert on that prefix (R2-5) — define the variables
    the block reads (`RUN_DATE`, `FULL_AUTHORITY_RC`, `SUMMARY`, `CRITICAL`,
    `CRIT_COUNT`, `LOGDIR`, `REPO`), and run the block with
    `subprocess.run([zsh, "-c", script], …)` where `zsh = shutil.which("zsh")`
@@ -173,10 +189,21 @@ plus the new hermetic tests).
    under `/bin/zsh`; a bash harness would not test the production shell (the
    `/bin/bash` precedent at `tests/test_schwab_chain_schedule.py:115-116`
    targets a script that is also zsh and must not be propagated).
-2. Hermetic fixture, required exactly: `tempfile.TemporaryDirectory()`; run
-   the subprocess with `env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull,
-   "GIT_CONFIG_SYSTEM": os.devnull, "HOME": tmpdir}`; in the temp repo set
-   `user.name`, `user.email`, and `core.hooksPath=` (empty). Without this the
+2. (closes R1-7, R1-13) Hermetic fixture, required exactly:
+   `tempfile.TemporaryDirectory()` — required, not interchangeable: its
+   `cleanup()` resets permissions, so case 3's `chmod 000` directory is
+   removable; do NOT copy the `mkdtemp` + `shutil.rmtree` pattern at
+   `tests/test_daily_ritual_provenance.py:1069-1070` (`shutil.rmtree` raises
+   `PermissionError` on that directory, Test-verified, and
+   `ignore_errors=True` leaks it); register the chmod restore so it runs
+   before the directory is removed. Run the subprocess with **`cwd=<the temp
+   repo>`** — the extracted block runs bare `git` commands, so a missing
+   `cwd` runs them in the REAL checkout (`unittest discover` starts at the
+   repo root, Test-verified; R2-1) — and
+   `env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM":
+   os.devnull, "HOME": <a "home" subdirectory OUTSIDE the temp repo's work
+   tree>}` (R2-7); in the temp repo set `user.name`, `user.email`, and
+   `core.hooksPath=` (empty). Without this the
    temp repo inherits the operator's `core.hooksPath=~/.githooks` (an
    auto-push `post-commit` hook that writes `~/.local/log/autopush.log`,
    breaking the tempdir-only claim), and on CI — where no identity is
@@ -187,30 +214,41 @@ plus the new hermetic tests).
    baseline, then append one line to `ledger/facts.log` and add one new file
    under `reports/h10/`. Set `FULL_AUTHORITY_RC=1` so only the data tier is
    staged.
-4. Case 1 (the bug): the extracted block ends with `git commit` (`:585`), so
+4. (closes R1-2) Case 1 (the bug): the extracted block ends with `git commit` (`:585`), so
    the index is empty afterwards and must NOT be asserted on. Assert instead:
    `git show --name-only --format= HEAD` lists both changed files (staging
    survived the absent path); the stub log contains `allow-list path absent,
    not staged: reports/schwab_chains_intraday`; the stub log contains NO
    `CRITICAL:` line; `evidence: nothing new to persist` was NOT printed.
-5. Case 2 (tracked path deleted): delete `ledger/facts.log` from the fixture
-   (it is tracked in the baseline) → the stub log contains `CRITICAL:
-   evidence: REQUIRED allow-list path absent: ledger/facts.log`, and HEAD
-   still contains the other staged change.
-6. Case 3 (real staging failure): make `reports/h10` unreadable (`chmod 000`,
+5. (closes R1-6) Case 2 (tracked path deleted): delete `ledger/facts.log`
+   from the fixture (it is tracked in the baseline) → the stub log contains
+   `CRITICAL: evidence: REQUIRED allow-list path absent: ledger/facts.log`,
+   and HEAD still contains the other staged change. Note for a Claude
+   session reproducing this by hand: `.agents/hooks/block_ledger_edits.py:56-64`
+   blocks any shell command that writes or deletes a path matching
+   `ledger/facts.log`, including in a temp repo. Build and mutate the fixture
+   from inside the test process (Python `Path.write_text` / `unlink`); do not
+   work around the hook (R2-14).
+6. (closes R1-1, R1-13) Case 3 (real staging failure): make `reports/h10` unreadable (`chmod 000`,
    restored in `addCleanup`; decorate with `@unittest.skipIf(os.geteuid() ==
    0, "chmod-based denial is bypassed for root")`) → the stub log contains
    `CRITICAL: evidence: STAGING FAILED for reports/h10 — ` followed by git's
    warning EVEN THOUGH `git add` exited 0, and `git show --name-only
    --format= HEAD` does NOT list any `reports/h10/` file.
-7. Case 4 (dedupe): `FULL_AUTHORITY_RC=0` with `ledger/facts.log` deleted →
+7. (closes R1-8) Case 4 (dedupe): `FULL_AUTHORITY_RC=0` with `ledger/facts.log` deleted →
    exactly ONE `REQUIRED allow-list path absent: ledger/facts.log` line.
 8. Existing tests that must stay green unchanged except for the registry
    numbers in WP-A.8: `test_every_script_surface_is_classified`
    (`:346-376`), `test_durability_allow_list_is_tier_scoped` (`:640-658`,
    which uses `durability.index("git add --")` — the loop preserves that
    string), the ordering pins at `:233-241`, `:583-591`, `:745-757` (all
-   outside the changed region), and `zsh -n tools/daily_ritual.sh`.
+   outside the changed region), and `zsh -n tools/daily_ritual.sh`. Also
+   green-unchanged, and NOT in scope to edit: `tests/test_closes_receipt.py:175-186`
+   and `tests/test_schwab_chain_intraday.py:515-519`, both of which parse this
+   same block (Test-verified: both pass against a simulated patch).
+   `tests/test_closes_receipt.py:158-160`'s docstring cites stale line numbers
+   and describes the pre-fix behaviour; correcting it is a follow-up, not
+   part of this brief — do not edit it (R2-4).
 
 ## Acceptance / verification
 
@@ -237,7 +275,13 @@ citation is a STOP-and-report, not a workaround. The implementation PR starts
 as a GitHub draft; the executor may not make it ready, merge, deploy, sync
 `~/options-validator-ops` or `~/options-validator-research`, or touch
 `ledger/`. Green checks are review evidence for the owner, not landing
-authority. Landing before **Monday 2026-09-07 09:09 ET** is what stops the
-next silent loss; until then the orchestrating session rescue-commits after
-each run under the owner's 2026-09-06 approval pattern. Timing is the
-owner's call.
+authority. Landing **and** fast-forwarding it into `~/options-validator-ops`
+(owner/orchestrator only — the executor may not sync ops) before **Monday
+2026-09-07 09:09 ET** is what stops the next silent loss. Repo-verified: nothing
+syncs ops before 09:09 — `tools/ops_alignment_check.sh:6` never pulls and runs
+09:45/12:45/15:30, `repo-reconcile` runs 09:20 and treats ops as read-only, and
+the ritual's own `git merge origin/main` (`:596`) runs AFTER Step 8 — so a merge
+to main alone leaves Monday's run on the old code and the fix live only from
+Tuesday 2026-09-08 (R2-2). Until the fix is live the orchestrating session
+rescue-commits after each run under the owner's 2026-09-06 approval pattern.
+Timing is the owner's call.
