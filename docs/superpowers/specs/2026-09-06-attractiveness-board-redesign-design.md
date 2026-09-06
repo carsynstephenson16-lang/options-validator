@@ -1,7 +1,7 @@
 # Attractiveness board redesign — design spec
 
 **Date:** 2026-09-06
-**Status:** DRAFT — owner review requested before the implementation plan
+**Status:** APPROVED AS WRITTEN — owner review 2026-09-06 (in chat, after the spec was read); implementation plan and Codex brief 39 follow
 **Author:** Claude (orchestrating session), from a brainstorming dialogue with the
 owner on 2026-09-06 (every design decision below cites the owner's answer).
 **Baseline:** origin/main @f83428d (PR #156 landed; brief 37's fixes are in).
