@@ -1,7 +1,7 @@
 # Attractiveness board redesign — design spec
 
 **Date:** 2026-09-06
-**Status:** APPROVED AS WRITTEN — owner review 2026-09-06 (in chat, after the spec was read); implementation plan and Codex brief 39 follow
+**Status:** APPROVED AS WRITTEN — owner review 2026-09-06 (in chat, after the spec was read); amended the same day with owner decisions D10–D12 after brief 39's round-1 adversarial review (`reports/2026-09-06-brief-39-adversarial-review-round1.md`); implementation plan and Codex brief 39 follow
 **Author:** Claude (orchestrating session), from a brainstorming dialogue with the
 owner on 2026-09-06 (every design decision below cites the owner's answer).
 **Baseline:** origin/main @f83428d (PR #156 landed; brief 37's fixes are in).
@@ -33,6 +33,9 @@ Owner decisions taken 2026-09-06 (in chat, one at a time):
 | D7 | First-screen direction | Option A: one agreement table (names × lanes) |
 | D8 | Agreement count | Favourable lanes only; cautions shown separately and never counted |
 | D9 | Pick-tracker scoreboard | Moves into the diagnostics drawer (owner chose "continue" over keeping it in the main flow) |
+| D10 | How "less long" is measured (brief 39 review finding 1: the byte-identical detail panels are 89% of today's bytes) | What is VISIBLE with fold-outs closed: ≤ 8 visible headings and ≤ 20 fold-out summaries above the drawer; file size is reported, not a target; the detail panels stay exactly today's when opened |
+| D11 | Content of the single event line (finding 6) | Events for the registered picks' contracts only — the union of the five baseline pick cards' chips; detail panels keep their own chips |
+| D12 | Context lane after D4 (finding 26) | Survives as a column in the agreement table only (rank or `veto`); the five context cards and their comparison table are removed |
 
 Design classification: architectural (restructures how the page's components
 fit together and re-pins two test contracts). Implementation is delegated to
@@ -52,9 +55,11 @@ review artifact.
    (`load_open_positions`, the H6 receipt date). The per-hypothesis tracker
    lines move into the drawer.
 3. **Agreement table** — the decision area (§3).
-4. **One event line** — the union of upcoming calendar events for the names
-   on the table, printed once (today the identical FOMC chip prints twelve
-   times above the fold).
+4. **One event line** — the union of the registered picks' event chips (the
+   baseline pick cards only, D11), printed once (today the identical FOMC chip
+   prints twelve times above the fold). Names on the table without a
+   registered pick contribute nothing; their own chips stay inside their
+   detail panel.
 5. **Pick details on demand** — one closed `<details>` per name on the
    table, holding what today's per-name panel holds (gate checks, ladder,
    bull/base/bear table, event chips). Nothing is rendered for names not on
@@ -68,7 +73,8 @@ review artifact.
    this page and Mission Control date independently.
 
 Removed from the page (content, not data): the 18-row composite table, the
-18 per-name panels, the five context-lane cards and their comparison table,
+18 per-name panels, the five context-lane cards and their comparison table
+(D12 — the lane itself survives as a table column),
 the QM hero cards, the core-names VST/AMZN strip (pinned names become table
 rows marked "pinned"), the repeated event chips, and the sticky symbol nav
 (the table is the index).
@@ -222,10 +228,13 @@ is inline SVG. No script tags, no external assets.
   zero-JS tests stay.
 - **Event-chip parity** (`tests/test_event_awareness.py:311`
   `test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list`):
-  the hero, context and pinned card surfaces no longer exist. New contract:
-  every per-name details fold-out renders the same chip list the symbol panel
-  did, and the single event line is exactly the sorted union of the table
-  names' chips. This is the DR-8b renegotiation brief 37 deferred.
+  the hero, context and pinned card surfaces no longer exist. New contract
+  (D11): each detail fold-out renders exactly what the symbol panel renders
+  today (the extraction is byte-identical), and the single event line is
+  exactly the sorted union of the registered picks' card chips, each printed
+  once; every chip on the line also appears in that pick's own detail panel.
+  Panels legitimately differ by symbol and expiry, so no cross-panel equality
+  is asserted. This is the DR-8b renegotiation brief 37 deferred.
 
 ## 8. Testing and acceptance
 
@@ -239,9 +248,12 @@ is inline SVG. No script tags, no external assets.
   reproduces today's output byte-for-byte on the layout fixture.
 - **Parity:** invariants 1–3 on a fresh-chain fixture and on the Friday
   2026-09-04 ops data (manual proof in the PR body).
-- **Acceptance targets** (LLM-proposed 2026-09-06, measured on Friday's data;
-  targets, not frozen numbers): ≤ 8 `<h2>`; HTML under 150 KB (771 KB today);
-  ≤ 20 `<details>` open or closed above the drawer (362 today).
+- **Acceptance targets** (D10; LLM-proposed 2026-09-06, measured on Friday's
+  data; targets, not frozen numbers): ≤ 8 VISIBLE headings (`<h2>` outside any
+  closed `<details>`) and ≤ 20 fold-out summaries (`<summary>`) above the
+  drawer (today: 30 headings, 362 fold-outs); file size is REPORTED in the PR
+  body, not a target — the detail panels are kept byte-identical and are 89%
+  of today's 782 KB, so the file stays large while the visible page is short.
 - Suite, ruff, pyright exit 0; `bash -n` not applicable (Python only).
 
 ## 9. Out of scope / held
