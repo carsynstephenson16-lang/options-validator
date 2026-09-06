@@ -1,52 +1,62 @@
 # Codex brief 39 — Attractiveness board redesign (agreement table) — implementation plan
 
-**Date:** 2026-09-06
+**Date:** 2026-09-06 (rev 2; rev 1 reviewed FAIL — `reports/2026-09-06-brief-39-adversarial-review-round1.md`; all 36 findings and 7 placeholder violations applied; owner decisions D10–D12 taken and recorded in the spec)
 **Author:** Claude (orchestrating session; brainstorming + spec with the owner 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37/38; owner may substitute at dispatch)
-**Status:** DRAFT — pending independent adversarial review before hand-off
+**Status:** DRAFT — pending independent adversarial review (round 2) before hand-off
 **Provenance:** file:line constraints are Repo-verified against origin/main
-@f83428d unless a sentence carries its own label. Sentences labelled
-**Inference** are the author's reading of the code, not a file fact.
-**Spec (approved by the owner 2026-09-06, read it first):**
+@f83428d unless a sentence carries its own label. Counts marked "measured"
+were taken from the 2026-09-04 ops build by the round-1 reviewer. Sentences
+labelled **Inference** are the author's reading of the code, not a file fact.
+**Spec (owner-approved 2026-09-06, amended D10–D12 the same day — read it first):**
 `docs/superpowers/specs/2026-09-06-attractiveness-board-redesign-design.md`
 with the approved first-screen mockup
 `docs/superpowers/specs/assets/2026-09-06-board-redesign-option-a-v2.html`.
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Tasks carry both a plan number and a work-package label (WP-A … WP-H) so review findings can cite them.
 
 **Goal:** Replace the attractiveness board's first screen with one agreement
-table (names × lanes, favourable-only count), render per-name details only
-for names on that table, and move everything descriptive into the existing
-drawer — cutting the page from ~19 screens to under 5 without changing any
-ranking, grade, snapshot, or authority.
+table (names × lanes, favourable-only count), render per-name detail panels
+only for the names on that table, and move everything descriptive into the
+existing drawer — so the VISIBLE page (fold-outs closed) drops from ~19
+screens to under 5 without changing any ranking, grade, snapshot, or authority.
 
 **Architecture:** A new pure module `options_researcher/board_lanes.py` turns
-the already-assembled board data (baseline picks, context rows, composite
-cards, QM picks, experiment lanes) into a `LaneBoard` value. The renderer in
+the already-assembled board data (baseline picks, context selection, composite
+cards, QM picks, experiment lanes, blocked records) into a `LaneBoard` value.
 `options_researcher/attractiveness_dashboard.py` gains a status strip, position
 tiles, the agreement table, one event line and "details for these names only",
-gated by `config.BOARD_LANES_ENABLED`; when the flag is `False` the page is
-byte-identical to today. Experiment lanes are computed in the gather step from
-cached data (injectable for tests).
+all gated by `config.BOARD_LANES_ENABLED`; when the flag is `False` the page is
+byte-identical to today (snapshot-tested). Experiment lanes are computed in the
+real gather step only (never for injected test fixtures) and are injectable.
 
 **Tech Stack:** Python 3.12, `unittest` (offline, no network), ruff, pyright,
 zero-JavaScript static HTML (native `<details>`, inline SVG only).
 
 ## Why this exists (plain language)
 
-The board is honest but ~19 screens long (771 KB, 30 headings, 362 fold-outs
-on 2026-09-04). The owner wants it "less long and easier to read", with the
-top picks always on top, a visible mark when several lanes share a pick, and
-only each lane's five best (spec §1, decisions D1–D9). This brief implements
-that spec exactly. It closes the visual half of brief 37's DR-8b (event-chip
-repetition) by renegotiating the chip-parity contract (spec §7).
+The board is honest but ~19 screens long (782,263 bytes, 30 headings, 362
+fold-outs on 2026-09-04 — measured). The owner wants it "less long and easier
+to read", with the top picks always on top, a visible mark when several lanes
+share a pick, and only each lane's five best (spec §1, D1–D12). This brief
+implements that spec exactly. It closes the visual half of brief 37's DR-8b
+(event-chip repetition) by renegotiating the chip-parity contract (spec §7,
+D11).
+
+Facts the design rests on (measured on the 2026-09-04 build): the 18 per-name
+panels are 698,705 bytes (89% of the page), hold 333 of the 362 `<details>`
+and 18 of the 30 `<h2>`; the 14 smallest panels sum to 497,016 bytes. So the
+FILE stays large (the panels are kept byte-identical, D10) while the VISIBLE
+page becomes short — which is what the owner asked for.
 
 ## Scope
 
-**IN:** `config.py` (two new display constants, provenance-labelled),
-`options_researcher/board_lanes.py` (new), `options_researcher/attractiveness_dashboard.py`
-(gather/assemble injection, new section builders, `render` wiring, symbol-panel
-extraction), and tests: new `tests/test_board_lanes.py`,
+**IN:** `config.py` (three display constants, provenance-labelled),
+`pyrightconfig.json` (one include line), `options_researcher/board_lanes.py`
+(new), `options_researcher/attractiveness_dashboard.py` (gather/assemble
+injection, new section builders, symbol-panel extraction, `_render_result`
+wiring, one docstring), and tests: new `tests/test_board_lanes.py`,
+`tests/fixtures/attractiveness_legacy_layout.html` (new snapshot),
 `tests/test_attractiveness_layout.py`, `tests/test_attractiveness_dashboard.py`,
 `tests/test_event_awareness.py`.
 
@@ -55,23 +65,29 @@ extraction), and tests: new `tests/test_board_lanes.py`,
   `options_researcher/context_lane.py`, `options_researcher/composite_signals.py`,
   `options_researcher/qm_signals.py`, `options_researcher/qm_dashboard.py`,
   `options_researcher/exp_*.py`, `options_researcher/experiments_dashboard.py`,
-  `options_researcher/pick_tracker.py`, or any `grades` input of any card.
-  Ranking, grades, the picks snapshot (`picks_snapshot/v1`, `_selection_snapshot`
-  at `attractiveness_dashboard.py:5384`), `source_row_hashes`, and the HTML
-  digest comment are untouched (spec §6).
+  `options_researcher/pick_tracker.py`, `options_researcher/event_calendar.py`,
+  or any `grades` input of any card. Ranking, grades, the picks snapshot
+  (`_selection_snapshot`, `attractiveness_dashboard.py:5384`), the source-row
+  hashes (`_render_source_row_hashes`, `:5364`), and the publish-path digest
+  (`pick_tracker.py:52`, bound at `attractiveness_dashboard.py:5876`) are
+  untouched (spec §6). All of these are computed OUTSIDE the flag branch
+  (`:5515-5528`, `:5751-5761`; reviewer-verified).
 - No edit to any member of `FEASIBILITY_SOURCE_PATHS`
-  (`options_researcher/h7_schwab_window_registration.py:143-194`; brief 37
-  verified the four IN files above are outside it; `board_lanes.py` is new and
-  imports nothing from H7 modules).
+  (`options_researcher/h7_schwab_window_registration.py:143-194`; `config.py`,
+  `attractiveness_dashboard.py` and the new module are all outside it —
+  reviewer-verified).
 - No JavaScript (`tests/test_attractiveness_layout.py:497`), no external
   assets, no network or provider call, no ledger write, no registration, no
   authority flip, no paper-book mutation, no plist/launchd change, no change
   to Mission Control (`options_researcher/dashboard.py`), no change to the
   standalone experiments page or the `EXP_*` flags.
 - No new numeric constant with owner provenance: the cap reuses
-  `config.PICK_TOP_N` (`config.py:650`).
+  `config.PICK_TOP_N` (`config.py:650`); the mark-age colour reuses
+  `config.CHAIN_STALE_BLOCK_SESSIONS` (`config.py:690`).
 - DR-5 / DR-5b stay held (brief 37 "Held" section); nothing here computes
   rv21 or changes a badge.
+- Do not trim, reorder or restyle the content INSIDE a per-name panel (D10):
+  `_symbol_panel_html` is a byte-identical extraction.
 
 ## Global Constraints
 
@@ -80,14 +96,20 @@ extraction), and tests: new `tests/test_board_lanes.py`,
   footer sentence "This page and the mission-control dashboard date
   INDEPENDENTLY" (`attractiveness_dashboard.py:5740-5745`).
 - The six drawer sections keep their order (`test_drawer_is_closed_and_holds_the_six_diagnostic_sections`,
-  `tests/test_attractiveness_layout.py:405`; `_DRAWER_SECTIONS` at `:375`);
-  relocated content is APPENDED after them.
+  `tests/test_attractiveness_layout.py:405`; `DiagnosticsDrawerTests._DRAWER_SECTIONS`
+  at `:374-382`); relocated content is APPENDED after them. The drawer element
+  is `<details class="panel diagnostics-drawer" id="diagnostics">` — anchor
+  tests on `id="diagnostics"`, never on `class="drawer"` (does not exist).
 - `config.BOARD_LANES_ENABLED = False` must reproduce today's HTML
-  byte-for-byte on the layout fixture (rollback path, spec §4).
-- Owner-pinned names (`pinned_picks(data)`, used at `:4662-4668`) are always
-  rows.
-- Fail-visible: every lane keeps its column with its state; a failed lane is
-  excluded from the agreement denominator (spec §5).
+  byte-for-byte on the layout fixture (rollback path, spec §4), proven by a
+  snapshot captured BEFORE any change to `_render_result` (Task 2).
+- Owner-pinned names (`pinned_picks(data)` → `[{"symbol", "pick"}]`,
+  `:576-594`; `config.PICK_PINNED_SYMBOLS`) are always rows.
+- Fail-visible: every lane keeps its column with its state; a non-READY lane
+  leaves the agreement denominator (spec §5).
+- Every `assemble(...)` call that injects `symbol_sections` must stay
+  hermetic (no disk, no cache): the experiment-lane default runs only on the
+  real gather path (Task 4).
 - Commit after every green task; never squash the task history before the
   PR; the PR starts as a GitHub draft.
 
@@ -96,65 +118,99 @@ extraction), and tests: new `tests/test_board_lanes.py`,
 | File | Responsibility |
 |---|---|
 | `config.py` | `BOARD_LANES_ENABLED`, `BOARD_FAVOURABLE_LANES`, `BOARD_CAUTION_LANES` (display-only, LLM-proposed 2026-09-06 labels) |
-| `options_researcher/board_lanes.py` (new, pure) | dataclasses `LaneMember`, `LaneColumn`, `BoardRow`, `LaneBoard`; `build_lane_board(...)`; lane-specific adapters `lane_from_baseline`, `lane_from_context`, `lane_from_composite`, `lane_from_qm`, `lane_from_experiment`; no I/O |
-| `options_researcher/attractiveness_dashboard.py` | gather: `experiment_lanes` computed + injectable; render: `_status_strip_html`, `_position_tiles_html`, `_agreement_table_html`, `_event_line_html`, `_pick_details_html`, extracted `_symbol_panel_html`; `render` order behind the flag |
+| `pyrightconfig.json` | add `"options_researcher/board_lanes.py"` to `include` so the repo type gate covers the new module |
+| `options_researcher/board_lanes.py` (new, pure) | dataclasses `LaneMember`, `LaneColumn`, `BoardRow`, `LaneBoard`; `build_lane_board(...)`; adapters `lane_from_baseline`, `lane_from_context`, `lane_from_composite`, `lane_from_qm`, `lane_from_experiment`; no I/O |
+| `options_researcher/attractiveness_dashboard.py` | gather: `_default_experiment_lanes` (real path only) + `assemble(experiment_lanes=…)`; render: `_symbol_panel_html` (extracted), `_status_strip_html`, `_position_tiles_html`, `_agreement_table_html`, `_event_line_html`, `_pick_details_html`, `_open_slots_notice_html`; `_render_result` order behind the flag; `_experiments_shelf_html` docstring amended |
+| `tests/fixtures/attractiveness_legacy_layout.html` | pre-change render of the layout fixture (rollback proof) |
 | `tests/test_board_lanes.py` (new) | unit tests for the pure module |
-| `tests/test_attractiveness_layout.py` | layout contract re-pinned to spec §2 (flag on) + legacy byte-identity (flag off) |
-| `tests/test_attractiveness_dashboard.py` | render tests for the new builders; existing tests updated only where they assert removed surfaces |
-| `tests/test_event_awareness.py` | chip-parity contract re-pinned to the new surfaces (spec §7) |
+| `tests/test_attractiveness_layout.py` | legacy byte-identity (flag off); layout contract re-pinned to spec §2 (flag on) |
+| `tests/test_attractiveness_dashboard.py` | render tests for the new builders; existing tests re-pinned per Task 7 |
+| `tests/test_event_awareness.py` | fixture lifted to module level; chip contract re-pinned to D11 |
 
-Existing data shapes the module consumes (Repo-verified):
+**Data shapes the module consumes (Repo-verified; corrected per review):**
 
-- baseline pick (`select_top_picks(data)`, `attractiveness_dashboard.py:438`):
-  `{"symbol", "lane", "status" ("ELIGIBLE"|"WATCH"|…), "score", "card": {...}}`
-  where `card` has `headline`, `strike`, `expiry`, `dte`, `cost`, `grades`,
-  `risk: {"max_loss", "capital_required", "max_profit", "breakeven"}` and
-  `top3_snapshot.candidate_id`.
-- context row (`_context_lane_selection(data)["rows"]`, `:4450`; built by
-  `options_researcher/context_lane.py:112-124`): `{"symbol", "lane",
+- baseline pick (`select_top_picks(data)`, `attractiveness_dashboard.py:438`;
+  built at `:357-364`): `{"symbol", "lane", "strike", "expiry", "dte", "score",
+  "card"}` — there is NO top-level `status`; policy status lives at
+  `card["top3_snapshot"]["policy"]["status"]`. `card` has `headline`,
+  `strike`, `expiry`, `dte`, `cost`, `grades`, `risk: {"max_loss",
+  "capital_required", "max_profit", "breakeven"}`, `top3_snapshot.candidate_id`.
+- context selection (`_context_lane_selection(data)`, `:4450-4465`):
+  `{"state": "READY"|"DISABLED"|"FAILED", "rows": [...], "error": <ExceptionName>|None}`;
+  each row (`options_researcher/context_lane.py:112-124`): `{"symbol", "lane",
   "candidate_id", "score", "context_max_asof", "board_as_of", "context_term",
-  "context_reason", "aligned_angles", "pick"}`; the selection dict carries
-  `state` in `{"READY","DISABLED","FAILED"}` and `error`.
-- composite card (`data["composite_signals"]`, built by
-  `options_researcher/composite_signals.py:619-624`): `{"symbol", "asof",
-  "max_asof", "grade", "aligned_count", "trend", "vol_premium", "regime",
-  "internals"}` (each angle a dict with `state`).
+  "context_reason", "aligned_angles", "pick"}`; `context_reason` takes
+  `"ALIGNED"`, `"VETOED"`, `"BLOCKED"`, `"DIRECTION_MISMATCH"` (branches at
+  `attractiveness_dashboard.py:4497-4500`).
+- composite card (`data["composite_signals"]`, `options_researcher/composite_signals.py:619-624`):
+  `{"symbol", "asof", "max_asof", "grade", "aligned_count": int, "trend",
+  "vol_premium", "regime", "internals"}` (each angle a dict with `state`).
 - QM pick (`select_qm_top_picks(data, qm_context, include_csp_watch=True)`,
-  `:488`): same shape as a baseline pick.
-- experiment lanes (`options_researcher.experiments_dashboard.build_experiment_lanes(symbols, asof=…)`,
-  `experiments_dashboard.py:262-284`): `{"exp_beta": [card…], "exp_tail": […],
-  "exp_spread": […], "exp_tbill": […]}`; every card has `symbol`, `state`,
-  `experiment_id`, optional `data_blocked`, and the lane metric:
-  `beta` (`exp_beta_qqq.py:132` states OK/UNSTABLE), `jump_count` + `skew`
-  (`exp_tail_shape.py:132-139` states OK/UNSTABLE), `ratio`
-  (`exp_spread_stability.py:169-176` states OK/ELEVATED), `carry_spread`
-  (`exp_tbill_carry.py:131` states ABOVE_TBILL/BELOW_TBILL). Blocked cards
-  carry `state == "DATA_BLOCKED"`.
-- open positions (`data["open_positions"]`, `:1778`; `load_open_positions`
-  `:1456-1520`): `{"rows": [{"book","identifier","text"}], "missing_sources",
-  "sources", "h6_last_mark"}`.
+  `:488-491`): same shape as a baseline pick; `qm_context` is a Mapping at the
+  call site (`enrich_qm_context_with_candidates`, `:5521`).
+- experiment lanes (`experiments_dashboard.build_experiment_lanes(symbols, asof=…)`,
+  `experiments_dashboard.py:262-282`): dict with keys `exp_beta`, `exp_tail`,
+  `exp_spread`, `exp_tbill` (lists of card dicts) AND `exp_short` (a list of
+  `ShortPositioningCard` dataclasses, NOT JSON-serialisable — ignored here;
+  only the four dict lanes are stored, Task 4). Every card dict has `symbol`,
+  `state`, `experiment_id`, optional `data_blocked`, and the lane metric:
+  `beta` (`exp_beta_qqq.py:132`, states `OK`/`UNSTABLE`), `jump_count` +
+  `skew` (`exp_tail_shape.py:132-139`, `OK`/`UNSTABLE`), `ratio`
+  (`exp_spread_stability.py:169-176`, `OK`/`ELEVATED`), `carry_spread`
+  (`exp_tbill_carry.py:131`, `ABOVE_TBILL`/`BELOW_TBILL`); blocked cards carry
+  `state == "DATA_BLOCKED"`; a lane whose builder raised is a one-card list
+  `{"state": "ERROR", "reason", "experiment_id", "asof"}` (`_error_card`,
+  `:250-259`). Measured 2026-09-04: `exp_beta` is `OK` for all 18 names (the
+  beta caution column renders empty) and `exp_tbill` is `ABOVE_TBILL` for all
+  18 (the T-bill column is effectively "top 5 by carry").
+- blocked record (`_block`, `:1866-1870`): `{"symbol", "reason_code",
+  "detail", "last_known_date", "unexpected"}` plus optional `display_only`.
+  There is NO `reason` key.
+- open positions (`data["open_positions"]`, `load_open_positions` `:1485`):
+  `{"rows": [{"book", "identifier", "text"}], "missing_sources", "sources",
+  "h6_last_mark"}`.
+- closes freshness (`data["underlying_closes_freshness"]`,
+  `_underlying_closes_store_freshness` `:1412-1459`): `{"state": "available",
+  "as_of"}` or `{"state": "unavailable", "detail"}`. No `max_session` key.
+- Schwab lane (`data["schwab_lane"]`): `{"verified_sessions", "failures":
+  [{"session", "kind", "reason"}], "receipts_found"}`; `kind == CHAINS_ABSENT`
+  is an expected research-checkout state, not a failure (`:1069-1080`).
+
+**Deviations from spec §4's sketch (deliberate, reviewer-flagged; the spec's
+sketch was illustrative):** `build_lane_board` takes `context_selection`
+(the whole `{"state","rows","error"}` dict, so a FAILED lane can be shown)
+instead of `context_rows`; it takes `blocked` so a DATA_BLOCKED name can show
+its reason in the pick cell (spec §3); `BoardRow` gains `block_reason`; the
+event line is rendered from the rows rather than stored on `LaneBoard`.
 
 ---
 
-### Task 1: Display constants with provenance labels
+### Task 1 (WP-A): Display constants with provenance labels
 
 **Files:**
-- Modify: `config.py:929-937` (append after `CONTEXT_LANE_ENABLED`, before the
-  "ATTRACTIVENESS EXPERIMENT LANES" block at `:932`)
-- Test: `tests/test_board_lanes.py` (new file, first test)
+- Modify: `config.py:929` (append after `CONTEXT_LANE_ENABLED: bool = True`, before the "ATTRACTIVENESS EXPERIMENT LANES" block at `:932`)
+- Test: `tests/test_board_lanes.py` (new file)
 
 **Interfaces:**
 - Produces: `config.BOARD_LANES_ENABLED: bool`,
   `config.BOARD_FAVOURABLE_LANES: tuple[str, ...]`,
-  `config.BOARD_CAUTION_LANES: tuple[str, ...]` — read by Tasks 2, 4, 5.
+  `config.BOARD_CAUTION_LANES: tuple[str, ...]`.
 
 - [ ] **Step 1: Write the failing test**
 
+Create `tests/test_board_lanes.py` with ALL imports at the top (Task 3 adds
+tests below; the import block is final now — a mid-file import fails ruff E402):
+
 ```python
 # tests/test_board_lanes.py
+"""Unit tests for the lane-board display constants and the pure lane-board
+module (spec docs/superpowers/specs/2026-09-06-attractiveness-board-redesign-design.md).
+Nothing here asserts a ranking, a signal, or an authority change."""
+from pathlib import Path
 import unittest
 
 import config
+from options_researcher import board_lanes as bl   # Task 3 creates it; Task 1 tests skip it
 
 
 class BoardConstantsTests(unittest.TestCase):
@@ -167,16 +223,18 @@ class BoardConstantsTests(unittest.TestCase):
         self.assertFalse(set(fav) & set(cau))
 
     def test_constants_carry_display_only_provenance_comment(self):
-        source = open("config.py", encoding="utf-8").read()
-        block = source[source.index("BOARD_LANES_ENABLED"):]
-        block = block[: block.index("ATTRACTIVENESS EXPERIMENT LANES")]
-        self.assertIn("LLM-proposed 2026-09-06", source[: source.index("BOARD_LANES_ENABLED")][-900:])
-        self.assertIn("display-only", source[: source.index("BOARD_LANES_ENABLED")][-900:].lower())
+        source = Path("config.py").read_text(encoding="utf-8")
+        preamble = source[: source.index("BOARD_LANES_ENABLED")][-900:]
+        self.assertIn("LLM-proposed 2026-09-06", preamble)
+        self.assertIn("display-only", preamble.lower())
 
 
 if __name__ == "__main__":
     unittest.main()
 ```
+
+For Task 1 only, temporarily comment out the `board_lanes` import line (Task 3
+restores it); otherwise the file fails to import.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -190,7 +248,7 @@ Insert after `CONTEXT_LANE_ENABLED: bool = True` (`config.py:929`):
 ```python
 # LANE BOARD — the attractiveness board's first-screen agreement table
 # (spec docs/superpowers/specs/2026-09-06-attractiveness-board-redesign-design.md).
-# Display-only; LLM-proposed 2026-09-06 under owner decisions D1–D9 of that
+# Display-only; LLM-proposed 2026-09-06 under owner decisions D1–D12 of that
 # spec (owner-directed in chat, not owner-typed). Nothing here changes
 # shortlist ranking, grades, the picks snapshot, registered hypotheses,
 # verdicts, FIRE authority, or paper-book state. BOARD_LANES_ENABLED=False
@@ -217,72 +275,131 @@ git commit -m "feat(board): lane-board display constants (LLM-proposed 2026-09-0
 
 ---
 
-### Task 2: The pure lane-board module
+### Task 2 (WP-B): Capture the legacy page snapshot BEFORE any renderer change
+
+**Files:**
+- Create: `tests/fixtures/attractiveness_legacy_layout.html`
+- Modify: `tests/test_attractiveness_layout.py` (append the snapshot helper + test)
+- Test: `tests/test_attractiveness_layout.py`
+
+**Interfaces:**
+- Produces: `LEGACY_RENDER_SNAPSHOT()` in the layout test module; the snapshot
+  file every later task is compared to. (The `mock` import and the `_board`
+  `experiment_lanes` default land in Task 4, when `assemble` learns the kwarg.)
+
+- [ ] **Step 1: Capture the snapshot from the UNMODIFIED renderer**
+
+This must run before Tasks 4–6 touch `assemble`/`_render_result`. `tests/`
+has no `__init__.py`; do not add one — use `PYTHONPATH=tests`:
+
+```bash
+mkdir -p tests/fixtures
+PYTHONPATH=tests uv run python - <<'EOF'
+from test_attractiveness_layout import _board
+from options_researcher import attractiveness_dashboard as ad
+html = ad.render(_board(["NVDA", "AMZN", "MSFT"]))
+open("tests/fixtures/attractiveness_legacy_layout.html", "w", encoding="utf-8").write(html)
+print(len(html), "bytes")
+EOF
+```
+
+Run the capture twice into two paths and `cmp` them to prove determinism
+(fixed `today`, injected sections, no cache reads).
+
+- [ ] **Step 2: Write the byte-identity test**
+
+Append to `tests/test_attractiveness_layout.py` (add `from unittest import
+mock` to the import block at `:10-18` now — it is not imported today):
+
+```python
+def LEGACY_RENDER_SNAPSHOT() -> str:
+    """The pre-redesign render of the layout fixture, captured before any change
+    to _render_result (brief 39 Task 2). The flag-off path must equal it byte
+    for byte — that is the rollback guarantee."""
+    from pathlib import Path
+    return Path("tests/fixtures/attractiveness_legacy_layout.html").read_text(encoding="utf-8")
+
+
+class LegacyByteIdentityTests(unittest.TestCase):
+    def test_flag_off_renders_the_legacy_page_byte_for_byte(self):
+        data = _board(["NVDA", "AMZN", "MSFT"])
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+            legacy = ad.render(data)
+        self.assertEqual(legacy, LEGACY_RENDER_SNAPSHOT())
+```
+
+- [ ] **Step 3: Run the test**
+
+Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_layout.py' -k LegacyByteIdentity -v`
+Expected: PASS (Task 1 already added the flag, so `mock.patch.object` works;
+the renderer is still unmodified).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add tests/fixtures/attractiveness_legacy_layout.html tests/test_attractiveness_layout.py
+git commit -m "test(board): capture the legacy layout snapshot before the redesign (rollback proof)"
+```
+
+---
+
+### Task 3 (WP-C): The pure lane-board module (typed)
 
 **Files:**
 - Create: `options_researcher/board_lanes.py`
+- Modify: `pyrightconfig.json` (`include`: add `"options_researcher/board_lanes.py"` after the `attractiveness_dashboard.py` entry)
 - Test: `tests/test_board_lanes.py`
 
 **Interfaces:**
 - Consumes: `config.PICK_TOP_N`, `config.BOARD_FAVOURABLE_LANES`, `config.BOARD_CAUTION_LANES`.
-- Produces (used by Tasks 4–5):
+- Produces (used by Tasks 5–6):
 
 ```python
 @dataclass(frozen=True)
 class LaneMember:
     symbol: str
-    label: str            # what the cell prints, e.g. "#2", "A · 3/4", "✓ 1.90", "! 3.79", "veto"
-    value: float | None   # the lane's own number when it has one
-    rank: int | None      # 1-based for ranking lanes, None for describing lanes
+    label: str            # cell text: "#2", "A · 3/4", "✓ 1.90", "! 3.79", "veto", "blocked", "direction mismatch"
+    value: float | None
+    rank: int | None
+    counts: bool = True   # False for context marks that are not ALIGNED
 
 @dataclass(frozen=True)
 class LaneColumn:
-    key: str              # "baseline" | "context" | "composite" | "qm" | "spread" | "tail" | "tbill" | "beta"
-    title: str
-    kind: str             # "ranking" | "describing"
-    favourable: bool
-    state: str            # "READY" | "DISABLED" | "FAILED:<ExceptionName>" | "UNAVAILABLE:<reason>"
-    as_of: str | None
-    members: tuple[LaneMember, ...]
-    note: str             # header footnote, e.g. "top 5 by carry_spread (LLM-proposed 2026-09-06)"
+    key: str; title: str; kind: str; favourable: bool; state: str
+    as_of: str | None; members: tuple[LaneMember, ...]; note: str
 
 @dataclass(frozen=True)
 class BoardRow:
-    symbol: str
-    pinned: bool
-    baseline_pick: dict | None      # the pick dict, or None
-    block_reason: str | None        # DATA_BLOCKED / stale reason for the pick cell
-    marks: dict[str, LaneMember]    # lane key -> member
-    fav_count: int
-    fav_ready: int                  # READY favourable lanes (denominator)
+    symbol: str; pinned: bool
+    baseline_pick: Mapping[str, object] | None
+    block_reason: str | None
+    marks: Mapping[str, LaneMember]
+    fav_count: int; fav_ready: int
 
 @dataclass(frozen=True)
 class LaneBoard:
-    columns: tuple[LaneColumn, ...]
-    rows: tuple[BoardRow, ...]
-    notes: tuple[str, ...]
+    columns: tuple[LaneColumn, ...]; rows: tuple[BoardRow, ...]; notes: tuple[str, ...]
 
 def build_lane_board(*, baseline_picks, context_selection, composite_cards, qm_picks,
                      experiment_lanes, pinned, blocked, cap=config.PICK_TOP_N,
                      board_as_of) -> LaneBoard
 ```
 
-- [ ] **Step 1: Write the failing tests (unit, pure)**
+- [ ] **Step 1: Write the failing tests**
 
-Append to `tests/test_board_lanes.py`:
+Restore the `from options_researcher import board_lanes as bl` import at the
+top of `tests/test_board_lanes.py` (Task 1 commented it out) and append:
 
 ```python
-from options_researcher import board_lanes as bl
-
-
-def _pick(symbol, rank_score=0, status="ELIGIBLE", lane="long_call"):
+def _pick(symbol, lane="long_call"):
+    # Real shape (attractiveness_dashboard.py:357-364): no top-level "status".
     return {
-        "symbol": symbol, "lane": lane, "status": status, "score": rank_score,
-        "card": {"headline": f"Buy the {symbol} call", "strike": 100.0,
-                 "expiry": "2026-09-16", "dte": 10, "cost": 300.0,
-                 "grades": {"liquidity": "GREEN"},
+        "symbol": symbol, "lane": lane, "strike": 100.0, "expiry": "2026-09-16", "dte": 10, "score": 0,
+        "card": {"headline": f"Buy the {symbol} call", "strike": 100.0, "expiry": "2026-09-16",
+                 "dte": 10, "cost": 300.0, "grades": {"liquidity": "GREEN"},
                  "risk": {"max_loss": 300.0, "breakeven": 103.0},
-                 "top3_snapshot": {"candidate_id": f"{symbol}:{lane}:2026-09-16:100.00"}},
+                 "top3_snapshot": {"candidate_id": f"{symbol}:{lane}:2026-09-16:100.00",
+                                   "policy": {"status": "ELIGIBLE", "reason_codes": []}}},
     }
 
 
@@ -309,8 +426,10 @@ def _exp(symbol, state, **metric):
 def _board(**over):
     kwargs = dict(
         baseline_picks=[_pick("AMZN"), _pick("NVDA"), _pick("SMCI")],
-        context_selection={"state": "READY", "rows": [_ctx_row("AMZN"), _ctx_row("NVDA"),
-                                                       _ctx_row("SMCI", term=0, reason="VETOED", angles=())], "error": None},
+        context_selection={"state": "READY", "error": None, "rows": [
+            _ctx_row("AMZN"), _ctx_row("NVDA"),
+            _ctx_row("SMCI", term=0, reason="VETOED", angles=()),
+            _ctx_row("CRWV", term=0, reason="BLOCKED", angles=())]},
         composite_cards=[_comp("PLTR"), _comp("NVDA"), _comp("AMZN"), _comp("ET", "C", 2),
                          _comp("VST", "C", 2), _comp("CEG", "C", 2), _comp("NBIS", "C", 2), _comp("AMD", "C", 1)],
         qm_picks=[_pick("AMZN"), _pick("NVDA")],
@@ -323,11 +442,21 @@ def _board(**over):
                            ("USAR", 1.73), ("SMCI", 1.76), ("AMZN", 0.65))],
         },
         pinned=("VST", "AMZN"),
-        blocked=[{"symbol": "ET", "reason": "DATA_BLOCKED: chain 29 sessions old"}],
+        # Real blocked-record shape (attractiveness_dashboard.py:1866-1870).
+        blocked=[{"symbol": "ET", "reason_code": "DATA_BLOCKED", "detail": "chain 29 sessions old",
+                  "last_known_date": "2026-07-27", "unexpected": False}],
         cap=5, board_as_of="2026-09-03",
     )
     kwargs.update(over)
     return bl.build_lane_board(**kwargs)
+
+
+def _col(board, key):
+    return next(c for c in board.columns if c.key == key)
+
+
+def _row(board, symbol):
+    return next(r for r in board.rows if r.symbol == symbol)
 
 
 class LaneBoardTests(unittest.TestCase):
@@ -340,76 +469,76 @@ class LaneBoardTests(unittest.TestCase):
     def test_baseline_order_first_then_favourable_count_then_symbol(self):
         board = _board()
         symbols = [r.symbol for r in board.rows]
-        self.assertEqual(symbols[:3], ["AMZN", "NVDA", "SMCI"])   # registered order, never re-sorted
-        rest = symbols[3:]
-        counts = [next(r for r in board.rows if r.symbol == s).fav_count for s in rest]
+        self.assertEqual(symbols[:3], ["AMZN", "NVDA", "SMCI"])
+        counts = [_row(board, s).fav_count for s in symbols[3:]]
         self.assertEqual(counts, sorted(counts, reverse=True))
 
     def test_agreement_counts_favourable_lanes_only(self):
         board = _board()
-        by = {r.symbol: r for r in board.rows}
-        # NVDA: baseline #2, context #2, composite A, qm #2, tbill absent -> 4/5
-        self.assertEqual(by["NVDA"].fav_count, 4)
-        self.assertEqual(by["NVDA"].fav_ready, 5)
-        # CEG: three cautions (beta, tail, spread) + composite 2/4 -> exactly 1
-        self.assertEqual(by["CEG"].fav_count, 1)
-        self.assertEqual(set(by["CEG"].marks) & {"beta", "tail", "spread"}, {"beta", "tail", "spread"})
+        # NVDA: baseline #2, context #2, composite A·3/4, qm #2; not in tbill -> 4/5
+        self.assertEqual(_row(board, "NVDA").fav_count, 4)
+        self.assertEqual(_row(board, "NVDA").fav_ready, 5)
+        # CEG: composite C·2/4 counts; beta/tail/spread are cautions -> 1/5
+        self.assertEqual(_row(board, "CEG").fav_count, 1)
+        self.assertEqual(set(_row(board, "CEG").marks) & {"beta", "tail", "spread"}, {"beta", "tail", "spread"})
 
-    def test_context_veto_is_shown_but_never_counted(self):
+    def test_context_marks_other_than_aligned_are_shown_but_never_counted(self):
         board = _board()
-        smci = next(r for r in board.rows if r.symbol == "SMCI")
+        smci = _row(board, "SMCI")
         self.assertEqual(smci.marks["context"].label, "veto")
-        # SMCI is in baseline (#3) and tbill (1.76 -> top 5); context vetoed; not in composite/qm
-        self.assertEqual(sorted(k for k in smci.marks if board_col(board, k).favourable and smci.marks[k].label != "veto"),
-                         ["baseline", "tbill"])
-        self.assertEqual(smci.fav_count, 2)
+        self.assertFalse(smci.marks["context"].counts)
+        self.assertEqual(smci.fav_count, 2)          # baseline #3 + tbill 1.76
+        crwv = _row(board, "CRWV")
+        self.assertEqual(crwv.marks["context"].label, "blocked")
+        self.assertFalse(crwv.marks["context"].counts)
+        self.assertEqual(crwv.fav_count, 1)          # tbill 1.90 only
 
     def test_ranking_lanes_are_capped_and_composite_ties_break_by_baseline_then_symbol(self):
         board = _board()
-        comp = board_col(board, "composite")
+        comp = _col(board, "composite")
+        # aligned=3: AMZN, NVDA (baseline rows first), PLTR; aligned=2: no baseline
+        # row, so symbol order fills the last two slots (CEG, ET); NBIS/VST drop.
         self.assertEqual([m.symbol for m in comp.members], ["AMZN", "NVDA", "PLTR", "CEG", "ET"])
-        # AMZN/NVDA (baseline rows) precede PLTR at aligned=3; at aligned=2 no name is
-        # a baseline row, so symbol order fills the remaining slots (CEG, ET) — NBIS/VST drop.
-        self.assertEqual(len(comp.members), 5)
 
     def test_describing_lane_overflow_takes_largest_metric_and_says_so(self):
         board = _board()
-        tbill = board_col(board, "tbill")
+        tbill = _col(board, "tbill")
         self.assertEqual([m.symbol for m in tbill.members], ["NBIS", "IREN", "CRWV", "CLSK", "SMCI"])
         self.assertIn("LLM-proposed 2026-09-06", tbill.note)
         self.assertEqual(tbill.members[0].label, "✓ 2.89")
 
     def test_beta_lane_has_no_metric_order_and_lists_by_symbol(self):
         board = _board()
-        beta = board_col(board, "beta")
+        beta = _col(board, "beta")
         self.assertEqual([m.symbol for m in beta.members], ["CEG"])
         self.assertEqual(beta.members[0].label, "!")
 
     def test_failed_lane_keeps_its_column_and_leaves_the_denominator(self):
         board = _board(context_selection={"state": "FAILED", "rows": [], "error": "ValueError"})
-        ctx = board_col(board, "context")
+        ctx = _col(board, "context")
         self.assertEqual(ctx.state, "FAILED:ValueError")
         self.assertEqual(ctx.members, ())
         self.assertTrue(all(r.fav_ready == 4 for r in board.rows))
 
-    def test_experiment_lane_exception_becomes_failed_state_not_a_raise(self):
+    def test_experiment_lane_error_card_becomes_unavailable_state_not_a_raise(self):
         board = _board(experiment_lanes={"exp_tbill": [{"symbol": "AMZN", "state": "ERROR",
                                                         "experiment_id": "EXP-TBILL", "reason": "boom"}]})
-        tbill = board_col(board, "tbill")
-        self.assertTrue(tbill.state.startswith("UNAVAILABLE:"))
-        self.assertIn("boom", tbill.state)
+        self.assertEqual(_col(board, "tbill").state, "UNAVAILABLE:boom")
         self.assertTrue(all(r.fav_ready == 4 for r in board.rows))
 
+    def test_gather_level_error_marks_every_experiment_column_unavailable(self):
+        board = _board(experiment_lanes={"__error__": "RuntimeError: cache missing"})
+        for key in ("tbill", "spread", "tail", "beta"):
+            self.assertEqual(_col(board, key).state, "UNAVAILABLE:RuntimeError: cache missing")
+
     def test_pinned_names_are_rows_even_when_no_lane_names_them(self):
-        board = _board()
-        vst = next(r for r in board.rows if r.symbol == "VST")
+        vst = _row(_board(), "VST")
         self.assertTrue(vst.pinned)
         self.assertIsNone(vst.baseline_pick)
 
-    def test_blocked_name_carries_its_reason_and_is_never_promoted(self):
-        board = _board()
-        et = next(r for r in board.rows if r.symbol == "ET")
-        self.assertEqual(et.block_reason, "DATA_BLOCKED: chain 29 sessions old")
+    def test_blocked_name_carries_reason_code_and_detail_and_is_never_promoted(self):
+        et = _row(_board(), "ET")
+        self.assertEqual(et.block_reason, "DATA_BLOCKED · chain 29 sessions old")
         self.assertIsNone(et.baseline_pick)
 
     def test_build_never_mutates_inputs(self):
@@ -417,10 +546,6 @@ class LaneBoardTests(unittest.TestCase):
         before = repr(picks)
         _board(baseline_picks=picks)
         self.assertEqual(repr(picks), before)
-
-
-def board_col(board, key):
-    return next(c for c in board.columns if c.key == key)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -428,7 +553,7 @@ def board_col(board, key):
 Run: `uv run python -m unittest discover -s tests -p 'test_board_lanes.py' -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'options_researcher.board_lanes'`
 
-- [ ] **Step 3: Write the module**
+- [ ] **Step 3: Write the module (typed — pyright basic must pass)**
 
 ```python
 # options_researcher/board_lanes.py
@@ -453,6 +578,7 @@ class LaneMember:
     label: str
     value: float | None
     rank: int | None
+    counts: bool = True
 
 
 @dataclass(frozen=True)
@@ -471,9 +597,9 @@ class LaneColumn:
 class BoardRow:
     symbol: str
     pinned: bool
-    baseline_pick: dict | None
+    baseline_pick: Mapping[str, object] | None
     block_reason: str | None
-    marks: dict[str, LaneMember]
+    marks: Mapping[str, LaneMember]
     fav_count: int
     fav_ready: int
 
@@ -486,9 +612,10 @@ class LaneBoard:
 
 
 _ORDER_NOTE = "top {cap} by {metric}, largest first (LLM-proposed 2026-09-06 display rule)"
+_CONTEXT_LABELS = {"VETOED": "veto", "BLOCKED": "blocked", "DIRECTION_MISMATCH": "direction mismatch"}
 
 # lane key -> (title, experiment_lanes key, flag state, metric, cell prefix)
-_EXPERIMENTS = {
+_EXPERIMENTS: dict[str, tuple[str, str, str, str | None, str]] = {
     "tbill": ("T-bill carry", "exp_tbill", "ABOVE_TBILL", "carry_spread", "✓"),
     "spread": ("Spread stability", "exp_spread", "ELEVATED", "ratio", "!"),
     "tail": ("Tail shape", "exp_tail", "UNSTABLE", "jump_count", "!"),
@@ -496,83 +623,123 @@ _EXPERIMENTS = {
 }
 
 
-def _sym(item: Mapping[str, object]) -> str | None:
+def _sym(item: object) -> str | None:
+    if not isinstance(item, Mapping):
+        return None
     s = item.get("symbol")
     return s if isinstance(s, str) and s else None
 
 
 def _num(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
     return float(value) if isinstance(value, (int, float)) and value == value else None
 
 
-def lane_from_baseline(picks: Sequence[Mapping[str, object]] | None, *, cap: int, as_of: str | None) -> LaneColumn:
+def _int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _cards(value: object) -> list[Mapping[str, object]]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return []
+    return [c for c in value if isinstance(c, Mapping)]
+
+
+def lane_from_baseline(picks: Sequence[Mapping[str, object]] | None, *, cap: int,
+                       as_of: str | None) -> LaneColumn:
     if picks is None:
-        return LaneColumn("baseline", "Rule-based top 5", "ranking", True, "UNAVAILABLE:no picks", as_of, (), "registered baseline")
-    members = tuple(LaneMember(s, f"#{i}", None, i) for i, p in enumerate(picks[:cap], 1) if (s := _sym(p)))
-    return LaneColumn("baseline", "Rule-based top 5", "ranking", True, "READY", as_of, members, "registered baseline; decides row order")
+        return LaneColumn("baseline", "Rule-based top 5", "ranking", True, "UNAVAILABLE:no picks",
+                          as_of, (), "registered baseline")
+    members: list[LaneMember] = []
+    for i, p in enumerate(picks[:cap], 1):
+        sym = _sym(p)
+        if sym is not None:
+            members.append(LaneMember(sym, f"#{i}", None, i))
+    return LaneColumn("baseline", "Rule-based top 5", "ranking", True, "READY", as_of,
+                      tuple(members), "registered baseline; decides row order")
 
 
-def lane_from_context(selection: Mapping[str, object] | None, *, cap: int, as_of: str | None) -> LaneColumn:
+def lane_from_context(selection: Mapping[str, object] | None, *, cap: int,
+                      as_of: str | None) -> LaneColumn:
+    note = "display-only · baseline + market-context tiebreak; only ALIGNED counts"
     if not isinstance(selection, Mapping):
-        return LaneColumn("context", "Context lane", "ranking", True, "UNAVAILABLE:no selection", as_of, (), "display-only")
+        return LaneColumn("context", "Context lane", "ranking", True, "UNAVAILABLE:no selection", as_of, (), note)
     state = str(selection.get("state") or "UNAVAILABLE")
     if state != "READY":
         err = selection.get("error")
         tag = f"FAILED:{err}" if state == "FAILED" and err else state
-        return LaneColumn("context", "Context lane", "ranking", True, tag, as_of, (), "display-only")
-    rows = selection.get("rows")
-    rows = rows if isinstance(rows, Sequence) else ()
-    members = []
-    for i, row in enumerate(rows[:cap], 1):
-        if not isinstance(row, Mapping) or not (s := _sym(row)):
+        return LaneColumn("context", "Context lane", "ranking", True, tag, as_of, (), note)
+    members: list[LaneMember] = []
+    for i, row in enumerate(_cards(selection.get("rows"))[:cap], 1):
+        sym = _sym(row)
+        if sym is None:
             continue
-        vetoed = str(row.get("context_reason") or "") == "VETOED"
-        members.append(LaneMember(s, "veto" if vetoed else f"#{i}", _num(row.get("context_term")), i))
-    return LaneColumn("context", "Context lane", "ranking", True, "READY", as_of, tuple(members),
-                      "display-only · baseline + market-context tiebreak; 'veto' is shown, never counted")
+        reason = str(row.get("context_reason") or "")
+        if reason == "ALIGNED":
+            members.append(LaneMember(sym, f"#{i}", _num(row.get("context_term")), i, True))
+        else:
+            members.append(LaneMember(sym, _CONTEXT_LABELS.get(reason, reason.lower() or "?"),
+                                      _num(row.get("context_term")), i, False))
+    return LaneColumn("context", "Context lane", "ranking", True, "READY", as_of, tuple(members), note)
 
 
 def lane_from_composite(cards: Sequence[Mapping[str, object]] | None, *, cap: int, as_of: str | None,
                         baseline_order: Sequence[str]) -> LaneColumn:
+    note = "display-only · angles agreeing; ties by baseline order, then symbol"
     if cards is None:
-        return LaneColumn("composite", "Composite", "ranking", True, "UNAVAILABLE:no cards", as_of, (), "display-only")
-    usable = [c for c in cards if isinstance(c, Mapping) and _sym(c) and isinstance(c.get("aligned_count"), int)]
+        return LaneColumn("composite", "Composite", "ranking", True, "UNAVAILABLE:no cards", as_of, (), note)
     pos = {s: i for i, s in enumerate(baseline_order)}
-    usable.sort(key=lambda c: (-int(c["aligned_count"]), pos.get(_sym(c), len(pos)), _sym(c)))
+    usable: list[tuple[int, str, Mapping[str, object]]] = []
+    for c in cards:
+        sym = _sym(c)
+        aligned = _int(c.get("aligned_count"))
+        if sym is not None and aligned is not None:
+            usable.append((aligned, sym, c))
+    usable.sort(key=lambda t: (-t[0], pos.get(t[1], len(pos)), t[1]))
     members = tuple(
-        LaneMember(_sym(c), f"{c.get('grade') or '?'} · {int(c['aligned_count'])}/4", float(c["aligned_count"]), i)
-        for i, c in enumerate(usable[:cap], 1)
+        LaneMember(sym, f"{c.get('grade') or '?'} · {aligned}/4", float(aligned), i)
+        for i, (aligned, sym, c) in enumerate(usable[:cap], 1)
     )
-    return LaneColumn("composite", "Composite", "ranking", True, "READY", as_of, members,
-                      "display-only · angles agreeing; ties by baseline order, then symbol")
+    return LaneColumn("composite", "Composite", "ranking", True, "READY", as_of, members, note)
 
 
 def lane_from_qm(picks: Sequence[Mapping[str, object]] | None, *, cap: int, as_of: str | None) -> LaneColumn:
     if picks is None:
-        return LaneColumn("qm", "QM movement", "ranking", True, "UNAVAILABLE:no QM context", as_of, (), "gated study")
-    members = tuple(LaneMember(s, f"#{i}", None, i) for i, p in enumerate(picks[:cap], 1) if (s := _sym(p)))
-    return LaneColumn("qm", "QM movement", "ranking", True, "READY", as_of, members, "gated study · mechanical picks")
+        return LaneColumn("qm", "QM movement", "ranking", True, "UNAVAILABLE:no QM context", as_of, (),
+                          "gated study")
+    members: list[LaneMember] = []
+    for i, p in enumerate(picks[:cap], 1):
+        sym = _sym(p)
+        if sym is not None:
+            members.append(LaneMember(sym, f"#{i}", None, i))
+    return LaneColumn("qm", "QM movement", "ranking", True, "READY", as_of, tuple(members),
+                      "gated study · mechanical picks")
 
 
 def lane_from_experiment(key: str, cards: object, *, cap: int, as_of: str | None) -> LaneColumn:
     title, _lane_key, flag_state, metric, prefix = _EXPERIMENTS[key]
     favourable = key in config.BOARD_FAVOURABLE_LANES
     if cards is None:
-        return LaneColumn(key, title, "describing", favourable, "UNAVAILABLE:lane not computed", as_of, (), "experiment")
-    cards = [c for c in cards if isinstance(c, Mapping)] if isinstance(cards, Sequence) else []
-    errors = [c for c in cards if c.get("state") == "ERROR"]
+        return LaneColumn(key, title, "describing", favourable, "UNAVAILABLE:lane not computed", as_of, (),
+                          "experiment")
+    card_list = _cards(cards)
+    errors = [c for c in card_list if c.get("state") == "ERROR"]
     if errors:
         reason = str(errors[0].get("reason") or "lane failed")
         return LaneColumn(key, title, "describing", favourable, f"UNAVAILABLE:{reason}", as_of, (), "experiment")
-    flagged = [c for c in cards if c.get("state") == flag_state and _sym(c)]
+    flagged: list[tuple[float | None, str, Mapping[str, object]]] = []
+    for c in card_list:
+        sym = _sym(c)
+        if sym is not None and c.get("state") == flag_state:
+            flagged.append((_num(c.get(metric)) if metric else None, sym, c))
     if metric:
-        flagged.sort(key=lambda c: (-(_num(c.get(metric)) or float("-inf")), _sym(c)))
+        flagged.sort(key=lambda t: (-(t[0] if t[0] is not None else float("-inf")), t[1]))
     else:
-        flagged.sort(key=lambda c: _sym(c))
-    members = []
-    for c in flagged[:cap]:
-        v = _num(c.get(metric)) if metric else None
-        members.append(LaneMember(_sym(c), f"{prefix} {v:.2f}" if v is not None else prefix, v, None))
+        flagged.sort(key=lambda t: t[1])
+    members: list[LaneMember] = []
+    for v, sym, _c in flagged[:cap]:
+        members.append(LaneMember(sym, f"{prefix} {v:.2f}" if v is not None else prefix, v, None))
     note = f"experiment · {'favourable' if favourable else 'caution'} · flags names in state {flag_state}"
     if metric and len(flagged) > cap:
         note += " · " + _ORDER_NOTE.format(cap=cap, metric=metric)
@@ -591,41 +758,61 @@ def build_lane_board(
     cap: int = config.PICK_TOP_N,
     board_as_of: str | None,
 ) -> LaneBoard:
-    base_order = [s for p in (baseline_picks or [])[:cap] if (s := _sym(p))]
-    exp = experiment_lanes if isinstance(experiment_lanes, Mapping) else {}
-    columns_by_key = {
+    base_picks = list(baseline_picks or [])[:cap]
+    base_order: list[str] = []
+    pick_by_symbol: dict[str, Mapping[str, object]] = {}
+    for p in base_picks:
+        sym = _sym(p)
+        if sym is not None:
+            base_order.append(sym)
+            pick_by_symbol[sym] = p
+
+    exp: Mapping[str, object] = experiment_lanes if isinstance(experiment_lanes, Mapping) else {}
+    gather_error = exp.get("__error__")
+    columns_by_key: dict[str, LaneColumn] = {
         "baseline": lane_from_baseline(baseline_picks, cap=cap, as_of=board_as_of),
         "context": lane_from_context(context_selection, cap=cap, as_of=board_as_of),
         "composite": lane_from_composite(composite_cards, cap=cap, as_of=board_as_of, baseline_order=base_order),
         "qm": lane_from_qm(qm_picks, cap=cap, as_of=board_as_of),
     }
-    gather_error = exp.get("__error__") if isinstance(exp, Mapping) else None
-    for key in _EXPERIMENTS:
-        if gather_error:
-            cards: object = [{"symbol": "", "state": "ERROR", "reason": str(gather_error)}]
+    for key, (_t, lane_key, _s, _m, _p) in _EXPERIMENTS.items():
+        cards: object
+        if gather_error is not None:
+            cards = [{"symbol": "", "state": "ERROR", "reason": str(gather_error)}]
+        elif experiment_lanes is None:
+            cards = None
         else:
-            cards = exp.get(_EXPERIMENTS[key][1]) if exp else None
+            cards = exp.get(lane_key)
         columns_by_key[key] = lane_from_experiment(key, cards, cap=cap, as_of=board_as_of)
+
     ordered_keys = tuple(config.BOARD_FAVOURABLE_LANES) + tuple(config.BOARD_CAUTION_LANES)
     columns = tuple(columns_by_key[k] for k in ordered_keys)
-
     fav_ready = sum(1 for c in columns if c.favourable and c.state == "READY")
+
     marks: dict[str, dict[str, LaneMember]] = {}
     for col in columns:
         for m in col.members:
             marks.setdefault(m.symbol, {})[col.key] = m
-    pick_by_symbol = {s: p for p in (baseline_picks or [])[:cap] if (s := _sym(p))}
-    block_by_symbol = {s: str(b.get("reason") or "DATA_BLOCKED")
-                       for b in (blocked or []) if isinstance(b, Mapping) and (s := _sym(b))}
+
+    block_by_symbol: dict[str, str] = {}
+    for b in blocked or []:
+        sym = _sym(b)
+        if sym is not None:
+            code = str(b.get("reason_code") or "DATA_BLOCKED")
+            detail = str(b.get("detail") or "")
+            block_by_symbol[sym] = f"{code} · {detail}" if detail else code
 
     def fav_count(sym: str) -> int:
-        return sum(1 for k, m in marks.get(sym, {}).items()
-                   if columns_by_key[k].favourable and columns_by_key[k].state == "READY" and m.label != "veto")
+        return sum(
+            1 for k, m in marks.get(sym, {}).items()
+            if m.counts and columns_by_key[k].favourable and columns_by_key[k].state == "READY"
+        )
 
-    symbols = set(marks) | set(pinned)
+    pinned_set = {str(s) for s in pinned}
+    symbols = set(marks) | pinned_set
     rest = sorted((s for s in symbols if s not in base_order), key=lambda s: (-fav_count(s), s))
     rows = tuple(
-        BoardRow(symbol=s, pinned=s in set(pinned), baseline_pick=pick_by_symbol.get(s),
+        BoardRow(symbol=s, pinned=s in pinned_set, baseline_pick=pick_by_symbol.get(s),
                  block_reason=block_by_symbol.get(s), marks=dict(marks.get(s, {})),
                  fav_count=fav_count(s), fav_ready=fav_ready)
         for s in [*base_order, *rest]
@@ -634,43 +821,45 @@ def build_lane_board(
     return LaneBoard(columns=columns, rows=rows, notes=notes)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Run tests, lint, types**
 
 Run: `uv run python -m unittest discover -s tests -p 'test_board_lanes.py' -v`
-Expected: PASS (13 tests). If the composite tie test disagrees with your
-implementation, the TEST is the contract (spec §3: ties by baseline order,
-then symbol); fix the code.
+Expected: PASS (15 tests). The TESTS are the contract (spec §3); if the
+implementation disagrees, fix the code.
+Run: `uv run ruff check options_researcher/board_lanes.py tests/test_board_lanes.py`
+Expected: `All checks passed!`
+Add `"options_researcher/board_lanes.py"` to `pyrightconfig.json` `include`
+(after `"options_researcher/attractiveness_dashboard.py"`), then
+`uv run pyright` → `0 errors`.
 
-- [ ] **Step 5: Lint and types, then commit**
-
-Run: `uv run ruff check options_researcher/board_lanes.py tests/test_board_lanes.py && uv run pyright options_researcher/board_lanes.py`
-Expected: clean.
+- [ ] **Step 5: Commit**
 
 ```bash
-git add options_researcher/board_lanes.py tests/test_board_lanes.py
+git add options_researcher/board_lanes.py tests/test_board_lanes.py pyrightconfig.json
 git commit -m "feat(board): pure lane-board builder (agreement table data; favourable-only count)"
 ```
 
 ---
 
-### Task 3: Experiment lanes in the gather step, injectable in `assemble`
+### Task 4 (WP-D): Experiment lanes on the real gather path only; injectable in `assemble`
 
 **Files:**
-- Modify: `options_researcher/attractiveness_dashboard.py:1562-1580` (`assemble` signature),
-  `:1770-1782` (where `assemble` attaches `open_positions` / `schwab_lane` to `out`),
-  `:1784` (`_gather_all`)
+- Modify: `options_researcher/attractiveness_dashboard.py:1562-1571` (`assemble` signature), `:1745-1780` (gating + `out`), `:1784` (`_gather_all` neighbourhood), `:3775-3776` (`_experiments_shelf_html` docstring)
+- Modify: `tests/test_attractiveness_layout.py:44-58` (`_board` default)
 - Test: `tests/test_attractiveness_dashboard.py`
 
 **Interfaces:**
 - Consumes: `options_researcher.experiments_dashboard.build_experiment_lanes(symbols, asof=...)` (`experiments_dashboard.py:262`).
-- Produces: `data["experiment_lanes"]` — the dict `build_experiment_lanes`
-  returns, or `{"__error__": "<ExceptionName>: <message>"}` when it raised;
-  `assemble(..., experiment_lanes=...)` keyword for injection.
+- Produces: `data["experiment_lanes"]` — present only when computed (real
+  path) or injected; a dict of the four card lists, or `{"__error__": "<ExceptionName>: <message>"}`;
+  `assemble(..., experiment_lanes=...)` keyword; `_default_experiment_lanes(as_of)`.
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `tests/test_attractiveness_dashboard.py` (reuse the file's existing
-`_fresh_section` / `_stale_section` helpers):
+Append to `tests/test_attractiveness_dashboard.py` (its helpers
+`_fresh_section(symbol="NVDA", as_of="2026-08-14", **overrides)` and
+`_stale_section(symbol="MSFT", as_of="2026-07-27", **overrides)` are defined
+at `:3427` and `:3454`, near the bottom of the file):
 
 ```python
 class ExperimentLaneGatherTests(unittest.TestCase):
@@ -681,27 +870,37 @@ class ExperimentLaneGatherTests(unittest.TestCase):
                            today="2026-08-14", experiment_lanes=lanes)
         self.assertEqual(data["experiment_lanes"], lanes)
 
-    def test_experiment_lane_builder_failure_is_recorded_not_raised(self):
+    def test_injected_fixtures_never_compute_experiment_lanes(self):
+        # Hermeticity: an injected assemble() must not touch the cache (65 test sites depend on it).
+        from unittest import mock
+        with mock.patch("options_researcher.experiments_dashboard.build_experiment_lanes",
+                        side_effect=AssertionError("must not be called")):
+            data = ad.assemble(symbol_sections=[_fresh_section()], rv21_by_symbol={}, today="2026-08-14")
+        self.assertNotIn("experiment_lanes", data)
+
+    def test_default_experiment_lanes_records_a_builder_failure(self):
         from unittest import mock
         with mock.patch("options_researcher.experiments_dashboard.build_experiment_lanes",
                         side_effect=RuntimeError("cache missing")):
-            data = ad.assemble(symbol_sections=[_fresh_section()], rv21_by_symbol={},
-                               today="2026-08-14")
-        self.assertEqual(data["experiment_lanes"], {"__error__": "RuntimeError: cache missing"})
+            lanes = ad._default_experiment_lanes("2026-08-14")
+        self.assertEqual(lanes, {"__error__": "RuntimeError: cache missing"})
 
-    def test_experiment_lanes_use_the_board_chain_session_as_asof(self):
+    def test_default_experiment_lanes_keeps_only_the_four_dict_lanes(self):
         from unittest import mock
         seen = {}
 
         def fake(symbols, *, asof):
             seen["asof"] = asof
             seen["symbols"] = tuple(symbols)
-            return {}
-
+            return {"exp_beta": [], "exp_tail": [], "exp_spread": [], "exp_tbill": [],
+                    "exp_short": [object()]}   # dataclass cards, not JSON-serialisable
         with mock.patch("options_researcher.experiments_dashboard.build_experiment_lanes", side_effect=fake):
-            data = ad.assemble(symbol_sections=[_fresh_section()], rv21_by_symbol={}, today="2026-08-14")
-        self.assertEqual(seen["asof"], data["data_as_of"])
-        self.assertEqual(seen["symbols"], tuple(config.ATTRACTIVENESS_UNIVERSE))
+            lanes = ad._default_experiment_lanes("2026-08-14")
+        self.assertEqual(set(lanes), {"exp_beta", "exp_tail", "exp_spread", "exp_tbill"})
+        self.assertEqual(seen, {"asof": "2026-08-14", "symbols": tuple(config.ATTRACTIVENESS_UNIVERSE)})
+
+    def test_default_experiment_lanes_without_a_session_is_an_error_record(self):
+        self.assertEqual(ad._default_experiment_lanes(None), {"__error__": "no board as-of session"})
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -711,86 +910,164 @@ Expected: FAIL with `TypeError: assemble() got an unexpected keyword argument 'e
 
 - [ ] **Step 3: Implement**
 
-In `assemble` (`:1562`): add keyword `experiment_lanes: Mapping[str, object] | None = None`.
-Where `out` is built (`:1770-1782`), after `out["schwab_lane"] = schwab_state`:
+`assemble` (`:1562`): add keyword `experiment_lanes: Mapping[str, object] | None = None`
+and document it in the docstring next to `open_positions`.
+
+Gate exactly like `open_positions` (`:1745`, `if open_positions is None and real_assembly:`):
 
 ```python
-    if experiment_lanes is None:
-        experiment_lanes = _default_experiment_lanes(out.get("data_as_of"))
-    out["experiment_lanes"] = dict(experiment_lanes)
+    if experiment_lanes is None and real_assembly:
+        experiment_lanes = _default_experiment_lanes(page_as_of)
+```
+
+placed after `page_as_of = _page_data_as_of(canonical_symbols)` (`:1751`) so
+the board's own chain session is the as-of. Then, next to
+`if open_positions is not None: out["open_positions"] = dict(open_positions)` (`:1777`):
+
+```python
+    if experiment_lanes is not None:
+        out["experiment_lanes"] = dict(experiment_lanes)
 ```
 
 Add near `_gather_all` (`:1784`):
 
 ```python
+_EXPERIMENT_DICT_LANES = ("exp_beta", "exp_tail", "exp_spread", "exp_tbill")
+
+
 def _default_experiment_lanes(as_of: object) -> dict[str, object]:
     """Compute the four parking-lot experiment lanes from cached data for the
-    lane board (spec §4). Fail-visible: a builder exception becomes a recorded
-    error the board prints as a lane state, never a crash of the whole page."""
+    lane board (spec §4), on the REAL gather path only. Fail-visible: a builder
+    exception becomes a recorded error the board prints as a lane state.
+    ``exp_short`` (dataclass cards) is deliberately dropped: it is not a lane
+    of this board and is not JSON-serialisable."""
     from options_researcher import experiments_dashboard
 
     if not isinstance(as_of, str) or not as_of:
         return {"__error__": "no board as-of session"}
     try:
-        return dict(experiments_dashboard.build_experiment_lanes(
-            list(config.ATTRACTIVENESS_UNIVERSE), asof=as_of))
+        lanes = experiments_dashboard.build_experiment_lanes(
+            list(config.ATTRACTIVENESS_UNIVERSE), asof=as_of)
     except Exception as exc:  # fail-visible by design (spec §5)
         return {"__error__": f"{exc.__class__.__name__}: {exc}"}
+    return {key: list(lanes.get(key) or []) for key in _EXPERIMENT_DICT_LANES}
 ```
 
-`build_lane_board` (Task 2) already treats a lanes dict containing
-`"__error__"` as every experiment column `UNAVAILABLE:<that text>` (the
-`gather_error` branch). Add the unit test for it in `tests/test_board_lanes.py`:
+Amend the docstring at `:3775-3776` so the two sources of truth agree
+(CLAUDE.md: say so when sources conflict):
 
 ```python
-    def test_gather_level_error_marks_every_experiment_column_unavailable(self):
-        board = _board(experiment_lanes={"__error__": "RuntimeError: cache missing"})
-        for key in ("tbill", "spread", "tail", "beta"):
-            self.assertEqual(board_col(board, key).state, "UNAVAILABLE:RuntimeError: cache missing")
+    """Passive local-view links only: this shelf never imports or runs an
+    experiment builder. (The lane board's gather step does run the four
+    builders for its agreement table — brief 39 / spec §4, owner-directed
+    2026-09-06; that is the ONLY place the board computes experiments.)"""
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+In `tests/test_attractiveness_layout.py` make `_board` (`:44-58`) hermetic by
+default while letting a caller override:
 
-Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_dashboard.py' -k ExperimentLaneGather -v && uv run python -m unittest discover -s tests -p 'test_board_lanes.py' -v`
-Expected: PASS. Then run the existing layout + dashboard files to prove the
-new kwarg default did not change any current output:
-`uv run python -m unittest discover -s tests -p 'test_attractiveness_*.py'` → OK.
+```python
+def _board(symbols, *, eligible=True, today="2026-08-25", **assemble_kwargs):
+    assemble_kwargs.setdefault("experiment_lanes", {})
+    data = ad.assemble(
+        symbol_sections=[_put_section(symbol) for symbol in symbols],
+        rv21_by_symbol={},
+        today=today,
+        composite_signals=[],
+        **assemble_kwargs,
+    )
+    ...unchanged...
+```
+
+(`setdefault` avoids the `TypeError: got multiple values` a hard-coded kwarg
+would cause when a test passes `experiment_lanes=`.)
+
+- [ ] **Step 4: Run tests**
+
+Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_*.py' -v 2>&1 | tail -5`
+Expected: OK — the new tests pass and the 203 + 28 existing tests still pass
+in about the same time as before (no cache reads: the layout suite must still
+run in well under a second). `LegacyByteIdentityTests` still PASS (the
+injected fixture path is unchanged).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add options_researcher/attractiveness_dashboard.py options_researcher/board_lanes.py tests/test_attractiveness_dashboard.py tests/test_board_lanes.py
-git commit -m "feat(board): compute experiment lanes in gather (injectable, fail-visible)"
+git add options_researcher/attractiveness_dashboard.py tests/test_attractiveness_dashboard.py tests/test_attractiveness_layout.py
+git commit -m "feat(board): experiment lanes on the real gather path (injectable, fail-visible, four dict lanes only)"
 ```
 
 ---
 
-### Task 4: New section builders (status strip, tiles, table, event line, details)
+### Task 5 (WP-E): Extract the symbol panel byte-identically; add the new section builders
 
 **Files:**
-- Modify: `options_researcher/attractiveness_dashboard.py` — add builders next
-  to `_composite_html` (`:4774`); extract `_symbol_panel_html` from the
-  per-symbol loop in `_render_result` (the block that appends
-  `<details class="panel symbol-panel"` to `symbols_html`, `:5590-5665`
-  region — locate with `grep -n 'symbols_html += (' options_researcher/attractiveness_dashboard.py`).
-- Test: `tests/test_attractiveness_dashboard.py`
+- Modify: `options_researcher/attractiveness_dashboard.py` — extraction from the
+  per-symbol loop at `:5548-5664` (`for sec in data["symbols"]:` … `symbols_html += (…)`),
+  new builders placed after `_composite_html` (`:4774`)
+- Test: `tests/test_attractiveness_dashboard.py`, `tests/test_attractiveness_layout.py` (byte-identity)
 
 **Interfaces:**
-- Consumes: `LaneBoard` (Task 2); `data["open_positions"]`; `_risk_line(card)` (`:3192`);
-  `_event_chips_html(card, symbol, evaluation_date, event_view)` (`:3014`);
-  `_esc`.
+- Consumes: `LaneBoard` (Task 3); `_risk_line` (`:3192`); `_event_chips_html(card, symbol, evaluation_date, event_view)` (`:3065`; `event_chips` at `:3024`); `_open_slots_html` (`:4104`), `_empty_hero_slot(data, slot)` (`:4116`); `_panel_status(sec, stale_symbols)` (`:5594`, returns `(status_labels, panel_open)`); `trading_sessions_between` (`top3_snapshot.py:83`); `CHAIN_SOURCE`, `CONVENTION_LABEL`, `CHAINS_ABSENT` (`schwab_chain_view.py`).
 - Produces:
-  - `_status_strip_html(data, research_views_status, context) -> str`
-  - `_position_tiles_html(data, event_line_text) -> str`
-  - `_agreement_table_html(board: LaneBoard, *, event_view, evaluation_date) -> str`
+  - `_symbol_panel_html(sec, *, data, context, event_view, evaluation_date, stale_symbols, pinned_symbols, protected_card_ids) -> tuple[str, str]` — `(panel_html, symbol_name)`, byte-identical to the loop body
+  - `_status_strip_html(data, context) -> str`
+  - `_position_tiles_html(data, event_line_text: str) -> str`
+  - `_agreement_table_html(board) -> str`
   - `_event_line_html(board, event_view, evaluation_date) -> str`
-  - `_symbol_panel_html(sec, *, context, event_view, evaluation_date, status_labels) -> str`
-    (the extracted per-symbol panel; byte-identical output to the inline loop;
-    it computes `open_attr` from `sec` exactly as the loop did, so DATA_BLOCKED
-    and stale panels stay open by default — spec §6 invariant 7)
-  - `_pick_details_html(data, board, *, context, event_view, evaluation_date, status_labels) -> str`
+  - `_pick_details_html(data, board, *, context, event_view, evaluation_date, stale_symbols, pinned_symbols, protected_card_ids) -> str`
+  - `_open_slots_notice_html(data, watch_picks) -> str`
 
-- [ ] **Step 1: Write the failing render tests**
+- [ ] **Step 1: Extract the per-symbol panel (no behaviour change)**
+
+The loop at `:5548-5664` reads these enclosing locals: `data`, `context`,
+`event_view`, `stale_symbols` (`:5550`), `pinned_symbols` (`:5551`),
+`protected_card_ids` (`:5541-5544`), and computes `evaluation_date` INSIDE the
+loop (`:5554`, `str(data.get("evaluation_date") or data.get("data_as_of") or "")`
+— loop-invariant) and `status_labels, panel_open = _panel_status(sec, stale_symbols)`
+(`:5594`) and `open_attr` (`:5601-5602`). It appends `symbol_names` at `:5633`.
+
+1. Hoist `evaluation_date = str(data.get("evaluation_date") or data.get("data_as_of") or "")`
+   to immediately BEFORE `for sec in data["symbols"]:` (`:5548`). Delete the
+   in-loop copy at `:5554`. (Loop-invariant; also fixes the latent
+   `NameError` when `data["symbols"]` is empty — **Inference**.)
+2. Move the loop body (from `tech = sec.get("technicals")` through the
+   `symbols_html += (…)` closing paren at `:5664`) into
+
+```python
+def _symbol_panel_html(
+    sec: Mapping[str, object], *, data: Mapping[str, object], context: Mapping[str, object] | None,
+    event_view: Mapping[str, object] | None, evaluation_date: str, stale_symbols: set[str],
+    pinned_symbols: set[str], protected_card_ids: set[int],
+) -> tuple[str, str]:
+    """One per-symbol panel, byte-identical to the pre-brief-39 inline loop.
+    Returns (panel_html, symbol_name). It decides its own open/closed state
+    (fail-visible DATA_BLOCKED/STALE/SKIPPED and owner-pinned names open)."""
+    ...the moved body, unchanged, ending with:
+    return panel_html, symbol_name
+```
+
+   where `panel_html` is the string the loop appended. Every local the body
+   used keeps its name; `status_labels`/`panel_open` are computed inside via
+   `_panel_status(sec, stale_symbols)` as today.
+3. The loop becomes exactly:
+
+```python
+    for sec in data["symbols"]:
+        panel_html, symbol_name = _symbol_panel_html(
+            sec, data=data, context=context, event_view=event_view, evaluation_date=evaluation_date,
+            stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
+        symbol_names.append(symbol_name)
+        symbols_html += panel_html
+```
+
+- [ ] **Step 2: Prove the extraction is byte-identical**
+
+Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_layout.py' -k LegacyByteIdentity -v`
+Expected: PASS (the Task 2 snapshot). If it fails, the extraction moved or
+reordered something — fix the extraction, never the snapshot.
+
+- [ ] **Step 3: Write the failing render tests for the new builders**
 
 Append to `tests/test_attractiveness_dashboard.py`:
 
@@ -798,7 +1075,8 @@ Append to `tests/test_attractiveness_dashboard.py`:
 class LaneBoardRenderTests(unittest.TestCase):
     def _board(self):
         from options_researcher import board_lanes as bl
-        pick = {"symbol": "AMZN", "lane": "long_call", "status": "ELIGIBLE", "score": 0,
+        pick = {"symbol": "AMZN", "lane": "long_call", "strike": 265.0, "expiry": "2026-09-16", "dte": 13,
+                "score": 0,
                 "card": {"headline": "Buy the AMZN $265 call", "strike": 265.0, "expiry": "2026-09-16",
                          "dte": 13, "cost": 319.0, "grades": {"liquidity": "GREEN"},
                          "risk": {"max_loss": 319.0, "breakeven": 268.19},
@@ -810,26 +1088,27 @@ class LaneBoardRenderTests(unittest.TestCase):
             pinned=("VST",), blocked=[], cap=5, board_as_of="2026-09-03")
 
     def test_agreement_table_prints_every_column_with_state_and_asof(self):
-        html = ad._agreement_table_html(self._board(), event_view=None, evaluation_date="2026-09-04")
+        html = ad._agreement_table_html(self._board())
         for title in ("Rule-based top 5", "Context lane", "Composite", "QM movement", "T-bill carry",
                       "Spread stability", "Tail shape", "Beta to QQQ"):
             self.assertIn(title, html)
-        self.assertIn("FAILED:ValueError", html)          # failed lane keeps its column
-        self.assertIn("2026-09-03", html)                  # as-of in headers
+        self.assertIn("FAILED:ValueError", html)
+        self.assertIn("2026-09-03", html)
         self.assertIn('class="agree"', html)
+        self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)   # h2 text kept (see step 4)
 
     def test_agreement_cell_counts_favourable_ready_lanes_only(self):
-        html = ad._agreement_table_html(self._board(), event_view=None, evaluation_date="2026-09-04")
-        row = html[html.index("AMZN"):]
-        self.assertIn("1/4", row[: row.index("</tr>")])   # baseline only; context FAILED leaves the denominator
+        html = ad._agreement_table_html(self._board())
+        row = html[html.index('<td class="sym">AMZN'):]
+        self.assertIn("1/4", row[: row.index("</tr>")])
 
     def test_pinned_name_without_a_pick_is_a_row_marked_pinned(self):
-        html = ad._agreement_table_html(self._board(), event_view=None, evaluation_date="2026-09-04")
-        self.assertIn("VST", html)
-        self.assertIn("pinned", html[html.index("VST"):][:400])
-        self.assertIn("not in the registered top 5", html[html.index("VST"):][:600])
+        html = ad._agreement_table_html(self._board())
+        vst = html[html.index('<td class="sym">VST'):]
+        self.assertIn("pinned", vst[:400])
+        self.assertIn("not in the registered top 5", vst[:800])
 
-    def test_position_tiles_flag_a_last_mark_older_than_the_exit_rule(self):
+    def test_position_tiles_flag_a_stale_last_mark(self):
         data = {"open_positions": {"rows": [
             {"book": "H6", "identifier": "H6-0001", "text": "H6-0001 NVDA $220.00 call · exp 2026-09-18 · entered 2026-07-13"},
             {"book": "shares", "identifier": "VST", "text": "VST 39 shares · cost basis $142.28 · acquired 2026-06-15"}],
@@ -838,8 +1117,9 @@ class LaneBoardRenderTests(unittest.TestCase):
         html = ad._position_tiles_html(data, "FOMC decision · 2026-09-16")
         self.assertIn("H6-0001", html)
         self.assertIn("2026-07-27", html)
-        self.assertIn("sessions unmarked", html)
-        self.assertIn("VST 39", html)
+        self.assertIn("29 sessions unmarked", html)
+        self.assertIn('class="tile bad"', html)          # older than CHAIN_STALE_BLOCK_SESSIONS
+        self.assertIn("VST 39 shares", html)
         self.assertIn("FOMC decision", html)
 
     def test_position_tiles_say_so_when_the_book_is_unreadable(self):
@@ -849,173 +1129,180 @@ class LaneBoardRenderTests(unittest.TestCase):
         self.assertIn("UNREAD", html)
         self.assertIn("data/positions/h6_positions.csv", html)
 
-    def test_event_line_prints_the_union_of_table_names_chips_once(self):
-        from options_researcher.event_calendar import Event  # existing type used by event_view
-        board = self._board()
-        # event_view shape per _event_chips_html: {"calendar": [...], "complex_map": {}}
-        from datetime import date
-        ev = {"calendar": [Event(date=date(2026, 9, 16), title="FOMC decision", kind="fomc")],  # adjust ctor to the real Event signature
-              "complex_map": {}}
-        html = ad._event_line_html(board, ev, "2026-09-04")
-        self.assertEqual(html.count("FOMC decision"), 1)
+    def test_status_strip_is_fail_visible_for_closes_and_ignores_chains_absent(self):
+        from options_researcher.schwab_chain_view import CHAINS_ABSENT, CHAIN_SOURCE
+        data = {"data_as_of": "2026-09-03", "as_of_kind": CHAIN_SOURCE, "evaluation_date": "2026-09-04",
+                "fresh_symbols": ["AMZN"], "stale_symbols": ["ET"],
+                "underlying_closes_freshness": {"state": "unavailable", "detail": "missing store files: X"},
+                "schwab_lane": {"verified_sessions": ["2026-09-03"], "receipts_found": True, "failures": [
+                    {"session": "2026-09-03", "kind": CHAINS_ABSENT, "reason": "research checkout"},
+                    {"session": "2026-09-01", "kind": "UNVERIFIED", "reason": "manifest missing"},
+                    {"session": "2026-08-01", "kind": "UNVERIFIED", "reason": "old"}]}}
+        html = ad._status_strip_html(data, context=None)
+        self.assertIn('class="dot crit"></span>closes unavailable', html)
+        self.assertIn("1 capture failure in window", html)     # 09-01 counts (3 sessions), 08-01 aged out, CHAINS_ABSENT ignored
+        self.assertIn("1 names fresh · 1 stale (ET)", html)
+
+    def test_open_slots_notice_mirrors_the_hero_slot_count(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()], rv21_by_symbol={}, today="2026-08-14",
+                           experiment_lanes={})
+        watch = ad.select_top_picks(data, include_csp_watch=True)
+        html = ad._open_slots_notice_html(data, watch)
+        self.assertEqual(html.count("intentional open slot") > 0, len(watch) < config.PICK_TOP_N)
 
     def test_pick_details_render_only_table_names(self):
         data = ad.assemble(symbol_sections=[_fresh_section("AMZN"), _fresh_section("MSFT")],
                            rv21_by_symbol={}, today="2026-08-14", experiment_lanes={})
-        board = self._board()
-        html = ad._pick_details_html(data, board, context=None, event_view=None,
-                                     evaluation_date="2026-08-14", status_labels={})
+        html = ad._pick_details_html(
+            data, self._board(), context=None, event_view=None, evaluation_date="2026-08-14",
+            stale_symbols=set(), pinned_symbols=set(), protected_card_ids=set())
         self.assertIn('id="symbol-AMZN"', html)
         self.assertNotIn('id="symbol-MSFT"', html)
 ```
 
-Executor notes: (a) read `options_researcher/event_calendar.py` for the real
-`Event` constructor before pasting the event-line test; the assertion (the
-title appears exactly once) is the contract, the fixture construction is
-yours. (b) `_fresh_section(...)` / `_stale_section(...)` are the helpers this
-test file already defines near its top; check their signatures (the stale one
-takes `(symbol, as_of)`) and build two sections with different symbols.
+- [ ] **Step 4: Implement the builders**
 
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_dashboard.py' -k LaneBoardRender -v`
-Expected: FAIL with `AttributeError: module ... has no attribute '_agreement_table_html'`
-
-- [ ] **Step 3: Implement the builders**
-
-Add after `_composite_html` (`:4774-4800` region):
+Add after `_composite_html` (`:4774`). Reuse the existing helpers by exact
+name; `re` is already imported at `:38`; `config` is module-level.
 
 ```python
-def _status_strip_html(data: Mapping[str, object], research_views_status: Mapping[str, object] | None,
-                       context: Mapping[str, object] | None) -> str:
-    """One line, five facts, each a coloured dot + a word (spec §2.1). The
-    per-notice detail keeps rendering inside the drawer (Task 5)."""
-    from options_researcher.schwab_chain_view import CHAIN_SOURCE, CONVENTION_LABEL
+def _status_strip_html(data: Mapping[str, object], context: Mapping[str, object] | None) -> str:
+    """One line, five facts, each a coloured dot + a word (spec §2.1). Every
+    dot is state-driven; an unavailable closes store is CRIT, never green."""
+    from options_researcher.schwab_chain_view import CHAINS_ABSENT, CHAIN_SOURCE, CONVENTION_LABEL
+    from options_researcher.top3_snapshot import trading_sessions_between
 
     as_of = str(data.get("data_as_of") or "no cached data")
-    source = (f"{CONVENTION_LABEL}, session {as_of}" if data.get("as_of_kind") == CHAIN_SOURCE
-              else f"frozen EOD {as_of}")
-    fresh = data.get("fresh_symbols") or []
-    stale = data.get("stale_symbols") or []
-    closes = data.get("underlying_closes_freshness") or {}
-    closes_as_of = str(closes.get("max_session") or closes.get("as_of") or "unknown")
-    lane = data.get("schwab_lane") or {}
+    on_schwab = data.get("as_of_kind") == CHAIN_SOURCE
+    source = f"{CONVENTION_LABEL}, session {as_of}" if on_schwab else f"frozen EOD {as_of}"
+    fresh = list(data.get("fresh_symbols") or [])
+    stale = [str(s) for s in (data.get("stale_symbols") or [])]
+    closes = data.get("underlying_closes_freshness")
+    closes = closes if isinstance(closes, Mapping) else {"state": "unavailable", "detail": "not assembled"}
+    closes_ok = closes.get("state") == "available"
+    closes_text = (f"closes through {closes.get('as_of')}" if closes_ok
+                   else f"closes unavailable — {closes.get('detail', 'unknown')}")
+    lane = data.get("schwab_lane")
     failures = lane.get("failures") if isinstance(lane, Mapping) else None
-    failures = list(failures) if isinstance(failures, (list, tuple)) else []
-    # "in window" = the same retention rule brief 37 WP-G gave the red notices:
-    # age <= config.CHAIN_STALE_BLOCK_SESSIONS counted with trading_sessions_between;
-    # when the evaluation session is missing every failure counts (fail-visible).
-    evaluation = str(data.get("evaluation_date") or "")
-    n_fail = len(failures)
-    if evaluation:
-        try:
-            from options_researcher.top3_snapshot import trading_sessions_between
-            n_fail = sum(1 for f in failures if isinstance(f, Mapping) and isinstance(f.get("session"), str)
-                         and trading_sessions_between(str(f["session"]), evaluation) <= config.CHAIN_STALE_BLOCK_SESSIONS)
-        except Exception:
-            n_fail = len(failures)
+    failures = [f for f in (failures or []) if isinstance(f, Mapping) and f.get("kind") != CHAINS_ABSENT]
+    # Same retention rule as _schwab_state_html (brief 37 WP-G, :1058-1110): a failure
+    # is "in window" when age <= CHAIN_STALE_BLOCK_SESSIONS; when the age cannot be
+    # computed the failure stays counted (fail-visible).
+    evaluation = data.get("evaluation_date")
+    in_window = 0
+    for f in failures:
+        age: int | None = None
+        if isinstance(evaluation, str) and isinstance(f.get("session"), str):
+            try:
+                age = trading_sessions_between(str(f["session"]), evaluation)
+            except Exception:
+                age = None
+        if not isinstance(age, int) or age <= config.CHAIN_STALE_BLOCK_SESSIONS:
+            in_window += 1
     researched = str((context or {}).get("researched_on") or "never")
 
     def dot(cls: str, text: str) -> str:
         return f'<span class="strip-item"><span class="dot {cls}"></span>{_esc(text)}</span>'
 
+    plural = "failure" if in_window == 1 else "failures"
     return ('<div class="status-strip">'
-            + dot("good" if data.get("as_of_kind") == CHAIN_SOURCE else "warn", f"option quotes: {source}")
-            + dot("good", f"closes through {closes_as_of}")
-            + dot("warn" if stale else "good", f"{len(fresh)} names fresh · {len(stale)} stale"
-                  + (f" ({', '.join(str(s) for s in stale)})" if stale else ""))
-            + dot("warn" if researched != str(as_of) else "good", f"research annotations {researched}")
-            + dot("crit" if n_fail else "good", f"{n_fail} capture failures in window")
+            + dot("good" if on_schwab else "warn", f"option quotes: {source}")
+            + dot("good" if closes_ok else "crit", closes_text)
+            + dot("warn" if stale else "good",
+                  f"{len(fresh)} names fresh · {len(stale)} stale" + (f" ({', '.join(stale)})" if stale else ""))
+            + dot("good" if researched == as_of else "warn", f"research annotations {researched}")
+            + dot("crit" if in_window else "good", f"{in_window} capture {plural} in window")
             + "</div>")
 
 
 def _position_tiles_html(data: Mapping[str, object], event_line_text: str) -> str:
     """Four stat tiles (spec §2.2). Reads only data['open_positions']; an
-    unreadable source is printed, never treated as an empty book."""
+    unreadable source is printed, never treated as an empty book. The last-mark
+    tile is red when the mark is older than the board's own staleness limit
+    (config.CHAIN_STALE_BLOCK_SESSIONS — reused, not a new number)."""
+    from options_researcher.top3_snapshot import trading_sessions_between
+
     positions = data.get("open_positions")
     if not isinstance(positions, Mapping):
-        return '<div class="tiles"><div class="tile bad"><div class="k">Positions</div><div class="v">UNREAD</div></div></div>'
-    rows = positions.get("rows") if isinstance(positions.get("rows"), list) else []
-    missing = positions.get("missing_sources") or []
+        return ('<div class="tiles"><div class="tile bad"><div class="k">Positions</div>'
+                '<div class="v">UNREAD</div><div class="d">open_positions not assembled</div></div></div>')
+    rows = [r for r in (positions.get("rows") or []) if isinstance(r, Mapping)]
+    missing = [str(m) for m in (positions.get("missing_sources") or [])]
     option_rows = [r for r in rows if r.get("book") != "shares"]
     share_rows = [r for r in rows if r.get("book") == "shares"]
     last_mark = positions.get("h6_last_mark")
-    evaluation = str(data.get("evaluation_date") or "")
-    mark_age = None
-    if isinstance(last_mark, str) and evaluation:
+    evaluation = data.get("evaluation_date")
+    mark_age: int | None = None
+    if isinstance(last_mark, str) and isinstance(evaluation, str):
         try:
-            from options_researcher.top3_snapshot import trading_sessions_between
             mark_age = trading_sessions_between(last_mark, evaluation)
         except Exception:
             mark_age = None
-    mark_cls = "bad" if (mark_age or 0) > 0 else ""   # see the executor note below on the registered exit rule
-    tiles = []
+    mark_bad = isinstance(mark_age, int) and mark_age > config.CHAIN_STALE_BLOCK_SESSIONS
+
+    def tile(k: str, v: str, d: str, cls: str = "") -> str:
+        return (f'<div class="tile{(" " + cls) if cls else ""}"><div class="k">{_esc(k)}</div>'
+                f'<div class="v">{_esc(v)}</div><div class="d">{_esc(d)}</div></div>')
+
+    tiles: list[str] = []
     if missing:
-        tiles.append('<div class="tile bad"><div class="k">Positions</div><div class="v">UNREAD</div>'
-                     f'<div class="d">{_esc(", ".join(str(m) for m in missing))}</div></div>')
-    tiles.append('<div class="tile"><div class="k">Open option</div>'
-                 f'<div class="v">{_esc(option_rows[0]["identifier"]) if option_rows else "none"}</div>'
-                 f'<div class="d">{_esc(option_rows[0]["text"]) if option_rows else "no open option positions"}</div></div>')
-    tiles.append(f'<div class="tile {mark_cls}"><div class="k">Last mark</div>'
-                 f'<div class="v">{_esc(str(last_mark) if last_mark else "none")}</div>'
-                 f'<div class="d">{(str(mark_age) + " sessions unmarked") if mark_age is not None else "no mark recorded"}</div></div>')
-    tiles.append('<div class="tile"><div class="k">Shares</div>'
-                 f'<div class="v">{_esc(share_rows[0]["text"].split(" · ")[0]) if share_rows else "none"}</div>'
-                 f'<div class="d">{_esc(share_rows[0]["text"]) if share_rows else "no share lots recorded"}</div></div>')
-    tiles.append('<div class="tile"><div class="k">Event ahead</div>'
-                 f'<div class="v">{_esc(event_line_text.split(" · ")[0]) if event_line_text else "none"}</div>'
-                 f'<div class="d">{_esc(event_line_text)}</div></div>')
+        tiles.append(tile("Positions", "UNREAD", ", ".join(missing), "bad"))
+    tiles.append(tile("Open option", str(option_rows[0].get("identifier")) if option_rows else "none",
+                      str(option_rows[0].get("text")) if option_rows else "no open option positions"))
+    tiles.append(tile("Last mark", str(last_mark) if last_mark else "none",
+                      f"{mark_age} sessions unmarked" if isinstance(mark_age, int) else "no mark recorded",
+                      "bad" if mark_bad else ""))
+    tiles.append(tile("Shares", str(share_rows[0].get("text", "")).split(" · ")[0] if share_rows else "none",
+                      str(share_rows[0].get("text")) if share_rows else "no share lots recorded"))
+    tiles.append(tile("Event ahead", event_line_text.split(" · ")[0] if event_line_text else "none",
+                      event_line_text or "no upcoming event for the registered picks"))
     return '<div class="tiles">' + "".join(tiles) + "</div>"
-```
 
-Executor note on the mark-age threshold: the registered H6 exit rule is
-`config.H6_*` (brief 37 cited `config.py:347-348`, `h6_watch.py:446-452`,
-"mandatory close at ≤ 21 days to expiry"). Read those lines; if a named
-constant for the 21-day rule exists use it, otherwise print the age only and
-colour the tile red when `mark_age > 0` — do NOT invent a threshold constant.
-Replace the `> 0` rule above with the real constant when one exists, and say
-which in the PR body.
 
-```python
-def _agreement_table_html(board: "LaneBoard", *, event_view: Mapping[str, object] | None,
-                          evaluation_date: str) -> str:
+def _agreement_table_html(board: "LaneBoard") -> str:
     """Spec §3. Row order and the 'Agree' count come from the pure module;
-    this function only prints."""
+    this function only prints. The <h2> text is byte-identical to today's
+    shortlist heading (:4213) because tests and the pick tracker locate the
+    shortlist by it."""
     fav = [c for c in board.columns if c.favourable]
     cau = [c for c in board.columns if not c.favourable]
 
-    def header(col) -> str:
+    def header(col: "LaneColumn") -> str:
         return (f'<th title="{_esc(col.note)}">{_esc(col.title)}<br>'
                 f'<span class="th-sub">{_esc(col.kind)} · as of {_esc(str(col.as_of or "?"))} · {_esc(col.state)}</span></th>')
 
-    def cell(row, col) -> str:
-        m = row.marks.get(col.key)
+    def cell(row: "BoardRow", col: "LaneColumn") -> str:
         if col.state != "READY":
             return '<td class="lane-off"></td>'
+        m = row.marks.get(col.key)
         if m is None:
             return "<td></td>"
-        cls = "warn" if not col.favourable else ("veto" if m.label == "veto" else "on")
+        cls = "warn" if not col.favourable else ("veto" if not m.counts else "on")
         return f'<td><span class="chip {cls}">{_esc(m.label)}</span></td>'
 
-    def pick_cell(row) -> str:
+    def pick_cell(row: "BoardRow") -> str:
         if row.baseline_pick is not None:
-            card = row.baseline_pick.get("card") or {}
-            risk = card.get("risk") or {}
-            econ = (f"cost ${float(card.get('cost') or 0):,.0f} · worst -${float(risk.get('max_loss') or 0):,.0f}"
-                    f" · breakeven ${float(risk.get('breakeven') or 0):,.2f} · {_esc(str(card.get('expiry') or '?'))}"
-                    f" ({_esc(str(card.get('dte') or '?'))}d)")
+            card = row.baseline_pick.get("card")
+            card = card if isinstance(card, Mapping) else {}
+            risk = card.get("risk")
+            risk = risk if isinstance(risk, Mapping) else {}
+            cost = _num_or_zero(card.get("cost"))
+            worst = _num_or_zero(risk.get("max_loss"))
+            be = _num_or_zero(risk.get("breakeven"))
+            econ = (f"cost ${cost:,.0f} · worst -${worst:,.0f} · breakeven ${be:,.2f} · "
+                    f"{_esc(str(card.get('expiry') or '?'))} ({_esc(str(card.get('dte') or '?'))}d)")
             return (f'{_esc(str(card.get("headline") or ""))}<div class="econ">{econ} · '
                     f'<a href="#symbol-{_esc(row.symbol)}">details</a></div>')
         if row.block_reason:
             return f'<span class="blocked">{_esc(row.block_reason)}</span>'
         return '<span class="muted">not in the registered top 5</span>'
 
-    head = ("<tr><th rowspan=\"2\">Name</th><th rowspan=\"2\">Registered pick (baseline decides the order)</th>"
-            f"<th colspan=\"{len(fav)}\" class=\"group\">Favourable lanes · top {config.PICK_TOP_N} each</th>"
-            "<th rowspan=\"2\">Agree</th>"
-            f"<th colspan=\"{len(cau)}\" class=\"group\">Cautions (shown, never counted)</th></tr>"
+    head = ('<tr><th rowspan="2">Name</th><th rowspan="2">Registered pick (baseline decides the order)</th>'
+            f'<th colspan="{len(fav)}" class="group">Favourable lanes · top {config.PICK_TOP_N} each</th>'
+            '<th rowspan="2">Agree</th>'
+            f'<th colspan="{len(cau)}" class="group">Cautions (shown, never counted)</th></tr>'
             "<tr>" + "".join(header(c) for c in fav) + "".join(header(c) for c in cau) + "</tr>")
-    body = []
+    body: list[str] = []
     for row in board.rows:
         pinned = ' <span class="chip">pinned</span>' if row.pinned else ""
         agree = (f'<td class="agree-cell"><span class="bar" style="width:{row.fav_count * 14}px"></span>'
@@ -1030,100 +1317,101 @@ def _agreement_table_html(board: "LaneBoard", *, event_view: Mapping[str, object
             'The registered baseline decides the order and is never re-ordered. "Agree" counts '
             'favourable lanes only — a description, never a score; cautions are shown but never counted.</p>'
             f'{notes}<table class="agreement-table"><thead>{head}</thead><tbody>{"".join(body)}</tbody></table></section>')
-```
 
-Keep the `<h2>` text `Rule-based top 5 — best policy-and-liquidity fit today`
-byte-identical to today's (`:4162`) — `tests/test_attractiveness_layout.py`
-and the pick-tracker digest locate the shortlist by it (verify with
-`grep -n "Rule-based top 5" tests/*.py options_researcher/pick_tracker.py`).
 
-```python
+def _num_or_zero(value: object) -> float:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
+
+
 def _event_line_html(board: "LaneBoard", event_view: Mapping[str, object] | None,
                      evaluation_date: str) -> str:
-    """The sorted union of the table names' event chips, printed once (spec §2.4)."""
+    """D11: the sorted union of the REGISTERED PICKS' event chips, printed once.
+    Names without a baseline pick contribute nothing (their chips stay in
+    their detail panel). An EVENT LAYER FAILED banner is returned as-is."""
     if not event_view:
         return ""
     seen: dict[str, None] = {}
     for row in board.rows:
-        card = (row.baseline_pick or {}).get("card") or {}
-        frag = _event_chips_html(card, row.symbol, evaluation_date, event_view)
+        if row.baseline_pick is None:
+            continue
+        card = row.baseline_pick.get("card")
+        if not isinstance(card, Mapping):
+            continue
+        frag = _event_chips_html(dict(card), row.symbol, evaluation_date, event_view)
         if frag.startswith('<div class="notice bad">'):
-            return frag                      # EVENT LAYER FAILED stays loud, never deduped
+            return frag
         for text in re.findall(r'<span class="event-chip">EVENT · (.*?)</span>', frag):
             seen.setdefault(text, None)
     if not seen:
         return ""
-    return ('<div class="event-line"><span class="event-line-label">Events ahead:</span>'
+    return ('<div class="event-line"><span class="event-line-label">Events ahead for the registered picks:</span>'
             + "".join(f'<span class="event-chip">EVENT · {t}</span>' for t in sorted(seen)) + "</div>")
 
 
-def _pick_details_html(data: Mapping[str, object], board: "LaneBoard", *, context, event_view,
-                       evaluation_date: str, status_labels: Mapping[str, object]) -> str:
-    """One closed <details> per table name (spec §2.5); other names are not rendered."""
+def _open_slots_notice_html(data: Mapping[str, object], watch_picks: Sequence[Mapping[str, object]]) -> str:
+    """Today's consolidated open-slot notice, unchanged (:4200-4203 uses the
+    watch-inclusive pick list to size the range)."""
+    return _open_slots_html(
+        [_empty_hero_slot(dict(data), slot)
+         for slot in range(len(watch_picks) + 1, config.PICK_TOP_N + 1)],
+        prefix="Pick", total=config.PICK_TOP_N)
+
+
+def _pick_details_html(
+    data: Mapping[str, object], board: "LaneBoard", *, context: Mapping[str, object] | None,
+    event_view: Mapping[str, object] | None, evaluation_date: str, stale_symbols: set[str],
+    pinned_symbols: set[str], protected_card_ids: set[int],
+) -> str:
+    """One per-name panel per table row (spec §2.5); other names are not rendered.
+    The panel HTML is byte-identical to today's (D10)."""
     wanted = [r.symbol for r in board.rows]
     by_symbol = {str(sec.get("symbol")): sec for sec in data.get("symbols", []) if isinstance(sec, Mapping)}
-    parts = []
+    parts: list[str] = []
     for symbol in wanted:
         sec = by_symbol.get(symbol)
         if sec is None:
             continue
-        parts.append(_symbol_panel_html(sec, context=context, event_view=event_view,
-                                        evaluation_date=evaluation_date, status_labels=status_labels))
+        panel_html, _name = _symbol_panel_html(
+            sec, data=data, context=context, event_view=event_view, evaluation_date=evaluation_date,
+            stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
+        parts.append(panel_html)
     if not parts:
         return ""
     return ('<section class="panel details" id="pick-details"><div class="eyebrow">Pick details on demand</div>'
             '<h2>Details for the names above</h2>' + "".join(parts) + "</section>")
 ```
 
-Then extract `_symbol_panel_html(sec, *, context, event_view, evaluation_date, status_labels) -> str`
-from the per-symbol loop body in `_render_result` so that the loop becomes:
+- [ ] **Step 5: Run tests to verify they pass**
 
-```python
-        symbols_html += _symbol_panel_html(sec, context=context, event_view=event_view,
-                                           evaluation_date=evaluation_date,
-                                           status_labels=status_labels)
-```
+Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_*.py' -v 2>&1 | tail -5`
+Expected: `LaneBoardRenderTests` PASS; every pre-existing test still PASSES
+(nothing is wired into `_render_result` yet); `LegacyByteIdentityTests` PASS.
 
-Move every local the loop body used (`open_attr`, `status_html`,
-`display_only_html`, `display_date_stat`, `event_failure`, `implied`,
-`stale_html`, `tech_html`, `rank_note`, `groups`) into the new function
-unchanged — including the rule that decides `open_attr` (owner-pinned and
-fail-visible DATA_BLOCKED/stale panels open, clean panels closed;
-`tests/test_attractiveness_layout.py:277`). Prove the extraction
-is byte-identical by rendering the layout fixture before and after (Task 5's
-byte-identity test covers it; run it now as a smoke check).
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_*.py' -v 2>&1 | tail -20`
-Expected: the new `LaneBoardRenderTests` PASS; every pre-existing test still
-PASSES (nothing is wired into `render` yet).
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add options_researcher/attractiveness_dashboard.py tests/test_attractiveness_dashboard.py
-git commit -m "feat(board): status strip, position tiles, agreement table, event line, details-on-demand builders"
+git commit -m "feat(board): extract the symbol panel byte-identically; add status strip, tiles, agreement table, event line, details builders"
 ```
 
 ---
 
-### Task 5: Wire the new page order behind the flag; keep the legacy page byte-identical
+### Task 6 (WP-F): Wire the new page order behind the flag
 
 **Files:**
-- Modify: `options_researcher/attractiveness_dashboard.py:5682-5721` (`_render_result` body assembly),
-  `:5737` (`_sticky_nav_html` call), `_STYLE` (add the new classes)
+- Modify: `options_researcher/attractiveness_dashboard.py:5690-5721` (`event_css` at `:5694-5695`, `body_html` at `:5700-5721`), `:5737` (`_sticky_nav_html` call), `_STYLE`
 - Test: `tests/test_attractiveness_layout.py`
 
 **Interfaces:**
-- Consumes: Task 2 `build_lane_board`, Task 4 builders, `config.BOARD_LANES_ENABLED`.
-- Produces: the redesigned page when the flag is on; today's page when off.
+- Consumes: Task 3 `build_lane_board`, Task 5 builders, `config.BOARD_LANES_ENABLED`.
+- Produces: the redesigned page when the flag is on; today's page, byte-identical, when off.
 
 - [ ] **Step 1: Write the failing layout tests**
 
-Append to `tests/test_attractiveness_layout.py` (the file's `_board` helper
-builds fixtures; add `experiment_lanes={}` to its `assemble` call so the
-fixture never touches the cache):
+Append to `tests/test_attractiveness_layout.py` (the drawer element is
+`<details class="panel diagnostics-drawer" id="diagnostics">`; the freshness
+heading is `DATA FRESHNESS`; the class holding `_DRAWER_SECTIONS` is
+`DiagnosticsDrawerTests` at `:374`):
 
 ```python
 class LaneBoardLayoutTests(unittest.TestCase):
@@ -1131,21 +1419,20 @@ class LaneBoardLayoutTests(unittest.TestCase):
 
     def _html(self, **kw):
         with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
-            data = _board(["NVDA", "AMZN", "MSFT"], **kw)
-            return ad.render(data)
+            return ad.render(_board(["NVDA", "AMZN", "MSFT"], **kw))
 
     def test_page_order_is_strip_tiles_table_event_details_drawer(self):
         html = self._html()
         anchors = ['class="status-strip"', 'class="tiles"', 'id="agreement-table"',
-                   'id="pick-details"', 'class="drawer"']
+                   'id="pick-details"', 'id="diagnostics"']
         offsets = [html.index(a) for a in anchors]
         self.assertEqual(offsets, sorted(offsets))
 
     def test_removed_surfaces_are_absent(self):
         html = self._html()
-        for gone in ('id="context-aware-top-5"', 'id="composite-board"', 'class="sticky-nav"',
-                     "VST / AMZN — ALWAYS SHOWN", "CONTEXT-AWARE SHORTLIST"):
-            self.assertNotIn(gone, html)
+        for gone in ('id="context-aware-top-5"', 'class="sticky-nav"', "VST / AMZN — ALWAYS SHOWN",
+                     "CONTEXT-AWARE SHORTLIST", "QM MOVEMENT LANE</h2>"):
+            self.assertNotIn(gone, html[: html.index('id="diagnostics"')])
 
     def test_details_render_only_for_table_names(self):
         html = self._html()
@@ -1156,10 +1443,11 @@ class LaneBoardLayoutTests(unittest.TestCase):
 
     def test_relocated_content_is_appended_after_the_six_drawer_sections(self):
         html = self._html()
-        drawer = html[html.index('class="drawer"'):]
-        six = [drawer.index(s) for s in DrawerTests._DRAWER_SECTIONS]   # reuse the existing tuple
+        drawer = html[html.index('id="diagnostics"'):]
+        six = [drawer.index(s) for s in DiagnosticsDrawerTests._DRAWER_SECTIONS]
         self.assertEqual(six, sorted(six))
-        for relocated in ("Registered-bets tracker", "Shortlist outcome scoreboard", "Data freshness"):
+        for relocated in ("REGISTERED-BETS TRACKER", "Shortlist outcome scoreboard", "DATA FRESHNESS",
+                          "Composite signal board"):
             self.assertGreater(drawer.index(relocated), six[-1])
 
     def test_disclaimers_survive_verbatim_with_flag_on(self):
@@ -1167,92 +1455,63 @@ class LaneBoardLayoutTests(unittest.TestCase):
         self.assertIn("mission-control dashboard date INDEPENDENTLY", html)
         self.assertIn("Payoffs are at-expiration scenarios, not predictions.", html)
 
-    def test_flag_off_renders_the_legacy_page_byte_for_byte(self):
-        data = _board(["NVDA", "AMZN", "MSFT"])
-        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
-            legacy = ad.render(data)
-        self.assertEqual(legacy, LEGACY_RENDER_SNAPSHOT(data))
-
     def test_zero_javascript_with_flag_on(self):
         self.assertNotIn("<script", self._html().lower())
 ```
 
-`LEGACY_RENDER_SNAPSHOT` is a module-level helper you add to the test file:
-
-```python
-def LEGACY_RENDER_SNAPSHOT(_data):
-    with open("tests/fixtures/attractiveness_legacy_layout.html", encoding="utf-8") as fh:
-        return fh.read()
-```
-
-The snapshot is **captured in Step 3 BEFORE wiring** (the pre-change page on
-a deterministic fixture: fixed `today`, injected sections,
-`experiment_lanes={}`), so the flag-off path is compared against today's
-renderer, not against itself. `DrawerTests._DRAWER_SECTIONS` in the test
-above means the tuple defined at `tests/test_attractiveness_layout.py:375` —
-use the name of the class that actually holds it.
-
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_layout.py' -k LaneBoardLayout -v`
-Expected: FAIL (`status-strip` not found; snapshot fixture missing).
+Expected: FAIL with `ValueError: substring not found` (`class="status-strip"`).
 
-- [ ] **Step 3: Capture the legacy snapshot BEFORE wiring**
+- [ ] **Step 3: Wire `_render_result`**
 
-```bash
-uv run python - <<'EOF'
-import config
-from tests.test_attractiveness_layout import _board   # add tests/__init__.py if import fails; see note
-from options_researcher import attractiveness_dashboard as ad
-config.BOARD_LANES_ENABLED = False
-html = ad.render(_board(["NVDA", "AMZN", "MSFT"]))
-open("tests/fixtures/attractiveness_legacy_layout.html", "w").write(html)
-print(len(html))
-EOF
-```
-
-Note: `tests/` has no `__init__.py`; run the snippet with `PYTHONPATH=tests`
-and `from test_attractiveness_layout import _board` instead of adding one.
-
-- [ ] **Step 4: Wire `render`**
-
-In `_render_result` (`:5682-5721`) replace the `body_html = (...)` assembly with:
+Replace `:5694-5721` (from `event_css = (...)` through the end of the
+`body_html = (...)` assignment) with the following. The flag-off branch is
+today's code verbatim — copy it from the file, do not retype it:
 
 ```python
     if config.BOARD_LANES_ENABLED:
         from options_researcher import board_lanes as _bl
 
+        board: "_bl.LaneBoard | None"
         try:
             board = _bl.build_lane_board(
                 baseline_picks=qualified_picks,
                 context_selection=context_selection,
                 composite_cards=data.get("composite_signals"),
-                qm_picks=(select_qm_top_picks(data, qm_context, include_csp_watch=True)
-                          if isinstance(qm_context, Mapping) else None),
+                qm_picks=select_qm_top_picks(data, qm_context, include_csp_watch=True),
                 experiment_lanes=data.get("experiment_lanes"),
-                pinned=[str(p.get("symbol")) for p in pinned_records or []],
+                pinned=[str(r.get("symbol")) for r in pinned_records],
                 blocked=data.get("blocked") or [],
                 board_as_of=str(data.get("data_as_of") or ""),
             )
             board_error = None
-        except Exception as exc:  # fail-visible: never blank the decision area
+        except Exception as exc:  # fail-visible: never blank the decision area (spec §5)
             board, board_error = None, exc.__class__.__name__
-        event_line_html = _event_line_html(board, event_view, evaluation_date) if board else ""
-        event_text = re.sub(r"<[^>]+>", "", event_line_html).replace("Events ahead:", "").strip()
-        decision_html = (
-            _agreement_table_html(board, event_view=event_view, evaluation_date=evaluation_date)
-            if board else
-            f'<div class="notice bad">LANE BOARD FAILED — {_esc(board_error)}; showing the registered picks only.</div>{hero_html}'
-        )
+        if board is not None:
+            event_line_html = _event_line_html(board, event_view, evaluation_date)
+            details_html = _pick_details_html(
+                data, board, context=context, event_view=event_view, evaluation_date=evaluation_date,
+                stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
+            decision_html = _agreement_table_html(board)
+        else:
+            event_line_html, details_html = "", symbols_html
+            decision_html = (f'<div class="notice bad">LANE BOARD FAILED — {_esc(str(board_error))}; '
+                             f'showing the registered picks only.</div>{hero_html}')
+        event_text = re.sub(r"<[^>]+>", " ", event_line_html).replace("Events ahead for the registered picks:", "").strip()
+        event_text = " ".join(event_text.split())
+        event_css = (_EVENT_STYLE if 'class="event-chip"' in
+                     (symbols_html + hero_html + qm_lanes_html + pinned_html + event_line_html + details_html) else "")
         body_html = (
-            f"{_status_strip_html(data, research_views_status, context)}"
+            f"{_status_strip_html(data, context)}"
             f"{warn_html}"
             f"{_blocked_html(data.get('blocked') or [])}"
             f"{_position_tiles_html(data, event_text)}"
-            f"{_open_slots_notice_html(qualified_picks)}"
+            f"{_open_slots_notice_html(data, watch_picks)}"
             f"{decision_html}"
             f"{event_line_html}"
-            f"{_pick_details_html(data, board, context=context, event_view=event_view, evaluation_date=evaluation_date, status_labels=status_labels) if board else symbols_html}"
+            f"{details_html}"
             + _diagnostics_drawer_html([
                 qm_lanes_html,
                 _research_desk_html(data, context, context_warning, annotation_notice),
@@ -1260,8 +1519,9 @@ In `_render_result` (`:5682-5721`) replace the `body_html = (...)` assembly with
                 _experiments_shelf_html(research_views_status),
                 _quant_want_html(qm_context),
                 _market_html(context),
-                # relocated (spec §2.6) — appended AFTER the six, text unchanged
-                _freshness_html(data, context, qm_context, research_views_status, context_evidence, annotation_integrity=annotation_integrity),
+                # relocated (spec §2.6, D9) — appended AFTER the six, text unchanged
+                _freshness_html(data, context, qm_context, research_views_status, context_evidence,
+                                annotation_integrity=annotation_integrity),
                 age_html,
                 _registered_bets_tracker_html(data),
                 _composite_html(data),
@@ -1270,166 +1530,255 @@ In `_render_result` (`:5682-5721`) replace the `body_html = (...)` assembly with
         )
         nav_html = ""
     else:
-        body_html = ( ...today's assembly, byte-identical... )
+        event_css = (_EVENT_STYLE if 'class="event-chip"' in
+                     (symbols_html + hero_html + qm_lanes_html + pinned_html) else "")
+        body_html = (
+            ...today's :5700-5721 assembly, copied verbatim...
+        )
         nav_html = _sticky_nav_html(body_html, symbol_names)
 ```
 
-and use `nav_html` where `_sticky_nav_html(...)` is interpolated at `:5737`.
-`_open_slots_notice_html(qualified_picks)` renders today's consolidated
-open-slot block (`_open_slots_html`, `:4104`) for `PICK_TOP_N - len(picks)`
-slots and nothing when all slots are filled — implement as a 6-line wrapper
-around the existing helper. Add the CSS classes used by Task 4
-(`status-strip`, `dot`, `tiles`, `tile`, `agreement-table`, `chip.on/.warn/.veto`,
-`agree`, `bar`, `event-line`, `lane-off`, `th-sub`, `group`) to `_STYLE`,
-using the existing colour variables only.
+and at `:5737` replace `f"{_sticky_nav_html(body_html, symbol_names)}"` with
+`f"{nav_html}"`. `symbols_html`, `hero_html`, `qm_lanes_html`, `pinned_html`,
+`age_html`, `warn_html`, `qualified_picks`, `watch_picks`, `context_selection`,
+`pinned_records`, `stale_symbols`, `pinned_symbols`, `protected_card_ids`,
+`evaluation_date` (hoisted in Task 5), `annotation_notice`,
+`research_views_status`, `context_evidence`, `annotation_integrity`,
+`data_as_of`, `qm_context` are all in scope at this point (reviewer-verified
+list minus the two Task 5 fixed).
 
-`event_css` (`:5694-5695`) must also consider `event_line_html` and the
-details HTML so the chip styles load when chips render only there.
+Add to `_STYLE` (colours from the existing variables only; no new palette):
 
-- [ ] **Step 5: Run the layout tests, then the whole suite**
+```css
+.status-strip{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;padding:6px 0 10px;border-bottom:1px solid var(--line)}
+.strip-item{white-space:nowrap}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.good{background:var(--good)}.dot.warn{background:var(--watch)}.dot.crit{background:var(--bad)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+.tile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.tile.bad{border-color:var(--bad)}
+.tile .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.7}.tile .v{font-size:20px;font-weight:600}.tile .d{font-size:12px;opacity:.8}
+.agreement-table{width:100%;border-collapse:collapse;font-size:13px}.agreement-table th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+.agreement-table th.group{text-align:center;border-left:1px solid var(--line)}.agreement-table .th-sub{font-weight:400;text-transform:none;letter-spacing:0;opacity:.75}
+.agreement-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
+.agreement-table td.sym{font-weight:700}.agreement-table td.lane-off{background:var(--surface-2)}.agreement-table .econ{font-size:12px;opacity:.8}
+.agreement-table .blocked{color:var(--bad)}.agreement-table .muted{opacity:.6}
+.chip.on{border-color:var(--good)}.chip.warn{border-color:var(--watch)}.chip.veto{border-color:var(--bad)}
+.agree-cell .bar{display:inline-block;height:8px;border-radius:4px;background:var(--good);vertical-align:middle;margin-right:6px}.agree{font-weight:700}
+.event-line{margin:10px 0;font-size:13px}.event-line-label{margin-right:8px;opacity:.75}
+```
+
+Use the variable names `_STYLE` already defines for good/watch/bad and the
+surfaces (read `_STYLE`'s `:root` block first and substitute the real names;
+do not introduce new colour tokens).
+
+- [ ] **Step 4: Run the layout tests, then the whole suite**
 
 Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_layout.py' -v`
-Expected: `LaneBoardLayoutTests` PASS; `test_flag_off_renders_the_legacy_page_byte_for_byte` PASS. Several
+Expected: `LaneBoardLayoutTests` and `LegacyByteIdentityTests` PASS. Several
 PRE-EXISTING layout tests now FAIL because they pin the old order — that is
-Task 6's job; list them in the commit body.
-
+Task 7's job; list them in the commit body.
 Run: `uv run python -m unittest discover -s tests 2>&1 | tail -5`
 Expected: failures only in `test_attractiveness_layout.py`,
-`test_attractiveness_dashboard.py`, `test_event_awareness.py`; nothing else.
-If any other file fails, STOP — that is a regression, not a contract change.
+`test_attractiveness_dashboard.py`, `test_event_awareness.py`. Any other file
+failing is a regression — STOP and report.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add options_researcher/attractiveness_dashboard.py tests/test_attractiveness_layout.py tests/fixtures/attractiveness_legacy_layout.html
+git add options_researcher/attractiveness_dashboard.py tests/test_attractiveness_layout.py
 git commit -m "feat(board): wire the lane-board page order behind BOARD_LANES_ENABLED (legacy page byte-identical when off)"
 ```
 
 ---
 
-### Task 6: Re-pin the two contracts (layout, event-chip parity)
+### Task 7 (WP-G): Re-pin the contracts (layout, dashboard, event-chip)
 
 **Files:**
-- Modify: `tests/test_attractiveness_layout.py` (the tests that assert removed
-  surfaces), `tests/test_attractiveness_dashboard.py` (same), `tests/test_event_awareness.py:311-460`
-- Test: the same files
+- Modify: `tests/test_attractiveness_layout.py`, `tests/test_attractiveness_dashboard.py`, `tests/test_event_awareness.py`
 
-**Interfaces:** none new.
+**Interfaces:** none new. Rule for every re-pin, recorded in a one-line
+comment above the test: **(a)** the test asserts the CONTENT of a section
+(what a fact says) → keep the assertion and render with the flag OFF using the
+helper below, because the section still renders inside the drawer with the
+same text; **(b)** the test asserts a spec §2 POSITION invariant → rewrite it
+against the new anchors with the same intent; **(c)** the test asserts a
+surface that no longer exists on the flag-on page → wrap with the flag off.
+Never delete a test.
 
-- [ ] **Step 1: Enumerate the failures**
-
-Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_layout.py' 2>&1 | grep -E "^(FAIL|ERROR):"`
-and the same for `test_attractiveness_dashboard.py` and `test_event_awareness.py`.
-Paste the list into the PR body. Expected members (Repo-verified names, the
-executor confirms): in the layout file `test_tracker_renders_before_the_shortlist_with_positions_kicker`
-(`:165`), `test_clean_panels_are_closed_except_owner_pinned_symbols` (`:277`),
-`test_panel_summary_is_one_line_with_source_asof_and_grade` (`:286`),
-`test_frozen_eod_panels_name_their_source_in_the_summary` (`:296`),
-`test_nav_links_every_present_section_and_symbol` (`:314`),
-`test_nav_never_links_a_section_that_is_not_on_the_page` (`:326`),
-`test_composite_board_is_one_table_with_every_label_preserved` (`:337`),
-`test_blocked_angle_reason_is_still_printed` (`:364`),
-`test_scoreboard_and_pinned_strip_stay_in_the_main_flow` (`:416`),
-`test_symbol_panels_precede_the_drawer` (`:424`), and the empty-slot
-consolidation tests (`:88-130`) if they locate the hero section by a removed
-marker; in `test_event_awareness.py`,
-`test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list` (`:311`)
-and possibly `test_pure_render_all_card_surfaces_and_failure_notice` (`:215`).
-
-- [ ] **Step 2: Re-pin each layout test to spec §2 — one decision per test**
-
-For each failing layout test, decide and record in a comment above it:
-(a) the assertion is about a surface that no longer exists → rewrite it to
-the new surface with the SAME intent (e.g. "tracker before shortlist" becomes
-"position tiles before the agreement table"; "composite is one table" becomes
-"composite is one column with every angle label preserved in the column
-title/notes"; "nav links every section" becomes "no sticky nav; every table
-name has a details anchor"); or (b) the assertion still holds and only the
-fixture needs `BOARD_LANES_ENABLED=False` → wrap it. Never delete a test. The
-disclaimer, drawer, digest and zero-JS tests must pass without edits.
-
-- [ ] **Step 3: Rewrite the chip-parity contract**
-
-Replace `test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list`
-(`tests/test_event_awareness.py:311`) with two tests that keep its intent:
+- [ ] **Step 1: Add the flag-off helper to both files**
 
 ```python
-    def test_every_details_panel_renders_the_symbol_panels_exact_chip_list(self):
-        # Spec §7: the per-name details fold-outs are the only per-name surface
-        # left; each must render exactly what the symbol panel rendered before.
-        html = self._render_populated()          # the existing fixture builder in this test class
-        panels = re.findall(r'<details class="panel symbol-panel"[^>]*>(.*?)</details>', html, re.S)
-        self.assertGreaterEqual(len(panels), 3)
-        expected = chips(panels[0])
-        self.assertGreaterEqual(len(expected), 3)
-        for panel in panels:
-            self.assertEqual(chips(panel), expected)
+import contextlib
 
-    def test_event_line_is_the_sorted_union_of_table_chips_printed_once(self):
-        html = self._render_populated()
-        line = html[html.index('class="event-line"'):]
-        line = line[: line.index("</div>") + 6]
-        table_chips = set()
-        for panel in re.findall(r'<details class="panel symbol-panel"[^>]*>(.*?)</details>', html, re.S):
-            table_chips |= set(chips(panel))
-        self.assertEqual(chips(line), sorted(table_chips))
-        for chip in table_chips:
-            self.assertEqual(line.count(chip), 1)
+
+@contextlib.contextmanager
+def _legacy_layout():
+    """Render the pre-brief-39 page: the flag-off path is byte-identical to the
+    legacy snapshot (tests/test_attractiveness_layout.py LegacyByteIdentityTests)."""
+    with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+        yield
 ```
 
-`chips(...)` is the helper the original test already defines (`:436-440`
-region); keep it.
+- [ ] **Step 2: Enumerate the failures (paste the list into the PR body)**
+
+Run each of the three files and collect `FAIL:`/`ERROR:` lines. Expected
+members (Repo-verified anchors; the executor confirms the exact set):
+
+`tests/test_attractiveness_layout.py` — (b) `test_tracker_renders_before_the_shortlist_with_positions_kicker` (`:165`) → tiles before the agreement table; (c) `test_clean_panels_are_closed_except_owner_pinned_symbols` (`:277`), `test_panel_summary_is_one_line_with_source_asof_and_grade` (`:286`), `test_frozen_eod_panels_name_their_source_in_the_summary` (`:296`) → these still hold for the panels inside `#pick-details`; re-point their slice to that section; (c) `test_nav_links_every_present_section_and_symbol` (`:314`), `test_nav_never_links_a_section_that_is_not_on_the_page` (`:326`) → legacy wrap (nav removed, D2/§2); (a) `test_composite_board_is_one_table_with_every_label_preserved` (`:337`), `test_blocked_angle_reason_is_still_printed` (`:364`) → legacy wrap (the table lives in the drawer, text unchanged); (b) `test_scoreboard_and_pinned_strip_stay_in_the_main_flow` (`:416`) → REWRITE per D9/§2: scoreboard is in the drawer, pinned names are table rows; (b) `test_symbol_panels_precede_the_drawer` (`:424`) → `#pick-details` precedes `id="diagnostics"`; the empty-slot consolidation tests (`:88-130`) → (a) legacy wrap if they locate the hero by a removed marker, else unchanged.
+
+`tests/test_attractiveness_dashboard.py` — (a) every test slicing
+`html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]` (`:3089`,
+`:3097`, `:3130`, `:3162`, `:3272`, `:3291`, `:3304`) → legacy wrap (the
+freshness block's TEXT is unchanged; with the flag on it sits after the table
+so the slice inverts); (a)/(c) the order pins at `:2036`, `:2061`, `:2112`,
+`:2145`, `:2152`, `:2155`, `:2171`, `:2632-2633`, `:3067-3075`, `:3191-3193`,
+`:3253-3264`, `:3317` → legacy wrap unless the assertion is a §2 invariant
+(tracker-before-shortlist at `:3191-3193` becomes tiles-before-table under the
+flag: rewrite as (b)).
+
+`tests/test_event_awareness.py` — `test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list` (`:311`) and possibly `test_pure_render_all_card_surfaces_and_failure_notice` (`:215`) → Step 3.
+
+- [ ] **Step 3: Lift the event fixture, then re-pin the chip contract (D11)**
+
+First, a no-behaviour-change commit: move `card()` (`:313-337`), `symbols`,
+`data` (`:339-375`), `view` (`:376-392`) and `chips()` (`:393-394`) out of the
+test at `:311` into module-level helpers, and make the old test call them:
+
+```python
+def _populated_card(symbol):
+    ...the body of card() at :313-337, unchanged...
+
+
+def _populated_data():
+    symbols = ["NVDA", "AMD", "AVGO"]
+    return {...the dict at :339-375, using _populated_card(symbol)...}
+
+
+def _populated_view(calendar):
+    return {...the dict at :376-392 with "calendar": calendar...}
+
+
+def _chips(fragment):
+    return re.findall(r'<span class="event-chip">(.*?)</span>', fragment)
+```
+
+Run the file: 16 tests still OK. Commit
+(`test(events): lift the populated fixture to module level (no behaviour change)`).
+
+Then replace `test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list`
+with two tests that keep its intent under D11 (each registered pick's chips
+appear once on the line and match that pick's own panel; no cross-panel
+equality is asserted because panels legitimately differ by symbol/expiry):
+
+```python
+    def test_event_line_is_the_sorted_union_of_the_registered_picks_chips_printed_once(self):
+        from options_researcher import board_lanes as bl
+        data = _populated_data()
+        view = _populated_view(self.calendar)
+        picks = ad.select_top_picks(data)
+        board = bl.build_lane_board(
+            baseline_picks=picks, context_selection={"state": "DISABLED", "rows": [], "error": None},
+            composite_cards=data["composite_signals"], qm_picks=[], experiment_lanes={},
+            pinned=(), blocked=[], cap=config.PICK_TOP_N, board_as_of=data["data_as_of"])
+        line = ad._event_line_html(board, view, data["evaluation_date"])
+        expected = set()
+        for pick in picks:
+            expected |= set(_chips(ad._event_chips_html(pick["card"], pick["symbol"], data["evaluation_date"], view)))
+        self.assertEqual(_chips(line), sorted(expected))
+        for chip in expected:
+            self.assertEqual(line.count(chip), 1)
+
+    def test_each_registered_pick_line_entry_appears_in_that_picks_own_panel(self):
+        data = _populated_data()
+        view = _populated_view(self.calendar)
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            html = ad.render(data, event_view=view)   # use the same render entry the old test used (:396-410)
+        line = html[html.index('class="event-line"'):]
+        line = line[: line.index("</div>") + 6]
+        for pick in ad.select_top_picks(data):
+            panel_start = html.index(f'id="symbol-{pick["symbol"]}"')
+            panel = html[panel_start: html.index("</details>", panel_start)]
+            for chip in _chips(line):
+                self.assertIn(chip, panel)
+```
+
+Executor note: the old test renders through a specific entry point at
+`:396-410` (read it); call the same one so `event_view` reaches `render`. Keep
+`test_pure_render_all_card_surfaces_and_failure_notice` (`:215`) green by
+wrapping it in `_legacy_layout()` if it asserts hero/pinned surfaces.
 
 - [ ] **Step 4: Run the three files, then the whole suite**
 
-Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_*.py' -v 2>&1 | tail -5 && uv run python -m unittest discover -s tests -p 'test_event_awareness.py' -v 2>&1 | tail -5`
-Expected: OK.
-Run: `uv run python -m unittest discover -s tests 2>&1 | tail -3`
-Expected: `OK` (skips allowed).
+Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_*.py' 2>&1 | tail -3 && uv run python -m unittest discover -s tests -p 'test_event_awareness.py' 2>&1 | tail -3`
+Expected: OK, OK.
+Run: `uv run python -m unittest discover -s tests 2>&1 | tail -3` → `OK` (skips allowed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add tests/test_attractiveness_layout.py tests/test_attractiveness_dashboard.py tests/test_event_awareness.py
-git commit -m "test(board): re-pin layout and event-chip parity contracts to the lane-board page (spec §7)"
+git commit -m "test(board): re-pin layout, dashboard and event-chip contracts to the lane-board page (spec §7, D11)"
 ```
 
 ---
 
-### Task 7: Parity proof, acceptance targets, lint, types, PR
+### Task 8 (WP-H): Parity proof, visible-length acceptance, gates, PR
 
 **Files:**
-- Test: `tests/test_attractiveness_layout.py` (two tests), `tests/test_board_lanes.py` (none)
-- Modify: none (PR body)
+- Test: `tests/test_attractiveness_layout.py`
 
 - [ ] **Step 1: Write the parity and acceptance tests**
 
 ```python
+def _visible_html(html: str) -> str:
+    """What the reader sees with fold-outs closed (D10): drop every symbol panel
+    and the diagnostics drawer, nesting-aware."""
+    openers = ('<details class="panel symbol-panel"', '<details class="panel diagnostics-drawer"')
+    out, i = [], 0
+    while True:
+        starts = [p for p in (html.find(o, i) for o in openers) if p != -1]
+        if not starts:
+            out.append(html[i:])
+            return "".join(out)
+        s = min(starts)
+        out.append(html[i:s])
+        depth, p = 0, s
+        while True:
+            o = html.find("<details", p + 1)
+            c = html.find("</details>", p + 1)
+            if c == -1:
+                p = len(html)
+                break
+            if o != -1 and o < c:
+                depth, p = depth + 1, o
+            elif depth == 0:
+                p = c + len("</details>")
+                break
+            else:
+                depth, p = depth - 1, c
+        i = p
+
+
 class LaneBoardParityAndSizeTests(unittest.TestCase):
-    def test_baseline_selection_and_snapshot_are_identical_flag_on_and_off(self):
+    def test_selection_snapshot_and_source_row_hashes_are_identical_flag_on_and_off(self):
         data = _board(["NVDA", "AMZN", "MSFT"])
         with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
-            off = ad.select_top_picks(data)
-            off_html = ad.render(data)
+            off = ad._render_result(data)
         with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
-            on = ad.select_top_picks(data)
-            on_html = ad.render(data)
-        self.assertEqual([p["symbol"] for p in on], [p["symbol"] for p in off])
-        digest_re = r"<!-- pick-tracker-digest:.*?-->"     # adjust to the real digest comment marker (see _render_source_row_hashes)
-        self.assertEqual(re.findall(digest_re, on_html), re.findall(digest_re, off_html))
+            on = ad._render_result(data)
+        self.assertEqual(on.selection_snapshot, off.selection_snapshot)
+        self.assertEqual(on.render_source_row_hashes, off.render_source_row_hashes)
 
-    def test_acceptance_targets_on_the_layout_fixture(self):
+    def test_visible_page_meets_the_d10_targets_on_the_layout_fixture(self):
         with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
             html = ad.render(_board(["NVDA", "AMZN", "MSFT", "PLTR", "SMCI", "CRWV", "CEG", "VST"]))
-        above_drawer = html[: html.index('class="drawer"')]
-        self.assertLessEqual(html.count("<h2"), 8)
-        self.assertLessEqual(above_drawer.count("<details"), 20)
+        visible = _visible_html(html)
+        self.assertLessEqual(visible.count("<h2"), 8)
+        self.assertLessEqual(visible.count("<summary"), 20)
+        self.assertNotIn('class="panel symbol-panel"', visible)
 ```
 
-Executor note: locate the real digest-comment marker with
-`grep -n "<!--" options_researcher/attractiveness_dashboard.py` and use it;
-the assertion "the digest comment is identical with the flag on and off" is
-the contract.
+`_render_result(data)` is called with the same defaults `render()` uses
+(`:5765-5780`; read it and pass the same keyword defaults if any are required).
 
 - [ ] **Step 2: Run tests**
 
@@ -1440,36 +1789,36 @@ Expected: PASS.
 
 ```bash
 uv run python -m unittest discover -s tests        # exit 0
-uv run ruff check . && uv run pyright              # both clean
+uv run ruff check . && uv run pyright              # both clean (board_lanes.py is now in pyrightconfig include)
 ```
 
-- [ ] **Step 4: Manual proof on Friday's data (orchestrator/owner runs it; you include the commands)**
+- [ ] **Step 4: Manual proof on Friday's data (orchestrator/owner runs it; include the commands and paste the numbers into the PR body)**
 
 ```bash
 ATTRACTIVENESS_INPUT_ROOT=/Users/carsynstephenson/options-validator-ops uv run python -m options_researcher.attractiveness_dashboard
-wc -c .tmp/dashboard/attractiveness.html                          # target < 150000
-grep -c "<h2" .tmp/dashboard/attractiveness.html                  # target <= 8
+wc -c .tmp/dashboard/attractiveness.html                          # REPORTED (D10), not a target
 grep -c "<script" .tmp/dashboard/attractiveness.html              # 0
-python3 -c "import json; d=json.load(open('.tmp/dashboard/picks_snapshot.json')); print([c['symbol'] for c in d['frozen_baseline']['candidates']])"
+PYTHONPATH=tests uv run python -c "from test_attractiveness_layout import _visible_html; h=open('.tmp/dashboard/attractiveness.html').read(); v=_visible_html(h); print('visible h2', v.count('<h2'), 'visible summaries', v.count('<summary'))"   # <= 8 and <= 20
+python3 -c "import json; d=json.load(open('.tmp/dashboard/picks_snapshot.json')); print([c['symbol'] for c in d['frozen_baseline']['candidates']], d['source_rows_sha256'])"
 ```
 
-The snapshot symbol list must equal the pre-change list for the same session
-(record both in the PR body).
+The snapshot symbol list and `source_rows_sha256` must equal the pre-change
+values for the same session (record both in the PR body).
 
 - [ ] **Step 5: Commit and open the DRAFT PR**
 
 ```bash
 git add tests/test_attractiveness_layout.py
-git commit -m "test(board): parity (flag on/off) and acceptance-target tests"
+git commit -m "test(board): parity (flag on/off) and D10 visible-length acceptance tests"
 git push -u origin <branch>
 gh pr create --draft --title "Attractiveness board redesign — agreement table (brief 39)" --body-file <body.md>
 ```
 
-PR body must contain: the spec path; the list of re-pinned tests with the
-one-line intent decision for each; the H6 mark-age rule you used (Task 4
-note); the digest-comment marker used; the Friday-data numbers (bytes, h2
-count, details count, snapshot symbol list before/after); and the standard
-authority boundary paragraph (draft; no ready/merge/sync/ledger).
+PR body must contain: the spec path and D1–D12; the list of re-pinned tests
+with the (a)/(b)/(c) decision for each; the Friday-data numbers (bytes
+reported, visible h2, visible summaries, snapshot symbol list and
+`source_rows_sha256` before/after); the docstring amendment at `:3775`; and
+the standard authority paragraph (draft; no ready/merge/sync/ledger).
 
 ---
 
@@ -1481,10 +1830,11 @@ uv run ruff check . && uv run pyright              # both exit 0
 ATTRACTIVENESS_INPUT_ROOT=~/options-validator-ops uv run python -m options_researcher.attractiveness_dashboard
 ```
 
-Plus: `BOARD_LANES_ENABLED=False` byte-identity test green; parity test green;
-`tests/test_board_lanes.py` ≥ 14 tests green; the three re-pinned files green
-with no deleted tests; zero `<script`; every disclaimer verbatim; six drawer
-sections in order.
+Plus: `LegacyByteIdentityTests` green (flag off == pre-change snapshot);
+`LaneBoardParityAndSizeTests` green; `tests/test_board_lanes.py` 15 tests
+green; the three re-pinned files green with no deleted test; zero `<script`;
+every disclaimer verbatim; six drawer sections in order; the layout suite
+still runs in well under a second (no cache reads on injected fixtures).
 
 Every constraint above is labelled; anything Codex finds that contradicts a
 citation is a STOP-and-report, not a workaround. The implementation PR starts
