@@ -36,7 +36,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -133,12 +135,12 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
     "mkdir -p reports/h5": (428,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (582,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (585,),  # data tier
-    "git fetch": (595,),  # data tier
-    "git merge": (596,),  # data tier — mutates the working tree unattended
-    "git push": (597,),  # data tier
-    "restic backup": (614,),  # data tier
+    "git add": (592,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (601,),  # data tier
+    "git fetch": (613,),  # data tier
+    "git merge": (614,),  # data tier — mutates the working tree unattended
+    "git push": (615,),  # data tier
+    "restic backup": (632,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -196,6 +198,146 @@ def _code_lines(source: str) -> list[tuple[int, str]]:
         for number, line in enumerate(source.split("\n"), 1)
         if not line.strip().startswith("#")
     ]
+
+
+class EvidenceStagingTests(unittest.TestCase):
+    def setUp(self):
+        self.zsh = shutil.which("zsh")
+        if self.zsh is None:
+            self.skipTest("zsh is required")
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        self.repo = root / "repo"
+        self.repo.mkdir()
+        home = root / "home"
+        home.mkdir()
+        self.env = {
+            **os.environ,
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "HOME": str(home),
+        }
+        self.log = root / "staging.log"
+        self._git("init", "-q")
+        self._git("config", "user.name", "Ritual staging test")
+        self._git("config", "user.email", "ritual-test@example.invalid")
+        self._git("config", "core.hooksPath", "")
+        for directory in (
+            "reports/ritual",
+            "reports/intraday_capture",
+            "reports/live_probe",
+            "reports/cache_runs",
+            "reports/h5",
+            "reports/h10",
+            "reports/schwab_chains",
+            "reports/pick_tracker",
+            "reports/closes_receipts",
+        ):
+            path = self.repo / directory
+            path.mkdir(parents=True)
+            (path / "baseline.txt").write_text("baseline\n", encoding="utf-8")
+        self.facts = self.repo / "ledger" / "facts.log"
+        self.facts.parent.mkdir()
+        self.facts.write_text("baseline\n", encoding="utf-8")
+        self._git("add", "--", ".")
+        self._git("commit", "-q", "-m", "baseline")
+        self.facts.write_text("baseline\nnew fact\n", encoding="utf-8")
+        (self.repo / "reports/h10/new.txt").write_text("new receipt\n", encoding="utf-8")
+
+    def _git(self, *args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def _stage(self, full_authority_rc: int = 1) -> tuple[str, set[str]]:
+        source = _source()
+        start, end = _region(source, "evidence staging")
+        script = "\n".join(
+            [
+                f"TEST_LOG={shlex.quote(str(self.log))}",
+                'note() { print -r -- "$1" >> "$TEST_LOG"; }',
+                'crit() { CRITICAL=1; CRIT_COUNT=$((CRIT_COUNT + 1)); note "CRITICAL: $1"; }',
+                "RUN_DATE=2026-09-06",
+                f"FULL_AUTHORITY_RC={full_authority_rc}",
+                'SUMMARY=""',
+                "CRITICAL=0",
+                "CRIT_COUNT=0",
+                f"LOGDIR={shlex.quote(str(self.log.parent))}",
+                f"REPO={shlex.quote(str(self.repo))}",
+                source[start:end],
+            ]
+        )
+        result = subprocess.run(
+            [self.zsh, "-c", script],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        log = self.log.read_text(encoding="utf-8")
+        self.assertIn("evidence: committed", log)
+        self.assertNotIn("evidence: COMMIT FAILED", log)
+        return log, set(self._git("show", "--name-only", "--format=", "HEAD").splitlines())
+
+    def test_absent_optional_path_does_not_disable_other_evidence(self):
+        log, committed = self._stage()
+        self.assertEqual(committed, {"ledger/facts.log", "reports/h10/new.txt"})
+        self.assertIn(
+            "evidence: allow-list path absent, not staged: reports/schwab_chains_intraday",
+            log,
+        )
+        self.assertNotIn("CRITICAL:", log)
+        self.assertNotIn("evidence: nothing new to persist", log)
+
+    def test_deleted_tracked_path_is_critical_and_other_evidence_survives(self):
+        self.facts.unlink()
+        log, committed = self._stage()
+        self.assertIn(
+            "CRITICAL: evidence: REQUIRED allow-list path absent: ledger/facts.log",
+            log,
+        )
+        self.assertEqual(committed, {"reports/h10/new.txt"})
+        self.assertEqual(self._git("show", "HEAD:ledger/facts.log"), "baseline\n")
+
+    @unittest.skipIf(os.geteuid() == 0, "chmod-based denial is bypassed for root")
+    def test_unreadable_directory_warning_is_critical_even_with_zero_git_exit(self):
+        h10 = self.repo / "reports/h10"
+        original_mode = h10.stat().st_mode
+        self.addCleanup(h10.chmod, original_mode)
+        h10.chmod(0)
+        probe = subprocess.run(
+            ["git", "add", "--", "reports/h10"],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(probe.returncode, 0, probe.stderr)
+        self.assertIn("Permission denied", probe.stderr)
+        log, committed = self._stage()
+        self.assertIn(
+            "CRITICAL: evidence: STAGING FAILED for reports/h10 — "
+            "warning: could not open directory 'reports/h10/': Permission denied",
+            log,
+        )
+        self.assertEqual(committed, {"ledger/facts.log"})
+
+    def test_full_authority_reports_deleted_duplicate_path_once(self):
+        self.facts.unlink()
+        log, committed = self._stage(full_authority_rc=0)
+        self.assertEqual(log.count("REQUIRED allow-list path absent: ledger/facts.log"), 1)
+        self.assertEqual(committed, {"reports/h10/new.txt"})
 
 
 class DailyRitualProvenanceTests(unittest.TestCase):
