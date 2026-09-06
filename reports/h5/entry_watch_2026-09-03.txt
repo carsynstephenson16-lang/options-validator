@@ -1,0 +1,3 @@
+H5 SCHWAB OBSERVER evaluation_session=2026-09-03 max_asof_session=2026-09-03 observational / non-verdict-bearing
+VST: OBSERVED observational / non-verdict-bearing; close $144.22 (as of 2026-09-03); capture_available=True; verified Schwab capture session 2026-09-03; ATM Schwab IV 0.41067; 10/126 finite Schwab observations; max_asof_session=2026-09-03
+AMZN: OBSERVED observational / non-verdict-bearing; close $258.90 (as of 2026-09-03); capture_available=True; verified Schwab capture session 2026-09-03; ATM Schwab IV 0.29171; 10/126 finite Schwab observations; max_asof_session=2026-09-03
