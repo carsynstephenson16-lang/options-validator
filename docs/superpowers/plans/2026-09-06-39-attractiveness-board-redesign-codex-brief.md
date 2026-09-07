@@ -1,9 +1,9 @@
 # Codex brief 39 — Attractiveness board redesign (agreement table) — implementation plan
 
-**Date:** 2026-09-06 (rev 6, 2026-09-07 00:10 ET; rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`, 0 blockers, page rebuilt from the brief's code; rev 5 bounded verification PASS WITH FIXES — `…-round5.md`, 2 inherited majors + 3 minors, all applied here; owner decisions D10–D12 recorded in the spec; **D13 and interpretation I1 PENDING owner ruling — do not dispatch before they are recorded**)
+**Date:** 2026-09-06 (rev 6, 2026-09-07 00:10 ET; rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`, 0 blockers, page rebuilt from the brief's code; rev 5 bounded verification PASS WITH FIXES — `…-round5.md`, 2 inherited majors + 3 minors, all applied here; owner decisions D10–D12 recorded in the spec; **D13 = A and I1 = accept RULED by the owner 2026-09-07 14:54 ET and recorded in the spec's pending-rulings section — dispatchable**)
 **Author:** Claude (orchestrating session; brainstorming + spec with the owner 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37/38; owner may substitute at dispatch)
-**Status:** READY FOR HAND-OFF — conditional on the owner recording D13 (option A assumed throughout) and not vetoing I1 in the spec's pending-rulings section; five review rounds, last two with zero blockers
+**Status:** READY FOR HAND-OFF — owner ruled D13 = A and I1 = accept (2026-09-07 14:54 ET; recorded in the spec); five review rounds, the last two with zero blockers
 **Provenance:** file:line constraints are Repo-verified against origin/main
 @f83428d unless a sentence carries its own label. Counts marked "measured"
 were taken from the 2026-09-04 ops build by the round-1 reviewer. Sentences
@@ -138,9 +138,10 @@ satisfy it. The owner types one letter:
   module tests, the whole gather step, the caution group) and the brief returns
   to review.
 
-Until the owner records D13 in the spec's pending-rulings section, Codex must
-not be dispatched. I1 (pinned panels not force-open under the flag) is an
-interpretation the owner may veto in the same reply; the default is to proceed.
+**Ruled 2026-09-07 14:54 ET (owner, in chat): D13 = A; I1 = accept.** Both
+are recorded in the spec's pending-rulings section with provenance. Task 4 is
+written for A and the I1-accept branch applies throughout; the veto-branch
+text in Global Constraints is retained only as a record of what was weighed.
 
 ## Global Constraints
 
@@ -2365,8 +2366,8 @@ uv run ruff check . && uv run pyright              # both exit 0
 ATTRACTIVENESS_INPUT_ROOT=~/options-validator-ops uv run python -m options_researcher.attractiveness_dashboard
 ```
 
-Plus: owner ruling D13 recorded in the spec BEFORE dispatch (and I1 not
-vetoed); `LegacyByteIdentityTests` green (flag off == pre-change snapshot);
+Plus: owner ruling D13 = A and I1 = accept recorded in the spec (2026-09-07);
+`LegacyByteIdentityTests` green (flag off == pre-change snapshot);
 `LaneBoardParityAndSizeTests` green; `tests/test_board_lanes.py` 16 tests
 green; the three re-pinned files green with no deleted test; zero `<script`;
 every disclaimer verbatim; six drawer sections in order; the layout suite
