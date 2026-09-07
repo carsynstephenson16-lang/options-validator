@@ -328,7 +328,13 @@ Findings 1–4 applied verbatim to `tests/test_daily_ritual_provenance.py`; `too
 
 - Finding 1 (GIT_DIR): red reproduced before the fix — foreign repo 1 → 9 commits, `core.hooksPath` blanked, 4 tests OK. After the fix — foreign repo 1 → 1 commits, hooksPath intact, 5 tests OK.
 - Finding 2 (newline collapse) mutation re-check after the fix: deleting the collapse line → `FAILED (failures=1)`.
-- Finding 3 (rc half) mutation re-check after the fix: dropping `[ "$rc" -ne 0 ] ||` → `OK`.
+- Finding 3 (rc half) mutation re-check after the fix: dropping `[ "$rc" -ne 0 ] ||` → `OK`, i.e. the
+  mutation is NOT caught, and the new ignored-path test does not change that. Reason (Test-verified):
+  every reachable non-zero `git add` also writes to stderr (ignored path: rc 1 + a 4-line message;
+  index lock: rc 128 + `fatal:`), so the stderr half always fires first and the rc half cannot be
+  isolated by any real git behaviour without a fake `git` on PATH. The rc half stays as defence in
+  depth; its absence of a pin is accepted and recorded here (MINOR, unchanged). What the new test
+  DOES pin is the ignored-allow-list-path failure mode as a whole (crit + other evidence still committed).
 - Finding 4 (order pin): `assertLess(note, committed)` in the optional-path test.
 - `EvidenceStagingTests`: 5 tests OK; whole provenance file: 48 tests OK; ruff clean. The full offline suite at 204775d was independently re-run by the orchestrator: 3,807 tests, 5 skipped, exit 0 (the fix round changes tests only).
 - Finding 5 (weak red check) and 6 (informational): recorded, no code change.
