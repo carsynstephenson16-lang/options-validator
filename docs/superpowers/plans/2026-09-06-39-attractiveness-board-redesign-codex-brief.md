@@ -1,9 +1,9 @@
 # Codex brief 39 — Attractiveness board redesign (agreement table) — implementation plan
 
-**Date:** 2026-09-06 (rev 4; rev 1 FAIL — `…-round1.md`; rev 2 FAIL — `…-round2.md`; rev 3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round3.md`: 3 blockers, 4 majors, 6 medium, 5 minor, the page BUILT from the brief's code; all applied here; owner decisions D10–D12 recorded in the spec; **D13 and interpretation I1 PENDING owner ruling — do not dispatch before they are recorded**)
+**Date:** 2026-09-06 (rev 5; rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`: 0 blockers, 4 majors, 2 medium, 7 minor, all applied here (page rebuilt from the brief's code, all three round-3 blockers proven closed); owner decisions D10–D12 recorded in the spec; **D13 and interpretation I1 PENDING owner ruling — do not dispatch before they are recorded**)
 **Author:** Claude (orchestrating session; brainstorming + spec with the owner 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37/38; owner may substitute at dispatch)
-**Status:** DRAFT — pending owner ruling D13 (+ I1 veto window) AND independent adversarial review (round 4) before hand-off
+**Status:** DRAFT — round-4 fixes applied; pending (1) a bounded round-5 verification of those fixes and (2) owner ruling D13 (+ I1 veto window) before hand-off
 **Provenance:** file:line constraints are Repo-verified against origin/main
 @f83428d unless a sentence carries its own label. Counts marked "measured"
 were taken from the 2026-09-04 ops build by the round-1 reviewer. Sentences
@@ -133,7 +133,10 @@ satisfy it. The owner types one letter:
   out of this brief's scope today), and every non-ritual build shows all four
   columns UNAVAILABLE because the artifact is absent. If B, Task 4 is rewritten
   and the brief returns to review.
-- **C:** drop the four experiment columns (reverses D5).
+- **C:** drop the four experiment columns (reverses D5). If C, Tasks 1, 3, 4
+  and 6 are rewritten (both tuples, the `_EXPERIMENTS` map and four of the 16
+  module tests, the whole gather step, the caution group) and the brief returns
+  to review.
 
 Until the owner records D13 in the spec's pending-rulings section, Codex must
 not be dispatched. I1 (pinned panels not force-open under the flag) is an
@@ -175,7 +178,16 @@ interpretation the owner may veto in the same reply; the default is to proceed.
   "always shown" ruling as table rows; their detail panels open only for
   fail-visible statuses, not because they are pinned. Implemented by passing
   `pinned_symbols=set()` to `_pick_details_html` in the flag branch; the
-  extraction and the flag-off page are untouched.
+  extraction and the flag-off page are untouched. I1 REVERSES a recorded
+  behaviour: the code comment at `attractiveness_dashboard.py:5598-5600`
+  ("… the owner-pinned names stay open by standing directive") and the test
+  `tests/test_attractiveness_dashboard.py:874/:894` that enforces it — both
+  are quoted in the spec's pending-ruling entry so the owner rules on the
+  evidence. **If the owner vetoes I1:** pass `pinned_symbols` through instead
+  of `set()`, leave `:874` at its current text, and change the two zero-open
+  assertions (Task 7's `:277` rewrite and Task 8's acceptance) to **2** —
+  measured on the fresh 8-symbol fixture (2 open panels, visible 4 `<h2>` /
+  6 `<summary>`, still inside the D10 targets).
 - Names that are on no lane, not pinned and not blocked are not named on the
   flag-on page (spec §2.5/D4 — the open-slot notice explains the shortlist
   gap); STALE names in that position are still NAMED in the status strip;
@@ -303,7 +315,7 @@ import unittest
 from pathlib import Path
 
 import config
-from options_researcher import board_lanes as bl   # Task 3 creates it; Task 1 tests skip it
+from options_researcher import board_lanes as bl  # Task 3 creates it; Task 1 tests skip it
 
 
 class BoardConstantsTests(unittest.TestCase):
@@ -936,7 +948,9 @@ Run: `uv run python -m unittest discover -s tests -p 'test_board_lanes.py' -v`
 Expected: PASS (16 tests). The TESTS are the contract (spec §3); if the
 implementation disagrees, fix the code.
 Run: `uv run ruff check options_researcher/board_lanes.py tests/test_board_lanes.py`
-Expected: `All checks passed!`
+Expected: `All checks passed!` (if ruff reports `I001` on a line this brief
+supplies, the brief is wrong — apply `ruff check --diff`'s suggestion and note
+it in the PR body; do not reorder names).
 Add `"options_researcher/board_lanes.py"` to `pyrightconfig.json` `include`
 (after `"options_researcher/attractiveness_dashboard.py"`), then
 `uv run pyright` → `0 errors`.
@@ -1127,6 +1141,15 @@ def _board(symbols, *, eligible=True, today="2026-08-25", **assemble_kwargs):
 (`setdefault` avoids the `TypeError: got multiple values` a hard-coded kwarg
 would cause when a test passes `experiment_lanes=`.)
 
+One EXISTING test takes the real gather path and therefore now runs the four
+builders inside the offline suite:
+`tests/test_attractiveness_dashboard.py:2859`
+`test_main_loads_board_and_context_from_same_external_root` patches
+`ad._gather_all`, so `assemble()` sees `real_assembly=True` and
+`_default_experiment_lanes` fires (round 4 measured: one call, ~2 ms on that
+fixture's root, four lanes returned, test passes). Name it in the PR body so a
+future cache-dependent slowdown there is not a mystery.
+
 - [ ] **Step 4: Run tests**
 
 Run: `uv run python -m unittest discover -s tests -p 'test_attractiveness_*.py' -v 2>&1 | tail -5`
@@ -1309,7 +1332,7 @@ class LaneBoardRenderTests(unittest.TestCase):
         self.assertIn("open_positions not assembled", html)
 
     def test_status_strip_is_fail_visible_for_closes_and_ignores_chains_absent(self):
-        from options_researcher.schwab_chain_view import CHAIN_SOURCE, CHAINS_ABSENT   # ruff isort order (round 3)
+        from options_researcher.schwab_chain_view import CHAIN_SOURCE, CHAINS_ABSENT  # ruff isort order (round 3)
         data = {"data_as_of": "2026-09-03", "as_of_kind": CHAIN_SOURCE, "evaluation_date": "2026-09-04",
                 "fresh_symbols": ["AMZN"], "stale_symbols": ["ET"],
                 "underlying_closes_freshness": {"state": "unavailable", "detail": "missing store files: X"},
@@ -1459,9 +1482,10 @@ _AGREE_BAR_PX = 14   # display-only: bar width per agreeing lane (LLM-proposed 2
 
 def _agreement_table_html(board: LaneBoard) -> str:
     """Spec §3. Row order and the 'Agree' count come from the pure module;
-    this function only prints. The eyebrow phrase and the <h2> text are
-    byte-identical to today's shortlist heading (:4212-4213) because 20+ test
-    assertions locate the shortlist by them. It also carries, verbatim, the
+    this function only prints. The <h2> text is byte-identical to today's
+    shortlist heading (:4213); the eyebrow keeps today's phrase (:4212) and
+    appends " · agreement across lanes". 20+ test assertions locate the
+    shortlist by them. It also carries, verbatim, the
     three authority sentences whose sections leave the flag-on page (hero
     :4215 in header-sub; pinned strip :4707-4708 and context lane :4442-4447
     via _table_footnotes_html) — see the brief's Global Constraints."""
@@ -1957,13 +1981,21 @@ or golden hash is never an acceptable repair — legacy-wrap the test instead;
 silently vacuous test, so every `html[html.index(A):html.index(B)]` slice in a
 re-pinned test must be checked for anchor order, not just for passing;
 **(3)** legacy-wrap ONLY a test the executor has OBSERVED to fail under the
-flag — a passing test stays flag-on (round 3 measured `:286`, `:296`, `:337`,
-`:364`, `:424` and dashboard `:2034` passing; do not touch them); **(4)** a
+flag — a passing test stays flag-on (rounds 3–4 measured `:286`, `:296`,
+`:337`, `:364`, `:424` and dashboard `:2034` passing; do not touch them; where
+rule (3) and an entry below disagree, rule (3) wins and the entry is stale);
+**(4)** a
 fourth disposition **(d) re-point** exists for tests that assert panel CONTENT
 for a symbol that is no longer a table row: wrap the render in
 `mock.patch.object(config, "PICK_PINNED_SYMBOLS", [<that symbol>])` so the
 symbol is a row and its panel renders (closed under I1, but present in the
-HTML), and keep every assertion flag-ON. Root cause, stated once: under the
+HTML), and keep every assertion flag-ON. Two caveats: pinning also feeds
+`pinned_picks(data)` → `protected_card_ids` (`:5540-5543`), which sets
+`protected_indexes` inside `_group_html` — measured harmless for all 18
+enumerated (d) tests, but a test asserting card ORDER inside a group must be
+re-checked; and (d) presumes the symbol HAS a section — a pinned symbol
+without one gets a row and no panel, so a panel-content assertion still
+fails (use a fixture with a section). Root cause, stated once: under the
 flag a section whose symbol is on no lane, not pinned and not blocked renders
 no panel (spec §2.5/D4). Fail-visible contracts (`FailClosedFeatureTests`,
 `SchwabFreshnessPageDateTests`) MUST stay flag-on via (d) — never (a)/(c).
@@ -1981,9 +2013,10 @@ empty: four fail and `:200` (`assertNotIn`) passes vacuously — wrap all five.
 (b) `SymbolPanelCollapseTests.test_clean_panels_are_closed_except_owner_pinned_symbols`
 (`:277`) — the only one of the class's four tests that fails (round 3
 measured; `:286`, `:296` and `:304` pass and stay untouched). Two things
-change under the flag: panels render in BOARD-ROW order, not `data["symbols"]`
-order (`[VST, NVDA, MSFT]` vs picks `[MSFT, NVDA, VST]`, so the slice at
-`:283` inverts to empty), and under I1 the pinned VST panel is CLOSED on a
+change under the flag: panels render in BOARD-ROW order (measured
+`MSFT, NVDA, VST` on this fixture), not `data["symbols"]` order
+(`VST, NVDA, MSFT`), so the slice at `:283` inverts to empty; and under I1 the
+pinned VST panel is CLOSED on a
 fresh board (zero `open` panels). Rewrite: `assertEqual(len(panels), 3)`,
 `assertEqual(sum(1 for p in panels if p), 0)` with a comment citing I1, and
 locate a panel with the helper below; add a legacy-wrapped twin keeping the
@@ -2000,23 +2033,34 @@ def _panel_slice(html: str, symbol: str) -> str:
 (c) `test_nav_links_every_present_section_and_symbol` (`:314`),
 `test_nav_never_links_a_section_that_is_not_on_the_page` (`:326`) → legacy wrap
 (the sticky nav is removed under the flag, D2/§2).
-(a) `test_composite_board_is_one_table_with_every_label_preserved` (`:337`),
-`test_blocked_angle_reason_is_still_printed` (`:364`) → legacy wrap (the table
-lives in the drawer, text unchanged).
 (b) `test_scoreboard_and_pinned_strip_stay_in_the_main_flow` (`:416`) →
 REWRITE per D9/§2: the scoreboard is inside `id="diagnostics"`, and the pinned
 names appear as `<td class="sym">VST` / `AMZN` rows above it.
-(b) `test_symbol_panels_precede_the_drawer` (`:424`) → `id="pick-details"`
-precedes `id="diagnostics"`.
+`test_symbol_panels_precede_the_drawer` (`:424`) PASSES flag-on unchanged —
+leave it (rule 3); tightening it to `id="pick-details"` before
+`id="diagnostics"` is not required and must not be done as a "fix".
 `test_disclaimers_are_present_verbatim` (`:456`) → must pass UNCHANGED
 (Global Constraints); if it fails, the agreement table is missing a sentence —
 fix the renderer, never the test.
-The empty-slot consolidation tests (`:88-130`) → (a) legacy wrap only if one
-locates the hero by a removed marker; otherwise unchanged (the notice text is
-unchanged and now sits above the table).
+(c) `EmptySlotConsolidationTests` — round 4 measured four of the five as
+`ERROR` under the flag: `:88`, `:102`, `:111`, `:130` → legacy wrap (they
+locate the hero grid, a removed surface); `:122`
+(`test_blocked_qm_slots_collapse_into_one_block`) PASSES — leave it. Add one
+flag-on twin asserting the consolidated notice text (`"of 5 slots open"`)
+appears exactly once above `id="agreement-table"`.
 
-`tests/test_attractiveness_dashboard.py` — round 3 measured **44** broken
-tests under the flag (37 failures + 7 errors of 203). All are listed here.
+`tests/test_attractiveness_dashboard.py` — **45** broken tests in rev 4's own
+flag-on build (round 3 measured 44 before I1; the 45th is caused by I1). All
+are listed here.
+(b) `SymbolPanelStatusTests.test_render_uses_details_and_fail_visible_open_attribute`
+(`:874`) — I1 consequence, NOT a (d) case: disposition (d) is measured NOT to
+work here because pinning is the cause, not the cure — this is the one
+fail-visible contract where the contract under test IS the pinned open-state.
+The assertions inside the `PICK_PINNED_SYMBOLS=[]` patch (`:889-892`) pass
+unchanged and stay flag-on. Replace `:893-894` with the flag-on contract
+`self.assertNotIn('<details class="panel symbol-panel" open>', ad.render(data))`
+plus a `_legacy_layout()`-wrapped twin keeping today's assertion, each with a
+one-line comment citing I1.
 (c) `test_flag_off_matches_post_brief26_golden_bytes` (`:2239`) asserts a
 hard-coded SHA-256 (`:2263-2266`) on a default-flag render → add
 `mock.patch.object(config, "BOARD_LANES_ENABLED", False)` beside the existing
@@ -2050,12 +2094,18 @@ assertions in `:2358` are computed outside the flag — keep them, wrap only the
 HTML lookups) and `:2687` (twin: the agreement table header shows
 `FAILED:RuntimeError` for the context column — `_col`-style substring on the
 `<th>` — and the loud-failure text is in `board.notes`).
-(a) `LoadContextTests` `:1591` → its `DATA FRESHNESS`-relative slice inverts;
-re-anchor on `id="diagnostics"` (content unchanged) rather than wrapping.
+(b) `LoadContextTests.test_rendered_context_freshness_has_all_evidence_derived_states`
+(`:1591`) — its `chip()` helper (`:1600-1603`) anchors on the FIRST
+`html.index("Research context")`; flag-on that is the drawer heading
+"Research context and coverage", which now precedes the relocated freshness
+chip (measured offsets 26,209 vs 30,053). Re-anchoring on `id="diagnostics"`
+does NOT fix it (measured). Change `start = html.index("Research context")`
+to `start = html.rindex("Research context")` and keep every assertion
+flag-on; the chip text is unchanged.
 
 `tests/test_attractiveness_v3.py` —
 (c) `test_partial_shortlist_keeps_configured_visible_slots_in_each_list`
-(`:279-288`) counts `<div class="hero-card '` == 3 and asserts
+(`:278-288`) counts `<div class="hero-card '` == 3 and asserts
 `Picks 2–{PICK_TOP_N}` → legacy wrap (under the flag only the open-slot notice
 emits `hero-card` markup). `:262-267` and `:269-276` keep "TOP 5 PICKS TODAY"
 / "This is an intentional open slot" because the eyebrow phrase and the notice
@@ -2226,9 +2276,15 @@ class LaneBoardParityAndSizeTests(unittest.TestCase):
         self.assertEqual(html.count('<details class="panel symbol-panel" open>'), 0)   # I1 + fresh
         self.assertGreaterEqual(html.count('<details class="panel symbol-panel">'), 5)  # the table names' panels exist
         visible = _visible_html(html)
-        self.assertLessEqual(visible.count("<h2"), 8)
+        # Measured (round 4): new page 2 <h2> / 0 <summary>; the PRE-redesign page on the
+        # same fixture scores 8 / 23 — so "<= 8" would not discriminate. D10's ceiling is 8;
+        # the redesign's own bar is 4, and the legacy page must FAIL the summary leg.
+        self.assertLessEqual(visible.count("<h2"), 4)
         self.assertLessEqual(visible.count("<summary"), 20)
         self.assertNotIn('class="panel symbol-panel"', visible)
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+            legacy = ad.render(_fresh_board(symbols), **LaneBoardLayoutTests._DRAWER_INPUTS)
+        self.assertGreater(_visible_html(legacy).count("<summary"), 20)   # the measure rejects today's page
 
     def test_force_open_panels_count_as_visible(self):
         # A STALE table name keeps its fail-visible open panel, and the measure counts it.
@@ -2304,8 +2360,10 @@ every disclaimer verbatim; six drawer sections in order; the layout suite
 still runs in well under a second (no cache reads on injected fixtures).
 
 **Byte figure:** this brief quotes the round-1 reviewer's measurement of the
-2026-09-04 build, 782,263 bytes; spec §1 says "771 KB" for the same build
-(different unit convention). The measured figure is the one to compare against.
+2026-09-04 build, 782,263 bytes. Spec §1 says "771 KB" and spec §8 says
+"782 KB" for the same build — the spec contradicts itself; the measured
+782,263 bytes is the figure to compare against, and spec §1 should be
+corrected in a later editorial pass (not by this brief).
 
 **Operational consequence to state in the PR body (owner-only to act on):**
 landing changes `diagnostic_source_hash()` — `research/hashing.py:132` walks
