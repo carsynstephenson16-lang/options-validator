@@ -85,6 +85,30 @@ def _composite_card(symbol, *, grade="A", trend="UP", vol="RICH",
     }
 
 
+
+def _fresh_board(symbols, chain_source=CHAIN_SOURCE,
+                 close_kind="preclose_mid_1545", **section_kwargs):
+    data = ad.assemble(
+        symbol_sections=[
+            _put_section(symbol, chain_source=chain_source,
+                         close_kind=close_kind,
+                         technicals_as_of="2026-08-25", **section_kwargs)
+            for symbol in symbols
+        ],
+        rv21_by_symbol={},
+        today="2026-08-25",
+        composite_signals=[],
+    )
+    for section in data["symbols"]:
+        section["groups"][0]["cards"][0]["top3_snapshot"].update({
+            "rank_eligible": True,
+            "selection_status": "ELIGIBLE",
+            "policy": {"status": "ELIGIBLE", "reason_codes": []},
+        })
+    return data
+
+
+
 class EmptySlotConsolidationTests(unittest.TestCase):
     """Five byte-identical 'OPEN' cards are one fact printed five times."""
 
@@ -256,26 +280,8 @@ class SymbolPanelCollapseTests(unittest.TestCase):
 
     def _data(self, chain_source=CHAIN_SOURCE,
               close_kind="preclose_mid_1545", **section_kwargs):
-        # A uniformly fresh board so no panel is force-opened by the
-        # fail-visible STALE rule; collapse is then the only thing under test.
-        data = ad.assemble(
-            symbol_sections=[
-                _put_section(symbol, chain_source=chain_source,
-                             close_kind=close_kind,
-                             technicals_as_of="2026-08-25", **section_kwargs)
-                for symbol in ("VST", "NVDA", "MSFT")
-            ],
-            rv21_by_symbol={},
-            today="2026-08-25",
-            composite_signals=[],
-        )
-        for section in data["symbols"]:
-            section["groups"][0]["cards"][0]["top3_snapshot"].update({
-                "rank_eligible": True,
-                "selection_status": "ELIGIBLE",
-                "policy": {"status": "ELIGIBLE", "reason_codes": []},
-            })
-        return data
+        return _fresh_board(("VST", "NVDA", "MSFT"), chain_source=chain_source,
+                            close_kind=close_kind, **section_kwargs)
 
     def test_clean_panels_are_closed_except_owner_pinned_symbols(self):
         html = ad.render(self._data())

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import subprocess
@@ -35,6 +36,99 @@ def _event(**changes: object) -> dict[str, object]:
     }
     event.update(changes)
     return event
+
+
+@contextlib.contextmanager
+def _legacy_layout():
+    """Render the pre-brief-39 page: the flag-off path is byte-identical to the
+    legacy snapshot (tests/test_attractiveness_layout.py LegacyByteIdentityTests)."""
+    with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+        yield
+
+def _populated_card(symbol):
+    return {
+        "headline": f"{symbol} call",
+        "expiry": "2026-09-06",
+        "strike": 100.0,
+        "dte": 11,
+        "cost": 100.0,
+        "breakeven": 101.0,
+        "breakeven_move": 0.01,
+        "grades": {
+            "fits_bucket": "GREEN",
+            "fits_cap": "GREEN",
+            "iv_for_buyer": "GREEN",
+            "liquidity": "GREEN",
+        },
+        "scenarios": [],
+        "bbb": [],
+        "verdict": "x",
+        "risk": {},
+        "top3_snapshot": {
+            "candidate_id": f"{symbol}:long_call:100",
+            "rank_eligible": True,
+            "selection_status": "ELIGIBLE",
+            "policy": {"status": "ELIGIBLE", "reason_codes": []},
+        },
+    }
+
+
+def _populated_data():
+    symbols = ["NVDA", "AMD", "AVGO"]
+    return {
+        "evaluation_date": "2026-08-26",
+        "data_as_of": "2026-08-26",
+        "blocked": [],
+        "stale_symbols": [],
+        "symbols": [
+            {
+                "symbol": symbol,
+                "as_of": "2026-08-26",
+                "close": 100.0,
+                "groups": [{"kind": "long_call", "title": "Calls", "cards": [_populated_card(symbol)]}],
+            }
+            for symbol in symbols
+        ],
+        "composite_signals": [
+            {
+                "symbol": symbol,
+                "grade": "A",
+                "aligned_count": 1,
+                "max_asof": "2026-08-26",
+                "trend": {"state": "UP", "data_blocked": False},
+                "vol_premium": {"data_blocked": True},
+                "regime": {"data_blocked": True},
+                "internals": {"data_blocked": True},
+            }
+            for symbol in symbols
+        ],
+    }
+
+
+def _populated_view(calendar):
+    return {
+        "calendar": calendar,
+        "complex_map": {},
+        "implied_moves": {
+            "NVDA": {
+                "text": "7.92%",
+                "method": "atm_straddle_mid/v1",
+                "chain_session": "2026-08-26",
+                "capture_convention": "15:45 ET preclose",
+                "expiry": "2026-09-05",
+                "strike": "100.0",
+                "spot_source": "stock_snapshot",
+                "intraday_receipt_session": "2026-08-26",
+                "spot_timestamp": "2026-08-26T15:45:00-04:00",
+            }
+        },
+        "failures": {},
+    }
+
+
+def _chips(fragment):
+    return re.findall(r'<span class="event-chip">(.*?)</span>', fragment)
+
 
 
 class EventCalendarTests(unittest.TestCase):
@@ -308,90 +402,19 @@ class EventChipTests(unittest.TestCase):
             self.assertIsNone(ad.build_event_view(data, "2026-08-26"))
         self.assertEqual(ad.render(data), ad.render(data, event_view=None))
 
+    # (c) D11 replaces the former hero/context/pinned surface contract.
+    @_legacy_layout()
     def test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list(self):
         # Catches a consumer drifting from the single event-chip join contract.
-        def card(symbol):
-            return {
-                "headline": f"{symbol} call",
-                "expiry": "2026-09-06",
-                "strike": 100.0,
-                "dte": 11,
-                "cost": 100.0,
-                "breakeven": 101.0,
-                "breakeven_move": 0.01,
-                "grades": {
-                    "fits_bucket": "GREEN",
-                    "fits_cap": "GREEN",
-                    "iv_for_buyer": "GREEN",
-                    "liquidity": "GREEN",
-                },
-                "scenarios": [],
-                "bbb": [],
-                "verdict": "x",
-                "risk": {},
-                "top3_snapshot": {
-                    "candidate_id": f"{symbol}:long_call:100",
-                    "rank_eligible": True,
-                    "selection_status": "ELIGIBLE",
-                    "policy": {"status": "ELIGIBLE", "reason_codes": []},
-                },
-            }
 
-        symbols = ["NVDA", "AMD", "AVGO"]
-        data = {
-            "evaluation_date": "2026-08-26",
-            "data_as_of": "2026-08-26",
-            "blocked": [],
-            "stale_symbols": [],
-            "symbols": [
-                {
-                    "symbol": symbol,
-                    "as_of": "2026-08-26",
-                    "close": 100.0,
-                    "groups": [{"kind": "long_call", "title": "Calls", "cards": [card(symbol)]}],
-                }
-                for symbol in symbols
-            ],
-            "composite_signals": [
-                {
-                    "symbol": symbol,
-                    "grade": "A",
-                    "aligned_count": 1,
-                    "max_asof": "2026-08-26",
-                    "trend": {"state": "UP", "data_blocked": False},
-                    "vol_premium": {"data_blocked": True},
-                    "regime": {"data_blocked": True},
-                    "internals": {"data_blocked": True},
-                }
-                for symbol in symbols
-            ],
-        }
+        data = _populated_data()
         grades_before = [
             dict(section["groups"][0]["cards"][0]["grades"]) for section in data["symbols"]
         ]
         picks_before = json.dumps(ad.select_top_picks(data), sort_keys=True, separators=(",", ":"))
         sections_before = ad.sections_json(data["symbols"])
-        view = {
-            "calendar": self.calendar,
-            "complex_map": {},
-            "implied_moves": {
-                "NVDA": {
-                    "text": "7.92%",
-                    "method": "atm_straddle_mid/v1",
-                    "chain_session": "2026-08-26",
-                    "capture_convention": "15:45 ET preclose",
-                    "expiry": "2026-09-05",
-                    "strike": "100.0",
-                    "spot_source": "stock_snapshot",
-                    "intraday_receipt_session": "2026-08-26",
-                    "spot_timestamp": "2026-08-26T15:45:00-04:00",
-                }
-            },
-            "failures": {},
-        }
+        view = _populated_view(self.calendar)
 
-        def chips(fragment):
-            return re.findall(r'<span class="event-chip">(.*?)</span>', fragment)
 
         def card_fragment(page, symbol, surface):
             marker = {
@@ -443,11 +466,11 @@ class EventChipTests(unittest.TestCase):
         # Bind the named hero explicitly rather than inferring identity from position.
         self.assertIn("NVDA:long_call:100", nvda_hero)
         for hero_card in hero_cards:
-            self.assertGreaterEqual(len(chips(hero_card)), 3)
-        expected = chips(lane)
-        self.assertEqual(chips(nvda_hero), expected)
-        self.assertEqual(chips(context), expected)
-        self.assertEqual(chips(pinned), expected)
+            self.assertGreaterEqual(len(_chips(hero_card)), 3)
+        expected = _chips(lane)
+        self.assertEqual(_chips(nvda_hero), expected)
+        self.assertEqual(_chips(context), expected)
+        self.assertEqual(_chips(pinned), expected)
         context_section = html[
             html.index("CONTEXT-AWARE SHORTLIST") : html.index(
                 "Frozen-shortlist comparison diagnostics"
@@ -458,7 +481,7 @@ class EventChipTests(unittest.TestCase):
             empty_start : context_section.index("</div>", empty_start) + 6
         ]
         self.assertIn("Context pick", empty_fragment)
-        self.assertEqual(chips(empty_fragment), [])
+        self.assertEqual(_chips(empty_fragment), [])
         self.assertIsNone(disabled)
         self.assertEqual(rollback, prebrief)
         self.assertNotIn("event-chip", rollback)
