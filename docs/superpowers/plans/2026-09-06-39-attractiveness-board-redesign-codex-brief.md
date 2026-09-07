@@ -1,13 +1,16 @@
 # Codex brief 39 — Attractiveness board redesign (agreement table) — implementation plan
 
-**Date:** 2026-09-06 (rev 2; rev 1 reviewed FAIL — `reports/2026-09-06-brief-39-adversarial-review-round1.md`; all 36 findings and 7 placeholder violations applied; owner decisions D10–D12 taken and recorded in the spec)
+**Date:** 2026-09-06 (rev 3; rev 1 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round1.md`; rev 2 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round2.md`: 3 blockers, 8 majors, 6 medium, 9 minor, all applied here; owner decisions D10–D12 recorded in the spec)
 **Author:** Claude (orchestrating session; brainstorming + spec with the owner 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37/38; owner may substitute at dispatch)
-**Status:** DRAFT — pending independent adversarial review (round 2) before hand-off
+**Status:** DRAFT — pending independent adversarial review (round 3) before hand-off
 **Provenance:** file:line constraints are Repo-verified against origin/main
 @f83428d unless a sentence carries its own label. Counts marked "measured"
 were taken from the 2026-09-04 ops build by the round-1 reviewer. Sentences
 labelled **Inference** are the author's reading of the code, not a file fact.
+Round 2 executed the Task 3 module and its 15 tests verbatim from this brief
+(15/15 green; ruff and pyright clean once Task 1 lands) — Task 3 is settled;
+rev 3 changes the renderer-facing tasks, the test re-pins, and the cites.
 **Spec (owner-approved 2026-09-06, amended D10–D12 the same day — read it first):**
 `docs/superpowers/specs/2026-09-06-attractiveness-board-redesign-design.md`
 with the approved first-screen mockup
@@ -71,7 +74,7 @@ wiring, one docstring), and tests: new `tests/test_board_lanes.py`,
   hashes (`_render_source_row_hashes`, `:5364`), and the publish-path digest
   (`pick_tracker.py:52`, bound at `attractiveness_dashboard.py:5876`) are
   untouched (spec §6). All of these are computed OUTSIDE the flag branch
-  (`:5515-5528`, `:5751-5761`; reviewer-verified).
+  (`:5524-5533`, `:5751-5761`; reviewer-verified in both rounds).
 - No edit to any member of `FEASIBILITY_SOURCE_PATHS`
   (`options_researcher/h7_schwab_window_registration.py:143-194`; `config.py`,
   `attractiveness_dashboard.py` and the new module are all outside it —
@@ -81,6 +84,16 @@ wiring, one docstring), and tests: new `tests/test_board_lanes.py`,
   authority flip, no paper-book mutation, no plist/launchd change, no change
   to Mission Control (`options_researcher/dashboard.py`), no change to the
   standalone experiments page or the `EXP_*` flags.
+- Authority for computing the four experiment lanes on every real build is
+  spec §4 (quoted so no later auditor has to hunt for it): "The four
+  experiments' own flags stay disabled for the standalone experiments page;
+  the board's use of their lane builders is an owner-directed display decision
+  (D5, 2026-09-06) and does not promote any experiment beyond experimental
+  status (2026-08-09 authorization: promotion needs a separate owner decision —
+  none is implied here)." The 2026-08-09 "disabled by default" clause binds the
+  experiments' own `EXP_*` flags, which this brief does not touch. (Repo fact:
+  the four dict lanes in `build_experiment_lanes` are not flag-gated —
+  `experiments_dashboard.py:262-282`; only `exp_short` is.)
 - No new numeric constant with owner provenance: the cap reuses
   `config.PICK_TOP_N` (`config.py:650`); the mark-age colour reuses
   `config.CHAIN_STALE_BLOCK_SESSIONS` (`config.py:690`).
@@ -91,10 +104,24 @@ wiring, one docstring), and tests: new `tests/test_board_lanes.py`,
 
 ## Global Constraints
 
-- Every disclaimer string asserted by `tests/test_attractiveness_layout.py:456`
-  (`test_disclaimers_are_present_verbatim`) stays verbatim, including the
-  footer sentence "This page and the mission-control dashboard date
-  INDEPENDENTLY" (`attractiveness_dashboard.py:5740-5745`).
+- All thirteen sentences in `AuthorityWordingSurvivesLayoutTests._SENTENCES`
+  (`tests/test_attractiveness_layout.py:434-454`) stay on the flag-on page
+  verbatim, plus the footer sentence "This page and the mission-control
+  dashboard date INDEPENDENTLY" (`attractiveness_dashboard.py:5740-5745`). Ten
+  live in sections that still render (drawer or panels). Three live only in
+  sections the redesign removes, so the agreement table carries them (spec
+  §2.7 / §6.4 say "verbatim"; this keeps them verbatim without a spec
+  amendment): (1) the hero sentence "This is a fit ranking, not a prediction"
+  (`:4215`) → the table's `header-sub` paragraph; (2) the pinned-strip sentence
+  "owner-pinned visibility — not ranked; these cards do not compete with or
+  reorder the Top-5 shortlist." (`:4705-4706`) → a footnote under the table;
+  (3) `_CONTEXT_LANE_DISCLAIMER` (`:4442-4446`) → a footnote under the table
+  prefixed "Context lane column:". Its phrase "the rule-based list above" now
+  refers to the baseline column; the wording is kept because verbatim is the
+  contract — dropping or rewording any of the three would be a spec amendment
+  and an owner ruling, not this brief. `test_disclaimers_are_present_verbatim`
+  (`:456`) renders with the DEFAULT flag (True after Task 1) and must stay
+  green untouched; Task 6 adds a flag-off twin.
 - The six drawer sections keep their order (`test_drawer_is_closed_and_holds_the_six_diagnostic_sections`,
   `tests/test_attractiveness_layout.py:405`; `DiagnosticsDrawerTests._DRAWER_SECTIONS`
   at `:374-382`); relocated content is APPENDED after them. The drawer element
@@ -146,8 +173,12 @@ wiring, one docstring), and tests: new `tests/test_board_lanes.py`,
   `{"symbol", "asof", "max_asof", "grade", "aligned_count": int, "trend",
   "vol_premium", "regime", "internals"}` (each angle a dict with `state`).
 - QM pick (`select_qm_top_picks(data, qm_context, include_csp_watch=True)`,
-  `:488-491`): same shape as a baseline pick; `qm_context` is a Mapping at the
-  call site (`enrich_qm_context_with_candidates`, `:5521`).
+  `:488-491`): same shape as a baseline pick. At the call site
+  `qm_context = enrich_qm_context_with_candidates(data, qm_context)` (`:5534`)
+  is typed `Mapping[str, object] | None` (`:540`) while `select_qm_top_picks`
+  requires a Mapping (`:489`); the repo's only other caller guards with
+  `assert isinstance(qm_context, Mapping)` (`:4281`). Task 6 guards with
+  `isinstance` and passes `None` (= lane UNAVAILABLE) otherwise.
 - experiment lanes (`experiments_dashboard.build_experiment_lanes(symbols, asof=…)`,
   `experiments_dashboard.py:262-282`): dict with keys `exp_beta`, `exp_tail`,
   `exp_spread`, `exp_tbill` (lists of card dicts) AND `exp_short` (a list of
@@ -159,8 +190,8 @@ wiring, one docstring), and tests: new `tests/test_board_lanes.py`,
   (`exp_spread_stability.py:169-176`, `OK`/`ELEVATED`), `carry_spread`
   (`exp_tbill_carry.py:131`, `ABOVE_TBILL`/`BELOW_TBILL`); blocked cards carry
   `state == "DATA_BLOCKED"`; a lane whose builder raised is a one-card list
-  `{"state": "ERROR", "reason", "experiment_id", "asof"}` (`_error_card`,
-  `:250-259`). Measured 2026-09-04: `exp_beta` is `OK` for all 18 names (the
+  `{"symbol": "ALL", "state": "ERROR", "reason", "experiment_id", "max_asof"}`
+  (`_error_card`, `:250-259`; the key is `max_asof`, not `asof`). Measured 2026-09-04: `exp_beta` is `OK` for all 18 names (the
   beta caution column renders empty) and `exp_tbill` is `ABOVE_TBILL` for all
   18 (the T-bill column is effectively "top 5 by carry").
 - blocked record (`_block`, `:1866-1870`): `{"symbol", "reason_code",
@@ -174,7 +205,7 @@ wiring, one docstring), and tests: new `tests/test_board_lanes.py`,
   "as_of"}` or `{"state": "unavailable", "detail"}`. No `max_session` key.
 - Schwab lane (`data["schwab_lane"]`): `{"verified_sessions", "failures":
   [{"session", "kind", "reason"}], "receipts_found"}`; `kind == CHAINS_ABSENT`
-  is an expected research-checkout state, not a failure (`:1069-1080`).
+  is an expected research-checkout state, not a failure (`:1081-1091`).
 
 **Deviations from spec §4's sketch (deliberate, reviewer-flagged; the spec's
 sketch was illustrative):** `build_lane_board` takes `context_selection`
@@ -199,15 +230,17 @@ event line is rendered from the rows rather than stored on `LaneBoard`.
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/test_board_lanes.py` with ALL imports at the top (Task 3 adds
-tests below; the import block is final now — a mid-file import fails ruff E402):
+tests below; the import block is final now — a mid-file import fails ruff E402,
+and `import x` lines sort before `from x import y` lines under ruff's isort
+(`pyproject.toml:40` selects `I`)):
 
 ```python
 # tests/test_board_lanes.py
 """Unit tests for the lane-board display constants and the pure lane-board
 module (spec docs/superpowers/specs/2026-09-06-attractiveness-board-redesign-design.md).
 Nothing here asserts a ranking, a signal, or an authority change."""
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 import config
 from options_researcher import board_lanes as bl   # Task 3 creates it; Task 1 tests skip it
@@ -295,10 +328,11 @@ has no `__init__.py`; do not add one — use `PYTHONPATH=tests`:
 ```bash
 mkdir -p tests/fixtures
 PYTHONPATH=tests uv run python - <<'EOF'
+from pathlib import Path
 from test_attractiveness_layout import _board
 from options_researcher import attractiveness_dashboard as ad
 html = ad.render(_board(["NVDA", "AMZN", "MSFT"]))
-open("tests/fixtures/attractiveness_legacy_layout.html", "w", encoding="utf-8").write(html)
+Path("tests/fixtures/attractiveness_legacy_layout.html").write_text(html, encoding="utf-8")
 print(len(html), "bytes")
 EOF
 ```
@@ -308,15 +342,16 @@ Run the capture twice into two paths and `cmp` them to prove determinism
 
 - [ ] **Step 2: Write the byte-identity test**
 
-Append to `tests/test_attractiveness_layout.py` (add `from unittest import
-mock` to the import block at `:10-18` now — it is not imported today):
+Append to `tests/test_attractiveness_layout.py`. Extend the import block at
+`:10-19` NOW, in isort order, with `import contextlib` (Task 7 uses it),
+`from pathlib import Path`, and `from unittest import mock` — none is imported
+today, and adding them later mid-file fails ruff E402:
 
 ```python
 def LEGACY_RENDER_SNAPSHOT() -> str:
     """The pre-redesign render of the layout fixture, captured before any change
     to _render_result (brief 39 Task 2). The flag-off path must equal it byte
     for byte — that is the rollback guarantee."""
-    from pathlib import Path
     return Path("tests/fixtures/attractiveness_legacy_layout.html").read_text(encoding="utf-8")
 
 
@@ -963,7 +998,7 @@ Amend the docstring at `:3775-3776` so the two sources of truth agree
     2026-09-06; that is the ONLY place the board computes experiments.)"""
 ```
 
-In `tests/test_attractiveness_layout.py` make `_board` (`:44-58`) hermetic by
+In `tests/test_attractiveness_layout.py` make `_board` (`:54-69`) hermetic by
 default while letting a caller override:
 
 ```python
@@ -1008,9 +1043,9 @@ git commit -m "feat(board): experiment lanes on the real gather path (injectable
 - Test: `tests/test_attractiveness_dashboard.py`, `tests/test_attractiveness_layout.py` (byte-identity)
 
 **Interfaces:**
-- Consumes: `LaneBoard` (Task 3); `_risk_line` (`:3192`); `_event_chips_html(card, symbol, evaluation_date, event_view)` (`:3065`; `event_chips` at `:3024`); `_open_slots_html` (`:4104`), `_empty_hero_slot(data, slot)` (`:4116`); `_panel_status(sec, stale_symbols)` (`:5594`, returns `(status_labels, panel_open)`); `trading_sessions_between` (`top3_snapshot.py:83`); `CHAIN_SOURCE`, `CONVENTION_LABEL`, `CHAINS_ABSENT` (`schwab_chain_view.py`).
+- Consumes: `LaneBoard` (Task 3); `_risk_line` (`:3192`); `_event_chips_html(card, symbol, evaluation_date, event_view)` (`:3065`; `event_chips` at `:3024`); `_open_slots_html` (`:4104`), `_empty_hero_slot(data, slot)` (`:4116`); `_panel_status(sec, stale_symbols)` (defined `:806-827`, called `:5594`; returns `(status_labels, panel_open)`); `trading_sessions_between` (`top3_snapshot.py:83`); `CHAIN_SOURCE`, `CONVENTION_LABEL`, `CHAINS_ABSENT` (`schwab_chain_view.py`).
 - Produces:
-  - `_symbol_panel_html(sec, *, data, context, event_view, evaluation_date, stale_symbols, pinned_symbols, protected_card_ids) -> tuple[str, str]` — `(panel_html, symbol_name)`, byte-identical to the loop body
+  - `_symbol_panel_html(sec, *, context, event_view, evaluation_date, stale_symbols, pinned_symbols, protected_card_ids) -> tuple[str, str]` — `(panel_html, symbol_name)`, byte-identical to the loop body (no `data` parameter: the body does not read it once `evaluation_date` is hoisted)
   - `_status_strip_html(data, context) -> str`
   - `_position_tiles_html(data, event_line_text: str) -> str`
   - `_agreement_table_html(board) -> str`
@@ -1020,25 +1055,32 @@ git commit -m "feat(board): experiment lanes on the real gather path (injectable
 
 - [ ] **Step 1: Extract the per-symbol panel (no behaviour change)**
 
-The loop at `:5548-5664` reads these enclosing locals: `data`, `context`,
-`event_view`, `stale_symbols` (`:5550`), `pinned_symbols` (`:5551`),
-`protected_card_ids` (`:5541-5544`), and computes `evaluation_date` INSIDE the
-loop (`:5554`, `str(data.get("evaluation_date") or data.get("data_as_of") or "")`
-— loop-invariant) and `status_labels, panel_open = _panel_status(sec, stale_symbols)`
-(`:5594`) and `open_attr` (`:5601-5602`). It appends `symbol_names` at `:5633`.
+The loop at `:5548-5664` reads these enclosing locals: `context`,
+`event_view`, `stale_symbols` (`:5544`), `pinned_symbols` (`:5545`),
+`protected_card_ids` (`:5539`, extended `:5541-5543`), and computes
+`evaluation_date` INSIDE the loop (`:5554`,
+`str(data.get("evaluation_date") or data.get("data_as_of") or "")` — the only
+place the body touches `data`, and loop-invariant) and
+`status_labels, panel_open = _panel_status(sec, stale_symbols)` (`:5594`) and
+`open_attr` (`:5601-5602`). It appends `symbol_names` at `:5633`. The panel
+markup is `<div class="symbol-anchor" id="symbol-{symbol}"></div>` followed by
+`<details class="panel symbol-panel"{open_attr}>` (`:5635-5636`) — tests anchor
+on the `symbol-anchor` id, not on the `<details>` tag.
 
 1. Hoist `evaluation_date = str(data.get("evaluation_date") or data.get("data_as_of") or "")`
    to immediately BEFORE `for sec in data["symbols"]:` (`:5548`). Delete the
-   in-loop copy at `:5554`. (Loop-invariant; also fixes the latent
-   `NameError` when `data["symbols"]` is empty — **Inference**.)
+   in-loop copy at `:5554`. (Loop-invariant. Required because Task 6 reads
+   `evaluation_date` AFTER the loop; today nothing after the loop reads it —
+   `:5716` recomputes its own — so there is no latent bug, only one that Task 6
+   would introduce on an empty `data["symbols"]` without the hoist.)
 2. Move the loop body (from `tech = sec.get("technicals")` through the
    `symbols_html += (…)` closing paren at `:5664`) into
 
 ```python
 def _symbol_panel_html(
-    sec: Mapping[str, object], *, data: Mapping[str, object], context: Mapping[str, object] | None,
-    event_view: Mapping[str, object] | None, evaluation_date: str, stale_symbols: set[str],
-    pinned_symbols: set[str], protected_card_ids: set[int],
+    sec: dict, *, context: dict | None, event_view: Mapping[str, object] | None,
+    evaluation_date: str, stale_symbols: set[str], pinned_symbols: set[str],
+    protected_card_ids: set[int],
 ) -> tuple[str, str]:
     """One per-symbol panel, byte-identical to the pre-brief-39 inline loop.
     Returns (panel_html, symbol_name). It decides its own open/closed state
@@ -1047,15 +1089,25 @@ def _symbol_panel_html(
     return panel_html, symbol_name
 ```
 
-   where `panel_html` is the string the loop appended. Every local the body
-   used keeps its name; `status_labels`/`panel_open` are computed inside via
+   Place the function immediately ABOVE `_render_result` (`:5506`). The
+   annotations are deliberately the ones the body sees today — `sec` is an
+   element of `data: dict` (`:5507`) and `context: dict | None` (`:5509`) —
+   because the body calls `_rank_groups_for_display(sec["groups"], tech=tech)`
+   (`:5550`; parameter `list[dict]` at `:690`), `float(sec["close"])`
+   (`:5560`) and `_symbol_context_html(symbol, context)` (`:4638`,
+   `dict | None`); typing them as `Mapping[str, object]` makes today's clean
+   body fail pyright (round-2 reproduced 3 errors). Byte-identical must also be
+   type-identical. If the moved body turns out to reference `data` anywhere,
+   keep a `data: dict` parameter and say so in the PR body (round 2 found no
+   such reference). Every local the body used keeps its name;
+   `status_labels`/`panel_open` are computed inside via
    `_panel_status(sec, stale_symbols)` as today.
 3. The loop becomes exactly:
 
 ```python
     for sec in data["symbols"]:
         panel_html, symbol_name = _symbol_panel_html(
-            sec, data=data, context=context, event_view=event_view, evaluation_date=evaluation_date,
+            sec, context=context, event_view=event_view, evaluation_date=evaluation_date,
             stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
         symbol_names.append(symbol_name)
         symbols_html += panel_html
@@ -1096,6 +1148,12 @@ class LaneBoardRenderTests(unittest.TestCase):
         self.assertIn("2026-09-03", html)
         self.assertIn('class="agree"', html)
         self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)   # h2 text kept (see step 4)
+        self.assertIn("TOP 5 PICKS TODAY", html)                                        # eyebrow text kept
+        # The three authority sentences whose sections leave the flag-on page (Global Constraints):
+        self.assertIn("This is a fit ranking, not a prediction", html)
+        self.assertIn("owner-pinned visibility — not ranked; these cards do not compete with or reorder "
+                      "the Top-5 shortlist.", html)
+        self.assertIn(ad._CONTEXT_LANE_DISCLAIMER, html)
 
     def test_agreement_cell_counts_favourable_ready_lanes_only(self):
         html = ad._agreement_table_html(self._board())
@@ -1126,8 +1184,9 @@ class LaneBoardRenderTests(unittest.TestCase):
         data = {"open_positions": {"rows": [], "missing_sources": ["data/positions/h6_positions.csv"],
                                    "sources": [], "h6_last_mark": None}, "evaluation_date": "2026-09-04"}
         html = ad._position_tiles_html(data, "")
-        self.assertIn("UNREAD", html)
+        self.assertIn('<div class="v">UNREAD</div>', html)
         self.assertIn("data/positions/h6_positions.csv", html)
+        self.assertEqual(html.count('<div class="tile'), 4)          # spec §2.2: always four tiles
 
     def test_status_strip_is_fail_visible_for_closes_and_ignores_chains_absent(self):
         from options_researcher.schwab_chain_view import CHAINS_ABSENT, CHAIN_SOURCE
@@ -1158,15 +1217,27 @@ class LaneBoardRenderTests(unittest.TestCase):
             stale_symbols=set(), pinned_symbols=set(), protected_card_ids=set())
         self.assertIn('id="symbol-AMZN"', html)
         self.assertNotIn('id="symbol-MSFT"', html)
+        self.assertNotIn('id="symbol-VST"', html)    # pinned row WITHOUT a section: a row, never a panel
 ```
 
 - [ ] **Step 4: Implement the builders**
 
 Add after `_composite_html` (`:4774`). Reuse the existing helpers by exact
-name; `re` is already imported at `:38`; `config` is module-level.
+name; `re` is already imported at `:38`; `config` is module-level. Add
+`from options_researcher.board_lanes import BoardRow, LaneBoard, LaneColumn`
+inside the existing `if TYPE_CHECKING:` block (`:50-51`) so the annotations
+below resolve for pyright (`from __future__ import annotations` at `:30` makes
+them free at runtime; round 2 reproduced `reportUndefinedVariable` without
+this). Two narrowing helpers keep `Mapping[str, object]` values iterable for
+pyright (round 2 reproduced the `"object" is not iterable` errors):
 
 ```python
-def _status_strip_html(data: Mapping[str, object], context: Mapping[str, object] | None) -> str:
+def _seq(value: object) -> list[object]:
+    """pyright-safe list view of a Mapping value that should be a sequence."""
+    return list(value) if isinstance(value, (list, tuple)) else []
+
+
+def _status_strip_html(data: dict, context: dict | None) -> str:
     """One line, five facts, each a coloured dot + a word (spec §2.1). Every
     dot is state-driven; an unavailable closes store is CRIT, never green."""
     from options_researcher.schwab_chain_view import CHAINS_ABSENT, CHAIN_SOURCE, CONVENTION_LABEL
@@ -1175,8 +1246,8 @@ def _status_strip_html(data: Mapping[str, object], context: Mapping[str, object]
     as_of = str(data.get("data_as_of") or "no cached data")
     on_schwab = data.get("as_of_kind") == CHAIN_SOURCE
     source = f"{CONVENTION_LABEL}, session {as_of}" if on_schwab else f"frozen EOD {as_of}"
-    fresh = list(data.get("fresh_symbols") or [])
-    stale = [str(s) for s in (data.get("stale_symbols") or [])]
+    fresh = _seq(data.get("fresh_symbols"))
+    stale = [str(s) for s in _seq(data.get("stale_symbols"))]
     closes = data.get("underlying_closes_freshness")
     closes = closes if isinstance(closes, Mapping) else {"state": "unavailable", "detail": "not assembled"}
     closes_ok = closes.get("state") == "available"
@@ -1215,9 +1286,10 @@ def _status_strip_html(data: Mapping[str, object], context: Mapping[str, object]
             + "</div>")
 
 
-def _position_tiles_html(data: Mapping[str, object], event_line_text: str) -> str:
-    """Four stat tiles (spec §2.2). Reads only data['open_positions']; an
-    unreadable source is printed, never treated as an empty book. The last-mark
+def _position_tiles_html(data: dict, event_line_text: str) -> str:
+    """Exactly four stat tiles (spec §2.2). Reads only data['open_positions'];
+    an unreadable source is printed in the first tile, never treated as an empty
+    book. The last-mark
     tile is red when the mark is older than the board's own staleness limit
     (config.CHAIN_STALE_BLOCK_SESSIONS — reused, not a new number)."""
     from options_researcher.top3_snapshot import trading_sessions_between
@@ -1245,10 +1317,11 @@ def _position_tiles_html(data: Mapping[str, object], event_line_text: str) -> st
                 f'<div class="v">{_esc(v)}</div><div class="d">{_esc(d)}</div></div>')
 
     tiles: list[str] = []
-    if missing:
-        tiles.append(tile("Positions", "UNREAD", ", ".join(missing), "bad"))
-    tiles.append(tile("Open option", str(option_rows[0].get("identifier")) if option_rows else "none",
-                      str(option_rows[0].get("text")) if option_rows else "no open option positions"))
+    if missing:   # spec §2.2 is FOUR tiles: an unreadable book takes over the first tile, never a fifth
+        tiles.append(tile("Open option", "UNREAD", "could not be read: " + ", ".join(missing), "bad"))
+    else:
+        tiles.append(tile("Open option", str(option_rows[0].get("identifier")) if option_rows else "none",
+                          str(option_rows[0].get("text")) if option_rows else "no open option positions"))
     tiles.append(tile("Last mark", str(last_mark) if last_mark else "none",
                       f"{mark_age} sessions unmarked" if isinstance(mark_age, int) else "no mark recorded",
                       "bad" if mark_bad else ""))
@@ -1259,19 +1332,25 @@ def _position_tiles_html(data: Mapping[str, object], event_line_text: str) -> st
     return '<div class="tiles">' + "".join(tiles) + "</div>"
 
 
-def _agreement_table_html(board: "LaneBoard") -> str:
+_AGREE_BAR_PX = 14   # display-only: bar width per agreeing lane (LLM-proposed 2026-09-06; not a strategy number)
+
+
+def _agreement_table_html(board: LaneBoard) -> str:
     """Spec §3. Row order and the 'Agree' count come from the pure module;
-    this function only prints. The <h2> text is byte-identical to today's
-    shortlist heading (:4213) because tests and the pick tracker locate the
-    shortlist by it."""
+    this function only prints. The eyebrow phrase and the <h2> text are
+    byte-identical to today's shortlist heading (:4212-4213) because 20+ test
+    assertions locate the shortlist by them. It also carries, verbatim, the
+    three authority sentences whose sections leave the flag-on page (hero
+    :4215, pinned strip :4705-4706, context lane :4442-4446) — see the brief's
+    Global Constraints."""
     fav = [c for c in board.columns if c.favourable]
     cau = [c for c in board.columns if not c.favourable]
 
-    def header(col: "LaneColumn") -> str:
+    def header(col: LaneColumn) -> str:
         return (f'<th title="{_esc(col.note)}">{_esc(col.title)}<br>'
                 f'<span class="th-sub">{_esc(col.kind)} · as of {_esc(str(col.as_of or "?"))} · {_esc(col.state)}</span></th>')
 
-    def cell(row: "BoardRow", col: "LaneColumn") -> str:
+    def cell(row: BoardRow, col: LaneColumn) -> str:
         if col.state != "READY":
             return '<td class="lane-off"></td>'
         m = row.marks.get(col.key)
@@ -1280,7 +1359,7 @@ def _agreement_table_html(board: "LaneBoard") -> str:
         cls = "warn" if not col.favourable else ("veto" if not m.counts else "on")
         return f'<td><span class="chip {cls}">{_esc(m.label)}</span></td>'
 
-    def pick_cell(row: "BoardRow") -> str:
+    def pick_cell(row: BoardRow) -> str:
         if row.baseline_pick is not None:
             card = row.baseline_pick.get("card")
             card = card if isinstance(card, Mapping) else {}
@@ -1305,25 +1384,30 @@ def _agreement_table_html(board: "LaneBoard") -> str:
     body: list[str] = []
     for row in board.rows:
         pinned = ' <span class="chip">pinned</span>' if row.pinned else ""
-        agree = (f'<td class="agree-cell"><span class="bar" style="width:{row.fav_count * 14}px"></span>'
+        agree = (f'<td class="agree-cell"><span class="bar" style="width:{row.fav_count * _AGREE_BAR_PX}px"></span>'
                  f'<span class="agree">{row.fav_count}/{row.fav_ready}</span></td>')
         body.append(f'<tr><td class="sym">{_esc(row.symbol)}{pinned}</td><td>{pick_cell(row)}</td>'
                     + "".join(cell(row, c) for c in fav) + agree + "".join(cell(row, c) for c in cau) + "</tr>")
     notes = "".join(f'<div class="notice info">{_esc(n)}</div>' for n in board.notes)
+    foot = ('<p class="table-foot">Pinned rows: owner-pinned visibility — not ranked; these cards do not '
+            'compete with or reorder the Top-5 shortlist.</p>'
+            f'<p class="table-foot">Context lane column: {_esc(_CONTEXT_LANE_DISCLAIMER)}</p>')
     return ('<section class="panel agreement" id="agreement-table">'
-            '<div class="eyebrow">Today\'s picks · agreement across lanes</div>'
+            '<div class="eyebrow">Daily shortlist · TOP 5 PICKS TODAY · agreement across lanes</div>'
             '<h2>Rule-based top 5 — best policy-and-liquidity fit today</h2>'
             '<p class="header-sub">Every name any lane picked or flagged, the registered picks first. '
-            'The registered baseline decides the order and is never re-ordered. "Agree" counts '
-            'favourable lanes only — a description, never a score; cautions are shown but never counted.</p>'
-            f'{notes}<table class="agreement-table"><thead>{head}</thead><tbody>{"".join(body)}</tbody></table></section>')
+            'The registered baseline decides the order and is never re-ordered. '
+            'This is a fit ranking, not a prediction. "Agree" counts favourable lanes only — '
+            'a description, never a score; cautions are shown but never counted.</p>'
+            f'{notes}<table class="agreement-table"><thead>{head}</thead><tbody>{"".join(body)}</tbody></table>'
+            f'{foot}</section>')
 
 
 def _num_or_zero(value: object) -> float:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
 
 
-def _event_line_html(board: "LaneBoard", event_view: Mapping[str, object] | None,
+def _event_line_html(board: LaneBoard, event_view: Mapping[str, object] | None,
                      evaluation_date: str) -> str:
     """D11: the sorted union of the REGISTERED PICKS' event chips, printed once.
     Names without a baseline pick contribute nothing (their chips stay in
@@ -1348,31 +1432,38 @@ def _event_line_html(board: "LaneBoard", event_view: Mapping[str, object] | None
             + "".join(f'<span class="event-chip">EVENT · {t}</span>' for t in sorted(seen)) + "</div>")
 
 
-def _open_slots_notice_html(data: Mapping[str, object], watch_picks: Sequence[Mapping[str, object]]) -> str:
-    """Today's consolidated open-slot notice, unchanged (:4200-4203 uses the
-    watch-inclusive pick list to size the range)."""
-    return _open_slots_html(
-        [_empty_hero_slot(dict(data), slot)
+def _open_slots_notice_html(data: dict, watch_picks: Sequence[Mapping[str, object]]) -> str:
+    """Today's consolidated open-slot notice, unchanged in text (:4200-4203 uses
+    the watch-inclusive pick list to size the range). Wrapped in the same
+    `hero-grid` parent the hero gives it (:4708 pattern), because
+    `_open_slot_group_html` (:4096) emits `hero-card … empty-slot` markup whose
+    layout rules live on that parent. Empty when there is no open slot."""
+    inner = _open_slots_html(
+        [_empty_hero_slot(data, slot)
          for slot in range(len(watch_picks) + 1, config.PICK_TOP_N + 1)],
         prefix="Pick", total=config.PICK_TOP_N)
+    return f'<div class="hero-grid open-slots">{inner}</div>' if inner else ""
 
 
 def _pick_details_html(
-    data: Mapping[str, object], board: "LaneBoard", *, context: Mapping[str, object] | None,
+    data: dict, board: LaneBoard, *, context: dict | None,
     event_view: Mapping[str, object] | None, evaluation_date: str, stale_symbols: set[str],
     pinned_symbols: set[str], protected_card_ids: set[int],
 ) -> str:
-    """One per-name panel per table row (spec §2.5); other names are not rendered.
-    The panel HTML is byte-identical to today's (D10)."""
+    """One per-name panel per table row, in BOARD-ROW order (spec §2.5) — not in
+    data["symbols"] order. A row whose symbol has no section (a pinned name
+    with no cached chain) renders a row in the table but no panel here; other
+    names are not rendered at all. The panel HTML is byte-identical to today's
+    (D10)."""
     wanted = [r.symbol for r in board.rows]
-    by_symbol = {str(sec.get("symbol")): sec for sec in data.get("symbols", []) if isinstance(sec, Mapping)}
+    by_symbol = {str(sec.get("symbol")): sec for sec in _seq(data.get("symbols")) if isinstance(sec, dict)}
     parts: list[str] = []
     for symbol in wanted:
         sec = by_symbol.get(symbol)
         if sec is None:
             continue
         panel_html, _name = _symbol_panel_html(
-            sec, data=data, context=context, event_view=event_view, evaluation_date=evaluation_date,
+            sec, context=context, event_view=event_view, evaluation_date=evaluation_date,
             stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
         parts.append(panel_html)
     if not parts:
@@ -1417,9 +1508,23 @@ heading is `DATA FRESHNESS`; the class holding `_DRAWER_SECTIONS` is
 class LaneBoardLayoutTests(unittest.TestCase):
     """Spec §2 page order, with the flag on."""
 
-    def _html(self, **kw):
+    # Mirrors DiagnosticsDrawerTests._rendered (:385-402): without context /
+    # qm_context / research_views_status, "Quant-want background" and "Market
+    # context" are not rendered at all (:4563-4566, :4593-4597) and the drawer
+    # drops empty sections (:5493) — the six-section assertion would raise.
+    _DRAWER_INPUTS = dict(
+        context={"as_of": "2026-08-25", "researched_on": "2026-08-25", "provenance": "fixture provenance",
+                 "market": {"summary": "Fixture market context.", "regime": "mixed"},
+                 "symbols": {"NVDA": {"news_summary": "covered"}}},
+        qm_context={"status": "DATA_BLOCKED",
+                    "quant_want": {"trend": {"status": "UP", "plain_language": "fixture trend"}},
+                    "source_commit": "fixture"},
+        research_views_status={"state": "absent"},
+    )
+
+    def _html(self, symbols=("NVDA", "AMZN", "MSFT"), **kw):
         with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
-            return ad.render(_board(["NVDA", "AMZN", "MSFT"], **kw))
+            return ad.render(_board(list(symbols), **kw), **self._DRAWER_INPUTS)
 
     def test_page_order_is_strip_tiles_table_event_details_drawer(self):
         html = self._html()
@@ -1438,8 +1543,14 @@ class LaneBoardLayoutTests(unittest.TestCase):
         html = self._html()
         table = html[html.index('id="agreement-table"'):html.index('id="pick-details"')]
         names_on_table = set(re.findall(r'<td class="sym">([A-Z]+)', table))
-        rendered = set(re.findall(r'id="symbol-([A-Z]+)"', html))
-        self.assertEqual(rendered, names_on_table)
+        rendered = set(re.findall(r'<div class="symbol-anchor" id="symbol-([A-Z]+)"', html))
+        # pinned_picks (:576-594) always yields VST and AMZN, section or not
+        # (config.PICK_PINNED_SYMBOLS, config.py:660), so VST is a ROW with no
+        # panel on this fixture. Equality is therefore the wrong contract.
+        self.assertTrue(rendered <= names_on_table)   # never a panel for a name that is not on the table
+        self.assertIn("NVDA", rendered)               # a table name WITH a section gets its panel
+        self.assertIn("VST", names_on_table)          # pinned → always a row (owner ruling 2026-07-16)
+        self.assertNotIn("VST", rendered)             # … but no panel: the fixture has no VST section
 
     def test_relocated_content_is_appended_after_the_six_drawer_sections(self):
         html = self._html()
@@ -1450,10 +1561,28 @@ class LaneBoardLayoutTests(unittest.TestCase):
                           "Composite signal board"):
             self.assertGreater(drawer.index(relocated), six[-1])
 
-    def test_disclaimers_survive_verbatim_with_flag_on(self):
-        html = self._html()
+    def test_all_thirteen_disclaimers_survive_with_flag_off_too(self):
+        # test_disclaimers_are_present_verbatim (:456) covers the DEFAULT flag
+        # (True). This twin pins the rollback path with the same fixture.
+        data = _board(["VST", "AAA"])
+        data["composite_signals"] = [_composite_card("AAA")]
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+            html = ad.render(data, context={"as_of": "2026-08-25", "provenance": "fixture",
+                                            "market": {"summary": "Fixture."}, "symbols": {}},
+                             qm_context=self._DRAWER_INPUTS["qm_context"],
+                             research_views_status={"state": "absent"})
+        for sentence in AuthorityWordingSurvivesLayoutTests._SENTENCES:
+            with self.subTest(sentence=sentence[:48]):
+                self.assertIn(sentence, html)
         self.assertIn("mission-control dashboard date INDEPENDENTLY", html)
-        self.assertIn("Payoffs are at-expiration scenarios, not predictions.", html)
+
+    def test_flag_on_carries_the_three_relocated_sentences_inside_the_agreement_table(self):
+        html = self._html()
+        table = html[html.index('id="agreement-table"'):html.index('id="pick-details"')]
+        self.assertIn("This is a fit ranking, not a prediction", table)
+        self.assertIn("owner-pinned visibility — not ranked; these cards do not compete with or reorder "
+                      "the Top-5 shortlist.", table)
+        self.assertIn(ad._CONTEXT_LANE_DISCLAIMER, table)
 
     def test_zero_javascript_with_flag_on(self):
         self.assertNotIn("<script", self._html().lower())
@@ -1474,13 +1603,16 @@ today's code verbatim — copy it from the file, do not retype it:
     if config.BOARD_LANES_ENABLED:
         from options_researcher import board_lanes as _bl
 
-        board: "_bl.LaneBoard | None"
+        board: LaneBoard | None
         try:
             board = _bl.build_lane_board(
                 baseline_picks=qualified_picks,
                 context_selection=context_selection,
                 composite_cards=data.get("composite_signals"),
-                qm_picks=select_qm_top_picks(data, qm_context, include_csp_watch=True),
+                # select_qm_top_picks requires a Mapping (:489); None = "lane unavailable".
+                # Same guard the only other caller uses (:4281).
+                qm_picks=(select_qm_top_picks(data, qm_context, include_csp_watch=True)
+                          if isinstance(qm_context, Mapping) else None),
                 experiment_lanes=data.get("experiment_lanes"),
                 pinned=[str(r.get("symbol")) for r in pinned_records],
                 blocked=data.get("blocked") or [],
@@ -1494,21 +1626,22 @@ today's code verbatim — copy it from the file, do not retype it:
             details_html = _pick_details_html(
                 data, board, context=context, event_view=event_view, evaluation_date=evaluation_date,
                 stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
-            decision_html = _agreement_table_html(board)
+            decision_html = _open_slots_notice_html(data, watch_picks) + _agreement_table_html(board)
         else:
+            # hero_html already carries its own open-slot block (:4200-4203): no separate notice here.
             event_line_html, details_html = "", symbols_html
             decision_html = (f'<div class="notice bad">LANE BOARD FAILED — {_esc(str(board_error))}; '
                              f'showing the registered picks only.</div>{hero_html}')
         event_text = re.sub(r"<[^>]+>", " ", event_line_html).replace("Events ahead for the registered picks:", "").strip()
         event_text = " ".join(event_text.split())
+        # Probe only fragments that are ON the flag-on page (qm_lanes_html sits in the drawer).
         event_css = (_EVENT_STYLE if 'class="event-chip"' in
-                     (symbols_html + hero_html + qm_lanes_html + pinned_html + event_line_html + details_html) else "")
+                     (decision_html + event_line_html + details_html + qm_lanes_html) else "")
         body_html = (
             f"{_status_strip_html(data, context)}"
             f"{warn_html}"
             f"{_blocked_html(data.get('blocked') or [])}"
             f"{_position_tiles_html(data, event_text)}"
-            f"{_open_slots_notice_html(data, watch_picks)}"
             f"{decision_html}"
             f"{event_line_html}"
             f"{details_html}"
@@ -1545,7 +1678,12 @@ and at `:5737` replace `f"{_sticky_nav_html(body_html, symbol_names)}"` with
 `evaluation_date` (hoisted in Task 5), `annotation_notice`,
 `research_views_status`, `context_evidence`, `annotation_integrity`,
 `data_as_of`, `qm_context` are all in scope at this point (reviewer-verified
-list minus the two Task 5 fixed).
+in both rounds). The six drawer calls above are today's `:5712-5719` calls,
+unchanged; the five relocated items follow them. Under the flag the page still
+builds `symbols_html` for all names (needed by the failure fallback) and then
+re-renders the table names inside `_pick_details_html` — a known double render
+of ~700 KB of string work; say so in the PR body next to the
+`build_experiment_lanes` cost (~3.3 s, round-1 measured).
 
 Add to `_STYLE` (colours from the existing variables only; no new palette):
 
@@ -1556,19 +1694,24 @@ Add to `_STYLE` (colours from the existing variables only; no new palette):
 .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
 .tile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.tile.bad{border-color:var(--bad)}
 .tile .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.7}.tile .v{font-size:20px;font-weight:600}.tile .d{font-size:12px;opacity:.8}
+.chip{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-size:12px;margin:1px 2px 1px 0}
 .agreement-table{width:100%;border-collapse:collapse;font-size:13px}.agreement-table th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 .agreement-table th.group{text-align:center;border-left:1px solid var(--line)}.agreement-table .th-sub{font-weight:400;text-transform:none;letter-spacing:0;opacity:.75}
 .agreement-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
-.agreement-table td.sym{font-weight:700}.agreement-table td.lane-off{background:var(--surface-2)}.agreement-table .econ{font-size:12px;opacity:.8}
+.agreement-table td.sym{font-weight:700}.agreement-table td.lane-off{background:var(--surface-soft)}.agreement-table .econ{font-size:12px;opacity:.8}
+.table-foot{font-size:12px;opacity:.8;margin:8px 0 0}
 .agreement-table .blocked{color:var(--bad)}.agreement-table .muted{opacity:.6}
 .chip.on{border-color:var(--good)}.chip.warn{border-color:var(--watch)}.chip.veto{border-color:var(--bad)}
 .agree-cell .bar{display:inline-block;height:8px;border-radius:4px;background:var(--good);vertical-align:middle;margin-right:6px}.agree{font-weight:700}
 .event-line{margin:10px 0;font-size:13px}.event-line-label{margin-right:8px;opacity:.75}
 ```
 
-Use the variable names `_STYLE` already defines for good/watch/bad and the
-surfaces (read `_STYLE`'s `:root` block first and substitute the real names;
-do not introduce new colour tokens).
+Every `var(--…)` above exists in `_STYLE`'s `:root` (`:2316-2341`): `--line`,
+`--good`, `--watch`, `--bad`, `--surface-soft`. `_STYLE` has no base `.chip`
+rule today (only `.meta-chip`, `.evidence-chip`, `.event-chip`), so the base
+`.chip` rule above is REQUIRED — without it the `.chip.on/.warn/.veto` border
+colours paint nothing. Do not introduce new colour tokens and do not copy the
+mockup's palette (`--surface-2`, `--seq4`, `--ink-2` … do not exist here).
 
 - [ ] **Step 4: Run the layout tests, then the whole suite**
 
@@ -1578,8 +1721,10 @@ PRE-EXISTING layout tests now FAIL because they pin the old order — that is
 Task 7's job; list them in the commit body.
 Run: `uv run python -m unittest discover -s tests 2>&1 | tail -5`
 Expected: failures only in `test_attractiveness_layout.py`,
-`test_attractiveness_dashboard.py`, `test_event_awareness.py`. Any other file
-failing is a regression — STOP and report.
+`test_attractiveness_dashboard.py`, `test_event_awareness.py` and
+`test_attractiveness_v3.py` (its `:282` counts `hero-card` divs, a flag-off
+surface — Task 7 legacy-wraps it). Any other file failing is a regression —
+STOP and report.
 
 - [ ] **Step 5: Commit**
 
@@ -1604,12 +1749,15 @@ against the new anchors with the same intent; **(c)** the test asserts a
 surface that no longer exists on the flag-on page → wrap with the flag off.
 Never delete a test.
 
-- [ ] **Step 1: Add the flag-off helper to both files**
+- [ ] **Step 1: Add the flag-off helper to the three test files**
+
+`import contextlib` goes in each file's TOP import block, in isort order — a
+mid-file import fails ruff E402: `tests/test_attractiveness_layout.py` (added
+in Task 2), `tests/test_attractiveness_dashboard.py:2-7` (before `import json`),
+`tests/test_event_awareness.py:5-13` (before `import json`; that file already
+imports `mock`). Then, once per file:
 
 ```python
-import contextlib
-
-
 @contextlib.contextmanager
 def _legacy_layout():
     """Render the pre-brief-39 page: the flag-off path is byte-identical to the
@@ -1623,25 +1771,92 @@ def _legacy_layout():
 Run each of the three files and collect `FAIL:`/`ERROR:` lines. Expected
 members (Repo-verified anchors; the executor confirms the exact set):
 
-`tests/test_attractiveness_layout.py` — (b) `test_tracker_renders_before_the_shortlist_with_positions_kicker` (`:165`) → tiles before the agreement table; (c) `test_clean_panels_are_closed_except_owner_pinned_symbols` (`:277`), `test_panel_summary_is_one_line_with_source_asof_and_grade` (`:286`), `test_frozen_eod_panels_name_their_source_in_the_summary` (`:296`) → these still hold for the panels inside `#pick-details`; re-point their slice to that section; (c) `test_nav_links_every_present_section_and_symbol` (`:314`), `test_nav_never_links_a_section_that_is_not_on_the_page` (`:326`) → legacy wrap (nav removed, D2/§2); (a) `test_composite_board_is_one_table_with_every_label_preserved` (`:337`), `test_blocked_angle_reason_is_still_printed` (`:364`) → legacy wrap (the table lives in the drawer, text unchanged); (b) `test_scoreboard_and_pinned_strip_stay_in_the_main_flow` (`:416`) → REWRITE per D9/§2: scoreboard is in the drawer, pinned names are table rows; (b) `test_symbol_panels_precede_the_drawer` (`:424`) → `#pick-details` precedes `id="diagnostics"`; the empty-slot consolidation tests (`:88-130`) → (a) legacy wrap if they locate the hero by a removed marker, else unchanged.
+Two standing rules for every re-pin: **re-pinning a hard-coded digest or
+golden hash is never an acceptable repair — legacy-wrap the test instead**;
+and a slice that becomes EMPTY under the flag (its two anchors invert) is a
+silently vacuous test, so every `html[html.index(A):html.index(B)]` slice in a
+re-pinned test must be checked for anchor order, not just for passing.
 
-`tests/test_attractiveness_dashboard.py` — (a) every test slicing
-`html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]` (`:3089`,
-`:3097`, `:3130`, `:3162`, `:3272`, `:3291`, `:3304`) → legacy wrap (the
-freshness block's TEXT is unchanged; with the flag on it sits after the table
-so the slice inverts); (a)/(c) the order pins at `:2036`, `:2061`, `:2112`,
-`:2145`, `:2152`, `:2155`, `:2171`, `:2632-2633`, `:3067-3075`, `:3191-3193`,
-`:3253-3264`, `:3317` → legacy wrap unless the assertion is a §2 invariant
-(tracker-before-shortlist at `:3191-3193` becomes tiles-before-table under the
-flag: rewrite as (b)).
+`tests/test_attractiveness_layout.py` —
+(b) `test_tracker_renders_before_the_shortlist_with_positions_kicker` (`:165`)
+→ under the flag the tiles precede the agreement table; rewrite the two
+`assertLess` calls against `class="tiles"` / `id="agreement-table"`, keep the
+two `assertIn`s.
+(a) the five `PositionsAndRiskFirstTests` that slice
+`html[html.index("POSITIONS &amp; RISK"):html.index("Rule-based top 5")]`
+(`:179`, `:191`, `:200`, `:208`, `:220`) → legacy wrap. Under the flag
+"POSITIONS &amp; RISK" moves into the drawer, AFTER the h2, so the slice is
+empty: four fail and `:200` (`assertNotIn`) passes vacuously — wrap all five.
+(c) `SymbolPanelCollapseTests` (`:277`, `:286`, `:296`) → the panels still
+render, inside `#pick-details`, but in BOARD-ROW order, not `data["symbols"]`
+order: on this fixture `data["symbols"]` is `[VST, NVDA, MSFT]` while
+`select_top_picks` yields `[MSFT, NVDA, VST]`, so the slice at `:283`
+(`id="symbol-VST"` … `id="symbol-NVDA"`) inverts to empty. Add a module-level
+helper and use it in all three:
+
+```python
+def _panel_slice(html: str, symbol: str) -> str:
+    """One symbol's panel: from its anchor to the next symbol anchor, the drawer, or the end."""
+    start = html.index(f'id="symbol-{symbol}"')
+    ends = [p for p in (html.find('id="symbol-', start + 1), html.find('id="diagnostics"', start)) if p != -1]
+    return html[start:min(ends)] if ends else html[start:]
+```
+
+(c) `test_nav_links_every_present_section_and_symbol` (`:314`),
+`test_nav_never_links_a_section_that_is_not_on_the_page` (`:326`) → legacy wrap
+(the sticky nav is removed under the flag, D2/§2).
+(a) `test_composite_board_is_one_table_with_every_label_preserved` (`:337`),
+`test_blocked_angle_reason_is_still_printed` (`:364`) → legacy wrap (the table
+lives in the drawer, text unchanged).
+(b) `test_scoreboard_and_pinned_strip_stay_in_the_main_flow` (`:416`) →
+REWRITE per D9/§2: the scoreboard is inside `id="diagnostics"`, and the pinned
+names appear as `<td class="sym">VST` / `AMZN` rows above it.
+(b) `test_symbol_panels_precede_the_drawer` (`:424`) → `id="pick-details"`
+precedes `id="diagnostics"`.
+`test_disclaimers_are_present_verbatim` (`:456`) → must pass UNCHANGED
+(Global Constraints); if it fails, the agreement table is missing a sentence —
+fix the renderer, never the test.
+The empty-slot consolidation tests (`:88-130`) → (a) legacy wrap only if one
+locates the hero by a removed marker; otherwise unchanged (the notice text is
+unchanged and now sits above the table).
+
+`tests/test_attractiveness_dashboard.py` —
+(c) `test_flag_off_matches_post_brief26_golden_bytes` (`:2239`) asserts a
+hard-coded SHA-256 (`:2263-2266`) on a default-flag render → add
+`mock.patch.object(config, "BOARD_LANES_ENABLED", False)` beside the existing
+`CONTEXT_LANE_ENABLED` patch at `:2245`. NEVER re-pin the digest.
+(a) every test slicing `html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]`
+(`:3089`, `:3097`, `:3130`, `:3162`, `:3272`, `:3291`, `:3304`) → legacy wrap
+(the freshness block's TEXT is unchanged; under the flag it sits after the h2
+so the slice inverts to empty — vacuous, not passing).
+(a)/(c) the order pins at `:2036`, `:2061`, `:2112`, `:2145`, `:2152`, `:2155`,
+`:2171`, `:2632-2633`, `:3067-3075`, `:3253-3264`, `:3317`, `:3341` → legacy
+wrap unless the assertion is a §2 invariant.
+(b) tracker-before-shortlist at `:3191-3193` → becomes tiles-before-table
+under the flag: rewrite.
+
+`tests/test_attractiveness_v3.py` —
+(c) `test_partial_shortlist_keeps_configured_visible_slots_in_each_list`
+(`:279-288`) counts `<div class="hero-card '` == 3 and asserts
+`Picks 2–{PICK_TOP_N}` → legacy wrap (under the flag only the open-slot notice
+emits `hero-card` markup). `:262-267` and `:269-276` keep "TOP 5 PICKS TODAY"
+/ "This is an intentional open slot" because the eyebrow phrase and the notice
+survive; if either fails, the renderer dropped text — fix the renderer.
+
+Any failure NOT in this list gets the same (a)/(b)/(c) treatment, is never
+deleted, and is listed in the PR body with its disposition and a one-line
+reason — that is a disposition rule, not a design delegation.
 
 `tests/test_event_awareness.py` — `test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list` (`:311`) and possibly `test_pure_render_all_card_surfaces_and_failure_notice` (`:215`) → Step 3.
 
 - [ ] **Step 3: Lift the event fixture, then re-pin the chip contract (D11)**
 
-First, a no-behaviour-change commit: move `card()` (`:313-337`), `symbols`,
-`data` (`:339-375`), `view` (`:376-392`) and `chips()` (`:393-394`) out of the
-test at `:311` into module-level helpers, and make the old test call them:
+First, a no-behaviour-change commit: move `card()` (`:313-338`), `symbols`
+(`:340`), `data` (`:341-368`), `view` (`:374-391`) and `chips()` (`:393-394`)
+out of the test at `:311` into module-level helpers, and make the old test
+call them. Leave `grades_before` / `picks_before` / `sections_before`
+(`:369-373`) and `card_fragment` (`:396-410`) inside the old test — they are
+its own assertions' scaffolding, not fixture:
 
 ```python
 def _populated_card(symbol):
@@ -1650,11 +1865,11 @@ def _populated_card(symbol):
 
 def _populated_data():
     symbols = ["NVDA", "AMD", "AVGO"]
-    return {...the dict at :339-375, using _populated_card(symbol)...}
+    return {...the dict at :341-368, using _populated_card(symbol)...}
 
 
 def _populated_view(calendar):
-    return {...the dict at :376-392 with "calendar": calendar...}
+    return {...the dict at :374-391 with "calendar": calendar...}
 
 
 def _chips(fragment):
@@ -1690,19 +1905,29 @@ equality is asserted because panels legitimately differ by symbol/expiry):
     def test_each_registered_pick_line_entry_appears_in_that_picks_own_panel(self):
         data = _populated_data()
         view = _populated_view(self.calendar)
-        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
-            html = ad.render(data, event_view=view)   # use the same render entry the old test used (:396-410)
+        with (
+            mock.patch.object(config, "BOARD_LANES_ENABLED", True),
+            mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+            mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"]),   # (:417) — the fixture has no VST/AMZN
+        ):
+            html = ad.render(data, event_view=view)   # same entry the old test uses at :419
         line = html[html.index('class="event-line"'):]
         line = line[: line.index("</div>") + 6]
         for pick in ad.select_top_picks(data):
-            panel_start = html.index(f'id="symbol-{pick["symbol"]}"')
-            panel = html[panel_start: html.index("</details>", panel_start)]
+            # Panels nest <details> three deep (:3340, :3296); slice to the next
+            # symbol anchor or the drawer, never to the first "</details>".
+            start = html.index(f'id="symbol-{pick["symbol"]}"')
+            ends = [p for p in (html.find('id="symbol-', start + 1), html.find('id="diagnostics"', start)) if p != -1]
+            panel = html[start:min(ends)] if ends else html[start:]
             for chip in _chips(line):
                 self.assertIn(chip, panel)
 ```
 
-Executor note: the old test renders through a specific entry point at
-`:396-410` (read it); call the same one so `event_view` reaches `render`. Keep
+Executor note: the old test's render is `:419`
+(`html = ad.render(data, event_view=view)`) inside the two `mock.patch.object`
+guards at `:415-418`; both new tests keep those two patches — without
+`PICK_PINNED_SYMBOLS=["NVDA"]` the default `["VST","AMZN"]` (neither in the
+fixture) would add two empty pinned rows. Keep
 `test_pure_render_all_card_surfaces_and_failure_notice` (`:215`) green by
 wrapping it in `_legacy_layout()` if it asserts hero/pinned surfaces.
 
@@ -1730,8 +1955,11 @@ git commit -m "test(board): re-pin layout, dashboard and event-chip contracts to
 
 ```python
 def _visible_html(html: str) -> str:
-    """What the reader sees with fold-outs closed (D10): drop every symbol panel
-    and the diagnostics drawer, nesting-aware."""
+    """D10's measure: the page with EVERY fold-out treated as closed (owner
+    wording, spec §2.7/D10) — drop every symbol panel and the diagnostics
+    drawer, nesting-aware. Panels that render force-open (STALE/BLOCKED,
+    owner-pinned) are counted as closed here on purpose; how many of them there
+    are on real data is REPORTED (Task 8 Step 4), not targeted."""
     openers = ('<details class="panel symbol-panel"', '<details class="panel diagnostics-drawer"')
     out, i = [], 0
     while True:
@@ -1775,6 +2003,10 @@ class LaneBoardParityAndSizeTests(unittest.TestCase):
         self.assertLessEqual(visible.count("<h2"), 8)
         self.assertLessEqual(visible.count("<summary"), 20)
         self.assertNotIn('class="panel symbol-panel"', visible)
+        # Candour check on the counterfactual: how many panels the reader would
+        # actually find open on this fixture (pinned VST/AMZN + any STALE).
+        forced_open = html.count('<details class="panel symbol-panel" open>')
+        self.assertGreaterEqual(forced_open, 2)   # VST and AMZN are pinned; the measure above ignores them knowingly
 ```
 
 `_render_result(data)` is called with the same defaults `render()` uses
@@ -1798,12 +2030,15 @@ uv run ruff check . && uv run pyright              # both clean (board_lanes.py 
 ATTRACTIVENESS_INPUT_ROOT=/Users/carsynstephenson/options-validator-ops uv run python -m options_researcher.attractiveness_dashboard
 wc -c .tmp/dashboard/attractiveness.html                          # REPORTED (D10), not a target
 grep -c "<script" .tmp/dashboard/attractiveness.html              # 0
-PYTHONPATH=tests uv run python -c "from test_attractiveness_layout import _visible_html; h=open('.tmp/dashboard/attractiveness.html').read(); v=_visible_html(h); print('visible h2', v.count('<h2'), 'visible summaries', v.count('<summary'))"   # <= 8 and <= 20
+PYTHONPATH=tests uv run python -c "from pathlib import Path; from test_attractiveness_layout import _visible_html; h=Path('.tmp/dashboard/attractiveness.html').read_text(); v=_visible_html(h); print('visible h2', v.count('<h2'), 'visible summaries', v.count('<summary'), 'force-open panels', h.count('<details class=\"panel symbol-panel\" open>'))"   # <= 8, <= 20, and the force-open count is REPORTED with each panel's status label
 python3 -c "import json; d=json.load(open('.tmp/dashboard/picks_snapshot.json')); print([c['symbol'] for c in d['frozen_baseline']['candidates']], d['source_rows_sha256'])"
 ```
 
 The snapshot symbol list and `source_rows_sha256` must equal the pre-change
-values for the same session (record both in the PR body).
+values for the same session (record both in the PR body). These commands
+overwrite the LOCAL `.tmp/dashboard/attractiveness.html` and
+`picks_snapshot.json` of the checkout they run in (they read the ops cache,
+write locally) — expected and harmless.
 
 - [ ] **Step 5: Commit and open the DRAFT PR**
 
@@ -1816,9 +2051,11 @@ gh pr create --draft --title "Attractiveness board redesign — agreement table 
 
 PR body must contain: the spec path and D1–D12; the list of re-pinned tests
 with the (a)/(b)/(c) decision for each; the Friday-data numbers (bytes
-reported, visible h2, visible summaries, snapshot symbol list and
-`source_rows_sha256` before/after); the docstring amendment at `:3775`; and
-the standard authority paragraph (draft; no ready/merge/sync/ledger).
+reported, visible h2, visible summaries, force-open panel count with each
+panel's status label, snapshot symbol list and `source_rows_sha256`
+before/after); the double-render and `build_experiment_lanes` cost note; the
+docstring amendment at `:3775`; the source-hash consequence below; and the
+standard authority paragraph (draft; no ready/merge/sync/ledger).
 
 ---
 
@@ -1835,6 +2072,16 @@ Plus: `LegacyByteIdentityTests` green (flag off == pre-change snapshot);
 green; the three re-pinned files green with no deleted test; zero `<script`;
 every disclaimer verbatim; six drawer sections in order; the layout suite
 still runs in well under a second (no cache reads on injected fixtures).
+
+**Operational consequence to state in the PR body (owner-only to act on):**
+landing changes `diagnostic_source_hash()` — `research/hashing.py:132` walks
+`options_researcher/` and `tools/` as directories, so the new
+`board_lanes.py`, the edited `attractiveness_dashboard.py` and `config.py` all
+move it. `h7_data_gate.py:748` rejects a receipt whose `source_hash` no longer
+matches, so H7 source-health and data-gate receipts written before the merge
+are invalidated and must be re-run (source health → data gate → watcher,
+CLAUDE.md order) before the next entry window. This is a different gate from
+`FEASIBILITY_SOURCE_PATHS`, which is untouched.
 
 Every constraint above is labelled; anything Codex finds that contradicts a
 citation is a STOP-and-report, not a workaround. The implementation PR starts
