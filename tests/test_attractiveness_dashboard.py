@@ -3845,3 +3845,136 @@ class ExperimentLaneGatherTests(unittest.TestCase):
 
     def test_default_experiment_lanes_without_a_session_is_an_error_record(self):
         self.assertEqual(ad._default_experiment_lanes(None), {"__error__": "no board as-of session"})
+
+
+class LaneBoardRenderTests(unittest.TestCase):
+    def _board(self):
+        from options_researcher import board_lanes as bl
+        pick = {"symbol": "AMZN", "lane": "long_call", "strike": 265.0, "expiry": "2026-09-16", "dte": 13,
+                "score": 0,
+                "card": {"headline": "Buy the AMZN $265 call", "strike": 265.0, "expiry": "2026-09-16",
+                         "dte": 13, "cost": 319.0, "grades": {"liquidity": "GREEN"},
+                         "risk": {"max_loss": 319.0, "breakeven": 268.19},
+                         "top3_snapshot": {"candidate_id": "AMZN:long_call:2026-09-16:265.00"}}}
+        return bl.build_lane_board(
+            baseline_picks=[pick], context_selection={"state": "FAILED", "rows": [], "error": "ValueError"},
+            composite_cards=[], qm_picks=[], experiment_lanes={"exp_tbill": [
+                {"symbol": "NBIS", "state": "ABOVE_TBILL", "carry_spread": 2.89, "experiment_id": "EXP-TBILL",
+                 "asof": "2026-09-02"}]},          # dated OFF the board session on purpose (spec §5)
+            pinned=("VST",), blocked=[], cap=5, board_as_of="2026-09-03", qm_as_of="2026-09-03")
+
+    def test_agreement_table_prints_every_column_with_state_and_asof(self):
+        html = ad._agreement_table_html(self._board())
+        for title in ("Rule-based top 5", "Context lane", "Composite", "QM movement", "T-bill carry",
+                      "Spread stability", "Tail shape", "Beta to QQQ"):
+            self.assertIn(title, html)
+        self.assertIn("FAILED:ValueError", html)
+        self.assertIn("2026-09-03", html)
+        # spec §5: the T-bill lane is dated 2026-09-02 against a 2026-09-03 board — marked in
+        # the header AND in the board notes; the baseline (board session) is not marked.
+        self.assertIn('<span class="asof-mismatch"', html)
+        self.assertIn("as of 2026-09-02 ≠ board", html)
+        self.assertIn("T-bill carry: evidence as of 2026-09-02 ≠ board session 2026-09-03", html)
+        self.assertIn("as of unknown ≠ board", html)          # composite_cards=[] -> READY, undated -> marked
+        self.assertEqual(html.count('class="asof-mismatch"'), 2)
+        self.assertIn('class="agree"', html)
+        self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)   # h2 text kept (see step 4)
+        self.assertIn("TOP 5 PICKS TODAY", html)                                        # eyebrow text kept
+        # The three authority sentences whose sections leave the flag-on page (Global Constraints):
+        self.assertIn("This is a fit ranking, not a prediction", html)
+        self.assertIn("owner-pinned visibility — not ranked; these cards do not compete with or reorder "
+                      "the Top-5 shortlist.", html)
+        self.assertIn(ad._CONTEXT_LANE_DISCLAIMER, html)
+
+    def test_agreement_cell_counts_favourable_ready_lanes_only(self):
+        html = ad._agreement_table_html(self._board())
+        row = html[html.index('<td class="sym">AMZN'):]
+        self.assertIn("1/4", row[: row.index("</tr>")])
+
+    def test_pinned_name_without_a_pick_is_a_row_marked_pinned(self):
+        html = ad._agreement_table_html(self._board())
+        vst = html[html.index('<td class="sym">VST'):]
+        self.assertIn("pinned", vst[:400])
+        self.assertIn("not in the registered top 5", vst[:800])
+
+    def test_position_tiles_flag_a_stale_last_mark(self):
+        data = {"open_positions": {"rows": [
+            {"book": "H6", "identifier": "H6-0001", "text": "H6-0001 NVDA $220.00 call · exp 2026-09-18 · entered 2026-07-13"},
+            {"book": "shares", "identifier": "VST", "text": "VST 39 shares · cost basis $142.28 · acquired 2026-06-15"}],
+            "missing_sources": [], "sources": [], "h6_last_mark": "2026-07-27"},
+            "evaluation_date": "2026-09-04"}
+        html = ad._position_tiles_html(data, "FOMC decision · 2026-09-16")
+        self.assertIn("H6-0001", html)
+        self.assertIn("2026-07-27", html)
+        self.assertIn("29 sessions unmarked", html)
+        self.assertIn('class="tile bad"', html)          # older than CHAIN_STALE_BLOCK_SESSIONS
+        self.assertIn("VST 39 shares", html)
+        self.assertIn("FOMC decision", html)
+
+    def test_position_tiles_say_so_when_the_book_is_unreadable(self):
+        data = {"open_positions": {"rows": [], "missing_sources": ["data/positions/h6_positions.csv"],
+                                   "sources": [], "h6_last_mark": None}, "evaluation_date": "2026-09-04"}
+        html = ad._position_tiles_html(data, "")
+        self.assertIn('<div class="v">UNREAD</div>', html)
+        self.assertIn("data/positions/h6_positions.csv", html)
+        self.assertEqual(html.count('<div class="k">'), 4)          # spec §2.2: always four tiles (the wrapper is "tiles")
+
+    def test_position_tiles_are_four_even_when_the_book_was_not_assembled(self):
+        # Every injected fixture hits this branch: assemble() loads the book only on the real path (:1745).
+        html = ad._position_tiles_html({"evaluation_date": "2026-09-04"}, "")
+        self.assertEqual(html.count('<div class="k">'), 4)
+        self.assertIn("open_positions not assembled", html)
+
+    def test_status_strip_is_fail_visible_for_closes_and_ignores_chains_absent(self):
+        from options_researcher.schwab_chain_view import CHAIN_SOURCE, CHAINS_ABSENT
+        data = {"data_as_of": "2026-09-03", "as_of_kind": CHAIN_SOURCE, "evaluation_date": "2026-09-04",
+                "fresh_symbols": ["AMZN"], "stale_symbols": ["ET"],
+                "underlying_closes_freshness": {"state": "unavailable", "detail": "missing store files: X"},
+                "schwab_lane": {"verified_sessions": ["2026-09-03"], "receipts_found": True, "failures": [
+                    {"session": "2026-09-03", "kind": CHAINS_ABSENT, "reason": "research checkout"},
+                    {"session": "2026-09-01", "kind": "UNVERIFIED", "reason": "manifest missing"},
+                    {"session": "2026-08-01", "kind": "UNVERIFIED", "reason": "old"}]}}
+        html = ad._status_strip_html(data, context=None)
+        self.assertIn('class="dot crit"></span>closes unavailable', html)
+        self.assertIn("1 capture failure in window", html)     # 09-01 counts (3 sessions), 08-01 aged out, CHAINS_ABSENT ignored
+        self.assertIn("1 names fresh · 1 stale (ET)", html)
+
+    def test_open_slots_notice_mirrors_the_hero_slot_count(self):
+        data = ad.assemble(symbol_sections=[_fresh_section()], rv21_by_symbol={}, today="2026-08-14",
+                           experiment_lanes={})
+        watch = ad.select_top_picks(data, include_csp_watch=True)
+        html = ad._open_slots_notice_html(data, watch)
+        self.assertEqual(html.count("intentional open slot") > 0, len(watch) < config.PICK_TOP_N)
+
+    def test_pick_details_render_only_table_names(self):
+        data = ad.assemble(symbol_sections=[_fresh_section("AMZN"), _fresh_section("MSFT")],
+                           rv21_by_symbol={}, today="2026-08-14", experiment_lanes={})
+        html = ad._pick_details_html(
+            data, self._board(), context=None, event_view=None, evaluation_date="2026-08-14",
+            stale_symbols=set(), pinned_symbols=set(), protected_card_ids=set())
+        self.assertIn('id="symbol-AMZN"', html)
+        self.assertNotIn('id="symbol-MSFT"', html)
+        self.assertNotIn('id="symbol-VST"', html)    # pinned row WITHOUT a section: a row, never a panel
+
+class QmLaneEvidenceDateTests(unittest.TestCase):
+    def test_mixed_qm_dates_reach_the_rendered_column_note(self):
+        from options_researcher import board_lanes as bl
+        context = {"symbols": {"AMZN": {"as_of": "2026-09-02"},
+                                "NVDA": {"as_of": "2026-09-03"}}}
+        latest, earliest = ad._qm_evidence_dates(context)
+        self.assertEqual((latest, earliest), ("2026-09-03", "2026-09-02"))
+        board = bl.build_lane_board(baseline_picks=[], context_selection=None,
+            composite_cards=None, qm_picks=[], experiment_lanes={}, pinned=(), blocked=[],
+            board_as_of="2026-09-04", qm_as_of=latest, qm_earliest_as_of=earliest)
+        rendered = ad._agreement_table_html(board)
+        self.assertIn("mixed as-of (earliest 2026-09-02)", rendered)
+        self.assertIn("QM movement: evidence as of 2026-09-03 ≠ board session 2026-09-04", rendered)
+
+    def test_qm_top_level_date_is_used_without_erasing_mixed_symbol_dates(self):
+        context = {"as_of": "2026-09-03", "symbols": {
+            "AMZN": {"as_of": "2026-09-02"}, "NVDA": {"as_of": "2026-09-03"}}}
+        self.assertEqual(ad._qm_evidence_dates(context), ("2026-09-03", "2026-09-02"))
+        self.assertEqual(ad._qm_evidence_dates({"as_of": "2026-09-03"}),
+                         ("2026-09-03", "2026-09-03"))
+        self.assertEqual(ad._qm_evidence_dates(None), (None, None))
+        self.assertEqual(ad._qm_evidence_dates({"symbols": {"AMZN": {}}}), (None, None))

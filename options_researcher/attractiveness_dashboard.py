@@ -42,12 +42,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import config
 from options_researcher import display_rank
 
 if TYPE_CHECKING:
+    from options_researcher.board_lanes import BoardRow, LaneBoard, LaneColumn
     from options_researcher.hypothesis_evidence import SymbolEvidence
 
 OUTPUT_PATH = os.path.join(".tmp", "dashboard", "attractiveness.html")
@@ -4840,6 +4841,290 @@ def _composite_html(data: dict) -> str:
     )
 
 
+def _seq(value: object) -> list[object]:
+    """pyright-safe list view of a Mapping value that should be a sequence."""
+    return list(value) if isinstance(value, (list, tuple)) else []
+
+
+def _status_strip_html(data: dict, context: dict | None) -> str:
+    """One line, five facts, each a coloured dot + a word (spec §2.1). Every
+    dot is state-driven; an unavailable closes store is CRIT, never green."""
+    from options_researcher.schwab_chain_view import CHAIN_SOURCE, CHAINS_ABSENT, CONVENTION_LABEL
+    from options_researcher.top3_snapshot import trading_sessions_between
+
+    as_of = str(data.get("data_as_of") or "no cached data")
+    on_schwab = data.get("as_of_kind") == CHAIN_SOURCE
+    source = f"{CONVENTION_LABEL}, session {as_of}" if on_schwab else f"frozen EOD {as_of}"
+    fresh = _seq(data.get("fresh_symbols"))
+    stale = [str(s) for s in _seq(data.get("stale_symbols"))]
+    closes = data.get("underlying_closes_freshness")
+    closes = closes if isinstance(closes, Mapping) else {"state": "unavailable", "detail": "not assembled"}
+    closes_ok = closes.get("state") == "available"
+    closes_text = (f"closes through {closes.get('as_of')}" if closes_ok
+                   else f"closes unavailable — {closes.get('detail', 'unknown')}")
+    lane = data.get("schwab_lane")
+    failures = lane.get("failures") if isinstance(lane, Mapping) else None
+    failures = [f for f in (failures or []) if isinstance(f, Mapping) and f.get("kind") != CHAINS_ABSENT]
+    # Same retention rule as _schwab_state_html (brief 37 WP-G, :1058-1110): a failure
+    # is "in window" when age <= CHAIN_STALE_BLOCK_SESSIONS; when the age cannot be
+    # computed the failure stays counted (fail-visible).
+    evaluation = data.get("evaluation_date")
+    in_window = 0
+    for f in failures:
+        age: int | None = None
+        if isinstance(evaluation, str) and isinstance(f.get("session"), str):
+            try:
+                age = trading_sessions_between(str(f["session"]), evaluation)
+            except Exception:
+                age = None
+        if not isinstance(age, int) or age <= config.CHAIN_STALE_BLOCK_SESSIONS:
+            in_window += 1
+    researched = str((context or {}).get("researched_on") or "never")
+
+    def dot(cls: str, text: str) -> str:
+        return f'<span class="strip-item"><span class="dot {cls}"></span>{_esc(text)}</span>'
+
+    plural = "failure" if in_window == 1 else "failures"
+    return ('<div class="status-strip">'
+            + dot("good" if on_schwab else "warn", f"option quotes: {source}")
+            + dot("good" if closes_ok else "crit", closes_text)
+            + dot("warn" if stale else "good",
+                  f"{len(fresh)} names fresh · {len(stale)} stale" + (f" ({', '.join(stale)})" if stale else ""))
+            + dot("good" if researched == as_of else "warn", f"research annotations {researched}")
+            + dot("crit" if in_window else "good", f"{in_window} capture {plural} in window")
+            + "</div>")
+
+
+def _position_tiles_html(data: dict, event_line_text: str) -> str:
+    """Exactly four stat tiles (spec §2.2). Reads only data['open_positions'];
+    an unreadable source is printed in the first tile, never treated as an empty
+    book. The last-mark
+    tile is red when the mark is older than the board's own staleness limit
+    (config.CHAIN_STALE_BLOCK_SESSIONS — reused, not a new number)."""
+    from options_researcher.top3_snapshot import trading_sessions_between
+
+    positions = data.get("open_positions")
+    if not isinstance(positions, Mapping):
+        # Not assembled (every injected fixture; :1745 loads the book on the real path only).
+        # Still exactly four tiles, first one fail-visible.
+        positions = {"rows": [], "missing_sources": ["open_positions not assembled"], "sources": [],
+                     "h6_last_mark": None}
+    rows = [r for r in (positions.get("rows") or []) if isinstance(r, Mapping)]
+    missing = [str(m) for m in (positions.get("missing_sources") or [])]
+    option_rows = [r for r in rows if r.get("book") != "shares"]
+    share_rows = [r for r in rows if r.get("book") == "shares"]
+    last_mark = positions.get("h6_last_mark")
+    evaluation = data.get("evaluation_date")
+    mark_age: int | None = None
+    if isinstance(last_mark, str) and isinstance(evaluation, str):
+        try:
+            mark_age = trading_sessions_between(last_mark, evaluation)
+        except Exception:
+            mark_age = None
+    mark_bad = isinstance(mark_age, int) and mark_age > config.CHAIN_STALE_BLOCK_SESSIONS
+
+    def tile(k: str, v: str, d: str, cls: str = "") -> str:
+        return (f'<div class="tile{(" " + cls) if cls else ""}"><div class="k">{_esc(k)}</div>'
+                f'<div class="v">{_esc(v)}</div><div class="d">{_esc(d)}</div></div>')
+
+    tiles: list[str] = []
+    if missing:   # spec §2.2 is FOUR tiles: an unreadable/unassembled book takes over the first tile, never a fifth
+        tiles.append(tile("Open option", "UNREAD", "could not be read: " + ", ".join(missing), "bad"))
+    else:
+        tiles.append(tile("Open option", str(option_rows[0].get("identifier")) if option_rows else "none",
+                          str(option_rows[0].get("text")) if option_rows else "no open option positions"))
+    tiles.append(tile("Last mark", str(last_mark) if last_mark else "none",
+                      f"{mark_age} sessions unmarked" if isinstance(mark_age, int) else "no mark recorded",
+                      "bad" if mark_bad else ""))
+    tiles.append(tile("Shares", str(share_rows[0].get("text", "")).split(" · ")[0] if share_rows else "none",
+                      str(share_rows[0].get("text")) if share_rows else "no share lots recorded"))
+    tiles.append(tile("Event ahead", event_line_text.split(" · ")[0] if event_line_text else "none",
+                      event_line_text or "no upcoming event for the registered picks"))
+    return '<div class="tiles">' + "".join(tiles) + "</div>"
+
+
+_AGREE_BAR_PX = 14   # display-only: bar width per agreeing lane (LLM-proposed 2026-09-06; not a strategy number)
+
+
+def _agreement_table_html(board: LaneBoard) -> str:
+    """Spec §3. Row order and the 'Agree' count come from the pure module;
+    this function only prints. The <h2> text is byte-identical to today's
+    shortlist heading (:4213); the eyebrow keeps today's phrase (:4212) and
+    appends " · agreement across lanes". 20+ test assertions locate the
+    shortlist by them. It also carries, verbatim, the
+    three authority sentences whose sections leave the flag-on page (hero
+    :4215 in header-sub; pinned strip :4707-4708 and context lane :4442-4447
+    via _table_footnotes_html) — see the brief's Global Constraints."""
+    fav = [c for c in board.columns if c.favourable]
+    cau = [c for c in board.columns if not c.favourable]
+
+    def header(col: LaneColumn) -> str:
+        as_of = _esc(str(col.as_of or "unknown"))
+        as_of_html = (
+            f'<span class="asof-mismatch" title="this lane\'s evidence date is not the board\'s chain session">'
+            f'as of {as_of} ≠ board</span>'
+            if col.as_of_mismatch else f"as of {as_of}"
+        )
+        return (f'<th title="{_esc(col.note)}">{_esc(col.title)}<br>'
+                f'<span class="th-sub">{_esc(col.kind)} · {as_of_html} · {_esc(col.state)}</span></th>')
+
+    def cell(row: BoardRow, col: LaneColumn) -> str:
+        if col.state != "READY":
+            return '<td class="lane-off"></td>'
+        m = row.marks.get(col.key)
+        if m is None:
+            return "<td></td>"
+        cls = "warn" if not col.favourable else ("veto" if not m.counts else "on")
+        return f'<td><span class="chip {cls}">{_esc(m.label)}</span></td>'
+
+    def pick_cell(row: BoardRow) -> str:
+        if row.baseline_pick is not None:
+            card = row.baseline_pick.get("card")
+            card = card if isinstance(card, Mapping) else {}
+            risk = card.get("risk")
+            risk = risk if isinstance(risk, Mapping) else {}
+            cost = _num_or_zero(card.get("cost"))
+            worst = _num_or_zero(risk.get("max_loss"))
+            be = _num_or_zero(risk.get("breakeven"))
+            econ = (f"cost ${cost:,.0f} · worst -${worst:,.0f} · breakeven ${be:,.2f} · "
+                    f"{_esc(str(card.get('expiry') or '?'))} ({_esc(str(card.get('dte') or '?'))}d)")
+            return (f'{_esc(str(card.get("headline") or ""))}<div class="econ">{econ} · '
+                    f'<a href="#symbol-{_esc(row.symbol)}">details</a></div>')
+        if row.block_reason:
+            return f'<span class="blocked">{_esc(row.block_reason)}</span>'
+        return '<span class="muted">not in the registered top 5</span>'
+
+    head = ('<tr><th rowspan="2">Name</th><th rowspan="2">Registered pick (baseline decides the order)</th>'
+            f'<th colspan="{len(fav)}" class="group">Favourable lanes · top {config.PICK_TOP_N} each</th>'
+            '<th rowspan="2">Agree</th>'
+            f'<th colspan="{len(cau)}" class="group">Cautions (shown, never counted)</th></tr>'
+            "<tr>" + "".join(header(c) for c in fav) + "".join(header(c) for c in cau) + "</tr>")
+    body: list[str] = []
+    for row in board.rows:
+        pinned = ' <span class="chip">pinned</span>' if row.pinned else ""
+        agree = (f'<td class="agree-cell"><span class="bar" style="width:{row.fav_count * _AGREE_BAR_PX}px"></span>'
+                 f'<span class="agree">{row.fav_count}/{row.fav_ready}</span></td>')
+        body.append(f'<tr><td class="sym">{_esc(row.symbol)}{pinned}</td><td>{pick_cell(row)}</td>'
+                    + "".join(cell(row, c) for c in fav) + agree + "".join(cell(row, c) for c in cau) + "</tr>")
+    notes = "".join(f'<div class="notice info">{_esc(n)}</div>' for n in board.notes)
+    foot = _table_footnotes_html()
+    return ('<section class="panel agreement" id="agreement-table">'
+            '<div class="eyebrow">Daily shortlist · TOP 5 PICKS TODAY · agreement across lanes</div>'
+            '<h2>Rule-based top 5 — best policy-and-liquidity fit today</h2>'
+            '<p class="header-sub">Every name any lane picked or flagged, the registered picks first. '
+            'The registered baseline decides the order and is never re-ordered. '
+            'This is a fit ranking, not a prediction. "Agree" counts favourable lanes only — '
+            'a description, never a score; cautions are shown but never counted.</p>'
+            f'{notes}<table class="agreement-table"><thead>{head}</thead><tbody>{"".join(body)}</tbody></table>'
+            f'{foot}</section>')
+
+
+def _num_or_zero(value: object) -> float:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
+
+
+def _qm_evidence_dates(qm_context: Mapping[str, object] | None) -> tuple[str | None, str | None]:
+    """Latest and earliest QM evidence sessions; retain mixed dates for the header.
+
+    The real context carries a top-level as_of (qm_dashboard.build_qm_context).
+    Include per-symbol dates when supplied, so injected mixed evidence stays visible.
+    Missing dates are never replaced with the board session.
+    """
+    if not isinstance(qm_context, Mapping):
+        return None, None
+    dates: list[str] = []
+    top = qm_context.get("as_of")
+    if isinstance(top, str) and top:
+        dates.append(top)
+    symbols = qm_context.get("symbols")
+    if isinstance(symbols, Mapping):
+        for item in symbols.values():
+            value = item.get("as_of") if isinstance(item, Mapping) else None
+            if isinstance(value, str) and value:
+                dates.append(value)
+    return (max(dates), min(dates)) if dates else (None, None)
+
+
+def _qm_as_of(qm_context: Mapping[str, object] | None) -> str | None:
+    """QM's latest evidence date, independent of the board session."""
+    return _qm_evidence_dates(qm_context)[0]
+
+
+def _table_footnotes_html() -> str:
+    """The two authority sentences whose sections leave the flag-on page, verbatim
+    (pinned strip :4707-4708; context lane :4442-4447). Printed under the agreement
+    table AND by the LANE BOARD FAILED fallback, so spec §6.4 holds on both paths."""
+    return ('<p class="table-foot">Pinned rows: owner-pinned visibility — not ranked; these cards do not '
+            'compete with or reorder the Top-5 shortlist.</p>'
+            f'<p class="table-foot">Context lane column: {_esc(_CONTEXT_LANE_DISCLAIMER)}</p>')
+
+
+def _event_line_html(board: LaneBoard, event_view: Mapping[str, object] | None,
+                     evaluation_date: str) -> str:
+    """D11: the sorted union of the REGISTERED PICKS' event chips, printed once.
+    Names without a baseline pick contribute nothing (their chips stay in
+    their detail panel). An EVENT LAYER FAILED banner is returned as-is."""
+    if not event_view:
+        return ""
+    seen: dict[str, None] = {}
+    for row in board.rows:
+        if row.baseline_pick is None:
+            continue
+        card = row.baseline_pick.get("card")
+        if not isinstance(card, Mapping):
+            continue
+        frag = _event_chips_html(dict(card), row.symbol, evaluation_date, event_view)
+        if frag.startswith('<div class="notice bad">'):
+            return frag
+        for text in re.findall(r'<span class="event-chip">EVENT · (.*?)</span>', frag):
+            seen.setdefault(text, None)
+    if not seen:
+        return ""
+    return ('<div class="event-line"><span class="event-line-label">Events ahead for the registered picks:</span>'
+            + "".join(f'<span class="event-chip">EVENT · {t}</span>' for t in sorted(seen)) + "</div>")
+
+
+def _open_slots_notice_html(data: dict, watch_picks: Sequence[Mapping[str, object]]) -> str:
+    """Today's consolidated open-slot notice, unchanged in text (:4200-4203 uses
+    the watch-inclusive pick list to size the range). Wrapped in the same
+    `hero-grid` parent the hero gives it (:4708 pattern), because
+    `_open_slot_group_html` (:4096) emits `hero-card … empty-slot` markup whose
+    layout rules live on that parent. Empty when there is no open slot."""
+    inner = _open_slots_html(
+        [_empty_hero_slot(data, slot)
+         for slot in range(len(watch_picks) + 1, config.PICK_TOP_N + 1)],
+        prefix="Pick", total=config.PICK_TOP_N)
+    return f'<div class="hero-grid open-slots">{inner}</div>' if inner else ""
+
+
+def _pick_details_html(
+    data: dict, board: LaneBoard, *, context: dict | None,
+    event_view: Mapping[str, object] | None, evaluation_date: str, stale_symbols: set[str],
+    pinned_symbols: set[str], protected_card_ids: set[int],
+) -> str:
+    """One per-name panel per table row, in BOARD-ROW order (spec §2.5) — not in
+    data["symbols"] order. A row whose symbol has no section (a pinned name
+    with no cached chain; every DATA_BLOCKED row) renders a row in the table
+    but no panel here; other names are not rendered at all. The panel HTML is
+    byte-identical to today's (D10); the caller decides whether pinned names
+    are force-open (I1: under the flag they are not)."""
+    wanted = [r.symbol for r in board.rows]
+    by_symbol = {str(sec.get("symbol")): sec for sec in _seq(data.get("symbols")) if isinstance(sec, dict)}
+    parts: list[str] = []
+    for symbol in wanted:
+        sec = by_symbol.get(symbol)
+        if sec is None:
+            continue
+        panel_html, _name = _symbol_panel_html(
+            sec, context=context, event_view=event_view, evaluation_date=evaluation_date,
+            stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
+        parts.append(panel_html)
+    if not parts:
+        return ""
+    return ('<section class="panel details" id="pick-details"><div class="eyebrow">Pick details on demand</div>'
+            '<h2>Details for the names above</h2>' + "".join(parts) + "</section>")
+
+
 def _evidence_attr(value: object, name: str, default: object = None) -> object:
     if isinstance(value, Mapping):
         return value.get(name, default)
@@ -5534,6 +5819,132 @@ def _diagnostics_drawer_html(sections: Sequence[str]) -> str:
             f'<div class="drawer-body">{body}</div></details>')
 
 
+def _symbol_panel_html(
+    sec: Any, *, context: dict | None, event_view: Mapping[str, object] | None,
+    evaluation_date: str, stale_symbols: set[str], pinned_symbols: set[str],
+    protected_card_ids: set[int],
+) -> tuple[str, str]:
+    """One per-symbol panel, byte-identical to the pre-brief-39 inline loop.
+    Returns (panel_html, symbol_name). It decides its own open/closed state
+    (fail-visible DATA_BLOCKED/STALE/SKIPPED, and owner-pinned names when the
+    caller passes them in pinned_symbols)."""
+    tech = sec.get("technicals")
+    ranked_groups = _rank_groups_for_display(sec["groups"], tech=tech)
+    section_stale = (sec.get("features_stale") is True
+                     or sec.get("symbol") in stale_symbols)
+    rendered_groups = []
+    for rank, group in enumerate(ranked_groups, start=1):
+        protected_indexes = frozenset(
+            index for index, card in enumerate(group.get("cards", []))
+            if id(card) in protected_card_ids)
+        rendered_groups.append(_group_html(
+            group, rank=rank, tech=tech, close=float(sec["close"]),
+            protected_indexes=protected_indexes,
+            collapse_enabled=not section_stale, symbol=str(sec.get("symbol", "")),
+            evaluation_date=evaluation_date, event_view=event_view))
+    groups = "".join(rendered_groups)
+    rank_note = (
+        '<div class="strategy-rank-note">'
+        "Strategy rank: 1 is the strongest current fit; "
+        "this display order does not change any policy or trade rule."
+        "</div>"
+    )
+    tech_line = sec.get("technicals_line")
+    tech_html = f'<div class="tech-line">{_esc(tech_line)}</div>' if tech_line else ""
+    stale_html = ""
+    if sec.get("features_stale"):
+        stale_html = (
+            '<div class="notice watch">! IV features are from '
+            f"{_esc(sec.get('features_as_of', '?'))}, older than the "
+            f"chain date ({_esc(sec.get('as_of', '?'))}) — IV-rank/VRP "
+            "badges are STALE and this symbol is excluded from the "
+            "Top-5 shortlist.</div>"
+        )
+    display_only_html = (
+        f'<div><span class="status-badge unknown">'
+        f"{_esc(DISPLAY_ONLY_LABEL)}</span></div>"
+        if sec.get("display_only")
+        else ""
+    )
+    display_date_stat = (
+        f'<div class="symbol-stat"><span>Display data</span><strong>'
+        f"{_esc(sec.get('as_of', '?'))}</strong></div>"
+        if sec.get("display_only")
+        else ""
+    )
+    status_labels, panel_open = _panel_status(sec, stale_symbols)
+    status_html = "".join(
+        f'<span class="status-badge unknown">{_esc(label)}</span>'
+        for label in status_labels)
+    # Collapsed by default so the board is a board, not a scroll. A
+    # fail-visible panel (DATA_BLOCKED / STALE / SKIPPED) still opens
+    # itself, and the owner-pinned names stay open by standing directive.
+    open_attr = (" open" if panel_open
+                 or str(sec.get("symbol", "")) in pinned_symbols else "")
+    event_failure = ""
+    if isinstance(event_view, Mapping):
+        raw_failures = event_view.get("failures", {})
+        failure_map = ({str(key): str(value) for key, value in raw_failures.items()}
+                       if isinstance(raw_failures, Mapping) else {})
+        failure = failure_map.get(sec.get("symbol")) or failure_map.get("__calendar__")
+        if failure:
+            event_failure = (f'<div class="notice bad">EVENT LAYER FAILED — '
+                             f'{_esc(failure)}</div>')
+    implied = ""
+    if isinstance(event_view, Mapping):
+        raw_moves = event_view.get("implied_moves", {})
+        moves = ({str(key): value for key, value in raw_moves.items()}
+                 if isinstance(raw_moves, Mapping) else {})
+        move = moves.get(str(sec.get("symbol", "")))
+        if isinstance(move, Mapping):
+            if move.get("text") == "UNAVAILABLE":
+                implied = (f'<div class="notice watch">implied move UNAVAILABLE — '
+                           f'{_esc(move.get("reason", "unknown"))}</div>')
+            elif move.get("text"):
+                implied = (f'<div class="label">implied move {_esc(move["text"])} · '
+                           f'{_esc(move.get("method", ""))} · chain session '
+                           f'{_esc(move.get("chain_session", ""))} · capture convention '
+                           f'{_esc(move.get("capture_convention", ""))} · expiry '
+                           f'{_esc(move.get("expiry", ""))} · strike '
+                           f'{_esc(move.get("strike", ""))} · spot source '
+                           f'{_esc(move.get("spot_source", ""))} · intraday receipt session '
+                           f'{_esc(move.get("intraday_receipt_session", ""))} · spot timestamp '
+                           f'{_esc(move.get("spot_timestamp", ""))}</div>')
+    symbol_name = str(sec["symbol"])
+    panel_html = (
+        f'<div class="symbol-anchor" id="symbol-{_esc(symbol_name)}"></div>'
+        f'<details class="panel symbol-panel"{open_attr}>'
+        '<summary class="symbol-header">'
+        '<span class="symbol-summary-line">'
+        f"<strong>{_esc(symbol_name)}</strong>"
+        f'<span class="summary-sep">·</span>'
+        f'<span class="summary-source">{_esc(_panel_source_text(sec))}</span>'
+        f'<span class="summary-sep">·</span>'
+        f'<span class="summary-grade">'
+        f"{_esc(_panel_grade_text(sec, status_labels))}</span></span>"
+        f'<span class="panel-status">{status_html}</span></summary>'
+        f'<div class="symbol-body">'
+        '<div class="eyebrow">Symbol review</div>'
+        f"<h2>{_esc(symbol_name)}</h2>{display_only_html}"
+        f'<div class="label">{_esc(_panel_best_headline(sec))}</div>'
+        '<div class="symbol-stats">'
+        f'<div class="symbol-stat"><span>{_esc(_close_stat_label(sec))}'
+        f"</span><strong>${sec['close']:,.2f}</strong></div>"
+        f'<div class="symbol-stat"><span>As of</span><strong>'
+        f'{_esc(sec.get("as_of", "?"))}</strong></div>'
+        f'<div class="symbol-stat"><span>IV rank</span><strong>'
+        f"{_esc(_iv_rank_text(sec))}</strong></div>"
+        f"{_atm_iv_stat_html(sec)}{display_date_stat}</div>"
+        f'{event_failure}{implied}'
+        f'{_elapsed_events_html(evaluation_date, event_view)}{_section_source_html(sec)}'
+        f"{_feature_unavailable_html(sec)}{stale_html}{tech_html}"
+        f"{_symbol_context_html(symbol_name, context)}{rank_note}{groups}"
+        f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
+        "</details>"
+    )
+    return panel_html, symbol_name
+
+
 def _render_result(
     data: dict,
     *,
@@ -5576,123 +5987,13 @@ def _render_result(
     pinned_symbols = {str(name) for name in config.PICK_PINNED_SYMBOLS}
     symbols_html = ""
     symbol_names: list[str] = []
+    evaluation_date = str(data.get("evaluation_date") or data.get("data_as_of") or "")
     for sec in data["symbols"]:
-        tech = sec.get("technicals")
-        ranked_groups = _rank_groups_for_display(sec["groups"], tech=tech)
-        section_stale = (sec.get("features_stale") is True
-                         or sec.get("symbol") in stale_symbols)
-        rendered_groups = []
-        evaluation_date = str(data.get("evaluation_date") or data.get("data_as_of") or "")
-        for rank, group in enumerate(ranked_groups, start=1):
-            protected_indexes = frozenset(
-                index for index, card in enumerate(group.get("cards", []))
-                if id(card) in protected_card_ids)
-            rendered_groups.append(_group_html(
-                group, rank=rank, tech=tech, close=float(sec["close"]),
-                protected_indexes=protected_indexes,
-                collapse_enabled=not section_stale, symbol=str(sec.get("symbol", "")),
-                evaluation_date=evaluation_date, event_view=event_view))
-        groups = "".join(rendered_groups)
-        rank_note = (
-            '<div class="strategy-rank-note">'
-            "Strategy rank: 1 is the strongest current fit; "
-            "this display order does not change any policy or trade rule."
-            "</div>"
-        )
-        tech_line = sec.get("technicals_line")
-        tech_html = f'<div class="tech-line">{_esc(tech_line)}</div>' if tech_line else ""
-        stale_html = ""
-        if sec.get("features_stale"):
-            stale_html = (
-                '<div class="notice watch">! IV features are from '
-                f"{_esc(sec.get('features_as_of', '?'))}, older than the "
-                f"chain date ({_esc(sec.get('as_of', '?'))}) — IV-rank/VRP "
-                "badges are STALE and this symbol is excluded from the "
-                "Top-5 shortlist.</div>"
-            )
-        display_only_html = (
-            f'<div><span class="status-badge unknown">'
-            f"{_esc(DISPLAY_ONLY_LABEL)}</span></div>"
-            if sec.get("display_only")
-            else ""
-        )
-        display_date_stat = (
-            f'<div class="symbol-stat"><span>Display data</span><strong>'
-            f"{_esc(sec.get('as_of', '?'))}</strong></div>"
-            if sec.get("display_only")
-            else ""
-        )
-        status_labels, panel_open = _panel_status(sec, stale_symbols)
-        status_html = "".join(
-            f'<span class="status-badge unknown">{_esc(label)}</span>'
-            for label in status_labels)
-        # Collapsed by default so the board is a board, not a scroll. A
-        # fail-visible panel (DATA_BLOCKED / STALE / SKIPPED) still opens
-        # itself, and the owner-pinned names stay open by standing directive.
-        open_attr = (" open" if panel_open
-                     or str(sec.get("symbol", "")) in pinned_symbols else "")
-        event_failure = ""
-        if isinstance(event_view, Mapping):
-            raw_failures = event_view.get("failures", {})
-            failure_map = ({str(key): str(value) for key, value in raw_failures.items()}
-                           if isinstance(raw_failures, Mapping) else {})
-            failure = failure_map.get(sec.get("symbol")) or failure_map.get("__calendar__")
-            if failure:
-                event_failure = (f'<div class="notice bad">EVENT LAYER FAILED — '
-                                 f'{_esc(failure)}</div>')
-        implied = ""
-        if isinstance(event_view, Mapping):
-            raw_moves = event_view.get("implied_moves", {})
-            moves = ({str(key): value for key, value in raw_moves.items()}
-                     if isinstance(raw_moves, Mapping) else {})
-            move = moves.get(str(sec.get("symbol", "")))
-            if isinstance(move, Mapping):
-                if move.get("text") == "UNAVAILABLE":
-                    implied = (f'<div class="notice watch">implied move UNAVAILABLE — '
-                               f'{_esc(move.get("reason", "unknown"))}</div>')
-                elif move.get("text"):
-                    implied = (f'<div class="label">implied move {_esc(move["text"])} · '
-                               f'{_esc(move.get("method", ""))} · chain session '
-                               f'{_esc(move.get("chain_session", ""))} · capture convention '
-                               f'{_esc(move.get("capture_convention", ""))} · expiry '
-                               f'{_esc(move.get("expiry", ""))} · strike '
-                               f'{_esc(move.get("strike", ""))} · spot source '
-                               f'{_esc(move.get("spot_source", ""))} · intraday receipt session '
-                               f'{_esc(move.get("intraday_receipt_session", ""))} · spot timestamp '
-                               f'{_esc(move.get("spot_timestamp", ""))}</div>')
-        symbol_name = str(sec["symbol"])
+        panel_html, symbol_name = _symbol_panel_html(
+            sec, context=context, event_view=event_view, evaluation_date=evaluation_date,
+            stale_symbols=stale_symbols, pinned_symbols=pinned_symbols, protected_card_ids=protected_card_ids)
         symbol_names.append(symbol_name)
-        symbols_html += (
-            f'<div class="symbol-anchor" id="symbol-{_esc(symbol_name)}"></div>'
-            f'<details class="panel symbol-panel"{open_attr}>'
-            '<summary class="symbol-header">'
-            '<span class="symbol-summary-line">'
-            f"<strong>{_esc(symbol_name)}</strong>"
-            f'<span class="summary-sep">·</span>'
-            f'<span class="summary-source">{_esc(_panel_source_text(sec))}</span>'
-            f'<span class="summary-sep">·</span>'
-            f'<span class="summary-grade">'
-            f"{_esc(_panel_grade_text(sec, status_labels))}</span></span>"
-            f'<span class="panel-status">{status_html}</span></summary>'
-            f'<div class="symbol-body">'
-            '<div class="eyebrow">Symbol review</div>'
-            f"<h2>{_esc(symbol_name)}</h2>{display_only_html}"
-            f'<div class="label">{_esc(_panel_best_headline(sec))}</div>'
-            '<div class="symbol-stats">'
-            f'<div class="symbol-stat"><span>{_esc(_close_stat_label(sec))}'
-            f"</span><strong>${sec['close']:,.2f}</strong></div>"
-            f'<div class="symbol-stat"><span>As of</span><strong>'
-            f'{_esc(sec.get("as_of", "?"))}</strong></div>'
-            f'<div class="symbol-stat"><span>IV rank</span><strong>'
-            f"{_esc(_iv_rank_text(sec))}</strong></div>"
-            f"{_atm_iv_stat_html(sec)}{display_date_stat}</div>"
-            f'{event_failure}{implied}'
-            f'{_elapsed_events_html(evaluation_date, event_view)}{_section_source_html(sec)}'
-            f"{_feature_unavailable_html(sec)}{stale_html}{tech_html}"
-            f"{_symbol_context_html(symbol_name, context)}{rank_note}{groups}"
-            f"{_hypothesis_panel_html(sec.get('hypothesis_evidence'))}</div>"
-            "</details>"
-        )
+        symbols_html += panel_html
     data_as_of = data.get("data_as_of") or "no cached data"
     display_data_as_of = data.get("display_data_as_of") or data_as_of
     display_date_meta = (
