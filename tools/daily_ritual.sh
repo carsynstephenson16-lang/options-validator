@@ -558,6 +558,7 @@ fi
 # any data-tier day (2026-08-20 and 2026-08-24 survived only by manual
 # rescue commits c9e74cc / 378230f / 13d48a9).
 # ---------------------------------------------------------------------------
+# ---- evidence staging ----
 DATA_TIER_PATHS=(reports/ritual reports/intraday_capture reports/live_probe reports/cache_runs
                  reports/h5 reports/h10 reports/schwab_chains reports/schwab_chains_intraday reports/pick_tracker reports/closes_receipts ledger/facts.log)
 GIT_ADD_PATHS=("${DATA_TIER_PATHS[@]}")
@@ -572,6 +573,7 @@ if [ "$FULL_AUTHORITY_RC" -eq 0 ]; then
                    reports/h7_receipts reports/h7_data_gate
                    reports/h6_forward reports/h8_forward)
   GIT_ADD_PATHS=("${GIT_ADD_PATHS[@]}" "${FULL_TIER_PATHS[@]}")
+  typeset -U GIT_ADD_PATHS
   EVIDENCE_COMMIT_MSG="data(h7): daily ritual evidence ${RUN_DATE}
 
 Autonomous persistence of the LIVE H7 forward window's daily evidence
@@ -579,7 +581,21 @@ Autonomous persistence of the LIVE H7 forward window's daily evidence
 Written by tools/daily_ritual.sh under an evidence-path allow-list; this
 commit never contains code."
 fi
-git add -- "${GIT_ADD_PATHS[@]}" 2>/dev/null
+for p in "${GIT_ADD_PATHS[@]}"; do
+  if [ ! -e "$p" ]; then
+    if git cat-file -e "HEAD:$p" 2>/dev/null; then
+      crit "evidence: REQUIRED allow-list path absent: $p"
+    else
+      note "evidence: allow-list path absent, not staged: $p"
+    fi
+  else
+    _stage_err="$(git add -- "$p" 2>&1)"; rc=$?
+    _stage_err="${_stage_err//$'\n'/ }"
+    if [ "$rc" -ne 0 ] || [ -n "$_stage_err" ]; then
+      crit "evidence: STAGING FAILED for $p — $_stage_err"
+    fi
+  fi
+done
 if git diff --cached --quiet 2>/dev/null; then
   note "evidence: nothing new to persist"
 elif git commit -q -m "$EVIDENCE_COMMIT_MSG"; then
@@ -587,6 +603,8 @@ elif git commit -q -m "$EVIDENCE_COMMIT_MSG"; then
 else
   note "evidence: COMMIT FAILED (retries next run)"
 fi
+
+# ---- end evidence staging ----
 
 # Bounded and prompt-free, matching the capture wrapper's own discipline: an
 # unattended push must fail closed quickly rather than hang. Most failures are
