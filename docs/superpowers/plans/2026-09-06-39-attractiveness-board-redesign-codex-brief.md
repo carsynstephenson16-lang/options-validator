@@ -1,9 +1,9 @@
 # Codex brief 39 — Attractiveness board redesign (agreement table) — implementation plan
 
-**Date:** 2026-09-06 (rev 5; rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`: 0 blockers, 4 majors, 2 medium, 7 minor, all applied here (page rebuilt from the brief's code, all three round-3 blockers proven closed); owner decisions D10–D12 recorded in the spec; **D13 and interpretation I1 PENDING owner ruling — do not dispatch before they are recorded**)
+**Date:** 2026-09-06 (rev 6, 2026-09-07 00:10 ET; rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`, 0 blockers, page rebuilt from the brief's code; rev 5 bounded verification PASS WITH FIXES — `…-round5.md`, 2 inherited majors + 3 minors, all applied here; owner decisions D10–D12 recorded in the spec; **D13 and interpretation I1 PENDING owner ruling — do not dispatch before they are recorded**)
 **Author:** Claude (orchestrating session; brainstorming + spec with the owner 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37/38; owner may substitute at dispatch)
-**Status:** DRAFT — round-4 fixes applied; pending (1) a bounded round-5 verification of those fixes and (2) owner ruling D13 (+ I1 veto window) before hand-off
+**Status:** READY FOR HAND-OFF — conditional on the owner recording D13 (option A assumed throughout) and not vetoing I1 in the spec's pending-rulings section; five review rounds, last two with zero blockers
 **Provenance:** file:line constraints are Repo-verified against origin/main
 @f83428d unless a sentence carries its own label. Counts marked "measured"
 were taken from the 2026-09-04 ops build by the round-1 reviewer. Sentences
@@ -185,9 +185,12 @@ interpretation the owner may veto in the same reply; the default is to proceed.
   are quoted in the spec's pending-ruling entry so the owner rules on the
   evidence. **If the owner vetoes I1:** pass `pinned_symbols` through instead
   of `set()`, leave `:874` at its current text, and change the two zero-open
-  assertions (Task 7's `:277` rewrite and Task 8's acceptance) to **2** —
-  measured on the fresh 8-symbol fixture (2 open panels, visible 4 `<h2>` /
-  6 `<summary>`, still inside the D10 targets).
+  assertions: Task 8's acceptance to **2** (measured on the fresh 8-symbol
+  fixture: 2 open panels, visible 4 `<h2>` / 6 `<summary>`) and Task 7's
+  `:277` rewrite to **1** (measured on that test's own 3-symbol fixture — VST
+  is the only pinned name with a section; AMZN has none). Under the veto the
+  acceptance test's `<h2> <= 4` leg passes at exactly 4 — no margin; leave the
+  limit at 4 rather than re-tightening.
 - Names that are on no lane, not pinned and not blocked are not named on the
   flag-on page (spec §2.5/D4 — the open-slot notice explains the shortlist
   gap); STALE names in that position are still NAMED in the status strip;
@@ -1143,8 +1146,9 @@ would cause when a test passes `experiment_lanes=`.)
 
 One EXISTING test takes the real gather path and therefore now runs the four
 builders inside the offline suite:
-`tests/test_attractiveness_dashboard.py:2859`
-`test_main_loads_board_and_context_from_same_external_root` patches
+`tests/test_attractiveness_dashboard.py:2801`
+`test_main_loads_board_and_context_from_same_external_root` (call site
+`:2859`) patches
 `ad._gather_all`, so `assemble()` sees `real_assembly=True` and
 `_default_experiment_lanes` fires (round 4 measured: one call, ~2 ms on that
 fixture's root, four lanes returned, test passes). Name it in the PR body so a
@@ -1332,7 +1336,7 @@ class LaneBoardRenderTests(unittest.TestCase):
         self.assertIn("open_positions not assembled", html)
 
     def test_status_strip_is_fail_visible_for_closes_and_ignores_chains_absent(self):
-        from options_researcher.schwab_chain_view import CHAIN_SOURCE, CHAINS_ABSENT  # ruff isort order (round 3)
+        from options_researcher.schwab_chain_view import CHAIN_SOURCE, CHAINS_ABSENT
         data = {"data_as_of": "2026-09-03", "as_of_kind": CHAIN_SOURCE, "evaluation_date": "2026-09-04",
                 "fresh_symbols": ["AMZN"], "stale_symbols": ["ET"],
                 "underlying_closes_freshness": {"state": "unavailable", "detail": "missing store files: X"},
@@ -2057,10 +2061,15 @@ are listed here.
 work here because pinning is the cause, not the cure — this is the one
 fail-visible contract where the contract under test IS the pinned open-state.
 The assertions inside the `PICK_PINNED_SYMBOLS=[]` patch (`:889-892`) pass
-unchanged and stay flag-on. Replace `:893-894` with the flag-on contract
+unchanged and stay flag-on. **Keep `:893`**
+(`data["symbols"][0]["features_stale"] = False`) — without that reset the
+panel is STALE-open and both new assertions are wrong: the flag-on
+`assertNotIn` fails and the legacy twin passes vacuously (round 5 measured).
+Replace only `:894` with the flag-on contract
 `self.assertNotIn('<details class="panel symbol-panel" open>', ad.render(data))`
 plus a `_legacy_layout()`-wrapped twin keeping today's assertion, each with a
-one-line comment citing I1.
+one-line comment citing I1 (round 5 measured: `SymbolPanelStatusTests` 4 tests
+OK on both branches).
 (c) `test_flag_off_matches_post_brief26_golden_bytes` (`:2239`) asserts a
 hard-coded SHA-256 (`:2263-2266`) on a default-flag render → add
 `mock.patch.object(config, "BOARD_LANES_ENABLED", False)` beside the existing
@@ -2308,6 +2317,10 @@ Expected: PASS.
 uv run python -m unittest discover -s tests        # exit 0
 uv run ruff check . && uv run pyright              # both clean (board_lanes.py is now in pyrightconfig include)
 ```
+
+If `ruff check .` reports `I001` (or `E501`, line length 100) on a line this
+brief supplies, the brief is wrong — apply `ruff check --diff`'s suggestion and
+note it in the PR body; do not reorder names.
 
 - [ ] **Step 4: Manual proof on Friday's data (orchestrator/owner runs it; include the commands and paste the numbers into the PR body)**
 
