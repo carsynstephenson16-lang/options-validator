@@ -3025,6 +3025,26 @@ _STYLE = """
   }
 """
 
+_BOARD_STYLE = """
+.status-strip{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;padding:6px 0 10px;border-bottom:1px solid var(--line)}
+.strip-item{white-space:nowrap}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.good{background:var(--good)}.dot.warn{background:var(--watch)}.dot.crit{background:var(--bad)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+.tile{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.tile.bad{border-color:var(--bad)}
+.tile .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.7}.tile .v{font-size:20px;font-weight:600}.tile .d{font-size:12px;opacity:.8}
+.chip{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-size:12px;margin:1px 2px 1px 0}
+.agreement-table{width:100%;border-collapse:collapse;font-size:13px}.agreement-table th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+.agreement-table th.group{text-align:center;border-left:1px solid var(--line)}.agreement-table .th-sub{font-weight:400;text-transform:none;letter-spacing:0;opacity:.75}
+.asof-mismatch{color:var(--watch);font-weight:600;opacity:1}
+.agreement-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
+.agreement-table td.sym{font-weight:700}.agreement-table td.lane-off{background:var(--surface-soft)}.agreement-table .econ{font-size:12px;opacity:.8}
+.table-foot{font-size:12px;opacity:.8;margin:8px 0 0}
+.agreement-table .blocked{color:var(--bad)}.agreement-table .muted{opacity:.6}
+.chip.on{border-color:var(--good)}.chip.warn{border-color:var(--watch)}.chip.veto{border-color:var(--bad)}
+.agree-cell .bar{display:inline-block;height:8px;border-radius:4px;background:var(--good);vertical-align:middle;margin-right:6px}.agree{font-weight:700}
+.event-line{margin:10px 0;font-size:13px}.event-line-label{margin-right:8px;opacity:.75}
+"""
+
 _EVENT_STYLE = """
   /* event-chip-style: neutral, non-grading annotations only */
   .event-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
@@ -6023,39 +6043,110 @@ def _render_result(
     )
     pinned_html = _pinned_html(data, event_view, records=pinned_records)
     qm_lanes_html = _qm_lanes_html(data, context, qm_context)
-    event_css = (_EVENT_STYLE if 'class="event-chip"' in
-                 (symbols_html + hero_html + qm_lanes_html + pinned_html) else "")
-    # Page order (2026-09-03 layout): open risk first, then the two shortlist
-    # lanes and their scoreboard, then the pinned strip and per-symbol panels;
-    # the descriptive/provenance lanes keep their relative order inside one
-    # closed drawer at the bottom.
-    body_html = (
-        f"{_freshness_html(data, context, qm_context, research_views_status, context_evidence, annotation_integrity=annotation_integrity)}"
-        f"{age_html}"
-        f"{warn_html}"
-        f"{_blocked_html(data.get('blocked') or [])}"
-        f"{_registered_bets_tracker_html(data)}"
-        f"{hero_html}"
-        f"{_composite_html(data)}"
-        f"{_pick_tracker_html(research_views_status)}"
-        f"{pinned_html}"
-        f"{symbols_html}"
-        + _diagnostics_drawer_html([
-            qm_lanes_html,
-            _research_desk_html(data, context, context_warning, annotation_notice),
-            _regime_strip_html(
-                research_views_status,
-                str(data.get("evaluation_date") or data_as_of)),
-            _experiments_shelf_html(research_views_status),
-            _quant_want_html(qm_context),
-            _market_html(context),
-        ])
-    )
+    if config.BOARD_LANES_ENABLED:
+        from options_researcher import board_lanes as _bl
+
+        board: LaneBoard | None
+        try:
+            qm_as_of, qm_earliest_as_of = _qm_evidence_dates(qm_context)
+            board = _bl.build_lane_board(
+                baseline_picks=qualified_picks,
+                context_selection=context_selection,
+                composite_cards=data.get("composite_signals"),
+                # select_qm_top_picks requires a Mapping (:489); None = "lane unavailable".
+                # Same guard the only other caller uses (:4281).
+                qm_picks=(select_qm_top_picks(data, qm_context, include_csp_watch=True)
+                          if isinstance(qm_context, Mapping) else None),
+                experiment_lanes=data.get("experiment_lanes"),
+                pinned=[str(r.get("symbol")) for r in pinned_records],
+                blocked=data.get("blocked") or [],
+                board_as_of=str(data.get("data_as_of") or ""),
+                qm_as_of=qm_as_of,
+                qm_earliest_as_of=qm_earliest_as_of,
+            )
+            board_error = None
+        except Exception as exc:  # fail-visible: never blank the decision area (spec §5)
+            board, board_error = None, exc.__class__.__name__
+        if board is not None:
+            event_line_html = _event_line_html(board, event_view, evaluation_date)
+            # I1: pinned names are rows; their panels open only for fail-visible statuses.
+            details_html = _pick_details_html(
+                data, board, context=context, event_view=event_view, evaluation_date=evaluation_date,
+                stale_symbols=stale_symbols, pinned_symbols=set(), protected_card_ids=protected_card_ids)
+            decision_html = _open_slots_notice_html(data, watch_picks) + _agreement_table_html(board)
+        else:
+            # hero_html already carries its own open-slot block (:4200-4203): no separate notice here.
+            # The two relocated authority sentences must survive the failure path too (spec §6.4).
+            event_line_html, details_html = "", symbols_html
+            decision_html = (f'<div class="notice bad">LANE BOARD FAILED — {_esc(str(board_error))}; '
+                             f'showing the registered picks only.</div>{hero_html}{_table_footnotes_html()}')
+        event_text = re.sub(r"<[^>]+>", " ", event_line_html).replace("Events ahead for the registered picks:", "").strip()
+        event_text = " ".join(event_text.split())
+        # Probe only fragments that are ON the flag-on page (qm_lanes_html sits in the drawer).
+        event_css = (_EVENT_STYLE if 'class="event-chip"' in
+                     (decision_html + event_line_html + details_html + qm_lanes_html) else "")
+        body_html = (
+            f"{_status_strip_html(data, context)}"
+            f"{warn_html}"
+            f"{_blocked_html(data.get('blocked') or [])}"
+            f"{_position_tiles_html(data, event_text)}"
+            f"{decision_html}"
+            f"{event_line_html}"
+            f"{details_html}"
+            + _diagnostics_drawer_html([
+                qm_lanes_html,
+                _research_desk_html(data, context, context_warning, annotation_notice),
+                _regime_strip_html(research_views_status, str(data.get("evaluation_date") or data_as_of)),
+                _experiments_shelf_html(research_views_status),
+                _quant_want_html(qm_context),
+                _market_html(context),
+                # relocated (spec §2.6, D9) — appended AFTER the six, text unchanged
+                _freshness_html(data, context, qm_context, research_views_status, context_evidence,
+                                annotation_integrity=annotation_integrity),
+                age_html,
+                _registered_bets_tracker_html(data),
+                _composite_html(data),
+                _pick_tracker_html(research_views_status),
+            ])
+        )
+        nav_html = ""
+        board_css = _BOARD_STYLE
+    else:
+        event_css = (_EVENT_STYLE if 'class="event-chip"' in
+                     (symbols_html + hero_html + qm_lanes_html + pinned_html) else "")
+        # Page order (2026-09-03 layout): open risk first, then the two shortlist
+        # lanes and their scoreboard, then the pinned strip and per-symbol panels;
+        # the descriptive/provenance lanes keep their relative order inside one
+        # closed drawer at the bottom.
+        body_html = (
+            f"{_freshness_html(data, context, qm_context, research_views_status, context_evidence, annotation_integrity=annotation_integrity)}"
+            f"{age_html}"
+            f"{warn_html}"
+            f"{_blocked_html(data.get('blocked') or [])}"
+            f"{_registered_bets_tracker_html(data)}"
+            f"{hero_html}"
+            f"{_composite_html(data)}"
+            f"{_pick_tracker_html(research_views_status)}"
+            f"{pinned_html}"
+            f"{symbols_html}"
+            + _diagnostics_drawer_html([
+                qm_lanes_html,
+                _research_desk_html(data, context, context_warning, annotation_notice),
+                _regime_strip_html(
+                    research_views_status,
+                    str(data.get("evaluation_date") or data_as_of)),
+                _experiments_shelf_html(research_views_status),
+                _quant_want_html(qm_context),
+                _market_html(context),
+            ])
+        )
+        nav_html = _sticky_nav_html(body_html, symbol_names)
+        board_css = ""
     out_html = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>Options Attractiveness</title>"
-        f"<style>{_STYLE}{event_css}</style></head><body>"
+        f"<style>{_STYLE}{board_css}{event_css}</style></head><body>"
         '<header class="app-header"><div class="app-header-inner">'
         '<div><div class="eyebrow">Options research · Attractiveness</div>'
         "<h1>Which options look attractive today?</h1>"
@@ -6066,7 +6157,7 @@ def _render_result(
         f"</strong> {_esc(data_as_of)}</span>{display_date_meta}{research_meta}"
         '<span class="meta-chip">Paper research</span>'
         '</div></div></header>'
-        f"{_sticky_nav_html(body_html, symbol_names)}"
+        f"{nav_html}"
         '<main class="page-body">'
         f"{body_html}"
         '<footer class="page-footer">Payoffs are at-expiration scenarios, '

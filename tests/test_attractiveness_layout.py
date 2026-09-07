@@ -523,3 +523,126 @@ class LegacyByteIdentityTests(unittest.TestCase):
         with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
             legacy = ad.render(data)
         self.assertEqual(legacy, LEGACY_RENDER_SNAPSHOT())
+
+
+class LaneBoardLayoutTests(unittest.TestCase):
+    """Spec §2 page order, with the flag on."""
+
+    # Mirrors DiagnosticsDrawerTests._rendered (:385-402): without context /
+    # qm_context / research_views_status, "Quant-want background" and "Market
+    # context" are not rendered at all (:4563-4566, :4593-4597) and the drawer
+    # drops empty sections (:5493) — the six-section assertion would raise.
+    _DRAWER_INPUTS = dict(
+        context={"as_of": "2026-08-25", "researched_on": "2026-08-25", "provenance": "fixture provenance",
+                 "market": {"summary": "Fixture market context.", "regime": "mixed"},
+                 "symbols": {"NVDA": {"news_summary": "covered"}}},
+        qm_context={"status": "DATA_BLOCKED",
+                    "quant_want": {"trend": {"status": "UP", "plain_language": "fixture trend"}},
+                    "source_commit": "fixture"},
+        research_views_status={"state": "absent"},
+    )
+
+    def _html(self, symbols=("NVDA", "AMZN", "MSFT"), **kw):
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            return ad.render(_board(list(symbols), **kw), **self._DRAWER_INPUTS)
+
+    def test_page_order_is_strip_tiles_table_event_details_drawer(self):
+        html = self._html()
+        anchors = ['class="status-strip"', 'class="tiles"', 'id="agreement-table"',
+                   'id="pick-details"', 'id="diagnostics"']
+        offsets = [html.index(a) for a in anchors]
+        self.assertEqual(offsets, sorted(offsets))
+
+    def test_removed_surfaces_are_absent(self):
+        html = self._html()
+        for gone in ('id="context-aware-top-5"', 'class="sticky-nav"', "VST / AMZN — ALWAYS SHOWN",
+                     "CONTEXT-AWARE SHORTLIST", "QM MOVEMENT LANE</h2>"):
+            self.assertNotIn(gone, html[: html.index('id="diagnostics"')])
+
+    def test_details_render_only_for_table_names(self):
+        html = self._html()
+        table = html[html.index('id="agreement-table"'):html.index('id="pick-details"')]
+        names_on_table = set(re.findall(r'<td class="sym">([A-Z]+)', table))
+        rendered = set(re.findall(r'<div class="symbol-anchor" id="symbol-([A-Z]+)"', html))
+        # pinned_picks (:576-594) always yields VST and AMZN, section or not
+        # (config.PICK_PINNED_SYMBOLS, config.py:660), so VST is a ROW with no
+        # panel on this fixture. Equality is therefore the wrong contract.
+        self.assertTrue(rendered <= names_on_table)   # never a panel for a name that is not on the table
+        self.assertIn("NVDA", rendered)               # a table name WITH a section gets its panel
+        self.assertIn("VST", names_on_table)          # pinned → always a row (owner ruling 2026-07-16)
+        self.assertNotIn("VST", rendered)             # … but no panel: the fixture has no VST section
+
+    def test_relocated_content_is_appended_after_the_six_drawer_sections(self):
+        html = self._html()
+        drawer = html[html.index('id="diagnostics"'):]
+        six = [drawer.index(s) for s in DiagnosticsDrawerTests._DRAWER_SECTIONS]
+        self.assertEqual(six, sorted(six))
+        for relocated in ("REGISTERED-BETS TRACKER", "Shortlist outcome scoreboard", "DATA FRESHNESS",
+                          "Composite signal board"):
+            self.assertGreater(drawer.index(relocated), six[-1])
+
+    def test_every_disclaimer_survives_with_flag_off_too(self):
+        # test_disclaimers_are_present_verbatim (:456) covers the DEFAULT flag
+        # (True). This twin pins the rollback path with the same fixture.
+        data = _board(["VST", "AAA"])
+        data["composite_signals"] = [_composite_card("AAA")]
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+            html = ad.render(data, context={"as_of": "2026-08-25", "provenance": "fixture",
+                                            "market": {"summary": "Fixture."}, "symbols": {}},
+                             qm_context=self._DRAWER_INPUTS["qm_context"],
+                             research_views_status={"state": "absent"})
+        for sentence in AuthorityWordingSurvivesLayoutTests._SENTENCES:
+            with self.subTest(sentence=sentence[:48]):
+                self.assertIn(sentence, html)
+        self.assertIn("mission-control dashboard date INDEPENDENTLY", html)
+
+    def test_flag_on_carries_the_three_relocated_sentences_inside_the_agreement_table(self):
+        html = self._html()
+        table = html[html.index('id="agreement-table"'):html.index('id="pick-details"')]
+        self.assertIn("This is a fit ranking, not a prediction", table)
+        self.assertIn("owner-pinned visibility — not ranked; these cards do not compete with or reorder "
+                      "the Top-5 shortlist.", table)
+        self.assertIn(ad._CONTEXT_LANE_DISCLAIMER, table)
+
+    def test_lane_board_failure_keeps_every_disclaimer(self):
+        data = _board(["VST", "AAA"])
+        data["composite_signals"] = [_composite_card("AAA")]
+        with (mock.patch.object(config, "BOARD_LANES_ENABLED", True),
+              mock.patch("options_researcher.board_lanes.build_lane_board", side_effect=RuntimeError("boom"))):
+            html = ad.render(data, context={"as_of": "2026-08-25", "provenance": "fixture",
+                                            "market": {"summary": "Fixture."}, "symbols": {}},
+                             qm_context=self._DRAWER_INPUTS["qm_context"],
+                             research_views_status={"state": "absent"})
+        self.assertIn("LANE BOARD FAILED — RuntimeError", html)
+        for sentence in AuthorityWordingSurvivesLayoutTests._SENTENCES:
+            with self.subTest(sentence=sentence[:48]):
+                self.assertIn(sentence, html)
+
+    def test_blocked_name_is_a_row_with_its_reason_and_no_panel(self):
+        data = _board(["NVDA", "AMZN", "MSFT"])
+        data["blocked"] = list(data.get("blocked") or []) + [{
+            "symbol": "ET", "reason_code": "DATA_BLOCKED", "detail": "chain 29 sessions old",
+            "last_known_date": "2026-07-27", "unexpected": False}]
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            html = ad.render(data, **self._DRAWER_INPUTS)
+        table = html[html.index('id="agreement-table"'):html.index('id="pick-details"')]
+        self.assertIn('<td class="sym">ET', table)
+        self.assertIn("DATA_BLOCKED · chain 29 sessions old", table)
+        self.assertNotIn('id="symbol-ET"', html)          # no section → no panel; the banner still names it
+        self.assertIn("<strong>ET</strong>", html)         # _blocked_html banner (:5129)
+
+    def test_stale_name_that_is_not_a_row_is_still_named_in_the_status_strip(self):
+        symbols = ("NVDA", "AMZN", "MSFT", "PLTR", "SMCI", "CRWV", "CEG", "VST")
+        data = _board(list(symbols))
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            html = ad.render(data, **self._DRAWER_INPUTS)
+        table = html[html.index('id="agreement-table"'):html.index('id="pick-details"')]
+        rows = set(re.findall(r'<td class="sym">([A-Z]+)', table))
+        stale_not_rows = {str(s) for s in data["stale_symbols"]} - rows
+        self.assertTrue(stale_not_rows)   # fixture guarantee: eight stale names, five slots (round-3 measured PLTR, SMCI)
+        strip = html[html.index('class="status-strip"'):html.index('class="tiles"')]
+        for name in stale_not_rows:
+            self.assertIn(name, strip)
+
+    def test_zero_javascript_with_flag_on(self):
+        self.assertNotIn("<script", self._html().lower())
