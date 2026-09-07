@@ -1,9 +1,9 @@
 # Codex brief 39 — Attractiveness board redesign (agreement table) — implementation plan
 
-**Date:** 2026-09-06 (rev 6, 2026-09-07 00:10 ET; rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`, 0 blockers, page rebuilt from the brief's code; rev 5 bounded verification PASS WITH FIXES — `…-round5.md`, 2 inherited majors + 3 minors, all applied here; owner decisions D10–D12 recorded in the spec; **D13 = A and I1 = accept RULED by the owner 2026-09-07 14:54 ET and recorded in the spec's pending-rulings section — dispatchable**)
+**Date:** 2026-09-06 (rev 7, 2026-09-07 15:20 ET — bounded correction after Codex's stop-and-report (`reports/2026-09-07-brief-39-codex-stop-report.md`): rev 6 stamped every lane column with the board's date and could not mark a spec §5 as-of mismatch; rev 6 was rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`, 0 blockers, page rebuilt from the brief's code; rev 5 bounded verification PASS WITH FIXES — `…-round5.md`, 2 inherited majors + 3 minors, all applied here; owner decisions D10–D12 recorded in the spec; **D13 = A and I1 = accept RULED by the owner 2026-09-07 14:54 ET and recorded in the spec's pending-rulings section — dispatchable**)
 **Author:** Claude (orchestrating session; brainstorming + spec with the owner 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37/38; owner may substitute at dispatch)
-**Status:** READY FOR HAND-OFF — owner ruled D13 = A and I1 = accept (2026-09-07 14:54 ET; recorded in the spec); five review rounds, the last two with zero blockers
+**Status:** DRAFT — rev 7 correction pending a bounded round-6 verification (module tests + render test executed); D13 = A / I1 = accept ruled 2026-09-07 14:54 ET; Codex's worktree `.tmp/worktrees/brief39` (branch `codex/brief39-board-redesign`, no commits) is parked and resumes from this rev
 **Provenance:** file:line constraints are Repo-verified against origin/main
 @f83428d unless a sentence carries its own label. Counts marked "measured"
 were taken from the 2026-09-04 ops build by the round-1 reviewer. Sentences
@@ -134,7 +134,7 @@ satisfy it. The owner types one letter:
   columns UNAVAILABLE because the artifact is absent. If B, Task 4 is rewritten
   and the brief returns to review.
 - **C:** drop the four experiment columns (reverses D5). If C, Tasks 1, 3, 4
-  and 6 are rewritten (both tuples, the `_EXPERIMENTS` map and four of the 16
+  and 6 are rewritten (both tuples, the `_EXPERIMENTS` map and the experiment
   module tests, the whole gather step, the caution group) and the brief returns
   to review.
 
@@ -167,6 +167,19 @@ text in Global Constraints is retained only as a record of what was weighed.
   one helper (`_table_footnotes_html`) that BOTH the agreement table and the
   `LANE BOARD FAILED` fallback print, so the invariant holds on the failure
   path too (round 3 measured the fallback dropping the pinned sentence).
+- **Lane as-of (spec §5; restored in rev 7 after Codex's 2026-09-07 stop-and-report):**
+  every column carries its OWN evidence date, never the board's substituted
+  for it — baseline = the board's chain session (its cards ARE that session);
+  context = latest `context_max_asof` over its rows (`context_lane.py:116-118`);
+  composite and each experiment = latest `max_asof`, else `asof`, over their
+  cards (the repo's own convention, `experiments_dashboard.py:74`); QM = the
+  movement context's session (`_qm_as_of`: the page loads it for the board's
+  `data_as_of`, `:5957`, and each per-symbol item records that `as_of`,
+  `qm_dashboard.py:110`). Mixed dates inside a lane show the latest and say
+  "mixed as-of (earliest X)" in the column note. A READY lane whose date is
+  unknown or differs from the board's session is marked in the header
+  (`≠ board`, `class="asof-mismatch"`) AND in the board notes; a non-READY
+  lane prints its state instead. Tests pin all of this (Task 3, Task 5).
 - "Visible" (D10) means what a reader sees without clicking: everything
   outside a CLOSED `<details>`. A force-open panel (STALE/BLOCKED/SKIPPED) IS
   visible and is counted. D10's targets are therefore measured on a FRESH
@@ -479,7 +492,9 @@ class LaneMember:
 @dataclass(frozen=True)
 class LaneColumn:
     key: str; title: str; kind: str; favourable: bool; state: str
-    as_of: str | None; members: tuple[LaneMember, ...]; note: str
+    as_of: str | None          # the lane's OWN evidence date (spec §5), never the board's
+    members: tuple[LaneMember, ...]; note: str
+    as_of_mismatch: bool = False   # READY and (unknown or != board session) — marked in header + notes
 
 @dataclass(frozen=True)
 class BoardRow:
@@ -495,7 +510,7 @@ class LaneBoard:
 
 def build_lane_board(*, baseline_picks, context_selection, composite_cards, qm_picks,
                      experiment_lanes, pinned, blocked, cap=config.PICK_TOP_N,
-                     board_as_of) -> LaneBoard
+                     board_as_of, qm_as_of=None) -> LaneBoard
 ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -558,7 +573,7 @@ def _board(**over):
         # Real blocked-record shape (attractiveness_dashboard.py:1866-1870).
         blocked=[{"symbol": "ET", "reason_code": "DATA_BLOCKED", "detail": "chain 29 sessions old",
                   "last_known_date": "2026-07-27", "unexpected": False}],
-        cap=5, board_as_of="2026-09-03",
+        cap=5, board_as_of="2026-09-03", qm_as_of="2026-09-03",
     )
     kwargs.update(over)
     return bl.build_lane_board(**kwargs)
@@ -664,6 +679,42 @@ class LaneBoardTests(unittest.TestCase):
         self.assertFalse(iren.pinned)
         self.assertIsNone(iren.baseline_pick)
 
+    def test_each_lane_carries_its_own_evidence_date_and_a_board_mismatch_is_marked(self):
+        # Spec §5: every column carries ITS OWN as-of; a lane dated off the board's chain
+        # session is marked. (Codex stop-and-report 2026-09-07: rev 6 stamped every column
+        # with the board date and could not mark a mismatch.)
+        board = _board(board_as_of="2026-09-04", qm_as_of="2026-09-04")
+        self.assertEqual(_col(board, "baseline").as_of, "2026-09-04")       # the board's own cards
+        self.assertFalse(_col(board, "baseline").as_of_mismatch)
+        self.assertEqual(_col(board, "context").as_of, "2026-09-03")        # rows' context_max_asof
+        self.assertTrue(_col(board, "context").as_of_mismatch)
+        self.assertEqual(_col(board, "composite").as_of, "2026-09-03")      # cards' max_asof
+        self.assertTrue(_col(board, "composite").as_of_mismatch)
+        self.assertEqual(_col(board, "tbill").as_of, "2026-09-03")          # cards' asof
+        self.assertTrue(_col(board, "tbill").as_of_mismatch)
+        self.assertFalse(_col(board, "qm").as_of_mismatch)
+        self.assertIn("Context lane: evidence as of 2026-09-03 ≠ board session 2026-09-04", board.notes)
+        self.assertEqual(sum(1 for c in board.columns if c.as_of_mismatch), 6)   # context, composite, 4 experiments
+
+    def test_matching_dates_raise_no_mismatch_and_mixed_dates_inside_a_lane_take_the_latest(self):
+        board = _board()   # every input dated 2026-09-03 == board_as_of
+        self.assertFalse(any(c.as_of_mismatch for c in board.columns))
+        self.assertFalse(any("≠ board" in n for n in board.notes))
+        cards = [_comp("PLTR"), dict(_comp("NVDA"), max_asof="2026-09-02", asof="2026-09-02")]
+        comp = _col(_board(composite_cards=cards), "composite")
+        self.assertEqual(comp.as_of, "2026-09-03")
+        self.assertIn("mixed as-of (earliest 2026-09-02)", comp.note)
+        self.assertFalse(comp.as_of_mismatch)
+
+    def test_a_ready_lane_with_no_evidence_date_is_marked_not_defaulted(self):
+        board = _board(experiment_lanes={"exp_tbill": [{"symbol": "NBIS", "state": "ABOVE_TBILL",
+                                                        "carry_spread": 2.89, "experiment_id": "EXP-TBILL"}]})
+        tbill = _col(board, "tbill")
+        self.assertEqual(tbill.state, "READY")
+        self.assertIsNone(tbill.as_of)
+        self.assertTrue(tbill.as_of_mismatch)
+        self.assertIn("T-bill carry: evidence as of unknown ≠ board session 2026-09-03", board.notes)
+
     def test_build_never_mutates_inputs(self):
         picks = [_pick("AMZN")]
         before = repr(picks)
@@ -690,7 +741,7 @@ registered baseline decides row order and is never re-sorted.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import config
 
@@ -711,9 +762,10 @@ class LaneColumn:
     kind: str
     favourable: bool
     state: str
-    as_of: str | None
+    as_of: str | None            # the lane's OWN evidence date (spec §5); never the board's substituted
     members: tuple[LaneMember, ...]
     note: str
+    as_of_mismatch: bool = False   # stamped by build_lane_board: READY and (unknown or != board session)
 
 
 @dataclass(frozen=True)
@@ -769,32 +821,56 @@ def _cards(value: object) -> list[Mapping[str, object]]:
     return [c for c in value if isinstance(c, Mapping)]
 
 
+def _lane_dates(items: Sequence[Mapping[str, object]], *keys: str) -> tuple[str | None, str | None]:
+    """(latest, earliest) evidence date over items, reading the first present key of
+    *keys per item — the repo's convention is max_asof, then asof
+    (experiments_dashboard.py:74). Missing dates are ignored, never defaulted."""
+    dates: list[str] = []
+    for item in items:
+        for key in keys:
+            value = item.get(key)
+            if isinstance(value, str) and value:
+                dates.append(value)
+                break
+    if not dates:
+        return None, None
+    return max(dates), min(dates)
+
+
+def _mixed_note(latest: str | None, earliest: str | None) -> str:
+    if latest and earliest and earliest != latest:
+        return f" · mixed as-of (earliest {earliest})"
+    return ""
+
+
 def lane_from_baseline(picks: Sequence[Mapping[str, object]] | None, *, cap: int,
-                       as_of: str | None) -> LaneColumn:
+                       board_as_of: str | None) -> LaneColumn:
+    # The baseline's cards ARE the board's chain session: its as-of is the board's by construction.
     if picks is None:
         return LaneColumn("baseline", "Rule-based top 5", "ranking", True, "UNAVAILABLE:no picks",
-                          as_of, (), "registered baseline")
+                          board_as_of, (), "registered baseline")
     members: list[LaneMember] = []
     for i, p in enumerate(picks[:cap], 1):
         sym = _sym(p)
         if sym is not None:
             members.append(LaneMember(sym, f"#{i}", None, i))
-    return LaneColumn("baseline", "Rule-based top 5", "ranking", True, "READY", as_of,
+    return LaneColumn("baseline", "Rule-based top 5", "ranking", True, "READY", board_as_of,
                       tuple(members), "registered baseline; decides row order")
 
 
-def lane_from_context(selection: Mapping[str, object] | None, *, cap: int,
-                      as_of: str | None) -> LaneColumn:
+def lane_from_context(selection: Mapping[str, object] | None, *, cap: int) -> LaneColumn:
     note = "display-only · baseline + market-context tiebreak; only ALIGNED counts"
     if not isinstance(selection, Mapping):
-        return LaneColumn("context", "Context lane", "ranking", True, "UNAVAILABLE:no selection", as_of, (), note)
+        return LaneColumn("context", "Context lane", "ranking", True, "UNAVAILABLE:no selection", None, (), note)
     state = str(selection.get("state") or "UNAVAILABLE")
     if state != "READY":
         err = selection.get("error")
         tag = f"FAILED:{err}" if state == "FAILED" and err else state
-        return LaneColumn("context", "Context lane", "ranking", True, tag, as_of, (), note)
+        return LaneColumn("context", "Context lane", "ranking", True, tag, None, (), note)
+    rows = _cards(selection.get("rows"))
+    latest, earliest = _lane_dates(rows, "context_max_asof")   # context_lane.py:116-118
     members: list[LaneMember] = []
-    for i, row in enumerate(_cards(selection.get("rows"))[:cap], 1):
+    for i, row in enumerate(rows[:cap], 1):
         sym = _sym(row)
         if sym is None:
             continue
@@ -804,14 +880,16 @@ def lane_from_context(selection: Mapping[str, object] | None, *, cap: int,
         else:
             members.append(LaneMember(sym, _CONTEXT_LABELS.get(reason, reason.lower() or "?"),
                                       _num(row.get("context_term")), i, False))
-    return LaneColumn("context", "Context lane", "ranking", True, "READY", as_of, tuple(members), note)
+    return LaneColumn("context", "Context lane", "ranking", True, "READY", latest, tuple(members),
+                      note + _mixed_note(latest, earliest))
 
 
-def lane_from_composite(cards: Sequence[Mapping[str, object]] | None, *, cap: int, as_of: str | None,
+def lane_from_composite(cards: Sequence[Mapping[str, object]] | None, *, cap: int,
                         baseline_order: Sequence[str]) -> LaneColumn:
     note = "display-only · angles agreeing; ties by baseline order, then symbol"
     if cards is None:
-        return LaneColumn("composite", "Composite", "ranking", True, "UNAVAILABLE:no cards", as_of, (), note)
+        return LaneColumn("composite", "Composite", "ranking", True, "UNAVAILABLE:no cards", None, (), note)
+    latest, earliest = _lane_dates(list(cards), "max_asof", "asof")   # composite_signals.py:619-622
     pos = {s: i for i, s in enumerate(baseline_order)}
     usable: list[tuple[int, str, Mapping[str, object]]] = []
     for c in cards:
@@ -824,33 +902,40 @@ def lane_from_composite(cards: Sequence[Mapping[str, object]] | None, *, cap: in
         LaneMember(sym, f"{c.get('grade') or '?'} · {aligned}/4", float(aligned), i)
         for i, (aligned, sym, c) in enumerate(usable[:cap], 1)
     )
-    return LaneColumn("composite", "Composite", "ranking", True, "READY", as_of, members, note)
+    return LaneColumn("composite", "Composite", "ranking", True, "READY", latest, members,
+                      note + _mixed_note(latest, earliest))
 
 
-def lane_from_qm(picks: Sequence[Mapping[str, object]] | None, *, cap: int, as_of: str | None) -> LaneColumn:
+def lane_from_qm(picks: Sequence[Mapping[str, object]] | None, *, cap: int,
+                 qm_as_of: str | None) -> LaneColumn:
+    # QM picks are board cards re-ranked by the QM movement context; the page loads that
+    # context for the board's own data_as_of (attractiveness_dashboard.py:5957) and its
+    # per-symbol items record that "as_of" (qm_dashboard.py:110) — qm_as_of is that date
+    # as the CALLER read it from the context (never assumed equal to the board).
     if picks is None:
-        return LaneColumn("qm", "QM movement", "ranking", True, "UNAVAILABLE:no QM context", as_of, (),
+        return LaneColumn("qm", "QM movement", "ranking", True, "UNAVAILABLE:no QM context", qm_as_of, (),
                           "gated study")
     members: list[LaneMember] = []
     for i, p in enumerate(picks[:cap], 1):
         sym = _sym(p)
         if sym is not None:
             members.append(LaneMember(sym, f"#{i}", None, i))
-    return LaneColumn("qm", "QM movement", "ranking", True, "READY", as_of, tuple(members),
+    return LaneColumn("qm", "QM movement", "ranking", True, "READY", qm_as_of, tuple(members),
                       "gated study · mechanical picks")
 
 
-def lane_from_experiment(key: str, cards: object, *, cap: int, as_of: str | None) -> LaneColumn:
+def lane_from_experiment(key: str, cards: object, *, cap: int) -> LaneColumn:
     title, _lane_key, flag_state, metric, prefix = _EXPERIMENTS[key]
     favourable = key in config.BOARD_FAVOURABLE_LANES
     if cards is None:
-        return LaneColumn(key, title, "describing", favourable, "UNAVAILABLE:lane not computed", as_of, (),
+        return LaneColumn(key, title, "describing", favourable, "UNAVAILABLE:lane not computed", None, (),
                           "experiment")
     card_list = _cards(cards)
     errors = [c for c in card_list if c.get("state") == "ERROR"]
     if errors:
         reason = str(errors[0].get("reason") or "lane failed")
-        return LaneColumn(key, title, "describing", favourable, f"UNAVAILABLE:{reason}", as_of, (), "experiment")
+        return LaneColumn(key, title, "describing", favourable, f"UNAVAILABLE:{reason}", None, (), "experiment")
+    latest, earliest = _lane_dates(card_list, "max_asof", "asof")   # exp_*.py cards, same keys as experiments_dashboard.py:74
     flagged: list[tuple[float | None, str, Mapping[str, object]]] = []
     for c in card_list:
         sym = _sym(c)
@@ -866,7 +951,8 @@ def lane_from_experiment(key: str, cards: object, *, cap: int, as_of: str | None
     note = f"experiment · {'favourable' if favourable else 'caution'} · flags names in state {flag_state}"
     if metric and len(flagged) > cap:
         note += " · " + _ORDER_NOTE.format(cap=cap, metric=metric)
-    return LaneColumn(key, title, "describing", favourable, "READY", as_of, tuple(members), note)
+    note += _mixed_note(latest, earliest)
+    return LaneColumn(key, title, "describing", favourable, "READY", latest, tuple(members), note)
 
 
 def build_lane_board(
@@ -880,6 +966,7 @@ def build_lane_board(
     blocked: Sequence[Mapping[str, object]] | None,
     cap: int = config.PICK_TOP_N,
     board_as_of: str | None,
+    qm_as_of: str | None = None,
 ) -> LaneBoard:
     base_picks = list(baseline_picks or [])[:cap]
     base_order: list[str] = []
@@ -893,10 +980,10 @@ def build_lane_board(
     exp: Mapping[str, object] = experiment_lanes if isinstance(experiment_lanes, Mapping) else {}
     gather_error = exp.get("__error__")
     columns_by_key: dict[str, LaneColumn] = {
-        "baseline": lane_from_baseline(baseline_picks, cap=cap, as_of=board_as_of),
-        "context": lane_from_context(context_selection, cap=cap, as_of=board_as_of),
-        "composite": lane_from_composite(composite_cards, cap=cap, as_of=board_as_of, baseline_order=base_order),
-        "qm": lane_from_qm(qm_picks, cap=cap, as_of=board_as_of),
+        "baseline": lane_from_baseline(baseline_picks, cap=cap, board_as_of=board_as_of),
+        "context": lane_from_context(context_selection, cap=cap),
+        "composite": lane_from_composite(composite_cards, cap=cap, baseline_order=base_order),
+        "qm": lane_from_qm(qm_picks, cap=cap, qm_as_of=qm_as_of),
     }
     for key, (_t, lane_key, _s, _m, _p) in _EXPERIMENTS.items():
         cards: object
@@ -906,10 +993,17 @@ def build_lane_board(
             cards = None
         else:
             cards = exp.get(lane_key)
-        columns_by_key[key] = lane_from_experiment(key, cards, cap=cap, as_of=board_as_of)
+        columns_by_key[key] = lane_from_experiment(key, cards, cap=cap)
+
+    def stamp(col: LaneColumn) -> LaneColumn:
+        # spec §5: a READY lane whose own evidence date is unknown, or differs from the
+        # board's chain session, is marked; a non-READY lane already prints its state.
+        mismatch = col.state == "READY" and (
+            col.as_of is None or (bool(board_as_of) and col.as_of != board_as_of))
+        return replace(col, as_of_mismatch=mismatch)
 
     ordered_keys = tuple(config.BOARD_FAVOURABLE_LANES) + tuple(config.BOARD_CAUTION_LANES)
-    columns = tuple(columns_by_key[k] for k in ordered_keys)
+    columns = tuple(stamp(columns_by_key[k]) for k in ordered_keys)
     fav_ready = sum(1 for c in columns if c.favourable and c.state == "READY")
 
     marks: dict[str, dict[str, LaneMember]] = {}
@@ -942,14 +1036,18 @@ def build_lane_board(
                  fav_count=fav_count(s), fav_ready=fav_ready)
         for s in [*base_order, *rest]
     )
-    notes = tuple(f"{c.title}: {c.state}" for c in columns if c.state != "READY")
+    notes = tuple(f"{c.title}: {c.state}" for c in columns if c.state != "READY") + tuple(
+        f"{c.title}: evidence as of {c.as_of or 'unknown'} ≠ board session {board_as_of or 'unknown'}"
+        for c in columns if c.as_of_mismatch
+    )
+    return LaneBoard(columns=columns, rows=rows, notes=notes)
     return LaneBoard(columns=columns, rows=rows, notes=notes)
 ```
 
 - [ ] **Step 4: Run tests, lint, types**
 
 Run: `uv run python -m unittest discover -s tests -p 'test_board_lanes.py' -v`
-Expected: PASS (16 tests). The TESTS are the contract (spec §3); if the
+Expected: PASS (19 tests). The TESTS are the contract (spec §3, §5); if the
 implementation disagrees, fix the code.
 Run: `uv run ruff check options_researcher/board_lanes.py tests/test_board_lanes.py`
 Expected: `All checks passed!` (if ruff reports `I001` on a line this brief
@@ -1278,8 +1376,9 @@ class LaneBoardRenderTests(unittest.TestCase):
         return bl.build_lane_board(
             baseline_picks=[pick], context_selection={"state": "FAILED", "rows": [], "error": "ValueError"},
             composite_cards=[], qm_picks=[], experiment_lanes={"exp_tbill": [
-                {"symbol": "NBIS", "state": "ABOVE_TBILL", "carry_spread": 2.89, "experiment_id": "EXP-TBILL"}]},
-            pinned=("VST",), blocked=[], cap=5, board_as_of="2026-09-03")
+                {"symbol": "NBIS", "state": "ABOVE_TBILL", "carry_spread": 2.89, "experiment_id": "EXP-TBILL",
+                 "asof": "2026-09-02"}]},          # dated OFF the board session on purpose (spec §5)
+            pinned=("VST",), blocked=[], cap=5, board_as_of="2026-09-03", qm_as_of="2026-09-03")
 
     def test_agreement_table_prints_every_column_with_state_and_asof(self):
         html = ad._agreement_table_html(self._board())
@@ -1288,6 +1387,12 @@ class LaneBoardRenderTests(unittest.TestCase):
             self.assertIn(title, html)
         self.assertIn("FAILED:ValueError", html)
         self.assertIn("2026-09-03", html)
+        # spec §5: the T-bill lane is dated 2026-09-02 against a 2026-09-03 board — marked in
+        # the header AND in the board notes; the baseline (board session) is not marked.
+        self.assertIn('<span class="asof-mismatch"', html)
+        self.assertIn("as of 2026-09-02 ≠ board", html)
+        self.assertIn("T-bill carry: evidence as of 2026-09-02 ≠ board session 2026-09-03", html)
+        self.assertEqual(html.count('class="asof-mismatch"'), 1)
         self.assertIn('class="agree"', html)
         self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)   # h2 text kept (see step 4)
         self.assertIn("TOP 5 PICKS TODAY", html)                                        # eyebrow text kept
@@ -1498,8 +1603,14 @@ def _agreement_table_html(board: LaneBoard) -> str:
     cau = [c for c in board.columns if not c.favourable]
 
     def header(col: LaneColumn) -> str:
+        as_of = _esc(str(col.as_of or "unknown"))
+        as_of_html = (
+            f'<span class="asof-mismatch" title="this lane\'s evidence date is not the board\'s chain session">'
+            f'as of {as_of} ≠ board</span>'
+            if col.as_of_mismatch else f"as of {as_of}"
+        )
         return (f'<th title="{_esc(col.note)}">{_esc(col.title)}<br>'
-                f'<span class="th-sub">{_esc(col.kind)} · as of {_esc(str(col.as_of or "?"))} · {_esc(col.state)}</span></th>')
+                f'<span class="th-sub">{_esc(col.kind)} · {as_of_html} · {_esc(col.state)}</span></th>')
 
     def cell(row: BoardRow, col: LaneColumn) -> str:
         if col.state != "READY":
@@ -1554,6 +1665,24 @@ def _agreement_table_html(board: LaneBoard) -> str:
 
 def _num_or_zero(value: object) -> float:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
+
+
+def _qm_as_of(qm_context: Mapping[str, object] | None) -> str | None:
+    """The QM movement context's own session, as the context reports it: a
+    top-level "as_of" if present, else the latest per-symbol item "as_of"
+    (qm_dashboard.py:110; the page loads the context for the board's
+    data_as_of at :5957). None when absent or undated — the lane is then
+    MARKED by build_lane_board, never defaulted to the board date (spec §5)."""
+    if not isinstance(qm_context, Mapping):
+        return None
+    top = qm_context.get("as_of")
+    if isinstance(top, str) and top:
+        return top
+    symbols = qm_context.get("symbols")
+    items = symbols.values() if isinstance(symbols, Mapping) else []
+    dates = [str(item.get("as_of")) for item in items
+             if isinstance(item, Mapping) and isinstance(item.get("as_of"), str) and item.get("as_of")]
+    return max(dates) if dates else None
 
 
 def _table_footnotes_html() -> str:
@@ -1816,6 +1945,7 @@ today's code verbatim — copy it from the file, do not retype it:
                 pinned=[str(r.get("symbol")) for r in pinned_records],
                 blocked=data.get("blocked") or [],
                 board_as_of=str(data.get("data_as_of") or ""),
+                qm_as_of=_qm_as_of(qm_context),   # the QM context's own session (spec §5)
             )
             board_error = None
         except Exception as exc:  # fail-visible: never blank the decision area (spec §5)
@@ -1904,6 +2034,7 @@ _BOARD_STYLE = """
 .chip{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-size:12px;margin:1px 2px 1px 0}
 .agreement-table{width:100%;border-collapse:collapse;font-size:13px}.agreement-table th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 .agreement-table th.group{text-align:center;border-left:1px solid var(--line)}.agreement-table .th-sub{font-weight:400;text-transform:none;letter-spacing:0;opacity:.75}
+.asof-mismatch{color:var(--watch);font-weight:600;opacity:1}
 .agreement-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
 .agreement-table td.sym{font-weight:700}.agreement-table td.lane-off{background:var(--surface-soft)}.agreement-table .econ{font-size:12px;opacity:.8}
 .table-foot{font-size:12px;opacity:.8;margin:8px 0 0}
@@ -2366,9 +2497,12 @@ uv run ruff check . && uv run pyright              # both exit 0
 ATTRACTIVENESS_INPUT_ROOT=~/options-validator-ops uv run python -m options_researcher.attractiveness_dashboard
 ```
 
-Plus: owner ruling D13 = A and I1 = accept recorded in the spec (2026-09-07);
+Plus: spec §5 as-of rule pinned — `tests/test_board_lanes.py` has three
+dated tests (per-lane own date + mismatch marks + notes; matching and mixed
+dates; unknown date marked) and the render test asserts `asof-mismatch` in the
+header; owner ruling D13 = A and I1 = accept recorded in the spec (2026-09-07);
 `LegacyByteIdentityTests` green (flag off == pre-change snapshot);
-`LaneBoardParityAndSizeTests` green; `tests/test_board_lanes.py` 16 tests
+`LaneBoardParityAndSizeTests` green; `tests/test_board_lanes.py` 19 tests
 green; the three re-pinned files green with no deleted test; zero `<script`;
 every disclaimer verbatim; six drawer sections in order; the layout suite
 still runs in well under a second (no cache reads on injected fixtures).
