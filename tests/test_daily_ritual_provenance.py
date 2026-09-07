@@ -200,6 +200,19 @@ def _code_lines(source: str) -> list[tuple[int, str]]:
     ]
 
 
+_GIT_CONTEXT_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+)
+
+
 class EvidenceStagingTests(unittest.TestCase):
     def setUp(self):
         self.zsh = shutil.which("zsh")
@@ -212,12 +225,18 @@ class EvidenceStagingTests(unittest.TestCase):
         self.repo.mkdir()
         home = root / "home"
         home.mkdir()
-        self.env = {
-            **os.environ,
-            "GIT_CONFIG_GLOBAL": os.devnull,
-            "GIT_CONFIG_SYSTEM": os.devnull,
-            "HOME": str(home),
-        }
+        # Scrub git's explicit-repository variables too: GIT_DIR beats cwd, so an
+        # inherited GIT_DIR (hooks, `git rebase --exec`, `git bisect run`) would
+        # make every git call below act on a FOREIGN repository while the tests
+        # still pass (implementation review round 1, finding 1).
+        self.env = {k: v for k, v in os.environ.items() if k not in _GIT_CONTEXT_VARS}
+        self.env.update(
+            {
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_SYSTEM": os.devnull,
+                "HOME": str(home),
+            }
+        )
         self.log = root / "staging.log"
         self._git("init", "-q")
         self._git("config", "user.name", "Ritual staging test")
@@ -292,9 +311,10 @@ class EvidenceStagingTests(unittest.TestCase):
     def test_absent_optional_path_does_not_disable_other_evidence(self):
         log, committed = self._stage()
         self.assertEqual(committed, {"ledger/facts.log", "reports/h10/new.txt"})
-        self.assertIn(
-            "evidence: allow-list path absent, not staged: reports/schwab_chains_intraday",
-            log,
+        # Brief 38 acceptance: the absent-path note precedes the evidence result.
+        self.assertLess(
+            log.index("evidence: allow-list path absent, not staged: reports/schwab_chains_intraday"),
+            log.index("evidence: committed"),
         )
         self.assertNotIn("CRITICAL:", log)
         self.assertNotIn("evidence: nothing new to persist", log)
@@ -332,12 +352,32 @@ class EvidenceStagingTests(unittest.TestCase):
             log,
         )
         self.assertEqual(committed, {"ledger/facts.log"})
+        # git's real message here is two lines; the collapse at the staging call
+        # must keep every log line single-line (round-1 finding 11 protection).
+        for line in log.splitlines():
+            self.assertRegex(line, r"^(CRITICAL: )?evidence: ")
 
     def test_full_authority_reports_deleted_duplicate_path_once(self):
         self.facts.unlink()
         log, committed = self._stage(full_authority_rc=0)
         self.assertEqual(log.count("REQUIRED allow-list path absent: ledger/facts.log"), 1)
         self.assertEqual(committed, {"reports/h10/new.txt"})
+
+    def test_ignored_allow_list_path_is_a_staging_failure(self):
+        # The only realistic NON-ZERO `git add`: an allow-list directory that a
+        # .gitignore rule covers exits 1 (brief 38 WP-A.3(b)). Pins the rc half
+        # of the crit gate; the other cases only exercise the stderr half.
+        (self.repo / ".gitignore").write_text("reports/schwab_chains_intraday/\n", encoding="utf-8")
+        self._git("add", "--", ".gitignore")
+        self._git("commit", "-q", "-m", "ignore rule")
+        intraday = self.repo / "reports/schwab_chains_intraday"
+        intraday.mkdir(parents=True)
+        (intraday / "r.json").write_text("{}\n", encoding="utf-8")
+        log, committed = self._stage()
+        self.assertIn(
+            "CRITICAL: evidence: STAGING FAILED for reports/schwab_chains_intraday — ", log
+        )
+        self.assertEqual(committed, {"ledger/facts.log", "reports/h10/new.txt"})
 
 
 class DailyRitualProvenanceTests(unittest.TestCase):
