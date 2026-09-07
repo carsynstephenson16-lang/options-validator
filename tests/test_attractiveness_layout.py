@@ -9,6 +9,8 @@ so a layout edit can never quietly drop one.
 """
 import re
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import config
 from options_researcher import attractiveness_dashboard as ad
@@ -505,3 +507,18 @@ class NoScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover - manual runs
     unittest.main()
+
+
+def LEGACY_RENDER_SNAPSHOT() -> str:
+    """The pre-redesign render of the layout fixture, captured before any change
+    to _render_result (brief 39 Task 2). The flag-off path must equal it byte
+    for byte — that is the rollback guarantee."""
+    return Path("tests/fixtures/attractiveness_legacy_layout.html").read_text(encoding="utf-8")
+
+
+class LegacyByteIdentityTests(unittest.TestCase):
+    def test_flag_off_renders_the_legacy_page_byte_for_byte(self):
+        data = _board(["NVDA", "AMZN", "MSFT"])
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+            legacy = ad.render(data)
+        self.assertEqual(legacy, LEGACY_RENDER_SNAPSHOT())
