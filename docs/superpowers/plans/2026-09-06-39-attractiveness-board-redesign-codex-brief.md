@@ -1,11 +1,13 @@
 # Codex brief 39 — Attractiveness board redesign (agreement table) — implementation plan
 
-**Date:** 2026-09-06 (rev 7, 2026-09-07 15:20 ET — bounded correction after Codex's stop-and-report (`reports/2026-09-07-brief-39-codex-stop-report.md`): rev 6 stamped every lane column with the board's date and could not mark a spec §5 as-of mismatch; rev 6 was rev 1–3 FAIL — `reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`; rev 4 PASS WITH FIXES — `…-round4.md`, 0 blockers, page rebuilt from the brief's code; rev 5 bounded verification PASS WITH FIXES — `…-round5.md`, 2 inherited majors + 3 minors, all applied here; owner decisions D10–D12 recorded in the spec; **D13 = A and I1 = accept RULED by the owner 2026-09-07 14:54 ET and recorded in the spec's pending-rulings section — dispatchable**)
+**Date:** 2026-09-06 (rev 8, 2026-09-07 15:40 ET). Review trail: rev 1–3 FAIL (`reports/2026-09-06-brief-39-adversarial-review-round{1,2,3}.md`); rev 4 PASS WITH FIXES (`…-round4.md`, page rebuilt from the brief); rev 5 bounded PASS WITH FIXES (`…-round5.md`); rev 6 dispatched → Codex STOPPED before Task 1 (`reports/2026-09-07-brief-39-codex-stop-report.md`: every lane column was stamped with the board's date, so the spec §5 as-of mismatch could never be marked); rev 7 = bounded correction; round 6 bounded verification PASS WITH FIXES (`reports/2026-09-07-brief-39-adversarial-review-round6.md`: Codex's red reproduced on rev 6, rev 7 green, 1 blocker in a new test assertion + 3 majors + 4 minors, all applied in this rev). Owner rulings D10–D12 and D13 = A / I1 = accept (2026-09-07 14:54 ET) are recorded in the spec.
 **Author:** Claude (orchestrating session; brainstorming + spec with the owner 2026-09-06)
 **Executor:** Codex (Sol, high reasoning — as briefs 07/37/38; owner may substitute at dispatch)
-**Status:** DRAFT — rev 7 correction pending a bounded round-6 verification (module tests + render test executed); D13 = A / I1 = accept ruled 2026-09-07 14:54 ET; Codex's worktree `.tmp/worktrees/brief39` (branch `codex/brief39-board-redesign`, no commits) is parked and resumes from this rev
+**Status:** READY FOR HAND-OFF — re-dispatchable; Codex resumes from its parked worktree `.tmp/worktrees/brief39` (branch `codex/brief39-board-redesign`, no commits) at this rev. Round 6's re-dispatch condition (apply its BLOCKER 1 + MAJOR 2 code fixes and MAJOR 3–5 documentation fixes) is met; no further execution round is required for the as-of rule, which round 6 proved correct.
 **Provenance:** file:line constraints are Repo-verified against origin/main
-@f83428d unless a sentence carries its own label. Counts marked "measured"
+@160fc02 (= f83428d + PR #158, which touched only `tools/daily_ritual.sh` and
+`tests/test_daily_ritual_provenance.py`; the later `293bb6d` is a ritual data
+rescue — neither moves any line this brief cites) unless a sentence carries its own label. Counts marked "measured"
 were taken from the 2026-09-04 ops build by the round-1 reviewer. Sentences
 labelled **Inference** are the author's reading of the code, not a file fact.
 Round 2 executed the Task 3 module and its tests verbatim (green; ruff and
@@ -169,17 +171,35 @@ text in Global Constraints is retained only as a record of what was weighed.
   path too (round 3 measured the fallback dropping the pinned sentence).
 - **Lane as-of (spec §5; restored in rev 7 after Codex's 2026-09-07 stop-and-report):**
   every column carries its OWN evidence date, never the board's substituted
-  for it — baseline = the board's chain session (its cards ARE that session);
+  for it — baseline = the board's own shortlist, so its column date is the
+  board session BY DEFINITION (not "by construction": `_admissible_pick_pool`,
+  `:316-348`, never filters on a section's `as_of` or STALE status, and
+  `data_as_of` is the max over FRESH sections only, `:987`/`:1005`, so a stale
+  section can supply a baseline pick — that per-name staleness is disclosed by
+  the STALE panel status and the status strip, `:817` / "STALE BOARD for …",
+  not by this column);
   context = latest `context_max_asof` over its rows (`context_lane.py:116-118`);
   composite and each experiment = latest `max_asof`, else `asof`, over their
   cards (the repo's own convention, `experiments_dashboard.py:74`); QM = the
-  movement context's session (`_qm_as_of`: the page loads it for the board's
-  `data_as_of`, `:5957`, and each per-symbol item records that `as_of`,
-  `qm_dashboard.py:110`). Mixed dates inside a lane show the latest and say
+  movement context's session (`_qm_as_of` reads the context's TOP-LEVEL
+  `as_of` — written at `qm_dashboard.py:364` for a live context and `:110` for
+  a blocked one; no per-symbol item carries a date — and the page loads that
+  context for the board's `data_as_of`, `:5957`). Mixed dates inside a lane show the latest and say
   "mixed as-of (earliest X)" in the column note. A READY lane whose date is
   unknown or differs from the board's session is marked in the header
   (`≠ board`, `class="asof-mismatch"`) AND in the board notes; a non-READY
   lane prints its state instead. Tests pin all of this (Task 3, Task 5).
+  **What this looks like on a real day (round 6 measured the 2026-09-07 ops
+  build):** context and composite were one session AHEAD of a two-session-old
+  chain (2026-09-04 vs 2026-09-03), QM equal, and the four experiment lanes
+  carried four different, much older stamps — so the mark fires on about six of
+  eight columns routinely, in BOTH directions. The mark is DISCLOSURE, not a
+  staleness verdict: the repo has already ruled that "exact-date equality would
+  blank the panel every capture day for a reason that is not staleness"
+  (`attractiveness_dashboard.py:381-387`), and today's context cards print
+  `context max as-of X · board as-of Y` side by side with no caution styling.
+  The header wording is therefore neutral (`≠ board`), the note is factual, and
+  Task 8's manual proof REPORTS the mark count in the PR body.
 - "Visible" (D10) means what a reader sees without clicking: everything
   outside a CLOSED `<details>`. A force-open panel (STALE/BLOCKED/SKIPPED) IS
   visible and is counted. D10's targets are therefore measured on a FRESH
@@ -909,9 +929,9 @@ def lane_from_composite(cards: Sequence[Mapping[str, object]] | None, *, cap: in
 def lane_from_qm(picks: Sequence[Mapping[str, object]] | None, *, cap: int,
                  qm_as_of: str | None) -> LaneColumn:
     # QM picks are board cards re-ranked by the QM movement context; the page loads that
-    # context for the board's own data_as_of (attractiveness_dashboard.py:5957) and its
-    # per-symbol items record that "as_of" (qm_dashboard.py:110) — qm_as_of is that date
-    # as the CALLER read it from the context (never assumed equal to the board).
+    # context for the board's own data_as_of (attractiveness_dashboard.py:5957) and the
+    # context records its session as a TOP-LEVEL "as_of" (qm_dashboard.py:364; :110 when
+    # blocked) — qm_as_of is that date as the CALLER read it, never assumed equal to the board.
     if picks is None:
         return LaneColumn("qm", "QM movement", "ranking", True, "UNAVAILABLE:no QM context", qm_as_of, (),
                           "gated study")
@@ -1040,7 +1060,6 @@ def build_lane_board(
         f"{c.title}: evidence as of {c.as_of or 'unknown'} ≠ board session {board_as_of or 'unknown'}"
         for c in columns if c.as_of_mismatch
     )
-    return LaneBoard(columns=columns, rows=rows, notes=notes)
     return LaneBoard(columns=columns, rows=rows, notes=notes)
 ```
 
@@ -1392,7 +1411,8 @@ class LaneBoardRenderTests(unittest.TestCase):
         self.assertIn('<span class="asof-mismatch"', html)
         self.assertIn("as of 2026-09-02 ≠ board", html)
         self.assertIn("T-bill carry: evidence as of 2026-09-02 ≠ board session 2026-09-03", html)
-        self.assertEqual(html.count('class="asof-mismatch"'), 1)
+        self.assertIn("as of unknown ≠ board", html)          # composite_cards=[] -> READY, undated -> marked
+        self.assertEqual(html.count('class="asof-mismatch"'), 2)
         self.assertIn('class="agree"', html)
         self.assertIn("Rule-based top 5 — best policy-and-liquidity fit today", html)   # h2 text kept (see step 4)
         self.assertIn("TOP 5 PICKS TODAY", html)                                        # eyebrow text kept
@@ -1482,7 +1502,9 @@ inside the existing `if TYPE_CHECKING:` block (`:50-51`) so the annotations
 below resolve for pyright (`from __future__ import annotations` at `:30` makes
 them free at runtime; round 2 reproduced `reportUndefinedVariable` without
 this). Two narrowing helpers keep `Mapping[str, object]` values iterable for
-pyright (round 2 reproduced the `"object" is not iterable` errors):
+pyright (round 2 reproduced the `"object" is not iterable` errors). The
+column header prints `as of unknown` for any undated column (rev 6 printed
+`as of ?`); no repo test asserts the old text (round 6 grepped `tests/`).
 
 ```python
 def _seq(value: object) -> list[object]:
@@ -1668,21 +1690,15 @@ def _num_or_zero(value: object) -> float:
 
 
 def _qm_as_of(qm_context: Mapping[str, object] | None) -> str | None:
-    """The QM movement context's own session, as the context reports it: a
-    top-level "as_of" if present, else the latest per-symbol item "as_of"
-    (qm_dashboard.py:110; the page loads the context for the board's
-    data_as_of at :5957). None when absent or undated — the lane is then
+    """The QM movement context's own session, as the context reports it in its
+    TOP-LEVEL "as_of" (qm_dashboard.py:364 for a live context, :110 for a blocked
+    one; no per-symbol item carries a date). The page loads the context for the
+    board's data_as_of (:5957). None when absent or undated — the lane is then
     MARKED by build_lane_board, never defaulted to the board date (spec §5)."""
     if not isinstance(qm_context, Mapping):
         return None
     top = qm_context.get("as_of")
-    if isinstance(top, str) and top:
-        return top
-    symbols = qm_context.get("symbols")
-    items = symbols.values() if isinstance(symbols, Mapping) else []
-    dates = [str(item.get("as_of")) for item in items
-             if isinstance(item, Mapping) and isinstance(item.get("as_of"), str) and item.get("as_of")]
-    return max(dates) if dates else None
+    return top if isinstance(top, str) and top else None
 
 
 def _table_footnotes_html() -> str:
@@ -2450,8 +2466,9 @@ uv run python -m unittest discover -s tests        # exit 0
 uv run ruff check . && uv run pyright              # both clean (board_lanes.py is now in pyrightconfig include)
 ```
 
-If `ruff check .` reports `I001` (or `E501`, line length 100) on a line this
-brief supplies, the brief is wrong — apply `ruff check --diff`'s suggestion and
+If `ruff check .` reports `I001` on a line this brief supplies (the repo
+selects only `E4, E7, E9, F, I` — `pyproject.toml`; isort wraps imports past
+100 chars), the brief is wrong — apply `ruff check --diff`'s suggestion and
 note it in the PR body; do not reorder names.
 
 - [ ] **Step 4: Manual proof on Friday's data (orchestrator/owner runs it; include the commands and paste the numbers into the PR body)**
@@ -2461,6 +2478,7 @@ ATTRACTIVENESS_INPUT_ROOT=/Users/carsynstephenson/options-validator-ops uv run p
 wc -c .tmp/dashboard/attractiveness.html                          # REPORTED (D10), not a target
 grep -c "<script" .tmp/dashboard/attractiveness.html              # 0
 PYTHONPATH=tests uv run python -c "from pathlib import Path; from test_attractiveness_layout import _visible_html; h=Path('.tmp/dashboard/attractiveness.html').read_text(); v=_visible_html(h); c=h.replace(' open>', '>'); vc=_visible_html(c); print('visible h2', v.count('<h2'), 'summaries', v.count('<summary'), '| all-closed counterfactual h2', vc.count('<h2'), 'summaries', vc.count('<summary'), '| force-open panels', h.count('<details class=\"panel symbol-panel\" open>'))"   # REPORT all five numbers; the D10 targets bind the fresh-fixture TEST, the Friday numbers are evidence
+grep -c 'class="asof-mismatch"' .tmp/dashboard/attractiveness.html   # REPORTED: how many columns carry the ≠ board mark today (round 6 measured 6 of 8)
 python3 -c "import json; d=json.load(open('.tmp/dashboard/picks_snapshot.json')); print([c['symbol'] for c in d['frozen_baseline']['candidates']], d['source_rows_sha256'])"
 ```
 
@@ -2482,8 +2500,8 @@ gh pr create --draft --title "Attractiveness board redesign — agreement table 
 PR body must contain: the spec path and D1–D12; the list of re-pinned tests
 with the (a)/(b)/(c) decision for each; the Friday-data numbers (bytes
 reported, visible h2, visible summaries, force-open panel count with each
-panel's status label, snapshot symbol list and `source_rows_sha256`
-before/after); the double-render and `build_experiment_lanes` cost note; the
+panel's status label, the `asof-mismatch` column count, snapshot symbol list
+and `source_rows_sha256` before/after); the double-render and `build_experiment_lanes` cost note; the
 docstring amendment at `:3775`; the source-hash consequence below; and the
 standard authority paragraph (draft; no ready/merge/sync/ledger).
 
@@ -2522,6 +2540,14 @@ matches, so H7 source-health and data-gate receipts written before the merge
 are invalidated and must be re-run (source health → data gate → watcher,
 CLAUDE.md order) before the next entry window. This is a different gate from
 `FEASIBILITY_SOURCE_PATHS`, which is untouched.
+
+**Known and deliberately out of scope (round 6 observation — do NOT "fix" it
+in this brief):** `lane_from_composite([])` and `lane_from_qm([])` return
+`READY` with zero members (a fully blocked QM context yields `qm_picks == []`,
+`:499-503`, while the call site still passes a Mapping, so the column is READY,
+empty, and dated from the blocked context's top-level `as_of`). Whether a
+READY lane with zero members is honest is a later round's question; record
+it in the PR body if it shows on Friday's data.
 
 Every constraint above is labelled; anything Codex finds that contradicts a
 citation is a STOP-and-report, not a workaround. The implementation PR starts
