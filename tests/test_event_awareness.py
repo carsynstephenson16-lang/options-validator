@@ -45,6 +45,7 @@ def _legacy_layout():
     with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
         yield
 
+
 def _populated_card(symbol):
     return {
         "headline": f"{symbol} call",
@@ -85,7 +86,9 @@ def _populated_data():
                 "symbol": symbol,
                 "as_of": "2026-08-26",
                 "close": 100.0,
-                "groups": [{"kind": "long_call", "title": "Calls", "cards": [_populated_card(symbol)]}],
+                "groups": [
+                    {"kind": "long_call", "title": "Calls", "cards": [_populated_card(symbol)]}
+                ],
             }
             for symbol in symbols
         ],
@@ -128,7 +131,6 @@ def _populated_view(calendar):
 
 def _chips(fragment):
     return re.findall(r'<span class="event-chip">(.*?)</span>', fragment)
-
 
 
 class EventCalendarTests(unittest.TestCase):
@@ -403,91 +405,67 @@ class EventChipTests(unittest.TestCase):
         self.assertEqual(ad.render(data), ad.render(data, event_view=None))
 
     # (c) D11 replaces the former hero/context/pinned surface contract.
-    @_legacy_layout()
-    def test_populated_hero_lane_context_and_pinned_surfaces_share_exact_chip_list(self):
-        # Catches a consumer drifting from the single event-chip join contract.
+    def test_event_line_is_the_sorted_union_of_the_registered_picks_chips_printed_once(self):
+        from options_researcher import board_lanes as bl
 
         data = _populated_data()
+        view = _populated_view(self.calendar)
+        picks = ad.select_top_picks(data)
+        board = bl.build_lane_board(
+            baseline_picks=picks,
+            context_selection={"state": "DISABLED", "rows": [], "error": None},
+            composite_cards=data["composite_signals"],
+            qm_picks=[],
+            experiment_lanes={},
+            pinned=(),
+            blocked=[],
+            cap=config.PICK_TOP_N,
+            board_as_of=data["data_as_of"],
+        )
+        line = ad._event_line_html(board, view, data["evaluation_date"])
+        expected = set()
+        for pick in picks:
+            expected |= set(
+                _chips(
+                    ad._event_chips_html(
+                        pick["card"], pick["symbol"], data["evaluation_date"], view
+                    )
+                )
+            )
+        self.assertEqual(_chips(line), sorted(expected))
+        for chip in expected:
+            self.assertEqual(line.count(chip), 1)
+
+    def test_each_registered_pick_line_entry_appears_in_that_picks_own_panel(self):
+        data = _populated_data()
+        view = _populated_view(self.calendar)
         grades_before = [
             dict(section["groups"][0]["cards"][0]["grades"]) for section in data["symbols"]
         ]
         picks_before = json.dumps(ad.select_top_picks(data), sort_keys=True, separators=(",", ":"))
         sections_before = ad.sections_json(data["symbols"])
-        view = _populated_view(self.calendar)
-
-
-        def card_fragment(page, symbol, surface):
-            marker = {
-                "lane": f'data-candidate-id="{symbol}:long_call:100"',
-                "context": f'data-context-symbol="{symbol}"',
-                "pinned": '<div class="pinned-card good">',
-            }[surface]
-            start = page.index(marker)
-            if surface == "lane":
-                start = page.rfind('<div class="panel candidate-card"', 0, start)
-                end = page.find("</details>", start)
-                return page[start:] if end == -1 else page[start:end]
-            if surface == "context":
-                end_marker = "</details></div>"
-                end = page.index(end_marker, start) + len(end_marker)
-                return page[start:end]
-            if surface == "pinned":
-                end = page.find("</section>", start)
-                return page[start:] if end == -1 else page[start:end]
-
         with (
+            mock.patch.object(config, "BOARD_LANES_ENABLED", True),
             mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
-            mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"]),
+            mock.patch.object(
+                config, "PICK_PINNED_SYMBOLS", ["NVDA"]
+            ),  # (:417) — the fixture has no VST/AMZN
         ):
-            html = ad.render(data, event_view=view)
-            self.assertIn("implied move 7.92%", html)
-            prebrief = ad.render(data)
-            with (
-                tempfile.TemporaryDirectory() as tmp,
-                mock.patch.object(event_calendar, "CALENDAR_PATH", Path(tmp) / "none.jsonl"),
-                mock.patch.object(event_calendar, "COMPLEX_MAP_PATH", Path(tmp) / "none.json"),
-            ):
-                disabled = ad.build_event_view(data, "2026-08-26")
-            rollback = ad.render(data, event_view=disabled)
-
-        lane = card_fragment(html, "NVDA", "lane")
-        context = card_fragment(html, "NVDA", "context")
-        pinned = card_fragment(html, "NVDA", "pinned")
-        hero_section = html[
-            html.index("Daily shortlist · TOP 5 PICKS TODAY") : html.index("CONTEXT-AWARE")
-        ]
-        hero_cards = re.findall(
-            r'<div class="hero-card good">(.*?)(?=<div class="hero-card good">|</section>)',
-            hero_section,
-            re.S,
-        )
-        self.assertEqual(len(hero_cards), 3)
-        nvda_hero = next(card for card in hero_cards if "NVDA call" in card)
-        # Bind the named hero explicitly rather than inferring identity from position.
-        self.assertIn("NVDA:long_call:100", nvda_hero)
-        for hero_card in hero_cards:
-            self.assertGreaterEqual(len(_chips(hero_card)), 3)
-        expected = _chips(lane)
-        self.assertEqual(_chips(nvda_hero), expected)
-        self.assertEqual(_chips(context), expected)
-        self.assertEqual(_chips(pinned), expected)
-        context_section = html[
-            html.index("CONTEXT-AWARE SHORTLIST") : html.index(
-                "Frozen-shortlist comparison diagnostics"
-            )
-        ]
-        empty_start = context_section.index('class="hero-card unknown empty-slot"')
-        empty_fragment = context_section[
-            empty_start : context_section.index("</div>", empty_start) + 6
-        ]
-        self.assertIn("Context pick", empty_fragment)
-        self.assertEqual(_chips(empty_fragment), [])
-        self.assertIsNone(disabled)
-        self.assertEqual(rollback, prebrief)
-        self.assertNotIn("event-chip", rollback)
-        self.assertNotIn("event-chip-style", rollback)
-        self.assertNotIn("implied move", rollback)
-        self.assertNotIn("EVENT LAYER FAILED", rollback)
+            html = ad.render(data, event_view=view)  # same entry the old test uses at :419
+        line = html[html.index('class="event-line"') :]
+        line = line[: line.index("</div>") + 6]
+        for pick in ad.select_top_picks(data):
+            # Panels nest <details> three deep (:3340, :3296); slice to the next
+            # symbol anchor or the drawer, never to the first "</details>".
+            start = html.index(f'id="symbol-{pick["symbol"]}"')
+            ends = [
+                p
+                for p in (html.find('id="symbol-', start + 1), html.find('id="diagnostics"', start))
+                if p != -1
+            ]
+            panel = html[start : min(ends)] if ends else html[start:]
+            for chip in _chips(line):
+                self.assertIn(chip, panel)
         self.assertEqual(
             [section["groups"][0]["cards"][0]["grades"] for section in data["symbols"]],
             grades_before,

@@ -1,4 +1,5 @@
 """tests/test_attractiveness_dashboard.py"""
+import contextlib
 import json
 import math
 import tempfile
@@ -61,6 +62,13 @@ def _evidence(symbol: str) -> SymbolEvidence:
         ),
     )
 
+
+@contextlib.contextmanager
+def _legacy_layout():
+    """Render the pre-brief-39 page: the flag-off path is byte-identical to the
+    legacy snapshot (tests/test_attractiveness_layout.py LegacyByteIdentityTests)."""
+    with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+        yield
 
 class PriceLadderTests(unittest.TestCase):
     def test_ladder_uses_moves_strike_breakeven_and_tags(self):
@@ -288,6 +296,8 @@ class RenderTests(unittest.TestCase):
                 ]}],
             rv21_by_symbol={"MSFT": 1.1})
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_render_has_label_and_no_external_assets(self):
         html = ad.render(self._assembled())
         self.assertIn("Your gain or loss", html)
@@ -298,21 +308,31 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("https://cdn", html)
         self.assertIn("<style>", html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_render_shows_empty_state_line(self):
         html = ad.render(self._assembled())
         self.assertIn("no candidates this cycle", html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_render_shows_grade_badges(self):
         html = ad.render(self._assembled())
         self.assertIn("yield · AMBER", html)
         self.assertIn('class="status-badge watch"', html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_render_escapes_dynamic_text(self):
         assembled = self._assembled()
         assembled["symbols"][0]["groups"][0]["cards"][0]["verdict"] = "<x>&"
         html = ad.render(assembled)
         self.assertNotIn("<x>&", html)
         self.assertIn("&lt;x&gt;&amp;", html)
+
 
     def test_render_defines_label_css(self):
         # The scenario tags / notes / countdown lean on the .label class;
@@ -335,6 +355,8 @@ class RenderTests(unittest.TestCase):
         # a skipped card carries no scenario table
         self.assertNotIn("Your gain or loss", html)
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_render_pmcc_note_and_leaps_countdown(self):
         d = ad.assemble(
             symbol_sections=[{
@@ -359,6 +381,7 @@ class RenderTests(unittest.TestCase):
         html = ad.render(d)
         self.assertIn("LEAPS value not counted", html)   # PMCC note branch
         self.assertIn("roll reminder", html)             # leaps countdown branch
+
 
 
 class DataAsOfBannerTests(unittest.TestCase):
@@ -891,7 +914,11 @@ class SymbolPanelStatusTests(unittest.TestCase):
             data["symbols"][0]["features_stale"] = True
             self.assertIn('<details class="panel symbol-panel" open>', ad.render(data))
         data["symbols"][0]["features_stale"] = False
-        self.assertIn('<details class="panel symbol-panel" open>', ad.render(data))
+        # (b) I1: a clean pinned name is a row, with details closed under the flag.
+        self.assertNotIn('<details class="panel symbol-panel" open>', ad.render(data))
+        # (b) I1 rollback twin keeps the standing pinned-open contract.
+        with _legacy_layout():
+            self.assertIn('<details class="panel symbol-panel" open>', ad.render(data))
 
 
 class RegimeStripTests(unittest.TestCase):
@@ -1237,6 +1264,8 @@ class StrategySectionRankingTests(unittest.TestCase):
         ordered = ad._rank_groups_for_display(groups)
         self.assertEqual([g["title"] for g in ordered], ["buyer", "seller"])
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["AAA"])
     def test_render_numbers_and_orders_strategy_sections(self):
         section = {
             "symbol": "AAA", "as_of": "2026-07-15", "close": 100.0,
@@ -1258,6 +1287,7 @@ class StrategySectionRankingTests(unittest.TestCase):
         self.assertIn('class="group-rank" aria-label="Rank 1">1</span>', html)
         self.assertIn('class="group-rank" aria-label="Rank 2">2</span>', html)
         self.assertIn("Strategy rank: 1 is the strongest current fit", html)
+
 
 
 class PinnedPicksTests(unittest.TestCase):
@@ -1304,6 +1334,8 @@ class PinnedPicksTests(unittest.TestCase):
         self.assertIsNone(pinned[0]["pick"])
         self.assertIsNone(pinned[1]["pick"])
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_render_pinned_strip_labeled_not_ranked(self):
         from unittest import mock
 
@@ -1317,6 +1349,7 @@ class PinnedPicksTests(unittest.TestCase):
         self.assertIn("not ranked", html)
         self.assertIn("ZZZ", html)  # gap is shown, never fabricated
         self.assertIn("no eligible liquid card", html)
+
 
 
 class BlockedSectionsTests(unittest.TestCase):
@@ -1357,6 +1390,8 @@ class BlockedSectionsTests(unittest.TestCase):
         self.assertEqual(ad._run_exit_code([self._BLOCKED[0]]), 0)
         self.assertEqual(ad._run_exit_code(self._BLOCKED), 1)
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["AMAT"])
     def test_display_only_chip_is_pinned_on_success_and_blocked_rows(self):
         section = {
             "symbol": "AMAT",
@@ -1388,8 +1423,14 @@ class BlockedSectionsTests(unittest.TestCase):
         html = ad.render(data)
         self.assertEqual(html.count(ad.DISPLAY_ONLY_LABEL), 2)
 
+        self.assertIn('<td class="sym">CLSK', html)
+        self.assertIn("NO_CACHED_CHAINS · no chain parquet", html)
+
+
 
 class HypothesisEvidencePanelTests(unittest.TestCase):
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_panel_escapes_all_values_and_keeps_intraday_separate(self):
         data = ad.assemble(
             symbol_sections=[_v2_section()],
@@ -1408,6 +1449,7 @@ class HypothesisEvidencePanelTests(unittest.TestCase):
         self.assertIn("WAIT &amp; WATCH", html)
         self.assertIn("reports/h5/&lt;unsafe&gt;.txt", html)
         self.assertNotIn("<script>", html)
+
 
     def test_evidence_is_inside_a_blocked_symbol_row(self):
         data = ad.assemble(
@@ -1599,7 +1641,7 @@ class LoadContextTests(unittest.TestCase):
 
         def chip(context, evidence):
             html = ad.render(data, context=context, context_evidence=evidence)
-            start = html.index("Research context")
+            start = html.rindex("Research context")
             return html[start:html.index("</span>", start)]
 
         exact = {"as_of": "2026-07-15", "annotations": {}}
@@ -1628,6 +1670,7 @@ class LoadContextTests(unittest.TestCase):
         invalid_annotations = {"as_of": "2026-07-15", "annotations": []}
         self.assertIn("Research context INTEGRITY_FAILED", chip(
             invalid_annotations, {**loaded, "context": invalid_annotations}))
+
 
     def test_mutable_refresh_files_cannot_change_injected_context_chip(self):
         import tempfile
@@ -1722,6 +1765,8 @@ class V2RenderTests(unittest.TestCase):
         return ad.assemble(symbol_sections=[_v2_section()],
                            rv21_by_symbol={"MSFT": math.sqrt(12) * 0.11})
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_hero_with_matched_context_pick(self):
         html = ad.render(self._assembled(), context=_v2_context())
         self.assertIn("TOP 5 PICKS TODAY", html)
@@ -1730,11 +1775,15 @@ class V2RenderTests(unittest.TestCase):
         self.assertNotIn("cushion exceeds monthly move", html)
         self.assertNotIn("Python quantitative shortlist differs", html)
 
+
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_hero_unmatched_pick_warns_and_discloses_disagreement(self):
         html = ad.render(self._assembled(), context=_v2_context(strike=999.0))
         self.assertIn("Legacy agent-selected top_picks were ignored", html)
         self.assertNotIn("unmatched to current candidates", html)
         self.assertNotIn("Python quantitative shortlist differs", html)
+
 
     def test_stale_annotation_does_not_hide_matching_current_annotation(self):
         candidate_id = "MSFT:put:2026-07-17:350.00"
@@ -1800,12 +1849,15 @@ class V2RenderTests(unittest.TestCase):
         self.assertIsNotNone(warning)
         self.assertIn("MSFT:put:2026-07-17:350.0", warning)
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_provenance_label_on_every_narrative_surface(self):
         html = ad.render(self._assembled(), context=_v2_context())
         prov = "LLM-asserted (test fixture, web research 2026-06-30)"
         # hero narrative, market strip, and symbol news all carry the tag
         self.assertGreaterEqual(html.count(ad._esc(prov)), 3)
         self.assertIn('class="prov"', html)
+
 
     def test_missing_context_renders_honest_quant_shortlist(self):
         html = ad.render(self._assembled())
@@ -1822,12 +1874,17 @@ class V2RenderTests(unittest.TestCase):
         without = ad.render(self._assembled())
         self.assertNotIn("Market context", without)
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_symbol_panel_shows_technicals_line_and_news(self):
         html = ad.render(self._assembled(), context=_v2_context())
         self.assertIn("above all MAs", html)                  # technicals line
         self.assertIn("Azure demand headlines", html)         # news blurb
         self.assertIn("earnings report", html)                # catalyst
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_render_survives_sections_without_technicals(self):
         section = _v2_section()
         del section["technicals"]
@@ -1838,6 +1895,9 @@ class V2RenderTests(unittest.TestCase):
         self.assertIn("Sell the MSFT $350 put", html)
         self.assertNotIn('<div class="tech-line">', html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["MSFT"])
     def test_cards_render_in_grid_with_collapsed_ladder_and_bbb(self):
         html = ad.render(self._assembled())
         self.assertIn('class="card-grid"', html)
@@ -1845,6 +1905,7 @@ class V2RenderTests(unittest.TestCase):
         self.assertIn("scenario framing from realized vol", html)
         for tag in ("bear", "base", "bull"):
             self.assertIn(f"<td>{tag}</td>", html)
+
 
     def test_context_warning_banner_rendered(self):
         warn = ("research context is from 2026-06-25 "
@@ -2039,6 +2100,8 @@ class V2RenderTests(unittest.TestCase):
             html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
         )
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_configured_slots_render_as_three_lists_and_duplicate_is_allowed(self):
         section = _v2_section()
         section["symbol"] = "AMZN"  # registered CSP name; appears as WATCH
@@ -2070,6 +2133,7 @@ class V2RenderTests(unittest.TestCase):
         self.assertIn("does not change the mechanical selection, order, edge, or verdict", html)
         self.assertIn("Parabolic FADE_REJECTED", html)
         self.assertIn("The preregistered fade reading failed.", html)
+
 
     def test_long_call_card_explains_when_frozen_study_cannot_support_frequency(self):
         section = _v2_section()
@@ -2103,6 +2167,8 @@ class V2RenderTests(unittest.TestCase):
         self.assertIn("frozen study records aggregate excursions, not per-fire moves", html)
         self.assertIn("not recomputed from today&#x27;s cache", html)
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_stale_qm_context_renders_configured_blocked_slots_but_original_remains(self):
         html = ad.render(
             self._assembled(),
@@ -2115,6 +2181,7 @@ class V2RenderTests(unittest.TestCase):
         self.assertEqual(qm_section.count("DATA BLOCKED"), 1)
         self.assertIn(f"{config.PICK_TOP_N} of {config.PICK_TOP_N} slots open", qm_section)
         self.assertIn("Sell the MSFT $350 put", html[original_start:])
+
 
     def test_incomplete_current_qm_context_renders_configured_blocked_slots(self):
         context = self._qm_context()
@@ -2139,6 +2206,8 @@ class V2RenderTests(unittest.TestCase):
         desk_end = html.index("EXPERIMENTS SHELF")
         self.assertIn("research annotation(s) do not match any card", html[desk_start:desk_end])
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_page_order_puts_mechanical_list_before_descriptive_qm_comparison(self):
         html = ad.render(self._assembled(), context=_v2_context(), qm_context=self._qm_context())
         self.assertLess(
@@ -2156,6 +2225,9 @@ class V2RenderTests(unittest.TestCase):
                         html.index("QM MOVEMENT LANE"))
         self.assertIn("DESCRIPTIVE ONLY — NOT A TRADE RANKING", html)
 
+
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_composite_board_renders_between_shortlist_and_scoreboard(self):
         # RENAMED 2026-09-03: the composite board stayed in the main flow while
         # the QM lanes moved into the bottom diagnostics drawer.
@@ -2178,6 +2250,7 @@ class V2RenderTests(unittest.TestCase):
             html.index("Composite signal board"),
             html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"),
         )
+
 
 
 class ContextLaneRenderTests(unittest.TestCase):
@@ -2242,7 +2315,8 @@ class ContextLaneRenderTests(unittest.TestCase):
         from unittest import mock
 
         case = LaneBoardPresentationTests()
-        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", False):
+        with (mock.patch.object(config, "CONTEXT_LANE_ENABLED", False),
+              mock.patch.object(config, "BOARD_LANES_ENABLED", False)):
             html = ad.render(
                 case._data(),
                 context=case._context(),
@@ -2265,6 +2339,7 @@ class ContextLaneRenderTests(unittest.TestCase):
             "3407b7337b7b83bc0d075bb705fdd1915d3037f955f6fe99b30fd07a2e4a3f5e",
         )
         self.assertNotIn("CONTEXT-AWARE SHORTLIST — EXPERIMENTAL", html)
+
 
     def test_render_is_pure_and_preserves_selection_and_event_inputs(self):
         """Characterize the Brief 28 render boundary before tracker wiring.
@@ -2329,6 +2404,8 @@ class ContextLaneRenderTests(unittest.TestCase):
             view_before,
         )
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_context_membership_is_independent_of_event_view(self):
         """Characterize events as presentation-only, never a ranking input."""
         import re
@@ -2354,6 +2431,7 @@ class ContextLaneRenderTests(unittest.TestCase):
         pattern = r'data-context-symbol="([^"]+)"'
         self.assertEqual(re.findall(pattern, noisy), re.findall(pattern, plain))
         self.assertEqual(re.findall(pattern, plain), ["S5", "S0", "S1", "S2", "S3"])
+
 
     def test_render_result_selects_tracker_arms_once_and_returns_rendered_membership(self):
         """Catches rerunning a tracker selector after rendering its cards."""
@@ -2392,12 +2470,16 @@ class ContextLaneRenderTests(unittest.TestCase):
                 "S3:put:2026-09-18:95.00",
             ],
         )
-        context_section = result.html[
-            result.html.index("CONTEXT-AWARE SHORTLIST") : result.html.index("QM MOVEMENT LANE")
+        # (c) D12 removes context cards; the flag-on membership checks above stay intact.
+        with _legacy_layout(), mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            legacy_html = ad.render(data, qm_context={"status": "DATA_BLOCKED"})
+        context_section = legacy_html[
+            legacy_html.index("CONTEXT-AWARE SHORTLIST") : legacy_html.index("QM MOVEMENT LANE")
         ]
         for item in result.selection_snapshot["context_lane"]["candidates"]:
             self.assertIn(f'data-context-symbol="{item["symbol"]}"', context_section)
         self.assertEqual(ad.sections_json(data["symbols"]), sections_before)
+
 
     def test_pick_tracker_section_is_loud_when_scoreboard_is_unbuilt(self):
         """Catches a missing scoreboard being rendered as an empty success."""
@@ -2596,6 +2678,8 @@ class ContextLaneRenderTests(unittest.TestCase):
         self.assertEqual(position["coverage_context"]["source_row_hash"], "a" * 64)
         self.assertEqual(ad.sections_json(data["symbols"]), before)
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_flag_on_reorders_full_pool_and_diagnoses_displaced_frozen_name(self):
         from unittest import mock
 
@@ -2639,6 +2723,9 @@ class ContextLaneRenderTests(unittest.TestCase):
             section,
         )
 
+
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_selected_blocked_composite_stays_in_slot_with_reason(self):
         from unittest import mock
 
@@ -2657,6 +2744,9 @@ class ContextLaneRenderTests(unittest.TestCase):
         self.assertIn('data-context-symbol="S0"', section)
         self.assertIn("BLOCKED", section)
 
+
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_flag_on_shows_zero_credit_for_vetoed_down_and_mixed_context(self):
         from unittest import mock
 
@@ -2684,6 +2774,9 @@ class ContextLaneRenderTests(unittest.TestCase):
             self.assertIn(reason, card)
             self.assertIn("context term 0", card)
 
+
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_scoring_exception_renders_loud_failure(self):
         from unittest import mock
 
@@ -2697,6 +2790,7 @@ class ContextLaneRenderTests(unittest.TestCase):
             html = ad.render(self._data(count=1))
 
         self.assertIn("CONTEXT LANE FAILED — RuntimeError", html)
+
 
 
 class InputRootFallbackTests(unittest.TestCase):
@@ -3033,6 +3127,8 @@ class LaneBoardPresentationTests(unittest.TestCase):
             self.assertEqual(ad.load_research_views_status(dashboard)["state"],
                              "integrity_failed")
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_freshness_research_composite_and_shelf_are_visible_in_board_order(self):
         html = ad.render(
             self._data(),
@@ -3074,6 +3170,9 @@ class LaneBoardPresentationTests(unittest.TestCase):
         ):
             self.assertLess(html.index(earlier), html.index(later))
 
+
+    # Brief 39 re-pin: freshness slice endpoints invert in the new drawer layout
+    @_legacy_layout()
     def test_experiments_views_freshness_chip_is_inside_top_freshness_strip(self):
         """A shelf-only status must not satisfy the top-strip freshness contract."""
         html = ad.render(
@@ -3092,12 +3191,18 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("experiments: OK", freshness)
         self.assertIn("wasserstein: OK", freshness)
 
+
+    # Brief 39 re-pin: freshness slice endpoints invert in the new drawer layout
+    @_legacy_layout()
     def test_experiments_views_absent_chip_honestly_says_not_published(self):
         html = ad.render(self._data(), research_views_status={"state": "absent"})
         freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("Experiments views</strong> not published", freshness)
         self.assertIn("BLOCKED", freshness)
 
+
+    # Brief 39 re-pin: freshness slice endpoints invert in the new drawer layout
+    @_legacy_layout()
     def test_underlying_closes_freshness_uses_configured_store_max_not_section_date(self):
         import tempfile
         from unittest import mock
@@ -3131,6 +3236,9 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("Underlying closes</strong> max session 2026-08-14", strip)
         self.assertNotIn("Underlying closes</strong> as of 2026-08-13", strip)
 
+
+    # Brief 39 re-pin: freshness slice endpoints invert in the new drawer layout
+    @_legacy_layout()
     def test_underlying_closes_freshness_fails_honestly_for_missing_and_malformed_store(self):
         import tempfile
         from pathlib import Path
@@ -3163,6 +3271,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("Underlying closes</strong> unavailable", strip)
         self.assertIn("BLOCKED", strip)
 
+
     def test_registered_bets_tracker_escapes_states_and_sits_before_shelf(self):
         """A raw receipt summary remains escaped, descriptive, and unranked."""
         data = self._data()
@@ -3188,10 +3297,11 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("cannot activate, rank, or place a trade", html)
         self.assertNotIn("<script>", html)
         # 2026-09-03 layout: the tracker leads the page as POSITIONS & RISK.
-        self.assertLess(html.index("REGISTERED-BETS TRACKER"),
-                        html.index("Rule-based top 5"))
-        self.assertLess(html.index("REGISTERED-BETS TRACKER"),
+        self.assertLess(html.index('class="tiles"'),
+                        html.index('id="agreement-table"'))
+        self.assertLess(html.index('class="tiles"'),
                         html.index("RESEARCH DESK"))
+
 
     def test_tracker_attachment_cannot_change_mechanical_selection_bytes(self):
         """A family rollup is presentation data, never a selection input."""
@@ -3223,6 +3333,8 @@ class LaneBoardPresentationTests(unittest.TestCase):
             baseline_bytes,
         )
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_full_lane_board_order_keeps_named_sections_distinct(self):
         """The retained QM comparison stays below movement without merging lanes."""
         data = self._data()
@@ -3263,6 +3375,9 @@ class LaneBoardPresentationTests(unittest.TestCase):
         for earlier, later in zip(headings, headings[1:]):
             self.assertLess(html.index(earlier), html.index(later))
 
+
+    # Brief 39 re-pin: freshness slice endpoints invert in the new drawer layout
+    @_legacy_layout()
     def test_unknown_freshness_and_absent_research_are_blocked_not_ok(self):
         data = self._data()
         data["symbols"][0]["as_of"] = "not-a-date"
@@ -3275,6 +3390,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("research: none", html)
         self.assertIn("not published", html)
 
+
     def test_research_desk_marks_stale_and_scalar_packets_uncovered(self):
         context = self._context()
         context.update({"as_of": "2026-08-11", "symbols": {"NVDA": "bad packet"}})
@@ -3284,6 +3400,8 @@ class LaneBoardPresentationTests(unittest.TestCase):
         self.assertIn("NVDA</strong> · no mapping-valued packet", desk)
         self.assertEqual(desk.count('class="research-coverage-row"'), 18)
 
+    # Brief 39 re-pin: freshness slice endpoints invert in the new drawer layout
+    @_legacy_layout()
     def test_research_freshness_uses_later_board_evaluation_not_mixed_source_date(self):
         data = self._data()
         data["evaluation_date"] = "2026-08-17"
@@ -3291,6 +3409,9 @@ class LaneBoardPresentationTests(unittest.TestCase):
         freshness = html[html.index("DATA FRESHNESS"):html.index("Rule-based top 5")]
         self.assertIn("Research</strong> as of 2026-08-14; researched on 2026-08-14; stale by 1 sessions; WARN", freshness)
 
+
+    # Brief 39 re-pin: freshness slice endpoints invert in the new drawer layout
+    @_legacy_layout()
     def test_schwab_freshness_uses_stalest_constituent_date(self):
         data = ad.assemble(
             symbol_sections=[
@@ -3305,6 +3426,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
         schwab = freshness[freshness.index("Verified Schwab"):freshness.index("Underlying closes")]
         self.assertIn("as of 2026-08-11; 3 sessions old", schwab)
         self.assertIn("BLOCKED", schwab)
+
 
     def test_hard_chain_block_banner_survives_freshness_strip(self):
         data = ad.assemble(
@@ -3326,6 +3448,8 @@ class LaneBoardPresentationTests(unittest.TestCase):
         })
         self.assertIn("Highest agreement today: none at grade A", html)
 
+    # Brief 39 re-pin: preserve content or removed card surface on the rollback layout
+    @_legacy_layout()
     def test_empty_composite_lane_is_rendered_with_honest_no_data_state_in_order(self):
         data = self._data()
         data["composite_signals"] = []
@@ -3341,6 +3465,7 @@ class LaneBoardPresentationTests(unittest.TestCase):
             html.index("Rule-based top 5"), html.index("Composite signal board")
         )
         self.assertLess(html.index("Composite signal board"), html.index("RESEARCH DESK"))
+
 
 
 class ChainAgeBannerTests(unittest.TestCase):
@@ -3548,6 +3673,8 @@ class SchwabFreshnessPageDateTests(unittest.TestCase):
         self.assertIn("CHAIN_STALE_VS_TODAY",
                       stale_snapshot["integrity"]["reason_codes"])
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"])
     def test_section_states_its_source_and_that_the_price_is_a_1545_mid(self):
         data = ad.assemble(symbol_sections=[_fresh_section()],
                            rv21_by_symbol={}, today="2026-08-14")
@@ -3558,6 +3685,9 @@ class SchwabFreshnessPageDateTests(unittest.TestCase):
         self.assertIn("<span>Spot 15:45 pre-close</span>", html)
         self.assertIn("closes through 2026-08-04", html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"])
     def test_refused_fresh_chain_is_visible_not_silent(self):
         section = _stale_section(
             "NVDA", "2026-07-27",
@@ -3568,6 +3698,7 @@ class SchwabFreshnessPageDateTests(unittest.TestCase):
         html = ad.render(ad.assemble(symbol_sections=[section],
                                      rv21_by_symbol={}, today="2026-08-14"))
         self.assertIn("no verified 15:45 spot for 2026-08-14", html)
+
 
     def test_verification_failure_is_loud_on_the_page(self):
         data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
@@ -3688,6 +3819,8 @@ class FailClosedFeatureTests(unittest.TestCase):
         self.assertEqual(_iv_seller_grade(0.9), "GREEN")
         self.assertEqual(_iv_seller_grade(float("nan")), "UNKNOWN")
 
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"])
     def test_unavailable_iv_rank_is_words_not_a_number(self):
         data = ad.assemble(symbol_sections=[_fresh_section()],
                            rv21_by_symbol={}, today="2026-08-14")
@@ -3695,6 +3828,9 @@ class FailClosedFeatureTests(unittest.TestCase):
         self.assertIn("<span>IV rank</span><strong>unavailable</strong>", html)
         self.assertNotIn("<span>IV rank</span><strong>0.00</strong>", html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"])
     def test_unavailable_features_are_named_with_their_reason(self):
         html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
                                      rv21_by_symbol={}, today="2026-08-14"))
@@ -3702,6 +3838,9 @@ class FailClosedFeatureTests(unittest.TestCase):
         self.assertIn("rv21: underlying closes end 2026-08-04", html)
         self.assertIn("show UNKNOWN (never a default value)", html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"])
     def test_absent_scenario_table_says_why(self):
         card = {"strike": 220.0, "expiry": "2026-09-18", "dte": 35,
                 "credit": 400.0, "annualized_yield": 0.2,
@@ -3717,10 +3856,14 @@ class FailClosedFeatureTests(unittest.TestCase):
         html = ad.render(data)
         self.assertIn("Scenario table unavailable", html)
 
+
+    # (d) Brief 39: keep panel-content checks flag-on by making its symbol a row.
+    @mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["NVDA"])
     def test_atm_iv_from_the_fresh_session_is_shown(self):
         html = ad.render(ad.assemble(symbol_sections=[_fresh_section()],
                                      rv21_by_symbol={}, today="2026-08-14"))
         self.assertIn("<span>ATM IV</span><strong>47.7%</strong>", html)
+
 
     def test_receipt_without_local_chains_is_stated_without_a_false_alarm(self):
         data = ad.assemble(symbol_sections=[_stale_section("MSFT", "2026-07-27")],
@@ -3978,3 +4121,57 @@ class QmLaneEvidenceDateTests(unittest.TestCase):
                          ("2026-09-03", "2026-09-03"))
         self.assertEqual(ad._qm_evidence_dates(None), (None, None))
         self.assertEqual(ad._qm_evidence_dates({"symbols": {"AMZN": {}}}), (None, None))
+
+
+class LaneBoardContractTwins(unittest.TestCase):
+    def test_pinned_gap_is_a_visible_table_row(self):
+        # (c) D4: the pinned strip's missing-card notice becomes a pinned row.
+        case = PinnedPicksTests()
+        data = ad.assemble(symbol_sections=case._data()["symbols"], rv21_by_symbol={"AAA": 0.4, "BBB": 0.4})
+        with mock.patch.object(config, "PICK_PINNED_SYMBOLS", ["AAA", "ZZZ"]):
+            html = ad.render(data)
+        row = html[html.index('<td class="sym">ZZZ'):]
+        row = row[:row.index("</tr>")]
+        self.assertIn("pinned", row)
+        self.assertIn("not in the registered top 5", row)
+
+    def test_hero_replacement_keeps_shortlist_and_authority_words(self):
+        # (c) D4: hero cards leave; the agreement table retains the shortlist contract.
+        case = V2RenderTests()
+        for context in (_v2_context(), _v2_context(strike=999.0)):
+            with self.subTest(context=context):
+                html = ad.render(case._assembled(), context=context)
+                table = html[html.index('id="agreement-table"'):]
+                table = table[:table.index("</section>")]
+                self.assertIn("TOP 5 PICKS TODAY", table)
+                self.assertIn("This is a fit ranking, not a prediction", table)
+                self.assertNotIn("unmatched to current candidates", html)
+
+    def test_context_column_preserves_selected_membership_and_noncounting_marks(self):
+        # (c) D12: former context-card facts now live in the context column.
+        from options_researcher import board_lanes as bl
+        case = ContextLaneRenderTests()
+        data = case._data(count=6)
+        data["composite_signals"] = [case._composite(f"S{i}", count=(4 if i == 5 else 3)) for i in range(6)]
+        with mock.patch.object(config, "CONTEXT_LANE_ENABLED", True):
+            selection = ad._context_lane_selection(data)
+        board = bl.build_lane_board(baseline_picks=ad.select_top_picks(data),
+            context_selection=selection, composite_cards=data["composite_signals"],
+            qm_picks=None, experiment_lanes={}, pinned=(), blocked=[], board_as_of=data["data_as_of"])
+        column = next(c for c in board.columns if c.key == "context")
+        self.assertEqual([m.symbol for m in column.members], ["S5", "S0", "S1", "S2", "S3"])
+        for reason, label in (("VETOED", "veto"), ("BLOCKED", "blocked")):
+            rows = [dict(selection["rows"][0], context_reason=reason, context_term=0)]
+            changed = bl.lane_from_context(dict(selection, rows=rows), cap=5)
+            self.assertEqual(changed.members[0].label, label)
+            self.assertFalse(changed.members[0].counts)
+
+    def test_context_failure_is_printed_in_header_and_board_notes(self):
+        # (c) D12: the removed card lane's loud failure survives as a column state and note.
+        with (mock.patch.object(config, "CONTEXT_LANE_ENABLED", True),
+              mock.patch("options_researcher.context_lane.rank_context_lane", side_effect=RuntimeError("injected"))):
+            html = ad.render(ContextLaneRenderTests()._data(count=1))
+        header = html[html.index('Context lane<br>'):]
+        header = header[:header.index("</th>")]
+        self.assertIn("FAILED:RuntimeError", header)
+        self.assertIn("Context lane: FAILED:RuntimeError", html)

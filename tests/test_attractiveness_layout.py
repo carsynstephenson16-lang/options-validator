@@ -7,6 +7,7 @@ test below is about WHERE a fact is printed and how many times, never about
 what the fact is.  The authority/disclaimer sentences are asserted verbatim
 so a layout edit can never quietly drop one.
 """
+import contextlib
 import re
 import unittest
 from pathlib import Path
@@ -85,6 +86,12 @@ def _composite_card(symbol, *, grade="A", trend="UP", vol="RICH",
     }
 
 
+@contextlib.contextmanager
+def _legacy_layout():
+    """Render the pre-brief-39 page: the flag-off path is byte-identical to the
+    legacy snapshot (tests/test_attractiveness_layout.py LegacyByteIdentityTests)."""
+    with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+        yield
 
 def _fresh_board(symbols, chain_source=CHAIN_SOURCE,
                  close_kind="preclose_mid_1545", **section_kwargs):
@@ -112,6 +119,8 @@ def _fresh_board(symbols, chain_source=CHAIN_SOURCE,
 class EmptySlotConsolidationTests(unittest.TestCase):
     """Five byte-identical 'OPEN' cards are one fact printed five times."""
 
+    # Brief 39 re-pin: the removed hero or sticky-nav surface is retained only on rollback
+    @_legacy_layout()
     def test_all_open_rule_based_slots_collapse_into_one_block(self):
         html = ad.render(_board(["AAA"], eligible=False))
         hero = html[html.index("Rule-based top 5"):html.index("Context-aware Top 5")]
@@ -126,6 +135,9 @@ class EmptySlotConsolidationTests(unittest.TestCase):
             hero,
         )
 
+
+    # Brief 39 re-pin: the removed hero or sticky-nav surface is retained only on rollback
+    @_legacy_layout()
     def test_single_open_slot_is_not_consolidated(self):
         data = _board([f"S{index}" for index in range(config.PICK_TOP_N - 1)])
         html = ad.render(data)
@@ -135,6 +147,9 @@ class EmptySlotConsolidationTests(unittest.TestCase):
         self.assertIn(f"<span>Pick {config.PICK_TOP_N}</span>", hero)
         self.assertNotIn("slots open", hero)
 
+
+    # Brief 39 re-pin: the removed hero or sticky-nav surface is retained only on rollback
+    @_legacy_layout()
     def test_context_lane_open_slots_collapse_and_keep_counters(self):
         html = ad.render(_board(["AAA"]))
         lane = html[
@@ -146,6 +161,7 @@ class EmptySlotConsolidationTests(unittest.TestCase):
         self.assertIn(f"{config.PICK_TOP_N - 1} of {config.PICK_TOP_N} slots open", lane)
         self.assertIn("The full admissible pool did not supply another symbol.", lane)
 
+
     def test_blocked_qm_slots_collapse_into_one_block(self):
         html = ad.render(_board(["AAA"]), qm_context={"status": "DATA_BLOCKED"})
         qm = html[html.index("QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5"):]
@@ -154,6 +170,8 @@ class EmptySlotConsolidationTests(unittest.TestCase):
         self.assertIn(f"{config.PICK_TOP_N} of {config.PICK_TOP_N} slots open", qm)
         self.assertIn("QM context withheld", qm)
 
+    # Brief 39 re-pin: the removed hero or sticky-nav surface is retained only on rollback
+    @_legacy_layout()
     def test_shortlist_counters_still_report_every_slot(self):
         html = ad.render(_board(["AAA"], eligible=False))
         hero = html[html.index("Rule-based top 5"):html.index("Context-aware Top 5")]
@@ -161,6 +179,7 @@ class EmptySlotConsolidationTests(unittest.TestCase):
         self.assertIn("<span>Eligible</span>", hero)
         self.assertIn("<span>Watch</span>", hero)
         self.assertIn(f"<strong>{config.PICK_TOP_N}</strong><span>Open</span>", hero)
+
 
 
 class PositionsAndRiskFirstTests(unittest.TestCase):
@@ -194,15 +213,18 @@ class PositionsAndRiskFirstTests(unittest.TestCase):
         data["open_positions"] = self._positions()
         html = ad.render(data)
 
-        self.assertLess(html.index("REGISTERED-BETS TRACKER"),
-                        html.index("Rule-based top 5"))
-        self.assertLess(html.index("DATA FRESHNESS"),
-                        html.index("REGISTERED-BETS TRACKER"))
+        self.assertLess(html.index('class="tiles"'),
+                        html.index('id="agreement-table"'))
+        self.assertLess(html.index('class="status-strip"'),
+                        html.index('class="tiles"'))
         self.assertIn("POSITIONS &amp; RISK", html)
         # The tracker's authority sentence is unchanged by the move.
         self.assertIn("This is a read-only receipt summary and cannot activate, "
                       "rank, or place a trade.", html)
 
+
+    # Brief 39 re-pin: preserve position content and avoid an inverted empty slice
+    @_legacy_layout()
     def test_open_positions_render_one_line_each_from_the_book(self):
         data = _board(["AAA"])
         data["open_positions"] = self._positions()
@@ -215,6 +237,9 @@ class PositionsAndRiskFirstTests(unittest.TestCase):
         self.assertIn("VST 39 shares", block)
         self.assertEqual(block.count('class="open-position"'), 2)
 
+
+    # Brief 39 re-pin: preserve position content and avoid an inverted empty slice
+    @_legacy_layout()
     def test_stale_last_mark_is_flagged_with_its_age(self):
         data = _board(["AAA"], today="2026-08-25")
         data["open_positions"] = self._positions()
@@ -224,6 +249,9 @@ class PositionsAndRiskFirstTests(unittest.TestCase):
         self.assertIn("last mark 2026-07-27", block)
         self.assertRegex(block, r"last mark 2026-07-27 \(\d+ sessions ago\)")
 
+
+    # Brief 39 re-pin: preserve position content and avoid an inverted empty slice
+    @_legacy_layout()
     def test_current_last_mark_makes_no_age_claim(self):
         data = _board(["AAA"], today="2026-07-27")
         data["open_positions"] = self._positions()
@@ -232,6 +260,9 @@ class PositionsAndRiskFirstTests(unittest.TestCase):
 
         self.assertNotIn("sessions ago", block)
 
+
+    # Brief 39 re-pin: preserve position content and avoid an inverted empty slice
+    @_legacy_layout()
     def test_missing_position_source_says_so_and_never_invents_a_row(self):
         data = _board(["AAA"])
         data["open_positions"] = self._positions(
@@ -244,12 +275,16 @@ class PositionsAndRiskFirstTests(unittest.TestCase):
         self.assertIn("could not be read", block)
         self.assertEqual(block.count('class="open-position"'), 0)
 
+
+    # Brief 39 re-pin: preserve position content and avoid an inverted empty slice
+    @_legacy_layout()
     def test_unread_position_sources_are_declared_not_assumed_empty(self):
         html = ad.render(_board(["AAA"]))
         block = html[html.index("POSITIONS &amp; RISK"):html.index("Rule-based top 5")]
 
         self.assertIn("not read for this render", block)
         self.assertNotIn("No open paper positions", block)
+
 
     def test_position_loader_reads_the_paper_book_without_fabricating(self):
         import tempfile
@@ -288,9 +323,10 @@ class SymbolPanelCollapseTests(unittest.TestCase):
         panels = re.findall(r'<details class="panel symbol-panel"( open)?>', html)
 
         self.assertEqual(len(panels), 3)
-        self.assertEqual(sum(1 for panel in panels if panel), 1)  # VST only
-        vst = html[html.index('id="symbol-VST"'):html.index('id="symbol-NVDA"')]
-        self.assertIn('<details class="panel symbol-panel" open>', vst)
+        self.assertEqual(sum(1 for panel in panels if panel), 0)  # (b) I1: pinned rows, closed panels
+        vst = _panel_slice(html, "VST")
+        self.assertIn('<details class="panel symbol-panel">', vst)
+
 
     def test_panel_summary_is_one_line_with_source_asof_and_grade(self):
         html = ad.render(self._data())
@@ -320,6 +356,8 @@ class SymbolPanelCollapseTests(unittest.TestCase):
 
 
 class StickyNavTests(unittest.TestCase):
+    # Brief 39 re-pin: the removed hero or sticky-nav surface is retained only on rollback
+    @_legacy_layout()
     def test_nav_links_every_present_section_and_symbol(self):
         data = _board(["VST", "NVDA"])
         html = ad.render(data)
@@ -332,6 +370,9 @@ class StickyNavTests(unittest.TestCase):
         self.assertIn('href="#symbol-VST"', nav)
         self.assertIn('href="#symbol-NVDA"', nav)
 
+
+    # Brief 39 re-pin: the removed hero or sticky-nav surface is retained only on rollback
+    @_legacy_layout()
     def test_nav_never_links_a_section_that_is_not_on_the_page(self):
         from unittest import mock
 
@@ -340,6 +381,7 @@ class StickyNavTests(unittest.TestCase):
         nav = html[html.index('class="sticky-nav"'):html.index("</nav>")]
 
         self.assertNotIn('href="#context-aware-top-5"', nav)
+
 
 
 class CompositeTableTests(unittest.TestCase):
@@ -426,9 +468,12 @@ class DiagnosticsDrawerTests(unittest.TestCase):
         html = self._rendered()
         drawer_open = html.index('class="panel diagnostics-drawer"')
 
-        self.assertLess(html.index("Shortlist outcome scoreboard"), drawer_open)
+        self.assertGreater(html.index("Shortlist outcome scoreboard"), drawer_open)
+        self.assertLess(html.index('<td class="sym">VST'), drawer_open)
+        self.assertLess(html.index('<td class="sym">AMZN'), drawer_open)
         self.assertLess(html.index("Rule-based top 5"),
                         html.index("Shortlist outcome scoreboard"))
+
 
     def test_symbol_panels_precede_the_drawer(self):
         html = self._rendered()
@@ -652,3 +697,27 @@ class LaneBoardLayoutTests(unittest.TestCase):
 
     def test_zero_javascript_with_flag_on(self):
         self.assertNotIn("<script", self._html().lower())
+
+
+def _panel_slice(html: str, symbol: str) -> str:
+    """One symbol's panel: from its anchor to the next symbol anchor, the drawer, or the end."""
+    start = html.index(f'id="symbol-{symbol}"')
+    ends = [p for p in (html.find('id="symbol-', start + 1), html.find('id="diagnostics"', start)) if p != -1]
+    return html[start:min(ends)] if ends else html[start:]
+
+
+class LaneBoardRepinTwins(unittest.TestCase):
+    def test_legacy_clean_pinned_panel_stays_open(self):
+        # (b) I1 changes only the flag-on contract.
+        with _legacy_layout():
+            html = ad.render(SymbolPanelCollapseTests()._data())
+        panels = re.findall(r'<details class="panel symbol-panel"( open)?>', html)
+        self.assertEqual(len(panels), 3)
+        self.assertEqual(sum(bool(p) for p in panels), 1)
+        self.assertIn('<details class="panel symbol-panel" open>', _panel_slice(html, "VST"))
+
+    def test_flag_on_open_slots_notice_is_consolidated_above_table(self):
+        # (c) Hero cards leave; the consolidated open-slot notice survives.
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            html = ad.render(_board(["AAA"], eligible=False))
+        self.assertEqual(html[:html.index('id="agreement-table"')].count("of 5 slots open"), 1)

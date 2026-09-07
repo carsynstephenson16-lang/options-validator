@@ -2,7 +2,9 @@
 risk economics reconciled against the repo risk policy, PMCC-preview full
 two-leg P&L + structural-preview exclusion, stale-feature veto, and the
 sources / research-date rendering. Offline; synthetic fixtures only."""
+import contextlib
 import unittest
+from unittest import mock
 
 import pandas as pd
 
@@ -31,6 +33,13 @@ def _card(strike, expiry, *, dte=45, lane_fields=None, grades=None,
     card.update(lane_fields or {})
     return card
 
+
+@contextlib.contextmanager
+def _legacy_layout():
+    """Render the pre-brief-39 page: the flag-off path is byte-identical to the
+    legacy snapshot (tests/test_attractiveness_layout.py LegacyByteIdentityTests)."""
+    with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+        yield
 
 class EarningsUnknownTests(unittest.TestCase):
     def test_ladder_marks_unknown_beyond_coverage_horizon(self):
@@ -275,6 +284,8 @@ class RenderHonestyTests(unittest.TestCase):
         self.assertIn("No qualifying contract", html)
         self.assertIn("This is an intentional open slot", html)
 
+    # Brief 39 re-pin: legacy hero-card slot count is a removed surface
+    @_legacy_layout()
     def test_partial_shortlist_keeps_configured_visible_slots_in_each_list(self):
         html = ad.render(self._data_one_fit_one_big())
         # 2026-09-03 layout: identical open slots consolidate, so each lane
@@ -286,6 +297,7 @@ class RenderHonestyTests(unittest.TestCase):
         self.assertIn(f"Picks 2–{config.PICK_TOP_N}", html)
         self.assertIn("No qualifying contract", html)
         self.assertIn("not missing UI", html)
+
 
     def test_open_slot_explains_actual_liquidity_and_policy_gates(self):
         data = {"symbols": [
