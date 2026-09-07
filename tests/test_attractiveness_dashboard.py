@@ -3804,3 +3804,44 @@ class FreshSourceAgesTests(unittest.TestCase):
         html = ad.render(data)
         self.assertIn("could NOT be compared with the evaluation date", html)
         self.assertIn("age UNKNOWN", html)
+
+
+class ExperimentLaneGatherTests(unittest.TestCase):
+    def test_injected_experiment_lanes_are_attached_verbatim(self):
+        lanes = {"exp_tbill": [{"symbol": "AMZN", "state": "ABOVE_TBILL", "carry_spread": 0.65,
+                                "experiment_id": "EXP-TBILL", "asof": "2026-08-14"}]}
+        data = ad.assemble(symbol_sections=[_fresh_section()], rv21_by_symbol={},
+                           today="2026-08-14", experiment_lanes=lanes)
+        self.assertEqual(data["experiment_lanes"], lanes)
+
+    def test_injected_fixtures_never_compute_experiment_lanes(self):
+        # Hermeticity: an injected assemble() must not touch the cache (65 test sites depend on it).
+        from unittest import mock
+        with mock.patch("options_researcher.experiments_dashboard.build_experiment_lanes",
+                        side_effect=AssertionError("must not be called")):
+            data = ad.assemble(symbol_sections=[_fresh_section()], rv21_by_symbol={}, today="2026-08-14")
+        self.assertNotIn("experiment_lanes", data)
+
+    def test_default_experiment_lanes_records_a_builder_failure(self):
+        from unittest import mock
+        with mock.patch("options_researcher.experiments_dashboard.build_experiment_lanes",
+                        side_effect=RuntimeError("cache missing")):
+            lanes = ad._default_experiment_lanes("2026-08-14")
+        self.assertEqual(lanes, {"__error__": "RuntimeError: cache missing"})
+
+    def test_default_experiment_lanes_keeps_only_the_four_dict_lanes(self):
+        from unittest import mock
+        seen = {}
+
+        def fake(symbols, *, asof):
+            seen["asof"] = asof
+            seen["symbols"] = tuple(symbols)
+            return {"exp_beta": [], "exp_tail": [], "exp_spread": [], "exp_tbill": [],
+                    "exp_short": [object()]}   # dataclass cards, not JSON-serialisable
+        with mock.patch("options_researcher.experiments_dashboard.build_experiment_lanes", side_effect=fake):
+            lanes = ad._default_experiment_lanes("2026-08-14")
+        self.assertEqual(set(lanes), {"exp_beta", "exp_tail", "exp_spread", "exp_tbill"})
+        self.assertEqual(seen, {"asof": "2026-08-14", "symbols": tuple(config.ATTRACTIVENESS_UNIVERSE)})
+
+    def test_default_experiment_lanes_without_a_session_is_an_error_record(self):
+        self.assertEqual(ad._default_experiment_lanes(None), {"__error__": "no board as-of session"})

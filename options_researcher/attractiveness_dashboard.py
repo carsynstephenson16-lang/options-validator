@@ -1568,12 +1568,15 @@ def assemble(
     composite_signals: list[dict] | None = None,
     underlying_closes_freshness: Mapping[str, str] | None = None,
     open_positions: Mapping[str, object] | None = None,
+    experiment_lanes: Mapping[str, object] | None = None,
     today: str | None = None,
 ) -> dict:
     """Attach scenario tables + headlines to gathered candidate sections.
 
     The arguments default to the real project state (see _gather_all);
     inject them to unit-test without touching disk or the network.
+    ``experiment_lanes`` injects the four display lanes; its default runs only
+    on the real gather path, like ``open_positions``.
     ``blocked`` carries the machine-readable per-symbol failure records
     (fail-visible: they render on the page, never disappear).
 
@@ -1749,6 +1752,8 @@ def assemble(
         sec for sec in out_symbols if not sec.get("display_only")
     ]
     page_as_of = _page_data_as_of(canonical_symbols)
+    if experiment_lanes is None and real_assembly:
+        experiment_lanes = _default_experiment_lanes(page_as_of)
     stale_as_of, stale_symbols = _stale_path_as_of(canonical_symbols)
     fresh_symbols = [str(sec.get("symbol", "?"))
                      for sec in _fresh_sections(canonical_symbols)]
@@ -1776,9 +1781,32 @@ def assemble(
     }
     if open_positions is not None:
         out["open_positions"] = dict(open_positions)
+    if experiment_lanes is not None:
+        out["experiment_lanes"] = dict(experiment_lanes)
     if schwab_state is not None:
         out["schwab_lane"] = schwab_state
     return out
+
+
+_EXPERIMENT_DICT_LANES = ("exp_beta", "exp_tail", "exp_spread", "exp_tbill")
+
+
+def _default_experiment_lanes(as_of: object) -> dict[str, object]:
+    """Compute the four parking-lot experiment lanes from cached data for the
+    lane board (spec §4), on the REAL gather path only. Fail-visible: a builder
+    exception becomes a recorded error the board prints as a lane state.
+    ``exp_short`` (dataclass cards) is deliberately dropped: it is not a lane
+    of this board and is not JSON-serialisable."""
+    from options_researcher import experiments_dashboard
+
+    if not isinstance(as_of, str) or not as_of:
+        return {"__error__": "no board as-of session"}
+    try:
+        lanes = experiments_dashboard.build_experiment_lanes(
+            list(config.ATTRACTIVENESS_UNIVERSE), asof=as_of)
+    except Exception as exc:  # fail-visible by design (spec §5)
+        return {"__error__": f"{exc.__class__.__name__}: {exc}"}
+    return {key: list(lanes.get(key) or []) for key in _EXPERIMENT_DICT_LANES}
 
 
 def _gather_all() -> tuple[list[dict], dict[str, float], list[dict], dict]:
@@ -3773,7 +3801,10 @@ def _research_desk_html(
 
 
 def _experiments_shelf_html(status: Mapping[str, object] | None) -> str:
-    """Passive local-view links only: never import or run an experiment builder."""
+    """Passive local-view links only: this shelf never imports or runs an
+    experiment builder. (The lane board's gather step does run the four
+    builders for its agreement table — brief 39 / spec §4, owner-directed
+    2026-09-06; that is the ONLY place the board computes experiments.)"""
     status_map = status if isinstance(status, Mapping) else {}
     state = status_map.get("state", "absent")
     prefix = ""

@@ -54,6 +54,7 @@ def _put_section(symbol, *, as_of="2026-08-25", chain_source=THETADATA_CHAIN_SOU
 
 
 def _board(symbols, *, eligible=True, today="2026-08-25", **assemble_kwargs):
+    assemble_kwargs.setdefault("experiment_lanes", {})
     data = ad.assemble(
         symbol_sections=[_put_section(symbol) for symbol in symbols],
         rv21_by_symbol={},
