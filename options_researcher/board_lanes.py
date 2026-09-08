@@ -151,7 +151,7 @@ def lane_from_baseline(
 
 
 def lane_from_context(selection: Mapping[str, object] | None, *, cap: int) -> LaneColumn:
-    note = "display-only · baseline + market-context tiebreak; only ALIGNED counts"
+    note = "display-only · baseline + market-context tiebreak; only positive alignment counts"
     if not isinstance(selection, Mapping):
         return LaneColumn(
             "context", "Context lane", "ranking", True, "UNAVAILABLE:no selection", None, (), note
@@ -169,7 +169,9 @@ def lane_from_context(selection: Mapping[str, object] | None, *, cap: int) -> La
         if sym is None:
             continue
         reason = str(row.get("context_reason") or "")
-        if reason == "ALIGNED":
+        # The selector reports aligned angle names, not a literal ALIGNED state.
+        term = _num(row.get("context_term"))
+        if reason not in _CONTEXT_LABELS and term is not None and term > 0:
             members.append(LaneMember(sym, f"#{i}", _num(row.get("context_term")), i, True))
         else:
             members.append(

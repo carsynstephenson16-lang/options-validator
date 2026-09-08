@@ -6,8 +6,11 @@ Nothing here asserts a ranking, a signal, or an authority change."""
 import unittest
 from pathlib import Path
 
+from test_context_lane import _composite, _pool_item
+
 import config
 from options_researcher import board_lanes as bl
+from options_researcher.context_lane import rank_context_lane
 
 
 class BoardConstantsTests(unittest.TestCase):
@@ -51,7 +54,9 @@ def _pick(symbol, lane="long_call"):
     }
 
 
-def _ctx_row(symbol, term=3, reason="ALIGNED", angles=("TREND", "REGIME", "INTERNALS")):
+def _ctx_row(
+    symbol, term=3, reason="TREND, REGIME, INTERNALS", angles=("TREND", "REGIME", "INTERNALS")
+):
     return {
         "symbol": symbol,
         "lane": "long_call",
@@ -186,6 +191,35 @@ class LaneBoardTests(unittest.TestCase):
         self.assertEqual(
             set(_row(board, "CEG").marks) & {"beta", "tail", "spread"}, {"beta", "tail", "spread"}
         )
+
+    def test_real_context_selector_success_counts_and_adverse_states_do_not(self):
+        symbols = ("GOOD", "VETO", "DOWN", "BLOCKED")
+        rows = rank_context_lane(
+            [_pool_item(symbol, green_fraction=0.5) for symbol in symbols],
+            [
+                _composite("GOOD"),
+                _composite("VETO", grade="C", internals="VETO"),
+                _composite("DOWN", trend="DOWN"),
+                _composite("BLOCKED", trend="DATA_BLOCKED", aligned_count=0),
+            ],
+            board_as_of="2026-08-25",
+            n=4,
+        )
+        self.assertEqual(rows[0]["context_reason"], "TREND, VOL_PREMIUM, REGIME, INTERNALS")
+        selection = {"state": "READY", "rows": rows, "error": None}
+        members = {m.symbol: m for m in bl.lane_from_context(selection, cap=5).members}
+        self.assertEqual(members["GOOD"].label, "#1")
+        self.assertTrue(members["GOOD"].counts)
+        for symbol, label in (
+            ("VETO", "veto"),
+            ("DOWN", "direction mismatch"),
+            ("BLOCKED", "blocked"),
+        ):
+            with self.subTest(symbol=symbol):
+                self.assertFalse(members[symbol].counts)
+                self.assertEqual(members[symbol].label, label)
+        board = _board(context_selection=selection)
+        self.assertEqual(_row(board, "GOOD").fav_count, 1)
 
     def test_context_marks_other_than_aligned_are_shown_but_never_counted(self):
         board = _board()
