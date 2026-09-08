@@ -721,3 +721,75 @@ class LaneBoardRepinTwins(unittest.TestCase):
         with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
             html = ad.render(_board(["AAA"], eligible=False))
         self.assertEqual(html[:html.index('id="agreement-table"')].count("of 5 slots open"), 1)
+
+
+def _visible_html(html: str) -> str:
+    """D10's measure = what the reader sees without clicking: drop every CLOSED
+    symbol panel and the (closed) diagnostics drawer, nesting-aware. A
+    force-open panel (STALE/BLOCKED/SKIPPED) stays in — it IS visible. The
+    acceptance fixture below is fresh, so nothing is force-open and the
+    targets are meaningful; Friday's force-open count is REPORTED (Step 4)."""
+    openers = ('<details class="panel symbol-panel">', '<details class="panel diagnostics-drawer"')
+    out, i = [], 0
+    while True:
+        starts = [p for p in (html.find(o, i) for o in openers) if p != -1]
+        if not starts:
+            out.append(html[i:])
+            return "".join(out)
+        s = min(starts)
+        out.append(html[i:s])
+        depth, p = 0, s
+        while True:
+            o = html.find("<details", p + 1)
+            c = html.find("</details>", p + 1)
+            if c == -1:
+                p = len(html)
+                break
+            if o != -1 and o < c:
+                depth, p = depth + 1, o
+            elif depth == 0:
+                p = c + len("</details>")
+                break
+            else:
+                depth, p = depth - 1, c
+        i = p
+
+
+class LaneBoardParityAndSizeTests(unittest.TestCase):
+    def test_selection_snapshot_and_source_row_hashes_are_identical_flag_on_and_off(self):
+        data = _board(["NVDA", "AMZN", "MSFT"])
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+            off = ad._render_result(data)
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            on = ad._render_result(data)
+        self.assertEqual(on.selection_snapshot, off.selection_snapshot)
+        self.assertEqual(on.render_source_row_hashes, off.render_source_row_hashes)
+
+    def test_visible_page_meets_the_d10_targets_on_a_fresh_board(self):
+        # FRESH board (same construction as SymbolPanelCollapseTests._data, :254-275,
+        # lifted to a module-level `_fresh_board(symbols)` in a no-behaviour commit):
+        # nothing is STALE, so no panel is force-open, and under I1 the pinned
+        # VST/AMZN panels are closed too. The measure can therefore FAIL if the
+        # flag-on page leaves too much in the main flow — which is what D10 rules on.
+        symbols = ["NVDA", "AMZN", "MSFT", "PLTR", "SMCI", "CRWV", "CEG", "VST"]
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            html = ad.render(_fresh_board(symbols), **LaneBoardLayoutTests._DRAWER_INPUTS)
+        self.assertEqual(html.count('<details class="panel symbol-panel" open>'), 0)   # I1 + fresh
+        self.assertGreaterEqual(html.count('<details class="panel symbol-panel">'), 5)  # the table names' panels exist
+        visible = _visible_html(html)
+        # Measured (round 4): new page 2 <h2> / 0 <summary>; the PRE-redesign page on the
+        # same fixture scores 8 / 23 — so "<= 8" would not discriminate. D10's ceiling is 8;
+        # the redesign's own bar is 4, and the legacy page must FAIL the summary leg.
+        self.assertLessEqual(visible.count("<h2"), 4)
+        self.assertLessEqual(visible.count("<summary"), 20)
+        self.assertNotIn('class="panel symbol-panel"', visible)
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", False):
+            legacy = ad.render(_fresh_board(symbols), **LaneBoardLayoutTests._DRAWER_INPUTS)
+        self.assertGreater(_visible_html(legacy).count("<summary"), 20)   # the measure rejects today's page
+
+    def test_force_open_panels_count_as_visible(self):
+        # A STALE table name keeps its fail-visible open panel, and the measure counts it.
+        with mock.patch.object(config, "BOARD_LANES_ENABLED", True):
+            html = ad.render(_board(["NVDA", "AMZN", "MSFT"]), **LaneBoardLayoutTests._DRAWER_INPUTS)
+        self.assertGreater(html.count('<details class="panel symbol-panel" open>'), 0)   # layout fixture is STALE
+        self.assertIn('class="panel symbol-panel" open', _visible_html(html))
