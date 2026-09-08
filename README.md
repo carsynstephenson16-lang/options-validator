@@ -295,7 +295,16 @@ adversarial review, `codex/brief-36-h7-activation-door`), regenerate the
 cohort-9 feasibility / source-health / data-gate receipts at the post-merge
 config, then the owner runs the activation CLI typing the loss bar (7), the
 OD-3 namespace line, and the starvation pre-acceptance. Quote-age blocking
-threshold is owner-typed at 60 minutes (ruling 3). The four **attractiveness experiments** (EXP-BETA/TAIL/SPREAD/
+threshold is owner-typed at 60 minutes (ruling 3). *Lane update (2026-09-08):*
+Brief 36 landed (#147, 09-03). The receipt regeneration turned out to be an
+activation-day procedure missing one command (no CLI writes the Schwab-mode
+data-gate receipt; the ritual's chain is fenced behind `h7_active`; the
+data-gate receipt hashes daily-refreshed close files) — Brief 40 specifies it.
+The cohort-9 feasibility receipt was regenerated at `863eff2` (3 / 4.0,
+unchanged). Source health 2026-09-08: AMZN, MSFT, NOW, TEM unhealthy (no
+confirmed next earnings date) — the door needs all nine cohort names healthy,
+so activation waits on the earnings store, realistically early-to-mid October.
+Details: `reports/2026-09-08-h7-receipt-regeneration-status.md`. The four **attractiveness experiments** (EXP-BETA/TAIL/SPREAD/
 TBILL) are display-only, off by default, in the standalone
 `experiments_dashboard.py`; the frozen baseline ranking is untouched. The
 production Schwab OAuth refresh token was re-authorized 2026-08-12 ~00:56 ET

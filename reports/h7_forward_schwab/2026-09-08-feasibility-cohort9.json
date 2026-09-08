@@ -1,0 +1,2774 @@
+{
+  "base_rate": 0.006349206349206349,
+  "code_sha": "863eff24a2edaa045ebd20e018feb9c5659c4710",
+  "config_hash": "52501dcb546571429384bec9c0d65353271cf5aea72ce61a858ea4f9743cc25a",
+  "error_count": 0,
+  "errors": [],
+  "expected_entries": 4.0,
+  "full_stack_passes": 4,
+  "input_files": {
+    "chain:AMD:2026-04-16": {
+      "path": ".cache/chains/AMD_2026-04-16.parquet",
+      "sha256": "55bd32642c6f925db427458f6754883dc068d799bc592394f61ca33d64085c6e"
+    },
+    "chain:AMD:2026-04-17": {
+      "path": ".cache/chains/AMD_2026-04-17.parquet",
+      "sha256": "df908fec7ba2f1b576aee1266194012f74942b14147960a3f52c07e03aa03f73"
+    },
+    "chain:AMD:2026-04-20": {
+      "path": ".cache/chains/AMD_2026-04-20.parquet",
+      "sha256": "11f4c84f50b02dc59f90dc10f36ad6a8b1a3a6bcfbd6875cde3d62fb70d7b9ad"
+    },
+    "chain:AMD:2026-04-21": {
+      "path": ".cache/chains/AMD_2026-04-21.parquet",
+      "sha256": "3b12baec6ca466ba32a22d3ddb28becdaeb61714a9c0482fc4d3dd2955a4877e"
+    },
+    "chain:AMD:2026-04-22": {
+      "path": ".cache/chains/AMD_2026-04-22.parquet",
+      "sha256": "532e33717b305664e907d343b9665bda3d21eaa1a291cce3b96e0058e52397df"
+    },
+    "chain:AMD:2026-04-23": {
+      "path": ".cache/chains/AMD_2026-04-23.parquet",
+      "sha256": "f4b9ea66b0363314ec533bb9961ac8b6c7233479c3100d02d8786c5c9b0466d7"
+    },
+    "chain:AMD:2026-04-24": {
+      "path": ".cache/chains/AMD_2026-04-24.parquet",
+      "sha256": "11d589ccae4181cb826f86e4aa53f5feae28e057f6119c38dd4691a363efae7c"
+    },
+    "chain:AMD:2026-04-27": {
+      "path": ".cache/chains/AMD_2026-04-27.parquet",
+      "sha256": "577b52260d56655ec39b499394d793e8e6788592996c5fea282b101064630654"
+    },
+    "chain:AMD:2026-04-28": {
+      "path": ".cache/chains/AMD_2026-04-28.parquet",
+      "sha256": "3150fbe1744b51af34facdb82a0b60bca5a22f087f8c1fbffd0aa797f567dd6a"
+    },
+    "chain:AMD:2026-04-29": {
+      "path": ".cache/chains/AMD_2026-04-29.parquet",
+      "sha256": "62aba078298bc5c7d4bc1443e328a68ee8df76634a2a094efffb77c26dd2c88f"
+    },
+    "chain:AMD:2026-04-30": {
+      "path": ".cache/chains/AMD_2026-04-30.parquet",
+      "sha256": "a3e5a147bc2e0d3b73aab3a37f677cf1b6190d283ae0c94d7bd96daa9d3ad2fa"
+    },
+    "chain:AMD:2026-05-01": {
+      "path": ".cache/chains/AMD_2026-05-01.parquet",
+      "sha256": "278c41ca50d334bb9a83eb1a25b144ffc6cb3728ab964dc498991d2866de508f"
+    },
+    "chain:AMD:2026-05-04": {
+      "path": ".cache/chains/AMD_2026-05-04.parquet",
+      "sha256": "ec364eaab367825a73eda18d037bd6d6772450fa8d34aaf1634341f061bb96a1"
+    },
+    "chain:AMD:2026-05-05": {
+      "path": ".cache/chains/AMD_2026-05-05.parquet",
+      "sha256": "dd0db2bfd3bff59823d7f3f0887f015792df04f9a8d6016e600c53fd098eeb35"
+    },
+    "chain:AMD:2026-05-06": {
+      "path": ".cache/chains/AMD_2026-05-06.parquet",
+      "sha256": "295b861687efb1b762179827ade0ac85aebf5841515e00d0a1af267d3e76c4ae"
+    },
+    "chain:AMD:2026-05-07": {
+      "path": ".cache/chains/AMD_2026-05-07.parquet",
+      "sha256": "3927a6565fcaa364966e1644c7e96f48342812c785355bc7e190ac5e0c45ffc2"
+    },
+    "chain:AMD:2026-05-08": {
+      "path": ".cache/chains/AMD_2026-05-08.parquet",
+      "sha256": "4112927ae59226ac296fc75f49d333f8b4652729b1c36af118fd0266d891e831"
+    },
+    "chain:AMD:2026-05-11": {
+      "path": ".cache/chains/AMD_2026-05-11.parquet",
+      "sha256": "c40cd6ff4b268b734ee0c844deb11173bd8d96f1ef7be5702f52d347dd6a7cc2"
+    },
+    "chain:AMD:2026-05-12": {
+      "path": ".cache/chains/AMD_2026-05-12.parquet",
+      "sha256": "c9a6418d83f31b82296dcb08e8695e8c265c60c0d04cf4d05a3348bee8aa6f6e"
+    },
+    "chain:AMD:2026-05-13": {
+      "path": ".cache/chains/AMD_2026-05-13.parquet",
+      "sha256": "f29645de57777758515774065f56d5e4f1d442ad52789a3abe237a96cf74c2b5"
+    },
+    "chain:AMD:2026-05-14": {
+      "path": ".cache/chains/AMD_2026-05-14.parquet",
+      "sha256": "187346b083be2b237cb45b2bc7d483fbe589bb1d3330a815a9c131f1ec607649"
+    },
+    "chain:AMD:2026-05-15": {
+      "path": ".cache/chains/AMD_2026-05-15.parquet",
+      "sha256": "7caf60c364e1dc3388c361566034c675027f3e717013fa7a32a5134c69f31748"
+    },
+    "chain:AMD:2026-05-18": {
+      "path": ".cache/chains/AMD_2026-05-18.parquet",
+      "sha256": "78502c231e77395f1824500765e86d621ccdd88e8ee888464a2e7bd4f3e12175"
+    },
+    "chain:AMD:2026-05-19": {
+      "path": ".cache/chains/AMD_2026-05-19.parquet",
+      "sha256": "b4436308f39e0dbfb7741772cffa07cab3407f11537d8fbad3e1dbbf8d13f488"
+    },
+    "chain:AMD:2026-05-20": {
+      "path": ".cache/chains/AMD_2026-05-20.parquet",
+      "sha256": "1d8f8f0e3cd5ac2b16a9c2866d58d9486ab923246337c7eb50403322e95ec47d"
+    },
+    "chain:AMD:2026-05-21": {
+      "path": ".cache/chains/AMD_2026-05-21.parquet",
+      "sha256": "924caffdc50245cb86f4532111359e740a59d33c47c47769a56a57884da1665e"
+    },
+    "chain:AMD:2026-05-22": {
+      "path": ".cache/chains/AMD_2026-05-22.parquet",
+      "sha256": "01beebd351d98baafaa80c2d2cb301c2237f9d28c2f37f79bbe09a1e532728e3"
+    },
+    "chain:AMD:2026-05-26": {
+      "path": ".cache/chains/AMD_2026-05-26.parquet",
+      "sha256": "883b558470bb1cabf504f3030eb57851fb88a4925555ff0eb67f8cfaa2886a54"
+    },
+    "chain:AMD:2026-05-27": {
+      "path": ".cache/chains/AMD_2026-05-27.parquet",
+      "sha256": "e2f079c67be2e11bf2579847f431545e5c26c8e71dc1cd0d647e0de61c49ecc4"
+    },
+    "chain:AMD:2026-05-28": {
+      "path": ".cache/chains/AMD_2026-05-28.parquet",
+      "sha256": "29a8c981c152bf3980d8d64e7cf315a1e4036e4928895f859edaa23881f29838"
+    },
+    "chain:AMD:2026-05-29": {
+      "path": ".cache/chains/AMD_2026-05-29.parquet",
+      "sha256": "dd9df76eec829641156317cc9418bf62be935f4afc1c7dd6bb29d3cb6eb72c29"
+    },
+    "chain:AMD:2026-06-01": {
+      "path": ".cache/chains/AMD_2026-06-01.parquet",
+      "sha256": "a17d7a26776e6b7e4a24bc8678706752cc17fc6abb996d13b51b3cd81c54a31a"
+    },
+    "chain:AMD:2026-06-02": {
+      "path": ".cache/chains/AMD_2026-06-02.parquet",
+      "sha256": "1a398b8c55c07e14ffa553b43dbefd2ec49f5954f2799daa592365b23f541964"
+    },
+    "chain:AMD:2026-06-03": {
+      "path": ".cache/chains/AMD_2026-06-03.parquet",
+      "sha256": "ea852cdc768e5eb86405818c7c433d9567d6ef6012af5541d381b01fb9aa5361"
+    },
+    "chain:AMD:2026-06-04": {
+      "path": ".cache/chains/AMD_2026-06-04.parquet",
+      "sha256": "33fa7c08b6b9a6a4f28188a891f5a4ad5a875f0a23d8eaaa99c2d4003a5ae68b"
+    },
+    "chain:AMD:2026-06-05": {
+      "path": ".cache/chains/AMD_2026-06-05.parquet",
+      "sha256": "1f7cf34ca75627c4bc3e48de053f2e115eb1e2b77ac7945a9fa62c4241c8d71f"
+    },
+    "chain:AMD:2026-06-08": {
+      "path": ".cache/chains/AMD_2026-06-08.parquet",
+      "sha256": "558c4fca2dc4423db3fa634376b76baeed4256850eb20c70d350b77ffbe3009c"
+    },
+    "chain:AMD:2026-06-09": {
+      "path": ".cache/chains/AMD_2026-06-09.parquet",
+      "sha256": "10f47ed601e72c46b7b974c16629b015d63fe9d0042648d2ca8a9719ac26b72d"
+    },
+    "chain:AMD:2026-06-10": {
+      "path": ".cache/chains/AMD_2026-06-10.parquet",
+      "sha256": "276485e40bf0130371540910b9a5023933f2dfc38274b643180609304d54544a"
+    },
+    "chain:AMD:2026-06-11": {
+      "path": ".cache/chains/AMD_2026-06-11.parquet",
+      "sha256": "ad9b9cab9fa13edc017d7fde78276b426d0d467533a0f7820e02e30d9e6d06e5"
+    },
+    "chain:AMD:2026-06-12": {
+      "path": ".cache/chains/AMD_2026-06-12.parquet",
+      "sha256": "964d9f1fae7a7c45293fb7e3fa6425f830a123eaad2145f9b3d7f8e319daa0a4"
+    },
+    "chain:AMD:2026-06-15": {
+      "path": ".cache/chains/AMD_2026-06-15.parquet",
+      "sha256": "eff2bb1f320437aad5525533dd28bdac5e989f40c5e010c7935f05868e58c34b"
+    },
+    "chain:AMD:2026-06-16": {
+      "path": ".cache/chains/AMD_2026-06-16.parquet",
+      "sha256": "477f062e52e2c5dad6aea84d30915c5650c3ac143c0c955f78e9cf49ab2dc732"
+    },
+    "chain:AMD:2026-06-17": {
+      "path": ".cache/chains/AMD_2026-06-17.parquet",
+      "sha256": "3819450cc74f06d45c960e22f9273e9a67a6c274104da22b7e2a1f8cd62ea0a6"
+    },
+    "chain:AMD:2026-06-18": {
+      "path": ".cache/chains/AMD_2026-06-18.parquet",
+      "sha256": "d5657200f52a086749cb14c5a2540d9557fd32ebfaac17b650f360702752fe4b"
+    },
+    "chain:AMD:2026-06-22": {
+      "path": ".cache/chains/AMD_2026-06-22.parquet",
+      "sha256": "14e8b9d04394c4d1e475926dd2381ba6ca9ffc2538aec38845e0ce34b5f61460"
+    },
+    "chain:AMD:2026-06-23": {
+      "path": ".cache/chains/AMD_2026-06-23.parquet",
+      "sha256": "e5d5f3261ebc42fd799a3e35d25f2a8a3638c3f7d9056a051ea0a596a5bb7420"
+    },
+    "chain:AMD:2026-06-24": {
+      "path": ".cache/chains/AMD_2026-06-24.parquet",
+      "sha256": "e371f5964bff48aea759e73b1110138f12c82f31f21e283af10f07b1c5b70ef7"
+    },
+    "chain:AMD:2026-06-25": {
+      "path": ".cache/chains/AMD_2026-06-25.parquet",
+      "sha256": "8dd8409678db20fc796217d2803843dfac5b0e5a95c5be5f5992fa1e224541ac"
+    },
+    "chain:AMD:2026-06-26": {
+      "path": ".cache/chains/AMD_2026-06-26.parquet",
+      "sha256": "1a2cad2ef6ae75e644cbfb4991a8ad17e294226e5a16f8a8e84dae7fe5c8d694"
+    },
+    "chain:AMD:2026-06-29": {
+      "path": ".cache/chains/AMD_2026-06-29.parquet",
+      "sha256": "f1b0f01d22d1562dda884dae419057109e977945d4c34008068314060ad0f8cb"
+    },
+    "chain:AMD:2026-06-30": {
+      "path": ".cache/chains/AMD_2026-06-30.parquet",
+      "sha256": "54c53148a0daa46ebd8726618d01bb317f8b4ac20993e1f2cc4162116894e3f4"
+    },
+    "chain:AMD:2026-07-01": {
+      "path": ".cache/chains/AMD_2026-07-01.parquet",
+      "sha256": "83c99c9200b03b7f0a06d9cb5c046d162fe6e687dbf047ef52f337d3cac753b5"
+    },
+    "chain:AMD:2026-07-02": {
+      "path": ".cache/chains/AMD_2026-07-02.parquet",
+      "sha256": "8a04997d639103ffd804e8bfb7ce532712b25064d6caa7b3861251c5ae36bf1f"
+    },
+    "chain:AMD:2026-07-06": {
+      "path": ".cache/chains/AMD_2026-07-06.parquet",
+      "sha256": "6cd85181093aa97d8b182340ef824fb4dc9ae97aa13181bdc6f773013232dcb3"
+    },
+    "chain:AMD:2026-07-07": {
+      "path": ".cache/chains/AMD_2026-07-07.parquet",
+      "sha256": "3b0db90c818a658020530ea37a881b756c8593b62e6aa9321b17d325fb3e3eb2"
+    },
+    "chain:AMD:2026-07-08": {
+      "path": ".cache/chains/AMD_2026-07-08.parquet",
+      "sha256": "5b3d9f598ff381da72eb4338d81d4497a6d959b88f90eb9c2750504407732eed"
+    },
+    "chain:AMD:2026-07-09": {
+      "path": ".cache/chains/AMD_2026-07-09.parquet",
+      "sha256": "ab31a3b1c0446935c6630eaffe1ed69b073c7800a1933aa9999020c9f7726bbb"
+    },
+    "chain:AMD:2026-07-10": {
+      "path": ".cache/chains/AMD_2026-07-10.parquet",
+      "sha256": "bd4c9f0682a7c352e46ee216bcfcfba195b1dc5b578df71d46ca6475db6a7ebd"
+    },
+    "chain:AMD:2026-07-13": {
+      "path": ".cache/chains/AMD_2026-07-13.parquet",
+      "sha256": "6e4bf45561849ba9c868be98a3dbaf341959840700368bbc1b4e5e2415d89616"
+    },
+    "chain:AMD:2026-07-14": {
+      "path": ".cache/chains/AMD_2026-07-14.parquet",
+      "sha256": "3f3d32289da92c98c38e4a63c163c7711b9656f7170f37f4e2b7e9f6c95d979c"
+    },
+    "chain:AMD:2026-07-15": {
+      "path": ".cache/chains/AMD_2026-07-15.parquet",
+      "sha256": "5cc7b82cccdcc900dc9d370e6cecf245e6ac0f0c5053240128be16d175e1d176"
+    },
+    "chain:AMD:2026-07-16": {
+      "path": ".cache/chains/AMD_2026-07-16.parquet",
+      "sha256": "9249eb4846d9ed75b565b20ea97f463e96199efd3844f5204cd6c64f322ec300"
+    },
+    "chain:AMD:2026-07-17": {
+      "path": ".cache/chains/AMD_2026-07-17.parquet",
+      "sha256": "23042c9a8459e590a24b9b4540b0193a8012249fe0060ac53d22d14718cbf946"
+    },
+    "chain:AMD:2026-07-20": {
+      "path": ".cache/chains/AMD_2026-07-20.parquet",
+      "sha256": "89e206d4529cea173e5e4e145fdfee7d73b1f6cc9b7581d31f2dfd580f4ebd34"
+    },
+    "chain:AMD:2026-07-21": {
+      "path": ".cache/chains/AMD_2026-07-21.parquet",
+      "sha256": "fbe253a2036ea60c84344e799d4a2c08dcecd8fc82f2b3ec00b9c6e6cfba3824"
+    },
+    "chain:AMD:2026-07-22": {
+      "path": ".cache/chains/AMD_2026-07-22.parquet",
+      "sha256": "7f90be212a86ce8073b6f0db2d56a7dca1105391542e08cb25fb57348815bf83"
+    },
+    "chain:AMD:2026-07-23": {
+      "path": ".cache/chains/AMD_2026-07-23.parquet",
+      "sha256": "2d132552097ee8b2bda592dd2a3126a4b05cdd5a9f4f7b01a72c53d96967cf4f"
+    },
+    "chain:AMD:2026-07-24": {
+      "path": ".cache/chains/AMD_2026-07-24.parquet",
+      "sha256": "d25a9cfb4d5058ef921a14496f8342878b4d3a7bae725359b5167b4aeee60dd9"
+    },
+    "chain:AMD:2026-07-27": {
+      "path": ".cache/chains/AMD_2026-07-27.parquet",
+      "sha256": "002ea3c60c04417f4fbb2269efb862fbca4c1be8dc04efd7aabea363b3b16ad3"
+    },
+    "chain:AMZN:2026-04-16": {
+      "path": ".cache/chains/AMZN_2026-04-16.parquet",
+      "sha256": "e5d27af008dffb9cec8bd188df58c68a67a16d00e93c05cac96e247c5531b5fc"
+    },
+    "chain:AMZN:2026-04-17": {
+      "path": ".cache/chains/AMZN_2026-04-17.parquet",
+      "sha256": "71aef237bd0c9e2b071fb999c58ea5e38e4905f1d745dab381794eaeab67fbe3"
+    },
+    "chain:AMZN:2026-04-20": {
+      "path": ".cache/chains/AMZN_2026-04-20.parquet",
+      "sha256": "7ffbcafff1978abc4d53bacd74ff6d276945f7936d1e70246310516bb1b4757b"
+    },
+    "chain:AMZN:2026-04-21": {
+      "path": ".cache/chains/AMZN_2026-04-21.parquet",
+      "sha256": "06522dae49c0e077e85ec2271aef211630172b33075efdf0360282ef69ef43b7"
+    },
+    "chain:AMZN:2026-04-22": {
+      "path": ".cache/chains/AMZN_2026-04-22.parquet",
+      "sha256": "7583f73644f4eb48964e7ebe348e8771d8583aba264f667c0e2faf4dcdfd743a"
+    },
+    "chain:AMZN:2026-04-23": {
+      "path": ".cache/chains/AMZN_2026-04-23.parquet",
+      "sha256": "133a75e11929fa7d1044f2074614692f367430ba9e3ecb6cb1797497f7ddfcbd"
+    },
+    "chain:AMZN:2026-04-24": {
+      "path": ".cache/chains/AMZN_2026-04-24.parquet",
+      "sha256": "d09526917d44e62b65f6904c9a0a8b74411303b176216ab8ddb1ffd007cc1189"
+    },
+    "chain:AMZN:2026-04-27": {
+      "path": ".cache/chains/AMZN_2026-04-27.parquet",
+      "sha256": "190342308b3d7e2d3bd1f6b4d618bd9bf1ef8e16e4087c16f00e457b40a8927d"
+    },
+    "chain:AMZN:2026-04-28": {
+      "path": ".cache/chains/AMZN_2026-04-28.parquet",
+      "sha256": "18dd3ba5d98e4fcfbb112b09dc07b86e7d51e006b6652444ded9c438d212b48a"
+    },
+    "chain:AMZN:2026-04-29": {
+      "path": ".cache/chains/AMZN_2026-04-29.parquet",
+      "sha256": "6ca7b6c52f9d6a175dbcb0aead20c457f6c8739d45c5b91a04152b0b17bd9792"
+    },
+    "chain:AMZN:2026-04-30": {
+      "path": ".cache/chains/AMZN_2026-04-30.parquet",
+      "sha256": "2b4b8186883b312e467ea06e3060cff370b258da51a3a7482f1c68214e4f3bf8"
+    },
+    "chain:AMZN:2026-05-01": {
+      "path": ".cache/chains/AMZN_2026-05-01.parquet",
+      "sha256": "401f33fd21a5915ed41900095e53a01af49c7c2d3159b17cad8c2bc0903e967e"
+    },
+    "chain:AMZN:2026-05-04": {
+      "path": ".cache/chains/AMZN_2026-05-04.parquet",
+      "sha256": "3db03a136dabb3429939f0a6e8b4366e0a1d88004b9e2e39418c43883eedc8ec"
+    },
+    "chain:AMZN:2026-05-05": {
+      "path": ".cache/chains/AMZN_2026-05-05.parquet",
+      "sha256": "9b1d784969789299831a31a5777f8a45e8dae0d4f0b9a08814852fec72f78f1e"
+    },
+    "chain:AMZN:2026-05-06": {
+      "path": ".cache/chains/AMZN_2026-05-06.parquet",
+      "sha256": "f177e22de76ac28a7779cb5fab141805534a9864048b1748ef316096c4ca4386"
+    },
+    "chain:AMZN:2026-05-07": {
+      "path": ".cache/chains/AMZN_2026-05-07.parquet",
+      "sha256": "af0fa4dda6814c9c51a5d080ad5ca2f155bcc8f00fc781089b7045509350143d"
+    },
+    "chain:AMZN:2026-05-08": {
+      "path": ".cache/chains/AMZN_2026-05-08.parquet",
+      "sha256": "09166346dccab8a4f63fda27ae34ac1aac01bd48ba7816406d38cf5d21c01ec6"
+    },
+    "chain:AMZN:2026-05-11": {
+      "path": ".cache/chains/AMZN_2026-05-11.parquet",
+      "sha256": "c5689f3a6f998daa9257da632b3d582d002a120ae7311102e8f47b379857a582"
+    },
+    "chain:AMZN:2026-05-12": {
+      "path": ".cache/chains/AMZN_2026-05-12.parquet",
+      "sha256": "80a38f5a7a106fed57fbf23ecf9918ab40eb40d2fb90b0b9e591a3159b4e0c68"
+    },
+    "chain:AMZN:2026-05-13": {
+      "path": ".cache/chains/AMZN_2026-05-13.parquet",
+      "sha256": "6809808144927b7d0c4bc0bc30c53bc33672429c7555dc1de8af0189637ab9fe"
+    },
+    "chain:AMZN:2026-05-14": {
+      "path": ".cache/chains/AMZN_2026-05-14.parquet",
+      "sha256": "d6a8e36474ff985a3c0c7f74ae44d3384cdb40fc9b30a9a1b1f91773524f5fe5"
+    },
+    "chain:AMZN:2026-05-15": {
+      "path": ".cache/chains/AMZN_2026-05-15.parquet",
+      "sha256": "a4bdb8eedbb414a7038e3c88cebad91254945628fd66102ef47a29190a47a88b"
+    },
+    "chain:AMZN:2026-05-18": {
+      "path": ".cache/chains/AMZN_2026-05-18.parquet",
+      "sha256": "c0a43ccdde6397ed6e3cd314a1f0df492025f1dbaf52b0070e626705b549a415"
+    },
+    "chain:AMZN:2026-05-19": {
+      "path": ".cache/chains/AMZN_2026-05-19.parquet",
+      "sha256": "fe01bfebb87b1fcef71e290bc752708b0dffec2ed43065caeb25656bc2a7d840"
+    },
+    "chain:AMZN:2026-05-20": {
+      "path": ".cache/chains/AMZN_2026-05-20.parquet",
+      "sha256": "6664844a8d95ebab75ca216e96b50ee0add9cb1c3b9b64969d7043150b0a785d"
+    },
+    "chain:AMZN:2026-05-21": {
+      "path": ".cache/chains/AMZN_2026-05-21.parquet",
+      "sha256": "839bd3f2a12734cfbc5a814ec4d6496c01368b097cdb71448312dd4d4ed108d0"
+    },
+    "chain:AMZN:2026-05-22": {
+      "path": ".cache/chains/AMZN_2026-05-22.parquet",
+      "sha256": "f00dd6d6d748c3414bb14d6e36e3bfa83584dddf678962a3e5cffbd99892b5eb"
+    },
+    "chain:AMZN:2026-05-26": {
+      "path": ".cache/chains/AMZN_2026-05-26.parquet",
+      "sha256": "63e05bab891ed197568f4556f0bfdbb149b3eb54f8d8c7bc638c58b21fee2171"
+    },
+    "chain:AMZN:2026-05-27": {
+      "path": ".cache/chains/AMZN_2026-05-27.parquet",
+      "sha256": "2364cc53eecd290d96f6ed4d7b4d1f52ac9857028c88c4d2c29282f490ebd0c7"
+    },
+    "chain:AMZN:2026-05-28": {
+      "path": ".cache/chains/AMZN_2026-05-28.parquet",
+      "sha256": "5e73faf428092001fc105690354cb7b50b41a240777258edfdfb3d9edf5d7a23"
+    },
+    "chain:AMZN:2026-05-29": {
+      "path": ".cache/chains/AMZN_2026-05-29.parquet",
+      "sha256": "13fc8c3e6cd051b3c48eeb4e38593e380869b126358d3ceb51c5cc26dabe0ccb"
+    },
+    "chain:AMZN:2026-06-01": {
+      "path": ".cache/chains/AMZN_2026-06-01.parquet",
+      "sha256": "e686e8c4cc4369d85dea73bb545a6659d6c0998a691eea2df57ca875c385765e"
+    },
+    "chain:AMZN:2026-06-02": {
+      "path": ".cache/chains/AMZN_2026-06-02.parquet",
+      "sha256": "8233656ba64242830e6db4224e7f9a0adcc652fe756f220d6b2fa655de56666e"
+    },
+    "chain:AMZN:2026-06-03": {
+      "path": ".cache/chains/AMZN_2026-06-03.parquet",
+      "sha256": "09547e54151e91f8d760eb5602fba89aa41930d0ab5f227bf01868350208d0da"
+    },
+    "chain:AMZN:2026-06-04": {
+      "path": ".cache/chains/AMZN_2026-06-04.parquet",
+      "sha256": "0ffded1021119bd2be2aee69a7ee085017e9c1a15d5968d05de6df4f06db2941"
+    },
+    "chain:AMZN:2026-06-05": {
+      "path": ".cache/chains/AMZN_2026-06-05.parquet",
+      "sha256": "8b788b5e4740d73cfd7a693edfa187831d71e43d054a95d0f3c4f88f07e1ce8b"
+    },
+    "chain:AMZN:2026-06-08": {
+      "path": ".cache/chains/AMZN_2026-06-08.parquet",
+      "sha256": "cf4c7601c0f39df4dbbb16e0f84a3ae6372f3c322f22c7b2d1ceb75ab5856a7b"
+    },
+    "chain:AMZN:2026-06-09": {
+      "path": ".cache/chains/AMZN_2026-06-09.parquet",
+      "sha256": "55291f4e55b5adb2be2d0764dd9451f4979ad7acfe9e6ab54a93ba1f97a42e92"
+    },
+    "chain:AMZN:2026-06-10": {
+      "path": ".cache/chains/AMZN_2026-06-10.parquet",
+      "sha256": "a61201f0fe1f3302211d255f33a2d37c5e93c6159d15fe44300b426fa0bba021"
+    },
+    "chain:AMZN:2026-06-11": {
+      "path": ".cache/chains/AMZN_2026-06-11.parquet",
+      "sha256": "f125294ddf6ae22dfdfca58f87f2a0dff702a27fa34b5ad5b4a19548e1eb2650"
+    },
+    "chain:AMZN:2026-06-12": {
+      "path": ".cache/chains/AMZN_2026-06-12.parquet",
+      "sha256": "e1aee8e4512143f560b345d512e8b950dc861a6150ef3f077866fa7eb66fc96f"
+    },
+    "chain:AMZN:2026-06-15": {
+      "path": ".cache/chains/AMZN_2026-06-15.parquet",
+      "sha256": "649ea96c59609b9f85e818977cf9d968db82be3c7bc6a7806007338715e7fab1"
+    },
+    "chain:AMZN:2026-06-16": {
+      "path": ".cache/chains/AMZN_2026-06-16.parquet",
+      "sha256": "5575f6faeff7d1e69abfc98ab2316cc398e141bc4f54db9e3d842d7eaccbcf35"
+    },
+    "chain:AMZN:2026-06-17": {
+      "path": ".cache/chains/AMZN_2026-06-17.parquet",
+      "sha256": "f97c1f1684f94956ae22a67cbdfb7c71fbe66d3612f6110a36c9694c5f4cf2b7"
+    },
+    "chain:AMZN:2026-06-18": {
+      "path": ".cache/chains/AMZN_2026-06-18.parquet",
+      "sha256": "8451b16eb1250f1a533e05b9b01fdb216391bd44a06e9970e8a6c90279f16fe0"
+    },
+    "chain:AMZN:2026-06-22": {
+      "path": ".cache/chains/AMZN_2026-06-22.parquet",
+      "sha256": "c0b8ad5faecd1c0a158fd775c594eb1e1fbfff33a982e3cdd33acdf619b9bf4a"
+    },
+    "chain:AMZN:2026-06-23": {
+      "path": ".cache/chains/AMZN_2026-06-23.parquet",
+      "sha256": "e7d018570acd601d733fa3ceff920d8ea93b3964f0b69c6e46ca3da35d2c3e2a"
+    },
+    "chain:AMZN:2026-06-24": {
+      "path": ".cache/chains/AMZN_2026-06-24.parquet",
+      "sha256": "6e5123de773b18c720678593fc1cd76f69ab1b85f5ac85709cca348adeb541fc"
+    },
+    "chain:AMZN:2026-06-25": {
+      "path": ".cache/chains/AMZN_2026-06-25.parquet",
+      "sha256": "c48b79d47a3651ba3bc4e278fd7db6fefd68d211d98ce470a49b2b47e65e9712"
+    },
+    "chain:AMZN:2026-06-26": {
+      "path": ".cache/chains/AMZN_2026-06-26.parquet",
+      "sha256": "378c3f1e7ff3dc5abd711b7748724b590323a4b747fc98d28b163f1556e13e8c"
+    },
+    "chain:AMZN:2026-06-29": {
+      "path": ".cache/chains/AMZN_2026-06-29.parquet",
+      "sha256": "278b10fa1d5d4b5aa31d6378074a3e9082c6141a7c79085d633aa709e7b589a4"
+    },
+    "chain:AMZN:2026-06-30": {
+      "path": ".cache/chains/AMZN_2026-06-30.parquet",
+      "sha256": "ef9ca9e7c89ab384454cc13b7263d26c2c9c39053d49e8232596f636c56ef22b"
+    },
+    "chain:AMZN:2026-07-01": {
+      "path": ".cache/chains/AMZN_2026-07-01.parquet",
+      "sha256": "96b45baf080846b2e840fb1ed93da38be3003facf26f9a7c57d5c2bd4ac825b4"
+    },
+    "chain:AMZN:2026-07-02": {
+      "path": ".cache/chains/AMZN_2026-07-02.parquet",
+      "sha256": "d1d5bb8df7f2fc41e8f6b5dbaf6bc1ad4c3d6cea2f6ef5e0f0d0ec8db26bf841"
+    },
+    "chain:AMZN:2026-07-06": {
+      "path": ".cache/chains/AMZN_2026-07-06.parquet",
+      "sha256": "b4bccfb33382a1fbd4860540b4db4501cdb223a4ef8d3e45e8eb6d9311bed75c"
+    },
+    "chain:AMZN:2026-07-07": {
+      "path": ".cache/chains/AMZN_2026-07-07.parquet",
+      "sha256": "5716d2a1317877b2b545a44068c7723307fa0622905ba16d350702a2f3d607f9"
+    },
+    "chain:AMZN:2026-07-08": {
+      "path": ".cache/chains/AMZN_2026-07-08.parquet",
+      "sha256": "82f6b4c8c346e33a677777dd21fd7303d57f593e99cb6b62511cb0a4f03b79dc"
+    },
+    "chain:AMZN:2026-07-09": {
+      "path": ".cache/chains/AMZN_2026-07-09.parquet",
+      "sha256": "71c5c5efa0d2bde9a8fec3edcb14f0cece6b5bf4dcb9e33661f7ae31b8cad3ba"
+    },
+    "chain:AMZN:2026-07-10": {
+      "path": ".cache/chains/AMZN_2026-07-10.parquet",
+      "sha256": "9990753d62abafd6151de0354196b8703006b717d7545b19088e6fd43ebea4c7"
+    },
+    "chain:AMZN:2026-07-13": {
+      "path": ".cache/chains/AMZN_2026-07-13.parquet",
+      "sha256": "3dbac09b1c2ad83005d9cefad9333052c53a332274978080366c9bf11fba38bb"
+    },
+    "chain:AMZN:2026-07-14": {
+      "path": ".cache/chains/AMZN_2026-07-14.parquet",
+      "sha256": "ba8f13fe5bdb1ff1e200a95fdf244d9dd30add1f09780c443d23aaa1bfb42a85"
+    },
+    "chain:AMZN:2026-07-15": {
+      "path": ".cache/chains/AMZN_2026-07-15.parquet",
+      "sha256": "5dcfe4b5ba7a17c2568cb8fbfd01c63017981e41cc5f476a55bfef6cc8e00610"
+    },
+    "chain:AMZN:2026-07-16": {
+      "path": ".cache/chains/AMZN_2026-07-16.parquet",
+      "sha256": "53476974398356a2889abe93503abf788786efcdfd6e710323b10d439780c0fe"
+    },
+    "chain:AMZN:2026-07-17": {
+      "path": ".cache/chains/AMZN_2026-07-17.parquet",
+      "sha256": "a8997b90680e6ced3b3528f53e5c5059f1583e872bc6e7da91529999d6337bc5"
+    },
+    "chain:AMZN:2026-07-20": {
+      "path": ".cache/chains/AMZN_2026-07-20.parquet",
+      "sha256": "614c9beefac636d589e9cdf8ffcec581e0da74a116c19705e297f057b949697b"
+    },
+    "chain:AMZN:2026-07-21": {
+      "path": ".cache/chains/AMZN_2026-07-21.parquet",
+      "sha256": "ada461a3393e37a9a41ef15f1c200a5d66bf9f61c09405b2224161b30930be09"
+    },
+    "chain:AMZN:2026-07-22": {
+      "path": ".cache/chains/AMZN_2026-07-22.parquet",
+      "sha256": "bf55056eb9c8fd3c230d8998876b3b02f5927813b21769a0de375f500089c90a"
+    },
+    "chain:AMZN:2026-07-23": {
+      "path": ".cache/chains/AMZN_2026-07-23.parquet",
+      "sha256": "0b2af04a8e515a733053fd91d9fd72e41788bf7f6e58c791ab0fa8e9c4a412fc"
+    },
+    "chain:AMZN:2026-07-24": {
+      "path": ".cache/chains/AMZN_2026-07-24.parquet",
+      "sha256": "cbd886fe4973087b135bcf51adc44869e672ac75a1d50f3d9c38006a2cc17f48"
+    },
+    "chain:AMZN:2026-07-27": {
+      "path": ".cache/chains/AMZN_2026-07-27.parquet",
+      "sha256": "dd43658e5dc9b5c51a3add98242bad334a7a9e534314478eed256608131aa43b"
+    },
+    "chain:CEG:2026-04-16": {
+      "path": ".cache/chains/CEG_2026-04-16.parquet",
+      "sha256": "99aff13eb25e1ab881c5b1d270f33686fac11016e8db68a98958bb5ba54c37a0"
+    },
+    "chain:CEG:2026-04-17": {
+      "path": ".cache/chains/CEG_2026-04-17.parquet",
+      "sha256": "1255e0d14e1b498ad7427ad5fed1803a32fd28b511c716ab7c46d91f8638fd94"
+    },
+    "chain:CEG:2026-04-20": {
+      "path": ".cache/chains/CEG_2026-04-20.parquet",
+      "sha256": "14ebe5f936c67818ac0169658a87def0f1dc82adde73f338dc58e2cb59827374"
+    },
+    "chain:CEG:2026-04-21": {
+      "path": ".cache/chains/CEG_2026-04-21.parquet",
+      "sha256": "e3555b4017733093593441bee2d0de3f5c1c75d24053cdd0ba459524b297f1cb"
+    },
+    "chain:CEG:2026-04-22": {
+      "path": ".cache/chains/CEG_2026-04-22.parquet",
+      "sha256": "e577f31c2777572b49b6d6860f27dd682be772e0377e2c4e52591bc5a20b166f"
+    },
+    "chain:CEG:2026-04-23": {
+      "path": ".cache/chains/CEG_2026-04-23.parquet",
+      "sha256": "23347c2a4342454913f8a88a46c2aac5ec51efaf1aa11dc26084e45c6385ec72"
+    },
+    "chain:CEG:2026-04-24": {
+      "path": ".cache/chains/CEG_2026-04-24.parquet",
+      "sha256": "43e4f70ba80717d458c7b6f10415893b385dfed6f562eacceb1cae03b995c296"
+    },
+    "chain:CEG:2026-04-27": {
+      "path": ".cache/chains/CEG_2026-04-27.parquet",
+      "sha256": "ead015fd7e917fbd5a0fe24753b5bbd324a728ac87b5c524bac9ecdd092924ac"
+    },
+    "chain:CEG:2026-04-28": {
+      "path": ".cache/chains/CEG_2026-04-28.parquet",
+      "sha256": "b94f3f5a996d25f1dcd26651e6b9119f1cbcd87eb97a3bbb62f95417cbc0e20a"
+    },
+    "chain:CEG:2026-04-29": {
+      "path": ".cache/chains/CEG_2026-04-29.parquet",
+      "sha256": "765b45bc0c373c825d7827eed08106176b8fb8360a1a688bc1e32553b746651c"
+    },
+    "chain:CEG:2026-04-30": {
+      "path": ".cache/chains/CEG_2026-04-30.parquet",
+      "sha256": "24614a3314ca02c9cbf31a93eaa94b9ebb8c0a98ae39c4a0708216c872bacb8d"
+    },
+    "chain:CEG:2026-05-01": {
+      "path": ".cache/chains/CEG_2026-05-01.parquet",
+      "sha256": "f3d0c79261f588a4be04404865ddf408b9aa41f1f91431af584a887a70f654d5"
+    },
+    "chain:CEG:2026-05-04": {
+      "path": ".cache/chains/CEG_2026-05-04.parquet",
+      "sha256": "4faaea1e89bf9f52cdf5d400c4d695bbebb972dc6f05fcddf537266af20d0d38"
+    },
+    "chain:CEG:2026-05-05": {
+      "path": ".cache/chains/CEG_2026-05-05.parquet",
+      "sha256": "2e0ea53580a426250a0ce2500e5196210c780124ed256920917df62bf4d5ca52"
+    },
+    "chain:CEG:2026-05-06": {
+      "path": ".cache/chains/CEG_2026-05-06.parquet",
+      "sha256": "a0490c8579f0eba91cec05f09267f6a8a83d8dbbe2402082908fb4ce3ac797d9"
+    },
+    "chain:CEG:2026-05-07": {
+      "path": ".cache/chains/CEG_2026-05-07.parquet",
+      "sha256": "d520bb071b7cebaf5cf9e6dc5ae244e7ecfeb9a0bb699a530455803b22ca728c"
+    },
+    "chain:CEG:2026-05-08": {
+      "path": ".cache/chains/CEG_2026-05-08.parquet",
+      "sha256": "bd3937aacd93154becc72b6931a480a273d96979675c18eddb2fd2259f649222"
+    },
+    "chain:CEG:2026-05-11": {
+      "path": ".cache/chains/CEG_2026-05-11.parquet",
+      "sha256": "dfa4aac8f2e04851d146a5f7580ad9747db09af73fc31427a39a8d9b36549ba9"
+    },
+    "chain:CEG:2026-05-12": {
+      "path": ".cache/chains/CEG_2026-05-12.parquet",
+      "sha256": "9148a0a600b21d5ae0b5795d6bb33f6373e544b00cbea2763d79d3cc078daedb"
+    },
+    "chain:CEG:2026-05-13": {
+      "path": ".cache/chains/CEG_2026-05-13.parquet",
+      "sha256": "6dc5c4b796800ce8d18ff4d31532e19e776d47eb9be20c97a8609068e8708e16"
+    },
+    "chain:CEG:2026-05-14": {
+      "path": ".cache/chains/CEG_2026-05-14.parquet",
+      "sha256": "283544cebd13d2169db0a16cd74f398e52fd5d75a9415d3ad29e3f8653e201c0"
+    },
+    "chain:CEG:2026-05-15": {
+      "path": ".cache/chains/CEG_2026-05-15.parquet",
+      "sha256": "76b80f54b86b7a36c8752924ef28ffa6ef5f4a34e9eec99bc65af63ce1ea1e58"
+    },
+    "chain:CEG:2026-05-18": {
+      "path": ".cache/chains/CEG_2026-05-18.parquet",
+      "sha256": "b74c28dce07bf6770a6752e3a9843663902ec62aa8e83952b6c24dda771a553f"
+    },
+    "chain:CEG:2026-05-19": {
+      "path": ".cache/chains/CEG_2026-05-19.parquet",
+      "sha256": "a5854906373f60cb8f36c5e01e5467103a0d27fbe5f25d0e1e3800839538b990"
+    },
+    "chain:CEG:2026-05-20": {
+      "path": ".cache/chains/CEG_2026-05-20.parquet",
+      "sha256": "94e49e8e94840508bec4d2681f4e58d2f0416bb854ecefbae760e42d8f7b1f39"
+    },
+    "chain:CEG:2026-05-21": {
+      "path": ".cache/chains/CEG_2026-05-21.parquet",
+      "sha256": "cf706ef09704b3fa024aea1c5b64850f01a5e73ba703ccb6bf9f9c82a063cb3a"
+    },
+    "chain:CEG:2026-05-22": {
+      "path": ".cache/chains/CEG_2026-05-22.parquet",
+      "sha256": "464800d25feb4982a915720371cb35f26c2d0b70ca112597884ab78393f90e8d"
+    },
+    "chain:CEG:2026-05-26": {
+      "path": ".cache/chains/CEG_2026-05-26.parquet",
+      "sha256": "a2a299fc368a1a722933db7d22f7f0d2ea484d27aa7ab6c9edc672926a5cc9d6"
+    },
+    "chain:CEG:2026-05-27": {
+      "path": ".cache/chains/CEG_2026-05-27.parquet",
+      "sha256": "837bc3450d74fe381e81b147f33fb2f82996a8cf53062968d11f990d3e9b8676"
+    },
+    "chain:CEG:2026-05-28": {
+      "path": ".cache/chains/CEG_2026-05-28.parquet",
+      "sha256": "7d935431cd5c1ab3972f03c345367cc3ade5df245086e791e74c3dd406fcda73"
+    },
+    "chain:CEG:2026-05-29": {
+      "path": ".cache/chains/CEG_2026-05-29.parquet",
+      "sha256": "10a82080f415b075e3d10b8e68c4fc3dce16552146a8dfcd562f2ac998c28e59"
+    },
+    "chain:CEG:2026-06-01": {
+      "path": ".cache/chains/CEG_2026-06-01.parquet",
+      "sha256": "661ff7a204c2248de1f46e21c61a1f9239c600dad37944990c5b679a55a4bd01"
+    },
+    "chain:CEG:2026-06-02": {
+      "path": ".cache/chains/CEG_2026-06-02.parquet",
+      "sha256": "672b276a71cfd96be1f53810581d52670bff8df7b1f4e175b212b19d84be2155"
+    },
+    "chain:CEG:2026-06-03": {
+      "path": ".cache/chains/CEG_2026-06-03.parquet",
+      "sha256": "08cefce6d32f5412d9ee1a5e412b8e97f893120b933eff518255e5dab7252f27"
+    },
+    "chain:CEG:2026-06-04": {
+      "path": ".cache/chains/CEG_2026-06-04.parquet",
+      "sha256": "3a7f0e043345229bae108c16e222624866051cf2cde8309d15bae15867814e97"
+    },
+    "chain:CEG:2026-06-05": {
+      "path": ".cache/chains/CEG_2026-06-05.parquet",
+      "sha256": "2a4a4b6c1e0a391b26b528c115d1f2f26a2effe78667472a42474622eab11ca2"
+    },
+    "chain:CEG:2026-06-08": {
+      "path": ".cache/chains/CEG_2026-06-08.parquet",
+      "sha256": "286c05ffa21c71a9f4f10413228bdd7b6e4f826c6215668e18523a995ea12774"
+    },
+    "chain:CEG:2026-06-09": {
+      "path": ".cache/chains/CEG_2026-06-09.parquet",
+      "sha256": "dc297ec2b590721b2c9fd8fb29b7e9835c6da0baed8793ea980836dfaf0c5e53"
+    },
+    "chain:CEG:2026-06-10": {
+      "path": ".cache/chains/CEG_2026-06-10.parquet",
+      "sha256": "f8322a2915ee8f590b537bdebfd2129315b8cfe1d1f87e05e787c3fefe423903"
+    },
+    "chain:CEG:2026-06-11": {
+      "path": ".cache/chains/CEG_2026-06-11.parquet",
+      "sha256": "473072dc88ea361a69f5774436f20b5d10a374340b6ae9835698d3573484d2cb"
+    },
+    "chain:CEG:2026-06-12": {
+      "path": ".cache/chains/CEG_2026-06-12.parquet",
+      "sha256": "143192e13cab6d7bc21f90ac1d20ec85da18de255e4aa838046bb041446a2ae1"
+    },
+    "chain:CEG:2026-06-15": {
+      "path": ".cache/chains/CEG_2026-06-15.parquet",
+      "sha256": "1b5824cd8fdd95faf1ca635388f9089d9c03ab2a159fd00880ac426e8428291a"
+    },
+    "chain:CEG:2026-06-16": {
+      "path": ".cache/chains/CEG_2026-06-16.parquet",
+      "sha256": "890f8189ce702926c4a4a2e7142b67ceb981b6ef6b8504f5d1d24cccf18a8f90"
+    },
+    "chain:CEG:2026-06-17": {
+      "path": ".cache/chains/CEG_2026-06-17.parquet",
+      "sha256": "29e60f2761d60ce5a02bab46d3cd138f64beef746d3f66c0382561823353598c"
+    },
+    "chain:CEG:2026-06-18": {
+      "path": ".cache/chains/CEG_2026-06-18.parquet",
+      "sha256": "a2fdc73c386cc3225514b2e12b2af26b83b485f639bbc0056a18f2f3572ec941"
+    },
+    "chain:CEG:2026-06-22": {
+      "path": ".cache/chains/CEG_2026-06-22.parquet",
+      "sha256": "606db87537032c935f33d9064a65854810e402a63d799a157cf8616d0a50960e"
+    },
+    "chain:CEG:2026-06-23": {
+      "path": ".cache/chains/CEG_2026-06-23.parquet",
+      "sha256": "4aa3057a33924b06a655dbf980ead7e363943979ad2c309e4c1709615afb14de"
+    },
+    "chain:CEG:2026-06-24": {
+      "path": ".cache/chains/CEG_2026-06-24.parquet",
+      "sha256": "61e3ff917b88cec09a14e75efc01d99543020f82a8698a4b282db0c5eec58cac"
+    },
+    "chain:CEG:2026-06-25": {
+      "path": ".cache/chains/CEG_2026-06-25.parquet",
+      "sha256": "3b1bc31a12583b505d5d8e76ee40dc18b17f39efa60db8c43371d51be82a3abd"
+    },
+    "chain:CEG:2026-06-26": {
+      "path": ".cache/chains/CEG_2026-06-26.parquet",
+      "sha256": "1a911e50d0a25de5ab778c46ada07393f1ace9892249dfd4f96e649320c0e066"
+    },
+    "chain:CEG:2026-06-29": {
+      "path": ".cache/chains/CEG_2026-06-29.parquet",
+      "sha256": "00c22858163f31aa9c8e91ea3057d140b680ff906ae18ec8829447050d04116a"
+    },
+    "chain:CEG:2026-06-30": {
+      "path": ".cache/chains/CEG_2026-06-30.parquet",
+      "sha256": "df25db0202000836229ef82fc356db53b1520f2f9c82ec187d9ce6188ac0b8a7"
+    },
+    "chain:CEG:2026-07-01": {
+      "path": ".cache/chains/CEG_2026-07-01.parquet",
+      "sha256": "960d9bb5fa72092bab5339073d772047de0da1c2c8351e9a348122b1c75b7cdf"
+    },
+    "chain:CEG:2026-07-02": {
+      "path": ".cache/chains/CEG_2026-07-02.parquet",
+      "sha256": "97156330055fc87bfcae78708ccbf55df3f596fbec661207c46003499625ca24"
+    },
+    "chain:CEG:2026-07-06": {
+      "path": ".cache/chains/CEG_2026-07-06.parquet",
+      "sha256": "49c4cd25d6e5d0ddb4081c0508fdedd464d0c2880d651958ff3e707fd521c18b"
+    },
+    "chain:CEG:2026-07-07": {
+      "path": ".cache/chains/CEG_2026-07-07.parquet",
+      "sha256": "b5d37f960f55d5c87861650c94092f96439dac6c399a8f6c356f978d12d02905"
+    },
+    "chain:CEG:2026-07-08": {
+      "path": ".cache/chains/CEG_2026-07-08.parquet",
+      "sha256": "7ee6b08f97000deefb0a1a7730b4808fa355d1b562cee3195bc967f325a17b64"
+    },
+    "chain:CEG:2026-07-09": {
+      "path": ".cache/chains/CEG_2026-07-09.parquet",
+      "sha256": "3290c8c033cc1cc51780f693ada0acccb224659bf506a271ef31cab65319e4f8"
+    },
+    "chain:CEG:2026-07-10": {
+      "path": ".cache/chains/CEG_2026-07-10.parquet",
+      "sha256": "f928dd89374c1c7fd53fa66e1eedfb859d273ef79a3be1c507b484cfc437693f"
+    },
+    "chain:CEG:2026-07-13": {
+      "path": ".cache/chains/CEG_2026-07-13.parquet",
+      "sha256": "c06dc7abbe0f9342b5943296d14e2b090ed1c6ad5370369c0ac216f8d07dea21"
+    },
+    "chain:CEG:2026-07-14": {
+      "path": ".cache/chains/CEG_2026-07-14.parquet",
+      "sha256": "783ac7025caa83a43ee8c9d1004c2affc82a3b312dca60927e7f1a53ce57dceb"
+    },
+    "chain:CEG:2026-07-15": {
+      "path": ".cache/chains/CEG_2026-07-15.parquet",
+      "sha256": "73cdf17eaae788325f8e8b961ebce83152b283745f4842691476db5d996b6cda"
+    },
+    "chain:CEG:2026-07-16": {
+      "path": ".cache/chains/CEG_2026-07-16.parquet",
+      "sha256": "94d6e59e01aac7b3f80552b021c9c3cc2e21f64844154ccb9f202201f47a0eaf"
+    },
+    "chain:CEG:2026-07-17": {
+      "path": ".cache/chains/CEG_2026-07-17.parquet",
+      "sha256": "24e78f36cd9c94934102393d233b460adf28d8fd7e3d5916f68c8040b8f902b0"
+    },
+    "chain:CEG:2026-07-20": {
+      "path": ".cache/chains/CEG_2026-07-20.parquet",
+      "sha256": "b80d5df14902fbdf784fb79b26e087f7af913ab8909c760582267f10230dbb66"
+    },
+    "chain:CEG:2026-07-21": {
+      "path": ".cache/chains/CEG_2026-07-21.parquet",
+      "sha256": "c055bfc1f992dff7a92806a0489a08363a5d7f2d457ce5cdf18324c3a8b8a0fb"
+    },
+    "chain:CEG:2026-07-22": {
+      "path": ".cache/chains/CEG_2026-07-22.parquet",
+      "sha256": "f97e45d38ee843f082ade0e09f0592d2c7e80472d9ca6f73e02671942bc4fc08"
+    },
+    "chain:CEG:2026-07-23": {
+      "path": ".cache/chains/CEG_2026-07-23.parquet",
+      "sha256": "263415c2ea4139cb4c469e247949a06c63775a376e9d9c3480b15b070f48ef84"
+    },
+    "chain:CEG:2026-07-24": {
+      "path": ".cache/chains/CEG_2026-07-24.parquet",
+      "sha256": "0b94e08eb9742b296d96498879f40cbe820dd48080894ce56fd4957d90602ff4"
+    },
+    "chain:CEG:2026-07-27": {
+      "path": ".cache/chains/CEG_2026-07-27.parquet",
+      "sha256": "09b8891559e8c4c9ee29b028c94f7772458560aa8cbee41e60d09c635a046228"
+    },
+    "chain:ET:2026-04-16": {
+      "path": ".cache/chains/ET_2026-04-16.parquet",
+      "sha256": "2a39ca8dcbf5e65af031e57e316b03d7f1f00a38d033435abc11284df4db2bbc"
+    },
+    "chain:ET:2026-04-17": {
+      "path": ".cache/chains/ET_2026-04-17.parquet",
+      "sha256": "72e039b94e6d3847b6567afc3a6547dcb2879fb6b32a313b4985ef006f6a6e6a"
+    },
+    "chain:ET:2026-04-20": {
+      "path": ".cache/chains/ET_2026-04-20.parquet",
+      "sha256": "78c1edb2af1d2df04f2040de14355b735abe37de99ee7a7ed41f3f2dad129fad"
+    },
+    "chain:ET:2026-04-21": {
+      "path": ".cache/chains/ET_2026-04-21.parquet",
+      "sha256": "7f7aac7abb3ee771df3acee8d81419a90053a9da886199cef5a7b17efbfec4e7"
+    },
+    "chain:ET:2026-04-22": {
+      "path": ".cache/chains/ET_2026-04-22.parquet",
+      "sha256": "f7ea0ce5b3e266c77887bd25640e04484d92cc0cc983d7138b1057e6604c4a00"
+    },
+    "chain:ET:2026-04-23": {
+      "path": ".cache/chains/ET_2026-04-23.parquet",
+      "sha256": "30ffcfe7f508f7edd655f20c885c2117c24d2916a0444f6055e07ceefa9ab33d"
+    },
+    "chain:ET:2026-04-24": {
+      "path": ".cache/chains/ET_2026-04-24.parquet",
+      "sha256": "2a783897ffb706268defb38489b75d46bbf4852ab0f56851a9fdbc2cf4544493"
+    },
+    "chain:ET:2026-04-27": {
+      "path": ".cache/chains/ET_2026-04-27.parquet",
+      "sha256": "aa8d9dad5ed01f48545e58d0c863830d402d73ca31554cd20beea44b8f2da413"
+    },
+    "chain:ET:2026-04-28": {
+      "path": ".cache/chains/ET_2026-04-28.parquet",
+      "sha256": "e082f6b3dba6509793fc925b8616eeb975a7750355c38e8d61542ce2de6768f3"
+    },
+    "chain:ET:2026-04-29": {
+      "path": ".cache/chains/ET_2026-04-29.parquet",
+      "sha256": "a204934132d3bf844251acda25a164ec3b58f096f0a0abcb3955b119bf2e9603"
+    },
+    "chain:ET:2026-04-30": {
+      "path": ".cache/chains/ET_2026-04-30.parquet",
+      "sha256": "f5b29001681d5450722ce80ee8c908a7a9f994a0449d8443ff755957d3efd5dc"
+    },
+    "chain:ET:2026-05-01": {
+      "path": ".cache/chains/ET_2026-05-01.parquet",
+      "sha256": "04c5a7ceda9d71ec57057dd6a48de4817a8c7236d3885df57f1f38d36f6115cc"
+    },
+    "chain:ET:2026-05-04": {
+      "path": ".cache/chains/ET_2026-05-04.parquet",
+      "sha256": "d351a96e17358e8ea98b9a7d76232ba0ec9ea1bc3241226606f1afa40ce5f82a"
+    },
+    "chain:ET:2026-05-05": {
+      "path": ".cache/chains/ET_2026-05-05.parquet",
+      "sha256": "4838c14793b4379c4318238a4177691e1c140673e9ae24a719d66f9cecb1929d"
+    },
+    "chain:ET:2026-05-06": {
+      "path": ".cache/chains/ET_2026-05-06.parquet",
+      "sha256": "53e9534666302b4207bcb33c29c9dac715458e6c847bab59a8a75adfd6e5b00a"
+    },
+    "chain:ET:2026-05-07": {
+      "path": ".cache/chains/ET_2026-05-07.parquet",
+      "sha256": "c61ad5ff71de5a9ba11bb6c8bb58205e201d8f00da95a6a7b29d1a5ef65c3904"
+    },
+    "chain:ET:2026-05-08": {
+      "path": ".cache/chains/ET_2026-05-08.parquet",
+      "sha256": "546f0159ef34a80cef6c41872700aa1ae0e5a4db7534fec90b21f43ff939ac02"
+    },
+    "chain:ET:2026-05-11": {
+      "path": ".cache/chains/ET_2026-05-11.parquet",
+      "sha256": "288692a6f568d876d747ed08cee425857d404b4ac0b88b52dc4a2773217de9bd"
+    },
+    "chain:ET:2026-05-12": {
+      "path": ".cache/chains/ET_2026-05-12.parquet",
+      "sha256": "6dc7b614d5f507a8381f8c4be6c70ebf850568a3d557ce6138653f3454adc9f2"
+    },
+    "chain:ET:2026-05-13": {
+      "path": ".cache/chains/ET_2026-05-13.parquet",
+      "sha256": "271a1719bfa692f2e97551c1b685a9ac2abe056f65c2bf16d46082004d9806ad"
+    },
+    "chain:ET:2026-05-14": {
+      "path": ".cache/chains/ET_2026-05-14.parquet",
+      "sha256": "227788099ba3e2292aa90af44dc4a31af2c76cfcdfe8553bb5c267a5d2fa716f"
+    },
+    "chain:ET:2026-05-15": {
+      "path": ".cache/chains/ET_2026-05-15.parquet",
+      "sha256": "dc1dd9192f236adfe92d3a2be68c6455dac27206d0e8ca0b265bcc0e334a1a56"
+    },
+    "chain:ET:2026-05-18": {
+      "path": ".cache/chains/ET_2026-05-18.parquet",
+      "sha256": "e24839d218d46ce8b702f442eec2f5eb1d92833b73ea0f01417dfe253616aa57"
+    },
+    "chain:ET:2026-05-19": {
+      "path": ".cache/chains/ET_2026-05-19.parquet",
+      "sha256": "1781cd21c7bd041f22e509fa41cce380bdf479df33e2d7debbf716a0ffe78fac"
+    },
+    "chain:ET:2026-05-20": {
+      "path": ".cache/chains/ET_2026-05-20.parquet",
+      "sha256": "eb5e2a19dfb69e7907f5d8726f03e02a85b7e204c6d01e0974b4e1d35f045b59"
+    },
+    "chain:ET:2026-05-21": {
+      "path": ".cache/chains/ET_2026-05-21.parquet",
+      "sha256": "b600a172202a25f1e33f9ac0d95f57d56fa6e63533c19d22e019fce3634d89f4"
+    },
+    "chain:ET:2026-05-22": {
+      "path": ".cache/chains/ET_2026-05-22.parquet",
+      "sha256": "c133146182fede133468b1b1506b6fab8d1e1f72bedb7477e2e35007a9742bec"
+    },
+    "chain:ET:2026-05-26": {
+      "path": ".cache/chains/ET_2026-05-26.parquet",
+      "sha256": "2f5f006166009fa095c0e8eb0fbf1eb6eee7fc22e21d8855ed667d17005d33ac"
+    },
+    "chain:ET:2026-05-27": {
+      "path": ".cache/chains/ET_2026-05-27.parquet",
+      "sha256": "f8225aa38c347e30b912e7e07bd24e2bbabf165c7f2edd6f8962d706d66f1e9b"
+    },
+    "chain:ET:2026-05-28": {
+      "path": ".cache/chains/ET_2026-05-28.parquet",
+      "sha256": "ce8de65429360b20ea7f8d10cc21d16939bc0e8f9a15993448a75a511bcb2b8b"
+    },
+    "chain:ET:2026-05-29": {
+      "path": ".cache/chains/ET_2026-05-29.parquet",
+      "sha256": "1f8e193c54756f5cfe91d8b0a4aec580fa694b3ac7653d64eb13c7fb2fd767d0"
+    },
+    "chain:ET:2026-06-01": {
+      "path": ".cache/chains/ET_2026-06-01.parquet",
+      "sha256": "e05d021737828454c68cd12e7276163f249f9cf15c6cf5d619e3423c65e4ce0b"
+    },
+    "chain:ET:2026-06-02": {
+      "path": ".cache/chains/ET_2026-06-02.parquet",
+      "sha256": "f562f2acd414ca06bca214c2abb21f3fd8026f32545ef94ce700e0f79620194e"
+    },
+    "chain:ET:2026-06-03": {
+      "path": ".cache/chains/ET_2026-06-03.parquet",
+      "sha256": "6c50a76618744d3973f33f622a2b77ca670dc73b57ad98c99a28a81c943781b0"
+    },
+    "chain:ET:2026-06-04": {
+      "path": ".cache/chains/ET_2026-06-04.parquet",
+      "sha256": "353bb054fda98a7d88a1a8e9ea1384e8c79d896bbacd4b6bbe956b7098456fab"
+    },
+    "chain:ET:2026-06-05": {
+      "path": ".cache/chains/ET_2026-06-05.parquet",
+      "sha256": "7bd4623a93b3f681e97c1d2bd46c6ca25f065657591d417a68bbff0d43f1ae5d"
+    },
+    "chain:ET:2026-06-08": {
+      "path": ".cache/chains/ET_2026-06-08.parquet",
+      "sha256": "128f94a491c1606421659d969d9198b75ff52c94457a31c145f50d6c9fd83070"
+    },
+    "chain:ET:2026-06-09": {
+      "path": ".cache/chains/ET_2026-06-09.parquet",
+      "sha256": "55017e9eb6f860432089f6ca39153f6ce8e0eb244d8da7ec90c482b5703c020a"
+    },
+    "chain:ET:2026-06-10": {
+      "path": ".cache/chains/ET_2026-06-10.parquet",
+      "sha256": "5ed6a553eaf91b67872a2613444e8cd744a33f2778aae0bb052a125218164981"
+    },
+    "chain:ET:2026-06-11": {
+      "path": ".cache/chains/ET_2026-06-11.parquet",
+      "sha256": "66b528fb6b1f0701c08cf5a35c0b7c82cdad3364b24b5de243b8f211837d825e"
+    },
+    "chain:ET:2026-06-12": {
+      "path": ".cache/chains/ET_2026-06-12.parquet",
+      "sha256": "4b608694d17f7545d983d56806e46846684cd9fc3e27ffaaafd5018242b5c6f5"
+    },
+    "chain:ET:2026-06-15": {
+      "path": ".cache/chains/ET_2026-06-15.parquet",
+      "sha256": "a3d27d913ec7f89e9e193984c2bf09f9fe3c95ac564e6d2e352bb556ce91b202"
+    },
+    "chain:ET:2026-06-16": {
+      "path": ".cache/chains/ET_2026-06-16.parquet",
+      "sha256": "d55ff3bf720ff0ef027739bb5fd31bc9a19be7fe6fc168613f69dab36ffdf309"
+    },
+    "chain:ET:2026-06-17": {
+      "path": ".cache/chains/ET_2026-06-17.parquet",
+      "sha256": "5f73040dcc5ea0d0475ec6d4b40fd224f53f27823ea3f5b22145e2afc3fdb51b"
+    },
+    "chain:ET:2026-06-18": {
+      "path": ".cache/chains/ET_2026-06-18.parquet",
+      "sha256": "396dbfd74b2885469bb36ff8243dbcbe21661130f53b05cd59d7bf3129cbd2a0"
+    },
+    "chain:ET:2026-06-22": {
+      "path": ".cache/chains/ET_2026-06-22.parquet",
+      "sha256": "2c8eaf03ee3c96275cc06128e7a7754452c5dc4a359b5d2febb2d638a20110c4"
+    },
+    "chain:ET:2026-06-23": {
+      "path": ".cache/chains/ET_2026-06-23.parquet",
+      "sha256": "ccd13ece433465d9e06d54b3c3c0b6fb60523a28551d3d7b7ab4021018459e4d"
+    },
+    "chain:ET:2026-06-24": {
+      "path": ".cache/chains/ET_2026-06-24.parquet",
+      "sha256": "7582ad1c2fce70d3cfab33bb751768eaff51625bb2c0f4072db6db4387ed8c2c"
+    },
+    "chain:ET:2026-06-25": {
+      "path": ".cache/chains/ET_2026-06-25.parquet",
+      "sha256": "757ce81b7b396409c79f062b688291a8d56888e4c4c2e280e0931bf34a31e4db"
+    },
+    "chain:ET:2026-06-26": {
+      "path": ".cache/chains/ET_2026-06-26.parquet",
+      "sha256": "d58b3f10c98f0fdfc2f69a88f40726928551733623efc3c4b354628c8d96cae0"
+    },
+    "chain:ET:2026-06-29": {
+      "path": ".cache/chains/ET_2026-06-29.parquet",
+      "sha256": "db6dab85a868d35a9fe131d855c3180d0c7946858dab553409ca40be19b32791"
+    },
+    "chain:ET:2026-06-30": {
+      "path": ".cache/chains/ET_2026-06-30.parquet",
+      "sha256": "46e6952da17e82cc0ff3288a8c0d547c8b47b1d1b62a62d9906ee8bdb61e72a8"
+    },
+    "chain:ET:2026-07-01": {
+      "path": ".cache/chains/ET_2026-07-01.parquet",
+      "sha256": "c391ccf40657c4b5eadd939d614b867115ce88204ee83cc9f496d20bfe6f8286"
+    },
+    "chain:ET:2026-07-02": {
+      "path": ".cache/chains/ET_2026-07-02.parquet",
+      "sha256": "76df8c041bd997b50dc4af491ff9af2b1560fc4fb194857e08c2196b8197ae9c"
+    },
+    "chain:ET:2026-07-06": {
+      "path": ".cache/chains/ET_2026-07-06.parquet",
+      "sha256": "36c8b66afa4bca60bb7c84dee418f6621c2c7d57eabe7d87f4bd1625b15e8f33"
+    },
+    "chain:ET:2026-07-07": {
+      "path": ".cache/chains/ET_2026-07-07.parquet",
+      "sha256": "c1f75fd2a1a9149526f113d8ef154dcf634f4db137f2c598e27fdab7a1df85e5"
+    },
+    "chain:ET:2026-07-08": {
+      "path": ".cache/chains/ET_2026-07-08.parquet",
+      "sha256": "e0d506c0d7c4d9a762090fd1d2287b02eb6ae92c8f71cc7c61b10b044c4249f6"
+    },
+    "chain:ET:2026-07-09": {
+      "path": ".cache/chains/ET_2026-07-09.parquet",
+      "sha256": "7e654a45fbedf6f243f42023c3112ef393e274d8b8c7b0515a4eb4b68f1c5b41"
+    },
+    "chain:ET:2026-07-10": {
+      "path": ".cache/chains/ET_2026-07-10.parquet",
+      "sha256": "0c8609fa189c09e75226e7a18995f3f735ea59879e20d07bfa3e7223e7b7189a"
+    },
+    "chain:ET:2026-07-13": {
+      "path": ".cache/chains/ET_2026-07-13.parquet",
+      "sha256": "b61231a12a23d1c62708ddeb8dfa6971962402a52d15ffc53c132d868bc41171"
+    },
+    "chain:ET:2026-07-14": {
+      "path": ".cache/chains/ET_2026-07-14.parquet",
+      "sha256": "809fd0b36f8ae100b3157938dc3f6c8aaaa184b76642aea0c94af5bd5bc0c6f8"
+    },
+    "chain:ET:2026-07-15": {
+      "path": ".cache/chains/ET_2026-07-15.parquet",
+      "sha256": "bba80465f4c05cda93f06ed9aa4ec6f6fe687a226348bedf82cd3470f71bf525"
+    },
+    "chain:ET:2026-07-16": {
+      "path": ".cache/chains/ET_2026-07-16.parquet",
+      "sha256": "cd4ac53b93c60f344dc6bbd348d641b990ceaff571bcbc552e3e43154996de3a"
+    },
+    "chain:ET:2026-07-17": {
+      "path": ".cache/chains/ET_2026-07-17.parquet",
+      "sha256": "715484b8d19dfec5ebc56fae20b484cac77a315791e8775521f5b4cabab51636"
+    },
+    "chain:ET:2026-07-20": {
+      "path": ".cache/chains/ET_2026-07-20.parquet",
+      "sha256": "b25b48f6fe24462632f4e986761b9719f4225c41160156dcf62bc6f63733d159"
+    },
+    "chain:ET:2026-07-21": {
+      "path": ".cache/chains/ET_2026-07-21.parquet",
+      "sha256": "a3ecb5e0ed85d007d94336bbb7f1111b0e518806e8378007d6448469b91fcc89"
+    },
+    "chain:ET:2026-07-22": {
+      "path": ".cache/chains/ET_2026-07-22.parquet",
+      "sha256": "4abe52b41d3c4d33bf5fc315c6aece73772b8db249c2e8b9bdeee24e1bcc6fd2"
+    },
+    "chain:ET:2026-07-23": {
+      "path": ".cache/chains/ET_2026-07-23.parquet",
+      "sha256": "5120a2c9cc65c150ac29a2af5fde3233802f01a9d165d2d8ed2b58b0f165971f"
+    },
+    "chain:ET:2026-07-24": {
+      "path": ".cache/chains/ET_2026-07-24.parquet",
+      "sha256": "a2a1eb6e4ff49007cb70b0e19870292043356d6af932c765ddabbab90a9df188"
+    },
+    "chain:ET:2026-07-27": {
+      "path": ".cache/chains/ET_2026-07-27.parquet",
+      "sha256": "02ee7ecbd85f2f2e7deae1c1c83ae326a26a91fb5f8b5d0482d1e30f63052a81"
+    },
+    "chain:MSFT:2026-04-16": {
+      "path": ".cache/chains/MSFT_2026-04-16.parquet",
+      "sha256": "99d4b6ae133bf5050de41b12196d15343f3ba6a4064acb9da5096362f698f8ae"
+    },
+    "chain:MSFT:2026-04-17": {
+      "path": ".cache/chains/MSFT_2026-04-17.parquet",
+      "sha256": "47c45456f7badcf652ab5678160a0e18b45055f30602ba2e2472edc01c4c9350"
+    },
+    "chain:MSFT:2026-04-20": {
+      "path": ".cache/chains/MSFT_2026-04-20.parquet",
+      "sha256": "592e87f816b689a336f4abcbf89a0482017790529758720b1c28ddc4aec23132"
+    },
+    "chain:MSFT:2026-04-21": {
+      "path": ".cache/chains/MSFT_2026-04-21.parquet",
+      "sha256": "a2b5f03b9ac6ec088a9176762a28781c57fbeba452d2c42ac53072af418e0f5f"
+    },
+    "chain:MSFT:2026-04-22": {
+      "path": ".cache/chains/MSFT_2026-04-22.parquet",
+      "sha256": "c51eff166e154c3c08c72941b9c8472230f71fa0ecb1382b13d9ac689e1407bd"
+    },
+    "chain:MSFT:2026-04-23": {
+      "path": ".cache/chains/MSFT_2026-04-23.parquet",
+      "sha256": "dd2f5433b2d624a955973fa5540aa9b904eabbe3b1d96badcf5474da7a896cf9"
+    },
+    "chain:MSFT:2026-04-24": {
+      "path": ".cache/chains/MSFT_2026-04-24.parquet",
+      "sha256": "07c065920d153d448eaf0fcecf6c4a224e8b19eaae13ad2b8112993f993f0d74"
+    },
+    "chain:MSFT:2026-04-27": {
+      "path": ".cache/chains/MSFT_2026-04-27.parquet",
+      "sha256": "2a1b1034cd2fcb8d13c8e3ab97c5c44d98f8de1f690e6b45e079b11733fc4480"
+    },
+    "chain:MSFT:2026-04-28": {
+      "path": ".cache/chains/MSFT_2026-04-28.parquet",
+      "sha256": "0b09aa521508d23626b6a14c7dd6002f30e776ea58de4dd016a1239f61dae168"
+    },
+    "chain:MSFT:2026-04-29": {
+      "path": ".cache/chains/MSFT_2026-04-29.parquet",
+      "sha256": "e7ef99440bda50020b7a16d454f92ea49f4b2f48cc08660af4969d532eba8493"
+    },
+    "chain:MSFT:2026-04-30": {
+      "path": ".cache/chains/MSFT_2026-04-30.parquet",
+      "sha256": "0ab80cac2fcc6aa48773d676b7d150b10db0f674f79749c1d54aaea5392d625a"
+    },
+    "chain:MSFT:2026-05-01": {
+      "path": ".cache/chains/MSFT_2026-05-01.parquet",
+      "sha256": "b5aa6fb10ec45da1c147ee5023a4addf16da5e972af44caed2779c78aa38024f"
+    },
+    "chain:MSFT:2026-05-04": {
+      "path": ".cache/chains/MSFT_2026-05-04.parquet",
+      "sha256": "6a92b97da5a48aef5c1cbac45e70259fd64e75a880d7bf7776bf156ffc6914f0"
+    },
+    "chain:MSFT:2026-05-05": {
+      "path": ".cache/chains/MSFT_2026-05-05.parquet",
+      "sha256": "152c30558d3e9ef7fb49755518dd65677190959a8a722d53197440303d532393"
+    },
+    "chain:MSFT:2026-05-06": {
+      "path": ".cache/chains/MSFT_2026-05-06.parquet",
+      "sha256": "92d3543be1d95382df3657b3c846c647da81029f5a2134a5330cd771b1ef1074"
+    },
+    "chain:MSFT:2026-05-07": {
+      "path": ".cache/chains/MSFT_2026-05-07.parquet",
+      "sha256": "d1b24e3b2ae8151d765cea1f635783522b5d93f344814e190010889a00b0773f"
+    },
+    "chain:MSFT:2026-05-08": {
+      "path": ".cache/chains/MSFT_2026-05-08.parquet",
+      "sha256": "24b79fdfebe2810d51de123d85a67e510799e760fd9ed228a60f30576a2ff1ce"
+    },
+    "chain:MSFT:2026-05-11": {
+      "path": ".cache/chains/MSFT_2026-05-11.parquet",
+      "sha256": "6d7ee4c2c20bd47ebb91c0cc4e84b61ec681bfc2e57a47dc5c02753038b98319"
+    },
+    "chain:MSFT:2026-05-12": {
+      "path": ".cache/chains/MSFT_2026-05-12.parquet",
+      "sha256": "0eb93c483a656204492fc7f60f8eb10a283e4ec7fd46cbe00902629c378883fc"
+    },
+    "chain:MSFT:2026-05-13": {
+      "path": ".cache/chains/MSFT_2026-05-13.parquet",
+      "sha256": "3ff35d5dd9d85b6bdca33d045b86ef1e107c474094846fc463fff330e91cd3b7"
+    },
+    "chain:MSFT:2026-05-14": {
+      "path": ".cache/chains/MSFT_2026-05-14.parquet",
+      "sha256": "9249d5533a397485e6a90f61598e55804c210f028baf33fe6b810c45961d4c5a"
+    },
+    "chain:MSFT:2026-05-15": {
+      "path": ".cache/chains/MSFT_2026-05-15.parquet",
+      "sha256": "d842808dc950d8fa3e77faf07e61ec5991a1192635c38ead1403fe4f7d1f4bcb"
+    },
+    "chain:MSFT:2026-05-18": {
+      "path": ".cache/chains/MSFT_2026-05-18.parquet",
+      "sha256": "67468706391cb2b844fef33ac084322db6f9efdbd6f9bd97c39411f837cf945b"
+    },
+    "chain:MSFT:2026-05-19": {
+      "path": ".cache/chains/MSFT_2026-05-19.parquet",
+      "sha256": "5dd15a41611e6332b975e8a212ae99ceff61111cd6a6ef297f80ef0c53f64cff"
+    },
+    "chain:MSFT:2026-05-20": {
+      "path": ".cache/chains/MSFT_2026-05-20.parquet",
+      "sha256": "73b645d551a339736acb9cd04ce838ecc264787c7f07dd8252fc97bbf56ff9b3"
+    },
+    "chain:MSFT:2026-05-21": {
+      "path": ".cache/chains/MSFT_2026-05-21.parquet",
+      "sha256": "57c79740b02465aad6b0ed9e3bf08308b94fe5274c70df0b034e0311248d93e5"
+    },
+    "chain:MSFT:2026-05-22": {
+      "path": ".cache/chains/MSFT_2026-05-22.parquet",
+      "sha256": "b06820ea2cb9880608d10a16ddd41e124d557e001f140198e4fba08b844688ee"
+    },
+    "chain:MSFT:2026-05-26": {
+      "path": ".cache/chains/MSFT_2026-05-26.parquet",
+      "sha256": "59b2425d29662548328852ac09771d1eb17fd89b0691868905facd13c24a0c34"
+    },
+    "chain:MSFT:2026-05-27": {
+      "path": ".cache/chains/MSFT_2026-05-27.parquet",
+      "sha256": "475525785403d6cd5fdf33f13a52d5e9a5e47970587a18004b26129371c8c8dd"
+    },
+    "chain:MSFT:2026-05-28": {
+      "path": ".cache/chains/MSFT_2026-05-28.parquet",
+      "sha256": "1893aa932f66347ef5b844f5f0a47afc639923c80c5269e40922edb8e04be857"
+    },
+    "chain:MSFT:2026-05-29": {
+      "path": ".cache/chains/MSFT_2026-05-29.parquet",
+      "sha256": "56f6c2335bf7b76a15a47b3c285575670b1e6a242cb9d895d7e0e609667500d9"
+    },
+    "chain:MSFT:2026-06-01": {
+      "path": ".cache/chains/MSFT_2026-06-01.parquet",
+      "sha256": "6d9217e12336eaeefb277e6a621d2f4bda7e9e8955ea9455ac2ced04051c5fde"
+    },
+    "chain:MSFT:2026-06-02": {
+      "path": ".cache/chains/MSFT_2026-06-02.parquet",
+      "sha256": "c11a39f12b24581ee3339d69e70445fc6fd306a860b97579ae39adfd4ae82481"
+    },
+    "chain:MSFT:2026-06-03": {
+      "path": ".cache/chains/MSFT_2026-06-03.parquet",
+      "sha256": "564518e7729bad5ac8cd5ad9c70da5caf4e0f58f218c6a25d023a8a6706fa6d3"
+    },
+    "chain:MSFT:2026-06-04": {
+      "path": ".cache/chains/MSFT_2026-06-04.parquet",
+      "sha256": "376bb3c2fe5b85af396561032b42d9a7f3301ebdcec00cf676ca72cf421c4e42"
+    },
+    "chain:MSFT:2026-06-05": {
+      "path": ".cache/chains/MSFT_2026-06-05.parquet",
+      "sha256": "877c105ac152b7550f610aee1ba847001c4cdfab07b07a5999367888e6076204"
+    },
+    "chain:MSFT:2026-06-08": {
+      "path": ".cache/chains/MSFT_2026-06-08.parquet",
+      "sha256": "08ca67d4114d95585c857d44f35ae98cfb9a522859db880912e7e82116f792d7"
+    },
+    "chain:MSFT:2026-06-09": {
+      "path": ".cache/chains/MSFT_2026-06-09.parquet",
+      "sha256": "79c5ec15484461fbf16b48387b3b912d4998604bf7a27b9f0e46e794af7ee0de"
+    },
+    "chain:MSFT:2026-06-10": {
+      "path": ".cache/chains/MSFT_2026-06-10.parquet",
+      "sha256": "49cda3f6f081faaf31162fe583b2576cf5759b8a1cffbd6929b49c5aff7d4451"
+    },
+    "chain:MSFT:2026-06-11": {
+      "path": ".cache/chains/MSFT_2026-06-11.parquet",
+      "sha256": "55d6315c3bb10bc144d65154c367a0ab72d0737027ae340c1c3331f6b42c9051"
+    },
+    "chain:MSFT:2026-06-12": {
+      "path": ".cache/chains/MSFT_2026-06-12.parquet",
+      "sha256": "c41496e70d1c871bde31b844c7566010f27e4ad869b333db0c429b25953f6dea"
+    },
+    "chain:MSFT:2026-06-15": {
+      "path": ".cache/chains/MSFT_2026-06-15.parquet",
+      "sha256": "3dad14a0d54f147e6f0ed504c7b1e04952fea91ec2aeff644cc847f798a8b29d"
+    },
+    "chain:MSFT:2026-06-16": {
+      "path": ".cache/chains/MSFT_2026-06-16.parquet",
+      "sha256": "8ceade07796dae2537181eea37ed46e963fbfa9689edcb97bac97215eae8dffb"
+    },
+    "chain:MSFT:2026-06-17": {
+      "path": ".cache/chains/MSFT_2026-06-17.parquet",
+      "sha256": "9c8f6b17020768bb63f2f9b543b051d2a4af8e1f3c4da2d3b77c1f6a44b90975"
+    },
+    "chain:MSFT:2026-06-18": {
+      "path": ".cache/chains/MSFT_2026-06-18.parquet",
+      "sha256": "42be4abfb8926804514cdb11633bc9e16cdcec3a74a9d40bb87be48324bc00ee"
+    },
+    "chain:MSFT:2026-06-22": {
+      "path": ".cache/chains/MSFT_2026-06-22.parquet",
+      "sha256": "64e9a2f31ba1893b6dae3c6bd7b60a0a6cb0a163565bf0074c4197135f3ccdb0"
+    },
+    "chain:MSFT:2026-06-23": {
+      "path": ".cache/chains/MSFT_2026-06-23.parquet",
+      "sha256": "2f647bbd84ace3d3b1c84744d03bd43e8495b214905540d50571ecd619282d33"
+    },
+    "chain:MSFT:2026-06-24": {
+      "path": ".cache/chains/MSFT_2026-06-24.parquet",
+      "sha256": "ac5153e9573f093384aab9f94ec8b7977317ddfa4f6e82b0292e240f0fb4d7f9"
+    },
+    "chain:MSFT:2026-06-25": {
+      "path": ".cache/chains/MSFT_2026-06-25.parquet",
+      "sha256": "29dd478991fd61b2e421bdf271947f9311b86e88ad43dee76dcc235fdf2edbd2"
+    },
+    "chain:MSFT:2026-06-26": {
+      "path": ".cache/chains/MSFT_2026-06-26.parquet",
+      "sha256": "b72ccfc116e0952a4aded1c48324a9c01b7fa0454d26f4b999795d7aee2c4947"
+    },
+    "chain:MSFT:2026-06-29": {
+      "path": ".cache/chains/MSFT_2026-06-29.parquet",
+      "sha256": "a5e6fec4792deee77b0f165045208cfbc5013628b1d9df4f7233d361ff34b1fb"
+    },
+    "chain:MSFT:2026-06-30": {
+      "path": ".cache/chains/MSFT_2026-06-30.parquet",
+      "sha256": "53a7b2986d7a77c3992cc773db713ed2aaf6d857e6fbd1af7cfa9da2f43bb4ca"
+    },
+    "chain:MSFT:2026-07-01": {
+      "path": ".cache/chains/MSFT_2026-07-01.parquet",
+      "sha256": "7eebd956cb13730242755ea919a31baa8e87d06efdbb6893d55233b12340cdb9"
+    },
+    "chain:MSFT:2026-07-02": {
+      "path": ".cache/chains/MSFT_2026-07-02.parquet",
+      "sha256": "5c4679ddc2cadb8473c9d01e3feb5043e4ef27e3784cd07276002e20d80a1a7e"
+    },
+    "chain:MSFT:2026-07-06": {
+      "path": ".cache/chains/MSFT_2026-07-06.parquet",
+      "sha256": "07825c791924c5b7648cd2d30fd42e357690e807aa43e2fe379844cbab9513e9"
+    },
+    "chain:MSFT:2026-07-07": {
+      "path": ".cache/chains/MSFT_2026-07-07.parquet",
+      "sha256": "45ad2f68420c0fced48bfa9e4c10abeacbea89c797e593d51f5040dccba07218"
+    },
+    "chain:MSFT:2026-07-08": {
+      "path": ".cache/chains/MSFT_2026-07-08.parquet",
+      "sha256": "5483fc6afd839e823d71c570a3030e6cea32a51fe0d29cd204b4bc14960dc6c9"
+    },
+    "chain:MSFT:2026-07-09": {
+      "path": ".cache/chains/MSFT_2026-07-09.parquet",
+      "sha256": "ba4b673ec6ffb7735f12968a6bf7975f2c461743055bc2199ac4cc281ece30c8"
+    },
+    "chain:MSFT:2026-07-10": {
+      "path": ".cache/chains/MSFT_2026-07-10.parquet",
+      "sha256": "2c3d591b7161f554e723db6b7c86b8cdbc4d2ebd667861076d147c9fe532b735"
+    },
+    "chain:MSFT:2026-07-13": {
+      "path": ".cache/chains/MSFT_2026-07-13.parquet",
+      "sha256": "4a92c81c831c5afe118a525c98746928b99751ef937328acd0ce71f43c8bfae5"
+    },
+    "chain:MSFT:2026-07-14": {
+      "path": ".cache/chains/MSFT_2026-07-14.parquet",
+      "sha256": "d5478f8d5281af5ed34ff897fa3243aab9b9da25d9037d9e59464aa8ab358b65"
+    },
+    "chain:MSFT:2026-07-15": {
+      "path": ".cache/chains/MSFT_2026-07-15.parquet",
+      "sha256": "2e151a0a2c4b5241119356c81382feb78c40d28994a7e4335822d6e23ff255ec"
+    },
+    "chain:MSFT:2026-07-16": {
+      "path": ".cache/chains/MSFT_2026-07-16.parquet",
+      "sha256": "5655d34963cc345a24abdbe7c80966494852092378e16d3ad4d9a94e88954915"
+    },
+    "chain:MSFT:2026-07-17": {
+      "path": ".cache/chains/MSFT_2026-07-17.parquet",
+      "sha256": "3b42de83e7c98b0e651e096afd1031b958754bc56f2e3f7fd28b6343a5d1e372"
+    },
+    "chain:MSFT:2026-07-20": {
+      "path": ".cache/chains/MSFT_2026-07-20.parquet",
+      "sha256": "1d5166a871d6741ee998b315aa2a70d07cafe2979d2a69741c0dd8a812db1cdf"
+    },
+    "chain:MSFT:2026-07-21": {
+      "path": ".cache/chains/MSFT_2026-07-21.parquet",
+      "sha256": "28b99bb377a5236ad2c531f3827b88455322a227cbe6576a696218408c4550f3"
+    },
+    "chain:MSFT:2026-07-22": {
+      "path": ".cache/chains/MSFT_2026-07-22.parquet",
+      "sha256": "6aab787d71eabcb8a918bc69ba45f80d74b3b7203b23df05007289aeda656de4"
+    },
+    "chain:MSFT:2026-07-23": {
+      "path": ".cache/chains/MSFT_2026-07-23.parquet",
+      "sha256": "598ba417215307a7c37863d857ef592b7681b2c3fc500430d24dfe80d1295b93"
+    },
+    "chain:MSFT:2026-07-24": {
+      "path": ".cache/chains/MSFT_2026-07-24.parquet",
+      "sha256": "8849ec9524e86b198dc854ea3d841a123d82bcfde7f74cbf77e6bcecda88dae0"
+    },
+    "chain:MSFT:2026-07-27": {
+      "path": ".cache/chains/MSFT_2026-07-27.parquet",
+      "sha256": "317ec2f645369d89d001bc15768c31525528a31478be12a8b691753845ae8909"
+    },
+    "chain:NOW:2026-04-16": {
+      "path": ".cache/chains/NOW_2026-04-16.parquet",
+      "sha256": "7e2d3c900d49ac779c8073c12075042583590cef96198279a9fb4e798e419663"
+    },
+    "chain:NOW:2026-04-17": {
+      "path": ".cache/chains/NOW_2026-04-17.parquet",
+      "sha256": "d3591607f67262544981ee44d8fa081d162876f1235d0eb9d99c6347522d9756"
+    },
+    "chain:NOW:2026-04-20": {
+      "path": ".cache/chains/NOW_2026-04-20.parquet",
+      "sha256": "22cba965ec7b888d19bf8f3ad808bddeb3d872c5d087b0b917e71b2dd2b7a9e6"
+    },
+    "chain:NOW:2026-04-21": {
+      "path": ".cache/chains/NOW_2026-04-21.parquet",
+      "sha256": "732232b4fa57fda0befa19e76623365ce37ccf8bbfffcf1b7083a7cc011e0545"
+    },
+    "chain:NOW:2026-04-22": {
+      "path": ".cache/chains/NOW_2026-04-22.parquet",
+      "sha256": "25bf4eaa365c57a2931e0bb3cb62a34aa247e2fda334f053e960e4aac22f76d0"
+    },
+    "chain:NOW:2026-04-23": {
+      "path": ".cache/chains/NOW_2026-04-23.parquet",
+      "sha256": "983402f065a3a3c301d0bcce0104a6dba621ceba4a5c9e28ee2826eca3c599bb"
+    },
+    "chain:NOW:2026-04-24": {
+      "path": ".cache/chains/NOW_2026-04-24.parquet",
+      "sha256": "bf5a7330af3aab9ee8aae2800b58bfc2b6f3427c8670d04304df9e596b460509"
+    },
+    "chain:NOW:2026-04-27": {
+      "path": ".cache/chains/NOW_2026-04-27.parquet",
+      "sha256": "9f1d4a152079a573c73f90371156d460fbc579294fac970f03653114ce85322c"
+    },
+    "chain:NOW:2026-04-28": {
+      "path": ".cache/chains/NOW_2026-04-28.parquet",
+      "sha256": "efccc5d6534006ed3869f276a869ce15be41df79b293f3f6503e8a2f689f3c6b"
+    },
+    "chain:NOW:2026-04-29": {
+      "path": ".cache/chains/NOW_2026-04-29.parquet",
+      "sha256": "1a9bac993bcc16fc35673623045da98ffd0298afa1a2335a4744fbdb092b304e"
+    },
+    "chain:NOW:2026-04-30": {
+      "path": ".cache/chains/NOW_2026-04-30.parquet",
+      "sha256": "ce377a07caacd18060aecb33f3305be9ee93fd48cbf6f1c9bc602c0f2719d5ad"
+    },
+    "chain:NOW:2026-05-01": {
+      "path": ".cache/chains/NOW_2026-05-01.parquet",
+      "sha256": "e8f69a0be2a973542df51cac218b56fa0293e88a74f6d5b8d882fbbf85835544"
+    },
+    "chain:NOW:2026-05-04": {
+      "path": ".cache/chains/NOW_2026-05-04.parquet",
+      "sha256": "01c01baebc3ca9d3ed8b21513d15108f18dbae3d907b4b312a272eb74699fe01"
+    },
+    "chain:NOW:2026-05-05": {
+      "path": ".cache/chains/NOW_2026-05-05.parquet",
+      "sha256": "5848279e1b673552c3594570aa2f6af5900fef8d7dc1fcdd832eefbaf105fa13"
+    },
+    "chain:NOW:2026-05-06": {
+      "path": ".cache/chains/NOW_2026-05-06.parquet",
+      "sha256": "45f614e8a027174bc70e994f198d7988160a3fee67bc65628a25caa804a647c1"
+    },
+    "chain:NOW:2026-05-07": {
+      "path": ".cache/chains/NOW_2026-05-07.parquet",
+      "sha256": "a213d9bda78743b2aeccda757af284985645b114d3b615a1b1ecdda48a9efb54"
+    },
+    "chain:NOW:2026-05-08": {
+      "path": ".cache/chains/NOW_2026-05-08.parquet",
+      "sha256": "73b6a4cd82ff3be9d09808251b424b650a362d28c47d3bfce798275c03bc9651"
+    },
+    "chain:NOW:2026-05-11": {
+      "path": ".cache/chains/NOW_2026-05-11.parquet",
+      "sha256": "e3003b5cfb515548e5d480ffe0e04e47df760da8548d51467a1efe083315ca42"
+    },
+    "chain:NOW:2026-05-12": {
+      "path": ".cache/chains/NOW_2026-05-12.parquet",
+      "sha256": "ebe60d05fd434342b2724fc1dbb8c8112c9f33a125e0a31089064aaa48ba849e"
+    },
+    "chain:NOW:2026-05-13": {
+      "path": ".cache/chains/NOW_2026-05-13.parquet",
+      "sha256": "b3f0a6c761f36c622b1974db928cb1865d56baae13dd325a08edf1ae2a1f3f01"
+    },
+    "chain:NOW:2026-05-14": {
+      "path": ".cache/chains/NOW_2026-05-14.parquet",
+      "sha256": "ad56d723aa5fd9cdfdf074d28cc41f1adb508645f6ee6e37f279e593ebeaad3e"
+    },
+    "chain:NOW:2026-05-15": {
+      "path": ".cache/chains/NOW_2026-05-15.parquet",
+      "sha256": "f36197c4ebfa2e823f0d663c5787c204830ef28abbb21d20689c84e4ff580d72"
+    },
+    "chain:NOW:2026-05-18": {
+      "path": ".cache/chains/NOW_2026-05-18.parquet",
+      "sha256": "5a5a5ed169f4d962ea5b385862a1245a3e8b71afdefb4389677767fe7c0398d0"
+    },
+    "chain:NOW:2026-05-19": {
+      "path": ".cache/chains/NOW_2026-05-19.parquet",
+      "sha256": "ddcd3c6fff232fd8ab8a739714c3fb8be687f8075435af9dc7b3b512c993ae6c"
+    },
+    "chain:NOW:2026-05-20": {
+      "path": ".cache/chains/NOW_2026-05-20.parquet",
+      "sha256": "142b69249e5923d51c498978807254e824bf7250e12c680450e4c3098fbe57f1"
+    },
+    "chain:NOW:2026-05-21": {
+      "path": ".cache/chains/NOW_2026-05-21.parquet",
+      "sha256": "3404c27335f99836899c74e34ec278c618441032f92a29888843bf0a16e424b5"
+    },
+    "chain:NOW:2026-05-22": {
+      "path": ".cache/chains/NOW_2026-05-22.parquet",
+      "sha256": "d95868cb74131e8945772cca7b7dd0a711348e47a74795e9a6f60d00e7e03499"
+    },
+    "chain:NOW:2026-05-26": {
+      "path": ".cache/chains/NOW_2026-05-26.parquet",
+      "sha256": "f56f9260cc85bad4b7ea429a87970dd278e4ca501930ac16ef1e2ddb28a70630"
+    },
+    "chain:NOW:2026-05-27": {
+      "path": ".cache/chains/NOW_2026-05-27.parquet",
+      "sha256": "3cee8102de2c2a257b342bf5ef3445f4e927b4785e6e1819e693730b41d24a98"
+    },
+    "chain:NOW:2026-05-28": {
+      "path": ".cache/chains/NOW_2026-05-28.parquet",
+      "sha256": "b65e97d1efb8d71544d7f057ee9e1cb2204ac78db00747f2cd229c08a524b134"
+    },
+    "chain:NOW:2026-05-29": {
+      "path": ".cache/chains/NOW_2026-05-29.parquet",
+      "sha256": "b552c93d93370c13c8be846b44e19a80eb4f6c0a37c139e115c140eb6269c8fa"
+    },
+    "chain:NOW:2026-06-01": {
+      "path": ".cache/chains/NOW_2026-06-01.parquet",
+      "sha256": "8398b9cc1ea440bb088c720d1d0a8406a6ed1763a8318c5465dc9b1e6906b48c"
+    },
+    "chain:NOW:2026-06-02": {
+      "path": ".cache/chains/NOW_2026-06-02.parquet",
+      "sha256": "ee76e2db2333e3cd1c673d03ce1b35fd89e6da4aa029d40e58764bbf70062089"
+    },
+    "chain:NOW:2026-06-03": {
+      "path": ".cache/chains/NOW_2026-06-03.parquet",
+      "sha256": "92c5e397b4511b0d1119682cff4a262ff6d916a5e32602f812eb0508cd3ef0c8"
+    },
+    "chain:NOW:2026-06-04": {
+      "path": ".cache/chains/NOW_2026-06-04.parquet",
+      "sha256": "8cebd5b7f82893d973cbef949a2a70913afae813dc986a2b448d9aba5f351bbf"
+    },
+    "chain:NOW:2026-06-05": {
+      "path": ".cache/chains/NOW_2026-06-05.parquet",
+      "sha256": "8344707542a39c09ecd9bb9e67d79b09341f83d46c71b88bba43d4c7dd32d262"
+    },
+    "chain:NOW:2026-06-08": {
+      "path": ".cache/chains/NOW_2026-06-08.parquet",
+      "sha256": "98d1339514005cb415ea6d48e23292c5068db2a80c36cc87d895c39b7f883060"
+    },
+    "chain:NOW:2026-06-09": {
+      "path": ".cache/chains/NOW_2026-06-09.parquet",
+      "sha256": "0abd59e0b711babd830a03623aa577b53204b80ad56ae77f51311539f7780229"
+    },
+    "chain:NOW:2026-06-10": {
+      "path": ".cache/chains/NOW_2026-06-10.parquet",
+      "sha256": "e5719cacd4addf798171e1479dcbc9a08fe7ec9aa163cc6cf0902987b25920c8"
+    },
+    "chain:NOW:2026-06-11": {
+      "path": ".cache/chains/NOW_2026-06-11.parquet",
+      "sha256": "b0b184e25f20bc69945f87525250cbb489918b6fe51e8e834847e7e3c7e9566d"
+    },
+    "chain:NOW:2026-06-12": {
+      "path": ".cache/chains/NOW_2026-06-12.parquet",
+      "sha256": "e89ac31c0fb8737e452e87762d72693e664c0ad330f367261d9e6ed7b1de4c0b"
+    },
+    "chain:NOW:2026-06-15": {
+      "path": ".cache/chains/NOW_2026-06-15.parquet",
+      "sha256": "8908304d20249c2966831605db17420a837a8e3baac9bf94b50e6463c9e83ff4"
+    },
+    "chain:NOW:2026-06-16": {
+      "path": ".cache/chains/NOW_2026-06-16.parquet",
+      "sha256": "66fa9cee8c9bea965b97cb49bc5136633a435f1e851a2c2605faa9dda6b35ae0"
+    },
+    "chain:NOW:2026-06-17": {
+      "path": ".cache/chains/NOW_2026-06-17.parquet",
+      "sha256": "a85fed303d681231365157bf6c4dbff7f7704e1f6815385900a98870487ac4f7"
+    },
+    "chain:NOW:2026-06-18": {
+      "path": ".cache/chains/NOW_2026-06-18.parquet",
+      "sha256": "160d517c5e469a06ae5f494a9e4ea773e41e2bc12e02d4dfe9780536ab6aeb9b"
+    },
+    "chain:NOW:2026-06-22": {
+      "path": ".cache/chains/NOW_2026-06-22.parquet",
+      "sha256": "30a0c590414b81ea9ec4bd2fe45c6b4b8ff71f53f4231b3ff85cad8eeec67a74"
+    },
+    "chain:NOW:2026-06-23": {
+      "path": ".cache/chains/NOW_2026-06-23.parquet",
+      "sha256": "5e532031f1054899b96c8f5b736971465f2ff77e9a4dcccdcb80bcb1e0df58c1"
+    },
+    "chain:NOW:2026-06-24": {
+      "path": ".cache/chains/NOW_2026-06-24.parquet",
+      "sha256": "17a4d43ed0b6db6c80c0c92874dfd25dd350f5b1c3f229188492907c688ece2a"
+    },
+    "chain:NOW:2026-06-25": {
+      "path": ".cache/chains/NOW_2026-06-25.parquet",
+      "sha256": "b92cbdb32bca538bda9c69453d307acb2fb350577fd4abee1b72688c79ca9201"
+    },
+    "chain:NOW:2026-06-26": {
+      "path": ".cache/chains/NOW_2026-06-26.parquet",
+      "sha256": "d08a6b66aacd861557592e56421205f81e168695a8ec3d9fba4efdd1c1d110f9"
+    },
+    "chain:NOW:2026-06-29": {
+      "path": ".cache/chains/NOW_2026-06-29.parquet",
+      "sha256": "b5e1e42f0d6127a11437dc005ec68bce82e37dda761282ab6353d0731294d7bc"
+    },
+    "chain:NOW:2026-06-30": {
+      "path": ".cache/chains/NOW_2026-06-30.parquet",
+      "sha256": "c385802a29f25294f0b5113873150fdbcd0d04b72d00ae1c8b8b009c32870d01"
+    },
+    "chain:NOW:2026-07-01": {
+      "path": ".cache/chains/NOW_2026-07-01.parquet",
+      "sha256": "880e2145920965fb6d441c462e74be74caf28f917769fb8dec158f37e0b5dc01"
+    },
+    "chain:NOW:2026-07-02": {
+      "path": ".cache/chains/NOW_2026-07-02.parquet",
+      "sha256": "259ecb5e394a06d5d1c8aad602c8dfc442ad7937782c094abe9bdc2ecb44b2c9"
+    },
+    "chain:NOW:2026-07-06": {
+      "path": ".cache/chains/NOW_2026-07-06.parquet",
+      "sha256": "1e3d6d97aac48855374ebc69670afe2147267b0028b79d5074e98fb6ca2fe145"
+    },
+    "chain:NOW:2026-07-07": {
+      "path": ".cache/chains/NOW_2026-07-07.parquet",
+      "sha256": "8390486eddba0ddb11eac7b055e8cc24e20ceb9f6baa15cd82ec152d14c3440f"
+    },
+    "chain:NOW:2026-07-08": {
+      "path": ".cache/chains/NOW_2026-07-08.parquet",
+      "sha256": "6482621c784528d8eec4ae6feb0ef28e9fd1874d717abcf13433317095e51ca4"
+    },
+    "chain:NOW:2026-07-09": {
+      "path": ".cache/chains/NOW_2026-07-09.parquet",
+      "sha256": "f0e6d5b7d85410aac9e0930c6eebd47281b8ca416cccded71f4c045be8f7813b"
+    },
+    "chain:NOW:2026-07-10": {
+      "path": ".cache/chains/NOW_2026-07-10.parquet",
+      "sha256": "bc081bfc0f697b4e20f5eef2365fc4a43aad4ff5c9444d01ce217b7f18762c20"
+    },
+    "chain:NOW:2026-07-13": {
+      "path": ".cache/chains/NOW_2026-07-13.parquet",
+      "sha256": "bd4c300861874477581cc33c8958676e32f10dfb79c10d5694117c15d5042c74"
+    },
+    "chain:NOW:2026-07-14": {
+      "path": ".cache/chains/NOW_2026-07-14.parquet",
+      "sha256": "30bb737e565dc829421ac7ba32adbf342050bbd470f0186c8ae975da8fe6c533"
+    },
+    "chain:NOW:2026-07-15": {
+      "path": ".cache/chains/NOW_2026-07-15.parquet",
+      "sha256": "e04d63d5e28b6537a5a2bf9514c024fbb9a45b1c48ddc17a6267c2a4f897ed8b"
+    },
+    "chain:NOW:2026-07-16": {
+      "path": ".cache/chains/NOW_2026-07-16.parquet",
+      "sha256": "2b73ad28dfdffb1a533864179008760bb6b37d9a645058ccc577cddce4952632"
+    },
+    "chain:NOW:2026-07-17": {
+      "path": ".cache/chains/NOW_2026-07-17.parquet",
+      "sha256": "a4a6b19e473d0ab7bf7cdf58e155e5f623f7d34b7e5fccb8d62dd88945bd6325"
+    },
+    "chain:NOW:2026-07-20": {
+      "path": ".cache/chains/NOW_2026-07-20.parquet",
+      "sha256": "bfa1c17a9cfff2b2c0978efd06fe9ba2e22e5345d6be96a6233750c1deefa833"
+    },
+    "chain:NOW:2026-07-21": {
+      "path": ".cache/chains/NOW_2026-07-21.parquet",
+      "sha256": "c541f6a0277a04f1e9d8a0cabaa59739c26d0dd571233d4fd59076cbf0e0a9fc"
+    },
+    "chain:NOW:2026-07-22": {
+      "path": ".cache/chains/NOW_2026-07-22.parquet",
+      "sha256": "1b54a44e570d9db8208bef5ce7648781d3fbfb75a94c6c475e67352ecf5c2e0a"
+    },
+    "chain:NOW:2026-07-23": {
+      "path": ".cache/chains/NOW_2026-07-23.parquet",
+      "sha256": "8d8b97cf0db6becb5e55aa9c316100edf35d70bf62cfbbe7e7140aad860fa67e"
+    },
+    "chain:NOW:2026-07-24": {
+      "path": ".cache/chains/NOW_2026-07-24.parquet",
+      "sha256": "07cdce7433008a5fe2e7795cb49afed9aadf50681079a27170e6ff56a75f3658"
+    },
+    "chain:NOW:2026-07-27": {
+      "path": ".cache/chains/NOW_2026-07-27.parquet",
+      "sha256": "9dbe045f9dff268134d8a8dabc2285f8830f893ad697ca5837091b1ee8c203fd"
+    },
+    "chain:PLTR:2026-04-16": {
+      "path": ".cache/chains/PLTR_2026-04-16.parquet",
+      "sha256": "bfd0c22379746d574490d54ab87394cd23a38e8064fa7bd01bfa9845d1af3445"
+    },
+    "chain:PLTR:2026-04-17": {
+      "path": ".cache/chains/PLTR_2026-04-17.parquet",
+      "sha256": "57d119f54bbb9d53c78e47a6b1060b50f66e8552f827e841ff9792a497ee7369"
+    },
+    "chain:PLTR:2026-04-20": {
+      "path": ".cache/chains/PLTR_2026-04-20.parquet",
+      "sha256": "1db8552b304d82ff565ec3e30bc7b577ab20449fb33e7b1edf3d0657030155d4"
+    },
+    "chain:PLTR:2026-04-21": {
+      "path": ".cache/chains/PLTR_2026-04-21.parquet",
+      "sha256": "1f1e0557b498b8218e4a0b2255d271aadc0cdb621fec1bc4f5fc792c88d68d3f"
+    },
+    "chain:PLTR:2026-04-22": {
+      "path": ".cache/chains/PLTR_2026-04-22.parquet",
+      "sha256": "1fe8da7e99b854632b354e48adffb228bc20557f3af4052d76401768f890214a"
+    },
+    "chain:PLTR:2026-04-23": {
+      "path": ".cache/chains/PLTR_2026-04-23.parquet",
+      "sha256": "3cae03843091a2a51c485e745877c7fd4d9fe3fa83723753e5b7a025b8aaf01f"
+    },
+    "chain:PLTR:2026-04-24": {
+      "path": ".cache/chains/PLTR_2026-04-24.parquet",
+      "sha256": "167d988d7c62c5d1ee084c33933c8b26b61b698890bb317fb2da3ae13fc7d6d4"
+    },
+    "chain:PLTR:2026-04-27": {
+      "path": ".cache/chains/PLTR_2026-04-27.parquet",
+      "sha256": "02ad8313a5de8bed9d302b43d49a0476c169b6690fd30b3c3855086437161aa1"
+    },
+    "chain:PLTR:2026-04-28": {
+      "path": ".cache/chains/PLTR_2026-04-28.parquet",
+      "sha256": "b28a9843df2ddb128197a85a5404dc292430eedf14f6bb9ce57ff7486e99ef98"
+    },
+    "chain:PLTR:2026-04-29": {
+      "path": ".cache/chains/PLTR_2026-04-29.parquet",
+      "sha256": "943f1ca8f6813661c44d8fd620e6fad0788233d144e1081a97aeaab2e6766467"
+    },
+    "chain:PLTR:2026-04-30": {
+      "path": ".cache/chains/PLTR_2026-04-30.parquet",
+      "sha256": "c8efd72b86aae3c16ab0b335f2adfe9f3f8ff3f7680f304f8a81f3203daa3874"
+    },
+    "chain:PLTR:2026-05-01": {
+      "path": ".cache/chains/PLTR_2026-05-01.parquet",
+      "sha256": "35e5bc7d845c3cb99d6571bdefa6d89139a1a1a8a45719b055b81d4046c33a90"
+    },
+    "chain:PLTR:2026-05-04": {
+      "path": ".cache/chains/PLTR_2026-05-04.parquet",
+      "sha256": "89a1b5c80b84b7131f5d6c77fef8afe8f2157d6058b19f0d0100eb903636601c"
+    },
+    "chain:PLTR:2026-05-05": {
+      "path": ".cache/chains/PLTR_2026-05-05.parquet",
+      "sha256": "69485486c6ab1c3d7e97e34d9a5e349debbacb17c48eafbbec9f95fe02799385"
+    },
+    "chain:PLTR:2026-05-06": {
+      "path": ".cache/chains/PLTR_2026-05-06.parquet",
+      "sha256": "6041d2553ada845f05f74a2ec37f522a619ccfbd7e2f9d411f10581f37c6f4a2"
+    },
+    "chain:PLTR:2026-05-07": {
+      "path": ".cache/chains/PLTR_2026-05-07.parquet",
+      "sha256": "b9aca17aa4b313841de5c02d4e62383e1bd71b635e6f225d8053c2f9903ca8f4"
+    },
+    "chain:PLTR:2026-05-08": {
+      "path": ".cache/chains/PLTR_2026-05-08.parquet",
+      "sha256": "3c434c254b83ffd2abe801459d31d9af0c935c8ae31912956a9f730192f18a55"
+    },
+    "chain:PLTR:2026-05-11": {
+      "path": ".cache/chains/PLTR_2026-05-11.parquet",
+      "sha256": "6e30c5273dfb65d9483cae0d54969d0ace5abcc7c32d2ac5d8131ff4f504a708"
+    },
+    "chain:PLTR:2026-05-12": {
+      "path": ".cache/chains/PLTR_2026-05-12.parquet",
+      "sha256": "70a1221bfe748a17d635abbc36b26bd971d603171ae44c695d0646be62301f6f"
+    },
+    "chain:PLTR:2026-05-13": {
+      "path": ".cache/chains/PLTR_2026-05-13.parquet",
+      "sha256": "213cd4ed7f8c8eecbbd9c212a6958d4ff81c3cefe9665d471b48ba0250309ba6"
+    },
+    "chain:PLTR:2026-05-14": {
+      "path": ".cache/chains/PLTR_2026-05-14.parquet",
+      "sha256": "4788884bc4afd348dd4732d97a4038161de3e55e068ced994a31e54bfe1b530b"
+    },
+    "chain:PLTR:2026-05-15": {
+      "path": ".cache/chains/PLTR_2026-05-15.parquet",
+      "sha256": "33b3681af78253451b64472a54d91789755831621810d2545088d3a16f485ec8"
+    },
+    "chain:PLTR:2026-05-18": {
+      "path": ".cache/chains/PLTR_2026-05-18.parquet",
+      "sha256": "f1c93d94ad514085b61cd4109e9f31baf3fe808c9f5657eb869bc3748c1c5e6b"
+    },
+    "chain:PLTR:2026-05-19": {
+      "path": ".cache/chains/PLTR_2026-05-19.parquet",
+      "sha256": "c56eef7d5832347609873090e7d7a563ba8ef4392231edf73b3c39c766e7afb7"
+    },
+    "chain:PLTR:2026-05-20": {
+      "path": ".cache/chains/PLTR_2026-05-20.parquet",
+      "sha256": "47ee3d1631a3e8b604a53612702aca25c7520ec320fe5953af41aa91a49723aa"
+    },
+    "chain:PLTR:2026-05-21": {
+      "path": ".cache/chains/PLTR_2026-05-21.parquet",
+      "sha256": "bde40e7ac7f5f96293955ac7baf5787df3731ccfb518c711f4c7507ee4a760e8"
+    },
+    "chain:PLTR:2026-05-22": {
+      "path": ".cache/chains/PLTR_2026-05-22.parquet",
+      "sha256": "1c3f23d2b5d11e77952a8f4d5e13d56d5982af1f45746e20a935752da096c700"
+    },
+    "chain:PLTR:2026-05-26": {
+      "path": ".cache/chains/PLTR_2026-05-26.parquet",
+      "sha256": "b2ec10ed671b533e8067884f946f9d772a886f4c24136de653a0ac14da8078f7"
+    },
+    "chain:PLTR:2026-05-27": {
+      "path": ".cache/chains/PLTR_2026-05-27.parquet",
+      "sha256": "4984276b8e5bdd30e6d580f7bd6e87bb8f6786ce8b18979d2701b74eb92a6898"
+    },
+    "chain:PLTR:2026-05-28": {
+      "path": ".cache/chains/PLTR_2026-05-28.parquet",
+      "sha256": "e9d2898f2282406cd1866cf0eb4fdbee2e694cae5ccb56dce409460d9b2e3623"
+    },
+    "chain:PLTR:2026-05-29": {
+      "path": ".cache/chains/PLTR_2026-05-29.parquet",
+      "sha256": "0fc104cafa5fa93782733c8577c2c8b597b3ac7b21e0ab9c9878d68a0433c04a"
+    },
+    "chain:PLTR:2026-06-01": {
+      "path": ".cache/chains/PLTR_2026-06-01.parquet",
+      "sha256": "25cd6dda44b7e3f83bff3463642898f72109fbcf0b316d2dffc2d51f8c3defb0"
+    },
+    "chain:PLTR:2026-06-02": {
+      "path": ".cache/chains/PLTR_2026-06-02.parquet",
+      "sha256": "afbb3cddc71c65ba29061e7deefa8cb72d2bc6035e338dcfae970458a9f0d93b"
+    },
+    "chain:PLTR:2026-06-03": {
+      "path": ".cache/chains/PLTR_2026-06-03.parquet",
+      "sha256": "7470d180c309a62c774d99b63a06f00dd096fe306a10d2e2489b921412eea51e"
+    },
+    "chain:PLTR:2026-06-04": {
+      "path": ".cache/chains/PLTR_2026-06-04.parquet",
+      "sha256": "27e96b6baff9545dd1c2659762a1aef88eb3f4181462bc918ac15e0ee9aa4fc9"
+    },
+    "chain:PLTR:2026-06-05": {
+      "path": ".cache/chains/PLTR_2026-06-05.parquet",
+      "sha256": "4b1fadf46ef863e7f7b26738df93577dd884f2f89a73bbd9e5bd3b10cd21c419"
+    },
+    "chain:PLTR:2026-06-08": {
+      "path": ".cache/chains/PLTR_2026-06-08.parquet",
+      "sha256": "27fc828153b76348cfe40ed4671beaee2dffe1f18965fe3b144c0ed1893653fb"
+    },
+    "chain:PLTR:2026-06-09": {
+      "path": ".cache/chains/PLTR_2026-06-09.parquet",
+      "sha256": "95f798dcc36786af7db4f2115880e51dde994106b998322b133477e0b550b68a"
+    },
+    "chain:PLTR:2026-06-10": {
+      "path": ".cache/chains/PLTR_2026-06-10.parquet",
+      "sha256": "e666588bae8b674ecd538faaf0575ddd03c3d402e03c19fedefaf89735c664ee"
+    },
+    "chain:PLTR:2026-06-11": {
+      "path": ".cache/chains/PLTR_2026-06-11.parquet",
+      "sha256": "0f372b3ff5477b34a9e1eb6f5f58efc0872c50b3df322728e76a28294aabc569"
+    },
+    "chain:PLTR:2026-06-12": {
+      "path": ".cache/chains/PLTR_2026-06-12.parquet",
+      "sha256": "dea57307a5e0491240ca6c1d7c58c5e2e02888bd6c53bb80993b126a3b5e667d"
+    },
+    "chain:PLTR:2026-06-15": {
+      "path": ".cache/chains/PLTR_2026-06-15.parquet",
+      "sha256": "997cf24351b6e3e545f14fc40f74683809d12cdfd0e48e055d67324b1de611e4"
+    },
+    "chain:PLTR:2026-06-16": {
+      "path": ".cache/chains/PLTR_2026-06-16.parquet",
+      "sha256": "06308e67ef18fca8f8f12bd3b1f0092bc88f5269a024c1cfe1f1c73613a9db9e"
+    },
+    "chain:PLTR:2026-06-17": {
+      "path": ".cache/chains/PLTR_2026-06-17.parquet",
+      "sha256": "77e4eeaa979539b1e05bf15d2fdd77b20034e6914cef7f18ea6484b02d68bf4f"
+    },
+    "chain:PLTR:2026-06-18": {
+      "path": ".cache/chains/PLTR_2026-06-18.parquet",
+      "sha256": "e6a2784ba4955cad7af3fd323cb1036c275386de9417795b8c158a3323fd222d"
+    },
+    "chain:PLTR:2026-06-22": {
+      "path": ".cache/chains/PLTR_2026-06-22.parquet",
+      "sha256": "81b5c8f90f92d6efa6a9a81ebc461ac10388f8b28408abf4a45d0f96af6fc2db"
+    },
+    "chain:PLTR:2026-06-23": {
+      "path": ".cache/chains/PLTR_2026-06-23.parquet",
+      "sha256": "2e8d04e39fcf6ccb6158dd3f4869c6b16aaf1c5f8a42d670f3264845261f657e"
+    },
+    "chain:PLTR:2026-06-24": {
+      "path": ".cache/chains/PLTR_2026-06-24.parquet",
+      "sha256": "9e59fda7d4e2d52b0a97fafad5a84fc34b0b75bbf076e906cb36a1b1a6b18136"
+    },
+    "chain:PLTR:2026-06-25": {
+      "path": ".cache/chains/PLTR_2026-06-25.parquet",
+      "sha256": "0188cbee825f6c5acf38f7cc5de662634ea9cf4448635700c00a8d32c813c349"
+    },
+    "chain:PLTR:2026-06-26": {
+      "path": ".cache/chains/PLTR_2026-06-26.parquet",
+      "sha256": "6fc03ffd8056f22ee78e6e1ce67ab5c0d490bff566db419cb2a38523a8983c2c"
+    },
+    "chain:PLTR:2026-06-29": {
+      "path": ".cache/chains/PLTR_2026-06-29.parquet",
+      "sha256": "776953799316756ce1bb7f6f0e420e2d4410dcd3af57a20356df69073b8481dc"
+    },
+    "chain:PLTR:2026-06-30": {
+      "path": ".cache/chains/PLTR_2026-06-30.parquet",
+      "sha256": "353ad85685a545f4cbe6111c7e66549c8a1085d5b863ac33e5ecc181ce3ee661"
+    },
+    "chain:PLTR:2026-07-01": {
+      "path": ".cache/chains/PLTR_2026-07-01.parquet",
+      "sha256": "810514cb9bd4828c03716307e0f545daf1724d446931d4f17a11caf27c73c55f"
+    },
+    "chain:PLTR:2026-07-02": {
+      "path": ".cache/chains/PLTR_2026-07-02.parquet",
+      "sha256": "93c8ffd87d97991c52a2461d4267d8d4e4787d3aeb1cad32c78df99c288de19a"
+    },
+    "chain:PLTR:2026-07-06": {
+      "path": ".cache/chains/PLTR_2026-07-06.parquet",
+      "sha256": "dc07c8f660b222e68fd455bacd8a371fc77d631f85107b4e612be0b9c573f5e4"
+    },
+    "chain:PLTR:2026-07-07": {
+      "path": ".cache/chains/PLTR_2026-07-07.parquet",
+      "sha256": "0bcba837f848487ecfa06ff4ac82a649d871aa3a7f3631142e5cb70f32f19175"
+    },
+    "chain:PLTR:2026-07-08": {
+      "path": ".cache/chains/PLTR_2026-07-08.parquet",
+      "sha256": "222393be8a3e4dbf065234fa56e95cdae249c52da111bac33c2326c578bfb906"
+    },
+    "chain:PLTR:2026-07-09": {
+      "path": ".cache/chains/PLTR_2026-07-09.parquet",
+      "sha256": "58d64f728d9355ee805693940ae3d2570a282bb067c8d78d6ad545d1903055d7"
+    },
+    "chain:PLTR:2026-07-10": {
+      "path": ".cache/chains/PLTR_2026-07-10.parquet",
+      "sha256": "43d4b564cbb8699f9adc213a0d84289fc1edb90cead5b470e1740dc44d7d4eb8"
+    },
+    "chain:PLTR:2026-07-13": {
+      "path": ".cache/chains/PLTR_2026-07-13.parquet",
+      "sha256": "7c7b5726bd838b0c46f4cb397fb19e8bebb4c18d92dd13707f79c537f37e162d"
+    },
+    "chain:PLTR:2026-07-14": {
+      "path": ".cache/chains/PLTR_2026-07-14.parquet",
+      "sha256": "a5f9533b6ff2fb45bce52a9ad65debc2542a2eb54aa616533727fd818e92ac34"
+    },
+    "chain:PLTR:2026-07-15": {
+      "path": ".cache/chains/PLTR_2026-07-15.parquet",
+      "sha256": "9c971dd308aef50bb32ca5b2fe141aea5e8626f340a55c139abe5d502ed0e86c"
+    },
+    "chain:PLTR:2026-07-16": {
+      "path": ".cache/chains/PLTR_2026-07-16.parquet",
+      "sha256": "a19099356eba13a00eb01f3c7b7774a7c3cbc5f7ef0372d8b05ebdb09115d455"
+    },
+    "chain:PLTR:2026-07-17": {
+      "path": ".cache/chains/PLTR_2026-07-17.parquet",
+      "sha256": "7d522142fbf79f28ba46bb5edf3f3d05d1e5d83a24cf44a77961df2c23ffad38"
+    },
+    "chain:PLTR:2026-07-20": {
+      "path": ".cache/chains/PLTR_2026-07-20.parquet",
+      "sha256": "2eb932d2c3a37bda6cc197e1aecbbbedd716b88833b4bf79ad7602971628b128"
+    },
+    "chain:PLTR:2026-07-21": {
+      "path": ".cache/chains/PLTR_2026-07-21.parquet",
+      "sha256": "a6d13b4d1d1464b165f08435ecc245d68ad5fddcec39f9b1313240950bc67909"
+    },
+    "chain:PLTR:2026-07-22": {
+      "path": ".cache/chains/PLTR_2026-07-22.parquet",
+      "sha256": "ad726c7dc93d1d67d6feb60b06176515409953179b482135e54c68d8ca0d12e6"
+    },
+    "chain:PLTR:2026-07-23": {
+      "path": ".cache/chains/PLTR_2026-07-23.parquet",
+      "sha256": "5d595ded5739c14881c106b073d651b71ec46adcab1959535988c3f8b1386dd9"
+    },
+    "chain:PLTR:2026-07-24": {
+      "path": ".cache/chains/PLTR_2026-07-24.parquet",
+      "sha256": "20b191cee23e45346e8e7da48860a6525012596efee1bf7c9bbd93d9304def27"
+    },
+    "chain:PLTR:2026-07-27": {
+      "path": ".cache/chains/PLTR_2026-07-27.parquet",
+      "sha256": "38ae1a0a73e32f2106b8246c96294e52567d708ba979c475ce84b010ea6de913"
+    },
+    "chain:TEM:2026-04-16": {
+      "path": ".cache/chains/TEM_2026-04-16.parquet",
+      "sha256": "bc12b08f50ffac800b31daaf0862e8f090e04a67e0072fc17bb0b377c84ac5f4"
+    },
+    "chain:TEM:2026-04-17": {
+      "path": ".cache/chains/TEM_2026-04-17.parquet",
+      "sha256": "e09990d5bcc6ff20e7f322bd4b0b895315feac9bd72eba80dae0946e7cc3c9ab"
+    },
+    "chain:TEM:2026-04-20": {
+      "path": ".cache/chains/TEM_2026-04-20.parquet",
+      "sha256": "0b1b58859f8b971ef0dc01e0e51e3f8099895c0f30cab8eee355d88a30e0b475"
+    },
+    "chain:TEM:2026-04-21": {
+      "path": ".cache/chains/TEM_2026-04-21.parquet",
+      "sha256": "1f0669656619e88011668cb37121f0ebe3a4d8a320899c7aff80ac3a9efd9f4f"
+    },
+    "chain:TEM:2026-04-22": {
+      "path": ".cache/chains/TEM_2026-04-22.parquet",
+      "sha256": "6f5e940e8133e7edb12fd67b64d16b48ddfdb6ebbd9a9c1166338fc89da7a231"
+    },
+    "chain:TEM:2026-04-23": {
+      "path": ".cache/chains/TEM_2026-04-23.parquet",
+      "sha256": "9116ea394fded03ec21d4cb99050cb754c3bd0337c62ecafc70fd1167827ee77"
+    },
+    "chain:TEM:2026-04-24": {
+      "path": ".cache/chains/TEM_2026-04-24.parquet",
+      "sha256": "ecb9255b3816306cb394c86281e68e3f990c9966fd4750034e16c7fb7d524f62"
+    },
+    "chain:TEM:2026-04-27": {
+      "path": ".cache/chains/TEM_2026-04-27.parquet",
+      "sha256": "ffdd6d995e8ccf0216f8090c5c6be7aca17b2e80c28062e9a2fd4bb942e99982"
+    },
+    "chain:TEM:2026-04-28": {
+      "path": ".cache/chains/TEM_2026-04-28.parquet",
+      "sha256": "0f03143d70b599dfaccf90c2f663dce3666c52a6188e0a903e61fb14860b8eb9"
+    },
+    "chain:TEM:2026-04-29": {
+      "path": ".cache/chains/TEM_2026-04-29.parquet",
+      "sha256": "31ac66fe59b844d19d04d2fcd45ef5ec5a6ea560a4d543dde5c15533a31405d9"
+    },
+    "chain:TEM:2026-04-30": {
+      "path": ".cache/chains/TEM_2026-04-30.parquet",
+      "sha256": "65dfa2d97bd6e4c6d6a2c6359d0f51d2a55ca7d8a32258830f6462e9a1de3cc3"
+    },
+    "chain:TEM:2026-05-01": {
+      "path": ".cache/chains/TEM_2026-05-01.parquet",
+      "sha256": "c6e4512b9faad389a81ec4751da5b156c5512f14cef3f635b96dd18659f5bc30"
+    },
+    "chain:TEM:2026-05-04": {
+      "path": ".cache/chains/TEM_2026-05-04.parquet",
+      "sha256": "607b4b52c0fefdd86188f141995d8ec3378c330ac2a4ea36e4b37a0adde973b8"
+    },
+    "chain:TEM:2026-05-05": {
+      "path": ".cache/chains/TEM_2026-05-05.parquet",
+      "sha256": "14676a9bd4a138bb7df231b97b004b747bbf8c203b988a4e78fac3bd7f750156"
+    },
+    "chain:TEM:2026-05-06": {
+      "path": ".cache/chains/TEM_2026-05-06.parquet",
+      "sha256": "ca68320019a1a1bbf090fc0665253d27b12f8768117a73a090edceee4b9f193a"
+    },
+    "chain:TEM:2026-05-07": {
+      "path": ".cache/chains/TEM_2026-05-07.parquet",
+      "sha256": "cf17143a9786d79de89d87802f126dbf7613364003fd125870a6c6bece8c0422"
+    },
+    "chain:TEM:2026-05-08": {
+      "path": ".cache/chains/TEM_2026-05-08.parquet",
+      "sha256": "771bffdc06fde7b85e096b02a7940f28ecd0b71831f9321114d0bd6aaeb174f5"
+    },
+    "chain:TEM:2026-05-11": {
+      "path": ".cache/chains/TEM_2026-05-11.parquet",
+      "sha256": "6cb934a95ef2fcf51267ec66281c1c0013589ee8e9a400379b39e5f39d200118"
+    },
+    "chain:TEM:2026-05-12": {
+      "path": ".cache/chains/TEM_2026-05-12.parquet",
+      "sha256": "6e435e84ffe6eb89f4ca9956807ddf5ed3611379fd32a29079bcecc6c60d0e8e"
+    },
+    "chain:TEM:2026-05-13": {
+      "path": ".cache/chains/TEM_2026-05-13.parquet",
+      "sha256": "43ae65582c9ac3cdf0df8969c110e682409879a61599b8e2b8c8fdc76c1b5d4e"
+    },
+    "chain:TEM:2026-05-14": {
+      "path": ".cache/chains/TEM_2026-05-14.parquet",
+      "sha256": "70aa865bef7421c1fd19513c4f898c6755eb3bea41566087583d3f5d129e986e"
+    },
+    "chain:TEM:2026-05-15": {
+      "path": ".cache/chains/TEM_2026-05-15.parquet",
+      "sha256": "bc70204956ebcd6a11703f30778e5b5fefd791af94301321a8143056164b1760"
+    },
+    "chain:TEM:2026-05-18": {
+      "path": ".cache/chains/TEM_2026-05-18.parquet",
+      "sha256": "5957834bda642eb44570ecae0c5fdc697f5e8bb16064e2cf317b722cfb5479cd"
+    },
+    "chain:TEM:2026-05-19": {
+      "path": ".cache/chains/TEM_2026-05-19.parquet",
+      "sha256": "fceabb34b4085d6e830958531b1a84c3767cf2af81aef046530a6c226c1cc54f"
+    },
+    "chain:TEM:2026-05-20": {
+      "path": ".cache/chains/TEM_2026-05-20.parquet",
+      "sha256": "84cb83844f43fd7e226160a76af54035819d9c23ec007d461240dd61a97f5ee9"
+    },
+    "chain:TEM:2026-05-21": {
+      "path": ".cache/chains/TEM_2026-05-21.parquet",
+      "sha256": "c1b7fc28042a88ffa512866cedc770251d62addc31bce952f3a5146a3a8cde37"
+    },
+    "chain:TEM:2026-05-22": {
+      "path": ".cache/chains/TEM_2026-05-22.parquet",
+      "sha256": "4b0bf62fcadf19a6acaac3d9dc4a4652654653c81ab703b7ccb8990243d48fc8"
+    },
+    "chain:TEM:2026-05-26": {
+      "path": ".cache/chains/TEM_2026-05-26.parquet",
+      "sha256": "73c401c89f8c6177f4e366fd77620fe67859f08dd68a168b3d8677114f011731"
+    },
+    "chain:TEM:2026-05-27": {
+      "path": ".cache/chains/TEM_2026-05-27.parquet",
+      "sha256": "315ce65d2edb18df48e6a4ba018b0038859d3663b4d6249253cbb3969108e552"
+    },
+    "chain:TEM:2026-05-28": {
+      "path": ".cache/chains/TEM_2026-05-28.parquet",
+      "sha256": "e33460f07cae8a64a8d38b91b35d05713ed4451bc2d655a2bf238068c72941d1"
+    },
+    "chain:TEM:2026-05-29": {
+      "path": ".cache/chains/TEM_2026-05-29.parquet",
+      "sha256": "bb5576bfebcbc44a44e9bb71c9c041ba7211975f7a25c33b449b2aaf157d95d9"
+    },
+    "chain:TEM:2026-06-01": {
+      "path": ".cache/chains/TEM_2026-06-01.parquet",
+      "sha256": "5c172e72b2444ebaa293ba97dc1c8b04e565b74a890a775eb2b5af18a6ba7865"
+    },
+    "chain:TEM:2026-06-02": {
+      "path": ".cache/chains/TEM_2026-06-02.parquet",
+      "sha256": "57df2996c1a8ce40b9cbdc493d880879864e90f0d4b52883a02611d9a10af1d3"
+    },
+    "chain:TEM:2026-06-03": {
+      "path": ".cache/chains/TEM_2026-06-03.parquet",
+      "sha256": "29ae9745346d11952a3624f4e8c2566a148441385281a12d15863f0af79389f0"
+    },
+    "chain:TEM:2026-06-04": {
+      "path": ".cache/chains/TEM_2026-06-04.parquet",
+      "sha256": "f528c414ae87ebb5aac352fdfb2ff3ff4282d2b86c3e8ac39b5cd16593d44ab7"
+    },
+    "chain:TEM:2026-06-05": {
+      "path": ".cache/chains/TEM_2026-06-05.parquet",
+      "sha256": "2537a7588beb7bdcddc8ab57232da7b99e27bbb6f8cf0e5018244a435017d2e6"
+    },
+    "chain:TEM:2026-06-08": {
+      "path": ".cache/chains/TEM_2026-06-08.parquet",
+      "sha256": "3189530f159fcca6e587beb62c360316603aa003b78472b03216c5a67fbcbcce"
+    },
+    "chain:TEM:2026-06-09": {
+      "path": ".cache/chains/TEM_2026-06-09.parquet",
+      "sha256": "1fc87d29620e4f7e64df92fca9f13a51ff5574fe3beee4315a607bfa02949622"
+    },
+    "chain:TEM:2026-06-10": {
+      "path": ".cache/chains/TEM_2026-06-10.parquet",
+      "sha256": "bc8df62059a724023cdc5bb0c3c4793a9fc16bf7327e3a04aca6ca0fd29a94bf"
+    },
+    "chain:TEM:2026-06-11": {
+      "path": ".cache/chains/TEM_2026-06-11.parquet",
+      "sha256": "601238ee4098513985a5a4901d05de0992ef4f755b1614613d3cf417548c5b21"
+    },
+    "chain:TEM:2026-06-12": {
+      "path": ".cache/chains/TEM_2026-06-12.parquet",
+      "sha256": "f51d3f54925f4cf33aa171401b7970f2e47fe40c864311f45da98d878da31367"
+    },
+    "chain:TEM:2026-06-15": {
+      "path": ".cache/chains/TEM_2026-06-15.parquet",
+      "sha256": "832d3675237cd4cb7e2edbe67fcb67ab0d7279326689066a9a49d8ab5c358804"
+    },
+    "chain:TEM:2026-06-16": {
+      "path": ".cache/chains/TEM_2026-06-16.parquet",
+      "sha256": "01835b436e37b01f75e6587ee6c2acb254e8a32c53c4e63d875afa36d261c496"
+    },
+    "chain:TEM:2026-06-17": {
+      "path": ".cache/chains/TEM_2026-06-17.parquet",
+      "sha256": "17ab645bd680cee4793868d1465d9a95268e2b36bccc2c2db486c31e8611260c"
+    },
+    "chain:TEM:2026-06-18": {
+      "path": ".cache/chains/TEM_2026-06-18.parquet",
+      "sha256": "bf521c84c50440bac8fb79f9bb04dab14e1ef914732ff95ef5cc05af94c7bd0a"
+    },
+    "chain:TEM:2026-06-22": {
+      "path": ".cache/chains/TEM_2026-06-22.parquet",
+      "sha256": "08ddab559272c6984bebb7b7db5c8a40561e16e9e7909e2679fdd3690c0cc8e7"
+    },
+    "chain:TEM:2026-06-23": {
+      "path": ".cache/chains/TEM_2026-06-23.parquet",
+      "sha256": "77635e4301a46323d994d625259d522c64d11e1060189b81e561b9c7e4b4e6e6"
+    },
+    "chain:TEM:2026-06-24": {
+      "path": ".cache/chains/TEM_2026-06-24.parquet",
+      "sha256": "540edf161f0c630da1218809951fb71bf70b0a3ce514fafdbe712ae2c43b13bb"
+    },
+    "chain:TEM:2026-06-25": {
+      "path": ".cache/chains/TEM_2026-06-25.parquet",
+      "sha256": "120f60a23eaa9247ba9c0e0854aca7e8e457ea678557fc60ca4a4dd9de4443ab"
+    },
+    "chain:TEM:2026-06-26": {
+      "path": ".cache/chains/TEM_2026-06-26.parquet",
+      "sha256": "05ee8acbc4c1f8879be6ecc02a53ac7e7f00d7ed7511c6b9e87f80311f89e7ec"
+    },
+    "chain:TEM:2026-06-29": {
+      "path": ".cache/chains/TEM_2026-06-29.parquet",
+      "sha256": "458730157c162e546d76f3fc2b4df8f1e3e172c8c4fd0093df4ab96c7e8d9df3"
+    },
+    "chain:TEM:2026-06-30": {
+      "path": ".cache/chains/TEM_2026-06-30.parquet",
+      "sha256": "66136b4d09b37a90010f6f0dc40b9599606a476f2500f37fe0691076b4a11362"
+    },
+    "chain:TEM:2026-07-01": {
+      "path": ".cache/chains/TEM_2026-07-01.parquet",
+      "sha256": "8c90a27148c973fabde6974cf6fb3c8d60f0cb91c74198cfe3f6d8e797a0e38f"
+    },
+    "chain:TEM:2026-07-02": {
+      "path": ".cache/chains/TEM_2026-07-02.parquet",
+      "sha256": "06de4dae008da654a2f2ef13a0e372e49f904a65ec17352d74d03ca9b07dcf1c"
+    },
+    "chain:TEM:2026-07-06": {
+      "path": ".cache/chains/TEM_2026-07-06.parquet",
+      "sha256": "8ea41bf9689d325ee7dbf1d9b7a807d1b5e096629e57f7b98c48d0a4166bc9c0"
+    },
+    "chain:TEM:2026-07-07": {
+      "path": ".cache/chains/TEM_2026-07-07.parquet",
+      "sha256": "454d72a1ef728b0362696dcd15c6a9dddabec28ae05e8158f4cfee01db335428"
+    },
+    "chain:TEM:2026-07-08": {
+      "path": ".cache/chains/TEM_2026-07-08.parquet",
+      "sha256": "351742736e85b93044d1b59231b8e6a14f6d9dee025168ebbf7f3559aa859f7d"
+    },
+    "chain:TEM:2026-07-09": {
+      "path": ".cache/chains/TEM_2026-07-09.parquet",
+      "sha256": "3ae0efdad08cd55b88e80416bef47ef14af17f986110b32c31d4547250c384f2"
+    },
+    "chain:TEM:2026-07-10": {
+      "path": ".cache/chains/TEM_2026-07-10.parquet",
+      "sha256": "05dd97c64e488d55f9e4f9e0026ab6218342a538c6d069817047ff27536e7c48"
+    },
+    "chain:TEM:2026-07-13": {
+      "path": ".cache/chains/TEM_2026-07-13.parquet",
+      "sha256": "c2bd60a19bb924c9fce797619ff8dd6f0f7ffae29a6d488945b49e75a676e6d2"
+    },
+    "chain:TEM:2026-07-14": {
+      "path": ".cache/chains/TEM_2026-07-14.parquet",
+      "sha256": "0799cc9fc75960b083a2c82398c9bd38eb8de9a84aed83127c3959fe8ecd62bb"
+    },
+    "chain:TEM:2026-07-15": {
+      "path": ".cache/chains/TEM_2026-07-15.parquet",
+      "sha256": "dc31b93f41c1af9f18adfc4a919923e1e6cba5603d63411ffd93326d3d24de63"
+    },
+    "chain:TEM:2026-07-16": {
+      "path": ".cache/chains/TEM_2026-07-16.parquet",
+      "sha256": "6ab5f4925eb49924a59e3d2999bd0696af0b3157dd5ad787fd72992f5106373b"
+    },
+    "chain:TEM:2026-07-17": {
+      "path": ".cache/chains/TEM_2026-07-17.parquet",
+      "sha256": "6376025bac07ddd2c46a5e696e10cc5b93e2cbabcd72005e64da4d3dedc3ec7e"
+    },
+    "chain:TEM:2026-07-20": {
+      "path": ".cache/chains/TEM_2026-07-20.parquet",
+      "sha256": "63ba6d958b037bca2c392411c57d0f8fa1393cdf28f35fbe9a35889d7a21e84d"
+    },
+    "chain:TEM:2026-07-21": {
+      "path": ".cache/chains/TEM_2026-07-21.parquet",
+      "sha256": "ab5df0be8049347ebeb93f0440c63bc4bf9179bf9cc18809f84c30e10e951ac8"
+    },
+    "chain:TEM:2026-07-22": {
+      "path": ".cache/chains/TEM_2026-07-22.parquet",
+      "sha256": "1395ec4a6b388a56784032054048d783fa997d7d9f6d28a23701fa9303bb13c4"
+    },
+    "chain:TEM:2026-07-23": {
+      "path": ".cache/chains/TEM_2026-07-23.parquet",
+      "sha256": "75e29a933ef861f410ba781df1de111060e360efec9d85484c05a75aa90962e5"
+    },
+    "chain:TEM:2026-07-24": {
+      "path": ".cache/chains/TEM_2026-07-24.parquet",
+      "sha256": "b3c725de35a075ca9cf8cf409f681bc5c5ddfa7a32cdf091cfed60b7ff8f3fd3"
+    },
+    "chain:TEM:2026-07-27": {
+      "path": ".cache/chains/TEM_2026-07-27.parquet",
+      "sha256": "498362e1d486326d16f41e8f333ba1780ae4c278db81eee3512ccb48f8f512ba"
+    },
+    "chain:VST:2026-04-16": {
+      "path": ".cache/chains/VST_2026-04-16.parquet",
+      "sha256": "f64f5ff2c47c54058d703e9aeda285381e7371c612bf1f4ba05814b90420242f"
+    },
+    "chain:VST:2026-04-17": {
+      "path": ".cache/chains/VST_2026-04-17.parquet",
+      "sha256": "2f0659caca28911852f3b65fd51a5b01f127b0ba77e73413b4c46c6d091819d9"
+    },
+    "chain:VST:2026-04-20": {
+      "path": ".cache/chains/VST_2026-04-20.parquet",
+      "sha256": "718f08865d475cd94fb651897d8522c8e4fd9d527ea0a0245b9744207a66812e"
+    },
+    "chain:VST:2026-04-21": {
+      "path": ".cache/chains/VST_2026-04-21.parquet",
+      "sha256": "30607a5827a526f7ce6b3e8f33926636601ca4090c13677bb241e0778dabd573"
+    },
+    "chain:VST:2026-04-22": {
+      "path": ".cache/chains/VST_2026-04-22.parquet",
+      "sha256": "b35499f5c05707c07706ced6f62d6e3453d4e6fca3c71e4af9e2f6fcb32ff4cd"
+    },
+    "chain:VST:2026-04-23": {
+      "path": ".cache/chains/VST_2026-04-23.parquet",
+      "sha256": "9ce2ad4f5f3fca2c15f2c93670c241eaa04d959a6b750e9d68454ef4e473e86c"
+    },
+    "chain:VST:2026-04-24": {
+      "path": ".cache/chains/VST_2026-04-24.parquet",
+      "sha256": "34a1b0d497ceb247a51047a9e83dc1832039b7831bece28218ffaed3bc5a30da"
+    },
+    "chain:VST:2026-04-27": {
+      "path": ".cache/chains/VST_2026-04-27.parquet",
+      "sha256": "bed53c09f931f07134e68aa942469da8fcb5dd09f40c902a04a3f778e4d8b39b"
+    },
+    "chain:VST:2026-04-28": {
+      "path": ".cache/chains/VST_2026-04-28.parquet",
+      "sha256": "77b4b9bf341a8558856ead3c7011fba77ca335d3ed621cd52329c2dc93a8d888"
+    },
+    "chain:VST:2026-04-29": {
+      "path": ".cache/chains/VST_2026-04-29.parquet",
+      "sha256": "67d9a7b3f6243dd1e7cbff6c238a9e754771867180884f94ed1080e62fde085a"
+    },
+    "chain:VST:2026-04-30": {
+      "path": ".cache/chains/VST_2026-04-30.parquet",
+      "sha256": "7b5b9c2b230f747bb715e3855733dd33b63fc0f6cd5d53b5954a7cc17fe5e21b"
+    },
+    "chain:VST:2026-05-01": {
+      "path": ".cache/chains/VST_2026-05-01.parquet",
+      "sha256": "947444aec5e3a85bac6dc6c068ccf7bc0b5ede1d050608e1bf648949aba87fdf"
+    },
+    "chain:VST:2026-05-04": {
+      "path": ".cache/chains/VST_2026-05-04.parquet",
+      "sha256": "09545b8dc16c3c48e356d96343be81d77a7884bdab966032eec425828a09517d"
+    },
+    "chain:VST:2026-05-05": {
+      "path": ".cache/chains/VST_2026-05-05.parquet",
+      "sha256": "9830f115993262733b9ae9598138bdeea6b2eacf6838febbd01128508220c883"
+    },
+    "chain:VST:2026-05-06": {
+      "path": ".cache/chains/VST_2026-05-06.parquet",
+      "sha256": "9e6a22981bd4b7f35568edb94b7b6b3289bb7b5d76276e9fb4cd76bac91f739e"
+    },
+    "chain:VST:2026-05-07": {
+      "path": ".cache/chains/VST_2026-05-07.parquet",
+      "sha256": "c783569bdca65117cfebc7c7972f30e0562c679ce8ddba36d28fe900b054ee1e"
+    },
+    "chain:VST:2026-05-08": {
+      "path": ".cache/chains/VST_2026-05-08.parquet",
+      "sha256": "1d051b72fb3fcd90c59f87f1479ed4895d228d44cbf4649a73b8ec209283eaf7"
+    },
+    "chain:VST:2026-05-11": {
+      "path": ".cache/chains/VST_2026-05-11.parquet",
+      "sha256": "74cab0cdd431425f92b0c50f4894f54b8de1c0203e95b41b1d9d79f33a3641cc"
+    },
+    "chain:VST:2026-05-12": {
+      "path": ".cache/chains/VST_2026-05-12.parquet",
+      "sha256": "097dd8a5c6462149642324cc375f5556e76992155747c22a864866bc1be9d915"
+    },
+    "chain:VST:2026-05-13": {
+      "path": ".cache/chains/VST_2026-05-13.parquet",
+      "sha256": "c49c93b9cf766352095f72d3ee4aa04e3ebea97c8425ed59244245ef97b1a4c0"
+    },
+    "chain:VST:2026-05-14": {
+      "path": ".cache/chains/VST_2026-05-14.parquet",
+      "sha256": "07408b82c101baa7dc200399c0789568b0286a1cdc6e72be5589088851d64efe"
+    },
+    "chain:VST:2026-05-15": {
+      "path": ".cache/chains/VST_2026-05-15.parquet",
+      "sha256": "1066c9a5a65df1abe35d669a85d3bdf5b7047e01461e4b22d3b05b176b8dc4c2"
+    },
+    "chain:VST:2026-05-18": {
+      "path": ".cache/chains/VST_2026-05-18.parquet",
+      "sha256": "d6f41648bb3ae8470092491323b176bd6d92fadc58405a5fb89134f95c8faee5"
+    },
+    "chain:VST:2026-05-19": {
+      "path": ".cache/chains/VST_2026-05-19.parquet",
+      "sha256": "50d5b0a892c1e51c5188af49a038a3483585875013fcf0bebd6c3de63c1d3b5e"
+    },
+    "chain:VST:2026-05-20": {
+      "path": ".cache/chains/VST_2026-05-20.parquet",
+      "sha256": "0caecbb54c134012db66884ea9e117b31c8e6f3c0dfdb8a8848c413361a18713"
+    },
+    "chain:VST:2026-05-21": {
+      "path": ".cache/chains/VST_2026-05-21.parquet",
+      "sha256": "6315254e712fec5340430ee48f9a19ca7fa822b3ce6648af6a64976113503e0b"
+    },
+    "chain:VST:2026-05-22": {
+      "path": ".cache/chains/VST_2026-05-22.parquet",
+      "sha256": "890bb0873680bdb42c114998c3ea268abe0b94e3f0765f7b4386de88b5b21b61"
+    },
+    "chain:VST:2026-05-26": {
+      "path": ".cache/chains/VST_2026-05-26.parquet",
+      "sha256": "94a425dc19dcb619d08ed046d2f47d152df74d02e1ae52f298396c17e88402e4"
+    },
+    "chain:VST:2026-05-27": {
+      "path": ".cache/chains/VST_2026-05-27.parquet",
+      "sha256": "325c3ccd970dc9d7fe5d0150795ff60e3ec38542424fff81586fa36c74623e5c"
+    },
+    "chain:VST:2026-05-28": {
+      "path": ".cache/chains/VST_2026-05-28.parquet",
+      "sha256": "16d674eb726961665f48bbf9d2102093815c46d68883e15cdf863f408fc9439d"
+    },
+    "chain:VST:2026-05-29": {
+      "path": ".cache/chains/VST_2026-05-29.parquet",
+      "sha256": "6b4e44f1aefab3835ddb6d8d9ae31b9996d4010ccd3b4a52eef26b1e90536858"
+    },
+    "chain:VST:2026-06-01": {
+      "path": ".cache/chains/VST_2026-06-01.parquet",
+      "sha256": "d35fff5869f2f0eef39053f82df6204356bd7ef83705c533e839858ccab27909"
+    },
+    "chain:VST:2026-06-02": {
+      "path": ".cache/chains/VST_2026-06-02.parquet",
+      "sha256": "6de89d1e93aabfa04f4af3ecfe8dd88fde5428da5a651965350758bc0906b0f1"
+    },
+    "chain:VST:2026-06-03": {
+      "path": ".cache/chains/VST_2026-06-03.parquet",
+      "sha256": "d5646aee6e6611ec2430425e5cd8716d973fd941e593d1d6573be7f5737f4dd0"
+    },
+    "chain:VST:2026-06-04": {
+      "path": ".cache/chains/VST_2026-06-04.parquet",
+      "sha256": "d482db5bbc4be55e76b0cdc12ef1f93d506d7f7cbbb0c8241c71cc6dff4ed677"
+    },
+    "chain:VST:2026-06-05": {
+      "path": ".cache/chains/VST_2026-06-05.parquet",
+      "sha256": "5795d2052b5643ebaff3f93c83ac8fedcfb1f75cdd5eec93f19e1876119fcc60"
+    },
+    "chain:VST:2026-06-08": {
+      "path": ".cache/chains/VST_2026-06-08.parquet",
+      "sha256": "75d52eaf0961aad9417a59c936b6f2f99289f03a152d5bedb38745e03f7bc93d"
+    },
+    "chain:VST:2026-06-09": {
+      "path": ".cache/chains/VST_2026-06-09.parquet",
+      "sha256": "e37b020ae84f9c6b5d977ef74da4654439941086546973aa5c4b9751db431427"
+    },
+    "chain:VST:2026-06-10": {
+      "path": ".cache/chains/VST_2026-06-10.parquet",
+      "sha256": "c70969d6c2ef12ef51784acfa80d5d65f9785dffb17126291d84fc068235cb81"
+    },
+    "chain:VST:2026-06-11": {
+      "path": ".cache/chains/VST_2026-06-11.parquet",
+      "sha256": "620ba0a9f745227cf6f49d67ade810f491b055e9ff07ac1b5692429358d53ab2"
+    },
+    "chain:VST:2026-06-12": {
+      "path": ".cache/chains/VST_2026-06-12.parquet",
+      "sha256": "e93a551858a585139d06ab16a6028251fe188363540882605c27ffa682676c2a"
+    },
+    "chain:VST:2026-06-15": {
+      "path": ".cache/chains/VST_2026-06-15.parquet",
+      "sha256": "41f9b198432544ce8e729073660c4042fb5569e4da389da7ec7a559166b4d5b1"
+    },
+    "chain:VST:2026-06-16": {
+      "path": ".cache/chains/VST_2026-06-16.parquet",
+      "sha256": "1ecef866a7aa3c24c068b468750f0ea7c45b92f1521d9fa52991167893253cec"
+    },
+    "chain:VST:2026-06-17": {
+      "path": ".cache/chains/VST_2026-06-17.parquet",
+      "sha256": "541e531409f62627951691cca37d276b2c5cab5f8579f22e2fbf1e190620a940"
+    },
+    "chain:VST:2026-06-18": {
+      "path": ".cache/chains/VST_2026-06-18.parquet",
+      "sha256": "4b35bb1e00cd1cf9ec98d340fe99df5c46e7f26e5d5870a01fe36d224858d0af"
+    },
+    "chain:VST:2026-06-22": {
+      "path": ".cache/chains/VST_2026-06-22.parquet",
+      "sha256": "591b26d7fde3ea38c11a378a104fb12ad269e2b9a7948d5d7c90e8a7a5ae6a1d"
+    },
+    "chain:VST:2026-06-23": {
+      "path": ".cache/chains/VST_2026-06-23.parquet",
+      "sha256": "c54467c6a8cc04b31df0077b2b458110ebbb4a7fc44e7b70ae1ec1229da9b26f"
+    },
+    "chain:VST:2026-06-24": {
+      "path": ".cache/chains/VST_2026-06-24.parquet",
+      "sha256": "55ec177da49831eb7cc6b2d803ef7327a85cfbe5c31f43e855ae9c23cffa4648"
+    },
+    "chain:VST:2026-06-25": {
+      "path": ".cache/chains/VST_2026-06-25.parquet",
+      "sha256": "681de511dcd1f310238f8eceb97602179611f13479090732e1552c63c877a74e"
+    },
+    "chain:VST:2026-06-26": {
+      "path": ".cache/chains/VST_2026-06-26.parquet",
+      "sha256": "382fbf53693dd1a4bb6007f360418ea1942edfe14161606aec34218537fc3e81"
+    },
+    "chain:VST:2026-06-29": {
+      "path": ".cache/chains/VST_2026-06-29.parquet",
+      "sha256": "51558530ebd23ac3087978f3afc7a562b0c8c2327d0fb136f9c28d2ea9a67d64"
+    },
+    "chain:VST:2026-06-30": {
+      "path": ".cache/chains/VST_2026-06-30.parquet",
+      "sha256": "18cd10e61f7777d43cab134b06a7636f853edad1be09aa9d5399410cae39a4b3"
+    },
+    "chain:VST:2026-07-01": {
+      "path": ".cache/chains/VST_2026-07-01.parquet",
+      "sha256": "89dcec1387863ce8c3704258b917414dc85a5afb20b5139ccf450f5740087586"
+    },
+    "chain:VST:2026-07-02": {
+      "path": ".cache/chains/VST_2026-07-02.parquet",
+      "sha256": "ab6986ceacb410f45e8856381a1998ac8a71170dd118d16bcb6ba7a8b5eaff4b"
+    },
+    "chain:VST:2026-07-06": {
+      "path": ".cache/chains/VST_2026-07-06.parquet",
+      "sha256": "421265408bd02d4b977c609489016d25be26aa0533e310a3387a88f4250da82d"
+    },
+    "chain:VST:2026-07-07": {
+      "path": ".cache/chains/VST_2026-07-07.parquet",
+      "sha256": "def0a5953fa84a5150e426d3babc749fb3216602d20e19d33f21af8290123943"
+    },
+    "chain:VST:2026-07-08": {
+      "path": ".cache/chains/VST_2026-07-08.parquet",
+      "sha256": "2fa99a6c8fd6d976a854c3f233ba8a454e21dffde92b582f16984fc7adb4ec90"
+    },
+    "chain:VST:2026-07-09": {
+      "path": ".cache/chains/VST_2026-07-09.parquet",
+      "sha256": "6550adbe72057ac203e7447d93aa679f9d4ef82cc88209100d069483a0035c5d"
+    },
+    "chain:VST:2026-07-10": {
+      "path": ".cache/chains/VST_2026-07-10.parquet",
+      "sha256": "969e3965a61bea86aeeedce0a0bbeebf8569b167b0cdb4ddfcee58c12b52ea0c"
+    },
+    "chain:VST:2026-07-13": {
+      "path": ".cache/chains/VST_2026-07-13.parquet",
+      "sha256": "334c39621ea4f6a047ea076bfab6045bcd5b3bca67fc4b11725a1c002c975de7"
+    },
+    "chain:VST:2026-07-14": {
+      "path": ".cache/chains/VST_2026-07-14.parquet",
+      "sha256": "6ded43f542b60e4b8d81e117a836b80c7f8772490db592e48dac2f7fa9fd95e0"
+    },
+    "chain:VST:2026-07-15": {
+      "path": ".cache/chains/VST_2026-07-15.parquet",
+      "sha256": "7155fb3eadef2ecde8495663640513d59e3e18417b357591a99291723c1c0071"
+    },
+    "chain:VST:2026-07-16": {
+      "path": ".cache/chains/VST_2026-07-16.parquet",
+      "sha256": "4d4a29a0a2db8218b733d286f32d7e281d4c94869eb40065e11ea8394faa4ce7"
+    },
+    "chain:VST:2026-07-17": {
+      "path": ".cache/chains/VST_2026-07-17.parquet",
+      "sha256": "60cb5cc92bf8aefaf341651f226c87c56338211a06ecd971fd0353e0b2862739"
+    },
+    "chain:VST:2026-07-20": {
+      "path": ".cache/chains/VST_2026-07-20.parquet",
+      "sha256": "e5fc17aff8beded33b20bd84c2e5ba6653c3072434f004205e24457f6a71a894"
+    },
+    "chain:VST:2026-07-21": {
+      "path": ".cache/chains/VST_2026-07-21.parquet",
+      "sha256": "987b7d5ce63d3235bb540362a565b35d8827fc6e5d26d51e908ac72c2baac90e"
+    },
+    "chain:VST:2026-07-22": {
+      "path": ".cache/chains/VST_2026-07-22.parquet",
+      "sha256": "43a48f8a3e995bfd484039d35679c6670c934bf6fddd5d881472ff97e64c860c"
+    },
+    "chain:VST:2026-07-23": {
+      "path": ".cache/chains/VST_2026-07-23.parquet",
+      "sha256": "fe5464dcc63e98970ffc2880957bcf1b40fb76296719299914b9a38b40735dc8"
+    },
+    "chain:VST:2026-07-24": {
+      "path": ".cache/chains/VST_2026-07-24.parquet",
+      "sha256": "df8f5322989db10a706b35dfe31d930bdf4550ac7e8b1c22211f0bf87e755f2a"
+    },
+    "chain:VST:2026-07-27": {
+      "path": ".cache/chains/VST_2026-07-27.parquet",
+      "sha256": "f2dc2e014da0f424140cdc6b49b3f15705be5f38859ba7ef16e05060fb686640"
+    },
+    "gating_assertions": {
+      "path": "data/earnings/gating_v3.csv",
+      "sha256": "da2bf6abd3d7fd0ba10c5b78fcbcec47a5a802f9372578dce503d837967e63e7"
+    },
+    "raw_assertions": {
+      "path": "data/earnings/assertions_v2.csv",
+      "sha256": "124f1fa2b512f238dbf36ea07485f8839653fad3ade1b40fd276a5ba003846fb"
+    },
+    "underlying:AMD": {
+      "path": ".cache/underlying/AMD.parquet",
+      "sha256": "642318d07e26ddf69a1548c61c48f5bd4da3f8a1217b33ce084bad25c67eca1a"
+    },
+    "underlying:AMZN": {
+      "path": ".cache/underlying/AMZN.parquet",
+      "sha256": "7119cbef693432b8de43c46a5849da10bf0c3518989db353b0801a38170349a5"
+    },
+    "underlying:CEG": {
+      "path": ".cache/underlying/CEG.parquet",
+      "sha256": "c9a723234e68812672dc2f9e06e2d0a1206c8fb1b9ac3814210ede805a336cf7"
+    },
+    "underlying:ET": {
+      "path": ".cache/underlying/ET.parquet",
+      "sha256": "3ed6afc1852dd9aab24032fc48610f8ead18198290522a128f979e6a6d22b76a"
+    },
+    "underlying:MSFT": {
+      "path": ".cache/underlying/MSFT.parquet",
+      "sha256": "b127800c4b1348027183d28cb2c5a2adcf22855ac3669c806c21f688eb8379b0"
+    },
+    "underlying:NOW": {
+      "path": ".cache/underlying/NOW.parquet",
+      "sha256": "a6b4561fae49affa831790a4ecfbe01e483e83d8b63b462903f1f95b4b0336e4"
+    },
+    "underlying:PLTR": {
+      "path": ".cache/underlying/PLTR.parquet",
+      "sha256": "833cfabea7ccfbee952542464a6c800972400722ab6d4712f27efb18b34fbb7b"
+    },
+    "underlying:TEM": {
+      "path": ".cache/underlying/TEM.parquet",
+      "sha256": "ce586381ae8b2b04fe92c7cd0b97f1729004094af73239e17faf67652cd11925"
+    },
+    "underlying:VST": {
+      "path": ".cache/underlying/VST.parquet",
+      "sha256": "8cca3fc1b5b12439d11cddb8798f65181bba91db2116aa6b223c26aa7e34ee60"
+    }
+  },
+  "lookback_end": "2026-07-27",
+  "lookback_sessions": 70,
+  "lookback_start": "2026-04-16",
+  "method": {
+    "allocation": "options_researcher.h7_board.resolve_board",
+    "data": "existing .cache/chains plus .cache/underlying only",
+    "error_policy": "unavailable symbol-day counts in denominator and cannot pass",
+    "occupancy_note": "upper bound: per-underlying lockout only; monthly sleeve is not netted across overlapping positions",
+    "portfolio_state_assumption": "each historical session starts with no open H7 positions and the full frozen monthly sleeve; same-session board caps apply",
+    "signal_and_execution": "options_researcher.h7_watch.assemble_name"
+  },
+  "occupancy_constrained_count": 3,
+  "occupancy_constrained_expected_entries": 3,
+  "occupancy_input_rows": [
+    {
+      "lane": "a",
+      "session": "2026-05-18",
+      "symbol": "NOW"
+    },
+    {
+      "lane": "a",
+      "session": "2026-07-13",
+      "symbol": "NOW"
+    },
+    {
+      "lane": "a",
+      "session": "2026-07-16",
+      "symbol": "MSFT"
+    },
+    {
+      "lane": "a",
+      "session": "2026-07-16",
+      "symbol": "PLTR"
+    }
+  ],
+  "occupancy_lockout_sessions": 42,
+  "occupancy_upper_bound": true,
+  "passing_symbol_days": [
+    {
+      "session": "2026-05-18",
+      "symbol": "NOW"
+    },
+    {
+      "session": "2026-07-13",
+      "symbol": "NOW"
+    },
+    {
+      "session": "2026-07-16",
+      "symbol": "MSFT"
+    },
+    {
+      "session": "2026-07-16",
+      "symbol": "PLTR"
+    }
+  ],
+  "provenance": "LLM/tool-computed",
+  "receipt_hash": "4ee89943a299722b0c73c348bb9bd7425ce09a7357af025d7facfab75bb9409b",
+  "receipt_kind": "h7_schwab_feasibility/v1",
+  "sessions": [
+    "2026-04-16",
+    "2026-04-17",
+    "2026-04-20",
+    "2026-04-21",
+    "2026-04-22",
+    "2026-04-23",
+    "2026-04-24",
+    "2026-04-27",
+    "2026-04-28",
+    "2026-04-29",
+    "2026-04-30",
+    "2026-05-01",
+    "2026-05-04",
+    "2026-05-05",
+    "2026-05-06",
+    "2026-05-07",
+    "2026-05-08",
+    "2026-05-11",
+    "2026-05-12",
+    "2026-05-13",
+    "2026-05-14",
+    "2026-05-15",
+    "2026-05-18",
+    "2026-05-19",
+    "2026-05-20",
+    "2026-05-21",
+    "2026-05-22",
+    "2026-05-26",
+    "2026-05-27",
+    "2026-05-28",
+    "2026-05-29",
+    "2026-06-01",
+    "2026-06-02",
+    "2026-06-03",
+    "2026-06-04",
+    "2026-06-05",
+    "2026-06-08",
+    "2026-06-09",
+    "2026-06-10",
+    "2026-06-11",
+    "2026-06-12",
+    "2026-06-15",
+    "2026-06-16",
+    "2026-06-17",
+    "2026-06-18",
+    "2026-06-22",
+    "2026-06-23",
+    "2026-06-24",
+    "2026-06-25",
+    "2026-06-26",
+    "2026-06-29",
+    "2026-06-30",
+    "2026-07-01",
+    "2026-07-02",
+    "2026-07-06",
+    "2026-07-07",
+    "2026-07-08",
+    "2026-07-09",
+    "2026-07-10",
+    "2026-07-13",
+    "2026-07-14",
+    "2026-07-15",
+    "2026-07-16",
+    "2026-07-17",
+    "2026-07-20",
+    "2026-07-21",
+    "2026-07-22",
+    "2026-07-23",
+    "2026-07-24",
+    "2026-07-27"
+  ],
+  "source_hash": "d796960a4cc65880ec250e9967dce13660655a333be249669d5a1c2f6f40f4bd",
+  "source_paths": [
+    "data/__init__.py",
+    "data/atomic_io.py",
+    "data/cache_provenance.py",
+    "data/cache_runner.py",
+    "data/cache_schema.py",
+    "data/chain_policy.py",
+    "data/pandas_feed.py",
+    "data/provider_policy.py",
+    "data/rates.py",
+    "data/recent_topup.py",
+    "data/schwab_adapter.py",
+    "data/schwab_credentials.py",
+    "data/thetadata_adapter.py",
+    "data/underlying_closes.py",
+    "options_researcher/__init__.py",
+    "options_researcher/black_scholes.py",
+    "options_researcher/chains.py",
+    "options_researcher/earnings.py",
+    "options_researcher/features.py",
+    "options_researcher/h7_board.py",
+    "options_researcher/h7_cohort.py",
+    "options_researcher/h7_data_gate.py",
+    "options_researcher/h7_earnings.py",
+    "options_researcher/h7_event_ledger.py",
+    "options_researcher/h7_exit_session.py",
+    "options_researcher/h7_forward_book.py",
+    "options_researcher/h7_paper_lifecycle.py",
+    "options_researcher/h7_schwab_data_gate.py",
+    "options_researcher/h7_schwab_window_registration.py",
+    "options_researcher/h7_scope.py",
+    "options_researcher/h7_scoring_identity.py",
+    "options_researcher/h7_signals.py",
+    "options_researcher/h7_watch.py",
+    "options_researcher/h7_window_registration.py",
+    "options_researcher/intraday_capture.py",
+    "options_researcher/live_quotes.py",
+    "options_researcher/schwab_auth_failure.py",
+    "options_researcher/studies/__init__.py",
+    "options_researcher/studies/long_call_carry.py",
+    "research/__init__.py",
+    "research/facts.py",
+    "research/hashing.py",
+    "research/receipts.py",
+    "strategies/__init__.py",
+    "strategies/base.py",
+    "strategies/h7_backtest.py",
+    "strategies/h7_lanes.py",
+    "tools/h7_entry_variant_menu.py",
+    "tools/h7_schwab_feasibility.py",
+    "tools/schwab_chain_manifest.py"
+  ],
+  "stack_version": "h7-frozen-entry-stack-plus-board/v1",
+  "symbol_days": 630,
+  "tool_label": "cached-only read-only measurement; no verdict",
+  "universe": [
+    "AMD",
+    "AMZN",
+    "CEG",
+    "ET",
+    "MSFT",
+    "NOW",
+    "PLTR",
+    "TEM",
+    "VST"
+  ],
+  "universe_size": 9,
+  "window_sessions": 70
+}
