@@ -63,7 +63,8 @@ fi
 # (running stale code unattended is what this guard exists to prevent), and
 # anything unresolvable fails closed.
 EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
-                reports/h7_receipts reports/h7_data_gate reports/h5
+                reports/h7_receipts reports/h7_data_gate
+                reports/h7_data_gate_schwab reports/h7_forward_schwab reports/h5
                 reports/h6_forward reports/h8_forward reports/h10
                 reports/ritual reports/intraday_capture reports/live_probe
                 reports/cache_runs reports/schwab_chains
@@ -104,6 +105,19 @@ if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
   echo "schwab_chain_capture: HEAD is AHEAD of origin/main by evidence-only commit(s) -- proceeding (owner decision D-3). Realign with: git -C ${REPO} push origin main"
 fi
 # --- end alignment gate ---------------------------------------------------
+
+# The plist fires on weekdays, including exchange holidays. Refuse through the
+# canonical XNYS calendar before touching Schwab auth or any capture slot.
+SESSION="$(TZ=America/New_York date +%Y-%m-%d)"
+"$UV" run python -c 'import sys; from data.cache_runner import trading_days; session = sys.argv[1]; raise SystemExit(0 if trading_days(session, session) else 10)' "$SESSION"
+CALENDAR_RC=$?
+if [ "$CALENDAR_RC" -eq 10 ]; then
+  echo "schwab_chain_capture refused: NOT_A_TRADING_SESSION ${SESSION}"
+  exit 1
+elif [ "$CALENDAR_RC" -ne 0 ]; then
+  echo "schwab_chain_capture refused: CALENDAR_UNAVAILABLE ${SESSION} (exit ${CALENDAR_RC})"
+  exit 1
+fi
 
 # Proactive refresh-token age line (2026-09-02). The Schwab refresh token
 # dies 7 days after CREATION and refreshing an access token does not reset

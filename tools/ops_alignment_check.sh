@@ -60,7 +60,8 @@ is_count() {
 # Kept identical to tools/schwab_chain_capture.sh's EVIDENCE_ALLOW: if the two
 # lists drift, this check starts lying about what the 15:45 gate will do.
 EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
-                reports/h7_receipts reports/h7_data_gate reports/h5
+                reports/h7_receipts reports/h7_data_gate
+                reports/h7_data_gate_schwab reports/h7_forward_schwab reports/h5
                 reports/h6_forward reports/h8_forward reports/h10
                 reports/ritual reports/intraday_capture reports/live_probe
                 reports/cache_runs reports/schwab_chains

@@ -71,7 +71,8 @@ fi
 # (running stale code unattended is what this guard exists to prevent), and
 # anything unresolvable fails closed.
 EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
-                reports/h7_receipts reports/h7_data_gate reports/h5
+                reports/h7_receipts reports/h7_data_gate
+                reports/h7_data_gate_schwab reports/h7_forward_schwab reports/h5
                 reports/h6_forward reports/h8_forward reports/h10
                 reports/ritual reports/intraday_capture reports/live_probe
                 reports/cache_runs reports/schwab_chains

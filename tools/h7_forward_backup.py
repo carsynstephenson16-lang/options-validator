@@ -31,6 +31,7 @@ reflexive "append another fact" habit -- every refresh. The covered binding is
 already unverifiable forever, so nothing further is given up. Coverage never
 extends to a missing file: a vanished input is data loss, not drift, and fails.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -65,31 +66,37 @@ BACKUP_PATHS = tuple(Path(namespace) for namespace in DEFAULT_NAMESPACES) + (
     Path("data/chain_cache_manifest.txt"),
     Path("ledger/facts.log"),
     Path("reports/h7_data_gate"),
+    Path("reports/h7_data_gate_schwab"),
     Path("reports/h7_receipts"),
     Path("reports/h7_forward"),
     Path("reports/h7_forward_schwab"),
     Path("ledger/h7_forward_schwab"),
 )
 EXCLUDE_PATTERNS = (
-    ".env", ".env.*", "*.pem", "*.key", "credentials*", ".tmp/*",
-    "__pycache__/*", "*.pyc",
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "credentials*",
+    ".tmp/*",
+    "__pycache__/*",
+    "*.pyc",
 )
 
 
 def backup_paths(root: Path = REPO_ROOT) -> list[Path]:
     """Return only existing allow-listed paths, resolved under ``root``."""
     root = Path(root).resolve()
-    return [root / relative for relative in BACKUP_PATHS
-            if (root / relative).exists()]
+    return [root / relative for relative in BACKUP_PATHS if (root / relative).exists()]
 
 
 def _included_directory_files(path: Path, root: Path):
-    for child in sorted(candidate for candidate in path.rglob("*")
-                        if candidate.is_file()):
+    for child in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
         child_rel = child.relative_to(root).as_posix()
-        if any(fnmatch.fnmatch(child_rel, pattern)
-               or fnmatch.fnmatch(child.name, pattern)
-               for pattern in EXCLUDE_PATTERNS):
+        if any(
+            fnmatch.fnmatch(child_rel, pattern) or fnmatch.fnmatch(child.name, pattern)
+            for pattern in EXCLUDE_PATTERNS
+        ):
             continue
         yield child
 
@@ -105,12 +112,14 @@ def backup_inventory(root: Path = REPO_ROOT) -> dict[str, dict]:
             for child in _included_directory_files(path, root):
                 child_rel = child.relative_to(root).as_posix()
                 files[child_rel] = {
-                    "sha256": sha256_file(child), "size": child.stat().st_size,
+                    "sha256": sha256_file(child),
+                    "size": child.stat().st_size,
                 }
             inventory[relative] = {"kind": "directory", "files": files}
         else:
             inventory[relative] = {
-                "kind": "file", "sha256": sha256_file(path),
+                "kind": "file",
+                "sha256": sha256_file(path),
                 "size": path.stat().st_size,
             }
     return inventory
@@ -122,8 +131,7 @@ def backup_payload_size(root: Path = REPO_ROOT) -> int:
     total = 0
     for path in backup_paths(root):
         if path.is_dir():
-            total += sum(child.stat().st_size
-                         for child in _included_directory_files(path, root))
+            total += sum(child.stat().st_size for child in _included_directory_files(path, root))
         else:
             total += path.stat().st_size
     return total
@@ -141,17 +149,16 @@ def _format_bytes(total: int) -> str:
 def _require_restic_environment() -> None:
     if not os.environ.get("RESTIC_REPOSITORY"):
         raise RuntimeError("RESTIC_REPOSITORY is required")
-    if not (os.environ.get("RESTIC_PASSWORD_COMMAND") or
-            os.environ.get("RESTIC_PASSWORD_FILE")):
+    if not (os.environ.get("RESTIC_PASSWORD_COMMAND") or os.environ.get("RESTIC_PASSWORD_FILE")):
         raise RuntimeError(
             "set RESTIC_PASSWORD_COMMAND or RESTIC_PASSWORD_FILE; "
-            "passwords are never accepted as command arguments")
+            "passwords are never accepted as command arguments"
+        )
 
 
 def _run_restic(args: list[str], *, cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess:
     _require_restic_environment()
-    return subprocess.run(["restic", *args], cwd=cwd, text=True,
-                          capture_output=True, check=True)
+    return subprocess.run(["restic", *args], cwd=cwd, text=True, capture_output=True, check=True)
 
 
 def _snapshot_id(stdout: str) -> str:
@@ -169,8 +176,9 @@ def _snapshot_id(stdout: str) -> str:
     return found
 
 
-def run_backup(*, completed_session: str, root: Path = REPO_ROOT,
-               receipt_path: Path | None = None) -> Path:
+def run_backup(
+    *, completed_session: str, root: Path = REPO_ROOT, receipt_path: Path | None = None
+) -> Path:
     """Create an encrypted restic snapshot and an immutable backup receipt."""
     root = Path(root).resolve()
     paths = backup_paths(root)
@@ -182,10 +190,14 @@ def run_backup(*, completed_session: str, root: Path = REPO_ROOT,
         f"{payload_bytes:,} bytes ({_format_bytes(payload_bytes)})"
     )
     relative_paths = [str(path.relative_to(root)) for path in paths]
-    args = ["backup", "--json", "--tag", BACKUP_TAG,
-            *[item for pattern in EXCLUDE_PATTERNS
-              for item in ("--exclude", pattern)],
-            *relative_paths]
+    args = [
+        "backup",
+        "--json",
+        "--tag",
+        BACKUP_TAG,
+        *[item for pattern in EXCLUDE_PATTERNS for item in ("--exclude", pattern)],
+        *relative_paths,
+    ]
     result = _run_restic(args, cwd=root)
     snapshot = _snapshot_id(result.stdout)
     payload = {
@@ -199,9 +211,11 @@ def run_backup(*, completed_session: str, root: Path = REPO_ROOT,
         "encrypted_by_restic": True,
     }
     receipt = make_receipt("backup", payload)
-    path = (Path(receipt_path) if receipt_path else
-            root / "reports/h7_receipts/backup" /
-            f"{completed_session}.json")
+    path = (
+        Path(receipt_path)
+        if receipt_path
+        else root / "reports/h7_receipts/backup" / f"{completed_session}.json"
+    )
     write_immutable_receipt(receipt, path)
     return path
 
@@ -210,10 +224,18 @@ INVALIDATION_TOKEN = "H7_INPUT_BINDING_INVALIDATION"
 INVALIDATION_SCHEMA = "h7-input-binding-invalidation/v1"
 # Exact key set: a record missing a field, or carrying an unexpected one, is a
 # partial/garbled record and must cover nothing.
-INVALIDATION_KEYS = frozenset({
-    "schema", "receipt", "receipt_hash", "bindings", "observed",
-    "invalidated_by", "recorded_session", "provenance",
-})
+INVALIDATION_KEYS = frozenset(
+    {
+        "schema",
+        "receipt",
+        "receipt_hash",
+        "bindings",
+        "observed",
+        "invalidated_by",
+        "recorded_session",
+        "provenance",
+    }
+)
 _HEX = frozenset("0123456789abcdef")
 
 
@@ -228,8 +250,7 @@ def _is_nonempty_text(value: object) -> TypeGuard[str]:
 def _is_hash_map(value: object, *, allow_empty: bool) -> bool:
     if not isinstance(value, dict) or (not value and not allow_empty):
         return False
-    return all(_is_nonempty_text(label) and _is_sha256(digest)
-               for label, digest in value.items())
+    return all(_is_nonempty_text(label) and _is_sha256(digest) for label, digest in value.items())
 
 
 def parse_invalidation_fact(text: str) -> dict | None:
@@ -242,7 +263,7 @@ def parse_invalidation_fact(text: str) -> dict | None:
     """
     if not isinstance(text, str) or not text.startswith(f"{INVALIDATION_TOKEN} "):
         return None
-    receipt_path, separator, body = text[len(INVALIDATION_TOKEN) + 1:].partition(" ")
+    receipt_path, separator, body = text[len(INVALIDATION_TOKEN) + 1 :].partition(" ")
     if not separator:
         return None
     try:
@@ -254,9 +275,13 @@ def parse_invalidation_fact(text: str) -> dict | None:
     if payload["schema"] != INVALIDATION_SCHEMA:
         return None
     receipt = payload["receipt"]
-    if (not _is_nonempty_text(receipt) or receipt != receipt_path
-            or receipt.startswith("/") or "\\" in receipt
-            or ".." in Path(receipt).parts):
+    if (
+        not _is_nonempty_text(receipt)
+        or receipt != receipt_path
+        or receipt.startswith("/")
+        or "\\" in receipt
+        or ".." in Path(receipt).parts
+    ):
         return None
     if not _is_sha256(payload["receipt_hash"]):
         return None
@@ -264,8 +289,10 @@ def parse_invalidation_fact(text: str) -> dict | None:
         return None
     if not _is_hash_map(payload["observed"], allow_empty=True):
         return None
-    if not all(_is_nonempty_text(payload[key])
-               for key in ("invalidated_by", "recorded_session", "provenance")):
+    if not all(
+        _is_nonempty_text(payload[key])
+        for key in ("invalidated_by", "recorded_session", "provenance")
+    ):
         return None
     return payload
 
@@ -290,9 +317,15 @@ def load_invalidations(ledger_dir: Path) -> dict[tuple[str, str, str], dict]:
     return index
 
 
-def _covering_invalidation(*, receipt_relative: str, receipt: dict, label: str,
-                           stored: dict, actual: dict,
-                           index: dict[tuple[str, str, str], dict]) -> dict | None:
+def _covering_invalidation(
+    *,
+    receipt_relative: str,
+    receipt: dict,
+    label: str,
+    stored: dict,
+    actual: dict,
+    index: dict[tuple[str, str, str], dict],
+) -> dict | None:
     """Return the fact covering this exact mismatch, or ``None``.
 
     Covers only a CHANGED hash of a still-present file whose sealed hash the
@@ -328,8 +361,7 @@ def _rebase_record(record: dict, restored_root: Path) -> dict:
     return input_file_record(candidate)
 
 
-def verify_restored_tree(restored_root: Path, *,
-                         invalidations: dict | None = None) -> dict:
+def verify_restored_tree(restored_root: Path, *, invalidations: dict | None = None) -> dict:
     """Verify manifest bytes and every restored H7 receipt/data-gate input.
 
     ``invalidations`` defaults to the facts recorded INSIDE the restored tree:
@@ -337,8 +369,13 @@ def verify_restored_tree(restored_root: Path, *,
     supplied by whatever happens to be on the operator's disk today.
     """
     restored_root = Path(restored_root).resolve()
-    checks = {"manifest": "NOT_PRESENT", "receipts": 0, "data_gates": 0,
-              "problems": [], "notes": []}
+    checks = {
+        "manifest": "NOT_PRESENT",
+        "receipts": 0,
+        "data_gates": 0,
+        "problems": [],
+        "notes": [],
+    }
     if invalidations is None:
         invalidations = load_invalidations(restored_root / "ledger")
     manifest = restored_root / "data/chain_cache_manifest.txt"
@@ -346,8 +383,9 @@ def verify_restored_tree(restored_root: Path, *,
     if manifest.exists() and chains.exists():
         from tools.cache_manifest import verify_manifest
 
-        checks["manifest"] = "OK" if not (problems := verify_manifest(
-            str(chains), str(manifest))) else "BLOCK"
+        checks["manifest"] = (
+            "OK" if not (problems := verify_manifest(str(chains), str(manifest))) else "BLOCK"
+        )
         checks["problems"].extend(problems)
     elif manifest.exists() or chains.exists():
         checks["manifest"] = "BLOCK"
@@ -362,6 +400,9 @@ def verify_restored_tree(restored_root: Path, *,
     dg_root = restored_root / "reports/h7_data_gate"
     if dg_root.exists():
         receipt_paths += list(dg_root.glob("*/receipts/*.json"))
+    schwab_dg_root = restored_root / "reports/h7_data_gate_schwab"
+    if schwab_dg_root.exists():
+        receipt_paths += list(schwab_dg_root.glob("*/receipts/*.json"))
     for path in sorted(receipt_paths):
         try:
             receipt = load_receipt(path)
@@ -372,9 +413,11 @@ def verify_restored_tree(restored_root: Path, *,
         if receipt.get("receipt_type") != "data_gate":
             continue
         checks["data_gates"] += 1
-        if (receipt.get("scope") != scope_identity()
-                or receipt.get("whole_universe_verdict") != "GO"
-                or receipt.get("go_count") != len(scope_identity()["symbols"])):
+        if (
+            receipt.get("scope") != scope_identity()
+            or receipt.get("whole_universe_verdict") != "GO"
+            or receipt.get("go_count") != len(scope_identity()["symbols"])
+        ):
             checks["problems"].append(f"{path}: stale scope")
         try:
             receipt_relative = path.resolve().relative_to(restored_root).as_posix()
@@ -382,12 +425,18 @@ def verify_restored_tree(restored_root: Path, *,
             receipt_relative = ""
         for label, record in sorted(receipt.get("input_files", {}).items()):
             actual = _rebase_record(record, restored_root)
-            if (actual.get("exists") == record.get("exists")
-                    and actual.get("sha256") == record.get("sha256")):
+            if actual.get("exists") == record.get("exists") and actual.get("sha256") == record.get(
+                "sha256"
+            ):
                 continue
             covering = _covering_invalidation(
-                receipt_relative=receipt_relative, receipt=receipt, label=label,
-                stored=record, actual=actual, index=invalidations)
+                receipt_relative=receipt_relative,
+                receipt=receipt,
+                label=label,
+                stored=record,
+                actual=actual,
+                index=invalidations,
+            )
             if covering is None:
                 checks["problems"].append(f"{path}: changed input {label}")
                 continue
@@ -396,7 +445,8 @@ def verify_restored_tree(restored_root: Path, *,
                 f"{INVALIDATION_TOKEN} fact id={invalidation_fact_id(covering)} "
                 f"recorded_session={covering['recorded_session']} "
                 f"invalidated_by={covering['invalidated_by']} "
-                f"provenance={covering['provenance']} (ledger/facts.log)")
+                f"provenance={covering['provenance']} (ledger/facts.log)"
+            )
             # Coverage deliberately does not require the replacement bytes (see
             # the module docstring's limits), but silence about a SECOND change
             # would hide real drift for free. Say it out loud instead.
@@ -405,27 +455,27 @@ def verify_restored_tree(restored_root: Path, *,
                 note += (
                     " -- WARNING: this input has changed AGAIN since the "
                     f"invalidation was recorded (recorded observed="
-                    f"{recorded_observed[:12]}, now={str(actual.get('sha256'))[:12]})")
+                    f"{recorded_observed[:12]}, now={str(actual.get('sha256'))[:12]})"
+                )
             checks["notes"].append(note)
     checks["ok"] = not checks["problems"] and checks["data_gates"] > 0
     return checks
 
 
-def run_restore_check(*, backup_receipt_path: Path,
-                      completed_session: str,
-                      snapshot: str | None = None,
-                      root: Path = REPO_ROOT,
-                      receipt_path: Path | None = None) -> Path:
+def run_restore_check(
+    *,
+    backup_receipt_path: Path,
+    completed_session: str,
+    snapshot: str | None = None,
+    root: Path = REPO_ROOT,
+    receipt_path: Path | None = None,
+) -> Path:
     """Restore the receipt-bound snapshot and prove an exact inventory match."""
     root = Path(root).resolve()
-    backup_receipt = load_receipt(
-        Path(backup_receipt_path), expected_type="backup"
-    )
+    backup_receipt = load_receipt(Path(backup_receipt_path), expected_type="backup")
     receipt_session = backup_receipt.get("completed_session")
     if receipt_session != completed_session:
-        raise RuntimeError(
-            "backup receipt completed session does not match restore request"
-        )
+        raise RuntimeError("backup receipt completed session does not match restore request")
     if backup_receipt.get("scope") != scope_identity():
         raise RuntimeError("backup receipt scope does not match current H7 scope")
     receipt_snapshot = backup_receipt.get("snapshot_id")
@@ -442,39 +492,49 @@ def run_restore_check(*, backup_receipt_path: Path,
         raise RuntimeError("backup receipt carries no input inventory")
 
     with tempfile.TemporaryDirectory(prefix="h7-restic-restore-") as temp:
-        _run_restic(["restore", receipt_snapshot, "--target", temp,
-                     "--tag", BACKUP_TAG], cwd=root)
+        _run_restic(["restore", receipt_snapshot, "--target", temp, "--tag", BACKUP_TAG], cwd=root)
         restored_root = Path(temp)
         restored_inventory = backup_inventory(restored_root)
         if restored_inventory != expected_inventory:
-            raise RuntimeError(
-                "restored H7 inventory does not exactly match backup receipt"
-            )
+            raise RuntimeError("restored H7 inventory does not exactly match backup receipt")
         verification = verify_restored_tree(restored_root)
         if not verification["ok"]:
             raise RuntimeError(f"restored H7 state failed verification: {verification}")
         for note in verification.get("notes", ()):
             print(f"PASS-WITH-NOTE {note}")
-    receipt = make_receipt("backup_restore", {
-        "completed_session": completed_session,
-        "verified_at_utc": datetime.now(timezone.utc).isoformat(),
-        "snapshot": receipt_snapshot,
-        "snapshot_id": receipt_snapshot,
-        "backup_receipt_hash": backup_receipt["receipt_hash"],
-        "scope": scope_identity(),
-        "restored_inventory": restored_inventory,
-        "verification": verification,
-    })
-    path = (Path(receipt_path) if receipt_path else
-            root / "reports/h7_receipts/backup_restore" /
-            f"{datetime.now(timezone.utc).date().isoformat()}.json")
+    receipt = make_receipt(
+        "backup_restore",
+        {
+            "completed_session": completed_session,
+            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+            "snapshot": receipt_snapshot,
+            "snapshot_id": receipt_snapshot,
+            "backup_receipt_hash": backup_receipt["receipt_hash"],
+            "scope": scope_identity(),
+            "restored_inventory": restored_inventory,
+            "verification": verification,
+        },
+    )
+    path = (
+        Path(receipt_path)
+        if receipt_path
+        else root
+        / "reports/h7_receipts/backup_restore"
+        / f"{datetime.now(timezone.utc).date().isoformat()}.json"
+    )
     write_immutable_receipt(receipt, path)
     return path
 
 
-def build_invalidation_fact(*, receipt_path: Path, label_prefix: str,
-                            invalidated_by: str, recorded_session: str,
-                            provenance: str, root: Path = REPO_ROOT) -> str | None:
+def build_invalidation_fact(
+    *,
+    receipt_path: Path,
+    label_prefix: str,
+    invalidated_by: str,
+    recorded_session: str,
+    provenance: str,
+    root: Path = REPO_ROOT,
+) -> str | None:
     """Build the fact line for one sealed receipt, or ``None`` if it is intact.
 
     Only labels that are ACTUALLY mismatched right now are recorded: a fact
@@ -492,8 +552,11 @@ def build_invalidation_fact(*, receipt_path: Path, label_prefix: str,
             continue
         sealed = record.get("sha256")
         current = input_file_record(root / record["path"])
-        if (not _is_sha256(sealed) or current.get("exists") is not True
-                or current.get("sha256") == sealed):
+        if (
+            not _is_sha256(sealed)
+            or current.get("exists") is not True
+            or current.get("sha256") == sealed
+        ):
             continue
         bindings[label] = sealed
         observed[label] = current["sha256"]
@@ -512,26 +575,36 @@ def build_invalidation_fact(*, receipt_path: Path, label_prefix: str,
     return f"{INVALIDATION_TOKEN} {relative} {canonical_json(payload)}"
 
 
-def record_invalidations(*, receipt_paths: list[Path], label_prefix: str,
-                         invalidated_by: str, recorded_session: str,
-                         provenance: str, root: Path = REPO_ROOT,
-                         ledger_dir: Path | None = None,
-                         dry_run: bool = False) -> list[str]:
+def record_invalidations(
+    *,
+    receipt_paths: list[Path],
+    label_prefix: str,
+    invalidated_by: str,
+    recorded_session: str,
+    provenance: str,
+    root: Path = REPO_ROOT,
+    ledger_dir: Path | None = None,
+    dry_run: bool = False,
+) -> list[str]:
     """Append one typed invalidation fact per sealed receipt (append-only)."""
     root = Path(root).resolve()
     ledger_dir = Path(ledger_dir) if ledger_dir else root / "ledger"
     lines = []
     for receipt_path in receipt_paths:
         text = build_invalidation_fact(
-            receipt_path=receipt_path, label_prefix=label_prefix,
-            invalidated_by=invalidated_by, recorded_session=recorded_session,
-            provenance=provenance, root=root)
+            receipt_path=receipt_path,
+            label_prefix=label_prefix,
+            invalidated_by=invalidated_by,
+            recorded_session=recorded_session,
+            provenance=provenance,
+            root=root,
+        )
         if text is None:
             continue
         if parse_invalidation_fact(text) is None:  # never write what cannot be read
             raise RuntimeError(f"refusing to record unparseable fact for {receipt_path}")
         if not dry_run:
-            prefix = text[:text.index("{")]
+            prefix = text[: text.index("{")]
             append_fact(text, str(ledger_dir), dedupe_prefix=prefix)
         lines.append(text)
     return lines
@@ -540,10 +613,12 @@ def record_invalidations(*, receipt_paths: list[Path], label_prefix: str,
 def backup_receipt_is_fresh(path: Path, *, completed_session: str) -> bool:
     """Activation freshness rule: backup must cover the current completed session."""
     receipt = load_receipt(path, expected_type="backup_restore")
-    return (receipt.get("scope") == scope_identity()
-            and receipt.get("verification", {}).get("ok") is True
-            and receipt.get("verified_at_utc") is not None
-            and receipt.get("completed_session") == completed_session)
+    return (
+        receipt.get("scope") == scope_identity()
+        and receipt.get("verification", {}).get("ok") is True
+        and receipt.get("verified_at_utc") is not None
+        and receipt.get("completed_session") == completed_session
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -558,40 +633,60 @@ def main(argv: list[str] | None = None) -> int:
     restore.add_argument("--completed-session", required=True)
     restore.add_argument("--receipt", type=Path)
     record = sub.add_parser(
-        "record-invalidation",
-        help="append a typed input-binding invalidation fact (disposition B)")
-    record.add_argument("--receipt", dest="receipts", type=Path, action="append",
-                        required=True, help="sealed receipt (repeatable)")
+        "record-invalidation", help="append a typed input-binding invalidation fact (disposition B)"
+    )
+    record.add_argument(
+        "--receipt",
+        dest="receipts",
+        type=Path,
+        action="append",
+        required=True,
+        help="sealed receipt (repeatable)",
+    )
     record.add_argument("--label-prefix", default="close:")
     record.add_argument("--invalidated-by", required=True)
     record.add_argument("--recorded-session", required=True)
     record.add_argument("--provenance", required=True)
-    record.add_argument("--root", type=Path, default=REPO_ROOT,
-                        help="tree the receipts' input paths are resolved against")
-    record.add_argument("--ledger-dir", type=Path,
-                        help="ledger directory to append to (default <root>/ledger)")
+    record.add_argument(
+        "--root",
+        type=Path,
+        default=REPO_ROOT,
+        help="tree the receipts' input paths are resolved against",
+    )
+    record.add_argument(
+        "--ledger-dir", type=Path, help="ledger directory to append to (default <root>/ledger)"
+    )
     record.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.command == "record-invalidation":
             lines = record_invalidations(
-                receipt_paths=args.receipts, label_prefix=args.label_prefix,
+                receipt_paths=args.receipts,
+                label_prefix=args.label_prefix,
                 invalidated_by=args.invalidated_by,
                 recorded_session=args.recorded_session,
-                provenance=args.provenance, root=args.root,
-                ledger_dir=args.ledger_dir, dry_run=args.dry_run)
+                provenance=args.provenance,
+                root=args.root,
+                ledger_dir=args.ledger_dir,
+                dry_run=args.dry_run,
+            )
             for line in lines:
                 print(line)
-            print(f"{'would record' if args.dry_run else 'recorded'} "
-                  f"{len(lines)} invalidation fact(s)")
+            print(
+                f"{'would record' if args.dry_run else 'recorded'} "
+                f"{len(lines)} invalidation fact(s)"
+            )
             return 0
-        path = (run_backup(completed_session=args.completed_session,
-                           receipt_path=args.receipt)
-                if args.command == "backup" else
-                run_restore_check(backup_receipt_path=args.backup_receipt,
-                                  snapshot=args.snapshot,
-                                  completed_session=args.completed_session,
-                                  receipt_path=args.receipt))
+        path = (
+            run_backup(completed_session=args.completed_session, receipt_path=args.receipt)
+            if args.command == "backup"
+            else run_restore_check(
+                backup_receipt_path=args.backup_receipt,
+                snapshot=args.snapshot,
+                completed_session=args.completed_session,
+                receipt_path=args.receipt,
+            )
+        )
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"H7 BACKUP ERROR -- {type(exc).__name__}: {exc}")
         return 2

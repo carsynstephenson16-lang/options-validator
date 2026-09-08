@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -80,9 +81,7 @@ class SchwabChainCaptureTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def _capture(self, client, *, universe=("AAA", "BBB"), now_ny=PRECLOSE):
-        with mock.patch.object(
-            capture, "FACTS_DIR", self.root / "ledger", create=True
-        ):
+        with mock.patch.object(capture, "FACTS_DIR", self.root / "ledger", create=True):
             return capture.capture(
                 client=client,
                 now_ny=now_ny,
@@ -95,9 +94,7 @@ class SchwabChainCaptureTests(unittest.TestCase):
     def test_force_refuses_before_fetching_or_writing_anything(self):
         client = FakeClient()
 
-        with mock.patch.object(
-            capture, "FACTS_DIR", self.root / "ledger", create=True
-        ):
+        with mock.patch.object(capture, "FACTS_DIR", self.root / "ledger", create=True):
             exit_code, receipt = capture.capture(
                 client=client,
                 now_ny=PRECLOSE,
@@ -120,9 +117,7 @@ class SchwabChainCaptureTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(receipt["overall_status"], "ok")
         self.assertEqual(receipt["session"], "2026-08-10")
-        self.assertEqual(
-            receipt["session_chain_convention"], "preclose_snapshot_v1"
-        )
+        self.assertEqual(receipt["session_chain_convention"], "preclose_snapshot_v1")
         self.assertEqual(receipt["universe"], ["AAA", "BBB"])
         self.assertTrue((self.reports_dir / "2026-08-10" / "manifest.json").is_file())
         self.assertTrue((self.reports_dir / "2026-08-10" / "preclose.json").is_file())
@@ -146,9 +141,7 @@ class SchwabChainCaptureTests(unittest.TestCase):
             "trade_timestamp",
         ]
         for symbol in ("AAA", "BBB"):
-            frame = pd.read_parquet(
-                self.chain_dir / f"{symbol}_2026-08-10.parquet"
-            )
+            frame = pd.read_parquet(self.chain_dir / f"{symbol}_2026-08-10.parquet")
             self.assertEqual(list(frame.columns), expected_columns)
             self.assertEqual(frame["expiration"].nunique(), 2)
             self.assertEqual(set(frame["right"]), {"C", "P"})
@@ -229,18 +222,55 @@ class SchwabChainCaptureTests(unittest.TestCase):
         self.assertIsNone(receipt)
         self.assertFalse(self.reports_dir.exists())
 
+    def _assert_holiday_refuses_before_default_client_construction(self, now_ny, expected_session):
+        client = FakeClient()
+        default_client = mock.Mock(return_value=client)
+        stdout = io.StringIO()
+
+        with (
+            mock.patch.object(capture, "_default_client", default_client),
+            mock.patch.object(capture, "append_fact") as append_fact,
+            mock.patch("sys.stdout", stdout),
+        ):
+            exit_code, receipt = capture.capture(
+                client=None,
+                now_ny=now_ny,
+                universe=["AAA"],
+                chain_dir=self.chain_dir,
+                reports_dir=self.reports_dir,
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIsNone(receipt)
+        self.assertEqual(
+            stdout.getvalue(),
+            f"schwab_chain_capture refused: NOT_A_TRADING_SESSION {expected_session}\n",
+        )
+        append_fact.assert_not_called()
+        default_client.assert_not_called()
+        self.assertEqual(client.calls, [])
+        self.assertFalse(self.chain_dir.exists())
+        self.assertFalse(self.reports_dir.exists())
+        self.assertFalse((self.root / "ledger").exists())
+
+    def test_good_friday_refuses_before_default_client_or_any_write(self):
+        good_friday = pd.Timestamp("2026-04-03T15:45:00", tz=NY).to_pydatetime()
+
+        self._assert_holiday_refuses_before_default_client_construction(good_friday, "2026-04-03")
+
+    def test_labor_day_refuses_before_default_client_or_any_write(self):
+        labor_day = pd.Timestamp("2026-09-07T15:45:00", tz=NY).to_pydatetime()
+
+        self._assert_holiday_refuses_before_default_client_construction(labor_day, "2026-09-07")
+
     def test_changed_retry_refuses_existing_file_and_receipt(self):
         first_code, _ = self._capture(FakeClient(bid=1.0), universe=("AAA",))
-        second_code, second_receipt = self._capture(
-            FakeClient(bid=1.1), universe=("AAA",)
-        )
+        second_code, second_receipt = self._capture(FakeClient(bid=1.1), universe=("AAA",))
 
         self.assertEqual(first_code, 0)
         self.assertEqual(second_code, 2)
         self.assertEqual(second_receipt["overall_status"], "failed")
-        stored = json.loads(
-            (self.reports_dir / "2026-08-10" / "preclose.json").read_text()
-        )
+        stored = json.loads((self.reports_dir / "2026-08-10" / "preclose.json").read_text())
         self.assertEqual(stored["overall_status"], "ok")
 
     def test_expired_refresh_token_propagates_to_cli_boundary(self):
@@ -276,6 +306,100 @@ class SchwabChainCaptureTests(unittest.TestCase):
             "expired or revoked; run uv run python tools/setup_schwab.py\n",
         )
 
+    def test_wrapper_refuses_labor_day_before_auth_or_capture(self):
+        self._assert_wrapper_calendar_refusal(False)
+
+    def test_wrapper_calendar_error_is_not_labelled_a_holiday(self):
+        self._assert_wrapper_calendar_refusal(True)
+
+    def _assert_wrapper_calendar_refusal(self, crash):
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required for wrapper behavior coverage")
+        real_uv = shutil.which("uv")
+        if real_uv is None:
+            self.skipTest("uv is required for the real calendar check")
+
+        repo = self.root / "repo"
+        tools_dir = repo / "tools"
+        tools_dir.mkdir(parents=True)
+        wrapper = tools_dir / "schwab_chain_capture.sh"
+        wrapper.write_text(
+            (Path(__file__).resolve().parents[1] / "tools" / "schwab_chain_capture.sh").read_text()
+        )
+        wrapper.chmod(0o755)
+
+        home = self.root / "home"
+        bin_dir = home / ".local" / "bin"
+        bin_dir.mkdir(parents=True)
+        calls = self.root / "uv-calls.log"
+        fake_uv = bin_dir / "uv"
+        fake_uv.write_text(
+            "#!/bin/sh\n"
+            f"printf '%s\\n' \"$*\" >> {calls}\n"
+            'case " $* " in\n'
+            '  *" python -c "*)\n'
+            + ("    exit 72\n" if crash else "")
+            + f"    cd {Path(__file__).resolve().parents[1]} || exit 98\n"
+            f'    exec {real_uv} "$@"\n'
+            "    ;;\n"
+            "  *) exit 97 ;;\n"
+            "esac\n"
+        )
+        fake_uv.chmod(0o755)
+
+        fake_git = bin_dir / "git"
+        fake_git.write_text(
+            "#!/bin/sh\n"
+            'case " $* " in\n'
+            '  *" branch --show-current "*) echo main ;;\n'
+            '  *" rev-parse HEAD "*) echo 0123456789abcdef ;;\n'
+            '  *" fetch -q origin main "*) exit 0 ;;\n'
+            '  *" rev-parse origin/main "*) echo 0123456789abcdef ;;\n'
+            '  *) echo "unexpected git invocation: $*" >&2; exit 96 ;;\n'
+            "esac\n"
+        )
+        fake_git.chmod(0o755)
+
+        fake_date = bin_dir / "date"
+        fake_date.write_text(
+            "#!/bin/sh\n"
+            'case "$1" in\n'
+            "  +%Y-%m-%d_%H%M) echo 2026-09-07_1545 ;;\n"
+            "  +%Y-%m-%d) echo 2026-09-07 ;;\n"
+            '  *) echo "unexpected date invocation: $*" >&2; exit 95 ;;\n'
+            "esac\n"
+        )
+        fake_date.chmod(0o755)
+
+        env = dict(os.environ)
+        env["HOME"] = str(home)
+        completed = subprocess.run(
+            [zsh, str(wrapper)],
+            cwd=repo,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        log = (repo / ".tmp" / "schwab_chain_capture" / "2026-09-07_1545.log").read_text()
+        self.assertIn(
+            (
+                "schwab_chain_capture refused: CALENDAR_UNAVAILABLE 2026-09-07"
+                if crash
+                else "schwab_chain_capture refused: NOT_A_TRADING_SESSION 2026-09-07"
+            ),
+            log,
+        )
+        uv_calls = calls.read_text().splitlines()
+        self.assertEqual(len(uv_calls), 1)
+        self.assertIn("python -c", uv_calls[0])
+        self.assertNotIn("schwab_token_age", uv_calls[0])
+        self.assertNotIn("schwab_chain_capture", uv_calls[0])
+
 
 class InvocationSourceTests(unittest.TestCase):
     """rev-2.1 item 3a — unattended-vs-manual capture provenance.
@@ -295,9 +419,7 @@ class InvocationSourceTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def _capture(self, client, *, universe=("AAA",)):
-        with mock.patch.object(
-            capture, "FACTS_DIR", self.root / "ledger", create=True
-        ):
+        with mock.patch.object(capture, "FACTS_DIR", self.root / "ledger", create=True):
             return capture.capture(
                 client=client,
                 now_ny=PRECLOSE,
@@ -319,9 +441,7 @@ class InvocationSourceTests(unittest.TestCase):
         # runtime on the capture path. A marker arriving that way must degrade
         # to "manual" -- only the process-start environment counts.
         with mock.patch.object(capture, "_INVOCATION_MARKER_AT_IMPORT", None):
-            with mock.patch.dict(
-                os.environ, {capture.INVOCATION_SOURCE_ENV: "launchd"}
-            ):
+            with mock.patch.dict(os.environ, {capture.INVOCATION_SOURCE_ENV: "launchd"}):
                 self.assertEqual(capture.resolve_invocation_source(), "manual")
 
     def test_dotenv_file_cannot_forge_unattended_provenance(self):
@@ -338,9 +458,7 @@ class InvocationSourceTests(unittest.TestCase):
             "print(m.resolve_invocation_source())"
         )
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / ".env").write_text(
-                f"{capture.INVOCATION_SOURCE_ENV}=launchd\n"
-            )
+            (Path(tmp) / ".env").write_text(f"{capture.INVOCATION_SOURCE_ENV}=launchd\n")
             env = dict(os.environ)
             env.pop(capture.INVOCATION_SOURCE_ENV, None)
             env["PYTHONPATH"] = str(repo_root)
@@ -381,9 +499,7 @@ class InvocationSourceTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(receipt["invocation_source"], "launchd")
-        stored = json.loads(
-            (self.reports_dir / "2026-08-10" / "preclose.json").read_text()
-        )
+        stored = json.loads((self.reports_dir / "2026-08-10" / "preclose.json").read_text())
         self.assertEqual(stored["invocation_source"], "launchd")
 
     def test_receipt_records_manual_when_the_marker_is_absent(self):
@@ -429,9 +545,7 @@ class InvocationSourceTests(unittest.TestCase):
         receipt_path = self.reports_dir / "2026-08-10" / "preclose.json"
         stored = json.loads(receipt_path.read_text())
         del stored["invocation_source"]
-        receipt_path.write_text(
-            json.dumps(stored, indent=2, sort_keys=True) + "\n"
-        )
+        receipt_path.write_text(json.dumps(stored, indent=2, sort_keys=True) + "\n")
 
         result = verify_session(
             "2026-08-10",

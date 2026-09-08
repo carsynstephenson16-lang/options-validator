@@ -153,3 +153,87 @@ source; these are the numbered operator steps.
    > `launchctl bootstrap`), stays this documented manual step (**D-6b**), or
    > the risk is explicitly accepted and written down (**D-6c**) is **owner
    > decision D-6 — PENDING**. This section is the D-6b minimum in the interim.
+
+## Activation day (Schwab)
+
+Run `tools/h7_activation_day.sh` in `~/options-validator-ops` on the intended
+activation day, after that morning's ritual and before the next refresh.
+The script produces and commits the qualifying receipt chain and prints the
+manual activation command. It never activates H7, pushes Git, synchronizes a
+checkout, or appends ledger or earnings rows.
+
+The D−1 package must be for the last completed XNYS session strictly before
+today: both `reports/schwab_chains/<session>/manifest.json` and `preclose.json`
+must exist before any output. The chain cache itself is flat at
+`.cache/schwab_chains/`. For example, 2026-09-08 requires the 2026-09-04
+package. The 2026-09-07 holiday package remains unchanged and inert for H7:
+`evaluation_session()` never selects it. The capture calendar refusal prevents
+new holiday packages before authentication.
+
+The script resolves its checkout from its own path. An explicitly approved
+alternate checkout requires `--allow-checkout <exact-path>`. Preconditions are
+`main`, a bounded fetch, alignment with `origin/main` or the capture wrapper's
+unchanged evidence-only-ahead rule, the full Git status including untracked
+files, the D−1 package, a usable token, Restic configuration, and a readable
+feasibility receipt if one exists. Reuse compares both `source_hash` and
+`config_hash`; a different `code_sha` alone does not trigger regeneration.
+
+Set `RESTIC_REPOSITORY` and either `RESTIC_PASSWORD_FILE` or
+`RESTIC_PASSWORD_COMMAND` in the environment or `.env`. Only those Restic
+values are imported as inert strings. Other `.env` lines are never sourced or
+printed. Restic itself may execute its configured password command.
+
+A dirty tree normally refuses. The explicit `--stage-routine-evidence` flag
+permits a prerequisite `data(ritual)` commit of only the intersection of the
+ritual's `DATA_TIER_PATHS` and the capture wrappers' `EVIDENCE_ALLOW`.
+`reports/pick_tracker`, `reports/closes_receipts`, code, and any other dirty
+path outside that intersection still refuse, including pre-staged changes.
+The final evidence commit contains the source receipt, Schwab artifact and
+receipt, backup and restore receipts, new feasibility receipt if needed, and
+the index at `reports/h7_forward_schwab/<date>-activation-day-receipts.json`.
+The index is written before the commit. Success leaves `git status --porcelain`
+empty. A requested routine-prerequisite commit is separate from that final
+commit.
+
+Source-health CLI exit status is ignored; every included name must be
+explicitly healthy in its receipt. An unhealthy included name stops before
+the data gate and prints `tools/h7_refresh_earnings.py --help`. Its immutable
+receipt stays uncommitted by default; invoke with `--commit-partial` only when
+the owner wants partial evidence committed. Review any failed run's remaining
+dirty evidence before retrying. Immutable conflicts are not overwritten.
+
+The new producer writes under `reports/h7_data_gate_schwab/<scope>/`. D-5's
+default is exit 0 for included-cohort GO, while printing the whole-universe
+verdict too. Exit 1 is included NO_GO; exit 2 refuses invalid invocation,
+package, source link, or conflicting output before publication. Mode A quote
+age remains non-blocking. Mode B over-threshold evidence exits 3 with an
+unchanged receipt, and the runbook prints the warning and continues: that
+arming obligation is not a registration input. Quote-age-only invalid evidence
+is printed with its reason; it is not labelled an over-threshold exit 3 and
+does not add a registration gate.
+
+Backup runs after the receipts exist, followed by a restore check for the
+same completed session. The unchanged restore verifier requires whole-universe
+GO for every data-gate receipt it scans. Thus included-only producer GO can
+still fail restore verification when excluded names are NO_GO. The runbook
+reports that refusal and stops; no acceptance logic is relaxed.
+
+The script never pushes. It prints `git -C <repo> push origin main` for owner
+realignment. If left unpushed, the next morning's ritual Step 8 attempts to push
+the evidence commit. Same-day capture compatibility depends on all three
+matching evidence allow-lists.
+
+Success creates `.tmp/h7_activation_day/<date>-evidence.template.json` and
+prints the manual activation command with owner placeholders. Complete every
+`<OWNER TYPES>` field before use. Compare the reviewed specification with the
+printed `shasum -a 256` command and type its hash yourself. The activation CLI
+overwrites source/data fields from validated receipt arguments, as the template
+notes. Its `code_commit` is HEAD after the evidence commit: if you commit
+anything before activating, recompute it with `git rev-parse HEAD`. The ignored
+`.tmp/h7_activation_day/<date>_<HHMM>.log` retains the run output.
+
+Owner item D-6 remains open: `h7_watch.py` cannot bind Schwab evidence, while
+`ritual_receipt.py` and `h7_entry_preflight.py` still use the legacy data-gate
+namespace. The watcher is omitted here. Its future change affects feasibility
+source closure and needs a separate brief and receipt regeneration. This
+procedure does not establish post-activation operational readiness.
