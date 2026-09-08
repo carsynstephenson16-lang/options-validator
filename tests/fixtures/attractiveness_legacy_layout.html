@@ -1,0 +1,683 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Options Attractiveness</title><style>
+  :root {
+    color-scheme: light;
+    --canvas: #f3f6f4;
+    --surface: #ffffff;
+    --surface-soft: #f7f9f8;
+    --ink: #17251f;
+    --muted: #53665c;
+    --line: #d9e3dd;
+    --line-strong: #c3d1c9;
+    --brand: #173f32;
+    --good: #116b45;
+    --good-bg: #e8f5ee;
+    --good-line: #a8d8bd;
+    --watch: #8a5700;
+    --watch-bg: #fff2cc;
+    --watch-line: #e8c66d;
+    --bad: #a42335;
+    --bad-bg: #fdecef;
+    --bad-line: #e7aeb7;
+    --unknown: #4f5d56;
+    --unknown-bg: #edf1ef;
+    --unknown-line: #cbd4cf;
+    --info: #235d7d;
+    --info-bg: #e8f3f8;
+    --shadow: 0 8px 24px rgba(23, 63, 50, 0.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, p { margin-top: 0; }
+  h1 {
+    font-size: clamp(1.65rem, 3vw, 2.45rem);
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: 1.2rem;
+    letter-spacing: -0.015em;
+    margin-bottom: 8px;
+  }
+  h3 {
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  a { color: #155f83; text-underline-offset: 2px; }
+  .app-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .app-header-inner {
+    align-items: flex-end;
+    display: flex;
+    gap: 24px;
+    justify-content: space-between;
+    margin: 0 auto;
+    max-width: 1480px;
+    padding: 28px 32px 24px;
+  }
+  .eyebrow {
+    color: var(--good);
+    font-size: 0.73rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    margin-bottom: 7px;
+    text-transform: uppercase;
+  }
+  .header-sub {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .meta-chip {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+  .meta-chip strong { color: var(--ink); }
+  .page-body {
+    margin: 0 auto;
+    max-width: 1480px;
+    padding: 24px 32px 40px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+    padding: 20px;
+  }
+  .party-name {
+    font-size: 1rem;
+    font-weight: 750;
+    line-height: 1.38;
+    margin-bottom: 10px;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    text-align: left;
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.82rem;
+  }
+  th {
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  tr:last-child td { border-bottom: 0; }
+  .party-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 12px;
+  }
+  .status-badge, .policy-status {
+    align-items: center;
+    border: 1px solid;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 800;
+    gap: 4px;
+    letter-spacing: 0.035em;
+    line-height: 1;
+    padding: 5px 8px;
+    text-transform: uppercase;
+  }
+  .status-badge.good, .policy-status.good {
+    background: var(--good-bg); border-color: var(--good-line); color: var(--good);
+  }
+  .status-badge.watch, .policy-status.watch {
+    background: var(--watch-bg); border-color: var(--watch-line); color: var(--watch);
+  }
+  .status-badge.bad, .policy-status.bad {
+    background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad);
+  }
+  .status-badge.unknown, .policy-status.unknown {
+    background: var(--unknown-bg); border-color: var(--unknown-line); color: var(--unknown);
+  }
+  .empty {
+    color: var(--muted);
+    font-style: italic;
+  }
+  .label {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: 12px;
+  }
+  .card-grid .panel {
+    border-radius: 12px;
+    box-shadow: none;
+    margin-bottom: 0;
+    padding: 16px;
+  }
+  .hero {
+    border-color: var(--line-strong);
+    padding: 24px;
+  }
+  .qm-comparison {
+    background: var(--surface-soft);
+    border-color: var(--line);
+    padding: 18px;
+  }
+  .qm-comparison .hero-card {
+    background: var(--surface);
+    box-shadow: none;
+  }
+  .section-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .section-header p { margin-bottom: 0; }
+  .hero-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .hero-stat {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    min-width: 84px;
+    padding: 7px 10px;
+    text-align: center;
+  }
+  .hero-stat strong {
+    display: block;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-stat span {
+    color: var(--muted);
+    font-size: 0.65rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .hero-stat.good strong { color: var(--good); }
+  .hero-stat.watch strong { color: var(--watch); }
+  .hero-stat.unknown strong { color: var(--unknown); }
+  .hero-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 1fr;
+  }
+  .hero-card, .pinned-card {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    min-width: 0;
+    padding: 17px;
+  }
+  .hero-card.good, .pinned-card.good { border-top: 4px solid var(--good); }
+  .hero-card.watch, .pinned-card.watch { border-top: 4px solid var(--watch); }
+  .hero-card.bad { border-top: 4px solid var(--bad); }
+  .hero-card.unknown { border-top: 4px solid var(--unknown); }
+  .slot-label {
+    align-items: center;
+    color: var(--muted);
+    display: flex;
+    font-size: 0.67rem;
+    font-weight: 800;
+    justify-content: space-between;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  .hero-card.empty-slot {
+    background: var(--unknown-bg);
+    border-style: dashed;
+  }
+  .empty-slot h3 {
+    color: var(--ink);
+    font-size: 1rem;
+    letter-spacing: 0;
+    margin: 0 0 8px;
+    text-transform: none;
+  }
+  .gate-list {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 12px 0 0;
+    padding-left: 18px;
+  }
+  .gate-list li + li { margin-top: 7px; }
+  .notice {
+    border: 1px solid;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin: 10px 0;
+    padding: 9px 11px;
+  }
+  .notice.watch {
+    background: var(--watch-bg); border-color: var(--watch-line); color: var(--watch);
+  }
+  .notice.bad {
+    background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad);
+  }
+  .notice.info {
+    background: var(--info-bg); border-color: #b9d7e6; color: var(--info);
+  }
+  .risk-block {
+    border-top: 1px solid var(--line);
+    margin: 12px 0;
+    padding-top: 10px;
+  }
+  .risk-metrics {
+    color: var(--muted);
+    font-size: 0.76rem;
+    margin-bottom: 7px;
+  }
+  .policy-line {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .policy-detail {
+    color: var(--muted);
+    flex: 1 1 180px;
+    font-size: 0.75rem;
+  }
+  .prov {
+    display: inline-block;
+    background: var(--unknown-bg);
+    color: var(--unknown);
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 0.65rem;
+    margin-left: 6px;
+  }
+  .tech-line {
+    background: var(--info-bg);
+    border-radius: 8px;
+    color: var(--info);
+    font-size: 0.78rem;
+    margin: 7px 0 12px;
+    padding: 8px 10px;
+  }
+  .narr {
+    margin: 7px 0;
+    font-size: 0.84rem;
+  }
+  .narr-k {
+    color: var(--brand);
+    font-weight: bold;
+    margin-right: 6px;
+  }
+  .qm-context {
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+    padding-top: 3px;
+  }
+  .qm-row {
+    border-bottom: 1px solid var(--line);
+    font-size: 0.8rem;
+    padding: 8px 0;
+  }
+  .qm-row:last-of-type { border-bottom: 0; }
+  .pnl-positive { color: var(--good); font-weight: 750; }
+  .pnl-negative { color: var(--bad); font-weight: 750; }
+  .pnl-flat { color: var(--unknown); font-weight: 750; }
+  .market-panel { padding: 20px 22px; }
+  .market-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 14px 0 10px;
+  }
+  .market-card {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .market-card h3 { margin-bottom: 6px; }
+  .market-card p { color: var(--muted); font-size: 0.8rem; margin: 0; }
+  .market-summary { font-size: 0.94rem; margin-bottom: 4px; }
+  .regime-label {
+    color: var(--info);
+    font-size: 0.75rem;
+    font-weight: 750;
+    text-transform: uppercase;
+  }
+  .sticky-nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line-strong);
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .nav-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0 auto;
+    max-width: 1480px;
+    padding: 8px 32px;
+  }
+  .nav-group {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .nav-label {
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .nav-inner a {
+    border-radius: 999px;
+    color: var(--brand);
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    text-decoration: none;
+  }
+  .nav-inner a:hover { background: var(--surface-soft); }
+  .nav-symbols a { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .symbol-anchor { scroll-margin-top: 64px; }
+  .composite-table {
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    width: 100%;
+  }
+  .composite-table th, .composite-table td {
+    border-bottom: 1px solid var(--line);
+    padding: 7px 10px;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .composite-table thead th {
+    color: var(--muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .composite-table tbody th { font-weight: 800; }
+  .composite-reason td { padding-top: 0; }
+  .diagnostics-drawer { padding: 0; }
+  .drawer-summary {
+    cursor: pointer;
+    display: block;
+    padding: 18px 22px;
+  }
+  .drawer-title {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 750;
+    letter-spacing: -0.015em;
+    margin-bottom: 6px;
+  }
+  .drawer-body {
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 14px;
+    padding: 14px;
+  }
+  .open-positions {
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+  .open-positions-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+  }
+  .open-position {
+    border-bottom: 1px solid var(--line);
+    font-size: 0.84rem;
+    padding: 6px 0;
+  }
+  .open-position:last-child { border-bottom: 0; }
+  .symbol-panel { padding: 0; overflow: hidden; }
+  .symbol-header {
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    display: flex;
+    gap: 18px;
+    justify-content: space-between;
+    padding: 14px 22px;
+  }
+  .symbol-summary-line {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.92rem;
+    gap: 8px;
+  }
+  .symbol-summary-line strong { font-size: 1.1rem; }
+  .summary-sep, .summary-source, .summary-grade { color: var(--muted); }
+  .symbol-body h2 { font-size: 1.45rem; margin: 0 0 8px; }
+  .symbol-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .symbol-stat {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    min-width: 105px;
+    padding: 7px 10px;
+  }
+  .symbol-stat span {
+    color: var(--muted);
+    display: block;
+    font-size: 0.63rem;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .symbol-stat strong {
+    font-size: 0.94rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .symbol-body { padding: 18px 22px 22px; }
+  .group-section + .group-section {
+    border-top: 1px solid var(--line);
+    margin-top: 22px;
+    padding-top: 20px;
+  }
+  .group-section > summary {
+    align-items: center;
+    color: var(--ink);
+    display: flex;
+    font-size: 0.8rem;
+    font-weight: 800;
+    gap: 12px;
+    justify-content: space-between;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+  }
+  .group-heading {
+    align-items: center;
+    display: inline-flex;
+    gap: 9px;
+    min-width: 0;
+  }
+  .group-rank {
+    align-items: center;
+    background: var(--brand);
+    border-radius: 999px;
+    color: #fff;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+    height: 22px;
+    justify-content: center;
+    letter-spacing: 0;
+    width: 22px;
+  }
+  .strategy-rank-note {
+    color: var(--muted);
+    font-size: 0.72rem;
+    margin: 2px 0 14px;
+  }
+  .group-count {
+    background: var(--unknown-bg);
+    border: 1px solid var(--unknown-line);
+    border-radius: 999px;
+    color: var(--unknown);
+    font-size: 0.63rem;
+    letter-spacing: 0.02em;
+    padding: 3px 7px;
+    text-transform: none;
+  }
+  .context-details {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin: 10px 0 18px;
+    padding: 0 11px 9px;
+  }
+  details {
+    margin-top: 8px;
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 8px 0;
+  }
+  .research-details {
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+  }
+  .research-details > summary { color: var(--good); }
+  .gate-details > summary { color: var(--info); }
+  .hypothesis-evidence {
+    border-top: 1px solid var(--line);
+    margin-top: 20px;
+    padding-top: 14px;
+  }
+  .hypothesis-evidence > summary {
+    color: var(--brand);
+    font-weight: 800;
+  }
+  .evidence-grid {
+    display: grid;
+    gap: 9px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 12px;
+  }
+  .evidence-row {
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    min-width: 0;
+    padding: 10px;
+  }
+  .evidence-row-head {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+  .evidence-membership, .evidence-dates, .evidence-detail {
+    color: var(--muted);
+    font-size: 0.74rem;
+    margin-top: 5px;
+  }
+  .evidence-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 7px;
+  }
+  .evidence-chip {
+    background: var(--unknown-bg);
+    border: 1px solid var(--unknown-line);
+    border-radius: 999px;
+    color: var(--unknown);
+    font-size: 0.68rem;
+    padding: 3px 7px;
+  }
+  .evidence-sources {
+    color: var(--muted);
+    font-size: 0.7rem;
+    margin: 7px 0 0;
+    overflow-wrap: anywhere;
+    padding-left: 18px;
+  }
+  .intraday-evidence {
+    border-top: 1px dashed var(--line);
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .intraday-evidence h4 {
+    color: var(--info);
+    font-size: 0.76rem;
+    letter-spacing: 0.04em;
+    margin: 0 0 8px;
+    text-transform: uppercase;
+  }
+  .page-footer {
+    color: var(--muted);
+    font-size: 0.72rem;
+    padding: 2px 4px 24px;
+    text-align: center;
+  }
+  @media (max-width: 1120px) {
+    .market-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .app-header-inner, .section-header, .symbol-header {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .app-header-inner { padding: 22px 18px 18px; }
+    .page-body { padding: 16px 12px 28px; }
+    .meta-row, .hero-stats { justify-content: flex-start; }
+    .panel, .hero { border-radius: 12px; padding: 16px; }
+    .symbol-panel { padding: 0; }
+    .symbol-header { padding: 16px; }
+    .symbol-body { padding: 15px; }
+    .evidence-grid { grid-template-columns: 1fr; }
+    .symbol-stats { width: 100%; }
+    .symbol-stat { flex: 1; min-width: 0; }
+    th, td { padding: 6px 4px; }
+  }
+</style></head><body><header class="app-header"><div class="app-header-inner"><div><div class="eyebrow">Options research · Attractiveness</div><h1>Which options look attractive today?</h1><p class="header-sub">Policy-gated candidates with at-expiration scenario ranges.</p></div><div class="meta-row"><span class="meta-chip"><strong>Market close</strong> 2026-08-25</span><span class="meta-chip">Paper research</span></div></div></header><nav class="sticky-nav" aria-label="Board sections"><div class="nav-inner"><div class="nav-group"><a href="#positions-and-risk">Positions</a><a href="#rule-based-top-5">Shortlist</a><a href="#context-aware-top-5">Context lane</a><a href="#composite-board">Composite</a><a href="#pick-tracker">Scoreboard</a><a href="#core-names">Core names</a><a href="#diagnostics">Diagnostics</a></div><div class="nav-group nav-symbols"><span class="nav-label">Symbols</span><a href="#symbol-NVDA">NVDA</a><a href="#symbol-AMZN">AMZN</a><a href="#symbol-MSFT">MSFT</a></div></div></nav><main class="page-body"><section class="panel freshness-strip"><div class="eyebrow">DATA FRESHNESS</div><p class="header-sub">These source timestamps describe available inputs; they do not predict, select, or authorize a trade.</p><div class="meta-row freshness-row"><span class="meta-chip freshness-chip ok"><strong>Frozen EOD (.cache/chains)</strong> as of 2026-08-25; 0 sessions old · 3/18 names; unavailable: CRWV, TEM, PLTR, NOW, SMCI, AMD, AVGO, IREN, USAR, ET, VST, CEG, NBIS, AMAT, CLSK · OK</span><span class="meta-chip freshness-chip blocked"><strong>Underlying closes</strong> unavailable: not assembled · BLOCKED</span><span class="meta-chip freshness-chip blocked"><strong>Research</strong> research: none · BLOCKED</span><span class="meta-chip freshness-chip blocked"><strong>QM</strong> frozen study vintage unavailable; exact daily computation unavailable; BLOCKED</span><span class="meta-chip freshness-chip blocked"><strong>Composite</strong> max as-of unavailable · BLOCKED</span><span class="meta-chip freshness-chip blocked"><strong>Experiments views</strong> unavailable (status malformed) · BLOCKED</span></div></section><div class="notice info">Option quotes are from the 2026-08-25 close — the most recent completed session.</div><section class="panel registered-bets-tracker" id="positions-and-risk"><div class="section-header"><div><div class="eyebrow">POSITIONS &amp; RISK · REGISTERED-BETS TRACKER</div><h2>Registered-bets tracker</h2><p>This is a read-only receipt summary and cannot activate, rank, or place a trade.</p></div></div><div class="notice watch">! Open-position sources were not read for this render — no position line is claimed here. See the receipt summary below.</div><ul><li><strong>H5</strong> — ritual <span class="status-badge bad">UNKNOWN</span> (NO RECEIPT); <span class="status-badge bad">evidence NO RECEIPT: 0</span>; evaluation UNKNOWN; run UNKNOWN</li><li><strong>H6</strong> — ritual <span class="status-badge bad">UNKNOWN</span> (NO RECEIPT); <span class="status-badge bad">evidence NO RECEIPT: 0</span>; evaluation UNKNOWN; run UNKNOWN</li><li><strong>H7</strong> — ritual <span class="status-badge bad">UNKNOWN</span> (NO RECEIPT); <span class="status-badge bad">evidence NO RECEIPT: 0</span>; evaluation UNKNOWN; run UNKNOWN</li><li><strong>H8</strong> — ritual <span class="status-badge bad">UNKNOWN</span> (NO RECEIPT); <span class="status-badge bad">evidence NO RECEIPT: 0</span>; evaluation UNKNOWN; run UNKNOWN</li><li><strong>H10a</strong> — ritual <span class="status-badge bad">UNKNOWN</span> (NO RECEIPT); <span class="status-badge bad">evidence NO RECEIPT: 0</span>; evaluation UNKNOWN; run UNKNOWN; registered-window metadata: ends 2026-10-06</li><li><strong>H10b</strong> — ritual <span class="status-badge bad">UNKNOWN</span> (NO RECEIPT); <span class="status-badge bad">evidence NO RECEIPT: 0</span>; evaluation UNKNOWN; run UNKNOWN; registered-window metadata: ends 2027-01-06</li></ul></section><section class="panel hero" id="rule-based-top-5"><div class="section-header"><div><div class="eyebrow">Daily shortlist · TOP 5 PICKS TODAY</div><h2>Rule-based top 5 — best policy-and-liquidity fit today</h2><p class="header-sub">Chosen by fixed rules (green-check fraction, one pick per stock). This is a fit ranking, not a prediction; whether it predicts anything is exactly what the registered RQ2/A2 studies will measure.</p></div><div class="hero-stats"><div class="hero-stat good"><strong>3</strong><span>Eligible</span></div><div class="hero-stat watch"><strong>0</strong><span>Watch</span></div><div class="hero-stat unknown"><strong>2</strong><span>Open</span></div></div></div><div class="hero-grid"><div class="hero-card good"><div class="slot-label"><span>Pick 1</span><span class="policy-status good">✓ ELIGIBLE</span></div><div class="party-name">Sell the AMZN $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="party-badges"><span class="status-badge good">✓ liquidity · GREEN</span></div><details class="gate-details"><summary>All gate checks (3)</summary><div class="party-badges"><span class="status-badge good">✓ yield · GREEN</span><span class="status-badge good">✓ liquidity · GREEN</span><span class="status-badge watch">! portfolio · AMBER</span></div></details><div class="risk-block"><div class="risk-metrics">worst case -$9,400 at expiration · capital required $9,500 · breakeven $94.00</div><div class="policy-line"><span class="policy-status good">✓ ELIGIBLE</span></div></div><details><summary>Selection audit</summary><div class="label">GREEN 2/3 · legacy score 2 · AMZN:put:2026-09-18:95.00</div></details><div class="notice watch">! Research evidence incomplete — no source-validated annotation for this candidate.</div></div><div class="hero-card good"><div class="slot-label"><span>Pick 2</span><span class="policy-status good">✓ ELIGIBLE</span></div><div class="party-name">Sell the MSFT $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="party-badges"><span class="status-badge good">✓ liquidity · GREEN</span></div><details class="gate-details"><summary>All gate checks (3)</summary><div class="party-badges"><span class="status-badge good">✓ yield · GREEN</span><span class="status-badge good">✓ liquidity · GREEN</span><span class="status-badge bad">× portfolio · RED</span></div></details><div class="risk-block"><div class="risk-metrics">worst case -$9,400 at expiration · capital required $9,500 · breakeven $94.00</div><div class="policy-line"><span class="policy-status good">✓ ELIGIBLE</span></div></div><details><summary>Selection audit</summary><div class="label">GREEN 2/3 · legacy score 2 · MSFT:put:2026-09-18:95.00</div></details><div class="notice watch">! Research evidence incomplete — no source-validated annotation for this candidate.</div></div><div class="hero-card good"><div class="slot-label"><span>Pick 3</span><span class="policy-status good">✓ ELIGIBLE</span></div><div class="party-name">Sell the NVDA $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="party-badges"><span class="status-badge good">✓ liquidity · GREEN</span></div><details class="gate-details"><summary>All gate checks (3)</summary><div class="party-badges"><span class="status-badge good">✓ yield · GREEN</span><span class="status-badge good">✓ liquidity · GREEN</span><span class="status-badge bad">× portfolio · RED</span></div></details><div class="risk-block"><div class="risk-metrics">worst case -$9,400 at expiration · capital required $9,500 · breakeven $94.00</div><div class="policy-line"><span class="policy-status good">✓ ELIGIBLE</span></div></div><details><summary>Selection audit</summary><div class="label">GREEN 2/3 · legacy score 2 · NVDA:put:2026-09-18:95.00</div></details><div class="notice watch">! Research evidence incomplete — no source-validated annotation for this candidate.</div></div><div class="hero-card unknown empty-slot" data-open-slots="2"><div class="slot-label"><span>Picks 4–5</span><span class="policy-status unknown">? OPEN</span></div><h3>2 of 5 slots open — No qualifying contract</h3><div class="label">This is an intentional open slot, not missing UI.</div><ul class="gate-list"><li>No additional contract passed both policy and liquidity gates.</li><li>A blocked or illiquid idea is never promoted just to fill the list.</li></ul></div></div></section><section class="panel hero context-lane" id="context-aware-top-5"><div class="section-header"><div><div class="eyebrow">CONTEXT-AWARE SHORTLIST — EXPERIMENTAL</div><h2>Context-aware Top 5 — full admitted pool</h2><p class="header-sub">Experimental re-ordering by market context. The rule-based list above is the registered baseline. This lane is display-only and carries no verdict or trade authority; once the pick tracker is live its picks will be tracked descriptively against the baseline.</p></div></div><div class="hero-grid"><div class="hero-card bad" data-context-symbol="AMZN"><div class="slot-label"><span>Context pick 1</span><span class="policy-status bad">BLOCKED</span></div><div class="party-name">Sell the AMZN $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="label">Context reason: BLOCKED · context term 0 · context max as-of unavailable · board as-of 2026-08-25</div><details><summary>Context score audit</summary><div class="label">AMZN:put:2026-09-18:95.00 · (-0.6666666666666666, 0, 0, 0, -0.3, &#x27;AMZN&#x27;, &#x27;put&#x27;, 95.0)</div></details></div><div class="hero-card bad" data-context-symbol="MSFT"><div class="slot-label"><span>Context pick 2</span><span class="policy-status bad">BLOCKED</span></div><div class="party-name">Sell the MSFT $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="label">Context reason: BLOCKED · context term 0 · context max as-of unavailable · board as-of 2026-08-25</div><details><summary>Context score audit</summary><div class="label">MSFT:put:2026-09-18:95.00 · (-0.6666666666666666, 0, 0, 0, -0.3, &#x27;MSFT&#x27;, &#x27;put&#x27;, 95.0)</div></details></div><div class="hero-card bad" data-context-symbol="NVDA"><div class="slot-label"><span>Context pick 3</span><span class="policy-status bad">BLOCKED</span></div><div class="party-name">Sell the NVDA $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="label">Context reason: BLOCKED · context term 0 · context max as-of unavailable · board as-of 2026-08-25</div><details><summary>Context score audit</summary><div class="label">NVDA:put:2026-09-18:95.00 · (-0.6666666666666666, 0, 0, 0, -0.3, &#x27;NVDA&#x27;, &#x27;put&#x27;, 95.0)</div></details></div><div class="hero-card unknown empty-slot" data-open-slots="2"><div class="slot-label"><span>Context picks 4–5</span><span class="policy-status unknown">? OPEN</span></div><h3>2 of 5 slots open — No qualifying contract</h3><div class="label">The full admissible pool did not supply another symbol.</div></div></div><div class="label">Frozen-shortlist comparison diagnostics</div><div class="party-badges"><span class="status-badge unknown" data-diagnostic-symbol="AMZN">AMZN — BLOCKED</span><span class="status-badge unknown" data-diagnostic-symbol="MSFT">MSFT — BLOCKED</span><span class="status-badge unknown" data-diagnostic-symbol="NVDA">NVDA — BLOCKED</span></div></section><section class="panel" id="composite-board"><div class="section-header"><div><div class="eyebrow">COMPOSITE SIGNAL LANE</div><h2>Composite signal board — display-only</h2><p>Four independent angles (trend, vol premium, regime, options-market internals) per name. Not verdict-bearing, not FIRE-capable; writes nothing to ledger/ or positions.</p><div class="label">Highest agreement today: none at grade A</div></div></div><div class="empty">No composite cards are available for this board. The lane is display-only and no signal or verdict is implied.</div></section><section class="panel pick-tracker" id="pick-tracker"><div class="eyebrow">PICK TRACKER (descriptive)</div><h2>Shortlist outcome scoreboard</h2><p class="header-sub">Descriptive only; no verdict, ranking, sizing, or trade authority.</p><div class="notice watch">PICK TRACKER UNBUILT — no scoreboard JSON published.</div></section><section class="panel hero" id="core-names"><div class="section-header"><div><div class="eyebrow">CORE NAMES</div><h2>VST / AMZN — ALWAYS SHOWN</h2><p>owner-pinned visibility — not ranked; these cards do not compete with or reorder the Top-5 shortlist.</p></div></div><div class="hero-grid"><div class="pinned-card watch"><div class="slot-label"><span>VST</span><span class="policy-status watch">GAP</span></div><div class="label">no eligible liquid card this run — pinning never fabricates a candidate; see the symbol panel below for why each card is out.</div></div><div class="pinned-card good"><div class="slot-label"><span>AMZN</span><span class="policy-status good">ELIGIBLE</span></div><div class="party-name">Sell the AMZN $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="party-badges"><span class="status-badge good">✓ liquidity · GREEN</span></div><details class="gate-details"><summary>All gate checks (3)</summary><div class="party-badges"><span class="status-badge good">✓ yield · GREEN</span><span class="status-badge good">✓ liquidity · GREEN</span><span class="status-badge watch">! portfolio · AMBER</span></div></details><div class="risk-block"><div class="risk-metrics">worst case -$9,400 at expiration · capital required $9,500 · breakeven $94.00</div><div class="policy-line"><span class="policy-status good">✓ ELIGIBLE</span></div></div></div></div></section><div class="symbol-anchor" id="symbol-NVDA"></div><details class="panel symbol-panel" open><summary class="symbol-header"><span class="symbol-summary-line"><strong>NVDA</strong><span class="summary-sep">·</span><span class="summary-source">frozen EOD 2026-08-25</span><span class="summary-sep">·</span><span class="summary-grade">STALE</span></span><span class="panel-status"><span class="status-badge unknown">STALE</span></span></summary><div class="symbol-body"><div class="eyebrow">Symbol review</div><h2>NVDA</h2><div class="label">Sell the NVDA $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="symbol-stats"><div class="symbol-stat"><span>Close</span><strong>$100.00</strong></div><div class="symbol-stat"><span>As of</span><strong>2026-08-25</strong></div><div class="symbol-stat"><span>IV rank</span><strong>0.50</strong></div></div><div class="strategy-rank-note">Strategy rank: 1 is the strongest current fit; this display order does not change any policy or trade rule.</div><details class="group-section"><summary><span class="group-heading"><span class="group-rank" aria-label="Rank 1">1</span><span>SELL A PUT?</span></span><span class="group-count">1 contract</span></summary><div class="card-grid"><div class="panel candidate-card" data-candidate-id="NVDA:put:2026-09-18:95.00"><div class="party-name">Sell the NVDA $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="party-badges"><span class="status-badge good">✓ yield · GREEN</span><span class="status-badge good">✓ liquidity · GREEN</span><span class="status-badge bad">× portfolio · RED</span></div><div class="risk-block"><div class="risk-metrics">worst case -$9,400 at expiration · capital required $9,500 · breakeven $94.00</div><div class="policy-line"><span class="policy-status good">✓ ELIGIBLE</span></div></div><div class="notice watch">! Scenario table unavailable — bull/base/bear scenarios need realized volatility (rv21): no finite rv21 for this session.</div><div class="header-sub">display only</div><details><summary>payoff ladder</summary><table><thead><tr><th>Price</th><th></th><th>Your gain or loss</th></tr></thead><tbody><tr><td>$94.00</td><td class="label">breakeven</td><td><span class="pnl-flat">$0</span></td></tr><tr><td>$95.00</td><td class="label">strike</td><td><span class="pnl-positive">+$100</span></td></tr><tr><td>$100.00</td><td class="label">today</td><td><span class="pnl-positive">+$100</span></td></tr></tbody></table></details></div></div></details></div></details><div class="symbol-anchor" id="symbol-AMZN"></div><details class="panel symbol-panel" open><summary class="symbol-header"><span class="symbol-summary-line"><strong>AMZN</strong><span class="summary-sep">·</span><span class="summary-source">frozen EOD 2026-08-25</span><span class="summary-sep">·</span><span class="summary-grade">STALE</span></span><span class="panel-status"><span class="status-badge unknown">STALE</span></span></summary><div class="symbol-body"><div class="eyebrow">Symbol review</div><h2>AMZN</h2><div class="label">Sell the AMZN $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="symbol-stats"><div class="symbol-stat"><span>Close</span><strong>$100.00</strong></div><div class="symbol-stat"><span>As of</span><strong>2026-08-25</strong></div><div class="symbol-stat"><span>IV rank</span><strong>0.50</strong></div></div><div class="strategy-rank-note">Strategy rank: 1 is the strongest current fit; this display order does not change any policy or trade rule.</div><details class="group-section"><summary><span class="group-heading"><span class="group-rank" aria-label="Rank 1">1</span><span>SELL A PUT?</span></span><span class="group-count">1 contract</span></summary><div class="card-grid"><div class="panel candidate-card" data-candidate-id="AMZN:put:2026-09-18:95.00"><div class="party-name">Sell the AMZN $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="party-badges"><span class="status-badge good">✓ yield · GREEN</span><span class="status-badge good">✓ liquidity · GREEN</span><span class="status-badge watch">! portfolio · AMBER</span></div><div class="risk-block"><div class="risk-metrics">worst case -$9,400 at expiration · capital required $9,500 · breakeven $94.00</div><div class="policy-line"><span class="policy-status good">✓ ELIGIBLE</span></div></div><div class="notice watch">! Scenario table unavailable — bull/base/bear scenarios need realized volatility (rv21): no finite rv21 for this session.</div><div class="header-sub">display only</div><details><summary>payoff ladder</summary><table><thead><tr><th>Price</th><th></th><th>Your gain or loss</th></tr></thead><tbody><tr><td>$94.00</td><td class="label">breakeven</td><td><span class="pnl-flat">$0</span></td></tr><tr><td>$95.00</td><td class="label">strike</td><td><span class="pnl-positive">+$100</span></td></tr><tr><td>$100.00</td><td class="label">today</td><td><span class="pnl-positive">+$100</span></td></tr></tbody></table></details></div></div></details></div></details><div class="symbol-anchor" id="symbol-MSFT"></div><details class="panel symbol-panel" open><summary class="symbol-header"><span class="symbol-summary-line"><strong>MSFT</strong><span class="summary-sep">·</span><span class="summary-source">frozen EOD 2026-08-25</span><span class="summary-sep">·</span><span class="summary-grade">STALE</span></span><span class="panel-status"><span class="status-badge unknown">STALE</span></span></summary><div class="symbol-body"><div class="eyebrow">Symbol review</div><h2>MSFT</h2><div class="label">Sell the MSFT $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="symbol-stats"><div class="symbol-stat"><span>Close</span><strong>$100.00</strong></div><div class="symbol-stat"><span>As of</span><strong>2026-08-25</strong></div><div class="symbol-stat"><span>IV rank</span><strong>0.50</strong></div></div><div class="strategy-rank-note">Strategy rank: 1 is the strongest current fit; this display order does not change any policy or trade rule.</div><details class="group-section"><summary><span class="group-heading"><span class="group-rank" aria-label="Rank 1">1</span><span>SELL A PUT?</span></span><span class="group-count">1 contract</span></summary><div class="card-grid"><div class="panel candidate-card" data-candidate-id="MSFT:put:2026-09-18:95.00"><div class="party-name">Sell the MSFT $95 put — collect $100 now (~30%/yr) (simple, not compounded) — result by 2026-09-18 (24 days out)</div><div class="party-badges"><span class="status-badge good">✓ yield · GREEN</span><span class="status-badge good">✓ liquidity · GREEN</span><span class="status-badge bad">× portfolio · RED</span></div><div class="risk-block"><div class="risk-metrics">worst case -$9,400 at expiration · capital required $9,500 · breakeven $94.00</div><div class="policy-line"><span class="policy-status good">✓ ELIGIBLE</span></div></div><div class="notice watch">! Scenario table unavailable — bull/base/bear scenarios need realized volatility (rv21): no finite rv21 for this session.</div><div class="header-sub">display only</div><details><summary>payoff ladder</summary><table><thead><tr><th>Price</th><th></th><th>Your gain or loss</th></tr></thead><tbody><tr><td>$94.00</td><td class="label">breakeven</td><td><span class="pnl-flat">$0</span></td></tr><tr><td>$95.00</td><td class="label">strike</td><td><span class="pnl-positive">+$100</span></td></tr><tr><td>$100.00</td><td class="label">today</td><td><span class="pnl-positive">+$100</span></td></tr></tbody></table></details></div></div></details></div></details><details class="panel diagnostics-drawer" id="diagnostics"><summary class="drawer-summary"><span class="eyebrow">DIAGNOSTICS</span><span class="drawer-title">Diagnostics &amp; provenance</span><span class="label">Descriptive lanes, research coverage and provenance. Display-only: nothing in this drawer ranks, gates, or activates anything.</span></summary><div class="drawer-body"><section class="panel qm-movement"><div class="section-header"><div><div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div><h2>QM MOVEMENT LANE</h2><p class="header-sub">Current-session mechanical fires from adjusted cached OHLCV, shown in watch-universe order. This does not select, order, gate, or validate a mechanical pick.</p><div class="label">UNVALIDATED SIGNAL -- descriptive screen; no forward evidence exists until the SS5 study reports; not an entry recommendation; no book path.</div></div></div><p class="label">BLOCKED — movement state is unavailable this session; no claim about fires is made.</p></section><section class="panel qm-comparison"><div class="section-header"><div><div class="eyebrow">DESCRIPTIVE ONLY — NOT A TRADE RANKING</div><h2>QM + MOVING-AVERAGE CONTEXT FOR MECHANICAL TOP 5</h2><p class="header-sub">A secondary research context shown after the mechanical shortlist. These are the same mechanical cards in the same mechanical order. QM does not select, rank, validate, or change the edge or verdict of any option contract.</p></div><div class="hero-stats"><div class="hero-stat good"><strong>0</strong><span>Shown</span></div><div class="hero-stat unknown"><strong>5</strong><span>Open/blocked</span></div></div></div><div class="hero-grid"><div class="hero-card bad empty-slot" data-open-slots="5"><div class="slot-label"><span>Picks 1–5</span><span class="policy-status bad">× DATA BLOCKED</span></div><h3>5 of 5 slots open — QM context withheld</h3><div class="label">Stale or missing QM data leaves the mechanical ranking unchanged and withholds this descriptive context.</div><div class="notice watch">! QM context unavailable</div></div></div></section><section class="panel research-desk"><div class="eyebrow">RESEARCH DESK</div><h2>Research context and coverage</h2><p class="header-sub">Research supplies context only; it cannot change the fixed shortlist, a grade, or a trade.</p><div class="label">as of unavailable · researched on unavailable · none · <span class="prov">provenance not stated in context file</span></div><div class="research-coverage"><div class="research-coverage-row"><strong>CRWV</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>TEM</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>PLTR</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>NOW</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>SMCI</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>NVDA</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>AMD</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>AVGO</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>IREN</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>USAR</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>ET</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>VST</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>CEG</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>MSFT</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>AMZN</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>NBIS</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>AMAT</strong> · no mapping-valued packet</div><div class="research-coverage-row"><strong>CLSK</strong> · no mapping-valued packet</div></div></section><section class="panel regime-strip"><div class="eyebrow">REGIME (descriptive)</div><div class="notice bad">regime view unpublished/stale — see Experiments shelf</div><ul><li><strong>VST</strong> · unavailable</li><li><strong>CEG</strong> · unavailable</li><li><strong>MSFT</strong> · unavailable</li><li><strong>AMZN</strong> · unavailable</li></ul><div class="label">Display-only, non-verdict-bearing. This is not a registered signal. Regime labels are unsupervised historical descriptions that have survived no predictive test. Transition frequencies are historical frequencies, not forecasts.</div></section><section class="panel experiments-shelf"><div class="eyebrow">EXPERIMENTS SHELF</div><h2>Passive research views</h2><p class="header-sub">These links are display-only and cannot change registered bets, rankings, or trades.</p><div class="label">not published</div><p><a href="experiments.html">Open experiments</a> · <a href="wasserstein-regime.txt">Open Wasserstein regime view</a></p><div class="market-grid"><div class="market-card"><h3>beta-to-QQQ</h3><p>Display-only research view.</p></div><div class="market-card"><h3>tail shape</h3><p>Display-only research view.</p></div><div class="market-card"><h3>spread stability</h3><p>Display-only research view.</p></div><div class="market-card"><h3>T-bill carry</h3><p>Display-only research view.</p></div><div class="market-card"><h3>short-interest context</h3><p>Display-only research view.</p></div></div></section></div></details><footer class="page-footer">Payoffs are at-expiration scenarios, not predictions. Income annualization uses 365 calendar days; realized-volatility inputs use 252 trading sessions. Quotes move intraday; verify the live broker quote before making a decision. Annualized income is simple, not compounded. This page and the mission-control dashboard date INDEPENDENTLY: this board can ride a 15:45 pre-close capture while mission control reports its own closes-derived date, so a difference between the two is expected, not an error.</footer></main></body></html>

@@ -89,8 +89,25 @@ def _experiment_boundary_violations(source: str) -> list[str]:
 
 
 class ExperimentBaselineTests(unittest.TestCase):
-    def test_production_dashboard_has_no_experiment_imports(self):
-        self.assertFalse(_experiment_boundary_violations(Path(dashboard.__file__).read_text()))
+    def test_production_dashboard_experiment_imports_are_confined_to_the_lane_gather(self):
+        # D13 (owner-ruled, spec pending-rulings section): the ONLY experiment
+        # import/call site the production dashboard may contain is the display-only
+        # gather helper `_default_experiment_lanes` (brief 39 / spec §4, D5). Every
+        # other line of the file must be as clean as before.
+        source = Path(dashboard.__file__).read_text()
+        tree = ast.parse(source)
+        sites = [node for node in ast.walk(tree)
+                 if isinstance(node, ast.FunctionDef) and node.name == "_default_experiment_lanes"]
+        self.assertEqual(len(sites), 1)
+        lo, hi = sites[0].lineno, sites[0].end_lineno or sites[0].lineno
+        lines = source.splitlines(keepends=True)
+        outside = "".join(lines[: lo - 1]) + "\n" * (hi - lo + 1) + "".join(lines[hi:])
+        self.assertFalse(_experiment_boundary_violations(outside))
+        self.assertEqual(
+            sorted(_experiment_boundary_violations(source)),
+            ["call options_researcher.experiments_dashboard.build_experiment_lanes",
+             "from options_researcher.experiments_dashboard"],
+        )
 
     def test_boundary_rejects_direct_from_and_aliased_experiment_forms(self):
         fixtures = (

@@ -45,6 +45,15 @@ FROZEN_CONFIG_UPPERCASE_NAMES = (
     "BACKTEST_EXECUTION_CONVENTION",
     "BACKTEST_START",
     "BACKTEST_TERMINAL_EXIT_CONVENTION",
+    # 2026-09-07: three display-only lane-board constants, with LLM-proposed
+    # 2026-09-06 labels under spec D1–D12. None is owner-typed or read by any
+    # strategy, scorer, gate, receipt or ledger. Authorized by the owner in
+    # chat 2026-09-07 as a brief 39 scope expansion. Listed here so the
+    # expansion is recorded and distinguished from unapproved drift,
+    # exactly as the A2_* entries above are.
+    "BOARD_CAUTION_LANES",
+    "BOARD_FAVOURABLE_LANES",
+    "BOARD_LANES_ENABLED",
     "BOOTSTRAP_BLOCK_CONSTANTS",
     "BOOTSTRAP_BLOCK_EXPONENT",
     "BOOTSTRAP_SAMPLES",

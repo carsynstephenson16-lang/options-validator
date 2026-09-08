@@ -928,6 +928,20 @@ CONSISTENCY_MAX_EXAMPLES = 20
 # Enabled by owner-authorized in-chat draft override 2026-08-26.
 CONTEXT_LANE_ENABLED: bool = True
 
+# LANE BOARD — the attractiveness board's first-screen agreement table
+# (spec docs/superpowers/specs/2026-09-06-attractiveness-board-redesign-design.md).
+# Display-only; LLM-proposed 2026-09-06 under owner decisions D1–D12 of that
+# spec (owner-directed in chat, not owner-typed). Nothing here changes
+# shortlist ranking, grades, the picks snapshot, registered hypotheses,
+# verdicts, FIRE authority, or paper-book state. BOARD_LANES_ENABLED=False
+# renders the pre-redesign page byte-for-byte (rollback path). The favourable
+# / caution split is spec §3 (D8): only favourable lanes count toward
+# "Agree"; cautions are shown, never counted. Changing either tuple is an
+# owner decision.
+BOARD_LANES_ENABLED: bool = True
+BOARD_FAVOURABLE_LANES: tuple[str, ...] = ("baseline", "context", "composite", "qm", "tbill")
+BOARD_CAUTION_LANES: tuple[str, ...] = ("spread", "tail", "beta")
+
 # ---------------------------------------------------------------------------
 # ATTRACTIVENESS EXPERIMENT LANES -- display-only, cached-data-only, and
 # disabled by default. LLM-proposed 2026-08-09; standard-from-literature or
