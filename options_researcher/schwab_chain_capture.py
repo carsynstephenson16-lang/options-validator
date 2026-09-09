@@ -118,9 +118,7 @@ def intraday_capture_kwargs(tag: str) -> dict:
     }
 
 
-def nearest_capture_tag(
-    now_ny: datetime, *, tags: Iterable[str] | None = None
-) -> str | None:
+def nearest_capture_tag(now_ny: datetime, *, tags: Iterable[str] | None = None) -> str | None:
     """The durable-lane slot nearest the wall clock (within tolerance), else None.
 
     ``tags`` restricts the candidate slots. tools/schwab_chain_intraday_capture.sh
@@ -137,9 +135,7 @@ def nearest_capture_tag(
         wanted = tuple(tags)
         unknown = sorted(set(wanted) - set(CAPTURE_SESSION_TIMES))
         if unknown or not wanted:
-            raise ValueError(
-                f"unknown capture tags {unknown}; choices: {CAPTURE_TAG_CHOICES}"
-            )
+            raise ValueError(f"unknown capture tags {unknown}; choices: {CAPTURE_TAG_CHOICES}")
         if PRECLOSE_TAG in wanted:
             # A restricted caller is by definition an intraday job. The
             # pre-close slot is only ever the bare default path; letting a
@@ -151,6 +147,7 @@ def nearest_capture_tag(
             )
         schedule = {tag: CAPTURE_SESSION_TIMES[tag] for tag in wanted}
     return nearest_session_tag(now_ny, schedule=schedule)
+
 
 H7_CHAIN_COLUMNS = [
     "expiration",
@@ -390,13 +387,19 @@ def capture(
         print(f"schwab_chain_capture refused: {timing_reason}")
         return 1, None
 
+    session = now_ny.date().isoformat()
+    from data.cache_runner import trading_days
+
+    if not trading_days(session, session):
+        print(f"schwab_chain_capture refused: NOT_A_TRADING_SESSION {session}")
+        return 1, None
+
     names = sorted(universe if universe is not None else watch_universe())
     if not names or len(names) != len(set(names)) or any(name != name.upper() for name in names):
         raise ValueError("capture universe must be unique, non-empty, and uppercase")
     if client is None:
         client = _default_client()
 
-    session = now_ny.date().isoformat()
     now_utc = now_ny.astimezone(timezone.utc)
     chain_dir = Path(chain_dir)
     session_reports = Path(reports_dir) / session
