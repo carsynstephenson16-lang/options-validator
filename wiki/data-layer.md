@@ -54,12 +54,31 @@ adapter (`data/thetadata_adapter.py`) survives for cached-read compatibility
 only; this page's earlier "subscription confirmed through 2026-11-30" claim
 described the pre-July state and was stale. The current capture path is the
 **Schwab 15:45 ET preclose lane**: exact-session chain packages land in
-`.cache/schwab_chains/` (gitignored, unrepurchasable — currently an
-inventory-guard protection GAP; brief 29 is closing it but is BLOCKED
-pending re-review as of 2026-08-26) with tracked manifests/receipts
-under `reports/schwab_chains/` (capture
+`.cache/schwab_chains/` (gitignored, unrepurchasable) with tracked
+manifests/receipts under `reports/schwab_chains/` (capture
 `options_researcher/schwab_chain_capture.py`, verifier
-`tools/schwab_chain_manifest.py`). Operational sharp edge: the Schwab OAuth
+`tools/schwab_chain_manifest.py`). Guard status as of 2026-09-09: the
+namespace itself has been listed in `tools/irreplaceable_data_guard.py`
+`DEFAULT_NAMESPACES` since 2026-08-09 (commit `d987c1f`), so this page's
+earlier "protection GAP" wording overstated the hole; the tighter
+inventory *binding* brief 29 specifies (rev 5, 2026-08-26 evening) was
+implemented and merged the next day via PR #96 (`42f6a1b`, 2026-08-27) —
+`data/irreplaceable_data_inventory.json` pins `.cache/schwab_chains` at
+90 files / 9,700,050 bytes and the guard enforces it
+(`tools/irreplaceable_data_guard.py:157,199-204`). Two canonical docs still
+disagree on brief 29's status — its own header says READY FOR HAND-OFF,
+`BRIEF-NUMBER-REGISTRY.md:17` still says "BLOCKED draft" — and neither
+records #96; the merged code is the fact. Since 2026-09-09 (Brief 40, PR #161) the pre-close capture
+also refuses to run on non-trading days — it had written a full 15-name
+package on Labor Day 2026-09-07.
+
+A second, isolated Schwab lane pulls chains at **10:00 and 13:00 ET**
+(`config.SCHWAB_CHAIN_INTRADAY_TIMES`; PR #150, 2026-09-02) into
+`.cache/schwab_chains_intraday/<tag>/` + `reports/schwab_chains_intraday/<tag>/`
+— separate namespace, first-write-wins, receipt kind
+`schwab_chain_capture_intraday/v1`. It is not H7 evidence and not a
+registered signal; its LaunchAgent install is an owner-gated staged step
+that had not happened as of 2026-09-09 (see [[automation]]). Operational sharp edge: the Schwab OAuth
 refresh token dies a hard **7 days after creation** (Official-source —
 Schwab developer documentation mirrored in the diagnosis report; separately
 Test-verified by the 2026-08 production expiry observation; refreshing an

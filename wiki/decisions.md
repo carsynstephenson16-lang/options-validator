@@ -17,8 +17,9 @@ The 15-name watch universe is `H7_WATCHLIST` (11 names) plus
 `H7_EXCLUDED` (`config.py:377-385, 643-645`);
 `options_researcher/h7_scope.py:18-25` hard-raises unless the count is
 exactly 15. Separately, the **9-name entry cohort is frozen for the life of
-the H7 forward window** (PAUSED per OD-3 as of 2026-08-26 — see
-[[hypotheses]]): `[AMD, AMZN, CEG, ET, MSFT, NOW, PLTR, TEM, VST]`,
+the H7 forward window** (still PAUSED per OD-3 as of 2026-09-09; the
+Schwab restart lane's activation-day tooling landed via Brief 40, PR #161,
+but activation waits on the earnings store — see [[hypotheses]]): `[AMD, AMZN, CEG, ET, MSFT, NOW, PLTR, TEM, VST]`,
 set at Stage-8 activation (`ledger/h7_forward/events.jsonl` seq 0,
 `window_registration`, 2026-07-20); 6 names excluded reason
 `EARNINGS-UNKNOWN` (AVGO, CRWV, IREN, NVDA, SMCI, USAR — data-readiness

@@ -102,7 +102,8 @@ are symlinked into `.claude/skills/` so they load as skills:
 for it), `ledger-discipline`, `web-fetch-order`, `backtest-realism-audit`,
 `results-red-team`, `independent-research-critic`, `repo-health-review`,
 `verdict-interpreter`, `options-data-audit`, `grilling`,
-`options-beginner-explainer`, `obsidian-vault`, `codex-brief-writing`.
+`options-beginner-explainer`, `obsidian-vault`, `codex-brief-writing`,
+`executor-handback-verification` (the return leg of a Codex hand-off).
 `.claude/skills/research-refresh` is the scheduled research-context refresh.
 
 ## Hard enforcement (hooks — treat a block as correct)

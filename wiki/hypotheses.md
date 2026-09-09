@@ -32,6 +32,14 @@ $2k/month **shared with H8**. Book `data/positions/h6_positions.csv` (one
 open position, NVDA $220C exp 2026-09-18). Receipts:
 `reports/h6_forward/<date>.json`. Status `INSUFFICIENT_SAMPLE` (zero
 completed positions).
+**As of 2026-09-09:** H6-0001 is still open in both checkouts (no
+`exit_date` in `data/positions/h6_positions.csv`) and is now past its own
+21-DTE mechanical close rule (`H6_CLOSE_AT_DTE = 21`, `config.py:348`;
+expiry 2026-09-18 is 9 days out). The H6/H8 evaluators are PAUSED — the
+ritual prints "H6/H8 lanes: PAUSED — gated behind the H7 data gate" every
+morning — so the newest H6 receipt on disk is `reports/h6_forward/2026-07-27.json`
+and the close rule has never fired. Open owner item: decide how the paper
+book records this position before it expires unmarked.
 
 ## H7 — Swing options, 15-name watchlist
 Three lanes (long call / debit spread / short-premium) chosen by IV vs.
@@ -40,15 +48,27 @@ realized vol ([[decisions]] has the exact list). Registered ledger trial 8,
 version is **permanently withdrawn** (amendment v1.3) — earnings provenance
 can't be reconstructed causally. Sole verdict path: the **forward paper
 window** (`ledger/h7_forward/events.jsonl` seq 0, hash-chained, immutable
-9-name entry cohort, opened 2026-07-20). **Status as of 2026-08-26: PAUSED
-per owner decision OD-3** — restart requires a NEW registration and
-namespace. A Schwab restart lane (`h7-forward-schwab-v1`) is
-PREPARED / NOT REGISTERED / NOT ACTIVATED (README "Scope status" lists the
-open gates). Daily chain when active: source health → data gate → exit
-fill/monitor → `h7_watch` → entry preflight; receipts under
-`reports/h7_receipts/h7-forward-15-v1/` and
-`reports/h7_data_gate/h7-forward-15-v1/`. Scores **once** at window end,
-≥10 losses.
+9-name entry cohort, opened 2026-07-20). **Status as of 2026-09-09: still
+PAUSED per owner decision OD-3** — restart requires a NEW registration and
+namespace. The Schwab restart lane (`h7-forward-schwab-v1`) is still
+NOT REGISTERED / NOT ACTIVATED, but the tooling to get there has landed:
+Brief 36's activation door (PR #147, 2026-09-03) and Brief 40's
+activation-day receipt chain (PR #161 @ `d95a5a1`, 2026-09-09 —
+`tools/h7_activation_day.sh` writes source-health → Schwab data-gate →
+backup/restore receipts in the ops checkout and *prints* the owner's
+activation command; it never activates anything). All six registration
+preconditions were cleared 2026-08-31 (README "Scope status"). What blocks
+activation now is data, not code: source health 2026-09-04 was 7/15
+healthy and four cohort names — **AMZN, MSFT, NOW, TEM** — are UNHEALTHY
+(no confirmed next earnings date); the door needs all nine cohort names
+healthy on one session, so `PROJECT_STATE.md` puts the earliest realistic
+window at early-to-mid October 2026 (owner item D-1: refresh
+`data/earnings/gating_v3.csv` from company IR/SEC sources). Daily chain
+when active: source health → data gate → exit fill/monitor → `h7_watch` →
+entry preflight; receipts under `reports/h7_receipts/h7-forward-15-v1/`
+and `reports/h7_data_gate/h7-forward-15-v1/` (Schwab-mode data-gate
+receipts get their own `reports/h7_data_gate_schwab/`). Scores **once** at
+window end, ≥10 losses (the Schwab lane's owner-typed bar is 7).
 
 ## H8 — Pre-earnings tactical long calls
 Companion to H6: buys a call on PLTR or AMZN in the T-15..T-8 session window
@@ -69,9 +89,15 @@ zero fires/trades/losses; any retest needs a new feasibility-clearing
 registration. H10b's window ends 2027-01-06 and its observation **RESUMED on
 the Schwab 15:45 preclose lane** per seq 28 `H10B_AMENDMENT_V1_1`
 (disclosed low fire rate — 11 historical events). Relaxed loss gate,
-`H10_MIN_LOSSES_FOR_VERDICT=7` (`config.py:598`, weaker-verdict disclosed).
+`H10_MIN_LOSSES_FOR_VERDICT=7` (`config.py:625`, weaker-verdict disclosed).
 Receipts: `reports/h10/receipts/h10_watch_<date>.json`; log
-`reports/h10/observations.jsonl`.
+`reports/h10/observations.jsonl`. **Observed as of 2026-09-09**
+(`reports/h10/h10b_observations.jsonl`, tracked on `main`, identical in
+both checkouts): 10 observation receipts
+2026-08-20 → 2026-09-09, zero fires on every name; ET, IREN and USAR are
+skipped for `DATA` on nearly every receipt (chain/quote availability, a
+different gate from H7 source health). Historical description only — not a
+signal and not a forecast.
 
 ## Spent one-run studies (never re-run)
 - **H9** — historical (non-blind) post-earnings study, run once. Result

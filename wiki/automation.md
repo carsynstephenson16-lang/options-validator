@@ -6,10 +6,14 @@ verified account. Cross-refs: [[data-layer]] for what gets refreshed,
 [[hypotheses]] for who consumes each step, [[dashboards]] for the pages this
 rebuilds.
 
-## The daily ritual (07:10 ET, weekdays)
+## The daily ritual (09:09 ET, weekdays — retimed from 07:10 on 2026-08-26)
 LaunchAgent `com.carsyn.options-validator.daily-ritual` runs
 `tools/daily_ritual.sh` from the **ops checkout**
-(`~/options-validator-ops`), never the dev checkout. Frozen step order
+(`~/options-validator-ops`), never the dev checkout. The 09:09 slot is
+deliberate: it sits after the ~08:15 repo-reconcile automerge so the ops
+checkout can be fast-forwarded first (`tools/launchagents/README.md:3-14`).
+`docs/monday-runbook.md` still says 07:10 throughout — treat that doc as
+stale for the time, not for the step order. Frozen step order
 (`tools/daily_ritual.sh:1-14` header comment, amendment v1.4 + the
 2026-07-24 `H10_RITUAL_ORDER_FIX`):
 
@@ -25,7 +29,14 @@ LaunchAgent `com.carsyn.options-validator.daily-ritual` runs
    `h10_watch`/`h10_observe`.
 7. Both dashboards rebuilt ([[dashboards]]).
 8. Durability: commits an evidence allow-list, pushes to `origin/main`,
-   takes a restic snapshot (`tools/daily_ritual.sh:335-380`).
+   takes a restic snapshot (`tools/daily_ritual.sh:528-640`). This step
+   silently persisted NOTHING from 2026-09-03 to 09-07: `git add` aborted
+   on an allow-listed path that did not exist yet on the ops checkout
+   (`reports/schwab_chains_intraday`, added by PR #150); 36 files were
+   rescued in `f83428d` (through 09-04) and the rest in `293bb6d` (09-04 →
+   09-07, whose 09:17 run still used the old staging). Brief 38 (PR #158,
+   2026-09-07) made staging skip absent paths with a logged note; the 09-08
+   and 09-09 runs show "evidence: committed / pushed" with no rescue needed.
 
 **Fail-closed semantics**: a branch guard refuses to run at all if the ops
 checkout isn't on `main` (`tools/daily_ritual.sh` — added after a 2026-07-20
@@ -44,11 +55,39 @@ with an explicit `RITUAL STATUS: OK` or `BROKEN` summary
 LaunchAgent `com.carsyn.options-validator.intraday-capture` fires at 09:31,
 09:35, 11:00, 13:00, 15:45 ET, writing a 15-name board snapshot receipt under
 `reports/intraday_capture/<date>/`. It never commits — the next morning's
-07:10 ritual sweeps the prior day's receipts into its evidence commit.
+09:09 ritual sweeps the prior day's receipts into its evidence commit.
 (As of 2026-08-26 the 15:45 slot is also when the Schwab preclose chain
 capture writes its exact-session packages — see [[data-layer]]; a 15:30
 alignment-check LaunchAgent warns if the ops checkout is behind
 `origin/main`, the condition that makes the capture wrapper refuse.)
+
+## Installed is not loaded (as of 2026-09-09)
+Nine plists are tracked in `tools/launchagents/`, eleven files sit in
+`~/Library/LaunchAgents/` (two are dated `.bak` copies of the ritual
+plist), and `launchctl list` showed **eight** `options-validator` jobs
+loaded. Compared live on 2026-09-09:
+
+- `research-refresh` — installed but **not loaded** (the scheduled
+  LLM research refresh; runs from `~/options-validator-research`). Its
+  preflight had already never passed since the 08-27 retime; today it is
+  not even in launchd. Owner item.
+- `job-health-digest` and `schwab-chain-intraday` — tracked but **not
+  installed**; both are known owner-gated staged installs, not defects.
+- `schwab-chain-preclose` (15:45 capture), `daily-ritual`,
+  `intraday-capture`, `alignment-check`, `live-dashboard`,
+  `research-views`, `research-display-refresh`, `repo-rag-health` — loaded.
+  Note the reverse asymmetry too: `repo-rag-health` is installed and loaded
+  but has no tracked plist under `tools/launchagents/` (its source is
+  `scripts/run_repo_rag_health.sh`), so a naive tracked-vs-loaded diff
+  flags it in the other direction.
+
+Why this matters: on 2026-09-03 the intraday-capture agent was found to
+have silently dropped out of launchd, and the board had been ranking on
+2026-07-27 quotes for five weeks — the plist was installed and
+byte-identical to the tracked copy the whole time. Nothing in the repo
+compares installed-vs-loaded; `tools/job_health_digest.py` is entirely
+receipt-based. The one-line check is:
+`launchctl list | grep options-validator` versus `ls tools/launchagents/`.
 
 ## Repo-RAG health agent (installed 2026-07-25)
 LaunchAgent `com.carsyn.options-validator.repo-rag-health.plist` runs
