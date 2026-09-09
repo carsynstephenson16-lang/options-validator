@@ -401,3 +401,33 @@ uv run ruff check .                            # exit 0
 uv run ruff format --check <files touched>     # exit 0
 uv run pyright                                 # exit 0
 ```
+
+## Amendment A1 (owner-directed 2026-09-08, in-session: "option 1 revert the restore scan, go")
+
+**Finding closed:** implementation review round 1 finding 2
+(`reports/2026-09-08-brief-40-implementation-review-round1.md`).
+
+**What changes.** WP-A step 11 is split. The `BACKUP_PATHS` entry for
+`reports/h7_data_gate_schwab` STAYS (the Schwab receipt is backed up). The
+restore-check scan extension — `reports/h7_data_gate_schwab/*/receipts/*.json`
+added to `verify_restored_tree` in `tools/h7_forward_backup.py` (PR #161
+`:403-405`) — is REVERTED, together with its acceptance test (the WP-A bullet
+"restore-check … counts it (`data_gates >= 1`)" is withdrawn). Reason: the
+pre-existing verifier rule (`main` `:376`; PR `:416-421`) marks any data-gate
+receipt with `whole_universe_verdict != "GO"` or `go_count != 15` as
+`stale scope`, so one excluded-name NO_GO in an immutable, backed-up Schwab
+receipt would refuse the door at F3 and fail every future restore drill.
+`data_gates > 0` remains satisfied by the legacy `reports/h7_data_gate`
+receipts, so `verification.ok` keeps today's meaning.
+
+**What this reverses.** Half of round-1 finding 5's disposition (R1-5). The
+namespace, the door's receipt-path argument, the ritual-collision avoidance and
+the backup coverage are unchanged.
+
+**Not chosen (recorded):** option (ii), a scope-aware verifier rule for the
+Schwab evidence mode — it edits acceptance logic and needs its own brief and
+review; it remains available as a successor if the owner wants restore drills
+to validate Schwab receipts.
+
+**Provenance:** owner ruling typed in-session; drafted by the orchestrating
+session under the 2026-07-25 amendment delegation; append-only.
