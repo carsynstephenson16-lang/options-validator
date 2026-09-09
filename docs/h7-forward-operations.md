@@ -213,10 +213,12 @@ is printed with its reason; it is not labelled an over-threshold exit 3 and
 does not add a registration gate.
 
 Backup runs after the receipts exist, followed by a restore check for the
-same completed session. The unchanged restore verifier requires whole-universe
-GO for every data-gate receipt it scans. Thus included-only producer GO can
-still fail restore verification when excluded names are NO_GO. The runbook
-reports that refusal and stops; no acceptance logic is relaxed.
+same completed session. Per Brief 40 Amendment A1, Schwab receipts under
+`reports/h7_data_gate_schwab` are backed up but are not scanned or validated
+by restore drills. Legacy `reports/h7_data_gate` receipts continue to satisfy
+the required data-gate count. The unchanged restore verifier still requires
+whole-universe GO for every data-gate receipt it scans; its acceptance logic
+is unchanged.
 
 The script never pushes. It prints `git -C <repo> push origin main` for owner
 realignment. If left unpushed, the next morning's ritual Step 8 attempts to push

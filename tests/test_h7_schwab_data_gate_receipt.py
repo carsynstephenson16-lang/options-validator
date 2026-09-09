@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import io
 import json
 import os
@@ -415,48 +414,11 @@ class SchwabDataGateReceiptTests(unittest.TestCase):
 
 
 class BackupSchwabNamespaceTests(unittest.TestCase):
-    def test_restore_scan_counts_whole_go_receipt_in_schwab_namespace(self) -> None:
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            chain = root / ".cache/chains/one.parquet"
-            chain.parent.mkdir(parents=True)
-            chain.write_bytes(b"chain")
-            digest = hashlib.sha256(b"chain").hexdigest()
-            manifest = root / "data/chain_cache_manifest.txt"
-            manifest.parent.mkdir(parents=True)
-            manifest.write_text(f"{digest}  5  one.parquet\n", encoding="utf-8")
-            receipt_path = (
-                root
-                / "reports/h7_data_gate_schwab"
-                / scope_identity()["scope_id"]
-                / "receipts"
-                / f"{SESSION}.json"
-            )
-            receipt = make_receipt(
-                "data_gate",
-                {
-                    "scope": scope_identity(),
-                    "whole_universe_verdict": "GO",
-                    "go_count": len(SYMBOLS),
-                    "input_files": {
-                        "chain": {
-                            "path": ".cache/chains/one.parquet",
-                            "exists": True,
-                            "sha256": digest,
-                        }
-                    },
-                },
-            )
-            write_immutable_receipt(receipt, receipt_path)
-
-            result = h7_forward_backup.verify_restored_tree(root)
-
-            self.assertTrue(result["ok"], result)
-            self.assertEqual(result["data_gates"], 1)
-            self.assertIn(
-                Path("reports/h7_data_gate_schwab"),
-                h7_forward_backup.BACKUP_PATHS,
-            )
+    def test_backup_paths_include_schwab_namespace(self) -> None:
+        self.assertIn(
+            Path("reports/h7_data_gate_schwab"),
+            h7_forward_backup.BACKUP_PATHS,
+        )
 
 
 if __name__ == "__main__":

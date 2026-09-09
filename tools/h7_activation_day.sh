@@ -1,6 +1,5 @@
 #!/bin/zsh
 # Owner-run receipt chain only. Never invokes activation or pushes a checkout.
-setopt PIPE_FAIL
 REPO="${0:A:h:h}"
 UV="$(command -v uv)"
 ALLOW_CHECKOUT=""
@@ -182,13 +181,13 @@ commit_evidence() {
   git commit -q -m "$message" || return 1
   [ -z "$(git status --porcelain)" ]
 }
-if [ "${#ROUTINE_PATHS[@]}" -gt 0 ]; then
-  commit_evidence "data(ritual): activation-day prerequisite artifacts $RUN_DATE" "${ROUTINE_PATHS[@]}" || refuse 'routine evidence commit failed'
-fi
 LOG_DIR=".tmp/h7_activation_day"
 mkdir -p "$LOG_DIR" || exit 2
 LOG="$LOG_DIR/${RUN_DATE}_$(date +%H%M).log"
 exec > >(tee -a "$LOG") 2>&1
+if [ "${#ROUTINE_PATHS[@]}" -gt 0 ]; then
+  commit_evidence "data(ritual): activation-day prerequisite artifacts $RUN_DATE" "${ROUTINE_PATHS[@]}" || refuse 'routine evidence commit failed'
+fi
 CHAIN_PATHS=()
 if [ "$REGENERATED" -eq 1 ]; then
   "$UV" run python tools/h7_schwab_feasibility.py --symbols "${INCLUDED[@]}" --output "$FEASIBILITY" || refuse 'feasibility regeneration failed'
@@ -198,7 +197,7 @@ SOURCE_OUT="$("$UV" run python -m options_researcher.h7_source_health --as-of "$
 SOURCE_RC=$?
 print -r -- "$SOURCE_OUT"
 print -r -- "source-health exit $SOURCE_RC ignored; included health controls continuation"
-SOURCE="$(print -r -- "$SOURCE_OUT" | sed -n 's/.*receipt=\([^;]*\);.*/\1/p' | tail -1)"
+SOURCE="$(print -r -- "$SOURCE_OUT" | sed -n 's/^summary: .*receipt=\([^;]*\);.*/\1/p' | tail -1)"
 EXPECTED_SOURCE="reports/h7_receipts/$SCOPE_ID/source_health/$SESSION.json"
 [ "$SOURCE" = "$EXPECTED_SOURCE" ] && [ -f "$SOURCE" ] || refuse 'source-health receipt path missing or unexpected'
 CHAIN_PATHS+=("$SOURCE")

@@ -301,7 +301,17 @@ class ActivationDayTests(unittest.TestCase):
             .split()
         )
         allowed = set(re.search(r"EVIDENCE_ALLOW=\((.*?)\)", capture, re.S).group(1).split())
+        script_allowed = re.search(r"EVIDENCE_ALLOW=\((.*?)\)", source, re.S).group(1).split()
+        capture_allowed = re.search(r"EVIDENCE_ALLOW=\((.*?)\)", capture, re.S).group(1).split()
+        self.assertEqual(script_allowed, capture_allowed)
         self.assertEqual(routine, daily & allowed)
+
+    def test_log_redirect_precedes_routine_evidence_commit(self):
+        source = SCRIPT.read_text()
+        self.assertLess(
+            source.index('exec > >(tee -a "$LOG") 2>&1'),
+            source.index('commit_evidence "data(ritual):'),
+        )
 
     def test_printed_manual_command_supplies_import_environment(self):
         result = self.run_script()

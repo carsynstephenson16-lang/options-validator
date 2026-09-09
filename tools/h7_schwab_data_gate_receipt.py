@@ -16,7 +16,6 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from data.cache_runner import trading_days  # noqa: E402
 from options_researcher import h7_data_gate, h7_schwab_data_gate  # noqa: E402
 from options_researcher.h7_cohort import (  # noqa: E402
     CohortUnavailableError,
@@ -98,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
         if requested > today:
             raise ValueError("date is in the future")
         session = h7_data_gate.evaluation_session(requested).isoformat()
+        from data.cache_runner import trading_days
+
         assert trading_days(session, session) == [session]
 
         package_dir = args.reports_root / session

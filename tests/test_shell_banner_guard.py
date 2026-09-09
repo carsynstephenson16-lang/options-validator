@@ -104,6 +104,36 @@ _ASSIGN_PREFIX_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(\")?\Z")
 #  of the same variable in the same file.
 ALLOWLIST: list[tuple[str, str, str]] = [
     (
+        "tools/h7_activation_day.sh",
+        "CONTEXT=",
+        "reason (a): preserve Python exit status; RUN_DATE, SESSION, SCOPE_ID, INCLUDED_TEXT and EXCLUDED_TEXT are derived with anchored sed filters before use.",
+    ),
+    (
+        "tools/h7_activation_day.sh",
+        "FEASIBILITY_STATE=",
+        "reason (a): preserve Python exit status; FEASIBILITY is derived with the anchored REUSE= sed filter.",
+    ),
+    (
+        "tools/h7_activation_day.sh",
+        "HEALTH=",
+        "reason (a): preserve Python exit status; BAD is derived with the anchored BAD= sed filter.",
+    ),
+    (
+        "tools/h7_activation_day.sh",
+        "SOURCE_OUT=",
+        "reason (a): preserve SOURCE_RC as the Python exit status; SOURCE is derived with the anchored summary: sed filter; raw output is diagnostic only.",
+    ),
+    (
+        "tools/h7_activation_day.sh",
+        "DATA_OUT=",
+        "reason (a): preserve DATA_RC as the Python exit status; DATA is derived with the anchored immutable receipt sed filter; raw output is diagnostic only.",
+    ),
+    (
+        "tools/h7_activation_day.sh",
+        "TOKEN_OUT=",
+        "reason (b): raw token status is only displayed and matched by case globs; no path or scalar value is extracted.",
+    ),
+    (
         "tools/daily_ritual.sh",
         'SH_OUT="$("$UV" run python -m options_researcher.h7_source_health',
         "reason (a): raw combined stdout+stderr capture exists only so "
@@ -140,7 +170,7 @@ ALLOWLIST: list[tuple[str, str, str]] = [
         "on the next line via an anchored `grep -Eo "
         "'^(open_auction|open|midmorning|midday|preclose|NONE)$' | tail "
         "-1`. TAG_RAW is also dumped verbatim on a refusal (`echo "
-        "\"$TAG_RAW\"` under the unparseable-output branch) so the operator "
+        '"$TAG_RAW"` under the unparseable-output branch) so the operator '
         "can see exactly what banner/output confused the parse -- that's "
         "diagnostic display, not a second parse path.",
     ),

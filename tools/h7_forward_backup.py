@@ -400,9 +400,6 @@ def verify_restored_tree(restored_root: Path, *, invalidations: dict | None = No
     dg_root = restored_root / "reports/h7_data_gate"
     if dg_root.exists():
         receipt_paths += list(dg_root.glob("*/receipts/*.json"))
-    schwab_dg_root = restored_root / "reports/h7_data_gate_schwab"
-    if schwab_dg_root.exists():
-        receipt_paths += list(schwab_dg_root.glob("*/receipts/*.json"))
     for path in sorted(receipt_paths):
         try:
             receipt = load_receipt(path)
