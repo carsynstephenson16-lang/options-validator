@@ -60,3 +60,5 @@ All 26 R-tags are closed in substance, scope discipline is clean, and the three 
 
 ---
 **Owner ruling on finding 2 (2026-09-08 20:18 ET, in-session):** option (ii) as numbered above — revert only the restore-scan half of WP-A.11, keep the `BACKUP_PATHS` entry. Recorded as Brief 40 Amendment A1; the revert is added to Codex's fix round 1.
+
+**Correction (2026-09-09, from round 2):** finding 5 wrongly listed `reports/h7_data_gate/h7-forward-15-v1/receipts` as an empty leftover directory; it holds 8 tracked receipts and was never touched. Only `reports/h7_data_gate/nested/…` was residue. Codex's dispute in the PR body was correct.
