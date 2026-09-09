@@ -8,9 +8,9 @@ for what rebuilds these, [[hypotheses]] for what data feeds each card.
 
 | Surface | Command | Output | Refresh |
 |---|---|---|---|
-| Mission control | `python -m options_researcher.dashboard` | `.tmp/dashboard/index.html` | Rebuilt by the 07:10 ritual |
-| Attractiveness / Top-3 | `python -m options_researcher.attractiveness_dashboard` | `.tmp/dashboard/attractiveness.html` (~500 KB) | Same |
-| Live preview server | `python -m options_researcher.live_dashboard --serve` | `http://127.0.0.1:8642/` | Manual-only; base page is a snapshot, its LIVE panel polls `/live.json` every 30s |
+| Mission control | `python -m options_researcher.dashboard` | `.tmp/dashboard/index.html` | Rebuilt by the 09:09 ritual |
+| Attractiveness / Top-3 | `python -m options_researcher.attractiveness_dashboard` | `.tmp/dashboard/attractiveness.html` (~500 KB) | Same. Layout redesigned 2026-09-07 (Brief 39, PR #159): lane-board / agreement table, `BOARD_LANES_ENABLED=True` by default (`config.py:941`); output path and bookmark unchanged |
+| Live preview server | `python -m options_researcher.live_dashboard --serve` | `http://127.0.0.1:8642/` | Kept running by LaunchAgent `com.carsyn.options-validator.live-dashboard` (owner-installed, `KeepAlive`, healthy since 2026-08-26 — its `-15` last-exit in `launchctl list` is stale bookkeeping); base page is a snapshot, its LIVE panel polls `/live.json` every 30s |
 | QM context module | (data provider, not a page) | — | Ritual refreshes its OHLCV cache |
 
 All four are stdlib Python, zero web frameworks, zero new processes for the
@@ -24,21 +24,23 @@ the page down.
 
 Primary bookmark:
 `file:///Users/carsynstephenson/options-validator-ops/.tmp/dashboard/attractiveness.html`
-— refresh re-reads the file after each 07:10 ritual run; shows "Market
+— refresh re-reads the file after each 09:09 ritual run; shows "Market
 close <date>" / "Research updated <date>" chips, with an explicit stale
 warning when research context lags behind the chain data.
 
 Secondary bookmark: the same directory's `index.html` (mission control).
-**Known quirk (P1, not yet fixed):** its yellow "DATA AS-OF" banner is
-pinned to `config.BACKTEST_END` (2026-06-30) rather than the actual latest
-close — read the header sub-line and the H7 panel for real freshness
-instead (`dashboard.py::_default_data_as_of`).
+**Fixed 2026-09-04 (Brief 37 WP-A, PR #156):** its yellow "DATA AS-OF"
+banner now shows the earliest last-cached-close date across
+`config.UNIVERSE` (`dashboard.py:123-144`, `_default_data_as_of`). Before
+that fix it was pinned to `config.BACKTEST_END` (2026-06-30) regardless of
+real freshness — historical quirk, no longer live.
 
-The live-preview server only resolves while manually started; nothing in
-the automation starts it (the live lane is itself gated on a same-day
-market-hours schema probe, `options_researcher.live_quotes --probe`), and it
-can never render a FIRE signal in the preview lane — that stays owned by
-`entry_watch` on completed-session closes (test-enforced).
+The live-preview server is kept up by its own LaunchAgent on the ops
+checkout (install is an explicit owner step, not part of the 09:09
+ritual); the live lane is still gated on a same-day market-hours schema
+probe (`options_researcher.live_quotes --probe`), and it can never render
+a FIRE signal in the preview lane — that stays owned by `entry_watch` on
+completed-session closes (test-enforced).
 
 ## Why this architecture (decision record)
 

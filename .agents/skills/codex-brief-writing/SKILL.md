@@ -54,5 +54,8 @@ executor. CLAUDE.md's division of labor makes this hand-off standing policy;
 - Every implementation PR starts as a GitHub draft. The executor may not make
   it ready, merge, deploy, sync an operational checkout, modify a ledger, or
   flip authority. Green checks are review evidence, not landing authority.
+- The return leg — verifying what the executor hands back — is the
+  `executor-handback-verification` skill; use it before repeating any
+  executor claim or writing an implementation-review verdict.
 - Closest existing example:
   `docs/superpowers/plans/2026-08-13-07-h7-schwab-b2-receipt-path-codex-brief.md`.

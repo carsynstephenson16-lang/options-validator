@@ -134,3 +134,40 @@ RAG health indexed 1072 sources and 35065 chunks; 0 source failures were reporte
 ## [2026-09-02] ingest | RAG health
 
 RAG health indexed 1129 sources and 35626 chunks; 0 source failures were reported.
+
+
+## [2026-09-09] ingest | RAG health
+
+RAG health indexed 1233 sources and 37004 chunks; 0 source failures were reported.
+
+## [2026-09-09] lint | 2026-09-09 stale-status reconciliation (owner-directed PM sweep)
+
+Owner directed a full vault refresh in-session ("ensure it's up to date to
+where we are"). A Sonnet audit (raw output not persisted; the corrections
+below are its findings after re-verification) was checked against
+canonical sources, then applied here; an Opus adversarial audit of the
+result caught two errors in the first pass (brief 29 status, leftover
+07:10 mentions), fixed before commit. hypotheses.md — H7 as-of bumped to 2026-09-09
+with Brief 36 door (#147) + Brief 40 activation-day chain (#161 @ d95a5a1)
+landed, source health 7/15 with AMZN/MSFT/NOW/TEM UNHEALTHY, activation
+realistically early-to-mid October; H6-0001 recorded as open past its
+21-DTE rule with the H6/H8 evaluators PAUSED (ritual line; newest receipt
+2026-07-27) — owner item; H10b observed cadence (10 receipts, 0 fires,
+ET/IREN/USAR DATA-skipped) added as description only. data-layer.md — the
+"protection GAP" wording corrected (namespace guarded since d987c1f
+2026-08-09; brief 29 implemented and merged via PR #96 @ 42f6a1b 2026-08-27
+— the registry row and the brief header still disagree on its status, noted);
+holiday refusal (Brief 40 WP-C) and the isolated 10:00/13:00 intraday lane
+(#150) added. automation.md, dashboards.md, index.md — every current-tense 07:10 mention
+corrected to 09:09 (retimed 2026-08-26; monday-runbook flagged stale;
+decisions.md's 07:10 lines are historical and left as-is); Step 8 durability regression
+09-03→09-06 + Brief 38 fix (#158) recorded; new "Installed is not loaded"
+section from a live launchctl comparison (research-refresh installed but
+NOT loaded; job-health-digest + schwab-chain-intraday tracked but not
+installed, owner-gated). dashboards.md — banner pin marked FIXED (#156,
+dashboard.py:123-141); live-dashboard LaunchAgent recorded; Brief 39 board
+redesign noted on the Top-3 row. decisions.md — H7 freeze stamp bumped.
+Evidence trail: PROJECT_STATE.md 2026-09-08 refresh, README "Scope status",
+tools/launchagents/README.md:3-14, PRs #147/#150/#156/#158/#159/#161,
+ops checkout ritual log 2026-09-09_0909. index.md unchanged (all five
+pages listed; every wiki link resolves).
