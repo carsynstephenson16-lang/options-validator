@@ -19608,3 +19608,5 @@
 2026-09-09T13:09:27.878857+00:00	DATA_PULL_OHLCV 2026-09-09: Yahoo OHLCV refresh CEG rows=1163 path=.cache/underlying_ohlcv/CEG.parquet
 2026-09-09T13:09:28.245278+00:00	DATA_PULL_OHLCV 2026-09-09: Yahoo OHLCV refresh MSFT rows=2433 path=.cache/underlying_ohlcv/MSFT.parquet
 2026-09-09T13:09:28.558268+00:00	DATA_PULL_OHLCV 2026-09-09: Yahoo OHLCV refresh AMZN rows=2433 path=.cache/underlying_ohlcv/AMZN.parquet
+2026-09-09T19:45:42.063174+00:00	SCHWAB_CHAIN_CAPTURE session=2026-09-09 manifest_hash=52feab51c563ec6f19c1f20c473d58b7877a1da2b68c60305ac2b95eeaa286fd receipt_hash=dc86d0d665e39c66ab17931258ef67508c277dfc3b0951e3003028676a80c83c
+2026-09-10T13:14:31.728215+00:00	DATA_PULL 2026-09-10: Yahoo closes guarded refresh for cached symbols; guard: 0 ok, 0 restored, 0 restore failures, 25 fetch errors. receipt=reports/closes_receipts/2026-09-10/guarded-all-cached.json
