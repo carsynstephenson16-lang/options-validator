@@ -713,6 +713,162 @@ def _session_rows(status: HealthStatus, reason: str, as_of: str) -> list[HealthR
     ]
 
 
+def _launchagent_state(root: Path, as_of: str) -> list[HealthRow]:
+    relative = f"reports/ritual/launchagent_state_{as_of}.json"
+
+    def degraded(reason: str, receipt: str = relative) -> HealthRow:
+        return HealthRow("LaunchAgents", HealthStatus.DEGRADED, reason, receipt)
+
+    path, error = _contained_path(root, relative)
+    if error or path is None:
+        return [degraded(error or "unsafe receipt path")]
+    fallback = not path.is_file()
+    if fallback:
+        candidates = sorted((root / "reports/ritual").glob("launchagent_state_*.json"))
+        if not candidates:
+            return [
+                HealthRow(
+                    "LaunchAgents",
+                    HealthStatus.NOT_INSTRUMENTED,
+                    "launchagent_state receipt absent",
+                    relative,
+                )
+            ]
+        newest: tuple[datetime, Path] | None = None
+        for candidate in candidates:
+            candidate_relative = candidate.relative_to(root).as_posix()
+            safe, error = _contained_path(root, candidate_relative)
+            if error or safe is None:
+                return [degraded(error or "unsafe receipt path", candidate_relative)]
+            payload, error = _read_object(safe)
+            stamp = payload.get("run_at_utc") if payload else None
+            try:
+                timestamp = datetime.fromisoformat(stamp) if isinstance(stamp, str) else None
+            except ValueError:
+                timestamp = None
+            if error or timestamp is None or timestamp.utcoffset() is None:
+                return [degraded(error or "invalid run_at_utc", candidate_relative)]
+            if newest is None or timestamp > newest[0]:
+                newest = (timestamp, safe)
+        if newest is None:
+            return [degraded("no readable observation timestamp")]
+        path = newest[1]
+        relative = path.relative_to(root).as_posix()
+    payload, error = _read_object(path)
+    if error or payload is None:
+        return [degraded(error or "invalid receipt", relative)]
+    if payload.get("schema_version") != "daily_ritual/launchagent_state/v1":
+        return [degraded("schema_version mismatch", relative)]
+    summary = payload.get("summary")
+    states = payload.get("states")
+    run_date = payload.get("run_date")
+    observed = payload.get("run_at_utc")
+    session = payload.get("as_of")
+    try:
+        if not isinstance(run_date, str) or date.fromisoformat(run_date).isoformat() != run_date:
+            raise ValueError("invalid run_date")
+        if not isinstance(observed, str) or datetime.fromisoformat(observed).utcoffset() is None:
+            raise ValueError("invalid run_at_utc")
+        if session is not None and (
+            not isinstance(session, str) or date.fromisoformat(session).isoformat() != session
+        ):
+            raise ValueError("invalid as_of")
+    except ValueError as exc:
+        return [degraded(str(exc), relative)]
+    count_keys = (
+        "loaded",
+        "installed_not_loaded",
+        "disabled",
+        "loaded_not_installed",
+        "untracked",
+        "not_installed",
+    )
+    if not isinstance(summary, dict) or not isinstance(states, list):
+        return [degraded("invalid states or summary", relative)]
+    if any(type(summary.get(key)) is not int or summary[key] < 0 for key in count_keys):
+        return [degraded("invalid summary counts", relative)]
+    unavailable = summary.get("unavailable_reason")
+    inputs = summary.get("unavailable_inputs")
+    if (
+        (unavailable is not None and not isinstance(unavailable, str))
+        or not isinstance(inputs, list)
+        or not all(isinstance(x, str) for x in inputs)
+    ):
+        return [degraded("invalid unavailable metadata", relative)]
+    actual_counts: dict[str, int] = dict.fromkeys(count_keys, 0)
+    for item in states:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("label"), str)
+            or not item["label"]
+        ):
+            return [degraded("invalid label state", relative)]
+        state = item.get("state")
+        if (
+            not isinstance(state, str)
+            or state.lower() not in actual_counts
+            or state != state.upper()
+        ):
+            return [degraded("unknown label state", relative)]
+        if any(type(item.get(key)) is not bool for key in ("installed", "loaded", "disabled")):
+            return [degraded("invalid label membership", relative)]
+        actual_counts[state.lower()] += 1
+    if any(summary[key] != actual_counts[key] for key in count_keys):
+        return [degraded("summary counts disagree with states", relative)]
+    if unavailable is not None:
+        return [degraded(f"{unavailable}; observed {observed}", relative)]
+    rows: list[HealthRow] = []
+    if fallback or run_date != as_of:
+        rows.append(
+            degraded(
+                f"receipt for run_date {run_date}; expected {as_of}; observed {observed}", relative
+            )
+        )
+    if session is None:
+        rows.append(
+            degraded(
+                f"as_of unresolved for run_date {run_date}; ritual crit at daily_ritual.sh:123",
+                relative,
+            )
+        )
+    if inputs:
+        rows.append(
+            degraded(f"unavailable_inputs={','.join(inputs)}; observed {observed}", relative)
+        )
+    for item in states:
+        state = item["state"]
+        if state in ("INSTALLED_NOT_LOADED", "DISABLED"):
+            rows.append(
+                HealthRow(
+                    item["label"],
+                    HealthStatus.FAILED,
+                    f"{state} in launchd gui domain, observed {observed}",
+                    relative,
+                )
+            )
+        elif state in ("UNTRACKED", "LOADED_NOT_INSTALLED"):
+            rows.append(
+                HealthRow(
+                    item["label"],
+                    HealthStatus.DEGRADED,
+                    f"{state} in launchd gui domain, observed {observed}",
+                    relative,
+                )
+            )
+    if rows:
+        return rows
+    counts = ", ".join(f"{key}={summary[key]}" for key in count_keys)
+    not_installed = ", ".join(item["label"] for item in states if item["state"] == "NOT_INSTALLED")
+    return [
+        HealthRow(
+            "LaunchAgents",
+            HealthStatus.OK,
+            f"{counts}; observed {observed}; NOT_INSTALLED (owner-gated): {not_installed or 'none'}",
+            relative,
+        )
+    ]
+
+
 def collect_health(
     root: Path,
     as_of: str,
@@ -738,6 +894,7 @@ def collect_health(
         *[_schwab_intraday(root, as_of, tag) for tag in config.SCHWAB_CHAIN_INTRADAY_TIMES],
         _schwab_preclose(root, as_of),
         _alignment_check(root, as_of),
+        *_launchagent_state(root, as_of),
         _research_refresh(research_root, as_of, invocation_date),
         _research_display_refresh(),
     ]
