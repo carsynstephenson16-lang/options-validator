@@ -1,0 +1,26 @@
+{
+  "as_of": null,
+  "run_at_utc": "2026-08-21T13:09:00Z",
+  "run_date": "2026-08-21",
+  "schema_version": "daily_ritual/launchagent_state/v1",
+  "states": [
+    {
+      "disabled": false,
+      "installed": true,
+      "label": "com.carsyn.options-validator.example",
+      "loaded": true,
+      "state": "LOADED",
+      "tracked_path": "tools/launchagents/example.plist"
+    }
+  ],
+  "summary": {
+    "disabled": 0,
+    "installed_not_loaded": 0,
+    "loaded": 1,
+    "loaded_not_installed": 0,
+    "not_installed": 0,
+    "unavailable_inputs": [],
+    "unavailable_reason": null,
+    "untracked": 0
+  }
+}
