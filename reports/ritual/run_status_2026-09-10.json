@@ -1,0 +1,12 @@
+{
+  "as_of": "2026-09-10",
+  "capture_receipt_path": "reports/ritual/capture_receipt_2026-09-10.json",
+  "capture_receipt_sha256": "d6d1fb792cf04c06ab0134063b908251ec813abadb47582ec27b96ce84c9cf24",
+  "code_sha": "5ff7001c2bf8fa56f5fd741aa73876c578ce9b20",
+  "log_path": "/Users/carsynstephenson/options-validator-ops/.tmp/daily_ritual/2026-09-11_0951.log",
+  "run_at_et": "2026-09-11T09:56:44.808642-04:00",
+  "run_at_utc": "2026-09-11T13:56:44.808642Z",
+  "run_date": "2026-09-11",
+  "schema_version": "daily_ritual/run_status/v1",
+  "status": "OK_STARVED"
+}
