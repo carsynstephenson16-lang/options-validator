@@ -317,3 +317,62 @@ today for both checkouts.
   calendar is `/presentations-webcasts` (the obvious path is a soft 404); Vistra's
   events page defaults to the Past tab; `ir.usare.com` and `investors.iren.com` do
   not resolve.
+
+---
+
+## 11. Loose-ends pass (same day, 11:20–13:00 ET) — what was tied up, what was found, what is still yours
+
+**Session:** Claude (Fable 5.1) orchestrating; Opus subagents for judgment
+(Codex brief 42 author, two fact-packet drafters/reviewers, four brief reviewers,
+six packet reviewers); Sonnet for mechanical work (full test run, EDGAR retrieval,
+doc edits). New memos under `reports/2026-09-15-audit/`: G (EDGAR block), H (fact
+packets), I/K/N/O (brief 42 rounds 1–4), J/L/M/P/Q/R (fact-packet rounds 1–6).
+
+### 11.1 Live state at the time of the pass (Run-verified)
+
+| Item | State |
+|---|---|
+| Schwab token | **EXPIRED 14:36 UTC.** 09:31 open capture OK (15/15); 11:00 intraday capture `SCHWAB REAUTH REQUIRED`; 13:00 and 15:45 will fail the same way until `tools/setup_schwab.py` is run. |
+| 09:09 ritual | `OK_STARVED`, evidence commit `a3745ab` pushed; ops HEAD == origin/main == main. Pipeline alive on the *old* gate (PR #175 unmerged). |
+| Token warning wording | The ritual printed "re-auth this weekend" with 1.2 h left. Fixed on this branch: the EXPIRING message now says "re-auth before expiry" (`options_researcher/schwab_token_age.py`, test updated). |
+| PR #175 | Draft, MERGEABLE, one evidence commit behind main, no conflict. |
+| Full offline suite at `f228894` | **3,944 tests, OK (5 skipped), exit 0, 5 min 35 s**; ruff check clean; pyright 0 errors; `ruff format --check` fails on 267 pre-existing files (already disclosed in the PR body; CI enforces lint only). |
+| Untracked `reports/intraday_capture/2026-09-15/` in ops | Not a repeat of the 09-11 hazard: that path is in every `EVIDENCE_ALLOW` copy and in `DATA_TIER_PATHS`. |
+
+### 11.2 Tied up on this branch
+
+- **Codex brief 42** — `docs/superpowers/plans/2026-09-15-42-verdict-bar-ledger-binding-codex-brief.md`, rev 5, Status DRAFT. Four adversarial rounds (I: FAIL, 3 blockers → K: PASS WITH FIXES → N: PASS WITH FIXES → O: PASS WITH FIXES, all applied). Honest title: *"Refuse H6/H8/H10b verdicts when `config.py` disagrees with the registered ledger record."* It is a refusal guard, not H7-grade sourcing — the registrations hold their bars as prose, so config stays the number source and the record contributes accept-or-refuse; the reviewers ruled that this must not be described as "reading the bar from the ledger." Found along the way: a **fourth** live verdict read (`h6_watch.py:748`, the monthly cap that defines a full-loss month) and the v2 kill date at `:710`; there is no H10b scorer at all, so its live read is the resume floor. Owner decision **D-1** (H8: build a bound scorer, or retire pending re-registration) is inside the brief and UNRULED; the H8 package is skipped-with-reason if unruled. Hands off from `main` only after #175 merges. Registry row 42 reserved.
+- **Owner fact packets** — `reports/2026-09-15-audit/H-owner-fact-packets.md`, Revision 6.2. H9 full-file hash fact (Packet 2): text passed round 3 **as written**; appendable once the sequencing preconditions in the packet are met. H6-0001 expiry fact (Packet 1): six rounds (J → L → M → P → Q → R); round 6 verdict **READY WITH FIXES, all non-text** — the Revision 6.1 text may be appended as-is after Friday's close. Each command is guarded: it refuses on placeholders, before 2026-09-19 ET, on any tree not on `main` at `origin/main`, on a dirty tree, on a wrong remote, on any cited path not committed, on a label outside {Official-source, Vendor-source}, on an intrinsic that does not equal max(0, close − 220) × 100, and on any byte outside the four fill slots differing from the reviewed text.
+- Three 2026-07-25 runbook docs carry a SUPERSEDED banner (kept for their 16 inbound links).
+- `web-fetch-order` skill now records the non-personal User-Agent rule, the IR-site quirks, and the 2026-09-15 finding that an **email-free UA gets HTTP 403 from EDGAR** (the earlier "achieves the same result" claim was LLM-asserted and is wrong).
+- `.claude/rules/ledger.md` drawdown wording aligned with the `METRIC_CORRECTION` fact (entry-date-ordered closed-trade value, not "chronological").
+- PROJECT_STATE.md blockers and next actions refreshed.
+
+### 11.3 What the adversarial rounds caught (worth reading even if you skip the receipts)
+
+1. **The H6-0001 "what was observed" paragraph was wrong four rounds running, each time because a true statement about one data lane was promoted into a statement about the whole record.** Rev 2 said the take-profit was "never within reach" (from two marks six weeks apart). Round 2: NVDA closed above $220 on 12 of 33 sessions — claim false. Rev 3 said the window was "unknown." Round 3: **14 Schwab pre-close captures** of the exact contract exist (best bid 13.50, 72.5 % of trigger; 08-28 bid 5.55 → −$372). Round 4: the **intraday capture lane** holds 66 more quotes (best bid 15.05 at 08-14 09:31, 80.8 % of trigger). Round 5, after an exhaustive scan of every NVDA parquet in the shared cache: the **parked ThetaData v2 namespace** covers 07-27 → 07-31 (bids 3.25–5.40). Final, Run-verified across four lanes: **86 in-window rows, 23 of 33 sessions observed, 10 unobserved (listed by date), 0 rows reach the $1,841.30 trigger, best 80.8 %; the missed 21-DTE close would have booked −$372 to −$377 depending on provider.** The conclusion (take-profit never fired; outage cost is a number, not unknown) survived measurement instead of resting on a model or an absence. Round 6 spot-checked dashboards, composite caches and three Obsidian vaults: no fifth lane.
+2. **Both drafts pre-decided for the owner** ("the owner selected (a)") — the A2 failure mode in new words. Fixed to the `METRIC_CORRECTION` template: the append is the ratification; nothing is claimed before it.
+3. **The append target was wrong twice.** The primary checkout `~/options-validator` is on `claude/rest-2026-09-09` (17 facts.log lines behind main); `git worktree add … main` fails because main is checked out in `~/options-validator-ops`. The only tree on main is the ops checkout; the guarded command now requires branch == main, HEAD == origin/main after fetch, clean `git status --porcelain`, matching remote URL, and every path the fact cites present in that tree — which means **PR #175 and the receipt memos must land before either fact is appended.**
+4. **Placeholder burn risk.** `append_fact`'s dedupe makes a first append permanent, so a placeholder typo would burn the key forever. The command now refuses on any `<`/`>`, on any date before 2026-09-19 ET, and on any byte outside the three fill slots differing from the reviewed text.
+5. **The brief's first mechanism sealed nothing** (a record-hash *field* compared to a constant, never recomputed). Replaced by `verify()` + prose-anchor refusal; `verify()` does recompute every record hash over its body (`research/ledger.py:557-559`).
+6. **The H9 receipt cannot be canonically hashed at all** — it contains NaN and `canonical_json` sets `allow_nan=False`. The seal has to be a sha256 of the file bytes, or the writer must stop emitting NaN.
+7. **Reviewer claims were themselves checked.** Round 2's Black-Scholes "within 4–8 % of firing" was off by ~45 % against the real quotes; round 1 of the brief mis-cited a seq; rev 1 of the packet cited a manifest key that does not exist. Every number in the final texts reproduced independently at least twice.
+
+### 11.4 Not tied up — owner-only, in order
+
+| When | Action | Notes |
+|---|---|---|
+| **Now** | `uv run python tools/setup_schwab.py` | Token expired 10:36 ET; 13:00 and 15:45 captures are lost until then. |
+| Now | Decide the EDGAR contact string | SEC requires name + email in the User-Agent; an email-free UA is refused (Run-verified). Supply a **non-personal project mailbox**, or paste the 15 acceptance timestamps by hand into memo G. Until then the 15 `append-raw` rows stay blocked. |
+| After #175 review | Merge #175; `git -C ~/options-validator-ops merge --ff-only origin/main`; switch the two hook `command` paths to `.agents/hooks/` | Order matters: the hook switch before merge fails-closed. |
+| Before Fri 09-18 close | Rule on H6-0001: (a) expire + disclosure fact, (b) reconstructed late close (not recommended — contradicts the registration), (c) prospective Schwab-lane amendment | Rounds 3–5 made (c) more live than the original packet said: 08-28 quotes exist on two lanes; only an evaluator on those lanes is missing. The (a) fact is drafted and passed six rounds; it is appended **after** Friday's close, from the ops checkout (the only tree on `main`), after #175 and the receipt memos land, with a clean tree (the ritual must first commit its own `reports/intraday_capture/2026-09-15/`). |
+| After #175 lands | Append the H9 hash fact (Packet 2) from the ops checkout, commit, push | Text passed round 3 as written. |
+| Next | Rule D-1 (H8) — then hand brief 42 to Codex from `main` | Brief is DRAFT rev 5, four rounds applied. |
+| Next | Brief 41 lands after #175 (rebase + registry recompute); stale-branch deletions after the guard | Unchanged from §4. |
+| Week of 10-05 | Re-check next earnings dates | None announced as of 09-15. |
+
+### 11.5 Process notes
+
+- Twenty-one agent dispatches (5 initial, 4 brief-42 reviews, 6 packet reviews, 6 author revisions); every review was by an agent that had not written the artifact, and every rewrite was by the original author with the receipt in hand. Rounds 2, 3, 4 and 5 of the packets each found a blocker the previous revision had introduced or missed — stopping after one round would have shipped a false claim into a permanent record. Reviewer arithmetic was itself wrong twice (round 2's Black-Scholes, round 5's floor rounding) and was caught by the author's reproduction; nothing in the final texts rests on a number checked fewer than two times independently.
+- A `source_health` receipt was written into this worktree by the 11:24 ET check (`reports/h7_receipts/.../2026-09-15.json`); it belongs to the ops lane and is left unstaged.
+- The session's working directory was bounced out of the worktree once by a `cd` into the main checkout; all agents worked against absolute paths and the worktree HEAD was re-confirmed at `f228894` before each edit.

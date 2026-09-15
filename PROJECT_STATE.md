@@ -48,10 +48,10 @@ file above, not here; update the sections below in place.
 
 | Blocker | Who | Detail |
 |---|---|---|
-| Schwab refresh token expires **2026-09-15 14:36 UTC (10:36 ET)** | Owner | `uv run python tools/setup_schwab.py` (Keychain prompt). After expiry the 15:45 capture fails until re-auth; each missed session is a permanent gap. |
+| Schwab refresh token **EXPIRED 2026-09-15 14:36 UTC (10:36 ET)** | Owner | `uv run python tools/setup_schwab.py` (Keychain prompt). Run-verified 11:24 ET: the 09:31 open capture succeeded (15/15), the 11:00 intraday capture failed `SCHWAB REAUTH REQUIRED`; the 13:00 and 15:45 captures will fail the same way until re-auth. Each missed session is a permanent gap. |
 | H6-0001 expires **2026-09-18** with no executable close path | Owner | The H6 evaluator binds to the frozen ThetaData cache, so the registered 21-DTE close (due ~08-28) could never fire. Last verifiable mark (Schwab pre-close 09-10): bid 3.75 / ask 3.80 vs $9.21 entry; NVDA closed $210.96 on 09-14 (strike $220 is out of the money). Disposition packet: audit report §7. |
-| Earnings source health **2/15 healthy** | Owner (runs the refresher) | All 15 last-report dates are now SEC-8-K-confirmed (audit report §6 has the 15 ready `append-raw` commands); no name has announced its next date yet. H7 Schwab activation needs all nine cohort names healthy → realistic window October 2026. |
-| Ops pipeline stalled 09-11 → 09-15 | **Cleared 2026-09-15 01:4x ET** | Root cause: the ritual's own evidence commit contained paths no capture-side allow-list knew, so a single failed push (network blip 09-11) made every later capture and ritual refuse. Fast-forward pushed; root fix on this branch (allow-list superset + self-healing gate). Confirm the next 09:09 ritual prints `OK`/`OK_STARVED`, not the alignment refusal. |
+| Earnings source health **2/15 healthy** | Owner (runs the refresher) | All 15 last-report dates are SEC-8-K-confirmed (audit report §6 has the 15 `append-raw` commands). Two placeholders per row (`--known-as-of`, `--timing`) still need the EDGAR acceptance time. **Blocked 2026-09-15 (Run-verified):** sec.gov returns 403 to any User-Agent without a contact email; the owner must supply a non-personal project mailbox for the UA (never the personal address), or paste the 15 acceptance timestamps by hand — `reports/2026-09-15-audit/G-earnings-refresh-resolved-commands.md`. No name has announced its next date; re-check week of 2026-10-05. H7 Schwab activation needs all nine cohort names healthy → realistic window October 2026. |
+| Ops pipeline stalled 09-11 → 09-15 | **Cleared 2026-09-15 01:4x ET; confirmed 09:09 ET** | Root cause: the ritual's own evidence commit contained paths no capture-side allow-list knew, so a single failed push (network blip 09-11) made every later capture and ritual refuse. Fast-forward pushed; root fix on this branch (allow-list superset + self-healing gate). Run-verified: the 09-15 09:09 ritual printed `OK_STARVED` and pushed its evidence commit `a3745ab`; ops HEAD == origin/main == main. The self-healing gate itself is NOT yet what runs (PR #175 unmerged). |
 | `research-refresh` LaunchAgent installed but not loaded | Owner | Brief 41 (installed-vs-loaded check) is implemented by Codex on `codex/brief-41-launchagent-loaded-check`; hand-back review 2026-09-15: `reports/2026-09-15-audit/E-brief41-handback-review.md`. |
 
 ## 3. Next actions, in order
@@ -62,12 +62,24 @@ file above, not here; update the sections below in place.
    re-registration.
 3. **Owner:** run the 15 earnings `append-raw` commands, then `promote` per
    name, then `uv run python -m options_researcher.h7_source_health`.
-4. **Owner:** merge the 2026-09-15 audit PR, then sync ops
+4. **Owner:** merge the 2026-09-15 audit PR (#175, draft), then sync ops
    (`git -C ~/options-validator-ops merge --ff-only origin/main`) so the
    self-healing gate is what runs at 09:09.
 5. Land brief 41 per the hand-back review; then the rest of the audit
-   report's owner-decision list (§4): H9 receipt full-hash fact, hook
-   registration switch to `.agents/hooks/`, seven stale local branches.
+   report's owner-decision list (§4): hook registration switch to
+   `.agents/hooks/`, seven stale local branches.
+5a. **Owner, after #175 lands:** ratify (by appending) the two reviewed fact
+   packets in `reports/2026-09-15-audit/H-owner-fact-packets.md` — H9
+   receipt full-file hash (runnable now) and H6-0001 unmarked expiry (after
+   Friday's close; fill the two placeholders first, the guarded command
+   refuses otherwise). Append only from the main checkout after the branch
+   lands (the worktree's facts.log is 4 lines ahead).
+5b. **Owner decision D-1 (H8):** build a scorer bound to the registered rule,
+   or retire H8 pending re-registration. Codex brief 42
+   (`docs/superpowers/plans/2026-09-15-42-verdict-bar-ledger-binding-codex-brief.md`)
+   binds the H6/H10b bars and hard-kill reads to their ledger records and
+   is conditional on D-1 for the H8 package; it hands off from `main` only
+   after #175 merges, never from this branch.
 6. **Research direction (owner call):** decide whether to register Candidate
    A (earnings-window defined-risk short volatility, MSFT/AMZN) — the only
    family with literature support that is feasible under the 2026-07-24 gate
@@ -101,4 +113,11 @@ file above, not here; update the sections below in place.
   `.agents/hooks/` with tests (previously laptop-only and untested). The local
   registration still points at the laptop copies until the owner switches the
   two `command` paths in `.claude/settings.local.json` after merge.
+- Loose-ends pass (same day, 11:20–12:30 ET, report §11): brief 42 drafted
+  and adversarially reviewed (round 1 FAIL → rev 2 → round 2); owner fact
+  packets drafted and reviewed (round 1 → rev 2 → round 2); SUPERSEDED
+  banners on the three 2026-07-25 runbook docs; non-personal User-Agent
+  rule + IR-site quirks persisted in `web-fetch-order`; token warning no
+  longer says "this weekend" (it said so with 1.2 h left); `.claude/rules/ledger.md`
+  drawdown wording aligned with the `METRIC_CORRECTION` fact.
 - Nothing in `ledger/`, `config.py`, cache bytes, or `data/` changed.
