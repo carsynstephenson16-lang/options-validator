@@ -181,10 +181,47 @@ Do not hardcode current prices, event probabilities, or market odds.
 If live data access is unavailable, return a blocker instead of guessing.
 Do not turn this repo into a live trading bot: no live order placement.
 Do not use "proven," "confirmed," "edge found," "works," or "guaranteed" about backtest results. Use "survived this test," "not yet rejected," "rejected," or "consistent with zero edge."
-The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
-forward-paper hypotheses; task sequencing lives in `PROJECT_STATE.md` (the
-canonical roadmap — its P0 gate binds), and H7's historical diagnostic is
-permanently retired. Before adding a new
+
+### Hard guardrails (non-negotiable), engineering rules, verdict rule (mirror of `.cursorrules` — keep identical)
+
+- NO LOOK-AHEAD: at each decision timestamp use only data available at or
+  before it. A leak invalidates every downstream result.
+- CONSERVATIVE FILLS: fill at the quote MID or WORSE -- never the favorable
+  side. Apply SLIPPAGE_HAIRCUT on top of mid. Use quote-based marks, not stale
+  last-traded prices.
+- COSTS: COMMISSION_PER_CONTRACT on BOTH legs each way (via a Lumibot
+  TradingFee) PLUS a half-spread cost on each leg.
+- LIQUIDITY: skip any contract failing MIN_OPEN_INTEREST or MAX_SPREAD_PCT --
+  check BOTH legs before trading.
+- EOD GAPS: ThetaData can miss EOD marks even when intraday quotes exist.
+  Prefer SKIPPING the day (log it) over silently using an intraday snapshot
+  inside an EOD backtest.
+- CACHE downloaded data locally (parquet).
+- Do NOT build a custom backtest engine, event loop, or fill simulator.
+  Configure Lumibot's (ThetaDataBacktesting + BacktestingBroker).
+- VERIFY every Lumibot/ThetaData API call against the INSTALLED library before
+  trusting it. Do not rely on remembered signatures. If a capability is
+  missing, STOP and report -- do not work around it by building infrastructure.
+- Every number in strategy logic comes from config.py. No magic numbers.
+- Keep it minimal. The goal is to validate edge, not build a framework.
+- Expectancy-per-trade after costs (with a bootstrap CI) is the headline.
+- The verdict gates on the number of LOSSES (MIN_LOSSES_FOR_VERDICT), not the
+  number of trades. A high win rate in a short-vol strategy proves nothing on
+  its own -- the rare losses decide whether the edge is real.
+- Registration feasibility gate (2026-07-24): a new loss-gated hypothesis or
+  forward window may only be registered if the historical base rate of its
+  full entry stack projects expected entries >= 2x the loss bar over the
+  declared window, OR the registration explicitly pre-accepts the starvation
+  risk quoting the computed number (H10 precedent). See
+  docs/superpowers/2026-07-24-registration-feasibility-gate.md.
+
+The live scope gate is README.md "Scope status", the registry of which
+hypotheses are registered (the list is NOT restated here — a copy in an
+instruction file goes stale silently; `ledger/experiments.jsonl` is the source
+of truth behind the registry); task sequencing lives in `PROJECT_STATE.md`
+(the canonical roadmap — its live blockers and standing gates bind and
+outrank any doc that implies building now), and H7's historical diagnostic
+is permanently retired. Before adding a new
 capability, ticker, strategy, or tool, answer: "Does this move one of the live
 hypotheses toward its declared verdict?" If no, write it into
 `ideas-parking-lot.md` and continue.
