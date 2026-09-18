@@ -105,7 +105,7 @@ def token_expiry_status(
             "expires_at_utc": expires_at_utc,
             "message": (
                 f"SCHWAB TOKEN EXPIRES IN {hours_remaining:.1f}h "
-                f"({expires_at_utc}) — re-auth this weekend with "
+                f"({expires_at_utc}) — re-auth before expiry with "
                 "tools/setup_schwab.py"
             ),
         }

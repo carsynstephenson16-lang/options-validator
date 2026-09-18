@@ -185,9 +185,12 @@ printed. Restic itself may execute its configured password command.
 
 A dirty tree normally refuses. The explicit `--stage-routine-evidence` flag
 permits a prerequisite `data(ritual)` commit of only the intersection of the
-ritual's `DATA_TIER_PATHS` and the capture wrappers' `EVIDENCE_ALLOW`.
-`reports/pick_tracker`, `reports/closes_receipts`, code, and any other dirty
-path outside that intersection still refuse, including pre-staged changes.
+ritual's `DATA_TIER_PATHS` and the capture wrappers' `EVIDENCE_ALLOW`. Since
+2026-09-15 that intersection is the whole data tier (`reports/pick_tracker`
+and `reports/closes_receipts` were added to every `EVIDENCE_ALLOW` copy after
+their absence stalled the ops pipeline 09-11..09-14); code, any
+code-suffixed file, and any dirty path outside the data tier still refuse,
+including pre-staged changes.
 The final evidence commit contains the source receipt, Schwab artifact and
 receipt, backup and restore receipts, new feasibility receipt if needed, and
 the index at `reports/h7_forward_schwab/<date>-activation-day-receipts.json`.
