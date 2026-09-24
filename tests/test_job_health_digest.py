@@ -52,6 +52,103 @@ class JobHealthDigestTests(unittest.TestCase):
         shutil.copyfile(FIXTURES / fixture, target)
         return target
 
+    def _launchagent_rows(self):
+        return [
+            row
+            for row in collect_health(self.root, AS_OF)
+            if row.job == "LaunchAgents" or row.job.startswith("com.carsyn.")
+        ]
+
+    def test_launchagent_fixture_statuses(self):
+        cases = {
+            "loaded": HealthStatus.OK,
+            "unloaded": HealthStatus.FAILED,
+            "disabled": HealthStatus.FAILED,
+            "loaded_missing": HealthStatus.DEGRADED,
+            "untracked": HealthStatus.DEGRADED,
+            "not_installed": HealthStatus.OK,
+            "unavailable": HealthStatus.DEGRADED,
+            "unresolved": HealthStatus.DEGRADED,
+            "prior": HealthStatus.DEGRADED,
+        }
+        rows = self._launchagent_rows()
+        self.assertEqual([r.status for r in rows], [HealthStatus.NOT_INSTRUMENTED])
+        for fixture, expected in cases.items():
+            with self.subTest(fixture=fixture):
+                self._copy(
+                    f"launchagent_{fixture}.json", f"reports/ritual/launchagent_state_{AS_OF}.json"
+                )
+                rows = self._launchagent_rows()
+                self.assertEqual([r.status for r in rows], [expected])
+                self.assertTrue(
+                    all(r.path.endswith(f"launchagent_state_{AS_OF}.json") for r in rows)
+                )
+                if fixture in ("loaded", "unloaded", "disabled", "not_installed"):
+                    self.assertIn("2026-08-21T13:09:00Z", rows[0].reason)
+                if fixture == "not_installed":
+                    self.assertIn("com.carsyn.options-validator.example", rows[0].reason)
+                if fixture == "unresolved":
+                    self.assertEqual(
+                        rows[0].reason,
+                        "as_of unresolved for run_date 2026-08-21; ritual crit at daily_ritual.sh:123",
+                    )
+
+    def test_launchagent_unresolved_keeps_failed_labels(self):
+        path = self._copy(
+            "launchagent_unloaded.json", f"reports/ritual/launchagent_state_{AS_OF}.json"
+        )
+        payload = json.loads(path.read_text())
+        payload["as_of"] = None
+        path.write_text(json.dumps(payload))
+        rows = self._launchagent_rows()
+        self.assertEqual({r.status for r in rows}, {HealthStatus.DEGRADED, HealthStatus.FAILED})
+        self.assertEqual(
+            next(r.job for r in rows if r.status == HealthStatus.FAILED),
+            "com.carsyn.options-validator.example",
+        )
+
+    def test_launchagent_fallback_uses_observation_time_and_preserves_failures(self):
+        self._copy("launchagent_loaded.json", "reports/ritual/launchagent_state_2026-08-19.json")
+        self._copy("launchagent_prior.json", "reports/ritual/launchagent_state_2026-08-20.json")
+        rows = self._launchagent_rows()
+        self.assertEqual([r.status for r in rows], [HealthStatus.DEGRADED])
+        self.assertTrue(rows[0].path.endswith("launchagent_state_2026-08-19.json"))
+        self.assertIn("2026-08-21", rows[0].reason)
+        path = self.root / "reports/ritual/launchagent_state_2026-08-19.json"
+        payload = json.loads(path.read_text())
+        payload["states"][0].update(state="INSTALLED_NOT_LOADED", loaded=False)
+        payload["summary"].update(loaded=0, installed_not_loaded=1)
+        path.write_text(json.dumps(payload))
+        self.assertEqual(
+            {r.status for r in self._launchagent_rows()},
+            {HealthStatus.DEGRADED, HealthStatus.FAILED},
+        )
+
+    def test_launchagent_invalid_receipt_and_partial_inputs_never_ok(self):
+        path = self._copy(
+            "launchagent_loaded.json", f"reports/ritual/launchagent_state_{AS_OF}.json"
+        )
+        baseline = json.loads(path.read_text())
+        for key, value in (
+            ("schema_version", "wrong"),
+            ("states", "bad"),
+            ("run_at_utc", "bad"),
+            ("summary", {}),
+        ):
+            with self.subTest(key=key):
+                payload = dict(baseline, **{key: value})
+                path.write_text(json.dumps(payload))
+                self.assertEqual(
+                    [r.status for r in self._launchagent_rows()], [HealthStatus.DEGRADED]
+                )
+        baseline["summary"]["unavailable_inputs"] = ["print-disabled"]
+        path.write_text(json.dumps(baseline))
+        rows = self._launchagent_rows()
+        self.assertEqual([r.status for r in rows], [HealthStatus.DEGRADED])
+        self.assertIn("print-disabled", rows[0].reason)
+        path.write_text("{broken")
+        self.assertEqual([r.status for r in self._launchagent_rows()], [HealthStatus.DEGRADED])
+
     def _install_intraday_tag(self, tag: str) -> Path:
         scheduled, captured_et, captured_utc = INTRADAY_FIXTURE_FIELDS[tag]
         payload = json.loads((FIXTURES / "intraday_preclose.json").read_text())
