@@ -319,6 +319,52 @@ class OpsAlignmentCheckTests(unittest.TestCase):
                 (ROOT / "tools" / "schwab_chain_capture.sh").read_text(encoding="utf-8")),
         )
 
+    def test_every_allow_list_copy_covers_every_path_the_ritual_stages(self):
+        # 2026-09-11 incident: Step 8 of the ritual committed reports/pick_tracker
+        # (#93) and reports/closes_receipts (#130) — both in DATA_TIER_PATHS — but
+        # no wrapper allow-list knew them, so the ritual's OWN evidence commit
+        # read as AHEAD_CODE once its push failed: the 15:45 capture refused on
+        # 09-11 and 09-14 and the 09-14 ritual refused outright. Every path the
+        # ritual can ever stage must be evidence to every gate that judges it.
+        def shell_list(path: Path, name: str) -> list[str]:
+            text = path.read_text(encoding="utf-8")
+            start = text.index(f"{name}=(")
+            return text[start + len(f"{name}=("):text.index(")", start)].split()
+
+        ritual = ROOT / "tools" / "daily_ritual.sh"
+        staged = set(shell_list(ritual, "DATA_TIER_PATHS"))
+        staged |= set(shell_list(ritual, "FULL_TIER_PATHS"))
+        self.assertIn("reports/pick_tracker", staged)
+        self.assertIn("reports/closes_receipts", staged)
+        for wrapper in (
+            "ops_alignment_check.sh",
+            "schwab_chain_capture.sh",
+            "schwab_chain_intraday_capture.sh",
+            "h7_activation_day.sh",
+        ):
+            with self.subTest(wrapper=wrapper):
+                allowed = set(shell_list(ROOT / "tools" / wrapper, "EVIDENCE_ALLOW"))
+                self.assertEqual(
+                    staged - allowed,
+                    set(),
+                    f"{wrapper} would classify a ritual evidence commit as code",
+                )
+
+    def test_ritual_data_tier_commit_is_evidence_only(self):
+        # Exact path shape of ops commit 6873263 (2026-09-11): facts.log plus the
+        # pick-tracker scoreboard and the guarded-closes receipt. Must never be
+        # read as unpushed code — that reading cost three captures.
+        repo = self._repo(ahead_paths=(
+            "ledger/facts.log",
+            "reports/pick_tracker/dryrun/2026-09-10/scoreboard.json",
+            "reports/closes_receipts/2026-09-11/guarded-all-cached.json",
+        ))
+        completed = self._run(repo)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("status=AHEAD_EVIDENCE_ONLY", completed.stdout)
+        self.assertNotIn("ACTION NEEDED", completed.stdout)
+
     def test_every_refusing_divergence_shape_exits_nonzero_with_the_command(self):
         cases = {
             "BEHIND": (self._repo(behind=1), "merge --ff-only origin/main"),
