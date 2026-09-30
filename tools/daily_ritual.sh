@@ -384,6 +384,17 @@ fi
 echo ">>> schwab token:"
 "$UV" run python -m options_researcher.schwab_token_age || true
 
+# Installed-versus-loaded LaunchAgent advisory (2026-09-09). DELIBERATELY
+# OUTSIDE the gated regions and the Schwab preclose lane below. Prints
+# operator lines and writes an advisory receipt only; never touches CRITICAL,
+# CRIT_COUNT, DATA_STARVED, or RITUAL_TERMINAL_STATUS. The CLI always exits 0;
+# `|| true` is belt-and-braces so an advisory can never break the ritual.
+# ---- launchagent state ----
+echo ">>> launchagents:"
+"$UV" run python -m options_researcher.launchagent_state \
+  --root "$REPO" --as-of "$AS_OF" --run-date "$RUN_DATE" || true
+# ---- end launchagent state ----
+
 # ---- Schwab preclose lane (brief 17 WP-F) ----
 # H10b and the H5 observer run OUTSIDE the H7 data-gate fence, and ONLY they
 # do: ledger seq 28 clause 1 and seq 29 clause 2 record the owner-confirmed
