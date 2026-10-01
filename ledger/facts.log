@@ -19769,3 +19769,17 @@
 2026-09-30T13:41:44.139415+00:00	DATA_PULL_OHLCV 2026-09-30: Yahoo OHLCV refresh VST rows=2448 path=.cache/underlying_ohlcv/VST.parquet
 2026-09-30T13:41:44.411237+00:00	DATA_PULL_OHLCV 2026-09-30: Yahoo OHLCV refresh CEG rows=1178 path=.cache/underlying_ohlcv/CEG.parquet
 2026-09-30T13:41:44.836756+00:00	DATA_PULL_OHLCV 2026-09-30: Yahoo OHLCV refresh MSFT rows=2448 path=.cache/underlying_ohlcv/MSFT.parquet
+2026-09-30T19:45:49.857502+00:00	SCHWAB_CHAIN_CAPTURE session=2026-09-30 manifest_hash=3dd77d4f4aa86ca0cdc23d95b0e3ac727ba8c5018f16f4c422d7e9bc08ce2fa3 receipt_hash=f650fdd8ad910e1ce89048b99485e54e5f3ca225e60e215f848ab83b94d80905
+2026-10-01T13:15:44.192572+00:00	DATA_PULL 2026-10-01: Yahoo closes guarded refresh for cached symbols; guard: 25 ok, 0 restored, 0 restore failures, 0 fetch errors. receipt=reports/closes_receipts/2026-10-01/guarded-all-cached.json
+2026-10-01T13:15:50.647256+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh CRWV rows=379 path=.cache/underlying_ohlcv/CRWV.parquet
+2026-10-01T13:15:50.959076+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh TEM rows=575 path=.cache/underlying_ohlcv/TEM.parquet
+2026-10-01T13:15:51.278229+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh PLTR rows=1507 path=.cache/underlying_ohlcv/PLTR.parquet
+2026-10-01T13:15:51.531044+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh NOW rows=2449 path=.cache/underlying_ohlcv/NOW.parquet
+2026-10-01T13:15:51.788983+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh SMCI rows=2449 path=.cache/underlying_ohlcv/SMCI.parquet
+2026-10-01T13:15:52.096638+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh NVDA rows=2449 path=.cache/underlying_ohlcv/NVDA.parquet
+2026-10-01T13:15:52.380938+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh AMD rows=2449 path=.cache/underlying_ohlcv/AMD.parquet
+2026-10-01T13:15:52.674007+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh AVGO rows=2449 path=.cache/underlying_ohlcv/AVGO.parquet
+2026-10-01T13:15:52.949933+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh VST rows=2449 path=.cache/underlying_ohlcv/VST.parquet
+2026-10-01T13:15:53.138129+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh CEG rows=1179 path=.cache/underlying_ohlcv/CEG.parquet
+2026-10-01T13:15:53.472926+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh MSFT rows=2449 path=.cache/underlying_ohlcv/MSFT.parquet
+2026-10-01T13:15:53.791947+00:00	DATA_PULL_OHLCV 2026-10-01: Yahoo OHLCV refresh AMZN rows=2449 path=.cache/underlying_ohlcv/AMZN.parquet

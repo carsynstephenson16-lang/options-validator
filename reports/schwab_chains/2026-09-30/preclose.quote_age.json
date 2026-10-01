@@ -1,0 +1,1061 @@
+{
+  "age_reference": "per-symbol maximum of the same timestamp column over ALL rows of that symbol's chain file",
+  "display_only": true,
+  "manifest_hash": "3dd77d4f4aa86ca0cdc23d95b0e3ac727ba8c5018f16f4c422d7e9bc08ce2fa3",
+  "max_as_of_session": "2026-09-30",
+  "package": {
+    "columns": {
+      "timestamp": {
+        "all_rows": {
+          "after_session_rows": 0,
+          "age_minutes": {
+            "max": 375.7262,
+            "p50": 0.0236,
+            "p90": 0.2472
+          },
+          "max_utc": "2026-09-30T19:45:48.578000+00:00",
+          "min_utc": "2026-09-30T13:30:00.983000+00:00",
+          "null_count": 0,
+          "prior_session_rows": 0,
+          "row_count": 34427
+        },
+        "selectable": {
+          "after_session_rows": 0,
+          "age_minutes": {
+            "max": 1.1819,
+            "p50": 0.0107,
+            "p90": 0.0488
+          },
+          "max_utc": "2026-09-30T19:45:48.532000+00:00",
+          "min_utc": "2026-09-30T19:44:14.947000+00:00",
+          "null_count": 0,
+          "prior_session_rows": 0,
+          "row_count": 7937
+        }
+      },
+      "trade_timestamp": {
+        "all_rows": {
+          "after_session_rows": 0,
+          "age_minutes": {
+            "max": 1051422.824,
+            "p50": 311.1165,
+            "p90": 21598.5686
+          },
+          "max_utc": "2026-09-30T19:45:47.167000+00:00",
+          "min_utc": "2024-09-30T16:02:32.336000+00:00",
+          "null_count": 4030,
+          "prior_session_rows": 13415,
+          "row_count": 34427
+        },
+        "selectable": {
+          "after_session_rows": 0,
+          "age_minutes": {
+            "max": 451002.447,
+            "p50": 94.3977,
+            "p90": 3175.6771
+          },
+          "max_utc": "2026-09-30T19:45:47.167000+00:00",
+          "min_utc": "2025-11-21T15:03:15.174000+00:00",
+          "null_count": 0,
+          "prior_session_rows": 1844,
+          "row_count": 7937
+        }
+      }
+    },
+    "row_count": 34427,
+    "selectable_row_count": 7937,
+    "symbol_count": 15
+  },
+  "schema_version": "schwab_quote_age_report/v1",
+  "selectable_definition": {
+    "abs_delta_band": [
+      0.15,
+      0.85
+    ],
+    "description": "generic liquidity gate plus |delta| band, mirroring data/recent_topup.py's default audit mask; a descriptive proxy, not any registered lane's exact selection rule",
+    "max_spread_pct": 0.1,
+    "min_open_interest": 100
+  },
+  "semantics": "WITHIN-PACKAGE DISPERSION, not absolute wall-clock age: each row's age is measured against the per-symbol MAXIMUM of the same timestamp column over ALL rows of that symbol's chain file, so a package whose quotes are ALL late reads as fresh. Absolute cross-day staleness appears only in prior_session_rows / after_session_rows, which compare each timestamp converted to America/New_York against the capture session date. All-rows statistics are dominated by illiquid contracts and run worse than the selectable subset by a margin that VARIES BY COLUMN -- orders of magnitude for the quote timestamp column, far less for trade_timestamp, whose selectable rows carry genuinely old last-trade times -- so the two populations are reported separately; a single blended statistic reads as a false alarm. Descriptive only -- no threshold, no gate, no effect on any receipt, verdict, or GO/NO_GO decision.",
+  "session": "2026-09-30",
+  "symbols": {
+    "AMD": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:16.690000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.2618,
+              "p50": 0.0522,
+              "p90": 0.2372
+            },
+            "max_utc": "2026-09-30T19:45:16.690000+00:00",
+            "min_utc": "2026-09-30T13:30:00.983000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 6498
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.2539,
+              "p50": 0.0446,
+              "p90": 0.0562
+            },
+            "max_utc": "2026-09-30T19:45:16.686000+00:00",
+            "min_utc": "2026-09-30T19:45:01.459000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1211
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:16.413000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 514417.1083,
+              "p50": 350.3704,
+              "p90": 18708.6887
+            },
+            "max_utc": "2026-09-30T19:45:16.413000+00:00",
+            "min_utc": "2025-10-08T14:08:09.914000+00:00",
+            "null_count": 905,
+            "prior_session_rows": 2671,
+            "row_count": 6498
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 89629.7208,
+              "p50": 160.1606,
+              "p90": 3088.602
+            },
+            "max_utc": "2026-09-30T19:45:16.413000+00:00",
+            "min_utc": "2026-07-30T13:55:33.168000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 340,
+            "row_count": 1211
+          }
+        }
+      },
+      "row_count": 6498,
+      "selectable_row_count": 1211
+    },
+    "AMZN": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:21.238000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.3276,
+              "p50": 0.0111,
+              "p90": 0.096
+            },
+            "max_utc": "2026-09-30T19:45:21.238000+00:00",
+            "min_utc": "2026-09-30T13:30:01.581000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 2516
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.0883,
+              "p50": 0.0091,
+              "p90": 0.0113
+            },
+            "max_utc": "2026-09-30T19:45:21.238000+00:00",
+            "min_utc": "2026-09-30T19:45:15.939000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 741
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:19.694000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 446449.1061,
+              "p50": 186.6358,
+              "p90": 13073.3923
+            },
+            "max_utc": "2026-09-30T19:45:19.694000+00:00",
+            "min_utc": "2025-11-24T18:56:13.327000+00:00",
+            "null_count": 294,
+            "prior_session_rows": 731,
+            "row_count": 2516
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 73674.0099,
+              "p50": 56.5889,
+              "p90": 1503.3551
+            },
+            "max_utc": "2026-09-30T19:45:17.310000+00:00",
+            "min_utc": "2026-08-10T15:51:19.098000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 94,
+            "row_count": 741
+          }
+        }
+      },
+      "row_count": 2516,
+      "selectable_row_count": 741
+    },
+    "AVGO": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:23.498000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.3521,
+              "p50": 0.0216,
+              "p90": 0.0283
+            },
+            "max_utc": "2026-09-30T19:45:23.498000+00:00",
+            "min_utc": "2026-09-30T13:30:02.371000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 3162
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.0287,
+              "p50": 0.0155,
+              "p90": 0.0257
+            },
+            "max_utc": "2026-09-30T19:45:23.498000+00:00",
+            "min_utc": "2026-09-30T19:45:21.776000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 748
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:21.777000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 1051422.824,
+              "p50": 328.0158,
+              "p90": 31885.9916
+            },
+            "max_utc": "2026-09-30T19:45:21.777000+00:00",
+            "min_utc": "2024-09-30T16:02:32.336000+00:00",
+            "null_count": 356,
+            "prior_session_rows": 1333,
+            "row_count": 3162
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 77853.3704,
+              "p50": 69.4887,
+              "p90": 3117.113
+            },
+            "max_utc": "2026-09-30T19:45:21.404000+00:00",
+            "min_utc": "2026-08-07T18:11:59.551000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 192,
+            "row_count": 748
+          }
+        }
+      },
+      "row_count": 3162,
+      "selectable_row_count": 748
+    },
+    "CEG": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:25.862000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.1461,
+              "p50": 0.1083,
+              "p90": 1.2497
+            },
+            "max_utc": "2026-09-30T19:45:25.862000+00:00",
+            "min_utc": "2026-09-30T13:30:17.093000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1816
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 1.1819,
+              "p50": 0.0914,
+              "p90": 0.1122
+            },
+            "max_utc": "2026-09-30T19:45:25.045000+00:00",
+            "min_utc": "2026-09-30T19:44:14.947000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 124
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:07.100000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 607830.6228,
+              "p50": 7490.8983,
+              "p90": 83746.0098
+            },
+            "max_utc": "2026-09-30T19:45:07.100000+00:00",
+            "min_utc": "2025-08-04T17:14:29.731000+00:00",
+            "null_count": 511,
+            "prior_session_rows": 817,
+            "row_count": 1816
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 384432.764,
+              "p50": 243.8102,
+              "p90": 17597.171
+            },
+            "max_utc": "2026-09-30T19:45:07.100000+00:00",
+            "min_utc": "2026-01-06T20:32:21.260000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 47,
+            "row_count": 124
+          }
+        }
+      },
+      "row_count": 1816,
+      "selectable_row_count": 124
+    },
+    "CRWV": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:27.672000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 1.5754,
+              "p50": 0.022,
+              "p90": 0.0482
+            },
+            "max_utc": "2026-09-30T19:45:27.672000+00:00",
+            "min_utc": "2026-09-30T19:43:53.148000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1729
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.1634,
+              "p50": 0.0189,
+              "p90": 0.0249
+            },
+            "max_utc": "2026-09-30T19:45:27.672000+00:00",
+            "min_utc": "2026-09-30T19:45:17.869000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 833
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:27.156000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 786440.0939,
+              "p50": 234.1321,
+              "p90": 13237.6008
+            },
+            "max_utc": "2026-09-30T19:45:27.156000+00:00",
+            "min_utc": "2025-04-02T16:25:21.524000+00:00",
+            "null_count": 12,
+            "prior_session_rows": 685,
+            "row_count": 1729
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 144032.3885,
+              "p50": 109.5839,
+              "p90": 8892.1792
+            },
+            "max_utc": "2026-09-30T19:45:27.156000+00:00",
+            "min_utc": "2026-06-22T19:13:03.845000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 263,
+            "row_count": 833
+          }
+        }
+      },
+      "row_count": 1729,
+      "selectable_row_count": 833
+    },
+    "ET": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:29.705000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.311,
+              "p50": 0.3837,
+              "p90": 0.6038
+            },
+            "max_utc": "2026-09-30T19:45:29.705000+00:00",
+            "min_utc": "2026-09-30T13:30:11.045000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 672
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.4672,
+              "p50": 0.2439,
+              "p90": 0.4172
+            },
+            "max_utc": "2026-09-30T19:45:27.889000+00:00",
+            "min_utc": "2026-09-30T19:45:01.672000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 5
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:26.386000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 390502.7332,
+              "p50": 1606.6509,
+              "p90": 73351.6975
+            },
+            "max_utc": "2026-09-30T19:45:26.386000+00:00",
+            "min_utc": "2026-01-02T15:22:42.395000+00:00",
+            "null_count": 248,
+            "prior_session_rows": 247,
+            "row_count": 672
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 1480.5713,
+              "p50": 141.8798,
+              "p90": 946.9502
+            },
+            "max_utc": "2026-09-30T19:04:26.475000+00:00",
+            "min_utc": "2026-09-29T19:04:52.110000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 1,
+            "row_count": 5
+          }
+        }
+      },
+      "row_count": 672,
+      "selectable_row_count": 5
+    },
+    "IREN": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:31.072000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 6.4167,
+              "p50": 0.0087,
+              "p90": 0.0154
+            },
+            "max_utc": "2026-09-30T19:45:31.072000+00:00",
+            "min_utc": "2026-09-30T19:39:06.068000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1414
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.2008,
+              "p50": 0.0056,
+              "p90": 0.0118
+            },
+            "max_utc": "2026-09-30T19:45:31.072000+00:00",
+            "min_utc": "2026-09-30T19:45:19.025000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 469
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:31.032000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 162881.6218,
+              "p50": 197.0604,
+              "p90": 13310.4653
+            },
+            "max_utc": "2026-09-30T19:45:31.032000+00:00",
+            "min_utc": "2026-06-09T17:03:53.722000+00:00",
+            "null_count": 60,
+            "prior_session_rows": 524,
+            "row_count": 1414
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 90926.5815,
+              "p50": 58.9126,
+              "p90": 1752.0885
+            },
+            "max_utc": "2026-09-30T19:45:30.067000+00:00",
+            "min_utc": "2026-07-29T16:18:56.140000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 65,
+            "row_count": 469
+          }
+        }
+      },
+      "row_count": 1414,
+      "selectable_row_count": 469
+    },
+    "MSFT": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:32.689000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.5178,
+              "p50": 0.0156,
+              "p90": 0.0253
+            },
+            "max_utc": "2026-09-30T19:45:32.689000+00:00",
+            "min_utc": "2026-09-30T13:30:01.623000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 3668
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.1703,
+              "p50": 0.0097,
+              "p90": 0.0212
+            },
+            "max_utc": "2026-09-30T19:45:32.688000+00:00",
+            "min_utc": "2026-09-30T19:45:22.470000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 921
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:31.139000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 627834.1146,
+              "p50": 202.7746,
+              "p90": 10377.7931
+            },
+            "max_utc": "2026-09-30T19:45:31.139000+00:00",
+            "min_utc": "2025-07-21T19:51:24.263000+00:00",
+            "null_count": 300,
+            "prior_session_rows": 1077,
+            "row_count": 3668
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 63616.815,
+              "p50": 91.244,
+              "p90": 1774.6928
+            },
+            "max_utc": "2026-09-30T19:45:31.139000+00:00",
+            "min_utc": "2026-08-17T15:28:42.236000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 178,
+            "row_count": 921
+          }
+        }
+      },
+      "row_count": 3668,
+      "selectable_row_count": 921
+    },
+    "NOW": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:35.980000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.4761,
+              "p50": 0.0289,
+              "p90": 0.0959
+            },
+            "max_utc": "2026-09-30T19:45:35.980000+00:00",
+            "min_utc": "2026-09-30T13:30:07.414000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1978
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.1636,
+              "p50": 0.0288,
+              "p90": 0.0911
+            },
+            "max_utc": "2026-09-30T19:45:35.960000+00:00",
+            "min_utc": "2026-09-30T19:45:26.164000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 500
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:35.133000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 411771.8974,
+              "p50": 1444.1787,
+              "p90": 29133.0442
+            },
+            "max_utc": "2026-09-30T19:45:35.133000+00:00",
+            "min_utc": "2025-12-18T20:53:41.289000+00:00",
+            "null_count": 175,
+            "prior_session_rows": 916,
+            "row_count": 1978
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 295563.0715,
+              "p50": 206.4823,
+              "p90": 10204.628
+            },
+            "max_utc": "2026-09-30T19:45:35.133000+00:00",
+            "min_utc": "2026-03-09T13:42:30.843000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 159,
+            "row_count": 500
+          }
+        }
+      },
+      "row_count": 1978,
+      "selectable_row_count": 500
+    },
+    "NVDA": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:38.088000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.5786,
+              "p50": 0.0053,
+              "p90": 0.0403
+            },
+            "max_utc": "2026-09-30T19:45:38.088000+00:00",
+            "min_utc": "2026-09-30T13:30:03.375000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 3886
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.0201,
+              "p50": 0.0047,
+              "p90": 0.0103
+            },
+            "max_utc": "2026-09-30T19:45:38.088000+00:00",
+            "min_utc": "2026-09-30T19:45:36.884000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 851
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:38.017000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 424757.9631,
+              "p50": 229.6396,
+              "p90": 20212.9695
+            },
+            "max_utc": "2026-09-30T19:45:38.017000+00:00",
+            "min_utc": "2025-12-09T20:27:40.230000+00:00",
+            "null_count": 497,
+            "prior_session_rows": 1334,
+            "row_count": 3886
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 40464.3453,
+              "p50": 43.4064,
+              "p90": 1742.8206
+            },
+            "max_utc": "2026-09-30T19:45:38.017000+00:00",
+            "min_utc": "2026-09-02T17:21:17.298000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 134,
+            "row_count": 851
+          }
+        }
+      },
+      "row_count": 3886,
+      "selectable_row_count": 851
+    },
+    "PLTR": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:41.514000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.331,
+              "p50": 0.0076,
+              "p90": 0.1137
+            },
+            "max_utc": "2026-09-30T19:45:41.514000+00:00",
+            "min_utc": "2026-09-30T13:30:21.654000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 2306
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.2436,
+              "p50": 0.0075,
+              "p90": 0.0104
+            },
+            "max_utc": "2026-09-30T19:45:41.506000+00:00",
+            "min_utc": "2026-09-30T19:45:26.900000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 589
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:41.007000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 456462.0613,
+              "p50": 353.5201,
+              "p90": 13313.7872
+            },
+            "max_utc": "2026-09-30T19:45:41.007000+00:00",
+            "min_utc": "2025-11-17T20:03:37.331000+00:00",
+            "null_count": 138,
+            "prior_session_rows": 1030,
+            "row_count": 2306
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 67977.4764,
+              "p50": 121.6369,
+              "p90": 3112.7212
+            },
+            "max_utc": "2026-09-30T19:45:40.124000+00:00",
+            "min_utc": "2026-08-14T14:48:12.421000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 122,
+            "row_count": 589
+          }
+        }
+      },
+      "row_count": 2306,
+      "selectable_row_count": 589
+    },
+    "SMCI": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:43.622000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.6726,
+              "p50": 0.0176,
+              "p90": 0.122
+            },
+            "max_utc": "2026-09-30T19:45:43.622000+00:00",
+            "min_utc": "2026-09-30T13:30:03.267000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1492
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.3223,
+              "p50": 0.0096,
+              "p90": 0.0279
+            },
+            "max_utc": "2026-09-30T19:45:43.622000+00:00",
+            "min_utc": "2026-09-30T19:45:24.282000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 524
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:41.992000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 597688.0864,
+              "p50": 352.2874,
+              "p90": 16494.83
+            },
+            "max_utc": "2026-09-30T19:45:41.992000+00:00",
+            "min_utc": "2025-08-11T18:17:36.806000+00:00",
+            "null_count": 59,
+            "prior_session_rows": 671,
+            "row_count": 1492
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 451002.447,
+              "p50": 130.6313,
+              "p90": 7383.8655
+            },
+            "max_utc": "2026-09-30T19:45:41.992000+00:00",
+            "min_utc": "2025-11-21T15:03:15.174000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 144,
+            "row_count": 524
+          }
+        }
+      },
+      "row_count": 1492,
+      "selectable_row_count": 524
+    },
+    "TEM": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:45.519000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 357.5132,
+              "p50": 0.5466,
+              "p90": 0.7444
+            },
+            "max_utc": "2026-09-30T19:45:45.519000+00:00",
+            "min_utc": "2026-09-30T13:48:14.726000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1164
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.7081,
+              "p50": 0.0614,
+              "p90": 0.6691
+            },
+            "max_utc": "2026-09-30T19:45:45.519000+00:00",
+            "min_utc": "2026-09-30T19:45:03.030000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 87
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:12.296000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 511271.3825,
+              "p50": 1523.1169,
+              "p90": 17486.7129
+            },
+            "max_utc": "2026-09-30T19:45:12.296000+00:00",
+            "min_utc": "2025-10-10T18:33:49.344000+00:00",
+            "null_count": 186,
+            "prior_session_rows": 529,
+            "row_count": 1164
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 350041.8493,
+              "p50": 119.3064,
+              "p90": 1760.2591
+            },
+            "max_utc": "2026-09-30T19:44:42.240000+00:00",
+            "min_utc": "2026-01-30T17:43:21.337000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 16,
+            "row_count": 87
+          }
+        }
+      },
+      "row_count": 1164,
+      "selectable_row_count": 87
+    },
+    "USAR": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:46.935000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.7262,
+              "p50": 0.0452,
+              "p90": 1.1417
+            },
+            "max_utc": "2026-09-30T19:45:46.935000+00:00",
+            "min_utc": "2026-09-30T13:30:03.365000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 724
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.4185,
+              "p50": 0.0063,
+              "p90": 0.0452
+            },
+            "max_utc": "2026-09-30T19:45:46.935000+00:00",
+            "min_utc": "2026-09-30T19:45:21.825000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 103
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:34.027000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 350101.5069,
+              "p50": 307.0495,
+              "p90": 20181.9339
+            },
+            "max_utc": "2026-09-30T19:45:34.027000+00:00",
+            "min_utc": "2026-01-30T16:44:03.615000+00:00",
+            "null_count": 66,
+            "prior_session_rows": 294,
+            "row_count": 724
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 103842.7737,
+              "p50": 118.1524,
+              "p90": 7537.8989
+            },
+            "max_utc": "2026-09-30T19:45:13.316000+00:00",
+            "min_utc": "2026-07-20T17:02:47.604000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 28,
+            "row_count": 103
+          }
+        }
+      },
+      "row_count": 724,
+      "selectable_row_count": 103
+    },
+    "VST": {
+      "columns": {
+        "timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:48.578000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 375.2843,
+              "p50": 0.0373,
+              "p90": 0.0421
+            },
+            "max_utc": "2026-09-30T19:45:48.578000+00:00",
+            "min_utc": "2026-09-30T13:30:31.521000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 1402
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 0.0419,
+              "p50": 0.0284,
+              "p90": 0.0401
+            },
+            "max_utc": "2026-09-30T19:45:48.532000+00:00",
+            "min_utc": "2026-09-30T19:45:46.064000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 0,
+            "row_count": 231
+          }
+        },
+        "trade_timestamp": {
+          "age_reference_utc": "2026-09-30T19:45:47.167000+00:00",
+          "all_rows": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 554392.4197,
+              "p50": 356.656,
+              "p90": 39032.9333
+            },
+            "max_utc": "2026-09-30T19:45:47.167000+00:00",
+            "min_utc": "2025-09-10T19:53:21.986000+00:00",
+            "null_count": 223,
+            "prior_session_rows": 556,
+            "row_count": 1402
+          },
+          "selectable": {
+            "after_session_rows": 0,
+            "age_minutes": {
+              "max": 214918.8243,
+              "p50": 96.0636,
+              "p90": 13063.8365
+            },
+            "max_utc": "2026-09-30T19:45:47.167000+00:00",
+            "min_utc": "2026-05-04T13:46:57.712000+00:00",
+            "null_count": 0,
+            "prior_session_rows": 61,
+            "row_count": 231
+          }
+        }
+      },
+      "row_count": 1402,
+      "selectable_row_count": 231
+    }
+  },
+  "symbols_requested": [
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "CEG",
+    "CRWV",
+    "ET",
+    "IREN",
+    "MSFT",
+    "NOW",
+    "NVDA",
+    "PLTR",
+    "SMCI",
+    "TEM",
+    "USAR",
+    "VST"
+  ],
+  "verdict_eligible": false
+}
