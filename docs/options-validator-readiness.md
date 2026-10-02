@@ -1,5 +1,7 @@
 # Options-validator readiness report — Monday 2026-07-27 run
 
+> **SUPERSEDED 2026-09-15.** Historical record of the 2026-07-25 readiness review; not an active runbook or queue. Current status and sequencing: `PROJECT_STATE.md`. Kept because other documents link here.
+
 Written 2026-07-25 by the readiness review session (lead reviewer + three
 scoped inventory agents + one fresh-context final reviewer). Every claim
 below is labeled; "Verified" means executed or read in this repo during the

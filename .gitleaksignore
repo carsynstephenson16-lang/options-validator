@@ -20,3 +20,15 @@
 # verbatim in its first committed form (e584080); the wording was replaced in
 # 53b770a but the historical commit remains in the PR range and re-fires.
 e5840801ea7d66c2f1fffaa9270dfc4f49bc9fe9:reports/2026-09-02-pr146-ops-fixes-review-receipt.md:generic-api-key:27
+# 2026-09-15 (PR #175): the owner fact-append packets and their review
+# receipts under reports/2026-09-15-audit/ embed the guarded append commands,
+# whose dedupe-prefix variable trips generic-api-key on variable name plus
+# entropy. The values are public ledger fact-type labels, not credentials.
+# The path-scoped allowlist added to .gitleaks.toml covers this on gitleaks
+# 8.30 locally but did NOT on the 8.24.3 that CI pins (run 35034960557
+# re-fired all three), so the commit-keyed fingerprints are pinned here too,
+# same as the A2 entries above. As above, the literal labels are deliberately
+# not reproduced in this comment.
+f561db8d4685f4b691e089bc60cc9dc8888cb816:reports/2026-09-15-audit/J-fact-packets-adversarial-review.md:generic-api-key:189
+f561db8d4685f4b691e089bc60cc9dc8888cb816:reports/2026-09-15-audit/H-owner-fact-packets.md:generic-api-key:502
+f561db8d4685f4b691e089bc60cc9dc8888cb816:reports/2026-09-15-audit/H-owner-fact-packets.md:generic-api-key:739

@@ -55,3 +55,31 @@ unproven without a same-day receipt. The `firecrawl-*` skills still carry
 recent invocation timestamps — that records the skill being dispatched, not a
 successful fetch. Don't read those timestamps as evidence that credits came
 back.
+
+## Earnings-date job notes (recorded 2026-09-15)
+
+- Every SEC EDGAR / IR request from any agent uses a fixed non-personal
+  User-Agent, e.g. `options-validator-research/1.0
+  (+https://github.com/carsynstephenson16-lang/options-validator)`; never an
+  email address or personal name. Why: on 2026-09-15 a subagent sent the
+  owner's personal email in the UA to sec.gov for several requests despite the
+  brief saying not to. SEC asks for a contact string; a repo URL satisfies
+  that.
+- **Run-verified 2026-09-15 11:30 ET: that email-free UA gets HTTP 403 from
+  `sec.gov` ("Undeclared Automated Tool") on every request.** The earlier
+  claim that a non-personal UA "achieves the same result" was LLM-asserted
+  and is wrong. SEC's fair-access policy requires a name AND a contact
+  email. So the contact string is an OWNER decision: supply a non-personal
+  mailbox for the project (never the owner's personal address) and put it in
+  the UA as `options-validator-research/1.0 (<project mailbox>)`. Until one
+  exists, EDGAR is effectively closed to agents; do not route around the
+  block with a spoofed browser UA (banned above). WebFetch still cannot set
+  a UA at all.
+- IR-site quirks: Broadcom's events page lives at
+  `/company-information/events-presentations`; Energy Transfer's live
+  calendar is `/presentations-webcasts` (the obvious path is a soft 404);
+  Vistra's events page defaults to the Past tab; `ir.usare.com` and
+  `investors.iren.com` do not resolve.
+- Aggregator dates (e.g. "CRWV Nov 16", "PLTR Nov 2" seen 2026-09-15) are not
+  confirmations and were rejected per the store's rules; next check the week
+  of 2026-10-05.
