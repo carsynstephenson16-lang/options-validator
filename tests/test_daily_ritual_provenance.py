@@ -91,22 +91,25 @@ GATE_SITES = ("data.ritual_authority",)  # the gate itself, never a gated surfac
 MODULE_SITE_RE = re.compile(r"python -m ([A-Za-z0-9_.]+)")
 
 # ---- registry 2: every `python -c` invocation site, classified --------------
-# Line 115 is DELIBERATELY data-tier-permitted even though it imports
+# Line 207 is DELIBERATELY data-tier-permitted even though it imports
 # options_researcher.h7_watch: it reads a session calendar and mutates nothing,
 # and AS_OF gates the entire data phase. A naive H7 matcher that greps for the
 # substring "h7_watch" would fail P2 on a correct script (mutation M9).
 PYTHON_DASH_C_CLASSIFICATION = {
-    120: "DATA_TIER_PERMITTED",  # AS_OF via options_researcher.h7_watch.evaluation_session
-    121: "DATA_TIER_PERMITTED",  # SCOPE_ID via options_researcher.h7_scope.scope_identity
-    199: "FULL_TIER",  # research.receipts.load_receipt — reads the gate receipt
-    290: "DATA_TIER",  # data.recent_topup.refresh_closes_guarded
-    314: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
-    317: "DATA_TIER",  # options_researcher.features.build_all (display extras)
-    365: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
+    # Line numbers shifted +87 on 2026-09-15 when the origin/main alignment
+    # gate grew from a 6-line strict comparison into the `# ---- alignment
+    # gate ----` region (tests/test_daily_ritual_alignment_gate.py).
+    207: "DATA_TIER_PERMITTED",  # AS_OF via options_researcher.h7_watch.evaluation_session
+    208: "DATA_TIER_PERMITTED",  # SCOPE_ID via options_researcher.h7_scope.scope_identity
+    286: "FULL_TIER",  # research.receipts.load_receipt — reads the gate receipt
+    377: "DATA_TIER",  # data.recent_topup.refresh_closes_guarded
+    401: "DATA_TIER",  # options_researcher.features.build_all (watch universe)
+    404: "DATA_TIER",  # options_researcher.features.build_all (display extras)
+    452: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
     # Brief 17 WP-F: the Schwab lane's own read-only sites. The verified-view
     # read is the lane's fail-closed gate; it mutates nothing.
-    406: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
-    449: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
+    493: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
+    536: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
 }
 
 # ---- registry 3: every mutation verb site ----------------------------------
@@ -117,7 +120,9 @@ MUTATION_VERB_PATTERNS = {
     "mkdir -p reports/h8_forward": r"mkdir -p reports/h8_forward",
     "git add": r"\bgit\s+add\b",
     "git commit": r"\bgit\s+commit\b",
-    "git fetch": r"\bgit\s+fetch\b",
+    # The alignment gate's fetch (2026-09-15) carries `-C "$REPO"` and the
+    # same bounded `-c` flags as its push, so the fetch matcher spans both.
+    "git fetch": r"\bgit(?:\s+-[cC]\s+\S+)*\s+fetch\b",
     "git merge": r"\bgit\s+merge\b",
     # `git push` is preceded by `-c` config flags, so the verb is not adjacent
     # to `git`. The matcher must therefore span them -- but it must ALSO not
@@ -127,20 +132,25 @@ MUTATION_VERB_PATTERNS = {
     # is anchored to COMMAND position: the verb may only follow the start of a
     # line, a `&&`/`||`/`;`/`|` separator, or an env-assignment prefix -- never
     # arbitrary text such as the middle of a message string.
-    "git push": r"(?:^|&&|\|\||;|\|)\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\s+-c\s+\S+)*\s+push\b",
+    "git push": r"(?:^|&&|\|\||;|\|)\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\s+-[cC]\s+\S+)*\s+push\b",
     "restic backup": r"\brestic\s+backup\b",
 }
 MUTATION_VERB_SITES = {
     'mkdir -p "$LOGDIR"': (68,),  # data tier
-    'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
-    "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
-    "mkdir -p reports/h5": (428,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (592,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (601,),  # data tier
-    "git fetch": (613,),  # data tier
-    "git merge": (614,),  # data tier — mutates the working tree unattended
-    "git push": (615,),  # data tier
-    "restic backup": (632,),  # data tier
+    'mkdir -p "$PF_RECEIPT_DIR"': (432,),  # full tier (region B)
+    "mkdir -p reports/h8_forward": (453,),  # full tier (region B, GATE_GO)
+    "mkdir -p reports/h5": (515,),  # Schwab preclose lane (brief 17 WP-F)
+    "git add": (680,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (689,),  # data tier
+    # 175/180 (2026-09-15): the alignment gate. It sits after require-data
+    # (line 60) and before the publisher role, so P1 still holds. Its fetch
+    # refreshes origin/main; its push is the ritual's OWN evidence push retried
+    # once, bare (no merge), reachable only after
+    # alignment_divergence_is_evidence_only returns 0.
+    "git fetch": (175, 701),  # alignment gate; Step 8 push_evidence_once
+    "git merge": (702,),  # data tier — mutates the working tree unattended
+    "git push": (180, 703),  # alignment gate (evidence-only, bare); Step 8
+    "restic backup": (720,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -150,8 +160,8 @@ MUTATION_VERB_SITES = {
 # run unattended.
 ANY_MUTATION_VERB_RE = re.compile(
     r"\bmkdir\b"
-    r"|\bgit\s+(?:add|commit|fetch|merge|reset|checkout|rm|clean)\b"
-    r"|(?:^|&&|\|\||;|\|)\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\s+-c\s+\S+)*\s+push\b"
+    r"|\bgit(?:\s+-[cC]\s+\S+)*\s+(?:add|commit|fetch|merge|reset|checkout|rm|clean)\b"
+    r"|(?:^|&&|\|\||;|\|)\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*git(?:\s+-[cC]\s+\S+)*\s+push\b"
     r"|(?:^|&&|\|\||;|\|)\s*rm\b"
     r"|\brestic\s+(?:backup|forget)\b"
 )
@@ -1083,7 +1093,7 @@ class CacheEdgeZshExecutionTests(unittest.TestCase):
         zsh = _shutil.which("zsh")
         if zsh is None:  # pragma: no cover - macOS always has zsh
             self.skipTest("zsh is required")
-        source = Path("tools/daily_ritual.sh").read_text()
+        source = RITUAL.read_text(encoding="utf-8")
         start = source.index('CHAIN_EDGE="$(ls .cache/chains')
         end = source.index("\nfi", source.index("STARVED", start)) + len("\nfi")
         block = source[start:end]

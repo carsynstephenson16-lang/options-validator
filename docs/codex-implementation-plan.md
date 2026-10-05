@@ -1,5 +1,7 @@
 # Codex implementation plan — staged packets (2026-07-25)
 
+> **SUPERSEDED 2026-09-15.** Historical record of the 2026-07-25 readiness review; not an active runbook or queue. Current status and sequencing: `PROJECT_STATE.md`. Kept because other documents link here.
+
 Owner directive 2026-07-25 (evening): Codex access restored; push/validate
 parking-lot work; add NBIS/AMAT/CLSK to the visual board; build a per-stock
 hypothesis-evidence overview; keep everything visual. This doc is the staged
