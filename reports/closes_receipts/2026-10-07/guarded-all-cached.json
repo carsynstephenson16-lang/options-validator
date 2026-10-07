@@ -1,0 +1,238 @@
+{
+ "hash_binding": "stored_file_sha256 is the sha256 of the STORED close parquet, read back from disk immediately after that symbol's refresh step. It is NOT a hash of the provider's raw response: the fetcher returns a path and retains no raw bytes.",
+ "producer": "data.recent_topup.refresh_closes_guarded",
+ "provider": "data.underlying_closes.fetch_underlying_eod_yahoo",
+ "requested_symbols": [
+  "AMAT",
+  "AMD",
+  "AMZN",
+  "AVGO",
+  "BE",
+  "CEG",
+  "CLSK",
+  "CRWD",
+  "CRWV",
+  "ET",
+  "HIMS",
+  "IREN",
+  "MSFT",
+  "NBIS",
+  "NOW",
+  "NVDA",
+  "PLTR",
+  "QQQ",
+  "SMCI",
+  "SPY",
+  "TEM",
+  "UBER",
+  "USAR",
+  "VST",
+  "ZS"
+ ],
+ "retrieved_utc": "2026-10-07T13:25:09Z",
+ "run_date": "2026-10-07",
+ "schema": "closes_refresh_receipt/v1",
+ "scope": "guarded-all-cached",
+ "symbols": {
+  "AMAT": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/AMAT.parquet",
+   "stored_file_sha256": "2d94a987b3f443f1bf4a0658b493eef5ddb161aef9a82be9c1b816b95505a453"
+  },
+  "AMD": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/AMD.parquet",
+   "stored_file_sha256": "5b78703aa9f74cef1d67aa70fa3e38d648a11d122702cb4b2417ee5befc2ca35"
+  },
+  "AMZN": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/AMZN.parquet",
+   "stored_file_sha256": "fa167d28e0971d2d3188e04bbced6cdc53018970beca4bb6e536780574835906"
+  },
+  "AVGO": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/AVGO.parquet",
+   "stored_file_sha256": "53b1c9e8e44412b915037764bdbd2163723baf672c29bb51f609074dca44350a"
+  },
+  "BE": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/BE.parquet",
+   "stored_file_sha256": "cf824bcdfa3c5399e1223bb7884bbab0c4f463ba88d24dc41ca6e47e4314cd37"
+  },
+  "CEG": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/CEG.parquet",
+   "stored_file_sha256": "1d3cc8262782b6aeef186bcaf8dadb6454401f7bea59f39bc381634f9560492c"
+  },
+  "CLSK": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/CLSK.parquet",
+   "stored_file_sha256": "e4a1da19236c64c4dcb8df407cb1fe431fd3ee6f3fa9468b72d3a93143fa12ab"
+  },
+  "CRWD": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/CRWD.parquet",
+   "stored_file_sha256": "a54f929a58b9eb1a87f6b6e84ce7c72fa04ece02d6a67e6e5822fba1eacfd22f"
+  },
+  "CRWV": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/CRWV.parquet",
+   "stored_file_sha256": "fc93337bad9a4e80b2ec6afb864bf70349f32c0fec19fe2cae0380b9e16a25df"
+  },
+  "ET": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-01",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/ET.parquet",
+   "stored_file_sha256": "40a22ddad01e7ac49464f9a42d132ca67f821382f7fa423630fa0af8584ddafd"
+  },
+  "HIMS": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/HIMS.parquet",
+   "stored_file_sha256": "734bb8215a9b91533580f929a00e9de82a5530192af136295373e0c5c8b96954"
+  },
+  "IREN": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/IREN.parquet",
+   "stored_file_sha256": "bf670fc8b3b5615dd4c3141f303689e40d9027bd39c0bcc367a9b63e66b0da04"
+  },
+  "MSFT": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/MSFT.parquet",
+   "stored_file_sha256": "4f024feeb8e2165ea0f98a4c5f112241c4bc8ff1ab2bcf3e65244c3d655f4d47"
+  },
+  "NBIS": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/NBIS.parquet",
+   "stored_file_sha256": "984d5882714383ac6feab8d6c95ec7b53cd7278d9edc2afeab89fb6a148f0968"
+  },
+  "NOW": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/NOW.parquet",
+   "stored_file_sha256": "abd6e1c3e984c305b7815ca085d04dd87d5936989f3c4be61d35c5d2e6264616"
+  },
+  "NVDA": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/NVDA.parquet",
+   "stored_file_sha256": "1d480de0ed92de60a5611f5b97274658bd380335b7f97f59dd78fd7972c0e082"
+  },
+  "PLTR": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/PLTR.parquet",
+   "stored_file_sha256": "5080619f680dfcac4a6be60d8ff778ef08b8d3a7608677c466bda095503d9bf6"
+  },
+  "QQQ": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/QQQ.parquet",
+   "stored_file_sha256": "6fa8dffc74843b67bd3051b2967d78aa4ee471595421c7c6fdd086ebcecc1204"
+  },
+  "SMCI": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/SMCI.parquet",
+   "stored_file_sha256": "3d2aaf227b28416854014e69db58da478c9dba1f7b2be0e3e086ec33069deb93"
+  },
+  "SPY": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/SPY.parquet",
+   "stored_file_sha256": "2380725c08adf0f66c63a4935af9404da44bdbaad58aa76ddeba7337779ae782"
+  },
+  "TEM": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/TEM.parquet",
+   "stored_file_sha256": "1ce8a06021d8e5e74fa693a34f0991810a2a79f7c2989e2ec34975b933c372c9"
+  },
+  "UBER": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/UBER.parquet",
+   "stored_file_sha256": "6963f7dafe539ee520704554525f6cd458e9c33257932f28ef7a357a11bca299"
+  },
+  "USAR": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/USAR.parquet",
+   "stored_file_sha256": "69e15d045d33458ef70612f98c588dab5cfc7de3645a7bc0d44cd80b4ac06dad"
+  },
+  "VST": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/VST.parquet",
+   "stored_file_sha256": "9517ef9e8a387a606c94f87a0b898e5584521b28c05a67221c15504db88755ac"
+  },
+  "ZS": {
+   "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>",
+   "max_session": "2026-10-05",
+   "outcome": "failed",
+   "stage": "fetch",
+   "stored_file": ".cache/underlying/ZS.parquet",
+   "stored_file_sha256": "bb83186eed2ed1a414199f59910b47863f054f252e1c62c76dace2aa2beba290"
+  }
+ }
+}
