@@ -58,6 +58,9 @@ DATA_TIER_MODULES = (
     # data-tier island (placing it inside broke the lane's first-statement
     # invariant); only PYTHON_DASH_C_CLASSIFICATION is position-enforced.
     "options_researcher.schwab_token_age",
+    # Data-tier advisory before the Schwab lane; prints and persists only,
+    # always exits 0, and changes no ritual status or authority.
+    "options_researcher.launchagent_state",
     "options_researcher.qm_dashboard",  # OHLCV refresh (data-tier island)
     "options_researcher.dashboard",
     "options_researcher.attractiveness_dashboard",
@@ -105,8 +108,8 @@ PYTHON_DASH_C_CLASSIFICATION = {
     365: "FULL_TIER_PROBE",  # `import options_researcher.h8_watch` availability probe
     # Brief 17 WP-F: the Schwab lane's own read-only sites. The verified-view
     # read is the lane's fail-closed gate; it mutates nothing.
-    406: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
-    449: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
+    417: "SCHWAB_LANE",  # schwab_chain_view.verified_sessions — lane gate
+    460: "SCHWAB_LANE",  # `import options_researcher.h10_watch` availability probe
 }
 
 # ---- registry 3: every mutation verb site ----------------------------------
@@ -134,13 +137,13 @@ MUTATION_VERB_SITES = {
     'mkdir -p "$LOGDIR"': (68,),  # data tier
     'mkdir -p "$PF_RECEIPT_DIR"': (345,),  # full tier (region B)
     "mkdir -p reports/h8_forward": (366,),  # full tier (region B, GATE_GO)
-    "mkdir -p reports/h5": (428,),  # Schwab preclose lane (brief 17 WP-F)
-    "git add": (592,),  # data tier, allow-list scoped (§6.4)
-    "git commit": (601,),  # data tier
-    "git fetch": (613,),  # data tier
-    "git merge": (614,),  # data tier — mutates the working tree unattended
-    "git push": (615,),  # data tier
-    "restic backup": (632,),  # data tier
+    "mkdir -p reports/h5": (439,),  # Schwab preclose lane (brief 17 WP-F)
+    "git add": (603,),  # data tier, allow-list scoped (§6.4)
+    "git commit": (612,),  # data tier
+    "git fetch": (624,),  # data tier
+    "git merge": (625,),  # data tier — mutates the working tree unattended
+    "git push": (626,),  # data tier
+    "restic backup": (643,),  # data tier
 }
 # Any mutation verb anywhere in the script must be registered above. The
 # families are deliberately WIDER than what the script uses today (`git reset`,
@@ -211,6 +214,60 @@ _GIT_CONTEXT_VARS = (
     "GIT_NAMESPACE",
     "GIT_PREFIX",
 )
+
+
+class LaunchagentAdvisoryTests(unittest.TestCase):
+    def test_advisory_passes_dates_and_never_crits_on_nonzero_exit(self):
+        source = _source()
+        self.assertIn("# ---- launchagent state ", source)
+        start, end = _region(source, "launchagent state")
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is required")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stub = root / "uv-stub"
+            args_file = root / "argv"
+            log = root / "log"
+            log.touch()
+            stub.write_text(
+                "#!/bin/zsh\n" + f"printf '%s\\n' \"$@\" > {shlex.quote(str(args_file))}\nexit 3\n"
+            )
+            stub.chmod(0o755)
+            for as_of in ("2026-09-08", ""):
+                script = "\n".join(
+                    [
+                        f"UV={shlex.quote(str(stub))}",
+                        f"REPO={shlex.quote(str(root))}",
+                        f"AS_OF={shlex.quote(as_of)}",
+                        "RUN_DATE=2026-09-09",
+                        f"TEST_LOG={shlex.quote(str(log))}",
+                        'note() { print -r -- "$1" >> "$TEST_LOG"; }',
+                        'crit() { note "CRITICAL: $1"; }',
+                        source[start:end],
+                    ]
+                )
+                result = subprocess.run(
+                    [zsh, "-c", script], capture_output=True, text=True, timeout=30
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    args_file.read_text().splitlines(),
+                    [
+                        "run",
+                        "python",
+                        "-m",
+                        "options_researcher.launchagent_state",
+                        "--root",
+                        str(root),
+                        "--as-of",
+                        as_of,
+                        "--run-date",
+                        "2026-09-09",
+                    ],
+                )
+                self.assertIn(">>> launchagents:", result.stdout)
+                self.assertNotIn("CRITICAL:", log.read_text())
 
 
 class EvidenceStagingTests(unittest.TestCase):
@@ -313,7 +370,9 @@ class EvidenceStagingTests(unittest.TestCase):
         self.assertEqual(committed, {"ledger/facts.log", "reports/h10/new.txt"})
         # Brief 38 acceptance: the absent-path note precedes the evidence result.
         self.assertLess(
-            log.index("evidence: allow-list path absent, not staged: reports/schwab_chains_intraday"),
+            log.index(
+                "evidence: allow-list path absent, not staged: reports/schwab_chains_intraday"
+            ),
             log.index("evidence: committed"),
         )
         self.assertNotIn("CRITICAL:", log)
