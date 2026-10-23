@@ -1,9 +1,25 @@
 # Agent guard hooks (tracked)
 
-Canonical, tested guard scripts for Claude Code PreToolUse hooks. The logic
-lives here (tracked, covered by `tests/`), while the *registration* lives in
-the local, gitignored `.claude/settings.local.json` — per this repo's policy
-that `.claude/` is never committed.
+Canonical guard scripts for Claude Code hooks. The logic lives here (tracked),
+while the *registration* lives in the local, gitignored
+`.claude/settings.local.json` — per this repo's policy that `.claude/` is never
+committed. All three hooks CLAUDE.md calls "hard enforcement" are in this
+directory as of 2026-09-15; before that, two of them (`block_live_trading.py`,
+`session_note_guard.py`) existed only as untracked files under
+`.claude/hooks/` on one laptop — absent from every fresh clone, the ops and
+research checkouts, and every worktree.
+
+| Hook | Event | What it does |
+|---|---|---|
+| `block_live_trading.py` | PreToolUse (`Bash\|Write\|Edit\|NotebookEdit`) | Blocks tool calls whose command/content matches live order-placement patterns (`place_order`, broker `.buy/.sell`, `paper_mode = false`, …). Fail-closed on unparseable input. Exit 2 = block. |
+| `block_ledger_edits.py` | PreToolUse (`Bash\|Write\|Edit\|NotebookEdit`) | Blocks hand-edits to the append-only ledger files (details below). |
+| `session_note_guard.py` | Stop | On a day with commits or a dirty tree and no `<main-checkout>/YYYY-MM-DD.md` note, blocks the stop once and asks for the `session-synthesis` skill. Anchors on the MAIN checkout even from a worktree. |
+
+Registration commands point at `$CLAUDE_PROJECT_DIR/.agents/hooks/<name>.py`.
+A registration that still points at `.claude/hooks/<name>.py` keeps working as
+long as that untracked copy exists; switch it to the tracked path so the hook
+body is the reviewed one (the two copies were byte-identical when tracked:
+sha256 `f52c6f32…` and `075088a5…`).
 
 ## block_ledger_edits.py
 
