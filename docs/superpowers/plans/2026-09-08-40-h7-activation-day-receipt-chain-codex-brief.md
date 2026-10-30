@@ -287,6 +287,16 @@ zsh harness in `tests/test_daily_ritual_provenance.py` (Brief 38 — `zsh =
 shutil.which("zsh")` + `skipTest`; hermetic git env: `GIT_CONFIG_GLOBAL`/
 `GIT_CONFIG_SYSTEM`=devnull, `HOME`=tmpdir, repo-local identity,
 `core.hooksPath=`; R1-15 — there is no `tests/test_daily_ritual_staging.py`).
+> **2026-09-15 note (post-landing, audit session):** R2-3's intersection remedy
+> is superseded at the root — `reports/pick_tracker` and `reports/closes_receipts`
+> were added to every `EVIDENCE_ALLOW` copy after their absence stalled the ops
+> pipeline 09-11..09-14, so `DATA_TIER_PATHS ∩ EVIDENCE_ALLOW` is now the whole
+> data tier and the acceptance criterion below ("refuses a dirty
+> `reports/closes_receipts` path") no longer holds; the refused example in
+> `tests/test_h7_activation_day.py` is a `reports/` path in no list. Code-suffixed
+> paths are refused by the shared predicate and by `path_allowed` regardless of
+> directory. See `reports/2026-09-15-audit-edge-verdict-and-loose-ends.md` §4.
+
 Python entry points are stubbed by prepending a fake `uv` to `PATH` that
 dispatches on the module/tool name and writes fixture receipts. Assert:
 refusal on untracked file / HEAD behind origin / non-evidence divergence /
