@@ -1,0 +1,188 @@
+{
+ "hash_binding": "stored_file_sha256 is the sha256 of the STORED close parquet, read back from disk immediately after that symbol's refresh step. It is NOT a hash of the provider's raw response: the fetcher returns a path and retains no raw bytes.",
+ "producer": "data.recent_topup.refresh_closes_guarded",
+ "provider": "data.underlying_closes.fetch_underlying_eod_yahoo",
+ "requested_symbols": [
+  "AMAT",
+  "AMD",
+  "AMZN",
+  "AVGO",
+  "BE",
+  "CEG",
+  "CLSK",
+  "CRWD",
+  "CRWV",
+  "ET",
+  "HIMS",
+  "IREN",
+  "MSFT",
+  "NBIS",
+  "NOW",
+  "NVDA",
+  "PLTR",
+  "QQQ",
+  "SMCI",
+  "SPY",
+  "TEM",
+  "UBER",
+  "USAR",
+  "VST",
+  "ZS"
+ ],
+ "retrieved_utc": "2026-10-30T13:15:15Z",
+ "run_date": "2026-10-30",
+ "schema": "closes_refresh_receipt/v1",
+ "scope": "guarded-all-cached",
+ "symbols": {
+  "AMAT": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/AMAT.parquet",
+   "stored_file_sha256": "4c6c82f146f7f1d172c1065906ecf7fc4dd14f258ec71f998462016eb8165a5c"
+  },
+  "AMD": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/AMD.parquet",
+   "stored_file_sha256": "a1a77f6bf35b4c5f866c14181816710f4d23bcc63d5a7c8266d2df198677609f"
+  },
+  "AMZN": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/AMZN.parquet",
+   "stored_file_sha256": "353a601dea59686f3a1669aaef5e1bb0bc9a03a3ddcfe945f3be6b939b8fffc7"
+  },
+  "AVGO": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/AVGO.parquet",
+   "stored_file_sha256": "8ce1f77d767c8aae3c761952fa049253c9bad1009213f2f0a0d606700543cb4f"
+  },
+  "BE": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/BE.parquet",
+   "stored_file_sha256": "2c641c6a570e02ee21d0d849f9135e81c889dccebd05f43b50d1ecc30fce0539"
+  },
+  "CEG": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/CEG.parquet",
+   "stored_file_sha256": "a234ff2b00329ff9a27d6691c6414e23727b4b5cbbfd170a0a39b394318dd86b"
+  },
+  "CLSK": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/CLSK.parquet",
+   "stored_file_sha256": "fc09f39aee84a2258626e18f73af8e7d348dc12f3413dc68954ad41cdf506caa"
+  },
+  "CRWD": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/CRWD.parquet",
+   "stored_file_sha256": "76e5f000e18c457c9890f49155a8ab5af141cee2669c0c69f0f152882085a494"
+  },
+  "CRWV": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/CRWV.parquet",
+   "stored_file_sha256": "4c098a9445d7e98c7b0d1c912c97225b102134ee8bcc73f8b32a355380055bf7"
+  },
+  "ET": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/ET.parquet",
+   "stored_file_sha256": "002a506e7910d6b08fe76a10a1610c49610b427818423e82a5a77976f678c118"
+  },
+  "HIMS": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/HIMS.parquet",
+   "stored_file_sha256": "3ea98ab5e180df1eaeba8d458a37ed12c3b80a29574fe59a8f934a849a6f3ecc"
+  },
+  "IREN": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/IREN.parquet",
+   "stored_file_sha256": "8c363115641b94cbc1f88b5b852fa5f6e6417b1f9f96004cbdfa0ed8774367f5"
+  },
+  "MSFT": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/MSFT.parquet",
+   "stored_file_sha256": "49ac3074a70d854039f5bc14160c3e3205b247b2fc942958b1de79212b83f1aa"
+  },
+  "NBIS": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/NBIS.parquet",
+   "stored_file_sha256": "42a96c8815224d73d55bc798926bdbe88f545edf5ac728a92cb97bd6a647a46e"
+  },
+  "NOW": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/NOW.parquet",
+   "stored_file_sha256": "361954b30a6932f8c98355b8ce0a2775260404cfdabdef53920599fa162af1c9"
+  },
+  "NVDA": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/NVDA.parquet",
+   "stored_file_sha256": "37a3ac96e31f584f219e3649bda0cfb632555d7d29f7a0ab6f54ea3ff62f506b"
+  },
+  "PLTR": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/PLTR.parquet",
+   "stored_file_sha256": "e8c8dac6fa5f7a63fec2e6ebf62dd5827e5fa8d6f12a8b5721df1845a9dbec24"
+  },
+  "QQQ": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/QQQ.parquet",
+   "stored_file_sha256": "75740ed7e35d94e4a5fdb170beeee28f27514c0b2bd5a4d94a44c4409d55688b"
+  },
+  "SMCI": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/SMCI.parquet",
+   "stored_file_sha256": "5e662b527177767183d23d0341d5ec768b595bc47031704b3f96c5bb49c49c04"
+  },
+  "SPY": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/SPY.parquet",
+   "stored_file_sha256": "1a6e5af5cc3c02aa79aec6734fe9396e090c6b28438fca886bd6650c46f859bb"
+  },
+  "TEM": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/TEM.parquet",
+   "stored_file_sha256": "217e54380c8ed191ea852e38d5bd4fe502c5105e7543760396a961f88191b0a9"
+  },
+  "UBER": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/UBER.parquet",
+   "stored_file_sha256": "fae9de55c6e41e9c6a77af0463a1058b64a78582873003f1162f7be0f3896f5c"
+  },
+  "USAR": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/USAR.parquet",
+   "stored_file_sha256": "07d33e134ba32051b95762eb159d62641157c7736715f924853a78f57d3d8e97"
+  },
+  "VST": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/VST.parquet",
+   "stored_file_sha256": "1dfa8d0819c73055d092f7f02b4fee1cd15c8e1a0b7588f3bcf8e052c7f3cfb1"
+  },
+  "ZS": {
+   "max_session": "2026-10-29",
+   "outcome": "refreshed",
+   "stored_file": ".cache/underlying/ZS.parquet",
+   "stored_file_sha256": "85871b633afc64505ff3114cb340a8a9472f00b0b78ecb99ca07afbe1f8e3e31"
+  }
+ }
+}
