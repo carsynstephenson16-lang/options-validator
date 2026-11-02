@@ -104,4 +104,5 @@ jobs:
           test_research_context_assemble
           test_irreplaceable_data_guard
           test_job_health_digest
+          test_launchagent_state
           test_schwab_chain_capture

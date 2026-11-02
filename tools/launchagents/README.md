@@ -50,6 +50,14 @@ That last line is the only honest verification: it prints what launchd holds,
 not what the file says. Expect five descriptors, Hour 9 / Minute 9,
 Weekdays 1–5.
 
+The 09:09 ritual now prints the installed-versus-loaded comparison each morning
+under `>>> launchagents:` and writes
+`reports/ritual/launchagent_state_<run_date>.json`, keyed by the ritual's
+`RUN_DATE` rather than its lagging `AS_OF`. The digest carries the comparison
+as rows once its agent is installed. An `INSTALLED_NOT_LOADED` line means a
+human runs the bootstrap block above; a `DISABLED` line means the human runs
+`launchctl enable gui/$UID/<label>` first.
+
 Note on who may run these: the alignment-check section below states that a
 Claude session cannot run `launchctl` because the classifier denies it. That
 was not true on 2026-08-26 — the session that performed this retime ran
@@ -86,8 +94,14 @@ Every result appends a dated line under `.tmp/alignment_check/`; every nonzero
 one also fires a macOS notification carrying the exact realign command. It
 never merges, pulls, resets, or pushes — that command is the owner's to run.
 
-Install (**the owner runs these; a Claude session cannot — the classifier
-denies `launchctl` to agents**):
+Correction (2026-09-09): the earlier claim that a Claude session cannot run
+`launchctl` because a classifier denies it was incorrect. The ritual runs the
+read-only observation unattended under launchd; a read-only session successfully
+ran `launchctl list`, `print`, and `print-disabled` on 2026-09-09 (Test-verified;
+Brief 41 review receipts). Installation commands remain owner-run by policy,
+not by a tooling limit.
+
+Install (**the owner runs these**):
 
 ```bash
 mkdir -p /Users/carsynstephenson/options-validator-ops/.tmp/alignment_check
