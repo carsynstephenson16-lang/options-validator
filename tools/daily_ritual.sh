@@ -99,12 +99,99 @@ if [ "$RITUAL_BRANCH" != "main" ]; then
   /usr/bin/osascript -e "display notification \"on '${RITUAL_BRANCH}', not main -- ritual refused\" with title \"[BROKEN] options-validator daily ritual\" subtitle \"repo: ${REPO}\"" 2>/dev/null
   exit 1
 fi
-if [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null)" != "$(git -C "$REPO" rev-parse origin/main 2>/dev/null)" ]; then
-  crit "main is not exactly aligned with origin/main -- refusing cache publisher authority"
-  echo "=== summary ==="
-  printf "%b" "$SUMMARY"
-  exit 1
+# ---- alignment gate ----
+# The unattended ritual runs only reviewed code from origin/main. Three shapes:
+#   BEHIND origin/main            -> refuse (unchanged; a human syncs code).
+#   AHEAD only by evidence paths  -> retry the ritual's OWN push once -- bare,
+#                                    no merge -- and proceed only if HEAD then
+#                                    equals origin/main.
+#   anything else                 -> refuse (unchanged text, unchanged exit).
+# Why the middle shape exists (2026-09-11/14): Step 8 committed that morning's
+# evidence, its push failed on a network blip, and the next run died HERE --
+# before reaching the Step 8 push that would have healed it -- so one blip
+# stalled the ritual, and through the same divergence the 15:45 captures,
+# until a human pushed. The capture wrappers were given this tolerance on
+# 2026-08-14 (owner decision D-3); the ritual never was. No new authority is
+# granted: push_evidence_once() already pushes ops main to origin/main at the
+# end of every run; this is the same push, in front of the gate its own
+# failure used to trip. EVIDENCE_ALLOW and the predicate are byte-identical to
+# the capture-side copies (pinned by tests/test_daily_ritual_alignment_gate.py
+# and tests/test_ops_alignment_check.py). The bounded, prompt-free fetch
+# refreshes origin/main when the network allows (a stale local ref must not
+# pass a strict comparison while reviewed code has moved on); when it cannot,
+# the comparison falls back to the last fetched ref and says so -- an offline
+# morning must still produce its data-phase artifacts, which Step 8 re-pushes.
+EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
+                reports/h7_receipts reports/h7_data_gate
+                reports/h7_data_gate_schwab reports/h7_forward_schwab reports/h5
+                reports/h6_forward reports/h8_forward reports/h10
+                reports/ritual reports/intraday_capture reports/live_probe
+                reports/cache_runs reports/schwab_chains
+                reports/schwab_chains_intraday reports/pick_tracker reports/closes_receipts)
+alignment_divergence_is_evidence_only() {
+  BEHIND_COUNT="$(git -C "$REPO" rev-list --count HEAD..origin/main 2>/dev/null)"
+  case "$BEHIND_COUNT" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$BEHIND_COUNT" -ne 0 ] && return 1
+  # TREE diff, not per-commit enumeration. `git log --name-only` has two
+  # documented blind spots that both let a code change through: it emits NO
+  # paths at all for a merge commit (so an "evil merge" whose conflict
+  # resolution edits code shows only the evidence paths of its parents), and
+  # it reports only the DESTINATION of a rename (so `git mv` of a code file
+  # into an evidence path reads as evidence-only). Comparing the trees asks
+  # the strictly stronger question this guard actually means: does the working
+  # HEAD differ from reviewed origin/main anywhere outside the evidence
+  # paths? --no-renames forces both sides of a rename to be reported.
+  AHEAD_PATHS="$(git -C "$REPO" diff --name-only --no-renames origin/main HEAD 2>/dev/null)" || return 1
+  while IFS= read -r CHANGED_PATH; do
+    [ -z "$CHANGED_PATH" ] && continue
+    # Evidence directories hold data (json / jsonl / md), never executables:
+    # a code-suffixed path is refused wherever it sits (2026-09-15 review D).
+    case "$CHANGED_PATH" in
+      *.py|*.sh|*.bash|*.zsh|*.pl|*.rb) return 1 ;;
+    esac
+    PATH_OK=1
+    for ALLOWED in "${EVIDENCE_ALLOW[@]}"; do
+      case "$CHANGED_PATH" in
+        "$ALLOWED"|"$ALLOWED"/*) PATH_OK=0; break ;;
+      esac
+    done
+    [ "$PATH_OK" -eq 0 ] || return 1
+  done <<< "$AHEAD_PATHS"
+  # Only regular files (or deletions) may differ. A symlink (120000) or gitlink
+  # (160000) at an evidence path is unreviewed content the path test cannot
+  # see; --raw reports the destination mode (2026-09-15 review B/S1).
+  RAW_DIFF="$(git -C "$REPO" diff --raw --no-renames origin/main HEAD 2>/dev/null)" || return 1
+  while read -r _SRC_MODE DST_MODE _REST; do
+    [ -z "$DST_MODE" ] && continue
+    case "$DST_MODE" in
+      100644|100755|000000) ;;
+      *) return 1 ;;
+    esac
+  done <<< "$RAW_DIFF"
+  return 0
+}
+if ! GIT_TERMINAL_PROMPT=0 git -C "$REPO" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 fetch -q origin main 2>/dev/null; then
+  note "main alignment: could not refresh origin/main (fetch failed); comparing against the last fetched ref"
 fi
+if [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null)" != "$(git -C "$REPO" rev-parse origin/main 2>/dev/null)" ]; then
+  if alignment_divergence_is_evidence_only \
+      && GIT_TERMINAL_PROMPT=0 git -C "$REPO" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=20 push -q origin main 2>/dev/null \
+      && [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null)" = "$(git -C "$REPO" rev-parse origin/main 2>/dev/null)" ]; then
+    note "main alignment: HEAD was ahead of origin/main by evidence-only commit(s); pushed them and proceeding"
+  else
+    crit "main is not exactly aligned with origin/main -- refusing cache publisher authority"
+    # A refusal here used to be visible only in the log (the 09-14 refusal went
+    # unnoticed for a day); notify like the branch guard does. The env guard
+    # keeps the gate's own tests from raising desktop notifications.
+    [ -n "${OPTIONS_VALIDATOR_NO_NOTIFY:-}" ] || /usr/bin/osascript -e "display notification \"main not aligned with origin/main -- ritual refused (see log)\" with title \"[BROKEN] options-validator daily ritual\" subtitle \"repo: ${REPO}\"" 2>/dev/null
+    echo "=== summary ==="
+    printf "%b" "$SUMMARY"
+    exit 1
+  fi
+fi
+# ---- end alignment gate ----
 # Single-writer cache authority. data/thetadata_adapter.py independently
 # verifies this role, repository root, main branch, and origin/main identity
 # before any OOS cache or BLIND_CACHE fact mutation.
@@ -571,7 +658,8 @@ evidence-path allow-list; this commit never contains code."
 if [ "$FULL_AUTHORITY_RC" -eq 0 ]; then
   FULL_TIER_PATHS=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
                    reports/h7_receipts reports/h7_data_gate
-                   reports/h6_forward reports/h8_forward)
+                   reports/h6_forward reports/h8_forward
+                   reports/h7_data_gate_schwab reports/h7_forward_schwab)
   GIT_ADD_PATHS=("${GIT_ADD_PATHS[@]}" "${FULL_TIER_PATHS[@]}")
   typeset -U GIT_ADD_PATHS
   EVIDENCE_COMMIT_MSG="data(h7): daily ritual evidence ${RUN_DATE}

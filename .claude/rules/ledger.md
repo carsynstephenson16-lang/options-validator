@@ -24,9 +24,12 @@ paths:
 - Known-wrong descriptive numbers (do not quote without the correction caveat):
   H1 seq 0 and H2 seq 3 `capital_efficiency` and `return_on_economic_max_loss`
   are inflated by exactly the trade count; H9 `max_drawdown` $361.30 was
-  computed over an alphabetically sorted trade list (chronological value:
-  $718.50). Verdicts (FAIL, FAIL, INSUFFICIENT_SAMPLE) are unaffected — the
-  verdict function reads neither ratio.
+  computed over the receipt's symbol-then-event-date trade order; the
+  zero-anchored, entry-date-ordered closed-trade value is $718.50 (a
+  closed-trade drawdown, NOT a daily-NAV or generic chronological drawdown —
+  `METRIC_CORRECTION`, facts.log 2026-08-01). Verdicts (FAIL, FAIL,
+  INSUFFICIENT_SAMPLE) are unaffected — the verdict function reads neither
+  ratio.
 - One-run experiments stay spent. H9's single allowed run is used; no refetch,
   rebuild, or v2 backfill authorizes another H9 result.
 - The H7 forward window (registered 2026-07-20, sole event in

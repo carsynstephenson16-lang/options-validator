@@ -68,7 +68,7 @@ EVIDENCE_ALLOW=(ledger/facts.log ledger/h7_forward ledger/h7_forward_schwab
                 reports/h6_forward reports/h8_forward reports/h10
                 reports/ritual reports/intraday_capture reports/live_probe
                 reports/cache_runs reports/schwab_chains
-                reports/schwab_chains_intraday)
+                reports/schwab_chains_intraday reports/pick_tracker reports/closes_receipts)
 alignment_divergence_is_evidence_only() {
   BEHIND_COUNT="$(git -C "$REPO" rev-list --count HEAD..origin/main 2>/dev/null)"
   case "$BEHIND_COUNT" in
@@ -87,6 +87,11 @@ alignment_divergence_is_evidence_only() {
   AHEAD_PATHS="$(git -C "$REPO" diff --name-only --no-renames origin/main HEAD 2>/dev/null)" || return 1
   while IFS= read -r CHANGED_PATH; do
     [ -z "$CHANGED_PATH" ] && continue
+    # Evidence directories hold data (json / jsonl / md), never executables:
+    # a code-suffixed path is refused wherever it sits (2026-09-15 review D).
+    case "$CHANGED_PATH" in
+      *.py|*.sh|*.bash|*.zsh|*.pl|*.rb) return 1 ;;
+    esac
     PATH_OK=1
     for ALLOWED in "${EVIDENCE_ALLOW[@]}"; do
       case "$CHANGED_PATH" in
@@ -95,6 +100,17 @@ alignment_divergence_is_evidence_only() {
     done
     [ "$PATH_OK" -eq 0 ] || return 1
   done <<< "$AHEAD_PATHS"
+  # Only regular files (or deletions) may differ. A symlink (120000) or gitlink
+  # (160000) at an evidence path is unreviewed content the path test cannot
+  # see; --raw reports the destination mode (2026-09-15 review B/S1).
+  RAW_DIFF="$(git -C "$REPO" diff --raw --no-renames origin/main HEAD 2>/dev/null)" || return 1
+  while read -r _SRC_MODE DST_MODE _REST; do
+    [ -z "$DST_MODE" ] && continue
+    case "$DST_MODE" in
+      100644|100755|000000) ;;
+      *) return 1 ;;
+    esac
+  done <<< "$RAW_DIFF"
   return 0
 }
 if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then

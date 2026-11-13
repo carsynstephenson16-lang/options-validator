@@ -51,6 +51,22 @@ A "no edge after costs" finding is a SUCCESS, not a failure to fix.
 ## Scope
 Validator only. No live order placement.
 
+## Draft-PR authority hold (owner-directed 2026-08-25)
+Every PR created by a worker starts as a GitHub draft. Workers may not make a
+PR ready, merge, deploy, sync an operational checkout, flip authority, or
+modify a ledger. Those actions require separate explicit owner authorization.
+A green draft is review evidence, not landing authority; automated
+reconciliation must continue to exclude drafts from merge eligibility.
+
+## Catalyst-calendar rule (owner-directed 2026-07-16)
+For VST and CEG, every attractiveness-context refresh must carry the next
+PJM capacity-auction (Base Residual Auction) date as a catalyst entry —
+`confirmed: false` with a PJM source link until PJM publishes the schedule.
+Rationale: auction results have been the dominant scheduled vol event for
+these names, larger than their earnings prints
+(reports/2026-07-16-vst-ceg-earnings-footprints.md). Dropping the entry in a
+refresh is a regression, not a simplification.
+
 ## Optional public-web research fetchers
 `uv sync --extra web-fetchers` installs Trafilatura (text extraction from
 already-captured HTML), Crawl4AI (public JavaScript-rendered pages), and
@@ -76,10 +92,13 @@ Scrapling (last-resort public-page fetcher). Manual research utilities ONLY:
   with zero edge."
 
 ## Scope guard
-The live scope gate is README.md "Scope status": H5, H6, H7, and H8 are registered
-forward-paper hypotheses; task sequencing lives in `PROJECT_STATE.md` (the
-canonical roadmap — its P0 gate binds), and H7's historical diagnostic is
-permanently retired. Before adding a new
+The live scope gate is README.md "Scope status", the registry of which
+hypotheses are registered (the list is NOT restated here — a copy in an
+instruction file goes stale silently; `ledger/experiments.jsonl` is the source
+of truth behind the registry); task sequencing lives in `PROJECT_STATE.md`
+(the canonical roadmap — its live blockers and standing gates bind and
+outrank any doc that implies building now), and H7's historical diagnostic
+is permanently retired. Before adding a new
 capability, ticker, strategy, or tool, answer: "Does this move one of the live
 hypotheses toward its declared verdict?" If no, write it into
 `ideas-parking-lot.md` and continue.

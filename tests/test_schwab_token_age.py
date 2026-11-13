@@ -78,7 +78,7 @@ class TokenExpiryStatusTests(unittest.TestCase):
         self.assertEqual(
             result["message"],
             "SCHWAB TOKEN EXPIRES IN 20.5h (2026-09-06 17:51 UTC) — re-auth "
-            "this weekend with tools/setup_schwab.py",
+            "before expiry with tools/setup_schwab.py",
         )
 
     def test_warn_hours_boundary_is_expiring(self):

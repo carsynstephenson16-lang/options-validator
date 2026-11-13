@@ -204,8 +204,12 @@ class ActivationDayTests(unittest.TestCase):
         path.write_text("{}")
         self.assert_success(self.run_script("--stage-routine-evidence"), commits="2")
 
-    def test_routine_refuses_closes_receipts_and_staged_code(self):
-        for relative in ("reports/closes_receipts/new.json", "code.py"):
+    def test_routine_refuses_non_evidence_reports_and_staged_code(self):
+        # reports/closes_receipts and reports/pick_tracker joined every
+        # EVIDENCE_ALLOW copy on 2026-09-15 (they were always ritual evidence;
+        # their absence stalled the ops pipeline 09-11..09-14), so the
+        # refused example is now a reports/ path in NO list at all.
+        for relative in ("reports/not_evidence/new.json", "code.py"):
             path = self.repo / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("dirty")
