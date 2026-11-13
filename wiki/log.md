@@ -171,3 +171,8 @@ Evidence trail: PROJECT_STATE.md 2026-09-08 refresh, README "Scope status",
 tools/launchagents/README.md:3-14, PRs #147/#150/#156/#158/#159/#161,
 ops checkout ritual log 2026-09-09_0909. index.md unchanged (all five
 pages listed; every wiki link resolves).
+
+
+## [2026-09-14] ingest | RAG health
+
+RAG health indexed 1272 sources and 37686 chunks; 0 source failures were reported.
