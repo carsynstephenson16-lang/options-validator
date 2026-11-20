@@ -40,3 +40,19 @@ condition = "AND"
 paths = ['''^options_researcher/a2_runner\.py$''']
 regexes = ['''RQ2_A2_PIN_ADDENDUM_V1''']
 regexTarget = "line"
+
+# 2026-09-15: the owner fact-append packets and their review receipts under
+# reports/2026-09-15-audit/ embed the guarded append commands, which bind the
+# facts.log dedupe prefix in a variable named KEY. The generic-api-key rule
+# matches on that variable name plus the label's entropy. The two labels are
+# public ledger fact-type names (the H6-0001 expiry disclosure and the H9
+# receipt full-document hash), tracked in Git, and grant no access to anything.
+# Same shape as the A2 entry above: path AND regex must both match, so a real
+# secret elsewhere in those receipts, or these labels in any other path, would
+# still fire.
+[[allowlists]]
+description = "2026-09-15 fact-packet ledger labels in the audit receipts (public, not credentials)"
+condition = "AND"
+paths = ['''^reports/2026-09-15-audit/''']
+regexes = ['''H6_0001_UNMARKED_EXPIRY''', '''H9_RECEIPT_FULL_DOCUMENT_HASH_V1''']
+regexTarget = "line"
