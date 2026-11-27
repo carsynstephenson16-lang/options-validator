@@ -1,5 +1,7 @@
 # Monday runbook — 2026-07-27 scheduled run
 
+> **SUPERSEDED 2026-09-15.** Historical record of the 2026-07-25 readiness review; not an active runbook or queue. Current status and sequencing: `PROJECT_STATE.md`. Kept because other documents link here.
+
 Written 2026-07-25 (readiness review). Every command below was executed or
 verified against the repo during that review; log/receipt paths are real paths
 observed on disk. The automation executes from the **ops checkout**
