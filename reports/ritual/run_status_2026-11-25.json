@@ -1,12 +1,12 @@
 {
   "as_of": "2026-11-25",
   "capture_receipt_path": "reports/ritual/capture_receipt_2026-11-25.json",
-  "capture_receipt_sha256": "5fb875ea68a81f42b0920eedb03c0fbb5572999d9e46582087e1af783969fe51",
-  "code_sha": "4c4b00e7b79944c29057c1710b60a6ebf9f0e5d3",
-  "log_path": "/Users/carsynstephenson/options-validator-ops/.tmp/daily_ritual/2026-11-26_0909.log",
-  "run_at_et": "2026-11-26T09:14:27.663369-05:00",
-  "run_at_utc": "2026-11-26T14:14:27.663369Z",
-  "run_date": "2026-11-26",
+  "capture_receipt_sha256": "c0cd075f42aa1fd4ff925e1731957412bd1c51c0674fc575bd3a5bdec6c01630",
+  "code_sha": "db50bfe1c00571ce60413064c85301d727e0d747",
+  "log_path": "/Users/carsynstephenson/options-validator-ops/.tmp/daily_ritual/2026-11-27_0909.log",
+  "run_at_et": "2026-11-27T09:12:20.826442-05:00",
+  "run_at_utc": "2026-11-27T14:12:20.826442Z",
+  "run_date": "2026-11-27",
   "schema_version": "daily_ritual/run_status/v1",
   "status": "OK_STARVED"
 }

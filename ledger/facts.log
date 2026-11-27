@@ -20253,3 +20253,4 @@
 2026-11-26T14:11:30.791659+00:00	DATA_PULL_OHLCV 2026-11-26: Yahoo OHLCV refresh CEG rows=1219 path=.cache/underlying_ohlcv/CEG.parquet
 2026-11-26T14:11:31.190455+00:00	DATA_PULL_OHLCV 2026-11-26: Yahoo OHLCV refresh MSFT rows=2489 path=.cache/underlying_ohlcv/MSFT.parquet
 2026-11-26T14:11:31.573444+00:00	DATA_PULL_OHLCV 2026-11-26: Yahoo OHLCV refresh AMZN rows=2489 path=.cache/underlying_ohlcv/AMZN.parquet
+2026-11-27T14:09:22.684969+00:00	DATA_PULL 2026-11-27: Yahoo closes guarded refresh for cached symbols; guard: 25 ok, 0 restored, 0 restore failures, 0 fetch errors. receipt=reports/closes_receipts/2026-11-27/guarded-all-cached.json
